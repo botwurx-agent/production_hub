@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { getOutstanding } from "@/lib/outstanding";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/ui/card";
 import { ProjectsView } from "@/components/projects/projects-view";
 import { NewProjectButton } from "@/components/projects/new-project-button";
+import { NeedsYou } from "@/components/projects/needs-you";
 import { ProjectsIcon } from "@/components/app-shell/nav-icons";
 import type { ProjectRow } from "@/components/projects/types";
 
@@ -11,13 +13,15 @@ export default async function ProjectsPage() {
   await requireStudioContext();
   const supabase = createClient();
 
-  const [{ data: projects }, { data: clients }] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("id, title, status, due_date, shoot_date, client:clients(name)")
-      .order("created_at", { ascending: false }),
-    supabase.from("clients").select("id, name").order("name"),
-  ]);
+  const [{ data: projects }, { data: clients }, outstanding] =
+    await Promise.all([
+      supabase
+        .from("projects")
+        .select("id, title, status, due_date, shoot_date, client:clients(name)")
+        .order("created_at", { ascending: false }),
+      supabase.from("clients").select("id, name").order("name"),
+      getOutstanding(),
+    ]);
 
   const rows = (projects ?? []) as unknown as ProjectRow[];
   const clientOptions = clients ?? [];
@@ -29,6 +33,7 @@ export default async function ProjectsPage() {
         subtitle="Every job, one board."
         action={<NewProjectButton clients={clientOptions} />}
       />
+      <NeedsYou items={outstanding} />
       {rows.length === 0 ? (
         <EmptyState
           icon={<ProjectsIcon className="h-7 w-7" />}

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { PROJECT_STATUS_ORDER } from "@/lib/status";
+import { PROJECT_STATUS, PROJECT_STATUS_ORDER } from "@/lib/status";
 import type { ProjectStatus } from "@/lib/database.types";
 
 export type FormState = { error?: string } | null;
@@ -54,10 +54,17 @@ export async function updateProjectStatus(
   projectId: string,
   status: ProjectStatus
 ) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   if (!isStatus(status)) return;
   const supabase = createClient();
   await supabase.from("projects").update({ status }).eq("id", projectId);
+  await supabase.from("activity").insert({
+    studio_id: ctx.studio.id,
+    project_id: projectId,
+    author_id: ctx.userId,
+    type: "status_change",
+    content: `Moved to ${PROJECT_STATUS[status].label}`,
+  });
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
 }

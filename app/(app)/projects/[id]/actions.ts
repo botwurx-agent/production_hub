@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { ASSET_STATUS } from "@/lib/status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AssetStatus, AssetType, Database } from "@/lib/database.types";
 
@@ -219,13 +220,23 @@ export async function addVersion(
 }
 
 export async function updateAssetStatus(assetId: string, status: AssetStatus) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
   const { data: asset } = await supabase
     .from("assets")
-    .select("project_id")
+    .select("name, project_id")
     .eq("id", assetId)
     .single();
   await supabase.from("assets").update({ status }).eq("id", assetId);
-  if (asset) revalidatePath(`/projects/${asset.project_id}`);
+  if (asset) {
+    await logActivity(
+      supabase,
+      ctx.studio.id,
+      ctx.userId,
+      asset.project_id,
+      "status_change",
+      `Set "${asset.name}" to ${ASSET_STATUS[status].label}`
+    );
+    revalidatePath(`/projects/${asset.project_id}`);
+  }
 }
