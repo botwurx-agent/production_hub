@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { createAsset, type ActionState } from "@/app/(app)/projects/[id]/actions";
+import { uploadAssetFile } from "@/components/projects/upload-file";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea, Field } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -11,25 +12,35 @@ import { ASSET_TYPE_LABEL } from "@/lib/status";
 
 const TYPES = ["image", "video", "storyboard", "reference", "cut", "other"];
 
-function Submit() {
+function Submit({ busy }: { busy: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
-      {pending ? "Adding..." : "Add asset"}
+    <Button type="submit" disabled={pending || busy}>
+      {pending || busy ? "Adding..." : "Add asset"}
     </Button>
   );
 }
 
-export function AddAssetButton({ projectId }: { projectId: string }) {
+export function AddAssetButton({
+  projectId,
+  studioId,
+}: {
+  projectId: string;
+  studioId: string;
+}) {
   const [open, setOpen] = useState(false);
   const bound = createAsset.bind(null, projectId);
   const [state, action] = useFormState<ActionState, FormData>(bound, null);
   const [submitted, setSubmitted] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (submitted && state === null) {
       setSubmitted(false);
       setOpen(false);
+      formRef.current?.reset();
     }
   }, [submitted, state]);
 
@@ -40,7 +51,32 @@ export function AddAssetButton({ projectId }: { projectId: string }) {
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Add asset">
         <form
+          ref={formRef}
           action={async (fd) => {
+            setUploadError(null);
+            const file = fd.get("file");
+            // Upload bytes straight to Storage, then send only metadata.
+            if (file instanceof File && file.size > 0) {
+              setUploading(true);
+              try {
+                const meta = await uploadAssetFile({
+                  studioId,
+                  projectId,
+                  file,
+                });
+                fd.set("storage_path", meta.storagePath);
+                fd.set("mime_type", meta.mimeType);
+                fd.set("size_bytes", String(meta.sizeBytes));
+              } catch (e) {
+                setUploadError(
+                  e instanceof Error ? e.message : "Upload failed."
+                );
+                setUploading(false);
+                return;
+              }
+              setUploading(false);
+            }
+            fd.delete("file");
             setSubmitted(true);
             await action(fd);
           }}
@@ -82,9 +118,9 @@ export function AddAssetButton({ projectId }: { projectId: string }) {
               className="min-h-[64px]"
             />
           </Field>
-          {state?.error && (
+          {(state?.error || uploadError) && (
             <p className="rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
-              {state.error}
+              {uploadError ?? state?.error}
             </p>
           )}
           <div className="flex justify-end gap-2">
@@ -95,7 +131,7 @@ export function AddAssetButton({ projectId }: { projectId: string }) {
             >
               Cancel
             </Button>
-            <Submit />
+            <Submit busy={uploading} />
           </div>
         </form>
       </Modal>

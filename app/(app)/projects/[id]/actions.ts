@@ -4,19 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  AssetStatus,
-  AssetType,
-  Database,
-} from "@/lib/database.types";
+import type { AssetStatus, AssetType, Database } from "@/lib/database.types";
 
 export type ActionState = { error?: string } | null;
-
-const ASSET_BUCKET = "assets";
-
-function safeName(name: string): string {
-  return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "file";
-}
 
 // ---------------------------------------------------------------------------
 // Brief
@@ -75,19 +65,32 @@ async function logActivity(
 
 // ---------------------------------------------------------------------------
 // Assets + versions (manual versioning)
+//
+// Files are uploaded to Storage from the browser (see upload-file.ts); these
+// actions receive only the resulting storage_path plus metadata, so the
+// request body stays tiny and large media is never routed through the server.
 // ---------------------------------------------------------------------------
 
-// Uploads an optional file and inserts a new version row, then points the
-// asset at it. Shared by createAsset (v1) and addVersion.
+function readVersionMeta(formData: FormData) {
+  const storagePath = String(formData.get("storage_path") ?? "").trim() || null;
+  const url = String(formData.get("url") ?? "").trim() || null;
+  const mimeType = String(formData.get("mime_type") ?? "").trim() || null;
+  const sizeRaw = String(formData.get("size_bytes") ?? "").trim();
+  const sizeBytes = sizeRaw ? Number(sizeRaw) : null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  return { storagePath, url, mimeType, sizeBytes, notes };
+}
+
 async function insertVersion(
   supabase: SupabaseClient<Database>,
   opts: {
     studioId: string;
     userId: string;
-    projectId: string;
     assetId: string;
-    file: File | null;
+    storagePath: string | null;
     url: string | null;
+    mimeType: string | null;
+    sizeBytes: number | null;
     notes: string | null;
   }
 ): Promise<{ versionNumber: number } | { error: string }> {
@@ -100,34 +103,17 @@ async function insertVersion(
     .maybeSingle();
   const versionNumber = (last?.version_number ?? 0) + 1;
 
-  let storage_path: string | null = null;
-  let mime_type: string | null = null;
-  let size_bytes: number | null = null;
-
-  if (opts.file && opts.file.size > 0) {
-    storage_path = `${opts.studioId}/${opts.projectId}/${opts.assetId}/v${versionNumber}-${safeName(opts.file.name)}`;
-    const { error: upErr } = await supabase.storage
-      .from(ASSET_BUCKET)
-      .upload(storage_path, opts.file, {
-        contentType: opts.file.type || undefined,
-        upsert: false,
-      });
-    if (upErr) return { error: upErr.message };
-    mime_type = opts.file.type || null;
-    size_bytes = opts.file.size;
-  }
-
   const { data: version, error } = await supabase
     .from("versions")
     .insert({
       studio_id: opts.studioId,
       asset_id: opts.assetId,
       version_number: versionNumber,
-      storage_path,
+      storage_path: opts.storagePath,
       url: opts.url,
+      mime_type: opts.mimeType,
+      size_bytes: opts.sizeBytes,
       notes: opts.notes,
-      mime_type,
-      size_bytes,
       created_by: opts.userId,
     })
     .select("id")
@@ -153,10 +139,7 @@ export async function createAsset(
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Name the asset." };
   const type = (String(formData.get("type") ?? "other") as AssetType) || "other";
-  const notes = String(formData.get("notes") ?? "").trim() || null;
-  const url = String(formData.get("url") ?? "").trim() || null;
-  const file = formData.get("file");
-  const fileObj = file instanceof File ? file : null;
+  const meta = readVersionMeta(formData);
 
   const { data: asset, error } = await supabase
     .from("assets")
@@ -173,16 +156,12 @@ export async function createAsset(
     .single();
   if (error) return { error: error.message };
 
-  // If a file or url was supplied, create v1 immediately.
-  if ((fileObj && fileObj.size > 0) || url) {
+  if (meta.storagePath || meta.url) {
     const res = await insertVersion(supabase, {
       studioId: ctx.studio.id,
       userId: ctx.userId,
-      projectId,
       assetId: asset.id,
-      file: fileObj,
-      url,
-      notes,
+      ...meta,
     });
     if ("error" in res) return { error: res.error };
   }
@@ -214,23 +193,16 @@ export async function addVersion(
     .single();
   if (!asset) return { error: "Asset not found." };
 
-  const notes = String(formData.get("notes") ?? "").trim() || null;
-  const url = String(formData.get("url") ?? "").trim() || null;
-  const file = formData.get("file");
-  const fileObj = file instanceof File ? file : null;
-
-  if (!(fileObj && fileObj.size > 0) && !url) {
+  const meta = readVersionMeta(formData);
+  if (!meta.storagePath && !meta.url) {
     return { error: "Add a file or a link for this version." };
   }
 
   const res = await insertVersion(supabase, {
     studioId: ctx.studio.id,
     userId: ctx.userId,
-    projectId: asset.project_id,
     assetId,
-    file: fileObj,
-    url,
-    notes,
+    ...meta,
   });
   if ("error" in res) return { error: res.error };
 

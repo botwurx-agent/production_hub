@@ -173,7 +173,7 @@ export default async function ProjectDetailPage({
           <Card className="p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-base font-bold">Assets</h2>
-              <AddAssetButton projectId={project.id} />
+              <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
             </div>
             {assets.length === 0 ? (
               <p className="rounded-[12px] border border-dashed border-border py-10 text-center text-sm text-text-faint">
@@ -186,6 +186,7 @@ export default async function ProjectDetailPage({
                     key={a.id}
                     asset={a}
                     projectId={project.id}
+                    studioId={ctx.studio.id}
                     currentUserId={ctx.userId}
                   />
                 ))}

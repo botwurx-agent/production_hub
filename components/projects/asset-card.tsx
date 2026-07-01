@@ -57,10 +57,12 @@ function Preview({
 export function AssetCard({
   asset,
   projectId,
+  studioId,
   currentUserId,
 }: {
   asset: AssetWithVersions;
   projectId: string;
+  studioId: string;
   currentUserId: string;
 }) {
   const [addOpen, setAddOpen] = useState(false);
@@ -176,7 +178,12 @@ export function AssetCard({
         onClose={() => setAddOpen(false)}
         title={`New version of ${asset.name}`}
       >
-        <AddVersionForm assetId={asset.id} onDone={() => setAddOpen(false)} />
+        <AddVersionForm
+          assetId={asset.id}
+          projectId={projectId}
+          studioId={studioId}
+          onDone={() => setAddOpen(false)}
+        />
       </Modal>
 
       {reviewVersion && (

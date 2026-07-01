@@ -3,30 +3,36 @@
 import { useEffect, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { addVersion, type ActionState } from "@/app/(app)/projects/[id]/actions";
+import { uploadAssetFile } from "@/components/projects/upload-file";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Field } from "@/components/ui/input";
 
-function Submit() {
+function Submit({ busy }: { busy: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
-      {pending ? "Uploading..." : "Add version"}
+    <Button type="submit" disabled={pending || busy}>
+      {pending || busy ? "Uploading..." : "Add version"}
     </Button>
   );
 }
 
 export function AddVersionForm({
   assetId,
+  projectId,
+  studioId,
   onDone,
 }: {
   assetId: string;
+  projectId: string;
+  studioId: string;
   onDone: () => void;
 }) {
   const bound = addVersion.bind(null, assetId);
   const [state, action] = useFormState<ActionState, FormData>(bound, null);
   const [submitted, setSubmitted] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Close the modal once a submit completes without error.
   useEffect(() => {
     if (submitted && state === null) {
       setSubmitted(false);
@@ -37,6 +43,23 @@ export function AddVersionForm({
   return (
     <form
       action={async (fd) => {
+        setUploadError(null);
+        const file = fd.get("file");
+        if (file instanceof File && file.size > 0) {
+          setUploading(true);
+          try {
+            const meta = await uploadAssetFile({ studioId, projectId, file });
+            fd.set("storage_path", meta.storagePath);
+            fd.set("mime_type", meta.mimeType);
+            fd.set("size_bytes", String(meta.sizeBytes));
+          } catch (e) {
+            setUploadError(e instanceof Error ? e.message : "Upload failed.");
+            setUploading(false);
+            return;
+          }
+          setUploading(false);
+        }
+        fd.delete("file");
         setSubmitted(true);
         await action(fd);
       }}
@@ -51,16 +74,16 @@ export function AddVersionForm({
       <Field label="Version notes" htmlFor="notes">
         <Textarea id="notes" name="notes" placeholder="What changed in this version?" className="min-h-[72px]" />
       </Field>
-      {state?.error && (
+      {(state?.error || uploadError) && (
         <p className="rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
-          {state.error}
+          {uploadError ?? state?.error}
         </p>
       )}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onDone}>
           Cancel
         </Button>
-        <Submit />
+        <Submit busy={uploading} />
       </div>
     </form>
   );
