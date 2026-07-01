@@ -383,6 +383,56 @@ export type Database = {
           },
         ];
       };
+      email_accounts: {
+        Row: {
+          id: string;
+          studio_id: string;
+          user_id: string;
+          provider: string;
+          email: string;
+          access_token: string | null;
+          refresh_token: string | null;
+          token_expiry: string | null;
+          scope: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          user_id: string;
+          provider?: string;
+          email: string;
+          access_token?: string | null;
+          refresh_token?: string | null;
+          token_expiry?: string | null;
+          scope?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          user_id?: string;
+          provider?: string;
+          email?: string;
+          access_token?: string | null;
+          refresh_token?: string | null;
+          token_expiry?: string | null;
+          scope?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "email_accounts_studio_id_fkey";
+            columns: ["studio_id"];
+            isOneToOne: false;
+            referencedRelation: "studios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       leads: {
         Row: {
           company: string;
@@ -727,3 +777,4 @@ export type Version = Tables<"versions">;
 export type Approval = Tables<"approvals">;
 export type Activity = Tables<"activity">;
 export type ReviewComment = Tables<"review_comments">;
+export type EmailAccount = Tables<"email_accounts">;

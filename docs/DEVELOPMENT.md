@@ -59,6 +59,37 @@ Every row belongs to a `studio`. A user joins studios through `memberships`
 `memberships` to avoid recursion). On signup, a trigger creates the user's
 studio and adds them as owner, reading the studio name from signup metadata.
 
+## Gmail connector (Google OAuth)
+
+The Gmail connector lets a user connect their Google account so a project's
+email and attachments can live in the app. Slice 1a is the connection itself
+(read-only scope). To enable it you need a Google Cloud OAuth client.
+
+Setup (one time):
+
+1. Google Cloud Console -> create/select a project.
+2. APIs & Services -> Library -> enable **Gmail API**.
+3. APIs & Services -> OAuth consent screen -> **External**. Set app name,
+   support email, developer email. Add scopes `.../auth/gmail.readonly`,
+   `openid`, `email`, `profile`. Add your address as a **Test user**. Leave the
+   app in **Testing** mode (no Google verification needed for test users; up to
+   100). Public launch later requires Google's verification for Gmail scopes.
+4. APIs & Services -> Credentials -> Create credentials -> **OAuth client ID**
+   -> **Web application**. Authorized redirect URIs:
+   - `https://<your-vercel-domain>/auth/google/callback`
+   - `http://localhost:3000/auth/google/callback` (local dev)
+   Copy the **Client ID** and **Client secret**.
+5. Set env vars (Vercel project settings + local `.env.local`), all
+   environments, then redeploy:
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+6. In the app: Settings -> Connections -> **Connect Gmail**.
+
+Security note: OAuth tokens are stored in `email_accounts`, RLS-scoped to the
+owning user. Before multi-user, move token reads to a service-role server
+client (so tokens are never reachable via the public REST API) and encrypt
+them at rest.
+
 ## Conventions
 
 - Token-first styling: never hardcode colors. Use the Tailwind tokens that map

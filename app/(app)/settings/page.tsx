@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { googleConfigured } from "@/lib/google";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/status-tag";
 import { Appearance } from "@/components/settings/appearance";
+import { Connections } from "@/components/settings/connections";
 import type { Hue } from "@/components/status-tag";
 
 const roleHue: Record<string, Hue> = {
@@ -12,19 +14,54 @@ const roleHue: Record<string, Hue> = {
   member: "blue",
 };
 
-export default async function SettingsPage() {
+const connectionError: Record<string, string> = {
+  google_not_configured: "Gmail is not configured yet (missing credentials).",
+  google_denied: "Google connection was cancelled.",
+  google_state: "Connection could not be verified. Please try again.",
+  google_exchange: "Could not complete the Google connection. Please retry.",
+  google_email: "Could not read the Google account email.",
+  google_store: "Connected, but saving the account failed. Please retry.",
+  no_studio: "No studio found for your account.",
+};
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: { connected?: string; error?: string };
+}) {
   const ctx = await requireStudioContext();
   const supabase = createClient();
 
-  const { data: members } = await supabase
-    .from("memberships")
-    .select("id, role, user_id")
-    .eq("studio_id", ctx.studio.id)
-    .order("created_at");
+  const [{ data: members }, { data: accounts }] = await Promise.all([
+    supabase
+      .from("memberships")
+      .select("id, role, user_id")
+      .eq("studio_id", ctx.studio.id)
+      .order("created_at"),
+    supabase
+      .from("email_accounts")
+      .select("id, provider, email")
+      .order("created_at"),
+  ]);
+
+  const errorMsg = searchParams.error
+    ? (connectionError[searchParams.error] ?? "Something went wrong.")
+    : null;
 
   return (
     <div className="max-w-3xl">
       <PageHeader title="Settings" subtitle="Your studio and workspace." />
+
+      {searchParams.connected && (
+        <div className="mb-6 rounded-[12px] bg-green-bg px-4 py-3 text-sm font-medium text-green">
+          Gmail connected.
+        </div>
+      )}
+      {errorMsg && (
+        <div className="mb-6 rounded-[12px] bg-red-bg px-4 py-3 text-sm font-medium text-red">
+          {errorMsg}
+        </div>
+      )}
 
       <div className="space-y-6">
         <Card className="p-5">
@@ -76,6 +113,14 @@ export default async function SettingsPage() {
               </li>
             ))}
           </ul>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="mb-4 font-display text-base font-bold">Connections</h2>
+          <Connections
+            configured={googleConfigured()}
+            accounts={accounts ?? []}
+          />
         </Card>
 
         <Card className="p-5">
