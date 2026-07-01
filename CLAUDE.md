@@ -134,4 +134,14 @@ The order follows real grief: the stuff that hurts most on real jobs comes first
 
 ## 9. Current status and next step
 
-Strategy, scope, data model, and design direction are decided. Next step: scaffold the repo (Next.js, TypeScript, Vercel, Supabase, token-first Tailwind) and build Phase 1, the foundation, toward use on a real job.
+Strategy, scope, data model, and design direction are decided.
+
+Phase 1 (foundation) is built:
+- Next.js (App Router, TypeScript) scaffolded, Tailwind wired token-first to the OKLCH tokens as CSS variables, dual-theme (data-theme: system default + manual toggle + localStorage) and data-accent (indigo default), fonts Plus Jakarta Sans + Hanken Grotesk. Token/theme reference page at /dev/tokens.
+- Supabase project provisioned (org GuthubAi, project "production-hub", ref wvcodunxakdiojgelbgc). Client/server helpers + auth middleware in place.
+- Schema applied (see supabase/migrations): full data-model spine, multi-tenancy (studios, memberships, roles), RLS scoped by studio membership, private assets storage bucket, signup studio-bootstrap trigger. TypeScript types in lib/database.types.ts.
+- Auth (email/password) with studio bootstrap on signup. App shell (sidebar Projects/Clients/Leads/Settings + topbar theme toggle). Projects (list + color-as-signal board Pre-pro/Shoot/Post/Delivered + detail with brief, assets, manual version history, internal activity). Clients + contacts. Leads with pipeline stage and convert-to-client then start-a-project. Settings (studio, team, appearance).
+
+Verified: build/typecheck pass; signup trigger, RLS studio-isolation, and authenticated insert checks verified directly against the live database. Full in-app runtime click-through was not exercised here because this sandbox's network egress allowlist blocks the app's server-side calls to *.supabase.co (environment config, not a code issue; Vercel is unaffected).
+
+Next step: deploy to Vercel (set the two NEXT_PUBLIC_SUPABASE_* env vars), run a real job through it, and let friction drive the Phase 2 backlog. Naming still a placeholder ("The Hub"). See docs/DEVELOPMENT.md for setup.
