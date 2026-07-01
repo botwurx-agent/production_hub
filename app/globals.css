@@ -150,11 +150,6 @@
     font-family: var(--font-display), system-ui, sans-serif;
     letter-spacing: -0.02em;
   }
-
-  /* Avoid theme flashing during load; the pre-paint script sets data-theme. */
-  html:not([data-theme]) body {
-    visibility: hidden;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -30,8 +30,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${display.variable} ${body.variable}`}>
+    <html
+      lang="en"
+      data-theme="light"
+      data-accent="indigo"
+      suppressHydrationWarning
+      className={`${display.variable} ${body.variable}`}
+    >
       <head>
+        {/* Upgrades data-theme to the stored/system value before first paint.
+            A default is set on <html> above so the UI is never gated on this
+            script running (avoids a blank page if it is blocked or delayed). */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
