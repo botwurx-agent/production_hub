@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Design tokens (OKLCH). Light and dark are two value sets for the same
+   tokens. Never hardcode colors anywhere else; reference these variables (or
+   the Tailwind utilities that map to them). Values are shared with the
+   marketing site so the product and its site read as one system.
+   ========================================================================== */
+
+:root,
+[data-theme="light"] {
+  --bg: oklch(0.987 0.005 280);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.975 0.008 285);
+  --text: oklch(0.255 0.035 282);
+  --text-muted: oklch(0.52 0.03 282);
+  --text-faint: oklch(0.66 0.025 282);
+  --border: oklch(0.92 0.011 285);
+  --border-strong: oklch(0.855 0.016 285);
+
+  --shadow-sm: 0 1px 2px rgba(40, 30, 70, 0.06), 0 1px 1px rgba(40, 30, 70, 0.04);
+  --shadow-md: 0 4px 10px -3px rgba(40, 30, 70, 0.12), 0 2px 4px -2px rgba(40, 30, 70, 0.08);
+  --shadow-lg: 0 2px 4px rgba(40, 30, 70, 0.04), 0 30px 60px -18px rgba(60, 40, 110, 0.26);
+
+  --h-purple: oklch(0.55 0.23 305);
+  --h-purple-bg: oklch(0.95 0.055 305);
+  --h-indigo: oklch(0.565 0.205 274);
+  --h-indigo-bg: oklch(0.95 0.05 274);
+  --h-blue: oklch(0.605 0.17 245);
+  --h-blue-bg: oklch(0.945 0.055 245);
+  --h-cyan: oklch(0.68 0.13 210);
+  --h-cyan-bg: oklch(0.95 0.06 210);
+  --h-green: oklch(0.665 0.165 158);
+  --h-green-bg: oklch(0.94 0.085 158);
+  --h-yellow: oklch(0.81 0.15 88);
+  --h-yellow-bg: oklch(0.955 0.08 88);
+  --h-orange: oklch(0.705 0.18 50);
+  --h-orange-bg: oklch(0.95 0.07 50);
+  --h-pink: oklch(0.655 0.225 352);
+  --h-pink-bg: oklch(0.95 0.06 352);
+  --h-red: oklch(0.625 0.225 22);
+  --h-red-bg: oklch(0.95 0.06 22);
+}
+
+[data-theme="dark"] {
+  --bg: oklch(0.185 0.022 282);
+  --surface: oklch(0.225 0.022 282);
+  --surface-2: oklch(0.265 0.024 282);
+  --text: oklch(0.965 0.012 282);
+  --text-muted: oklch(0.73 0.02 282);
+  --text-faint: oklch(0.57 0.02 282);
+  --border: oklch(0.33 0.022 282);
+  --border-strong: oklch(0.43 0.026 282);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px -3px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 36px 70px -20px rgba(0, 0, 0, 0.72);
+
+  --h-purple: oklch(0.71 0.19 305);
+  --h-purple-bg: oklch(0.37 0.1 305);
+  --h-indigo: oklch(0.685 0.17 274);
+  --h-indigo-bg: oklch(0.37 0.1 274);
+  --h-blue: oklch(0.71 0.15 245);
+  --h-blue-bg: oklch(0.37 0.1 245);
+  --h-cyan: oklch(0.79 0.12 210);
+  --h-cyan-bg: oklch(0.37 0.085 210);
+  --h-green: oklch(0.78 0.155 158);
+  --h-green-bg: oklch(0.38 0.1 158);
+  --h-yellow: oklch(0.86 0.14 88);
+  --h-yellow-bg: oklch(0.42 0.1 88);
+  --h-orange: oklch(0.78 0.16 50);
+  --h-orange-bg: oklch(0.39 0.11 50);
+  --h-pink: oklch(0.75 0.2 352);
+  --h-pink-bg: oklch(0.38 0.11 352);
+  --h-red: oklch(0.71 0.2 22);
+  --h-red-bg: oklch(0.38 0.11 22);
+}
+
+/* --------------------------------------------------------------------------
+   Accent mapping. One restrained brand accent, swappable via data-accent.
+   Indigo is the default. Each accent maps --accent / -soft / -strong / -fg
+   off the corresponding hue token.
+   -------------------------------------------------------------------------- */
+
+:root,
+[data-accent="indigo"] {
+  --accent: var(--h-indigo);
+  --accent-soft: var(--h-indigo-bg);
+  --accent-strong: color-mix(in oklch, var(--h-indigo) 84%, #000);
+  --accent-fg: oklch(0.99 0.01 274);
+}
+
+[data-accent="purple"] {
+  --accent: var(--h-purple);
+  --accent-soft: var(--h-purple-bg);
+  --accent-strong: color-mix(in oklch, var(--h-purple) 84%, #000);
+  --accent-fg: oklch(0.99 0.01 305);
+}
+
+[data-accent="blue"] {
+  --accent: var(--h-blue);
+  --accent-soft: var(--h-blue-bg);
+  --accent-strong: color-mix(in oklch, var(--h-blue) 84%, #000);
+  --accent-fg: oklch(0.99 0.01 245);
+}
+
+[data-accent="pink"] {
+  --accent: var(--h-pink);
+  --accent-soft: var(--h-pink-bg);
+  --accent-strong: color-mix(in oklch, var(--h-pink) 84%, #000);
+  --accent-fg: oklch(0.99 0.01 352);
+}
+
+[data-accent="orange"] {
+  --accent: var(--h-orange);
+  --accent-soft: var(--h-orange-bg);
+  --accent-strong: color-mix(in oklch, var(--h-orange) 84%, #000);
+  --accent-fg: oklch(0.99 0.01 50);
+}
+
+/* --------------------------------------------------------------------------
+   Base element styling driven by tokens.
+   -------------------------------------------------------------------------- */
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display), system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  /* Avoid theme flashing during load; the pre-paint script sets data-theme. */
+  html:not([data-theme]) body {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
