@@ -7,6 +7,7 @@ import { StatusMenu } from "@/components/projects/status-menu";
 import { BriefEditor } from "@/components/projects/brief-editor";
 import { AssetCard } from "@/components/projects/asset-card";
 import { AddAssetButton } from "@/components/projects/add-asset-button";
+import { ProjectEmail } from "@/components/projects/project-email";
 import {
   ActivityPanel,
   type ActivityItem,
@@ -37,8 +38,13 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound();
 
-  const [{ data: brief }, { data: assetsRaw }, { data: activityRaw }] =
-    await Promise.all([
+  const [
+    { data: brief },
+    { data: assetsRaw },
+    { data: activityRaw },
+    { data: emailThreads },
+    { data: emailAccount },
+  ] = await Promise.all([
       supabase
         .from("briefs")
         .select("content")
@@ -61,6 +67,12 @@ export default async function ProjectDetailPage({
         .eq("project_id", params.id)
         .order("created_at", { ascending: false })
         .limit(100),
+      supabase
+        .from("email_threads")
+        .select("id, gmail_thread_id, subject, last_message_at")
+        .eq("project_id", params.id)
+        .order("last_message_at", { ascending: false, nullsFirst: false }),
+      supabase.from("email_accounts").select("id").limit(1).maybeSingle(),
     ]);
 
   // Batch-sign all stored files so private previews and downloads work.
@@ -192,6 +204,17 @@ export default async function ProjectDetailPage({
                 ))}
               </div>
             )}
+          </Card>
+
+          {/* Email / communication */}
+          <Card className="p-5">
+            <h2 className="mb-4 font-display text-base font-bold">Email</h2>
+            <ProjectEmail
+              projectId={project.id}
+              connected={Boolean(emailAccount)}
+              defaultQuery={clientName ?? ""}
+              threads={emailThreads ?? []}
+            />
           </Card>
         </div>
 

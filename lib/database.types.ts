@@ -433,6 +433,57 @@ export type Database = {
           },
         ];
       };
+      email_threads: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          account_id: string;
+          gmail_thread_id: string;
+          subject: string | null;
+          last_message_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          account_id: string;
+          gmail_thread_id: string;
+          subject?: string | null;
+          last_message_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          account_id?: string;
+          gmail_thread_id?: string;
+          subject?: string | null;
+          last_message_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "email_threads_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "email_threads_studio_id_fkey";
+            columns: ["studio_id"];
+            isOneToOne: false;
+            referencedRelation: "studios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       leads: {
         Row: {
           company: string;
@@ -778,3 +829,4 @@ export type Approval = Tables<"approvals">;
 export type Activity = Tables<"activity">;
 export type ReviewComment = Tables<"review_comments">;
 export type EmailAccount = Tables<"email_accounts">;
+export type EmailThread = Tables<"email_threads">;
