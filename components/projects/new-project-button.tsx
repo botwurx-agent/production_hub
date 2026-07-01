@@ -20,7 +20,17 @@ function Submit() {
   );
 }
 
-export function NewProjectButton({ clients }: { clients: ClientOption[] }) {
+export function NewProjectButton({
+  clients,
+  defaultClientId = "",
+  label = "New project",
+  variant = "primary",
+}: {
+  clients: ClientOption[];
+  defaultClientId?: string;
+  label?: string;
+  variant?: "primary" | "secondary";
+}) {
   const [open, setOpen] = useState(false);
   const [state, action] = useFormState<FormState, FormData>(
     createProject,
@@ -29,8 +39,8 @@ export function NewProjectButton({ clients }: { clients: ClientOption[] }) {
 
   return (
     <>
-      <Button onClick={() => setOpen(true)}>
-        <PlusIcon /> New project
+      <Button variant={variant} onClick={() => setOpen(true)}>
+        <PlusIcon /> {label}
       </Button>
       <Modal open={open} onClose={() => setOpen(false)} title="New project">
         <form action={action} className="space-y-4">
@@ -44,7 +54,7 @@ export function NewProjectButton({ clients }: { clients: ClientOption[] }) {
             />
           </Field>
           <Field label="Client" htmlFor="client_id">
-            <Select id="client_id" name="client_id" defaultValue="">
+            <Select id="client_id" name="client_id" defaultValue={defaultClientId}>
               <option value="">No client yet</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>

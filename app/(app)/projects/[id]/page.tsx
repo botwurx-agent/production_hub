@@ -1,0 +1,172 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { requireStudioContext } from "@/lib/studio";
+import { Card } from "@/components/ui/card";
+import { StatusMenu } from "@/components/projects/status-menu";
+import { BriefEditor } from "@/components/projects/brief-editor";
+import { AssetCard } from "@/components/projects/asset-card";
+import { AddAssetButton } from "@/components/projects/add-asset-button";
+import {
+  ActivityPanel,
+  type ActivityItem,
+} from "@/components/projects/activity-panel";
+import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
+import { longDate } from "@/lib/format";
+import type { AssetWithVersions } from "@/components/projects/asset-types";
+
+const SIGNED_URL_TTL = 60 * 60; // 1 hour
+
+export default async function ProjectDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, title, status, due_date, shoot_date, client:clients(name)")
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (!project) notFound();
+
+  const [{ data: brief }, { data: assetsRaw }, { data: activityRaw }] =
+    await Promise.all([
+      supabase
+        .from("briefs")
+        .select("content")
+        .eq("project_id", params.id)
+        .maybeSingle(),
+      supabase
+        .from("assets")
+        .select(
+          "id, name, type, status, current_version_id, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
+        )
+        .eq("project_id", params.id)
+        .order("created_at", { ascending: true })
+        .order("version_number", {
+          referencedTable: "versions",
+          ascending: false,
+        }),
+      supabase
+        .from("activity")
+        .select("id, content, type, created_at, author_id")
+        .eq("project_id", params.id)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
+
+  // Batch-sign all stored files so private previews and downloads work.
+  const paths = (assetsRaw ?? [])
+    .flatMap((a) => a.versions ?? [])
+    .map((v) => v.storage_path)
+    .filter((p): p is string => Boolean(p));
+
+  const signed = new Map<string, string>();
+  if (paths.length > 0) {
+    const { data: signedList } = await supabase.storage
+      .from("assets")
+      .createSignedUrls(paths, SIGNED_URL_TTL);
+    for (const s of signedList ?? []) {
+      if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+    }
+  }
+
+  const assets: AssetWithVersions[] = (assetsRaw ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    type: a.type,
+    status: a.status,
+    current_version_id: a.current_version_id,
+    versions: (a.versions ?? []).map((v) => ({
+      ...v,
+      signedUrl: v.storage_path ? (signed.get(v.storage_path) ?? null) : null,
+    })),
+  }));
+
+  const activity = (activityRaw ?? []) as ActivityItem[];
+  const clientName = (project.client as { name: string } | null)?.name ?? null;
+  const dateBits = [
+    project.shoot_date ? `Shoot ${longDate(project.shoot_date)}` : null,
+    project.due_date ? `Due ${longDate(project.due_date)}` : null,
+  ].filter(Boolean);
+
+  return (
+    <div>
+      <Link
+        href="/projects"
+        className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-text-muted transition hover:text-text"
+      >
+        <ChevronLeftIcon /> Projects
+      </Link>
+
+      {/* Project header: title is the hero, meta sits quieter beneath. */}
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
+            {project.title}
+          </h1>
+          <p className="mt-1.5 text-sm text-text-muted">
+            {clientName ?? "No client"}
+            {dateBits.length > 0 && (
+              <span className="text-text-faint">
+                {"  ·  "}
+                {dateBits.join("  ·  ")}
+              </span>
+            )}
+          </p>
+        </div>
+        <StatusMenu projectId={project.id} status={project.status} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          {/* Brief */}
+          <Card className="p-5">
+            <h2 className="mb-3 font-display text-base font-bold">Brief</h2>
+            <BriefEditor
+              projectId={project.id}
+              initialContent={brief?.content ?? ""}
+            />
+          </Card>
+
+          {/* Assets */}
+          <Card className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-base font-bold">Assets</h2>
+              <AddAssetButton projectId={project.id} />
+            </div>
+            {assets.length === 0 ? (
+              <p className="rounded-[12px] border border-dashed border-border py-10 text-center text-sm text-text-faint">
+                No assets yet. Add your first deliverable and its versions.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {assets.map((a) => (
+                  <AssetCard key={a.id} asset={a} />
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Activity */}
+        <div className="lg:col-span-1">
+          <Card className="p-5">
+            <h2 className="mb-4 font-display text-base font-bold">
+              Activity &amp; notes
+            </h2>
+            <ActivityPanel
+              projectId={project.id}
+              items={activity}
+              currentUserId={ctx.userId}
+            />
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}

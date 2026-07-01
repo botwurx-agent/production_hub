@@ -75,3 +75,21 @@ export const ASSET_TYPE_LABEL: Record<string, string> = {
   cut: "Cut",
   other: "Other",
 };
+
+// Preview tint per asset category (color-as-signal on the asset grid).
+export const ASSET_TYPE_HUE: Record<string, Hue> = {
+  image: "blue",
+  video: "orange",
+  storyboard: "green",
+  reference: "pink",
+  cut: "purple",
+  other: "cyan",
+};
+
+export const ASSET_STATUS_ORDER: (keyof typeof ASSET_STATUS)[] = [
+  "draft",
+  "in_review",
+  "needs_changes",
+  "approved",
+  "delivered",
+];
