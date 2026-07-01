@@ -13,7 +13,11 @@ import {
 } from "@/components/projects/activity-panel";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { longDate } from "@/lib/format";
-import type { AssetWithVersions } from "@/components/projects/asset-types";
+import type {
+  AssetWithVersions,
+  VersionComment,
+  VersionApproval,
+} from "@/components/projects/asset-types";
 
 const SIGNED_URL_TTL = 60 * 60; // 1 hour
 
@@ -75,6 +79,36 @@ export default async function ProjectDetailPage({
     }
   }
 
+  // Review data (comments + internal sign-offs) for every version.
+  const versionIds = (assetsRaw ?? []).flatMap((a) =>
+    (a.versions ?? []).map((v) => v.id)
+  );
+  const commentsByVersion = new Map<string, VersionComment[]>();
+  const approvalsByVersion = new Map<string, VersionApproval[]>();
+  if (versionIds.length > 0) {
+    const [{ data: comments }, { data: approvals }] = await Promise.all([
+      supabase
+        .from("review_comments")
+        .select("id, body, created_at, author_id, version_id")
+        .in("version_id", versionIds),
+      supabase
+        .from("approvals")
+        .select("id, status, reviewer_user_id, created_at, target_id")
+        .eq("target_type", "version")
+        .in("target_id", versionIds),
+    ]);
+    for (const c of comments ?? []) {
+      const list = commentsByVersion.get(c.version_id) ?? [];
+      list.push(c);
+      commentsByVersion.set(c.version_id, list);
+    }
+    for (const a of approvals ?? []) {
+      const list = approvalsByVersion.get(a.target_id) ?? [];
+      list.push(a);
+      approvalsByVersion.set(a.target_id, list);
+    }
+  }
+
   const assets: AssetWithVersions[] = (assetsRaw ?? []).map((a) => ({
     id: a.id,
     name: a.name,
@@ -84,6 +118,8 @@ export default async function ProjectDetailPage({
     versions: (a.versions ?? []).map((v) => ({
       ...v,
       signedUrl: v.storage_path ? (signed.get(v.storage_path) ?? null) : null,
+      comments: commentsByVersion.get(v.id) ?? [],
+      approvals: approvalsByVersion.get(v.id) ?? [],
     })),
   }));
 
@@ -146,7 +182,12 @@ export default async function ProjectDetailPage({
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {assets.map((a) => (
-                  <AssetCard key={a.id} asset={a} />
+                  <AssetCard
+                    key={a.id}
+                    asset={a}
+                    projectId={project.id}
+                    currentUserId={ctx.userId}
+                  />
                 ))}
               </div>
             )}

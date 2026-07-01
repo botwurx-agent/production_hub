@@ -532,6 +532,48 @@ export type Database = {
           },
         ];
       };
+      review_comments: {
+        Row: {
+          author_id: string | null;
+          body: string;
+          created_at: string;
+          id: string;
+          studio_id: string;
+          version_id: string;
+        };
+        Insert: {
+          author_id?: string | null;
+          body: string;
+          created_at?: string;
+          id?: string;
+          studio_id: string;
+          version_id: string;
+        };
+        Update: {
+          author_id?: string | null;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          studio_id?: string;
+          version_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "review_comments_studio_id_fkey";
+            columns: ["studio_id"];
+            isOneToOne: false;
+            referencedRelation: "studios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "review_comments_version_id_fkey";
+            columns: ["version_id"];
+            isOneToOne: false;
+            referencedRelation: "versions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       studios: {
         Row: {
           created_at: string;
@@ -684,3 +726,4 @@ export type Asset = Tables<"assets">;
 export type Version = Tables<"versions">;
 export type Approval = Tables<"approvals">;
 export type Activity = Tables<"activity">;
+export type ReviewComment = Tables<"review_comments">;

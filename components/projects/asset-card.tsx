@@ -3,12 +3,17 @@
 import { useState } from "react";
 import { AssetStatusMenu } from "@/components/projects/asset-status-menu";
 import { AddVersionForm } from "@/components/projects/add-version-form";
+import { ReviewModal } from "@/components/projects/review-modal";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag } from "@/components/status-tag";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
 import { ASSET_TYPE_HUE, ASSET_TYPE_LABEL } from "@/lib/status";
 import { fileSize, shortDate } from "@/lib/format";
-import type { AssetWithVersions, VersionRow } from "@/components/projects/asset-types";
+import {
+  summarizeReview,
+  type AssetWithVersions,
+  type VersionRow,
+} from "@/components/projects/asset-types";
 
 function Preview({
   version,
@@ -49,13 +54,23 @@ function Preview({
   );
 }
 
-export function AssetCard({ asset }: { asset: AssetWithVersions }) {
+export function AssetCard({
+  asset,
+  projectId,
+  currentUserId,
+}: {
+  asset: AssetWithVersions;
+  projectId: string;
+  currentUserId: string;
+}) {
   const [addOpen, setAddOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [reviewVersion, setReviewVersion] = useState<VersionRow | null>(null);
   const hue = ASSET_TYPE_HUE[asset.type] ?? "cyan";
   const current =
     asset.versions.find((v) => v.id === asset.current_version_id) ??
     asset.versions[0];
+  const currentSummary = current ? summarizeReview(current.approvals) : null;
 
   return (
     <div className="rounded-[15px] border border-border bg-surface p-3 shadow-sm">
@@ -70,6 +85,20 @@ export function AssetCard({ asset }: { asset: AssetWithVersions }) {
         </div>
         <AssetStatusMenu assetId={asset.id} status={asset.status} />
       </div>
+
+      {/* Current-version review signal (color-as-signal), opens review */}
+      {current && currentSummary && (
+        <button
+          onClick={() => setReviewVersion(current)}
+          className="mt-3 flex w-full items-center justify-between rounded-[10px] border border-border px-2.5 py-1.5 text-left transition hover:border-border-strong hover:bg-surface-2/60"
+        >
+          <StatusTag hue={currentSummary.hue}>{currentSummary.label}</StatusTag>
+          <span className="text-xs font-semibold text-text-muted">
+            Review
+            {current.comments.length > 0 ? ` · ${current.comments.length}` : ""}
+          </span>
+        </button>
+      )}
 
       <div className="mt-3 flex items-center gap-2">
         <button
@@ -93,6 +122,7 @@ export function AssetCard({ asset }: { asset: AssetWithVersions }) {
         <ol className="mt-3 space-y-2 border-t border-border pt-3">
           {asset.versions.map((v) => {
             const link = v.signedUrl ?? v.url;
+            const s = summarizeReview(v.approvals);
             return (
               <li key={v.id} className="flex items-start gap-2 text-sm">
                 <StatusTag
@@ -120,6 +150,20 @@ export function AssetCard({ asset }: { asset: AssetWithVersions }) {
                       </a>
                     )}
                   </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <button
+                      onClick={() => setReviewVersion(v)}
+                      className="text-xs font-semibold text-accent hover:underline"
+                    >
+                      Review
+                      {v.comments.length > 0 ? ` (${v.comments.length})` : ""}
+                    </button>
+                    {v.approvals.length > 0 && (
+                      <StatusTag hue={s.hue} dot={false}>
+                        {s.label}
+                      </StatusTag>
+                    )}
+                  </div>
                 </div>
               </li>
             );
@@ -134,6 +178,17 @@ export function AssetCard({ asset }: { asset: AssetWithVersions }) {
       >
         <AddVersionForm assetId={asset.id} onDone={() => setAddOpen(false)} />
       </Modal>
+
+      {reviewVersion && (
+        <ReviewModal
+          open={Boolean(reviewVersion)}
+          onClose={() => setReviewVersion(null)}
+          projectId={projectId}
+          assetName={asset.name}
+          version={reviewVersion}
+          currentUserId={currentUserId}
+        />
+      )}
     </div>
   );
 }
