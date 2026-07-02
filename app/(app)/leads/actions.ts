@@ -25,15 +25,31 @@ export async function createLead(
   const stageRaw = String(formData.get("stage") ?? "new");
   const stage: LeadStage = isStage(stageRaw) ? stageRaw : "new";
 
-  const { error } = await supabase.from("leads").insert({
-    studio_id: ctx.studio.id,
-    company,
-    stage,
-    source: String(formData.get("source") ?? "").trim() || null,
-    notes: String(formData.get("notes") ?? "").trim() || null,
-    owner_id: ctx.userId,
-  });
+  const { data: lead, error } = await supabase
+    .from("leads")
+    .insert({
+      studio_id: ctx.studio.id,
+      company,
+      stage,
+      source: String(formData.get("source") ?? "").trim() || null,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+      owner_id: ctx.userId,
+    })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  // Capture the primary contact (name/title/email) as a lead contact.
+  const contactName = String(formData.get("contact_name") ?? "").trim();
+  if (contactName) {
+    await supabase.from("contacts").insert({
+      studio_id: ctx.studio.id,
+      lead_id: lead.id,
+      name: contactName,
+      role: String(formData.get("contact_title") ?? "").trim() || null,
+      email: String(formData.get("contact_email") ?? "").trim() || null,
+    });
+  }
 
   revalidatePath("/leads");
   return null;

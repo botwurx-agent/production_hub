@@ -47,9 +47,33 @@ export function NewLeadButton() {
             <Input
               id="company"
               name="company"
-              placeholder="e.g. Bolt Energy"
+              placeholder="e.g. IQ Bar"
               autoFocus
               required
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Name" htmlFor="contact_name">
+              <Input
+                id="contact_name"
+                name="contact_name"
+                placeholder="e.g. Jane Doe"
+              />
+            </Field>
+            <Field label="Title" htmlFor="contact_title">
+              <Input
+                id="contact_title"
+                name="contact_title"
+                placeholder="e.g. Brand Manager"
+              />
+            </Field>
+          </div>
+          <Field label="Email" htmlFor="contact_email">
+            <Input
+              id="contact_email"
+              name="contact_email"
+              type="email"
+              placeholder="e.g. jane@iqbar.com"
             />
           </Field>
           <Field label="Source" htmlFor="source">
