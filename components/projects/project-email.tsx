@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { LinkEmailModal } from "@/components/projects/link-email-modal";
 import { ImportAttachment } from "@/components/projects/import-attachment";
-import { PlusIcon } from "@/components/app-shell/nav-icons";
+import { PlusIcon, EnvelopeIcon } from "@/components/app-shell/nav-icons";
 import { fileSize, longDate, shortDate } from "@/lib/format";
 import {
   getThreadMessages,
@@ -86,17 +86,34 @@ export function ThreadReader({
   }
 
   return (
-    <div className="rounded-[12px] border border-border">
+    <div
+      className="overflow-hidden rounded-[12px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm"
+      style={{ borderLeft: "3px solid var(--h-blue)" }}
+    >
       <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-        <button onClick={toggle} className="min-w-0 flex-1 text-left">
-          <div className="truncate text-sm font-semibold text-text">
-            {thread.subject || "(no subject)"}
-          </div>
-          <div className="text-xs text-text-faint">
-            {thread.last_message_at
-              ? shortDate(thread.last_message_at)
-              : "Email thread"}
-          </div>
+        <button onClick={toggle} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <span
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
+            style={{ backgroundColor: "var(--h-blue-bg)", color: "var(--h-blue)" }}
+          >
+            <EnvelopeIcon />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-text">
+              {thread.subject || "(no subject)"}
+            </span>
+            <span
+              className="block text-xs font-medium"
+              style={{ color: "var(--h-blue)" }}
+            >
+              Email
+              <span className="text-text-faint">
+                {thread.last_message_at
+                  ? `  ·  ${shortDate(thread.last_message_at)}`
+                  : ""}
+              </span>
+            </span>
+          </span>
         </button>
         <button
           onClick={() =>

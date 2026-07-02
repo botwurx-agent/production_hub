@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
-import { PlusIcon } from "@/components/app-shell/nav-icons";
+import { PlusIcon, HashIcon } from "@/components/app-shell/nav-icons";
 import { fileSize, longDate } from "@/lib/format";
 import {
   searchSlackConversations,
@@ -142,13 +142,29 @@ export function SlackReader({
   }
 
   return (
-    <div className="rounded-[12px] border border-border">
+    <div
+      className="overflow-hidden rounded-[12px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm"
+      style={{ borderLeft: "3px solid var(--h-purple)" }}
+    >
       <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-        <button onClick={toggle} className="min-w-0 flex-1 text-left">
-          <div className="truncate text-sm font-semibold text-text">
-            #{channel.channel_name || channel.slack_channel_id}
-          </div>
-          <div className="text-xs text-text-faint">Slack channel</div>
+        <button onClick={toggle} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <span
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
+            style={{ backgroundColor: "var(--h-purple-bg)", color: "var(--h-purple)" }}
+          >
+            <HashIcon />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-text">
+              #{channel.channel_name || channel.slack_channel_id}
+            </span>
+            <span
+              className="block text-xs font-medium"
+              style={{ color: "var(--h-purple)" }}
+            >
+              Slack
+            </span>
+          </span>
         </button>
         <button
           onClick={() =>

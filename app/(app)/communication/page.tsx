@@ -34,10 +34,10 @@ type Group = {
   slack: SlackRow[];
 };
 
-const CHANNELS: { key: string; label: string; live: boolean }[] = [
-  { key: "email", label: "Email", live: true },
-  { key: "slack", label: "Slack", live: true },
-  { key: "gchat", label: "Google Chat", live: false },
+const CHANNELS: { key: string; label: string; live: boolean; hue: Hue }[] = [
+  { key: "email", label: "Email", live: true, hue: "blue" },
+  { key: "slack", label: "Slack", live: true, hue: "purple" },
+  { key: "gchat", label: "Google Chat", live: false, hue: "cyan" },
 ];
 
 function classify(r: OwnerJoins): Omit<Group, "email" | "slack"> | null {
@@ -137,20 +137,27 @@ export default async function CommunicationPage() {
         {CHANNELS.map((c) => (
           <span
             key={c.key}
-            className={`inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold ${
+            className="inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold"
+            style={
               c.live
-                ? "border-border bg-surface text-text"
-                : "border-dashed border-border text-text-faint"
-            }`}
+                ? {
+                    backgroundColor: `var(--h-${c.hue}-bg)`,
+                    color: `var(--h-${c.hue})`,
+                    borderColor: "transparent",
+                  }
+                : undefined
+            }
           >
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{
-                backgroundColor: c.live ? "var(--h-green)" : "var(--border-strong)",
-              }}
-            />
-            {c.label}
-            {!c.live && <span className="text-text-faint">· soon</span>}
+            <span className={c.live ? "" : "flex items-center gap-1.5 text-text-faint"}>
+              {!c.live && (
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: "var(--border-strong)" }}
+                />
+              )}
+              {c.label}
+              {!c.live && <span className="text-text-faint"> · soon</span>}
+            </span>
           </span>
         ))}
       </div>
@@ -173,16 +180,26 @@ export default async function CommunicationPage() {
         <div className="space-y-8">
           {[...groups.values()].map((g) => (
             <section key={g.key}>
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-3 flex items-center gap-3">
+                <span
+                  className="h-6 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: `var(--h-${g.hue})` }}
+                />
                 <Link
                   href={g.href}
-                  className="font-display text-sm font-bold text-text hover:text-accent"
+                  className="font-display text-lg font-extrabold tracking-tight text-text transition hover:text-accent"
                 >
                   {g.label}
                 </Link>
                 <StatusTag hue={g.hue} dot={false}>
                   {g.kind}
                 </StatusTag>
+                <span className="text-xs font-medium text-text-faint">
+                  {g.email.length + g.slack.length}{" "}
+                  {g.email.length + g.slack.length === 1
+                    ? "conversation"
+                    : "conversations"}
+                </span>
               </div>
               <div className="space-y-2">
                 {g.email.map((t) => (
