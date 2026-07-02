@@ -10,6 +10,7 @@ import { NewProjectButton } from "@/components/projects/new-project-button";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { addClientContact } from "@/app/(app)/clients/actions";
 import { EmailPanel } from "@/components/projects/project-email";
+import { SlackPanel } from "@/components/communication/slack-panel";
 import { PROJECT_STATUS } from "@/lib/status";
 import { shortDate } from "@/lib/format";
 import type { Contact } from "@/lib/database.types";
@@ -34,6 +35,8 @@ export default async function ClientDetailPage({
     { data: projects },
     { data: emailThreads },
     { data: emailAccount },
+    { data: slackChannels },
+    { data: slackAccount },
   ] = await Promise.all([
     supabase
       .from("contacts")
@@ -50,7 +53,23 @@ export default async function ClientDetailPage({
       .select("id, gmail_thread_id, subject, last_message_at")
       .eq("client_id", params.id)
       .order("last_message_at", { ascending: false, nullsFirst: false }),
-    supabase.from("email_accounts").select("id, scope").limit(1).maybeSingle(),
+    supabase
+      .from("email_accounts")
+      .select("id, scope")
+      .eq("provider", "google")
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("slack_channels")
+      .select("id, slack_channel_id, channel_name")
+      .eq("client_id", params.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("email_accounts")
+      .select("id")
+      .eq("provider", "slack")
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const revalidate = `/clients/${params.id}`;
@@ -148,6 +167,18 @@ export default async function ClientDetailPage({
             canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
             defaultQuery={primaryEmail || client.name}
             threads={emailThreads ?? []}
+          />
+        </Card>
+
+        {/* Slack */}
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-base font-bold">Slack</h2>
+          <SlackPanel
+            ownerType="client"
+            ownerId={client.id}
+            connected={Boolean(slackAccount)}
+            defaultQuery={client.name}
+            channels={slackChannels ?? []}
           />
         </Card>
       </div>

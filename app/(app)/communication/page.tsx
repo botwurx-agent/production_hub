@@ -9,16 +9,19 @@ import {
   ThreadReader,
   type LinkedThread,
 } from "@/components/projects/project-email";
+import {
+  SlackReader,
+  type LinkedSlackChannel,
+} from "@/components/communication/slack-panel";
 import type { Hue } from "@/components/status-tag";
 
-type Row = LinkedThread & {
-  project_id: string | null;
-  lead_id: string | null;
-  client_id: string | null;
+type OwnerJoins = {
   project: { id: string; title: string } | null;
   lead: { id: string; company: string } | null;
   client: { id: string; name: string } | null;
 };
+type EmailRow = LinkedThread & OwnerJoins;
+type SlackRow = LinkedSlackChannel & OwnerJoins;
 
 type Group = {
   key: string;
@@ -27,71 +30,89 @@ type Group = {
   kind: "Project" | "Lead" | "Client";
   hue: Hue;
   projectId?: string;
-  threads: Row[];
+  email: EmailRow[];
+  slack: SlackRow[];
 };
 
 const CHANNELS: { key: string; label: string; live: boolean }[] = [
   { key: "email", label: "Email", live: true },
-  { key: "slack", label: "Slack", live: false },
+  { key: "slack", label: "Slack", live: true },
   { key: "gchat", label: "Google Chat", live: false },
 ];
+
+function classify(r: OwnerJoins): Omit<Group, "email" | "slack"> | null {
+  if (r.project)
+    return {
+      key: `project:${r.project.id}`,
+      label: r.project.title,
+      href: `/projects/${r.project.id}`,
+      kind: "Project",
+      hue: "indigo",
+      projectId: r.project.id,
+    };
+  if (r.lead)
+    return {
+      key: `lead:${r.lead.id}`,
+      label: r.lead.company,
+      href: `/leads/${r.lead.id}`,
+      kind: "Lead",
+      hue: "yellow",
+    };
+  if (r.client)
+    return {
+      key: `client:${r.client.id}`,
+      label: r.client.name,
+      href: `/clients/${r.client.id}`,
+      kind: "Client",
+      hue: "blue",
+    };
+  return null;
+}
 
 export default async function CommunicationPage() {
   await requireStudioContext();
   const supabase = createClient();
 
-  const [{ data: threadsRaw }, { data: account }] = await Promise.all([
-    supabase
-      .from("email_threads")
-      .select(
-        "id, gmail_thread_id, subject, last_message_at, project_id, lead_id, client_id, project:projects(id, title), lead:leads(id, company), client:clients(id, name)"
-      )
-      .order("last_message_at", { ascending: false, nullsFirst: false }),
-    supabase.from("email_accounts").select("id, scope").limit(1).maybeSingle(),
-  ]);
+  const [{ data: emailRaw }, { data: slackRaw }, { data: googleAccount }] =
+    await Promise.all([
+      supabase
+        .from("email_threads")
+        .select(
+          "id, gmail_thread_id, subject, last_message_at, project:projects(id, title), lead:leads(id, company), client:clients(id, name)"
+        )
+        .order("last_message_at", { ascending: false, nullsFirst: false }),
+      supabase
+        .from("slack_channels")
+        .select(
+          "id, slack_channel_id, channel_name, project:projects(id, title), lead:leads(id, company), client:clients(id, name)"
+        )
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("email_accounts")
+        .select("id, scope")
+        .eq("provider", "google")
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-  const rows = (threadsRaw ?? []) as unknown as Row[];
-  const canSend = Boolean(account?.scope?.includes("gmail.send"));
+  const emails = (emailRaw ?? []) as unknown as EmailRow[];
+  const slacks = (slackRaw ?? []) as unknown as SlackRow[];
+  const canSend = Boolean(googleAccount?.scope?.includes("gmail.send"));
+  const anyConnection = emails.length > 0 || slacks.length > 0;
 
-  // Group by owner (project / lead / client).
   const groups = new Map<string, Group>();
-  for (const r of rows) {
-    let g: Group | undefined;
-    if (r.project) {
-      const key = `project:${r.project.id}`;
-      g = groups.get(key) ?? {
-        key,
-        label: r.project.title,
-        href: `/projects/${r.project.id}`,
-        kind: "Project",
-        hue: "indigo",
-        projectId: r.project.id,
-        threads: [],
-      };
-    } else if (r.lead) {
-      const key = `lead:${r.lead.id}`;
-      g = groups.get(key) ?? {
-        key,
-        label: r.lead.company,
-        href: `/leads/${r.lead.id}`,
-        kind: "Lead",
-        hue: "yellow",
-        threads: [],
-      };
-    } else if (r.client) {
-      const key = `client:${r.client.id}`;
-      g = groups.get(key) ?? {
-        key,
-        label: r.client.name,
-        href: `/clients/${r.client.id}`,
-        kind: "Client",
-        hue: "blue",
-        threads: [],
-      };
-    }
-    if (!g) continue;
-    g.threads.push(r);
-    groups.set(g.key, g);
+  const ensure = (base: Omit<Group, "email" | "slack">): Group => {
+    const g = groups.get(base.key) ?? { ...base, email: [], slack: [] };
+    groups.set(base.key, g);
+    return g;
+  };
+  for (const r of emails) {
+    const base = classify(r);
+    if (base) ensure(base).email.push(r);
+  }
+  for (const r of slacks) {
+    const base = classify(r);
+    if (base) ensure(base).slack.push(r);
   }
 
   return (
@@ -123,11 +144,11 @@ export default async function CommunicationPage() {
         ))}
       </div>
 
-      {!account ? (
+      {!anyConnection ? (
         <EmptyState
           icon={<CommunicationIcon className="h-7 w-7" />}
-          title="Connect a channel to get started"
-          description="Connect Gmail in Settings to bring email into one inbox. Slack and Google Chat are coming next."
+          title="No conversations linked yet"
+          description="Link a Gmail thread or Slack channel from a lead, client, or project and it will show up here. Connect channels in Settings."
           action={
             <Link
               href="/settings"
@@ -136,12 +157,6 @@ export default async function CommunicationPage() {
               Go to Settings
             </Link>
           }
-        />
-      ) : groups.size === 0 ? (
-        <EmptyState
-          icon={<CommunicationIcon className="h-7 w-7" />}
-          title="No conversations linked yet"
-          description="Link a Gmail thread from a lead, client, or project and it will show up here."
         />
       ) : (
         <div className="space-y-8">
@@ -157,16 +172,21 @@ export default async function CommunicationPage() {
                 <StatusTag hue={g.hue} dot={false}>
                   {g.kind}
                 </StatusTag>
-                <span className="text-xs text-text-faint">
-                  {g.threads.length} thread{g.threads.length === 1 ? "" : "s"}
-                </span>
               </div>
               <div className="space-y-2">
-                {g.threads.map((t) => (
+                {g.email.map((t) => (
                   <ThreadReader
                     key={t.id}
                     thread={t}
                     canSend={canSend}
+                    projectId={g.projectId}
+                    revalidate="/communication"
+                  />
+                ))}
+                {g.slack.map((c) => (
+                  <SlackReader
+                    key={c.id}
+                    channel={c}
                     projectId={g.projectId}
                     revalidate="/communication"
                   />

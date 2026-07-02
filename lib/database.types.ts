@@ -684,6 +684,45 @@ export type Database = {
           },
         ];
       };
+      slack_channels: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string | null;
+          lead_id: string | null;
+          client_id: string | null;
+          account_id: string;
+          slack_channel_id: string;
+          channel_name: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id?: string | null;
+          lead_id?: string | null;
+          client_id?: string | null;
+          account_id: string;
+          slack_channel_id: string;
+          channel_name?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string | null;
+          lead_id?: string | null;
+          client_id?: string | null;
+          account_id?: string;
+          slack_channel_id?: string;
+          channel_name?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       studios: {
         Row: {
           created_at: string;
@@ -839,3 +878,4 @@ export type Activity = Tables<"activity">;
 export type ReviewComment = Tables<"review_comments">;
 export type EmailAccount = Tables<"email_accounts">;
 export type EmailThread = Tables<"email_threads">;
+export type SlackChannel = Tables<"slack_channels">;

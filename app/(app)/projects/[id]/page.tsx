@@ -8,6 +8,7 @@ import { BriefEditor } from "@/components/projects/brief-editor";
 import { AssetCard } from "@/components/projects/asset-card";
 import { AddAssetButton } from "@/components/projects/add-asset-button";
 import { EmailPanel } from "@/components/projects/project-email";
+import { SlackPanel } from "@/components/communication/slack-panel";
 import {
   ActivityPanel,
   type ActivityItem,
@@ -44,6 +45,8 @@ export default async function ProjectDetailPage({
     { data: activityRaw },
     { data: emailThreads },
     { data: emailAccount },
+    { data: slackChannels },
+    { data: slackAccount },
   ] = await Promise.all([
       supabase
         .from("briefs")
@@ -72,7 +75,23 @@ export default async function ProjectDetailPage({
         .select("id, gmail_thread_id, subject, last_message_at")
         .eq("project_id", params.id)
         .order("last_message_at", { ascending: false, nullsFirst: false }),
-      supabase.from("email_accounts").select("id, scope").limit(1).maybeSingle(),
+      supabase
+        .from("email_accounts")
+        .select("id, scope")
+        .eq("provider", "google")
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("slack_channels")
+        .select("id, slack_channel_id, channel_name")
+        .eq("project_id", params.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("email_accounts")
+        .select("id")
+        .eq("provider", "slack")
+        .limit(1)
+        .maybeSingle(),
     ]);
 
   // Batch-sign all stored files so private previews and downloads work.
@@ -217,6 +236,19 @@ export default async function ProjectDetailPage({
               canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
               defaultQuery={clientName ?? ""}
               threads={emailThreads ?? []}
+            />
+          </Card>
+
+          {/* Slack */}
+          <Card className="p-5">
+            <h2 className="mb-4 font-display text-base font-bold">Slack</h2>
+            <SlackPanel
+              ownerType="project"
+              ownerId={project.id}
+              projectId={project.id}
+              connected={Boolean(slackAccount)}
+              defaultQuery={clientName ?? ""}
+              channels={slackChannels ?? []}
             />
           </Card>
         </div>

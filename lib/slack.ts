@@ -76,3 +76,144 @@ export async function exchangeSlackCode(
     slackUserId: data.authed_user.id,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Web API (read). All calls use the connected user's token.
+// ---------------------------------------------------------------------------
+const API = "https://slack.com/api";
+
+async function slackGet<T>(
+  token: string,
+  method: string,
+  params: Record<string, string>
+): Promise<T> {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${API}/${method}?${qs}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as { ok: boolean; error?: string } & T;
+  if (!data.ok) throw new Error(`Slack ${method}: ${data.error ?? "error"}`);
+  return data;
+}
+
+export type SlackConversationMatch = {
+  channelId: string;
+  channelName: string;
+  snippet: string;
+};
+
+// Search messages, then dedupe to the channels they live in (link targets).
+export async function searchConversations(
+  token: string,
+  query: string,
+  max = 20
+): Promise<SlackConversationMatch[]> {
+  const data = await slackGet<{
+    messages?: {
+      matches?: {
+        channel?: { id: string; name?: string };
+        text?: string;
+      }[];
+    };
+  }>(token, "search.messages", { query, count: String(max) });
+
+  const byChannel = new Map<string, SlackConversationMatch>();
+  for (const m of data.messages?.matches ?? []) {
+    const ch = m.channel;
+    if (!ch?.id || byChannel.has(ch.id)) continue;
+    byChannel.set(ch.id, {
+      channelId: ch.id,
+      channelName: ch.name || ch.id,
+      snippet: m.text || "",
+    });
+  }
+  return [...byChannel.values()];
+}
+
+export type SlackFile = {
+  id: string;
+  name: string;
+  mimetype: string;
+  size: number;
+  urlPrivateDownload: string;
+};
+export type SlackMessage = {
+  ts: string;
+  author: string;
+  text: string;
+  files: SlackFile[];
+};
+
+export async function getConversationHistory(
+  token: string,
+  channelId: string,
+  limit = 30
+): Promise<SlackMessage[]> {
+  const data = await slackGet<{
+    messages?: {
+      ts: string;
+      user?: string;
+      username?: string;
+      text?: string;
+      files?: {
+        id: string;
+        name?: string;
+        mimetype?: string;
+        size?: number;
+        url_private_download?: string;
+      }[];
+    }[];
+  }>(token, "conversations.history", {
+    channel: channelId,
+    limit: String(limit),
+  });
+
+  const messages = data.messages ?? [];
+  // Resolve user display names (cached per call).
+  const nameCache = new Map<string, string>();
+  const resolve = async (userId?: string): Promise<string> => {
+    if (!userId) return "Unknown";
+    if (nameCache.has(userId)) return nameCache.get(userId)!;
+    try {
+      const u = await slackGet<{
+        user?: { real_name?: string; name?: string };
+      }>(token, "users.info", { user: userId });
+      const name = u.user?.real_name || u.user?.name || userId;
+      nameCache.set(userId, name);
+      return name;
+    } catch {
+      return userId;
+    }
+  };
+
+  const out: SlackMessage[] = [];
+  for (const m of messages.reverse()) {
+    out.push({
+      ts: m.ts,
+      author: m.username || (await resolve(m.user)),
+      text: m.text || "",
+      files: (m.files ?? [])
+        .filter((f) => f.url_private_download)
+        .map((f) => ({
+          id: f.id,
+          name: f.name || "file",
+          mimetype: f.mimetype || "application/octet-stream",
+          size: f.size || 0,
+          urlPrivateDownload: f.url_private_download!,
+        })),
+    });
+  }
+  return out;
+}
+
+export async function getSlackFileBytes(
+  token: string,
+  urlPrivateDownload: string
+): Promise<Buffer> {
+  const res = await fetch(urlPrivateDownload, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Slack file download ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
