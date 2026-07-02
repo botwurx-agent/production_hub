@@ -90,6 +90,31 @@ owning user. Before multi-user, move token reads to a service-role server
 client (so tokens are never reachable via the public REST API) and encrypt
 them at rest.
 
+## Slack connector (Slack OAuth)
+
+Slice 1a is the connection (user-token read scopes). To enable it you need a
+Slack app.
+
+Setup (one time):
+
+1. api.slack.com/apps -> **Create New App** -> From scratch. Pick your
+   workspace.
+2. **OAuth & Permissions** -> **Redirect URLs** -> add:
+   - `https://<your-vercel-domain>/auth/slack/callback`
+   - `http://localhost:3000/auth/slack/callback`
+3. Under **Scopes -> User Token Scopes**, add: `channels:history`,
+   `channels:read`, `groups:history`, `groups:read`, `im:history`, `im:read`,
+   `mpim:history`, `mpim:read`, `users:read`, `files:read`, `search:read`.
+   (Bot scopes are not required.)
+4. **Basic Information** -> copy the **Client ID** and **Client Secret**.
+5. Set env vars (Vercel + local), all environments, then redeploy:
+   - `SLACK_CLIENT_ID`
+   - `SLACK_CLIENT_SECRET`
+6. In the app: Settings -> Connections -> **Connect Slack**.
+
+Slack user tokens do not expire, so there is no refresh step. Read/link and
+file import are layered in later slices.
+
 ## Conventions
 
 - Token-first styling: never hardcode colors. Use the Tailwind tokens that map

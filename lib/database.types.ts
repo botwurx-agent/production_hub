@@ -394,6 +394,7 @@ export type Database = {
           refresh_token: string | null;
           token_expiry: string | null;
           scope: string | null;
+          external_ref: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -407,6 +408,7 @@ export type Database = {
           refresh_token?: string | null;
           token_expiry?: string | null;
           scope?: string | null;
+          external_ref?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -420,6 +422,7 @@ export type Database = {
           refresh_token?: string | null;
           token_expiry?: string | null;
           scope?: string | null;
+          external_ref?: Json | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { googleConfigured } from "@/lib/google";
+import { slackConfigured } from "@/lib/slack";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/status-tag";
@@ -21,6 +22,11 @@ const connectionError: Record<string, string> = {
   google_exchange: "Could not complete the Google connection. Please retry.",
   google_email: "Could not read the Google account email.",
   google_store: "Connected, but saving the account failed. Please retry.",
+  slack_not_configured: "Slack is not configured yet (missing credentials).",
+  slack_denied: "Slack connection was cancelled.",
+  slack_state: "Connection could not be verified. Please try again.",
+  slack_exchange: "Could not complete the Slack connection. Please retry.",
+  slack_store: "Connected, but saving the account failed. Please retry.",
   no_studio: "No studio found for your account.",
 };
 
@@ -54,7 +60,7 @@ export default async function SettingsPage({
 
       {searchParams.connected && (
         <div className="mb-6 rounded-[12px] bg-green-bg px-4 py-3 text-sm font-medium text-green">
-          Gmail connected.
+          {searchParams.connected === "slack" ? "Slack" : "Gmail"} connected.
         </div>
       )}
       {errorMsg && (
@@ -118,7 +124,10 @@ export default async function SettingsPage({
         <Card className="p-5">
           <h2 className="mb-4 font-display text-base font-bold">Connections</h2>
           <Connections
-            configured={googleConfigured()}
+            configured={{
+              google: googleConfigured(),
+              slack: slackConfigured(),
+            }}
             accounts={accounts ?? []}
           />
         </Card>
