@@ -21,7 +21,7 @@ export type LinkedThread = {
   last_message_at: string | null;
 };
 
-function ThreadRow({
+export function ThreadRow({
   thread,
   projectId,
 }: {

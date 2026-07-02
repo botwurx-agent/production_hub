@@ -7,10 +7,12 @@ import {
   ClientsIcon,
   LeadsIcon,
   SettingsIcon,
+  CommunicationIcon,
 } from "@/components/app-shell/nav-icons";
 
 const nav = [
   { href: "/projects", label: "Projects", Icon: ProjectsIcon },
+  { href: "/communication", label: "Communication", Icon: CommunicationIcon },
   { href: "/clients", label: "Clients", Icon: ClientsIcon },
   { href: "/leads", label: "Leads", Icon: LeadsIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
