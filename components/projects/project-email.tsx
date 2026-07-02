@@ -5,11 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { LinkEmailModal } from "@/components/projects/link-email-modal";
+import { ImportAttachment } from "@/components/projects/import-attachment";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
 import { fileSize, longDate, shortDate } from "@/lib/format";
 import {
   getThreadMessages,
-  importAttachment,
   unlinkThread,
 } from "@/app/(app)/projects/[id]/email-actions";
 import type { ThreadMessage } from "@/lib/gmail";
@@ -33,8 +33,6 @@ export function ThreadRow({
   const [messages, setMessages] = useState<ThreadMessage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, start] = useTransition();
-  const [importing, setImporting] = useState<string | null>(null);
-  const [imported, setImported] = useState<Set<string>>(new Set());
 
   function toggle() {
     const next = !open;
@@ -46,25 +44,6 @@ export function ThreadRow({
         else setMessages(res.messages);
       });
     }
-  }
-
-  function doImport(m: ThreadMessage, attId: string, filename: string, mime: string) {
-    setImporting(attId);
-    start(async () => {
-      const res = await importAttachment(
-        projectId,
-        m.id,
-        attId,
-        filename,
-        mime
-      );
-      setImporting(null);
-      if (res?.error) setError(res.error);
-      else {
-        setImported((prev) => new Set(prev).add(attId));
-        router.refresh();
-      }
-    });
   }
 
   return (
@@ -126,23 +105,13 @@ export function ThreadRow({
                             {att.filename}
                             {att.size ? ` · ${fileSize(att.size)}` : ""}
                           </span>
-                          <Button
-                            size="sm"
-                            variant={imported.has(att.attachmentId) ? "secondary" : "primary"}
-                            disabled={
-                              imported.has(att.attachmentId) ||
-                              importing === att.attachmentId
-                            }
-                            onClick={() =>
-                              doImport(m, att.attachmentId, att.filename, att.mimeType)
-                            }
-                          >
-                            {imported.has(att.attachmentId)
-                              ? "Imported"
-                              : importing === att.attachmentId
-                                ? "..."
-                                : "Import to assets"}
-                          </Button>
+                          <ImportAttachment
+                            projectId={projectId}
+                            messageId={m.id}
+                            attachmentId={att.attachmentId}
+                            filename={att.filename}
+                            mimeType={att.mimeType}
+                          />
                         </div>
                       ))}
                     </div>

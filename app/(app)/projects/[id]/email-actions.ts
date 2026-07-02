@@ -108,7 +108,44 @@ function assetTypeFromMime(
   return "other";
 }
 
-// Downloads a Gmail attachment server-side and files it as a project asset.
+// Existing project assets, to offer an email attachment as a new version of one.
+export async function getProjectAssets(
+  projectId: string
+): Promise<{ assets: { id: string; name: string }[] } | { error: string }> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("assets")
+    .select("id, name")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+  if (error) return { error: error.message };
+  return { assets: data ?? [] };
+}
+
+// Shared: download the Gmail attachment and store it once.
+async function fetchAndStore(
+  supabase: SupabaseClient<Database>,
+  studioId: string,
+  projectId: string,
+  gmailMessageId: string,
+  attachmentId: string,
+  filename: string,
+  mimeType: string
+): Promise<{ path: string; size: number } | { error: string }> {
+  const account = await getGoogleAccount(supabase);
+  if (!account) return { error: "Connect Gmail in Settings first." };
+  const token = await getAccessToken(supabase, account);
+  const bytes = await getAttachmentBytes(token, gmailMessageId, attachmentId);
+  const path = `${studioId}/${projectId}/gmail-${crypto.randomUUID()}-${safeName(filename)}`;
+  const { error } = await supabase.storage
+    .from("assets")
+    .upload(path, bytes, { contentType: mimeType || undefined, upsert: false });
+  if (error) return { error: error.message };
+  return { path, size: bytes.length };
+}
+
+// Import a Gmail attachment as a brand-new project asset (v1).
 export async function importAttachment(
   projectId: string,
   gmailMessageId: string,
@@ -118,18 +155,17 @@ export async function importAttachment(
 ): Promise<EmailState> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  const account = await getGoogleAccount(supabase);
-  if (!account) return { error: "Connect Gmail in Settings first." };
-
   try {
-    const token = await getAccessToken(supabase, account);
-    const bytes = await getAttachmentBytes(token, gmailMessageId, attachmentId);
-    const path = `${ctx.studio.id}/${projectId}/gmail-${crypto.randomUUID()}-${safeName(filename)}`;
-
-    const { error: upErr } = await supabase.storage
-      .from("assets")
-      .upload(path, bytes, { contentType: mimeType || undefined, upsert: false });
-    if (upErr) return { error: upErr.message };
+    const stored = await fetchAndStore(
+      supabase,
+      ctx.studio.id,
+      projectId,
+      gmailMessageId,
+      attachmentId,
+      filename,
+      mimeType
+    );
+    if ("error" in stored) return stored;
 
     const { data: asset, error: aErr } = await supabase
       .from("assets")
@@ -156,9 +192,9 @@ export async function importAttachment(
         studio_id: ctx.studio.id,
         asset_id: asset.id,
         version_number: 1,
-        storage_path: path,
+        storage_path: stored.path,
         mime_type: mimeType || null,
-        size_bytes: bytes.length,
+        size_bytes: stored.size,
         notes: "Imported from Gmail",
         created_by: ctx.userId,
       })
@@ -177,6 +213,82 @@ export async function importAttachment(
       author_id: ctx.userId,
       type: "upload",
       content: `Imported "${filename}" from email`,
+    });
+
+    revalidatePath(`/projects/${projectId}`);
+    return null;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Import failed." };
+  }
+}
+
+// Import a Gmail attachment as a new version of an existing asset.
+export async function importAttachmentAsVersion(
+  projectId: string,
+  assetId: string,
+  gmailMessageId: string,
+  attachmentId: string,
+  filename: string,
+  mimeType: string
+): Promise<EmailState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: asset } = await supabase
+    .from("assets")
+    .select("name")
+    .eq("id", assetId)
+    .maybeSingle();
+  if (!asset) return { error: "Asset not found." };
+
+  try {
+    const stored = await fetchAndStore(
+      supabase,
+      ctx.studio.id,
+      projectId,
+      gmailMessageId,
+      attachmentId,
+      filename,
+      mimeType
+    );
+    if ("error" in stored) return stored;
+
+    const { data: last } = await supabase
+      .from("versions")
+      .select("version_number")
+      .eq("asset_id", assetId)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const versionNumber = (last?.version_number ?? 0) + 1;
+
+    const { data: version, error: vErr } = await supabase
+      .from("versions")
+      .insert({
+        studio_id: ctx.studio.id,
+        asset_id: assetId,
+        version_number: versionNumber,
+        storage_path: stored.path,
+        mime_type: mimeType || null,
+        size_bytes: stored.size,
+        notes: "Imported from Gmail",
+        created_by: ctx.userId,
+      })
+      .select("id")
+      .single();
+    if (vErr) return { error: vErr.message };
+
+    await supabase
+      .from("assets")
+      .update({ current_version_id: version.id })
+      .eq("id", assetId);
+
+    await supabase.from("activity").insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      author_id: ctx.userId,
+      type: "upload",
+      content: `Added v${versionNumber} to "${asset.name}" from email`,
     });
 
     revalidatePath(`/projects/${projectId}`);
