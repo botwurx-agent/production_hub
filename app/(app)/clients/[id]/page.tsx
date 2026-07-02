@@ -9,6 +9,7 @@ import { AddContactForm } from "@/components/contacts/add-contact-form";
 import { NewProjectButton } from "@/components/projects/new-project-button";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { addClientContact } from "@/app/(app)/clients/actions";
+import { EmailPanel } from "@/components/projects/project-email";
 import { PROJECT_STATUS } from "@/lib/status";
 import { shortDate } from "@/lib/format";
 import type { Contact } from "@/lib/database.types";
@@ -28,7 +29,12 @@ export default async function ClientDetailPage({
     .maybeSingle();
   if (!client) notFound();
 
-  const [{ data: contacts }, { data: projects }] = await Promise.all([
+  const [
+    { data: contacts },
+    { data: projects },
+    { data: emailThreads },
+    { data: emailAccount },
+  ] = await Promise.all([
     supabase
       .from("contacts")
       .select("*")
@@ -39,9 +45,16 @@ export default async function ClientDetailPage({
       .select("id, title, status, shoot_date, due_date")
       .eq("client_id", params.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("email_threads")
+      .select("id, gmail_thread_id, subject, last_message_at")
+      .eq("client_id", params.id)
+      .order("last_message_at", { ascending: false, nullsFirst: false }),
+    supabase.from("email_accounts").select("id, scope").limit(1).maybeSingle(),
   ]);
 
   const revalidate = `/clients/${params.id}`;
+  const primaryEmail = (contacts ?? []).find((c) => c.email)?.email ?? "";
 
   return (
     <div>
@@ -123,6 +136,19 @@ export default async function ClientDetailPage({
               ))}
             </ul>
           )}
+        </Card>
+
+        {/* Email */}
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-base font-bold">Email</h2>
+          <EmailPanel
+            ownerType="client"
+            ownerId={client.id}
+            connected={Boolean(emailAccount)}
+            canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
+            defaultQuery={primaryEmail || client.name}
+            threads={emailThreads ?? []}
+          />
         </Card>
       </div>
     </div>

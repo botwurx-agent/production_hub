@@ -123,6 +123,12 @@ export async function convertLead(leadId: string) {
     .update({ client_id: client.id, lead_id: null })
     .eq("lead_id", leadId);
 
+  // Carry the lead's email threads forward onto the new client.
+  await supabase
+    .from("email_threads")
+    .update({ client_id: client.id, lead_id: null })
+    .eq("lead_id", leadId);
+
   await supabase
     .from("leads")
     .update({

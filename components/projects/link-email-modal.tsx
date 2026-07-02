@@ -8,18 +8,21 @@ import { Input } from "@/components/ui/input";
 import {
   searchGmailThreads,
   linkThread,
+  type OwnerType,
 } from "@/app/(app)/projects/[id]/email-actions";
 import type { ThreadSummary } from "@/lib/gmail";
 
 export function LinkEmailModal({
   open,
   onClose,
-  projectId,
+  ownerType,
+  ownerId,
   defaultQuery,
 }: {
   open: boolean;
   onClose: () => void;
-  projectId: string;
+  ownerType: OwnerType;
+  ownerId: string;
   defaultQuery: string;
 }) {
   const router = useRouter();
@@ -55,7 +58,13 @@ export function LinkEmailModal({
   function link(t: ThreadSummary) {
     setLinkingId(t.gmailThreadId);
     startSearch(async () => {
-      const res = await linkThread(projectId, t.gmailThreadId, t.subject, t.dateMs);
+      const res = await linkThread(
+        ownerType,
+        ownerId,
+        t.gmailThreadId,
+        t.subject,
+        t.dateMs
+      );
       setLinkingId(null);
       if (res?.error) {
         setError(res.error);

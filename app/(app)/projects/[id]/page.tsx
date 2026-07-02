@@ -7,7 +7,7 @@ import { StatusMenu } from "@/components/projects/status-menu";
 import { BriefEditor } from "@/components/projects/brief-editor";
 import { AssetCard } from "@/components/projects/asset-card";
 import { AddAssetButton } from "@/components/projects/add-asset-button";
-import { ProjectEmail } from "@/components/projects/project-email";
+import { EmailPanel } from "@/components/projects/project-email";
 import {
   ActivityPanel,
   type ActivityItem,
@@ -209,7 +209,9 @@ export default async function ProjectDetailPage({
           {/* Email / communication */}
           <Card className="p-5">
             <h2 className="mb-4 font-display text-base font-bold">Email</h2>
-            <ProjectEmail
+            <EmailPanel
+              ownerType="project"
+              ownerId={project.id}
               projectId={project.id}
               connected={Boolean(emailAccount)}
               canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}

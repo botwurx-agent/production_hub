@@ -9,6 +9,7 @@ import { LeadStageMenu } from "@/components/leads/lead-stage-menu";
 import { ConvertButton } from "@/components/leads/convert-button";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { addLeadContact } from "@/app/(app)/leads/actions";
+import { EmailPanel } from "@/components/projects/project-email";
 import type { Contact } from "@/lib/database.types";
 
 export default async function LeadDetailPage({
@@ -26,13 +27,19 @@ export default async function LeadDetailPage({
     .maybeSingle();
   if (!lead) notFound();
 
-  const { data: contacts } = await supabase
-    .from("contacts")
-    .select("*")
-    .eq("lead_id", params.id)
-    .order("created_at");
+  const [{ data: contacts }, { data: emailThreads }, { data: emailAccount }] =
+    await Promise.all([
+      supabase.from("contacts").select("*").eq("lead_id", params.id).order("created_at"),
+      supabase
+        .from("email_threads")
+        .select("id, gmail_thread_id, subject, last_message_at")
+        .eq("lead_id", params.id)
+        .order("last_message_at", { ascending: false, nullsFirst: false }),
+      supabase.from("email_accounts").select("id, scope").limit(1).maybeSingle(),
+    ]);
 
   const revalidate = `/leads/${params.id}`;
+  const primaryEmail = (contacts ?? []).find((c) => c.email)?.email ?? "";
 
   return (
     <div>
@@ -87,6 +94,18 @@ export default async function LeadDetailPage({
             />
           </div>
           <AddContactForm action={addLeadContact.bind(null, lead.id)} />
+        </Card>
+
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-base font-bold">Email</h2>
+          <EmailPanel
+            ownerType="lead"
+            ownerId={lead.id}
+            connected={Boolean(emailAccount)}
+            canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
+            defaultQuery={primaryEmail || lead.company}
+            threads={emailThreads ?? []}
+          />
         </Card>
       </div>
     </div>

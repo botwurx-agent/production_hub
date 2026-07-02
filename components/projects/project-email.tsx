@@ -13,6 +13,7 @@ import {
   getThreadMessages,
   unlinkThread,
   sendReply,
+  type OwnerType,
 } from "@/app/(app)/projects/[id]/email-actions";
 import type { ThreadMessage } from "@/lib/gmail";
 
@@ -23,14 +24,24 @@ export type LinkedThread = {
   last_message_at: string | null;
 };
 
-export function ThreadRow({
+const OWNER_PATH: Record<OwnerType, string> = {
+  project: "/projects",
+  lead: "/leads",
+  client: "/clients",
+};
+
+// Reads a linked email thread inline, with reply and (for projects) import.
+// projectId enables attachment import; revalidate is the page to refresh.
+export function ThreadReader({
   thread,
-  projectId,
   canSend = false,
+  projectId,
+  revalidate,
 }: {
   thread: LinkedThread;
-  projectId: string;
   canSend?: boolean;
+  projectId?: string;
+  revalidate: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -60,13 +71,15 @@ export function ThreadRow({
     setSending(true);
     setReplyError(null);
     start(async () => {
-      const res = await sendReply(projectId, thread.gmail_thread_id, reply);
+      const res = await sendReply(thread.gmail_thread_id, reply, {
+        projectId,
+        revalidate,
+      });
       setSending(false);
-      if (res?.error) {
-        setReplyError(res.error);
-      } else {
+      if (res?.error) setReplyError(res.error);
+      else {
         setReply("");
-        loadMessages(); // pull in the just-sent message
+        loadMessages();
         router.refresh();
       }
     });
@@ -87,7 +100,9 @@ export function ThreadRow({
         </button>
         <button
           onClick={() =>
-            start(() => unlinkThread(thread.id, projectId).then(() => router.refresh()))
+            start(() =>
+              unlinkThread(thread.id, revalidate).then(() => router.refresh())
+            )
           }
           className="shrink-0 rounded-[8px] p-1 text-text-faint transition hover:bg-red-bg hover:text-red"
           aria-label="Unlink thread"
@@ -131,13 +146,19 @@ export function ThreadRow({
                             {att.filename}
                             {att.size ? ` · ${fileSize(att.size)}` : ""}
                           </span>
-                          <ImportAttachment
-                            projectId={projectId}
-                            messageId={m.id}
-                            attachmentId={att.attachmentId}
-                            filename={att.filename}
-                            mimeType={att.mimeType}
-                          />
+                          {projectId ? (
+                            <ImportAttachment
+                              projectId={projectId}
+                              messageId={m.id}
+                              attachmentId={att.attachmentId}
+                              filename={att.filename}
+                              mimeType={att.mimeType}
+                            />
+                          ) : (
+                            <span className="text-text-faint">
+                              Import once this is a project
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -147,7 +168,6 @@ export function ThreadRow({
             </ol>
           )}
 
-          {/* Reply */}
           {messages !== null &&
             (canSend ? (
               <div className="mt-3 border-t border-border pt-3">
@@ -175,10 +195,7 @@ export function ThreadRow({
             ) : (
               <p className="mt-3 border-t border-border pt-3 text-xs text-text-faint">
                 Reconnect Gmail in{" "}
-                <Link
-                  href="/settings"
-                  className="font-semibold text-accent hover:underline"
-                >
+                <Link href="/settings" className="font-semibold text-accent hover:underline">
                   Settings
                 </Link>{" "}
                 to reply from here.
@@ -190,20 +207,26 @@ export function ThreadRow({
   );
 }
 
-export function ProjectEmail({
-  projectId,
+// Owner-agnostic email panel: link + read + reply, on a project, lead or client.
+export function EmailPanel({
+  ownerType,
+  ownerId,
   connected,
   canSend = false,
   defaultQuery,
   threads,
+  projectId,
 }: {
-  projectId: string;
+  ownerType: OwnerType;
+  ownerId: string;
   connected: boolean;
   canSend?: boolean;
   defaultQuery: string;
   threads: LinkedThread[];
+  projectId?: string;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
+  const revalidate = `${OWNER_PATH[ownerType]}/${ownerId}`;
 
   if (!connected) {
     return (
@@ -212,7 +235,7 @@ export function ProjectEmail({
         <Link href="/settings" className="font-semibold text-accent hover:underline">
           Settings
         </Link>{" "}
-        to bring this project&apos;s email in here.
+        to bring this {ownerType}&apos;s email in here.
       </p>
     );
   }
@@ -227,17 +250,17 @@ export function ProjectEmail({
 
       {threads.length === 0 ? (
         <p className="rounded-[12px] border border-dashed border-border px-3 py-6 text-center text-sm text-text-faint">
-          No email linked yet. Link a Gmail thread to read it here and pull its
-          attachments into assets.
+          No email linked yet. Link a Gmail thread to read and reply here.
         </p>
       ) : (
         <div className="space-y-2">
           {threads.map((t) => (
-            <ThreadRow
+            <ThreadReader
               key={t.id}
               thread={t}
-              projectId={projectId}
               canSend={canSend}
+              projectId={projectId}
+              revalidate={revalidate}
             />
           ))}
         </div>
@@ -246,7 +269,8 @@ export function ProjectEmail({
       <LinkEmailModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        projectId={projectId}
+        ownerType={ownerType}
+        ownerId={ownerId}
         defaultQuery={defaultQuery}
       />
     </div>

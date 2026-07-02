@@ -17,6 +17,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 
 export type EmailState = { error?: string } | null;
+export type OwnerType = "project" | "lead" | "client";
+
+const ownerPath: Record<OwnerType, string> = {
+  project: "/projects",
+  lead: "/leads",
+  client: "/clients",
+};
 
 async function getGoogleAccount(supabase: SupabaseClient<Database>) {
   const { data } = await supabase
@@ -62,7 +69,8 @@ export async function getThreadMessages(
 }
 
 export async function linkThread(
-  projectId: string,
+  ownerType: OwnerType,
+  ownerId: string,
   gmailThreadId: string,
   subject: string,
   lastMessageMs: number
@@ -72,29 +80,31 @@ export async function linkThread(
   const account = await getGoogleAccount(supabase);
   if (!account) return { error: "Connect Gmail in Settings first." };
 
-  const { error } = await supabase.from("email_threads").upsert(
-    {
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      account_id: account.id,
-      gmail_thread_id: gmailThreadId,
-      subject,
-      last_message_at: lastMessageMs
-        ? new Date(lastMessageMs).toISOString()
-        : null,
-      created_by: ctx.userId,
-    },
-    { onConflict: "project_id,gmail_thread_id" }
-  );
-  if (error) return { error: error.message };
-  revalidatePath(`/projects/${projectId}`);
+  const { error } = await supabase.from("email_threads").insert({
+    studio_id: ctx.studio.id,
+    project_id: ownerType === "project" ? ownerId : null,
+    lead_id: ownerType === "lead" ? ownerId : null,
+    client_id: ownerType === "client" ? ownerId : null,
+    account_id: account.id,
+    gmail_thread_id: gmailThreadId,
+    subject,
+    last_message_at: lastMessageMs
+      ? new Date(lastMessageMs).toISOString()
+      : null,
+    created_by: ctx.userId,
+  });
+  // 23505 = already linked to this owner; treat as success.
+  if (error && error.code !== "23505") return { error: error.message };
+
+  revalidatePath(`${ownerPath[ownerType]}/${ownerId}`);
+  revalidatePath("/communication");
   return null;
 }
 
 export async function sendReply(
-  projectId: string,
   gmailThreadId: string,
-  body: string
+  body: string,
+  opts: { projectId?: string; revalidate?: string } = {}
 ): Promise<EmailState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -111,25 +121,30 @@ export async function sendReply(
     const token = await getAccessToken(supabase, account);
     const rc = await getReplyContext(token, gmailThreadId);
     await sendGmailReply(token, gmailThreadId, rc, text);
-    await supabase.from("activity").insert({
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      author_id: ctx.userId,
-      type: "activity",
-      content: `Replied via email: "${rc.subject}"`,
-    });
-    revalidatePath(`/projects/${projectId}`);
+    // Log to the project timeline only when the thread belongs to a project.
+    if (opts.projectId) {
+      await supabase.from("activity").insert({
+        studio_id: ctx.studio.id,
+        project_id: opts.projectId,
+        author_id: ctx.userId,
+        type: "activity",
+        content: `Replied via email: "${rc.subject}"`,
+      });
+    }
+    if (opts.revalidate) revalidatePath(opts.revalidate);
+    revalidatePath("/communication");
     return null;
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not send reply." };
   }
 }
 
-export async function unlinkThread(threadRowId: string, projectId: string) {
+export async function unlinkThread(threadRowId: string, revalidate?: string) {
   await requireStudioContext();
   const supabase = createClient();
   await supabase.from("email_threads").delete().eq("id", threadRowId);
-  revalidatePath(`/projects/${projectId}`);
+  if (revalidate) revalidatePath(revalidate);
+  revalidatePath("/communication");
 }
 
 function safeName(name: string): string {

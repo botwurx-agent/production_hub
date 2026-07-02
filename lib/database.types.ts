@@ -437,7 +437,9 @@ export type Database = {
         Row: {
           id: string;
           studio_id: string;
-          project_id: string;
+          project_id: string | null;
+          lead_id: string | null;
+          client_id: string | null;
           account_id: string;
           gmail_thread_id: string;
           subject: string | null;
@@ -448,7 +450,9 @@ export type Database = {
         Insert: {
           id?: string;
           studio_id: string;
-          project_id: string;
+          project_id?: string | null;
+          lead_id?: string | null;
+          client_id?: string | null;
           account_id: string;
           gmail_thread_id: string;
           subject?: string | null;
@@ -459,7 +463,9 @@ export type Database = {
         Update: {
           id?: string;
           studio_id?: string;
-          project_id?: string;
+          project_id?: string | null;
+          lead_id?: string | null;
+          client_id?: string | null;
           account_id?: string;
           gmail_thread_id?: string;
           subject?: string | null;
