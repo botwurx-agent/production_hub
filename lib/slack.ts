@@ -227,6 +227,32 @@ export async function getConversationHistory(
   return out;
 }
 
+// Counts channel messages newer than sinceTs (epoch seconds string) that were
+// not authored by the connected user, skipping system messages (joins, etc.).
+// An empty sinceTs counts the recent window. Used for the Communication badge.
+export async function countNewIncoming(
+  token: string,
+  channelId: string,
+  sinceTs: string,
+  myUserId: string
+): Promise<number> {
+  const params: Record<string, string> = { channel: channelId, limit: "100" };
+  if (sinceTs) {
+    params.oldest = sinceTs;
+    params.inclusive = "false";
+  }
+  const data = await slackGet<{
+    messages?: { ts: string; user?: string; subtype?: string }[];
+  }>(token, "conversations.history", params);
+  let n = 0;
+  for (const m of data.messages ?? []) {
+    if (m.subtype) continue;
+    if (m.user && m.user === myUserId) continue;
+    n += 1;
+  }
+  return n;
+}
+
 // Posts a message to a channel as the connected user (needs chat:write).
 export async function postSlackMessage(
   token: string,

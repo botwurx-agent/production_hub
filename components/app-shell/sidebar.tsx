@@ -9,6 +9,7 @@ import {
   SettingsIcon,
   CommunicationIcon,
 } from "@/components/app-shell/nav-icons";
+import { CommunicationBadge } from "@/components/app-shell/communication-badge";
 
 const nav = [
   { href: "/projects", label: "Projects", Icon: ProjectsIcon },
@@ -53,6 +54,7 @@ export function Sidebar({ studioName }: { studioName: string }) {
             >
               <Icon />
               {label}
+              {href === "/communication" && <CommunicationBadge />}
             </Link>
           );
         })}

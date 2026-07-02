@@ -447,6 +447,7 @@ export type Database = {
           gmail_thread_id: string;
           subject: string | null;
           last_message_at: string | null;
+          last_read_at: string;
           created_by: string | null;
           created_at: string;
         };
@@ -460,6 +461,7 @@ export type Database = {
           gmail_thread_id: string;
           subject?: string | null;
           last_message_at?: string | null;
+          last_read_at?: string;
           created_by?: string | null;
           created_at?: string;
         };
@@ -473,6 +475,7 @@ export type Database = {
           gmail_thread_id?: string;
           subject?: string | null;
           last_message_at?: string | null;
+          last_read_at?: string;
           created_by?: string | null;
           created_at?: string;
         };
@@ -694,6 +697,7 @@ export type Database = {
           account_id: string;
           slack_channel_id: string;
           channel_name: string | null;
+          last_read_at: string;
           created_by: string | null;
           created_at: string;
         };
@@ -706,6 +710,7 @@ export type Database = {
           account_id: string;
           slack_channel_id: string;
           channel_name?: string | null;
+          last_read_at?: string;
           created_by?: string | null;
           created_at?: string;
         };
@@ -718,6 +723,7 @@ export type Database = {
           account_id?: string;
           slack_channel_id?: string;
           channel_name?: string | null;
+          last_read_at?: string;
           created_by?: string | null;
           created_at?: string;
         };

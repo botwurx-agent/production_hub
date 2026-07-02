@@ -139,6 +139,17 @@ export async function sendReply(
   }
 }
 
+// Marks a thread read (opened in the Hub) so it stops counting toward the
+// Communication badge. Fire-and-forget from the thread reader.
+export async function markThreadRead(threadRowId: string): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("email_threads")
+    .update({ last_read_at: new Date().toISOString() })
+    .eq("id", threadRowId);
+}
+
 export async function unlinkThread(threadRowId: string, revalidate?: string) {
   await requireStudioContext();
   const supabase = createClient();

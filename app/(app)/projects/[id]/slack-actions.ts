@@ -122,6 +122,17 @@ export async function linkSlackChannel(
   return null;
 }
 
+// Marks a channel read (opened in the Hub) so it stops counting toward the
+// Communication badge. Fire-and-forget from the channel reader.
+export async function markChannelRead(rowId: string): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("slack_channels")
+    .update({ last_read_at: new Date().toISOString() })
+    .eq("id", rowId);
+}
+
 export async function unlinkSlackChannel(id: string, revalidate?: string) {
   await requireStudioContext();
   const supabase = createClient();

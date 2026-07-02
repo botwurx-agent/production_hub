@@ -15,7 +15,9 @@ import {
   getSlackChannelMessages,
   importSlackFile,
   sendSlackMessage,
+  markChannelRead,
 } from "@/app/(app)/projects/[id]/slack-actions";
+import { COMMS_READ_EVENT } from "@/components/app-shell/communication-badge";
 import type { OwnerType } from "@/app/(app)/projects/[id]/email-actions";
 import type { SlackConversationMatch, SlackMessage } from "@/lib/slack";
 
@@ -120,7 +122,13 @@ export function SlackReader({
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next && messages === null) loadMessages();
+    if (next) {
+      if (messages === null) loadMessages();
+      // Opening it here clears it from the Communication badge.
+      markChannelRead(channel.id)
+        .then(() => window.dispatchEvent(new Event(COMMS_READ_EVENT)))
+        .catch(() => {});
+    }
   }
 
   function send() {

@@ -13,8 +13,10 @@ import {
   getThreadMessages,
   unlinkThread,
   sendReply,
+  markThreadRead,
   type OwnerType,
 } from "@/app/(app)/projects/[id]/email-actions";
+import { COMMS_READ_EVENT } from "@/components/app-shell/communication-badge";
 import type { ThreadMessage } from "@/lib/gmail";
 
 export type LinkedThread = {
@@ -63,7 +65,13 @@ export function ThreadReader({
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next && messages === null) loadMessages();
+    if (next) {
+      if (messages === null) loadMessages();
+      // Opening it here clears it from the Communication badge.
+      markThreadRead(thread.id)
+        .then(() => window.dispatchEvent(new Event(COMMS_READ_EVENT)))
+        .catch(() => {});
+    }
   }
 
   function send() {

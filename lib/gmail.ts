@@ -206,6 +206,28 @@ export async function getThread(
   });
 }
 
+// Counts messages in a thread that arrived after sinceMs and were not sent by
+// the connected account (SENT/DRAFT labels). Used for the "new since you last
+// opened it here" Communication badge. Metadata format keeps the payload lean.
+export async function countNewIncoming(
+  accessToken: string,
+  gmailThreadId: string,
+  sinceMs: number
+): Promise<number> {
+  const t = await gapi<{
+    messages?: { internalDate?: string; labelIds?: string[] }[];
+  }>(accessToken, `threads/${gmailThreadId}?format=metadata&metadataHeaders=From`);
+  let n = 0;
+  for (const m of t.messages ?? []) {
+    const ms = Number(m.internalDate ?? 0);
+    const labels = m.labelIds ?? [];
+    if (ms > sinceMs && !labels.includes("SENT") && !labels.includes("DRAFT")) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
 export type ReplyContext = {
   to: string;
   subject: string;
