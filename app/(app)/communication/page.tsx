@@ -25,10 +25,11 @@ export default async function CommunicationPage() {
       .from("email_threads")
       .select("id, gmail_thread_id, subject, last_message_at, project:projects(id, title)")
       .order("last_message_at", { ascending: false, nullsFirst: false }),
-    supabase.from("email_accounts").select("id").limit(1).maybeSingle(),
+    supabase.from("email_accounts").select("id, scope").limit(1).maybeSingle(),
   ]);
 
   const rows = (threadsRaw ?? []) as unknown as Row[];
+  const canSend = Boolean(account?.scope?.includes("gmail.send"));
 
   // Group linked threads by project for a scannable inbox.
   const groups = new Map<string, { title: string; threads: Row[] }>();
@@ -109,7 +110,12 @@ export default async function CommunicationPage() {
               </div>
               <div className="space-y-2">
                 {g.threads.map((t) => (
-                  <ThreadRow key={t.id} thread={t} projectId={projectId} />
+                  <ThreadRow
+                    key={t.id}
+                    thread={t}
+                    projectId={projectId}
+                    canSend={canSend}
+                  />
                 ))}
               </div>
             </section>

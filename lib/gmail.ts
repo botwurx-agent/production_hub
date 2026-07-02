@@ -206,6 +206,77 @@ export async function getThread(
   });
 }
 
+export type ReplyContext = {
+  to: string;
+  subject: string;
+  inReplyTo: string;
+  references: string;
+};
+
+// Builds reply headers (recipient, threaded Subject/References) from the
+// last message in a thread.
+export async function getReplyContext(
+  accessToken: string,
+  gmailThreadId: string
+): Promise<ReplyContext> {
+  const t = await gapi<{ messages?: GmailMessage[] }>(
+    accessToken,
+    `threads/${gmailThreadId}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=Message-ID&metadataHeaders=References`
+  );
+  const msgs = t.messages ?? [];
+  const h = headerMap(msgs[msgs.length - 1]?.payload?.headers);
+  const rawSubject = h["subject"] || "";
+  const subject = /^re:/i.test(rawSubject) ? rawSubject : `Re: ${rawSubject}`;
+  const messageId = h["message-id"] || "";
+  const references = [h["references"], messageId].filter(Boolean).join(" ");
+  return {
+    to: h["reply-to"] || h["from"] || "",
+    subject,
+    inReplyTo: messageId,
+    references,
+  };
+}
+
+function encodeB64Url(input: string): string {
+  return Buffer.from(input, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+// Sends a plain-text reply that stays in the same Gmail thread. From is set by
+// Gmail to the authenticated account.
+export async function sendGmailReply(
+  accessToken: string,
+  gmailThreadId: string,
+  ctx: ReplyContext,
+  bodyText: string
+): Promise<void> {
+  const headers = [
+    `To: ${ctx.to}`,
+    `Subject: ${ctx.subject}`,
+    ctx.inReplyTo ? `In-Reply-To: ${ctx.inReplyTo}` : "",
+    ctx.references ? `References: ${ctx.references}` : "",
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+  ]
+    .filter(Boolean)
+    .join("\r\n");
+  const raw = encodeB64Url(`${headers}\r\n\r\n${bodyText}`);
+  const res = await fetch(`${API}/messages/send`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ raw, threadId: gmailThreadId }),
+  });
+  if (!res.ok) {
+    throw new Error(`Gmail send ${res.status}: ${await res.text()}`);
+  }
+}
+
 // Returns the raw bytes of an attachment.
 export async function getAttachmentBytes(
   accessToken: string,

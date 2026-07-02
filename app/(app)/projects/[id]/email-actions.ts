@@ -8,6 +8,8 @@ import {
   searchThreads,
   getThread,
   getAttachmentBytes,
+  getReplyContext,
+  sendGmailReply,
   type ThreadSummary,
   type ThreadMessage,
 } from "@/lib/gmail";
@@ -19,7 +21,7 @@ export type EmailState = { error?: string } | null;
 async function getGoogleAccount(supabase: SupabaseClient<Database>) {
   const { data } = await supabase
     .from("email_accounts")
-    .select("id, access_token, refresh_token, token_expiry, email")
+    .select("id, access_token, refresh_token, token_expiry, email, scope")
     .eq("provider", "google")
     .order("created_at", { ascending: true })
     .limit(1)
@@ -87,6 +89,40 @@ export async function linkThread(
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}`);
   return null;
+}
+
+export async function sendReply(
+  projectId: string,
+  gmailThreadId: string,
+  body: string
+): Promise<EmailState> {
+  const ctx = await requireStudioContext();
+  const text = body.trim();
+  if (!text) return { error: "Write a message first." };
+
+  const supabase = createClient();
+  const account = await getGoogleAccount(supabase);
+  if (!account) return { error: "Connect Gmail in Settings first." };
+  if (!(account.scope ?? "").includes("gmail.send")) {
+    return { error: "Reconnect Gmail in Settings to enable sending." };
+  }
+
+  try {
+    const token = await getAccessToken(supabase, account);
+    const rc = await getReplyContext(token, gmailThreadId);
+    await sendGmailReply(token, gmailThreadId, rc, text);
+    await supabase.from("activity").insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      author_id: ctx.userId,
+      type: "activity",
+      content: `Replied via email: "${rc.subject}"`,
+    });
+    revalidatePath(`/projects/${projectId}`);
+    return null;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not send reply." };
+  }
 }
 
 export async function unlinkThread(threadRowId: string, projectId: string) {

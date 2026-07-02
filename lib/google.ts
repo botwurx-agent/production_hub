@@ -7,6 +7,7 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
   "openid",
   "email",
   "profile",

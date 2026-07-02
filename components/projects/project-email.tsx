@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/input";
 import { LinkEmailModal } from "@/components/projects/link-email-modal";
 import { ImportAttachment } from "@/components/projects/import-attachment";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
@@ -11,6 +12,7 @@ import { fileSize, longDate, shortDate } from "@/lib/format";
 import {
   getThreadMessages,
   unlinkThread,
+  sendReply,
 } from "@/app/(app)/projects/[id]/email-actions";
 import type { ThreadMessage } from "@/lib/gmail";
 
@@ -24,26 +26,50 @@ export type LinkedThread = {
 export function ThreadRow({
   thread,
   projectId,
+  canSend = false,
 }: {
   thread: LinkedThread;
   projectId: string;
+  canSend?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ThreadMessage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, start] = useTransition();
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+
+  function loadMessages() {
+    start(async () => {
+      const res = await getThreadMessages(thread.gmail_thread_id);
+      if ("error" in res) setError(res.error);
+      else setMessages(res.messages);
+    });
+  }
 
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next && messages === null) {
-      start(async () => {
-        const res = await getThreadMessages(thread.gmail_thread_id);
-        if ("error" in res) setError(res.error);
-        else setMessages(res.messages);
-      });
-    }
+    if (next && messages === null) loadMessages();
+  }
+
+  function send() {
+    if (!reply.trim()) return;
+    setSending(true);
+    setReplyError(null);
+    start(async () => {
+      const res = await sendReply(projectId, thread.gmail_thread_id, reply);
+      setSending(false);
+      if (res?.error) {
+        setReplyError(res.error);
+      } else {
+        setReply("");
+        loadMessages(); // pull in the just-sent message
+        router.refresh();
+      }
+    });
   }
 
   return (
@@ -120,6 +146,44 @@ export function ThreadRow({
               ))}
             </ol>
           )}
+
+          {/* Reply */}
+          {messages !== null &&
+            (canSend ? (
+              <div className="mt-3 border-t border-border pt-3">
+                <Textarea
+                  value={reply}
+                  onChange={(e) => setReply(e.target.value)}
+                  placeholder="Write a reply... (sends from your connected Gmail, stays in this thread)"
+                  className="min-h-[72px]"
+                />
+                {replyError && (
+                  <p className="mt-1 text-xs font-medium text-red">
+                    {replyError}
+                  </p>
+                )}
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={send}
+                    disabled={sending || !reply.trim()}
+                  >
+                    {sending ? "Sending..." : "Send reply"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 border-t border-border pt-3 text-xs text-text-faint">
+                Reconnect Gmail in{" "}
+                <Link
+                  href="/settings"
+                  className="font-semibold text-accent hover:underline"
+                >
+                  Settings
+                </Link>{" "}
+                to reply from here.
+              </p>
+            ))}
         </div>
       )}
     </div>
@@ -129,11 +193,13 @@ export function ThreadRow({
 export function ProjectEmail({
   projectId,
   connected,
+  canSend = false,
   defaultQuery,
   threads,
 }: {
   projectId: string;
   connected: boolean;
+  canSend?: boolean;
   defaultQuery: string;
   threads: LinkedThread[];
 }) {
@@ -167,7 +233,12 @@ export function ProjectEmail({
       ) : (
         <div className="space-y-2">
           {threads.map((t) => (
-            <ThreadRow key={t.id} thread={t} projectId={projectId} />
+            <ThreadRow
+              key={t.id}
+              thread={t}
+              projectId={projectId}
+              canSend={canSend}
+            />
           ))}
         </div>
       )}

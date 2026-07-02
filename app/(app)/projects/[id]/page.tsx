@@ -72,7 +72,7 @@ export default async function ProjectDetailPage({
         .select("id, gmail_thread_id, subject, last_message_at")
         .eq("project_id", params.id)
         .order("last_message_at", { ascending: false, nullsFirst: false }),
-      supabase.from("email_accounts").select("id").limit(1).maybeSingle(),
+      supabase.from("email_accounts").select("id, scope").limit(1).maybeSingle(),
     ]);
 
   // Batch-sign all stored files so private previews and downloads work.
@@ -212,6 +212,7 @@ export default async function ProjectDetailPage({
             <ProjectEmail
               projectId={project.id}
               connected={Boolean(emailAccount)}
+              canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
               defaultQuery={clientName ?? ""}
               threads={emailThreads ?? []}
             />
