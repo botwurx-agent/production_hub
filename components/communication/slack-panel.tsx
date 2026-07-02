@@ -190,16 +190,14 @@ function LinkSlackModal({
   onClose,
   ownerType,
   ownerId,
-  defaultQuery,
 }: {
   open: boolean;
   onClose: () => void;
   ownerType: OwnerType;
   ownerId: string;
-  defaultQuery: string;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState(defaultQuery);
+  const [query, setQuery] = useState("");
   const [results, setResults] = useState<SlackConversationMatch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
@@ -216,8 +214,12 @@ function LinkSlackModal({
     });
   }
 
+  // List all conversations on open so they can browse or type to filter.
   useEffect(() => {
-    if (open) run(defaultQuery);
+    if (open) {
+      setQuery("");
+      run("");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -250,7 +252,7 @@ function LinkSlackModal({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search Slack messages (keywords, names)"
+            placeholder="Filter your channels and DMs by name"
             autoFocus
           />
           <Button type="submit" disabled={busy}>
@@ -313,14 +315,12 @@ export function SlackPanel({
   ownerType,
   ownerId,
   connected,
-  defaultQuery,
   channels,
   projectId,
 }: {
   ownerType: OwnerType;
   ownerId: string;
   connected: boolean;
-  defaultQuery: string;
   channels: LinkedSlackChannel[];
   projectId?: string;
 }) {
@@ -369,7 +369,6 @@ export function SlackPanel({
         onClose={() => setModalOpen(false)}
         ownerType={ownerType}
         ownerId={ownerId}
-        defaultQuery={defaultQuery}
       />
     </div>
   );

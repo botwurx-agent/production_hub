@@ -136,7 +136,6 @@ export default async function LeadDetailPage({
             ownerType="lead"
             ownerId={lead.id}
             connected={Boolean(slackAccount)}
-            defaultQuery={lead.company}
             channels={slackChannels ?? []}
           />
         </Card>

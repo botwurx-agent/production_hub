@@ -177,7 +177,6 @@ export default async function ClientDetailPage({
             ownerType="client"
             ownerId={client.id}
             connected={Boolean(slackAccount)}
-            defaultQuery={client.name}
             channels={slackChannels ?? []}
           />
         </Card>

@@ -102,32 +102,52 @@ export type SlackConversationMatch = {
   snippet: string;
 };
 
-// Search messages, then dedupe to the channels they live in (link targets).
+// Lists the user's conversations (channels, private channels, group + direct
+// messages) and filters by name. Empty query returns the full list to browse.
+// DM names are resolved via users.info (bounded).
 export async function searchConversations(
   token: string,
   query: string,
-  max = 20
+  max = 40
 ): Promise<SlackConversationMatch[]> {
+  const q = query.trim().toLowerCase();
   const data = await slackGet<{
-    messages?: {
-      matches?: {
-        channel?: { id: string; name?: string };
-        text?: string;
-      }[];
-    };
-  }>(token, "search.messages", { query, count: String(max) });
+    channels?: {
+      id: string;
+      name?: string;
+      is_im?: boolean;
+      user?: string;
+    }[];
+  }>(token, "conversations.list", {
+    types: "public_channel,private_channel,mpim,im",
+    exclude_archived: "true",
+    limit: "200",
+  });
 
-  const byChannel = new Map<string, SlackConversationMatch>();
-  for (const m of data.messages?.matches ?? []) {
-    const ch = m.channel;
-    if (!ch?.id || byChannel.has(ch.id)) continue;
-    byChannel.set(ch.id, {
-      channelId: ch.id,
-      channelName: ch.name || ch.id,
-      snippet: m.text || "",
-    });
+  const channels = data.channels ?? [];
+  const out: SlackConversationMatch[] = [];
+  let imLookups = 0;
+
+  for (const c of channels) {
+    let name = c.name;
+    // Direct messages have no name; resolve the other user (bounded to 60).
+    if (!name && c.is_im && c.user && imLookups < 60) {
+      imLookups += 1;
+      try {
+        const u = await slackGet<{
+          user?: { real_name?: string; name?: string };
+        }>(token, "users.info", { user: c.user });
+        name = u.user?.real_name || u.user?.name || c.user;
+      } catch {
+        name = c.user;
+      }
+    }
+    const label = name || c.id;
+    if (q && !label.toLowerCase().includes(q)) continue;
+    out.push({ channelId: c.id, channelName: label, snippet: "" });
+    if (out.length >= max) break;
   }
-  return [...byChannel.values()];
+  return out;
 }
 
 export type SlackFile = {
