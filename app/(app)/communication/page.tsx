@@ -73,8 +73,12 @@ export default async function CommunicationPage() {
   await requireStudioContext();
   const supabase = createClient();
 
-  const [{ data: emailRaw }, { data: slackRaw }, { data: googleAccount }] =
-    await Promise.all([
+  const [
+    { data: emailRaw },
+    { data: slackRaw },
+    { data: googleAccount },
+    { data: slackAccount },
+  ] = await Promise.all([
       supabase
         .from("email_threads")
         .select(
@@ -93,11 +97,18 @@ export default async function CommunicationPage() {
         .eq("provider", "google")
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from("email_accounts")
+        .select("id, scope")
+        .eq("provider", "slack")
+        .limit(1)
+        .maybeSingle(),
     ]);
 
   const emails = (emailRaw ?? []) as unknown as EmailRow[];
   const slacks = (slackRaw ?? []) as unknown as SlackRow[];
   const canSend = Boolean(googleAccount?.scope?.includes("gmail.send"));
+  const slackCanSend = Boolean(slackAccount?.scope?.includes("chat:write"));
   const anyConnection = emails.length > 0 || slacks.length > 0;
 
   const groups = new Map<string, Group>();
@@ -188,6 +199,7 @@ export default async function CommunicationPage() {
                     key={c.id}
                     channel={c}
                     projectId={g.projectId}
+                    canSend={slackCanSend}
                     revalidate="/communication"
                   />
                 ))}

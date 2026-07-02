@@ -7,6 +7,7 @@ import {
   searchConversations,
   getConversationHistory,
   getSlackFileBytes,
+  postSlackMessage,
   type SlackConversationMatch,
   type SlackMessage,
 } from "@/lib/slack";
@@ -25,7 +26,7 @@ const ownerPath: Record<OwnerType, string> = {
 async function getSlackAccount(supabase: SupabaseClient<Database>) {
   const { data } = await supabase
     .from("email_accounts")
-    .select("id, access_token")
+    .select("id, access_token, scope")
     .eq("provider", "slack")
     .order("created_at", { ascending: true })
     .limit(1)
@@ -65,6 +66,31 @@ export async function getSlackChannelMessages(
     return { messages };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not load channel." };
+  }
+}
+
+export async function sendSlackMessage(
+  channelId: string,
+  text: string,
+  opts: { revalidate?: string } = {}
+): Promise<SlackState> {
+  await requireStudioContext();
+  const body = text.trim();
+  if (!body) return { error: "Write a message first." };
+
+  const supabase = createClient();
+  const account = await getSlackAccount(supabase);
+  if (!account?.access_token)
+    return { error: "Connect Slack in Settings first." };
+  if (!(account.scope ?? "").includes("chat:write")) {
+    return { error: "Reconnect Slack in Settings to enable sending." };
+  }
+  try {
+    await postSlackMessage(account.access_token, channelId, body);
+    if (opts.revalidate) revalidatePath(opts.revalidate);
+    return null;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not send." };
   }
 }
 

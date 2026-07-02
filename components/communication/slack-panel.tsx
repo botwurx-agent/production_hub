@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
 import { fileSize, longDate } from "@/lib/format";
 import {
@@ -14,6 +14,7 @@ import {
   unlinkSlackChannel,
   getSlackChannelMessages,
   importSlackFile,
+  sendSlackMessage,
 } from "@/app/(app)/projects/[id]/slack-actions";
 import type { OwnerType } from "@/app/(app)/projects/[id]/email-actions";
 import type { SlackConversationMatch, SlackMessage } from "@/lib/slack";
@@ -91,10 +92,12 @@ function FileRow({
 export function SlackReader({
   channel,
   projectId,
+  canSend = false,
   revalidate,
 }: {
   channel: LinkedSlackChannel;
   projectId?: string;
+  canSend?: boolean;
   revalidate: string;
 }) {
   const router = useRouter();
@@ -102,17 +105,40 @@ export function SlackReader({
   const [messages, setMessages] = useState<SlackMessage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, start] = useTransition();
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  function loadMessages() {
+    start(async () => {
+      const res = await getSlackChannelMessages(channel.slack_channel_id);
+      if ("error" in res) setError(res.error);
+      else setMessages(res.messages);
+    });
+  }
 
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next && messages === null) {
-      start(async () => {
-        const res = await getSlackChannelMessages(channel.slack_channel_id);
-        if ("error" in res) setError(res.error);
-        else setMessages(res.messages);
+    if (next && messages === null) loadMessages();
+  }
+
+  function send() {
+    if (!draft.trim()) return;
+    setSending(true);
+    setSendError(null);
+    start(async () => {
+      const res = await sendSlackMessage(channel.slack_channel_id, draft, {
+        revalidate,
       });
-    }
+      setSending(false);
+      if (res?.error) setSendError(res.error);
+      else {
+        setDraft("");
+        loadMessages();
+        router.refresh();
+      }
+    });
   }
 
   return (
@@ -179,6 +205,40 @@ export function SlackReader({
               ))}
             </ol>
           )}
+
+          {messages !== null &&
+            (canSend ? (
+              <div className="mt-3 border-t border-border pt-3">
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Message this channel... (posts to Slack as you)"
+                  className="min-h-[64px]"
+                />
+                {sendError && (
+                  <p className="mt-1 text-xs font-medium text-red">
+                    {sendError}
+                  </p>
+                )}
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={send}
+                    disabled={sending || !draft.trim()}
+                  >
+                    {sending ? "Sending..." : "Send to Slack"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 border-t border-border pt-3 text-xs text-text-faint">
+                Reconnect Slack in{" "}
+                <Link href="/settings" className="font-semibold text-accent hover:underline">
+                  Settings
+                </Link>{" "}
+                to send messages from here.
+              </p>
+            ))}
         </div>
       )}
     </div>
@@ -315,12 +375,14 @@ export function SlackPanel({
   ownerType,
   ownerId,
   connected,
+  canSend = false,
   channels,
   projectId,
 }: {
   ownerType: OwnerType;
   ownerId: string;
   connected: boolean;
+  canSend?: boolean;
   channels: LinkedSlackChannel[];
   projectId?: string;
 }) {
@@ -358,6 +420,7 @@ export function SlackPanel({
               key={c.id}
               channel={c}
               projectId={projectId}
+              canSend={canSend}
               revalidate={revalidate}
             />
           ))}

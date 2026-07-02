@@ -66,7 +66,7 @@ export default async function ClientDetailPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("email_accounts")
-      .select("id")
+      .select("id, scope")
       .eq("provider", "slack")
       .limit(1)
       .maybeSingle(),
@@ -177,6 +177,7 @@ export default async function ClientDetailPage({
             ownerType="client"
             ownerId={client.id}
             connected={Boolean(slackAccount)}
+            canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
             channels={slackChannels ?? []}
           />
         </Card>

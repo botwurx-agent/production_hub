@@ -18,6 +18,7 @@ export const SLACK_USER_SCOPES = [
   "users:read",
   "files:read",
   "search:read",
+  "chat:write",
 ].join(",");
 
 export function slackConfigured(): boolean {
@@ -224,6 +225,24 @@ export async function getConversationHistory(
     });
   }
   return out;
+}
+
+// Posts a message to a channel as the connected user (needs chat:write).
+export async function postSlackMessage(
+  token: string,
+  channelId: string,
+  text: string
+): Promise<void> {
+  const res = await fetch(`${API}/chat.postMessage`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({ channel: channelId, text }),
+  });
+  const data = (await res.json()) as { ok: boolean; error?: string };
+  if (!data.ok) throw new Error(`Slack send: ${data.error ?? "error"}`);
 }
 
 export async function getSlackFileBytes(
