@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { aiConfigured, generateProjectSummary, AI_MODEL } from "@/lib/ai";
+import { aiConfigured, generateProjectSummary, aiModel } from "@/lib/ai";
 import { gatherProjectContext } from "@/lib/project-context";
 
 export type SummaryResult =
@@ -19,7 +19,7 @@ export async function summarizeProject(
   if (!aiConfigured()) {
     return {
       error:
-        "Add an ANTHROPIC_API_KEY to the deployment to turn on AI summaries.",
+        "Add an OpenAI or Anthropic API key to the deployment to turn on AI summaries.",
     };
   }
 
@@ -38,7 +38,7 @@ export async function summarizeProject(
         studio_id: ctx.studio.id,
         project_id: projectId,
         content,
-        model: AI_MODEL,
+        model: aiModel(),
         created_by: ctx.userId,
         created_at: createdAt,
       },

@@ -46,7 +46,8 @@ export function ProjectSummary({
   if (!connected) {
     return (
       <p className="rounded-[12px] border border-dashed border-border px-3 py-6 text-center text-sm text-text-muted">
-        Add an ANTHROPIC_API_KEY to the deployment to turn on AI summaries.
+        Add an OpenAI or Anthropic API key to the deployment to turn on AI
+        summaries.
       </p>
     );
   }
