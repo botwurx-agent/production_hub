@@ -76,6 +76,22 @@ export async function renameBoard(id: string, name: string): Promise<BoardState>
   return null;
 }
 
+export async function setBoardBackground(
+  id: string,
+  background: string
+): Promise<BoardState> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const bg = ["dots", "grid", "plain"].includes(background) ? background : "dots";
+  const { error } = await supabase
+    .from("boards")
+    .update({ background: bg })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/boards");
+  return null;
+}
+
 export async function setBoardProject(
   id: string,
   projectId: string | null

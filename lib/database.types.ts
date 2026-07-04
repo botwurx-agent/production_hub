@@ -201,6 +201,7 @@ export type Database = {
           project_id: string | null;
           name: string;
           position: number;
+          background: string;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -211,6 +212,7 @@ export type Database = {
           project_id?: string | null;
           name: string;
           position?: number;
+          background?: string;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -221,6 +223,7 @@ export type Database = {
           project_id?: string | null;
           name?: string;
           position?: number;
+          background?: string;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;

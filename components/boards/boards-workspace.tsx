@@ -13,6 +13,7 @@ import {
   renameBoard,
   deleteBoard,
   setBoardProject,
+  setBoardBackground,
   getBoardItems,
   addUploadItems,
   addNote,
@@ -93,6 +94,29 @@ export function BoardsWorkspace({
       await addNote(activeId, 80, 80);
       reload(activeId);
     });
+  }
+
+  function onDropFiles(files: FileList, x: number, y: number) {
+    if (!activeId) return;
+    const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (imgs.length === 0) return;
+    const fd = new FormData();
+    fd.set("boardId", activeId);
+    fd.set("x", String(x));
+    fd.set("y", String(y));
+    for (const f of imgs) fd.append("files", f);
+    startBusy(async () => {
+      await addUploadItems(fd);
+      reload(activeId);
+    });
+  }
+
+  function chooseBackground(bg: string) {
+    if (!active) return;
+    setBoards((prev) =>
+      prev.map((b) => (b.id === active.id ? { ...b, background: bg } : b))
+    );
+    void setBoardBackground(active.id, bg);
   }
 
   function toggleDrive(f: PickedDriveFile) {
@@ -181,6 +205,21 @@ export function BoardsWorkspace({
             </button>
             <div className="ml-auto flex items-center gap-2">
               {loading && <span className="text-xs text-text-faint">loading...</span>}
+              <div className="inline-flex items-center gap-0.5 rounded-[9px] border border-border bg-surface p-0.5">
+                {(["dots", "grid", "plain"] as const).map((bg) => (
+                  <button
+                    key={bg}
+                    onClick={() => chooseBackground(bg)}
+                    className={`rounded-[7px] px-2 py-1 text-xs font-semibold capitalize transition ${
+                      (active.background ?? "dots") === bg
+                        ? "bg-accent-soft text-accent"
+                        : "text-text-muted hover:text-text"
+                    }`}
+                  >
+                    {bg}
+                  </button>
+                ))}
+              </div>
               <button className={toolBtn} onClick={() => setSettingsOpen(true)}>
                 Board settings
               </button>
@@ -197,7 +236,13 @@ export function BoardsWorkspace({
 
           {/* Canvas */}
           <div className="min-h-0 flex-1">
-            <BoardCanvas boardId={active.id} items={items} setItems={setItems} />
+            <BoardCanvas
+              boardId={active.id}
+              items={items}
+              setItems={setItems}
+              background={active.background ?? "dots"}
+              onDropFiles={onDropFiles}
+            />
           </div>
         </>
       )}
