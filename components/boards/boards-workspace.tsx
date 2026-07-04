@@ -47,6 +47,7 @@ export function BoardsWorkspace({
   const [driveOpen, setDriveOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<Board | null>(null);
   const [driveSel, setDriveSel] = useState<PickedDriveFile[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -119,6 +120,16 @@ export function BoardsWorkspace({
     void setBoardBackground(active.id, bg);
   }
 
+  function doDelete(b: Board) {
+    startBusy(async () => {
+      await deleteBoard(b.id);
+      const rest = boards.filter((x) => x.id !== b.id);
+      setBoards(rest);
+      if (activeId === b.id) setActiveId(rest[0]?.id ?? null);
+      setDeleteConfirm(null);
+    });
+  }
+
   function toggleDrive(f: PickedDriveFile) {
     setDriveSel((prev) =>
       prev.some((x) => x.id === f.id)
@@ -147,19 +158,33 @@ export function BoardsWorkspace({
     <div className="flex h-[calc(100vh-8rem)] flex-col">
       {/* Tabs */}
       <div className="mb-3 flex items-center gap-1 overflow-x-auto border-b border-border pb-2">
-        {boards.map((b) => (
-          <button
-            key={b.id}
-            onClick={() => setActiveId(b.id)}
-            className={`shrink-0 rounded-[10px] px-3 py-1.5 text-sm font-semibold transition ${
-              b.id === activeId
-                ? "bg-accent-soft text-accent"
-                : "text-text-muted hover:bg-surface-2 hover:text-text"
-            }`}
-          >
-            {b.name}
-          </button>
-        ))}
+        {boards.map((b) => {
+          const isActive = b.id === activeId;
+          return (
+            <div
+              key={b.id}
+              className={`flex shrink-0 items-center rounded-[10px] py-1.5 pl-3 text-sm font-semibold transition ${
+                isActive
+                  ? "bg-accent-soft text-accent pr-1.5"
+                  : "pr-3 text-text-muted hover:bg-surface-2 hover:text-text"
+              }`}
+            >
+              <button onClick={() => setActiveId(b.id)}>{b.name}</button>
+              {isActive && (
+                <button
+                  onClick={() => setDeleteConfirm(b)}
+                  className="ml-1.5 grid h-5 w-5 place-items-center rounded-[6px] text-accent/70 transition hover:bg-red-bg hover:text-red"
+                  aria-label="Delete board"
+                  title="Delete board"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          );
+        })}
         <button
           onClick={newBoard}
           disabled={busy}
@@ -293,6 +318,35 @@ export function BoardsWorkspace({
           />
         </>
       )}
+
+      <Modal
+        open={Boolean(deleteConfirm)}
+        onClose={() => setDeleteConfirm(null)}
+        title="Delete board?"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-text-muted">
+            Delete{" "}
+            <span className="font-semibold text-text">
+              {deleteConfirm?.name}
+            </span>
+            ? This removes the board and everything on it. This can&apos;t be
+            undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteConfirm && doDelete(deleteConfirm)}
+              disabled={busy}
+            >
+              {busy ? "Deleting..." : "Delete board"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
