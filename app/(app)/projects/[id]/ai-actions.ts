@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { aiConfigured, generateProjectSummary, aiModel } from "@/lib/ai";
+import {
+  aiConfigured,
+  generateProjectSummary,
+  generateClientUpdate,
+  aiModel,
+} from "@/lib/ai";
 import { gatherProjectContext } from "@/lib/project-context";
 
 export type SummaryResult =
@@ -51,6 +56,38 @@ export async function summarizeProject(
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : "Could not generate summary.",
+    };
+  }
+}
+
+export type DraftResult = { error: string } | { draft: string };
+
+// Drafts a client-facing progress update from the project state. Ephemeral:
+// the producer edits it in place, then sends via a linked channel.
+export async function draftClientUpdate(
+  projectId: string
+): Promise<DraftResult> {
+  await requireStudioContext();
+  if (!aiConfigured()) {
+    return {
+      error:
+        "Add an OpenAI or Anthropic API key to the deployment to turn on AI drafts.",
+    };
+  }
+
+  const supabase = createClient();
+  const context = await gatherProjectContext(supabase, projectId);
+  if (!context) return { error: "Project not found." };
+
+  try {
+    const draft = await generateClientUpdate(context);
+    if (!draft) {
+      return { error: "The model returned an empty draft. Please try again." };
+    }
+    return { draft };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Could not generate draft.",
     };
   }
 }

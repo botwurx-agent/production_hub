@@ -111,12 +111,39 @@ async function openaiComplete(system: string, user: string): Promise<string> {
   return (data.choices?.[0]?.message?.content ?? "").trim();
 }
 
+const CLIENT_UPDATE_SYSTEM = `You are drafting a short progress update that a producer at a boutique commercial production studio will send to their client. It goes out under the producer's name, so write it as the producer.
+
+Write a warm, professional, concise update from the project data provided.
+
+Rules:
+- Optional short greeting, then a couple of sentences (or a few short bullets) on what has progressed and what is coming next.
+- If something is needed from the client (a review, an approval, an answer), ask for it clearly and specifically.
+- Client-facing tone: no internal jargon, no internal-only notes, nothing that would read as complaining about the client.
+- Never invent facts that are not in the data. If the project is early, keep it brief and forward-looking.
+- Keep it under about 150 words.
+- Plain text only. No markdown headers, no bold. Do not use em dashes; use commas, colons, or parentheses instead.
+- End with a simple sign-off line like "Best," on its own line (no name; the producer adds theirs).
+- This is a draft the producer will review and edit before sending, so do not include placeholders like [client name] unless the data does not provide one.`;
+
+function clientUpdateUserMessage(context: string): string {
+  return `Draft a client-facing progress update for this project.\n\n${context}`;
+}
+
+// Dispatch a system+user completion to the configured provider.
+async function complete(system: string, user: string): Promise<string> {
+  const provider = aiProvider();
+  if (provider === "openai") return openaiComplete(system, user);
+  if (provider === "anthropic") return anthropicComplete(system, user);
+  throw new Error("No AI provider configured.");
+}
+
 // Generates the "where does this project stand" summary from a prepared
 // context string, using whichever provider is configured.
 export async function generateProjectSummary(context: string): Promise<string> {
-  const provider = aiProvider();
-  const user = summaryUserMessage(context);
-  if (provider === "openai") return openaiComplete(SUMMARY_SYSTEM, user);
-  if (provider === "anthropic") return anthropicComplete(SUMMARY_SYSTEM, user);
-  throw new Error("No AI provider configured.");
+  return complete(SUMMARY_SYSTEM, summaryUserMessage(context));
+}
+
+// Generates a client-ready progress update draft from the project context.
+export async function generateClientUpdate(context: string): Promise<string> {
+  return complete(CLIENT_UPDATE_SYSTEM, clientUpdateUserMessage(context));
 }
