@@ -7,6 +7,8 @@ import { StatusMenu } from "@/components/projects/status-menu";
 import { BriefEditor } from "@/components/projects/brief-editor";
 import { AssetCard } from "@/components/projects/asset-card";
 import { AddAssetButton } from "@/components/projects/add-asset-button";
+import { DriveImportButton } from "@/components/projects/drive-import-button";
+import { driveConnected } from "@/lib/googledrive";
 import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
@@ -283,7 +285,12 @@ export default async function ProjectDetailPage({
           <Card className="p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-base font-bold">Assets</h2>
-              <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
+              <div className="flex items-center gap-2">
+                {driveConnected(emailAccount?.scope) && (
+                  <DriveImportButton projectId={project.id} />
+                )}
+                <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
+              </div>
             </div>
             {assets.length === 0 ? (
               <p className="rounded-[12px] border border-dashed border-border py-10 text-center text-sm text-text-faint">

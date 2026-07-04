@@ -11,6 +11,8 @@ export const GOOGLE_SCOPES = [
   // Google Chat: list the user's spaces, read messages, and post as the user.
   "https://www.googleapis.com/auth/chat.spaces.readonly",
   "https://www.googleapis.com/auth/chat.messages",
+  // Google Drive: read-only, to search and import files into a project.
+  "https://www.googleapis.com/auth/drive.readonly",
   "openid",
   "email",
   "profile",
