@@ -5,6 +5,7 @@ import { AssetStatusMenu } from "@/components/projects/asset-status-menu";
 import { AddVersionForm } from "@/components/projects/add-version-form";
 import { ReviewModal } from "@/components/projects/review-modal";
 import { AssetViewer, viewerKind } from "@/components/projects/asset-viewer";
+import { ShareReviewButton } from "@/components/projects/share-review-button";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag } from "@/components/status-tag";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
@@ -118,11 +119,13 @@ export function AssetCard({
   projectId,
   studioId,
   currentUserId,
+  reviewLink,
 }: {
   asset: AssetWithVersions;
   projectId: string;
   studioId: string;
   currentUserId: string;
+  reviewLink?: { id: string; token: string } | null;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -181,6 +184,16 @@ export function AssetCard({
             {asset.versions.length} version
             {asset.versions.length === 1 ? "" : "s"}
           </button>
+        )}
+        {current && (
+          <span className="ml-auto">
+            <ShareReviewButton
+              projectId={projectId}
+              assetId={asset.id}
+              initialToken={reviewLink?.token ?? null}
+              linkId={reviewLink?.id ?? null}
+            />
+          </span>
         )}
       </div>
 

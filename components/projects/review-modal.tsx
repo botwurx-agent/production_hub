@@ -105,22 +105,34 @@ export function ReviewModal({
           </div>
           {version.approvals.length > 0 && (
             <ul className="mt-3 space-y-1.5">
-              {version.approvals.map((a) => (
-                <li
-                  key={a.id}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <span className="text-text-muted">
-                    {a.reviewer_user_id === currentUserId ? "You" : "Team member"}
-                  </span>
-                  <StatusTag
-                    hue={a.status === "approved" ? "green" : "red"}
-                    dot={false}
+              {version.approvals.map((a) => {
+                const isClient = Boolean(a.reviewer_name) && !a.reviewer_user_id;
+                return (
+                  <li
+                    key={a.id}
+                    className="flex items-center justify-between text-sm"
                   >
-                    {a.status === "approved" ? "Approved" : "Changes requested"}
-                  </StatusTag>
-                </li>
-              ))}
+                    <span className="flex items-center gap-1.5 text-text-muted">
+                      {isClient
+                        ? a.reviewer_name
+                        : a.reviewer_user_id === currentUserId
+                          ? "You"
+                          : "Team member"}
+                      {isClient && (
+                        <span className="rounded-pill bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                          Client
+                        </span>
+                      )}
+                    </span>
+                    <StatusTag
+                      hue={a.status === "approved" ? "green" : "red"}
+                      dot={false}
+                    >
+                      {a.status === "approved" ? "Approved" : "Changes requested"}
+                    </StatusTag>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -132,12 +144,23 @@ export function ReviewModal({
           </span>
           {comments.length > 0 ? (
             <ol className="mt-3 space-y-3">
-              {comments.map((c) => (
+              {comments.map((c) => {
+                const isClient = Boolean(c.reviewer_name) && !c.author_id;
+                return (
                 <li key={c.id}>
                   <div className="mb-0.5 flex items-center gap-2">
                     <span className="text-xs font-semibold text-text">
-                      {c.author_id === currentUserId ? "You" : "Team member"}
+                      {isClient
+                        ? c.reviewer_name
+                        : c.author_id === currentUserId
+                          ? "You"
+                          : "Team member"}
                     </span>
+                    {isClient && (
+                      <span className="rounded-pill bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                        Client
+                      </span>
+                    )}
                     <span className="text-xs text-text-faint">
                       {timeAgo(c.created_at)}
                     </span>
@@ -146,7 +169,8 @@ export function ReviewModal({
                     {c.body}
                   </p>
                 </li>
-              ))}
+                );
+              })}
             </ol>
           ) : (
             <p className="mt-3 text-sm text-text-faint">

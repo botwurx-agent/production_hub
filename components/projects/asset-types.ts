@@ -5,12 +5,14 @@ export type VersionComment = {
   body: string;
   created_at: string;
   author_id: string | null;
+  reviewer_name: string | null;
 };
 
 export type VersionApproval = {
   id: string;
   status: ApprovalStatus;
   reviewer_user_id: string | null;
+  reviewer_name: string | null;
   created_at: string;
 };
 

@@ -61,6 +61,7 @@ export default async function ProjectDetailPage({
     { data: slackAccount },
     { data: chatSpaces },
     { data: summary },
+    { data: reviewLinks },
   ] = await Promise.all([
       supabase
         .from("briefs")
@@ -116,7 +117,21 @@ export default async function ProjectDetailPage({
         .select("content, created_at")
         .eq("project_id", params.id)
         .maybeSingle(),
+      supabase
+        .from("review_links")
+        .select("id, asset_id, token")
+        .eq("project_id", params.id)
+        .eq("revoked", false)
+        .order("created_at", { ascending: false }),
     ]);
+
+  // Newest active review link per asset (studios share one stable link each).
+  const reviewLinkByAsset = new Map<string, { id: string; token: string }>();
+  for (const l of reviewLinks ?? []) {
+    if (!reviewLinkByAsset.has(l.asset_id)) {
+      reviewLinkByAsset.set(l.asset_id, { id: l.id, token: l.token });
+    }
+  }
 
   // Batch-sign all stored files so private previews and downloads work.
   const paths = (assetsRaw ?? [])
@@ -144,11 +159,11 @@ export default async function ProjectDetailPage({
     const [{ data: comments }, { data: approvals }] = await Promise.all([
       supabase
         .from("review_comments")
-        .select("id, body, created_at, author_id, version_id")
+        .select("id, body, created_at, author_id, reviewer_name, version_id")
         .in("version_id", versionIds),
       supabase
         .from("approvals")
-        .select("id, status, reviewer_user_id, created_at, target_id")
+        .select("id, status, reviewer_user_id, reviewer_name, created_at, target_id")
         .eq("target_type", "version")
         .in("target_id", versionIds),
     ]);
@@ -305,6 +320,7 @@ export default async function ProjectDetailPage({
                     projectId={project.id}
                     studioId={ctx.studio.id}
                     currentUserId={ctx.userId}
+                    reviewLink={reviewLinkByAsset.get(a.id) ?? null}
                   />
                 ))}
               </div>

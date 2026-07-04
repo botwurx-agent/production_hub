@@ -70,7 +70,9 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           id: string;
+          review_link_id: string | null;
           reviewer_contact_id: string | null;
+          reviewer_name: string | null;
           reviewer_user_id: string | null;
           status: Database["public"]["Enums"]["approval_status"];
           studio_id: string;
@@ -83,7 +85,9 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
+          review_link_id?: string | null;
           reviewer_contact_id?: string | null;
+          reviewer_name?: string | null;
           reviewer_user_id?: string | null;
           status?: Database["public"]["Enums"]["approval_status"];
           studio_id: string;
@@ -96,7 +100,9 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
+          review_link_id?: string | null;
           reviewer_contact_id?: string | null;
+          reviewer_name?: string | null;
           reviewer_user_id?: string | null;
           status?: Database["public"]["Enums"]["approval_status"];
           studio_id?: string;
@@ -723,6 +729,8 @@ export type Database = {
           body: string;
           created_at: string;
           id: string;
+          review_link_id: string | null;
+          reviewer_name: string | null;
           studio_id: string;
           version_id: string;
         };
@@ -731,6 +739,8 @@ export type Database = {
           body: string;
           created_at?: string;
           id?: string;
+          review_link_id?: string | null;
+          reviewer_name?: string | null;
           studio_id: string;
           version_id: string;
         };
@@ -739,6 +749,8 @@ export type Database = {
           body?: string;
           created_at?: string;
           id?: string;
+          review_link_id?: string | null;
+          reviewer_name?: string | null;
           studio_id?: string;
           version_id?: string;
         };
@@ -758,6 +770,45 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      review_links: {
+        Row: {
+          asset_id: string;
+          created_at: string;
+          created_by: string | null;
+          expires_at: string | null;
+          id: string;
+          project_id: string;
+          recipient: string | null;
+          revoked: boolean;
+          studio_id: string;
+          token: string;
+        };
+        Insert: {
+          asset_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at?: string | null;
+          id?: string;
+          project_id: string;
+          recipient?: string | null;
+          revoked?: boolean;
+          studio_id: string;
+          token: string;
+        };
+        Update: {
+          asset_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at?: string | null;
+          id?: string;
+          project_id?: string;
+          recipient?: string | null;
+          revoked?: boolean;
+          studio_id?: string;
+          token?: string;
+        };
+        Relationships: [];
       };
       slack_channels: {
         Row: {
@@ -954,6 +1005,7 @@ export type Version = Tables<"versions">;
 export type Approval = Tables<"approvals">;
 export type Activity = Tables<"activity">;
 export type ReviewComment = Tables<"review_comments">;
+export type ReviewLink = Tables<"review_links">;
 export type EmailAccount = Tables<"email_accounts">;
 export type EmailThread = Tables<"email_threads">;
 export type SlackChannel = Tables<"slack_channels">;
