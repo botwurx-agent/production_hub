@@ -9,7 +9,14 @@ import Anthropic from "@anthropic-ai/sdk";
 export const ANTHROPIC_MODEL = "claude-opus-4-8";
 // OpenAI model is overridable so a different account/tier can swap it without a
 // code change. Default targets the Chat Completions API.
-export const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o";
+export const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
+
+// GPT-5 and o-series are reasoning models: they use max_completion_tokens
+// (not max_tokens), only allow the default temperature, and accept
+// reasoning_effort. Detect them so the request shape is correct.
+function isReasoningModel(model: string): boolean {
+  return /^(gpt-5|o\d)/i.test(model);
+}
 
 export type AiProvider = "anthropic" | "openai" | null;
 
@@ -73,20 +80,27 @@ async function anthropicComplete(
 
 // --- OpenAI path (Chat Completions) -----------------------------------------
 async function openaiComplete(system: string, user: string): Promise<string> {
+  const reasoning = isReasoningModel(OPENAI_MODEL);
+  const body: Record<string, unknown> = {
+    model: OPENAI_MODEL,
+    // Higher cap than the visible summary needs: reasoning models spend part of
+    // this budget on internal reasoning tokens before the answer.
+    max_completion_tokens: 2000,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  };
+  // Keep reasoning shallow for a short status summary (cheaper, faster).
+  if (reasoning) body.reasoning_effort = "low";
+
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      max_tokens: 900,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
