@@ -16,6 +16,8 @@ import {
   ClientUpdate,
   type UpdateDestination,
 } from "@/components/projects/client-update";
+import { ProjectAttention } from "@/components/projects/project-attention";
+import { getProjectOutstanding } from "@/lib/outstanding";
 import { aiConfigured } from "@/lib/ai";
 import {
   ActivityPanel,
@@ -181,6 +183,8 @@ export default async function ProjectDetailPage({
     project.due_date ? `Due ${longDate(project.due_date)}` : null,
   ].filter(Boolean);
 
+  const attention = await getProjectOutstanding(params.id);
+
   // Channels this update can be sent through: linked to the project and the
   // provider is connected with send access.
   const emailCanSend = Boolean(emailAccount?.scope?.includes("gmail.send"));
@@ -242,6 +246,9 @@ export default async function ProjectDetailPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {/* Needs attention (stalled sign-offs / unactioned revisions) */}
+          <ProjectAttention items={attention} />
+
           {/* AI project summary */}
           <Card className="p-5">
             <div className="mb-4 flex items-center gap-2">
