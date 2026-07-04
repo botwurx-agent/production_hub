@@ -17,6 +17,8 @@ export type DriveFile = {
   name: string;
   mimeType: string;
   iconLink?: string;
+  thumbnailLink?: string;
+  hasThumbnail: boolean;
   modifiedTime: string;
   modifiedMs: number;
   size: number; // 0 for Google-native docs (no direct size)
@@ -82,7 +84,7 @@ export async function searchDriveFiles(
     orderBy: "modifiedTime desc",
     pageSize: String(max),
     fields:
-      "files(id,name,mimeType,iconLink,modifiedTime,size)",
+      "files(id,name,mimeType,iconLink,thumbnailLink,hasThumbnail,modifiedTime,size)",
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
     corpora: "allDrives",
@@ -94,6 +96,8 @@ export async function searchDriveFiles(
       name?: string;
       mimeType?: string;
       iconLink?: string;
+      thumbnailLink?: string;
+      hasThumbnail?: boolean;
       modifiedTime?: string;
       size?: string;
     }[];
@@ -106,6 +110,8 @@ export async function searchDriveFiles(
       name: f.name!,
       mimeType: f.mimeType || "application/octet-stream",
       iconLink: f.iconLink,
+      thumbnailLink: f.thumbnailLink,
+      hasThumbnail: Boolean(f.hasThumbnail && f.thumbnailLink),
       modifiedTime: f.modifiedTime || "",
       modifiedMs: f.modifiedTime ? Date.parse(f.modifiedTime) : 0,
       size: f.size ? Number(f.size) : 0,
