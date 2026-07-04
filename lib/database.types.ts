@@ -627,6 +627,36 @@ export type Database = {
           },
         ];
       };
+      project_summaries: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          content: string;
+          model: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          content: string;
+          model?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          content?: string;
+          model?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       projects: {
         Row: {
           client_id: string | null;

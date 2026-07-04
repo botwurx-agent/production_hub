@@ -11,6 +11,8 @@ import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
+import { ProjectSummary } from "@/components/projects/project-summary";
+import { aiConfigured } from "@/lib/ai";
 import {
   ActivityPanel,
   type ActivityItem,
@@ -50,6 +52,7 @@ export default async function ProjectDetailPage({
     { data: slackChannels },
     { data: slackAccount },
     { data: chatSpaces },
+    { data: summary },
   ] = await Promise.all([
       supabase
         .from("briefs")
@@ -100,6 +103,11 @@ export default async function ProjectDetailPage({
         .select("id, space_name, space_display_name")
         .eq("project_id", params.id)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("project_summaries")
+        .select("content, created_at")
+        .eq("project_id", params.id)
+        .maybeSingle(),
     ]);
 
   // Batch-sign all stored files so private previews and downloads work.
@@ -199,6 +207,27 @@ export default async function ProjectDetailPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {/* AI project summary */}
+          <Card className="p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <h2 className="font-display text-base font-bold">
+                Project summary
+              </h2>
+              <span
+                className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
+                style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+              >
+                AI
+              </span>
+            </div>
+            <ProjectSummary
+              projectId={project.id}
+              connected={aiConfigured()}
+              initialContent={summary?.content ?? null}
+              initialAt={summary?.created_at ?? null}
+            />
+          </Card>
+
           {/* Brief */}
           <Card className="p-5">
             <h2 className="mb-3 font-display text-base font-bold">Brief</h2>
