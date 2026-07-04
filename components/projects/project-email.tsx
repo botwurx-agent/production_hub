@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,9 @@ import { longDate, shortDate } from "@/lib/format";
 import {
   getThreadMessages,
   unlinkThread,
-  sendReply,
   markThreadRead,
   getProjectAssets,
+  sendReplyWithFiles,
   type OwnerType,
 } from "@/app/(app)/projects/[id]/email-actions";
 import { COMMS_READ_EVENT } from "@/components/app-shell/communication-badge";
@@ -60,6 +60,17 @@ export function ThreadReader({
     { id: string; name: string }[] | null
   >(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function addFiles(list: FileList | null) {
+    if (!list) return;
+    setFiles((prev) => [...prev, ...Array.from(list)]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+  function removeFile(idx: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   function loadAssetOpts() {
     if (!projectId) return;
@@ -99,18 +110,22 @@ export function ThreadReader({
     if (!reply.trim()) return;
     setSending(true);
     setReplyError(null);
+    const fd = new FormData();
+    fd.set("threadId", thread.gmail_thread_id);
+    fd.set("body", reply);
+    if (projectId) fd.set("projectId", projectId);
+    if (revalidate) fd.set("revalidate", revalidate);
+    fd.set("assetIds", JSON.stringify(attachIds));
+    for (const f of files) fd.append("files", f);
     start(async () => {
-      const res = await sendReply(thread.gmail_thread_id, reply, {
-        projectId,
-        revalidate,
-        assetIds: attachIds,
-      });
+      const res = await sendReplyWithFiles(fd);
       setSending(false);
       if (res?.error) setReplyError(res.error);
       else {
         setReply("");
         setAttachIds([]);
         setAttachOpen(false);
+        setFiles([]);
         loadMessages();
         router.refresh();
       }
@@ -292,7 +307,44 @@ export function ThreadReader({
                     )}
                   </div>
                 )}
-                <div className="mt-2 flex justify-end">
+                {files.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {files.map((f, i) => (
+                      <span
+                        key={`${f.name}-${i}`}
+                        className="inline-flex items-center gap-1 rounded-pill bg-accent-soft px-2 py-0.5 text-[11px] text-accent"
+                      >
+                        {f.name}
+                        <button
+                          type="button"
+                          onClick={() => removeFile(i)}
+                          className="text-accent/70 hover:text-red"
+                          aria-label="Remove file"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => addFiles(e.target.files)}
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                    </svg>
+                    Attach file
+                  </button>
                   <Button
                     size="sm"
                     onClick={send}
