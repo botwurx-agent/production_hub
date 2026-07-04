@@ -9,8 +9,8 @@ const TOKEN_URL = "https://api.figma.com/v1/oauth/token";
 const REFRESH_URL = "https://api.figma.com/v1/oauth/refresh";
 const API = "https://api.figma.com/v1";
 
-// Figma's classic read scope (works across app configurations).
-const SCOPE = "file_read";
+// Figma's granular read scope (current apps reject the legacy "file_read").
+export const FIGMA_SCOPE = "files:read";
 
 export function figmaConfigured(): boolean {
   return Boolean(
@@ -22,7 +22,7 @@ export function buildFigmaAuthUrl(redirectUri: string, state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.FIGMA_CLIENT_ID!,
     redirect_uri: redirectUri,
-    scope: SCOPE,
+    scope: FIGMA_SCOPE,
     state,
     response_type: "code",
   });

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { exchangeFigmaCode, getFigmaMe } from "@/lib/figma";
+import { exchangeFigmaCode, getFigmaMe, FIGMA_SCOPE } from "@/lib/figma";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -33,12 +33,19 @@ export async function GET(request: NextRequest) {
   if (!membership) return settings("error=no_studio");
 
   let tokens;
-  let me;
   try {
     tokens = await exchangeFigmaCode(code, `${origin}/auth/figma/callback`);
-    me = await getFigmaMe(tokens.access_token);
   } catch {
     return settings("error=figma_exchange");
+  }
+
+  // Account info is best-effort: the files:read scope may not cover /me, so a
+  // failure here shouldn't block the connection.
+  let me = { id: "", email: "", handle: "Figma" };
+  try {
+    me = await getFigmaMe(tokens.access_token);
+  } catch {
+    // keep the default
   }
 
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
@@ -51,7 +58,7 @@ export async function GET(request: NextRequest) {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       token_expiry: expiry,
-      scope: "file_read",
+      scope: FIGMA_SCOPE,
       external_ref: { figma_user_id: me.id },
     },
     { onConflict: "user_id,provider,email" }
