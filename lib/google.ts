@@ -13,6 +13,8 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/chat.messages",
   // Google Drive: read-only, to search and import files into a project.
   "https://www.googleapis.com/auth/drive.readonly",
+  // Google Calendar: read + create/delete events (with Meet links).
+  "https://www.googleapis.com/auth/calendar.events",
   "openid",
   "email",
   "profile",

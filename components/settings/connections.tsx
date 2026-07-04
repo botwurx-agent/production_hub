@@ -26,7 +26,7 @@ const PROVIDERS: ProviderMeta[] = [
     glyph: "G",
     startPath: "/auth/google/start",
     blurb:
-      "Bring Gmail email (with attachment import), Google Chat spaces, and Google Drive files into the app, tied to the right job. Reconnect to grant new access.",
+      "Bring Gmail email (with attachment import), Google Chat spaces, Google Drive files, and your Google Calendar into the app, tied to the right job. Reconnect to grant new access.",
   },
   {
     key: "slack",

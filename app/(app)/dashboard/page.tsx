@@ -18,8 +18,14 @@ export default async function DashboardPage() {
   const ctx = await requireStudioContext();
   const supabase = createClient();
 
-  const [{ data: projects }, { data: leads }, { data: activityRaw }, outstanding, followUps] =
-    await Promise.all([
+  const [
+    { data: projects },
+    { data: leads },
+    { data: activityRaw },
+    { data: googleAccount },
+    outstanding,
+    followUps,
+  ] = await Promise.all([
       supabase
         .from("projects")
         .select("id, title, status, shoot_date, due_date, client:clients(name)"),
@@ -29,9 +35,18 @@ export default async function DashboardPage() {
         .select("id, content, type, created_at, project:projects(id, title)")
         .order("created_at", { ascending: false })
         .limit(8),
+      supabase
+        .from("email_accounts")
+        .select("scope")
+        .eq("provider", "google")
+        .limit(1)
+        .maybeSingle(),
       getOutstanding(),
       getLeadFollowups(),
     ]);
+  const calendarConnected = Boolean(
+    googleAccount?.scope?.includes("/auth/calendar")
+  );
 
   const proj = projects ?? [];
   const now = new Date();
@@ -111,6 +126,7 @@ export default async function DashboardPage() {
         counts={counts}
         followUpCount={followUpCount}
         activity={activity}
+        calendarConnected={calendarConnected}
         initialYear={now.getFullYear()}
         initialMonth={now.getMonth()}
         todayStr={todayStr}

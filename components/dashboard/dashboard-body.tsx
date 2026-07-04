@@ -51,6 +51,7 @@ export function DashboardBody({
   counts,
   followUpCount,
   activity,
+  calendarConnected,
   initialYear,
   initialMonth,
   todayStr,
@@ -63,6 +64,7 @@ export function DashboardBody({
   counts: Record<string, number>;
   followUpCount: number;
   activity: ActivityFeedItem[];
+  calendarConnected: boolean;
   initialYear: number;
   initialMonth: number;
   todayStr: string;
@@ -191,6 +193,7 @@ export function DashboardBody({
         <Card className="p-5 lg:col-span-2">
           <Calendar
             events={events}
+            calendarConnected={calendarConnected}
             initialYear={initialYear}
             initialMonth={initialMonth}
             todayStr={todayStr}
