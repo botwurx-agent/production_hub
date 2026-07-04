@@ -18,11 +18,13 @@ const TABS: { key: Tab; label: string; soon?: boolean }[] = [
 
 export function ProductionTabs({
   projectId,
+  projectTitle,
   shots,
   callSheet,
   entries,
 }: {
   projectId: string;
+  projectTitle: string;
   shots: Shot[];
   callSheet: CS | null;
   entries: CallSheetEntry[];
@@ -58,7 +60,12 @@ export function ProductionTabs({
       <Card className="p-5">
         {tab === "shots" && <ShotList projectId={projectId} shots={shots} />}
         {tab === "callsheet" && (
-          <CallSheet projectId={projectId} callSheet={callSheet} entries={entries} />
+          <CallSheet
+            projectId={projectId}
+            projectTitle={projectTitle}
+            callSheet={callSheet}
+            entries={entries}
+          />
         )}
       </Card>
     </div>

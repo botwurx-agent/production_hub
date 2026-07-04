@@ -25,7 +25,7 @@ export function Topbar({
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur print:hidden">
       <div className="flex h-14 items-center gap-3 px-4 md:px-6">
         {/* Mobile brand */}
         <Link href="/projects" className="flex items-center gap-2 md:hidden">

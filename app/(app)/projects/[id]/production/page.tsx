@@ -59,6 +59,7 @@ export default async function ProductionPage({
 
       <ProductionTabs
         projectId={project.id}
+        projectTitle={project.title}
         shots={(shots ?? []) as Shot[]}
         callSheet={(callSheet as CallSheet | null) ?? null}
         entries={entries}

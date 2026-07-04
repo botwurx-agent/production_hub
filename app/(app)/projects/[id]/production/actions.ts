@@ -75,14 +75,27 @@ export async function swapShots(
 
 // ---- Call sheet -------------------------------------------------------------
 
+export type CallSheetPatch = {
+  shoot_date?: string | null;
+  call_time?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  production_title?: string | null;
+  day_of?: string | null;
+  crew_call?: string | null;
+  shoot_call?: string | null;
+  lunch?: string | null;
+  wrap?: string | null;
+  weather?: string | null;
+  sunrise?: string | null;
+  sunset?: string | null;
+  parking?: string | null;
+  hospital?: string | null;
+};
+
 export async function saveCallSheet(
   projectId: string,
-  patch: {
-    shoot_date?: string | null;
-    call_time?: string | null;
-    location?: string | null;
-    notes?: string | null;
-  }
+  patch: CallSheetPatch
 ): Promise<ProdState> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -125,7 +138,10 @@ async function ensureCallSheet(
   return { id: data.id };
 }
 
-export async function addCallSheetEntry(projectId: string): Promise<ProdState> {
+export async function addCallSheetEntry(
+  projectId: string,
+  kind: "cast" | "crew" = "crew"
+): Promise<ProdState> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
   const cs = await ensureCallSheet(projectId);
@@ -142,6 +158,7 @@ export async function addCallSheetEntry(projectId: string): Promise<ProdState> {
     call_sheet_id: cs.id,
     position: (last?.position ?? -1) + 1,
     name: "",
+    kind,
   });
   if (error) return { error: error.message };
   rp(projectId);

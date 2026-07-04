@@ -16,7 +16,7 @@ export default async function AppLayout({
       <Sidebar studioName={ctx.studio.name} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar email={ctx.email} needsYouCount={outstanding.length} />
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">{children}</main>
       </div>
     </div>
   );

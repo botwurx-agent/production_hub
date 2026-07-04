@@ -341,6 +341,17 @@ export type Database = {
           call_time: string | null;
           location: string | null;
           notes: string | null;
+          production_title: string | null;
+          day_of: string | null;
+          crew_call: string | null;
+          shoot_call: string | null;
+          lunch: string | null;
+          wrap: string | null;
+          weather: string | null;
+          sunrise: string | null;
+          sunset: string | null;
+          parking: string | null;
+          hospital: string | null;
           created_by: string | null;
           updated_at: string;
         };
@@ -352,6 +363,17 @@ export type Database = {
           call_time?: string | null;
           location?: string | null;
           notes?: string | null;
+          production_title?: string | null;
+          day_of?: string | null;
+          crew_call?: string | null;
+          shoot_call?: string | null;
+          lunch?: string | null;
+          wrap?: string | null;
+          weather?: string | null;
+          sunrise?: string | null;
+          sunset?: string | null;
+          parking?: string | null;
+          hospital?: string | null;
           created_by?: string | null;
           updated_at?: string;
         };
@@ -363,6 +385,17 @@ export type Database = {
           call_time?: string | null;
           location?: string | null;
           notes?: string | null;
+          production_title?: string | null;
+          day_of?: string | null;
+          crew_call?: string | null;
+          shoot_call?: string | null;
+          lunch?: string | null;
+          wrap?: string | null;
+          weather?: string | null;
+          sunrise?: string | null;
+          sunset?: string | null;
+          parking?: string | null;
+          hospital?: string | null;
           created_by?: string | null;
           updated_at?: string;
         };
@@ -378,6 +411,7 @@ export type Database = {
           role: string | null;
           call_time: string | null;
           contact: string | null;
+          kind: string;
           created_at: string;
         };
         Insert: {
@@ -389,6 +423,7 @@ export type Database = {
           role?: string | null;
           call_time?: string | null;
           contact?: string | null;
+          kind?: string;
           created_at?: string;
         };
         Update: {
@@ -400,6 +435,7 @@ export type Database = {
           role?: string | null;
           call_time?: string | null;
           contact?: string | null;
+          kind?: string;
           created_at?: string;
         };
         Relationships: [];
