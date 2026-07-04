@@ -70,6 +70,7 @@ export function Calendar({
   const [gLoading, startLoad] = useTransition();
   const [createDay, setCreateDay] = useState<string | null>(null);
   const [detail, setDetail] = useState<GDisplay | null>(null);
+  const [meetBusy, startMeet] = useTransition();
 
   const fetchMonth = useCallback(
     (y: number, m: number) => {
@@ -156,6 +157,30 @@ export function Calendar({
     } else setMonth((m) => m + 1);
   }
 
+  // Instant meeting: a 30-minute event starting now, with a Meet link, opened
+  // straight into the detail modal (Join / Copy link).
+  function newMeet() {
+    setGError(null);
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now = new Date();
+    const end = new Date(now.getTime() + 30 * 60_000);
+    startMeet(async () => {
+      const res = await addCalendarEvent({
+        title: "Meeting",
+        allDay: false,
+        start: now.toISOString(),
+        end: end.toISOString(),
+        timeZone: tz,
+        addMeet: true,
+      });
+      if ("error" in res) setGError(res.error);
+      else {
+        setDetail(mapGoogle(res.event));
+        fetchMonth(year, month);
+      }
+    });
+  }
+
   const navBtn =
     "grid h-7 w-7 place-items-center rounded-[8px] border border-border text-text-muted transition hover:bg-surface-2 hover:text-text";
   const segBtn = (active: boolean) =>
@@ -177,9 +202,17 @@ export function Calendar({
         </div>
         <div className="flex items-center gap-2">
           {calendarConnected && (
-            <Button size="sm" variant="secondary" onClick={() => setCreateDay(todayStr)}>
-              + Event
-            </Button>
+            <>
+              <Button size="sm" onClick={newMeet} disabled={meetBusy}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11z" />
+                </svg>
+                {meetBusy ? "Creating..." : "New Meet"}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setCreateDay(todayStr)}>
+                + Event
+              </Button>
+            </>
           )}
           <div className="inline-flex items-center gap-1 rounded-pill border border-border bg-surface p-1">
             <button onClick={() => setView("month")} className={segBtn(view === "month")}>
@@ -478,6 +511,7 @@ function EventDetailModal({
   onDeleted: () => void;
 }) {
   const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [busy, start] = useTransition();
 
   function del() {
@@ -489,6 +523,17 @@ function EventDetailModal({
     });
   }
 
+  function copyLink() {
+    if (!event.meetLink) return;
+    navigator.clipboard?.writeText(event.meetLink).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      },
+      () => {}
+    );
+  }
+
   return (
     <Modal open onClose={onClose} title={event.title}>
       <div className="space-y-4">
@@ -496,17 +541,30 @@ function EventDetailModal({
           {shortDate(event.dateKey)} · {event.timeLabel}
         </p>
         {event.meetLink && (
-          <a
-            href={event.meetLink}
-            target="_blank"
-            rel="noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-[11px] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg transition hover:bg-accent-strong"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11z" />
-            </svg>
-            Join Google Meet
-          </a>
+          <>
+            <a
+              href={event.meetLink}
+              target="_blank"
+              rel="noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-[11px] bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg transition hover:bg-accent-strong"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11z" />
+              </svg>
+              Join Google Meet
+            </a>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={event.meetLink}
+                onFocus={(e) => e.currentTarget.select()}
+                className="w-full rounded-[10px] border border-border bg-surface-2 px-3 py-1.5 text-xs text-text-muted outline-none"
+              />
+              <Button size="sm" variant="secondary" onClick={copyLink}>
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+          </>
         )}
         {err && (
           <p className="rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
