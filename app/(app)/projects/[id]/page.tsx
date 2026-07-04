@@ -266,7 +266,19 @@ export default async function ProjectDetailPage({
             )}
           </p>
         </div>
-        <StatusMenu projectId={project.id} status={project.status} />
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/projects/${project.id}/production`}
+            className="inline-flex items-center gap-1.5 rounded-[11px] border border-border bg-surface px-3 py-2 text-sm font-semibold text-text-muted shadow-sm transition hover:bg-surface-2 hover:text-text"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m4 4 12 6-12 6z" />
+              <path d="M20 4v12" />
+            </svg>
+            Production
+          </Link>
+          <StatusMenu projectId={project.id} status={project.status} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -290,6 +290,120 @@ export type Database = {
         };
         Relationships: [];
       };
+      shots: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          position: number;
+          scene: string | null;
+          description: string;
+          setup: string | null;
+          notes: string | null;
+          status: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          position?: number;
+          scene?: string | null;
+          description?: string;
+          setup?: string | null;
+          notes?: string | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          position?: number;
+          scene?: string | null;
+          description?: string;
+          setup?: string | null;
+          notes?: string | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      call_sheets: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          shoot_date: string | null;
+          call_time: string | null;
+          location: string | null;
+          notes: string | null;
+          created_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          shoot_date?: string | null;
+          call_time?: string | null;
+          location?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          shoot_date?: string | null;
+          call_time?: string | null;
+          location?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      call_sheet_entries: {
+        Row: {
+          id: string;
+          studio_id: string;
+          call_sheet_id: string;
+          position: number;
+          name: string;
+          role: string | null;
+          call_time: string | null;
+          contact: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          call_sheet_id: string;
+          position?: number;
+          name?: string;
+          role?: string | null;
+          call_time?: string | null;
+          contact?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          call_sheet_id?: string;
+          position?: number;
+          name?: string;
+          role?: string | null;
+          call_time?: string | null;
+          contact?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       brief_attachments: {
         Row: {
           brief_id: string;
@@ -1104,6 +1218,9 @@ export type ReviewComment = Tables<"review_comments">;
 export type ReviewLink = Tables<"review_links">;
 export type Board = Tables<"boards">;
 export type BoardItem = Tables<"board_items">;
+export type Shot = Tables<"shots">;
+export type CallSheet = Tables<"call_sheets">;
+export type CallSheetEntry = Tables<"call_sheet_entries">;
 export type EmailAccount = Tables<"email_accounts">;
 export type EmailThread = Tables<"email_threads">;
 export type SlackChannel = Tables<"slack_channels">;
