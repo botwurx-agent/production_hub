@@ -49,6 +49,7 @@ export function CallSheet({
     shoot_date: callSheet?.shoot_date ?? "",
     crew_call: callSheet?.crew_call ?? "",
     shoot_call: callSheet?.shoot_call ?? "",
+    breakfast: callSheet?.breakfast ?? "",
     lunch: callSheet?.lunch ?? "",
     wrap: callSheet?.wrap ?? "",
     location: callSheet?.location ?? "",
@@ -58,6 +59,16 @@ export function CallSheet({
     sunset: callSheet?.sunset ?? "",
     hospital: callSheet?.hospital ?? "",
     notes: callSheet?.notes ?? "",
+    company_name: callSheet?.company_name ?? "",
+    company_address: callSheet?.company_address ?? "",
+    company_website: callSheet?.company_website ?? "",
+    company_phone: callSheet?.company_phone ?? "",
+    producer: callSheet?.producer ?? "",
+    producer_phone: callSheet?.producer_phone ?? "",
+    director: callSheet?.director ?? "",
+    director_phone: callSheet?.director_phone ?? "",
+    pm: callSheet?.pm ?? "",
+    pm_phone: callSheet?.pm_phone ?? "",
   });
   function set(k: keyof typeof f, v: string) {
     setF((prev) => ({ ...prev, [k]: v }));
@@ -111,6 +122,82 @@ export function CallSheet({
         </Link>
       </div>
 
+      {/* Production company */}
+      <div>
+        <div className="mb-2 text-xs font-bold uppercase tracking-wide text-text-faint">
+          Production company
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Labeled label="Company">
+            <input
+              value={f.company_name}
+              onChange={(e) => set("company_name", e.target.value)}
+              onBlur={() => save("company_name", f.company_name)}
+              placeholder="Studio / company name"
+              className={field}
+            />
+          </Labeled>
+          <Labeled label="Phone">
+            <input
+              value={f.company_phone}
+              onChange={(e) => set("company_phone", e.target.value)}
+              onBlur={() => save("company_phone", f.company_phone)}
+              className={field}
+            />
+          </Labeled>
+          <Labeled label="Website">
+            <input
+              value={f.company_website}
+              onChange={(e) => set("company_website", e.target.value)}
+              onBlur={() => save("company_website", f.company_website)}
+              className={field}
+            />
+          </Labeled>
+          <Labeled label="Company address">
+            <input
+              value={f.company_address}
+              onChange={(e) => set("company_address", e.target.value)}
+              onBlur={() => save("company_address", f.company_address)}
+              className={field}
+            />
+          </Labeled>
+        </div>
+      </div>
+
+      {/* Key contacts */}
+      <div>
+        <div className="mb-2 text-xs font-bold uppercase tracking-wide text-text-faint">
+          Key contacts
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {([
+            ["producer", "producer_phone", "Producer"],
+            ["director", "director_phone", "Director"],
+            ["pm", "pm_phone", "Production mgr"],
+          ] as const).map(([nameKey, phoneKey, label]) => (
+            <div key={nameKey} className="rounded-[10px] border border-border p-2.5">
+              <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+                {label}
+              </div>
+              <input
+                value={f[nameKey]}
+                onChange={(e) => set(nameKey, e.target.value)}
+                onBlur={() => save(nameKey, f[nameKey])}
+                placeholder="Name"
+                className={`${field} mb-1.5`}
+              />
+              <input
+                value={f[phoneKey]}
+                onChange={(e) => set(phoneKey, e.target.value)}
+                onBlur={() => save(phoneKey, f[phoneKey])}
+                placeholder="Phone"
+                className={field}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Details */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Labeled label="Production">
@@ -160,6 +247,7 @@ export function CallSheet({
           {([
             ["crew_call", "Crew call"],
             ["shoot_call", "Shooting call"],
+            ["breakfast", "Breakfast"],
             ["lunch", "Lunch"],
             ["wrap", "Est. wrap"],
           ] as const).map(([key, label]) => (

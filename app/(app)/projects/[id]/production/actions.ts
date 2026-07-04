@@ -91,6 +91,17 @@ export type CallSheetPatch = {
   sunset?: string | null;
   parking?: string | null;
   hospital?: string | null;
+  company_name?: string | null;
+  company_address?: string | null;
+  company_website?: string | null;
+  company_phone?: string | null;
+  producer?: string | null;
+  producer_phone?: string | null;
+  director?: string | null;
+  director_phone?: string | null;
+  pm?: string | null;
+  pm_phone?: string | null;
+  breakfast?: string | null;
 };
 
 export async function saveCallSheet(
