@@ -9,8 +9,8 @@ const TOKEN_URL = "https://api.figma.com/v1/oauth/token";
 const REFRESH_URL = "https://api.figma.com/v1/oauth/refresh";
 const API = "https://api.figma.com/v1";
 
-// Figma's granular read scope (current apps reject the legacy "file_read").
-export const FIGMA_SCOPE = "files:read";
+// Figma's granular scope for reading file contents + rendering images.
+export const FIGMA_SCOPE = "file_content:read";
 
 export function figmaConfigured(): boolean {
   return Boolean(
