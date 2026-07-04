@@ -48,6 +48,8 @@ export function BoardsWorkspace({
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Board | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
   const [driveSel, setDriveSel] = useState<PickedDriveFile[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -120,6 +122,17 @@ export function BoardsWorkspace({
     void setBoardBackground(active.id, bg);
   }
 
+  function startRename(b: Board) {
+    setEditingId(b.id);
+    setEditName(b.name);
+  }
+  function commitRename(b: Board) {
+    const name = editName.trim() || b.name;
+    setBoards((prev) => prev.map((x) => (x.id === b.id ? { ...x, name } : x)));
+    setEditingId(null);
+    void renameBoard(b.id, name);
+  }
+
   function doDelete(b: Board) {
     startBusy(async () => {
       await deleteBoard(b.id);
@@ -169,8 +182,28 @@ export function BoardsWorkspace({
                   : "pr-3 text-text-muted hover:bg-surface-2 hover:text-text"
               }`}
             >
-              <button onClick={() => setActiveId(b.id)}>{b.name}</button>
-              {isActive && (
+              {editingId === b.id ? (
+                <input
+                  value={editName}
+                  autoFocus
+                  onChange={(e) => setEditName(e.target.value)}
+                  onBlur={() => commitRename(b)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitRename(b);
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                  className="w-28 rounded-[6px] border border-border bg-surface px-1.5 py-0.5 text-sm font-semibold text-text outline-none focus:border-border-strong"
+                />
+              ) : (
+                <button
+                  onClick={() => setActiveId(b.id)}
+                  onDoubleClick={() => startRename(b)}
+                  title="Double-click to rename"
+                >
+                  {b.name}
+                </button>
+              )}
+              {isActive && editingId !== b.id && (
                 <button
                   onClick={() => setDeleteConfirm(b)}
                   className="ml-1.5 grid h-5 w-5 place-items-center rounded-[6px] text-accent/70 transition hover:bg-red-bg hover:text-red"
