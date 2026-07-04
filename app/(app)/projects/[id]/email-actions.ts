@@ -170,6 +170,21 @@ function assetTypeFromMime(
   return "other";
 }
 
+// Studio projects, to choose an import target when importing from a lead or
+// client conversation (which has no project of its own).
+export async function getImportProjects(): Promise<
+  { projects: { id: string; title: string }[] } | { error: string }
+> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, title")
+    .order("created_at", { ascending: false });
+  if (error) return { error: error.message };
+  return { projects: data ?? [] };
+}
+
 // Existing project assets, to offer an email attachment as a new version of one.
 export async function getProjectAssets(
   projectId: string

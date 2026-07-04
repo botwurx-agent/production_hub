@@ -18,6 +18,7 @@ import {
   markChannelRead,
 } from "@/app/(app)/projects/[id]/slack-actions";
 import { COMMS_READ_EVENT } from "@/components/app-shell/communication-badge";
+import { getImportProjects } from "@/app/(app)/projects/[id]/email-actions";
 import type { OwnerType } from "@/app/(app)/projects/[id]/email-actions";
 import type { SlackConversationMatch, SlackMessage } from "@/lib/slack";
 
@@ -52,6 +53,42 @@ function FileRow({
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, start] = useTransition();
+  // When there is no fixed project (lead/client conversation), pick one.
+  const [projects, setProjects] = useState<
+    { id: string; title: string }[] | null
+  >(null);
+  const [target, setTarget] = useState(projectId ?? "");
+
+  useEffect(() => {
+    if (projectId) return;
+    let alive = true;
+    getImportProjects().then((res) => {
+      if (alive && "projects" in res) setProjects(res.projects);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [projectId]);
+
+  function add() {
+    if (!target) return;
+    start(async () => {
+      const res = await importSlackFile(
+        target,
+        channelId,
+        file.urlPrivateDownload,
+        file.name,
+        file.mimetype
+      );
+      if (res?.error) setErr(res.error);
+      else {
+        setDone(true);
+        router.refresh();
+      }
+    });
+  }
+
+  const downloadHref = `/api/attachments/slack?url=${encodeURIComponent(file.urlPrivateDownload)}&filename=${encodeURIComponent(file.name)}&mime=${encodeURIComponent(file.mimetype)}`;
 
   return (
     <div className="flex items-center justify-between gap-2 text-xs">
@@ -59,34 +96,38 @@ function FileRow({
         {file.name}
         {file.size ? ` · ${fileSize(file.size)}` : ""}
       </span>
-      {projectId ? (
+      <span className="flex shrink-0 items-center gap-2">
+        <a
+          href={downloadHref}
+          download={file.name}
+          className="font-semibold text-accent hover:underline"
+        >
+          Download
+        </a>
+        {!projectId && (
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            className="max-w-[8rem] rounded-[8px] border border-border bg-surface px-1.5 py-1 text-xs"
+          >
+            <option value="">Project...</option>
+            {(projects ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+        )}
         <Button
           size="sm"
           variant={done ? "secondary" : "primary"}
-          disabled={done || busy}
-          onClick={() =>
-            start(async () => {
-              const res = await importSlackFile(
-                projectId,
-                channelId,
-                file.urlPrivateDownload,
-                file.name,
-                file.mimetype
-              );
-              if (res?.error) setErr(res.error);
-              else {
-                setDone(true);
-                router.refresh();
-              }
-            })
-          }
+          disabled={done || busy || !target}
+          onClick={add}
         >
           {done ? "Imported" : busy ? "..." : "Add to assets"}
         </Button>
-      ) : (
-        <span className="text-text-faint">Import once this is a project</span>
-      )}
-      {err && <span className="text-red">{err}</span>}
+        {err && <span className="text-red">{err}</span>}
+      </span>
     </div>
   );
 }

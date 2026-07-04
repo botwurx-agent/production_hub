@@ -171,7 +171,14 @@ export function ThreadReader({
                             {att.filename}
                             {att.size ? ` · ${fileSize(att.size)}` : ""}
                           </span>
-                          {projectId ? (
+                          <span className="flex shrink-0 items-center gap-3">
+                            <a
+                              href={`/api/attachments/gmail?message=${encodeURIComponent(m.id)}&attachment=${encodeURIComponent(att.attachmentId)}&filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType)}`}
+                              download={att.filename}
+                              className="font-semibold text-accent hover:underline"
+                            >
+                              Download
+                            </a>
                             <ImportAttachment
                               projectId={projectId}
                               messageId={m.id}
@@ -179,11 +186,7 @@ export function ThreadReader({
                               filename={att.filename}
                               mimeType={att.mimeType}
                             />
-                          ) : (
-                            <span className="text-text-faint">
-                              Import once this is a project
-                            </span>
-                          )}
+                          </span>
                         </div>
                       ))}
                     </div>
