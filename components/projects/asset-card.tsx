@@ -20,6 +20,7 @@ const TYPE_ICON: Record<string, string> = {
   pdf: "PDF",
   video: "Video",
   audio: "Audio",
+  office: "Doc",
   text: "Text",
   other: "File",
 };

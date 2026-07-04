@@ -4,7 +4,24 @@ import { useEffect } from "react";
 import { fileSize, shortDate } from "@/lib/format";
 import type { VersionRow } from "@/components/projects/asset-types";
 
-type ViewerKind = "image" | "video" | "audio" | "pdf" | "text" | "other";
+type ViewerKind =
+  | "image"
+  | "video"
+  | "audio"
+  | "pdf"
+  | "office"
+  | "text"
+  | "other";
+
+// Office (Word/Excel/PowerPoint) mime types, incl. the legacy .doc/.xls/.ppt.
+const OFFICE_MIMES = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/msword",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+]);
 
 export function viewerKind(mime: string | null | undefined): ViewerKind {
   const m = mime ?? "";
@@ -12,8 +29,19 @@ export function viewerKind(mime: string | null | undefined): ViewerKind {
   if (m.startsWith("video/")) return "video";
   if (m.startsWith("audio/")) return "audio";
   if (m === "application/pdf") return "pdf";
+  if (OFFICE_MIMES.has(m)) return "office";
   if (m.startsWith("text/")) return "text";
   return "other";
+}
+
+// Microsoft's hosted Office viewer renders Word/Excel/PowerPoint from a
+// publicly reachable URL (our Supabase signed URLs qualify while they last).
+// `embed` is for the inline iframe; the full-page view is for a new tab.
+function officeEmbedUrl(fileUrl: string): string {
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
+}
+function officeViewUrl(fileUrl: string): string {
+  return `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fileUrl)}`;
 }
 
 function FileGlyph() {
@@ -56,6 +84,10 @@ export function AssetViewer({
 
   const link = version.signedUrl ?? version.url;
   const kind = viewerKind(version.mime_type);
+  // For Office files the browser can't display the raw bytes, so "Open in new
+  // tab" points at the Office web viewer instead of downloading.
+  const openLink =
+    kind === "office" && link ? officeViewUrl(link) : link;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -80,7 +112,7 @@ export function AssetViewer({
             {link && (
               <>
                 <a
-                  href={link}
+                  href={openLink ?? undefined}
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-[9px] bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent hover:text-accent-fg"
@@ -132,6 +164,12 @@ export function AssetViewer({
           ) : kind === "pdf" ? (
             <iframe
               src={link}
+              title={name}
+              className="h-[78vh] w-full rounded-[10px] border border-border bg-white"
+            />
+          ) : kind === "office" ? (
+            <iframe
+              src={officeEmbedUrl(link)}
               title={name}
               className="h-[78vh] w-full rounded-[10px] border border-border bg-white"
             />
