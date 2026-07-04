@@ -8,6 +8,10 @@ import { Textarea } from "@/components/ui/input";
 import { LinkEmailModal } from "@/components/projects/link-email-modal";
 import { ImportAttachment } from "@/components/projects/import-attachment";
 import { AttachmentCard } from "@/components/attachments/attachment-card";
+import {
+  DrivePickerModal,
+  type PickedDriveFile,
+} from "@/components/projects/drive-browser";
 import { PlusIcon, EnvelopeIcon } from "@/components/app-shell/nav-icons";
 import { longDate, shortDate } from "@/lib/format";
 import {
@@ -62,6 +66,8 @@ export function ThreadReader({
   const [attachOpen, setAttachOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [driveFiles, setDriveFiles] = useState<PickedDriveFile[]>([]);
+  const [driveOpen, setDriveOpen] = useState(false);
 
   function addFiles(list: FileList | null) {
     if (!list) return;
@@ -70,6 +76,13 @@ export function ThreadReader({
   }
   function removeFile(idx: number) {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function toggleDriveFile(f: PickedDriveFile) {
+    setDriveFiles((prev) =>
+      prev.some((x) => x.id === f.id)
+        ? prev.filter((x) => x.id !== f.id)
+        : [...prev, f]
+    );
   }
 
   function loadAssetOpts() {
@@ -116,6 +129,7 @@ export function ThreadReader({
     if (projectId) fd.set("projectId", projectId);
     if (revalidate) fd.set("revalidate", revalidate);
     fd.set("assetIds", JSON.stringify(attachIds));
+    fd.set("driveFiles", JSON.stringify(driveFiles));
     for (const f of files) fd.append("files", f);
     start(async () => {
       const res = await sendReplyWithFiles(fd);
@@ -126,6 +140,7 @@ export function ThreadReader({
         setAttachIds([]);
         setAttachOpen(false);
         setFiles([]);
+        setDriveFiles([]);
         loadMessages();
         router.refresh();
       }
@@ -327,6 +342,29 @@ export function ThreadReader({
                     ))}
                   </div>
                 )}
+                {driveFiles.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {driveFiles.map((f) => (
+                      <span
+                        key={f.id}
+                        className="inline-flex items-center gap-1 rounded-pill bg-surface-2 px-2 py-0.5 text-[11px] text-text"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path d="M8.4 3.5h7.2l6.4 11.1-3.6 6.2H5.6L2 14.6 8.4 3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                        </svg>
+                        {f.name}
+                        <button
+                          type="button"
+                          onClick={() => toggleDriveFile(f)}
+                          className="text-text-faint hover:text-red"
+                          aria-label="Remove Drive file"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -335,16 +373,28 @@ export function ThreadReader({
                   onChange={(e) => addFiles(e.target.files)}
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                    </svg>
-                    Attach file
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                      </svg>
+                      Attach file
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDriveOpen(true)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <path d="M8.4 3.5h7.2l6.4 11.1-3.6 6.2H5.6L2 14.6 8.4 3.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                      </svg>
+                      Attach from Drive
+                    </button>
+                  </div>
                   <Button
                     size="sm"
                     onClick={send}
@@ -353,6 +403,13 @@ export function ThreadReader({
                     {sending ? "Sending..." : "Send reply"}
                   </Button>
                 </div>
+                <DrivePickerModal
+                  open={driveOpen}
+                  onClose={() => setDriveOpen(false)}
+                  mode="select"
+                  selectedIds={new Set(driveFiles.map((f) => f.id))}
+                  onToggle={toggleDriveFile}
+                />
               </div>
             ) : (
               <p className="mt-3 border-t border-border pt-3 text-xs text-text-faint">

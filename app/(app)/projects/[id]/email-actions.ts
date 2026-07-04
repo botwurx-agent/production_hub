@@ -14,6 +14,7 @@ import {
   type ThreadMessage,
   type OutgoingAttachment,
 } from "@/lib/gmail";
+import { getDriveFileBytes } from "@/lib/googledrive";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 
@@ -233,6 +234,14 @@ export async function sendReplyWithFiles(
     assetIds = [];
   }
 
+  let driveFiles: { id: string; name: string; mimeType: string }[] = [];
+  try {
+    const raw = formData.get("driveFiles");
+    if (raw) driveFiles = JSON.parse(String(raw));
+  } catch {
+    driveFiles = [];
+  }
+
   const supabase = createClient();
   const acct = await requireSendAccount(supabase);
   if ("error" in acct) return { error: acct.error };
@@ -249,6 +258,25 @@ export async function sendReplyWithFiles(
       mimeType: f.type || "application/octet-stream",
       bytes: Buffer.from(await f.arrayBuffer()),
     });
+  }
+
+  // Google Drive files chosen in the reply box (downloaded server-side).
+  if (driveFiles.length > 0) {
+    try {
+      const token = await getAccessToken(supabase, acct.account);
+      for (const d of driveFiles) {
+        const dl = await getDriveFileBytes(token, d.id, d.name, d.mimeType);
+        attachments.push({
+          filename: dl.filename,
+          mimeType: dl.mimeType,
+          bytes: dl.bytes,
+        });
+      }
+    } catch (e) {
+      return {
+        error: e instanceof Error ? e.message : "Could not fetch a Drive file.",
+      };
+    }
   }
 
   return deliverReply(supabase, ctx, acct.account, gmailThreadId, text, attachments, {
