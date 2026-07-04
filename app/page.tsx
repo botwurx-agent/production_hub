@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-// The authenticated app lives under /projects; middleware sends signed-out
+// The authenticated app opens on the dashboard; middleware sends signed-out
 // users to /login.
 export default function RootPage() {
-  redirect("/projects");
+  redirect("/dashboard");
 }

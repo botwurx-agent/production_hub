@@ -29,7 +29,7 @@ export async function signIn(
   if (error) return { error: error.message };
 
   revalidatePath("/", "layout");
-  redirect("/projects");
+  redirect("/dashboard");
 }
 
 export async function signUp(
@@ -59,7 +59,7 @@ export async function signUp(
   // If email confirmation is disabled the user is signed in immediately.
   if (data.session) {
     revalidatePath("/", "layout");
-    redirect("/projects");
+    redirect("/dashboard");
   }
 
   return {

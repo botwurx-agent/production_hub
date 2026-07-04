@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  DashboardIcon,
   ProjectsIcon,
   ClientsIcon,
   LeadsIcon,
@@ -12,6 +13,7 @@ import {
 import { CommunicationBadge } from "@/components/app-shell/communication-badge";
 
 const nav = [
+  { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { href: "/projects", label: "Projects", Icon: ProjectsIcon },
   { href: "/communication", label: "Communication", Icon: CommunicationIcon },
   { href: "/clients", label: "Clients", Icon: ClientsIcon },
