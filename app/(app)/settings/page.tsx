@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { googleConfigured } from "@/lib/google";
 import { slackConfigured } from "@/lib/slack";
+import { figmaConfigured } from "@/lib/figma";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/status-tag";
@@ -27,7 +28,18 @@ const connectionError: Record<string, string> = {
   slack_state: "Connection could not be verified. Please try again.",
   slack_exchange: "Could not complete the Slack connection. Please retry.",
   slack_store: "Connected, but saving the account failed. Please retry.",
+  figma_not_configured: "Figma is not configured yet (missing credentials).",
+  figma_denied: "Figma connection was cancelled.",
+  figma_state: "Connection could not be verified. Please try again.",
+  figma_exchange: "Could not complete the Figma connection. Please retry.",
+  figma_store: "Connected, but saving the account failed. Please retry.",
   no_studio: "No studio found for your account.",
+};
+
+const connectedLabel: Record<string, string> = {
+  slack: "Slack",
+  figma: "Figma",
+  google: "Gmail",
 };
 
 export default async function SettingsPage({
@@ -60,7 +72,7 @@ export default async function SettingsPage({
 
       {searchParams.connected && (
         <div className="mb-6 rounded-[12px] bg-green-bg px-4 py-3 text-sm font-medium text-green">
-          {searchParams.connected === "slack" ? "Slack" : "Gmail"} connected.
+          {connectedLabel[searchParams.connected] ?? "Account"} connected.
         </div>
       )}
       {errorMsg && (
@@ -127,6 +139,7 @@ export default async function SettingsPage({
             configured={{
               google: googleConfigured(),
               slack: slackConfigured(),
+              figma: figmaConfigured(),
             }}
             accounts={accounts ?? []}
           />

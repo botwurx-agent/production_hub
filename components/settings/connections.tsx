@@ -36,6 +36,14 @@ const PROVIDERS: ProviderMeta[] = [
     blurb:
       "Bring Slack conversations into the Communication hub, tied to the right job.",
   },
+  {
+    key: "figma",
+    label: "Figma",
+    glyph: "F",
+    startPath: "/auth/figma/start",
+    blurb:
+      "Import frames from a Figma file straight into a project's assets, rendered as images.",
+  },
 ];
 
 function AccountRow({ account }: { account: ConnectedAccount }) {

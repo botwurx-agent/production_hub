@@ -8,6 +8,7 @@ import { BriefEditor } from "@/components/projects/brief-editor";
 import { AssetCard } from "@/components/projects/asset-card";
 import { AddAssetButton } from "@/components/projects/add-asset-button";
 import { DriveImportButton } from "@/components/projects/drive-import-button";
+import { FigmaImportButton } from "@/components/projects/figma-import-button";
 import { driveConnected } from "@/lib/googledrive";
 import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
@@ -62,6 +63,7 @@ export default async function ProjectDetailPage({
     { data: chatSpaces },
     { data: summary },
     { data: reviewLinks },
+    { data: figmaAccount },
   ] = await Promise.all([
       supabase
         .from("briefs")
@@ -123,6 +125,12 @@ export default async function ProjectDetailPage({
         .eq("project_id", params.id)
         .eq("revoked", false)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("email_accounts")
+        .select("id")
+        .eq("provider", "figma")
+        .limit(1)
+        .maybeSingle(),
     ]);
 
   // Newest active review link per asset (studios share one stable link each).
@@ -301,6 +309,7 @@ export default async function ProjectDetailPage({
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-base font-bold">Assets</h2>
               <div className="flex items-center gap-2">
+                {figmaAccount && <FigmaImportButton projectId={project.id} />}
                 {driveConnected(emailAccount?.scope) && (
                   <DriveImportButton projectId={project.id} />
                 )}
