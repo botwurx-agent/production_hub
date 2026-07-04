@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { PrintButton } from "@/components/production/print-button";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
+import { signedLogoUrl } from "@/lib/branding";
 import type {
   ShotBoard,
   ShotBoardFlavor,
@@ -91,6 +92,7 @@ export default async function ShotBoardViewPage({
     }));
   }
 
+  const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
   const title = b?.title?.trim() || project.title;
   const clientName =
     b?.client?.trim() || (project.client as { name: string } | null)?.name || "";
@@ -116,12 +118,23 @@ export default async function ShotBoardViewPage({
         style={printExact}
         className="rounded-[16px] bg-bg p-8 text-text print:rounded-none"
       >
-        <div className="mb-8 flex items-center justify-between">
-          <div className="text-lg font-bold text-text">
-            {ctx.studio.name}
-            {b?.agency?.trim() ? (
-              <span className="text-text-faint"> × {b.agency}</span>
-            ) : null}
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            {logoUrl && (
+              <span
+                style={printExact}
+                className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-surface"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={logoUrl} alt={ctx.studio.name} className="h-full w-full object-contain p-1" />
+              </span>
+            )}
+            <div className="text-lg font-bold text-text">
+              {ctx.studio.name}
+              {b?.agency?.trim() ? (
+                <span className="text-text-faint"> × {b.agency}</span>
+              ) : null}
+            </div>
           </div>
           <span className="rounded-pill border border-border-strong px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-text-faint">
             Production · Confidential

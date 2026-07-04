@@ -1,5 +1,6 @@
 import { requireStudioContext } from "@/lib/studio";
 import { getOutstanding } from "@/lib/outstanding";
+import { signedLogoUrl } from "@/lib/branding";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 
@@ -10,10 +11,11 @@ export default async function AppLayout({
 }) {
   const ctx = await requireStudioContext();
   const outstanding = await getOutstanding();
+  const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar studioName={ctx.studio.name} />
+      <Sidebar studioName={ctx.studio.name} logoUrl={logoUrl} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar email={ctx.email} needsYouCount={outstanding.length} />
         <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">{children}</main>

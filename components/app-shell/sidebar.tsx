@@ -23,15 +23,28 @@ const nav = [
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
-export function Sidebar({ studioName }: { studioName: string }) {
+export function Sidebar({
+  studioName,
+  logoUrl,
+}: {
+  studioName: string;
+  logoUrl?: string | null;
+}) {
   const pathname = usePathname();
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface print:!hidden md:flex">
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-        <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-accent text-accent-fg shadow-sm">
-          <span className="text-sm font-extrabold">H</span>
-        </span>
+        {logoUrl ? (
+          <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[10px] border border-border bg-surface">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logoUrl} alt={studioName} className="h-full w-full object-contain p-0.5" />
+          </span>
+        ) : (
+          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-accent text-accent-fg shadow-sm">
+            <span className="text-sm font-extrabold">H</span>
+          </span>
+        )}
         <div className="min-w-0">
           <div className="truncate text-sm font-bold leading-tight text-text">
             {studioName}

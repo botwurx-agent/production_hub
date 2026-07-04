@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { PrintButton } from "@/components/production/print-button";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
+import { signedLogoUrl } from "@/lib/branding";
 import type { CallSheet, CallSheetEntry } from "@/lib/database.types";
 
 // "Tuesday 2/17/26" from a YYYY-MM-DD string (parsed as a local date).
@@ -147,6 +148,7 @@ export default async function CallSheetPrintPage({
 
   const cast = entries.filter((e) => e.kind === "cast");
   const crew = entries.filter((e) => e.kind !== "cast");
+  const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
   const title = s?.production_title?.trim() || project.title;
   const company = s?.company_name?.trim() || ctx.studio.name;
   const callTime = s?.crew_call?.trim() || s?.shoot_call?.trim() || s?.call_time?.trim() || "TBD";
@@ -195,6 +197,14 @@ export default async function CallSheetPrintPage({
 
           {/* Title + CALL badge */}
           <div className="flex flex-col items-center justify-center gap-3 text-center">
+            {logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt={company}
+                className="max-h-12 w-auto max-w-[160px] object-contain"
+              />
+            )}
             <h1 className="font-display text-xl font-extrabold leading-tight tracking-tight text-text">
               {title}
             </h1>

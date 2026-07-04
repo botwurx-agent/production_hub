@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/status-tag";
 import { Appearance } from "@/components/settings/appearance";
 import { Connections } from "@/components/settings/connections";
+import { LogoUpload } from "@/components/settings/logo-upload";
+import { signedLogoUrl } from "@/lib/branding";
 import type { Hue } from "@/components/status-tag";
 
 const roleHue: Record<string, Hue> = {
@@ -65,6 +67,8 @@ export default async function SettingsPage({
   const errorMsg = searchParams.error
     ? (connectionError[searchParams.error] ?? "Something went wrong.")
     : null;
+
+  const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
 
   return (
     <div className="max-w-3xl">
@@ -131,6 +135,11 @@ export default async function SettingsPage({
               </li>
             ))}
           </ul>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="mb-4 font-display text-base font-bold">Branding</h2>
+          <LogoUpload logoUrl={logoUrl} />
         </Card>
 
         <Card className="p-5">
