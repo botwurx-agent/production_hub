@@ -14,6 +14,7 @@ import {
   unlinkThread,
   sendReply,
   markThreadRead,
+  getProjectAssets,
   type OwnerType,
 } from "@/app/(app)/projects/[id]/email-actions";
 import { COMMS_READ_EVENT } from "@/components/app-shell/communication-badge";
@@ -53,6 +54,25 @@ export function ThreadReader({
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [attachIds, setAttachIds] = useState<string[]>([]);
+  const [assetOpts, setAssetOpts] = useState<
+    { id: string; name: string }[] | null
+  >(null);
+  const [attachOpen, setAttachOpen] = useState(false);
+
+  function loadAssetOpts() {
+    if (!projectId) return;
+    start(async () => {
+      const res = await getProjectAssets(projectId);
+      if (!("error" in res)) setAssetOpts(res.assets);
+    });
+  }
+
+  function toggleAttach(id: string) {
+    setAttachIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
 
   function loadMessages() {
     start(async () => {
@@ -82,11 +102,14 @@ export function ThreadReader({
       const res = await sendReply(thread.gmail_thread_id, reply, {
         projectId,
         revalidate,
+        assetIds: attachIds,
       });
       setSending(false);
       if (res?.error) setReplyError(res.error);
       else {
         setReply("");
+        setAttachIds([]);
+        setAttachOpen(false);
         loadMessages();
         router.refresh();
       }
@@ -209,6 +232,70 @@ export function ThreadReader({
                   <p className="mt-1 text-xs font-medium text-red">
                     {replyError}
                   </p>
+                )}
+                {projectId && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachOpen((o) => !o);
+                        if (assetOpts === null) loadAssetOpts();
+                      }}
+                      className="text-xs font-semibold text-accent hover:underline"
+                    >
+                      {attachOpen ? "Hide assets" : "Attach asset"}
+                    </button>
+                    {attachOpen && (
+                      <div className="mt-1 max-h-32 overflow-y-auto rounded-[10px] border border-border p-1">
+                        {assetOpts === null ? (
+                          <p className="px-2 py-1 text-xs text-text-faint">
+                            Loading assets...
+                          </p>
+                        ) : assetOpts.length === 0 ? (
+                          <p className="px-2 py-1 text-xs text-text-faint">
+                            No assets in this project.
+                          </p>
+                        ) : (
+                          assetOpts.map((a) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => toggleAttach(a.id)}
+                              className="flex w-full items-center justify-between gap-2 rounded-[8px] px-2 py-1 text-left text-xs transition hover:bg-surface-2"
+                            >
+                              <span className="truncate text-text">{a.name}</span>
+                              {attachIds.includes(a.id) && (
+                                <span className="text-accent">&#10003;</span>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                    {attachIds.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {attachIds.map((id) => {
+                          const a = assetOpts?.find((x) => x.id === id);
+                          return (
+                            <span
+                              key={id}
+                              className="inline-flex items-center gap-1 rounded-pill bg-surface-2 px-2 py-0.5 text-[11px] text-text"
+                            >
+                              {a?.name ?? "asset"}
+                              <button
+                                type="button"
+                                onClick={() => toggleAttach(id)}
+                                className="text-text-faint hover:text-red"
+                                aria-label="Remove attachment"
+                              >
+                                &times;
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <div className="mt-2 flex justify-end">
                   <Button

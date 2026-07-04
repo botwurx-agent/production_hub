@@ -12,6 +12,7 @@ import {
   sendGmailReply,
   type ThreadSummary,
   type ThreadMessage,
+  type OutgoingAttachment,
 } from "@/lib/gmail";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
@@ -104,7 +105,7 @@ export async function linkThread(
 export async function sendReply(
   gmailThreadId: string,
   body: string,
-  opts: { projectId?: string; revalidate?: string } = {}
+  opts: { projectId?: string; revalidate?: string; assetIds?: string[] } = {}
 ): Promise<EmailState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -117,18 +118,58 @@ export async function sendReply(
     return { error: "Reconnect Gmail in Settings to enable sending." };
   }
 
+  // Gather any project assets to attach (their current stored file).
+  const attachments: OutgoingAttachment[] = [];
+  if (opts.assetIds && opts.assetIds.length > 0) {
+    const { data: assets } = await supabase
+      .from("assets")
+      .select(
+        "id, name, current:versions!assets_current_version_fk(storage_path, mime_type)"
+      )
+      .in("id", opts.assetIds);
+    let total = 0;
+    for (const a of assets ?? []) {
+      const cur = a.current as {
+        storage_path: string | null;
+        mime_type: string | null;
+      } | null;
+      if (!cur?.storage_path) continue;
+      const { data: blob, error } = await supabase.storage
+        .from("assets")
+        .download(cur.storage_path);
+      if (error || !blob) continue;
+      const bytes = Buffer.from(await blob.arrayBuffer());
+      total += bytes.length;
+      attachments.push({
+        filename: a.name,
+        mimeType: cur.mime_type || "application/octet-stream",
+        bytes,
+      });
+    }
+    if (total > 5_000_000) {
+      return {
+        error:
+          "Those attachments are over the 5MB email limit. Send fewer or smaller files.",
+      };
+    }
+  }
+
   try {
     const token = await getAccessToken(supabase, account);
     const rc = await getReplyContext(token, gmailThreadId);
-    await sendGmailReply(token, gmailThreadId, rc, text);
+    await sendGmailReply(token, gmailThreadId, rc, text, attachments);
     // Log to the project timeline only when the thread belongs to a project.
     if (opts.projectId) {
+      const suffix =
+        attachments.length > 0
+          ? ` with ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}`
+          : "";
       await supabase.from("activity").insert({
         studio_id: ctx.studio.id,
         project_id: opts.projectId,
         author_id: ctx.userId,
         type: "activity",
-        content: `Replied via email: "${rc.subject}"`,
+        content: `Replied via email: "${rc.subject}"${suffix}`,
       });
     }
     if (opts.revalidate) revalidatePath(opts.revalidate);

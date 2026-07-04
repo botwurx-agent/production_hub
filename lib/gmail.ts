@@ -267,25 +267,69 @@ function encodeB64Url(input: string): string {
     .replace(/=+$/, "");
 }
 
-// Sends a plain-text reply that stays in the same Gmail thread. From is set by
-// Gmail to the authenticated account.
+export type OutgoingAttachment = {
+  filename: string;
+  mimeType: string;
+  bytes: Buffer;
+};
+
+function headerSafe(name: string): string {
+  return name.replace(/[\r\n"]/g, "_");
+}
+
+// Sends a plain-text reply (optionally with attachments) that stays in the same
+// Gmail thread. From is set by Gmail to the authenticated account.
 export async function sendGmailReply(
   accessToken: string,
   gmailThreadId: string,
   ctx: ReplyContext,
-  bodyText: string
+  bodyText: string,
+  attachments: OutgoingAttachment[] = []
 ): Promise<void> {
-  const headers = [
-    `To: ${ctx.to}`,
-    `Subject: ${ctx.subject}`,
-    ctx.inReplyTo ? `In-Reply-To: ${ctx.inReplyTo}` : "",
-    ctx.references ? `References: ${ctx.references}` : "",
-    "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-  ]
-    .filter(Boolean)
-    .join("\r\n");
-  const raw = encodeB64Url(`${headers}\r\n\r\n${bodyText}`);
+  let mime: string;
+  if (attachments.length === 0) {
+    const headers = [
+      `To: ${ctx.to}`,
+      `Subject: ${ctx.subject}`,
+      ctx.inReplyTo ? `In-Reply-To: ${ctx.inReplyTo}` : "",
+      ctx.references ? `References: ${ctx.references}` : "",
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="UTF-8"',
+    ]
+      .filter(Boolean)
+      .join("\r\n");
+    mime = `${headers}\r\n\r\n${bodyText}`;
+  } else {
+    const boundary = `mixed_${Math.random().toString(36).slice(2)}`;
+    const parts: string[] = [
+      `To: ${ctx.to}`,
+      `Subject: ${ctx.subject}`,
+      ctx.inReplyTo ? `In-Reply-To: ${ctx.inReplyTo}` : "",
+      ctx.references ? `References: ${ctx.references}` : "",
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      "",
+      bodyText,
+    ].filter(Boolean) as string[];
+    for (const a of attachments) {
+      const b64 = a.bytes.toString("base64").replace(/(.{76})/g, "$1\r\n");
+      const name = headerSafe(a.filename);
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${headerSafe(a.mimeType)}; name="${name}"`,
+        `Content-Disposition: attachment; filename="${name}"`,
+        "Content-Transfer-Encoding: base64",
+        "",
+        b64
+      );
+    }
+    parts.push(`--${boundary}--`);
+    mime = parts.join("\r\n");
+  }
+  const raw = encodeB64Url(mime);
   const res = await fetch(`${API}/messages/send`, {
     method: "POST",
     headers: {
