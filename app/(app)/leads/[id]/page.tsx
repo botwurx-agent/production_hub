@@ -14,6 +14,7 @@ import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
 import { OutreachDraft } from "@/components/leads/outreach-draft";
+import { LeadNotesEditor } from "@/components/leads/lead-notes-editor";
 import { aiConfigured } from "@/lib/ai";
 import type { UpdateDestination } from "@/components/projects/client-update";
 import type { Contact } from "@/lib/database.types";
@@ -140,14 +141,10 @@ export default async function LeadDetailPage({
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {lead.notes && (
-          <Card className="p-5">
-            <h2 className="mb-3 font-display text-base font-bold">Notes</h2>
-            <p className="whitespace-pre-wrap text-sm text-text-muted">
-              {lead.notes}
-            </p>
-          </Card>
-        )}
+        <Card className="p-5">
+          <h2 className="mb-3 font-display text-base font-bold">Notes</h2>
+          <LeadNotesEditor leadId={lead.id} initialContent={lead.notes ?? ""} />
+        </Card>
         <Card className="p-5">
           <h2 className="mb-4 font-display text-base font-bold">Contacts</h2>
           <div className="mb-4">

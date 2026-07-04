@@ -55,6 +55,16 @@ export async function createLead(
   return null;
 }
 
+export async function updateLeadNotes(leadId: string, notes: string) {
+  await requireStudioContext();
+  const supabase = db();
+  await supabase
+    .from("leads")
+    .update({ notes: notes.trim() || null })
+    .eq("id", leadId);
+  revalidatePath(`/leads/${leadId}`);
+}
+
 export async function updateLeadStage(leadId: string, stage: LeadStage) {
   await requireStudioContext();
   if (!isStage(stage)) return;
