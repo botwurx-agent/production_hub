@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/ui/card";
 import { NewLeadButton } from "@/components/leads/new-lead-button";
 import { LeadsView } from "@/components/leads/leads-view";
+import { getLeadFollowups } from "@/lib/leads-followup";
 import { LeadsIcon } from "@/components/app-shell/nav-icons";
 import type { LeadRow } from "@/components/leads/types";
 
@@ -11,10 +12,13 @@ export default async function LeadsPage() {
   await requireStudioContext();
   const supabase = createClient();
 
-  const { data: leads } = await supabase
-    .from("leads")
-    .select("id, company, source, stage, converted_client_id")
-    .order("created_at", { ascending: false });
+  const [{ data: leads }, followUps] = await Promise.all([
+    supabase
+      .from("leads")
+      .select("id, company, source, stage, converted_client_id")
+      .order("created_at", { ascending: false }),
+    getLeadFollowups(),
+  ]);
 
   const rows = (leads ?? []) as LeadRow[];
 
@@ -33,7 +37,7 @@ export default async function LeadsPage() {
           action={<NewLeadButton />}
         />
       ) : (
-        <LeadsView leads={rows} />
+        <LeadsView leads={rows} followUps={followUps} />
       )}
     </div>
   );

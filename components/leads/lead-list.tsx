@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { LeadStageMenu } from "@/components/leads/lead-stage-menu";
 import { ConvertButton } from "@/components/leads/convert-button";
+import { FollowUpTag } from "@/components/leads/follow-up-tag";
 import type { LeadRow } from "@/components/leads/types";
 
-export function LeadList({ leads }: { leads: LeadRow[] }) {
+export function LeadList({
+  leads,
+  followUps,
+}: {
+  leads: LeadRow[];
+  followUps: Record<string, number>;
+}) {
   return (
     <div className="overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
       <table className="w-full text-sm">
@@ -22,12 +29,17 @@ export function LeadList({ leads }: { leads: LeadRow[] }) {
               className="border-b border-border last:border-0 transition hover:bg-surface-2/60"
             >
               <td className="px-4 py-3">
-                <Link
-                  href={`/leads/${l.id}`}
-                  className="font-semibold text-text hover:text-accent"
-                >
-                  {l.company}
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/leads/${l.id}`}
+                    className="font-semibold text-text hover:text-accent"
+                  >
+                    {l.company}
+                  </Link>
+                  {followUps[l.id] != null && (
+                    <FollowUpTag days={followUps[l.id]} />
+                  )}
+                </div>
               </td>
               <td className="hidden px-4 py-3 text-text-muted sm:table-cell">
                 {l.source ?? "—"}

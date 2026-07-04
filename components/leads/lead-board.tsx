@@ -3,12 +3,23 @@ import { LEAD_STAGE, LEAD_STAGE_ORDER } from "@/lib/status";
 import type { LeadRow } from "@/components/leads/types";
 
 // Horizontal pipeline: one column per stage, new through won/lost.
-export function LeadBoard({ leads }: { leads: LeadRow[] }) {
+export function LeadBoard({
+  leads,
+  followUps,
+}: {
+  leads: LeadRow[];
+  followUps: Record<string, number>;
+}) {
   return (
     <div className="flex gap-4 overflow-x-auto pb-2">
       {LEAD_STAGE_ORDER.map((stage) => {
         const meta = LEAD_STAGE[stage];
-        const items = leads.filter((l) => l.stage === stage);
+        // Leads needing follow-up rise to the top of their column.
+        const items = leads
+          .filter((l) => l.stage === stage)
+          .sort(
+            (a, b) => (followUps[b.id] ?? -1) - (followUps[a.id] ?? -1)
+          );
         return (
           <div key={stage} className="flex w-64 shrink-0 flex-col">
             <div className="mb-3 flex items-center gap-2 px-1">
@@ -28,7 +39,9 @@ export function LeadBoard({ leads }: { leads: LeadRow[] }) {
                   Nothing here yet
                 </p>
               ) : (
-                items.map((l) => <LeadCard key={l.id} lead={l} />)
+                items.map((l) => (
+                  <LeadCard key={l.id} lead={l} followUpDays={followUps[l.id]} />
+                ))
               )}
             </div>
           </div>

@@ -7,7 +7,13 @@ import type { LeadRow } from "@/components/leads/types";
 
 type View = "board" | "list";
 
-export function LeadsView({ leads }: { leads: LeadRow[] }) {
+export function LeadsView({
+  leads,
+  followUps,
+}: {
+  leads: LeadRow[];
+  followUps: Record<string, number>;
+}) {
   const [view, setView] = useState<View>("board");
 
   return (
@@ -28,9 +34,9 @@ export function LeadsView({ leads }: { leads: LeadRow[] }) {
         ))}
       </div>
       {view === "board" ? (
-        <LeadBoard leads={leads} />
+        <LeadBoard leads={leads} followUps={followUps} />
       ) : (
-        <LeadList leads={leads} />
+        <LeadList leads={leads} followUps={followUps} />
       )}
     </div>
   );
