@@ -241,36 +241,53 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     style={{ ...common, backgroundColor: `var(--h-${hue}-bg)`, boxShadow: ring }}
-                    className="group rounded-[10px] p-2"
-                    onPointerDown={(e) => startMove(e, it)}
+                    className="group flex flex-col overflow-hidden rounded-[10px]"
                   >
+                    {/* Drag handle / toolbar (the textarea can't be dragged) */}
+                    <div
+                      className="flex h-6 shrink-0 cursor-move items-center justify-between px-1.5"
+                      style={{ color: `var(--h-${hue})`, touchAction: "none" }}
+                      onPointerDown={(e) => startMove(e, it)}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden opacity="0.7">
+                        <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" />
+                        <circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" />
+                        <circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
+                      </svg>
+                      {isSel && (
+                        <span className="flex items-center gap-1">
+                          {NOTE_HUES.map((h) => (
+                            <button
+                              key={h}
+                              onClick={() => setNoteHue(it, h)}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              className="h-3.5 w-3.5 rounded-full ring-1 ring-black/10"
+                              style={{ backgroundColor: `var(--h-${h})` }}
+                              aria-label={`Color ${h}`}
+                            />
+                          ))}
+                          <button
+                            onClick={() => remove(it.id)}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            className="ml-0.5 grid h-4 w-4 place-items-center rounded-[5px] text-red hover:bg-red-bg"
+                            aria-label="Delete note"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                              <path d="M18 6 6 18M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
+                      )}
+                    </div>
                     <textarea
                       value={it.text ?? ""}
                       onChange={(e) => editNote(it.id, e.target.value)}
                       onBlur={() => persistNote(it)}
+                      onFocus={() => setSelected(it.id)}
                       placeholder="Note..."
-                      className="h-full w-full resize-none bg-transparent text-sm outline-none"
+                      className="w-full flex-1 resize-none bg-transparent px-2 pb-2 text-sm outline-none"
                       style={{ color: `var(--h-${hue})` }}
                     />
-                    {isSel && (
-                      <div className="absolute -top-9 left-0 flex items-center gap-1 rounded-[9px] border border-border bg-surface p-1 shadow-sm">
-                        {NOTE_HUES.map((h) => (
-                          <button
-                            key={h}
-                            onClick={() => setNoteHue(it, h)}
-                            className="h-4 w-4 rounded-full"
-                            style={{ backgroundColor: `var(--h-${h})` }}
-                            aria-label={`Color ${h}`}
-                          />
-                        ))}
-                        <button
-                          onClick={() => remove(it.id)}
-                          className="ml-1 rounded-[6px] px-1.5 text-xs font-semibold text-red hover:bg-red-bg"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )}
                     <span
                       data-resize="1"
                       onPointerDown={(e) => startResize(e, it)}
