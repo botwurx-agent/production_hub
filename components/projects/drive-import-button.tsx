@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fileSize, shortDate } from "@/lib/format";
 import { viewerKind } from "@/lib/file-kind";
-import { searchDrive, importDriveFile } from "@/app/(app)/projects/[id]/drive-actions";
+import { browseDrive, importDriveFile } from "@/app/(app)/projects/[id]/drive-actions";
 import type { DriveFile } from "@/lib/googledrive";
+
+type Crumb = { id: string; name: string };
+const ROOT: Crumb = { id: "root", name: "My Drive" };
 
 function DriveGlyph() {
   return (
@@ -35,6 +38,34 @@ const KIND_LABEL: Record<string, string> = {
 
 function thumbUrl(link: string) {
   return `/api/attachments/drive?url=${encodeURIComponent(link)}`;
+}
+
+function FolderCard({
+  file,
+  onOpen,
+}: {
+  file: DriveFile;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex flex-col items-center justify-center gap-2 rounded-[14px] border border-border bg-surface p-4 text-center shadow-sm transition hover:-translate-y-px hover:border-border-strong hover:shadow"
+    >
+      <span
+        className="grid h-12 w-12 place-items-center rounded-[12px]"
+        style={{ backgroundColor: "var(--h-yellow-bg)", color: "var(--h-yellow)" }}
+      >
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </svg>
+      </span>
+      <span className="line-clamp-2 text-sm font-semibold text-text" title={file.name}>
+        {file.name}
+      </span>
+    </button>
+  );
 }
 
 function FileCard({
@@ -124,14 +155,18 @@ export function DriveImportButton({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [crumbs, setCrumbs] = useState<Crumb[]>([ROOT]);
+  const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<DriveFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
 
-  function run(q: string) {
+  const currentFolder = crumbs[crumbs.length - 1];
+
+  function load(folderId: string, q: string) {
     setError(null);
     start(async () => {
-      const res = await searchDrive(q);
+      const res = await browseDrive({ folderId, query: q });
       if ("error" in res) {
         setError(res.error);
         setResults([]);
@@ -139,10 +174,46 @@ export function DriveImportButton({ projectId }: { projectId: string }) {
     });
   }
 
+  function openFolder(file: DriveFile) {
+    const next = [...crumbs, { id: file.id, name: file.name }];
+    setCrumbs(next);
+    setQuery("");
+    setSearching(false);
+    load(file.id, "");
+  }
+
+  function goToCrumb(index: number) {
+    const next = crumbs.slice(0, index + 1);
+    setCrumbs(next);
+    setQuery("");
+    setSearching(false);
+    load(next[next.length - 1].id, "");
+  }
+
+  function doSearch() {
+    const q = query.trim();
+    if (!q) {
+      setSearching(false);
+      load(currentFolder.id, "");
+      return;
+    }
+    setSearching(true);
+    load(currentFolder.id, q);
+  }
+
+  function clearSearch() {
+    setQuery("");
+    setSearching(false);
+    load(currentFolder.id, "");
+  }
+
+  // Open at My Drive root.
   useEffect(() => {
     if (open) {
       setQuery("");
-      run("");
+      setSearching(false);
+      setCrumbs([ROOT]);
+      load(ROOT.id, "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -159,6 +230,9 @@ export function DriveImportButton({ projectId }: { projectId: string }) {
       document.body.style.overflow = "";
     };
   }, [open]);
+
+  const folders = (results ?? []).filter((f) => f.isFolder);
+  const files = (results ?? []).filter((f) => !f.isFolder);
 
   return (
     <>
@@ -189,11 +263,11 @@ export function DriveImportButton({ projectId }: { projectId: string }) {
               </button>
             </div>
 
-            <div className="border-b border-border px-5 py-3">
+            <div className="space-y-2 border-b border-border px-5 py-3">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  run(query);
+                  doSearch();
                 }}
                 className="flex gap-2"
               >
@@ -201,14 +275,46 @@ export function DriveImportButton({ projectId }: { projectId: string }) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search your Drive by file name"
-                  autoFocus
                 />
                 <Button type="submit" disabled={busy}>
                   {busy ? "..." : "Search"}
                 </Button>
               </form>
+
+              {/* Breadcrumb, or the active search scope */}
+              {searching ? (
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <span>Search results across your Drive</span>
+                  <button
+                    onClick={clearSearch}
+                    className="font-semibold text-accent hover:underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1 text-xs text-text-muted">
+                  {crumbs.map((c, i) => (
+                    <span key={c.id} className="flex items-center gap-1">
+                      {i > 0 && <span className="text-text-faint">/</span>}
+                      <button
+                        onClick={() => goToCrumb(i)}
+                        disabled={i === crumbs.length - 1}
+                        className={
+                          i === crumbs.length - 1
+                            ? "font-semibold text-text"
+                            : "font-semibold text-accent hover:underline"
+                        }
+                      >
+                        {c.name}
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {error && (
-                <p className="mt-2 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
+                <p className="rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
                   {error}
                 </p>
               )}
@@ -217,22 +323,37 @@ export function DriveImportButton({ projectId }: { projectId: string }) {
             <div className="flex-1 overflow-y-auto p-5">
               {results === null || busy ? (
                 <p className="py-10 text-center text-sm text-text-faint">
-                  {busy ? "Searching your Drive..." : ""}
+                  {busy ? "Loading your Drive..." : ""}
                 </p>
               ) : results.length === 0 ? (
                 <p className="py-10 text-center text-sm text-text-faint">
-                  No matching files.
+                  {searching ? "No matching files." : "This folder is empty."}
                 </p>
               ) : (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  {results.map((f) => (
-                    <FileCard
-                      key={f.id}
-                      projectId={projectId}
-                      file={f}
-                      onDone={() => router.refresh()}
-                    />
-                  ))}
+                <div className="space-y-4">
+                  {folders.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {folders.map((f) => (
+                        <FolderCard
+                          key={f.id}
+                          file={f}
+                          onOpen={() => openFolder(f)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {files.length > 0 && (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                      {files.map((f) => (
+                        <FileCard
+                          key={f.id}
+                          projectId={projectId}
+                          file={f}
+                          onDone={() => router.refresh()}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

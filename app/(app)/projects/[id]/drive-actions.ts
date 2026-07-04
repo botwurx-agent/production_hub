@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { getAccessToken } from "@/lib/gmail";
 import {
-  searchDriveFiles,
+  listDrive,
   getDriveFileBytes,
   type DriveFile,
 } from "@/lib/googledrive";
@@ -25,8 +25,10 @@ async function getGoogleAccount(supabase: SupabaseClient<Database>) {
   return data;
 }
 
-export async function searchDrive(
-  query: string
+// Browse a Drive folder (default My Drive root) or, when a query is given,
+// search by name across the user's Drive.
+export async function browseDrive(
+  opts: { folderId?: string; query?: string } = {}
 ): Promise<{ files: DriveFile[] } | { error: string }> {
   await requireStudioContext();
   const supabase = createClient();
@@ -37,10 +39,13 @@ export async function searchDrive(
   }
   try {
     const token = await getAccessToken(supabase, account);
-    const files = await searchDriveFiles(token, query);
+    const files = await listDrive(token, {
+      folderId: opts.folderId,
+      query: opts.query,
+    });
     return { files };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Drive search failed." };
+    return { error: e instanceof Error ? e.message : "Drive request failed." };
   }
 }
 

@@ -12,6 +12,8 @@ export function driveConnected(scope: string | null | undefined): boolean {
   return (scope ?? "").includes("/auth/drive");
 }
 
+export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+
 export type DriveFile = {
   id: string;
   name: string;
@@ -23,6 +25,7 @@ export type DriveFile = {
   modifiedMs: number;
   size: number; // 0 for Google-native docs (no direct size)
   isGoogleDoc: boolean;
+  isFolder: boolean;
 };
 
 // Google-native files have no downloadable bytes; they must be exported to a
@@ -64,30 +67,34 @@ async function driveGet<T>(token: string, path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-// Searches the user's Drive by filename. An empty query returns recent files to
-// browse. Folders are excluded; trashed files are excluded. Shared drives are
-// included.
-export async function searchDriveFiles(
+// Lists the user's Drive. With no query it browses a folder's contents
+// (default "root" = My Drive), folders first, so you can navigate. With a query
+// it searches by name across the user's Drive. Folders are included (so they can
+// be opened); trashed items are excluded.
+export async function listDrive(
   token: string,
-  query: string,
-  max = 25
+  opts: { folderId?: string; query?: string; max?: number } = {}
 ): Promise<DriveFile[]> {
-  const q = query.trim().replace(/'/g, "\\'");
-  const clauses = [
-    "trashed = false",
-    "mimeType != 'application/vnd.google-apps.folder'",
-  ];
-  if (q) clauses.push(`name contains '${q}'`);
+  const folderId = opts.folderId || "root";
+  const query = (opts.query ?? "").trim();
+  const max = opts.max ?? 100;
+
+  const clauses = ["trashed = false"];
+  if (query) {
+    clauses.push(`name contains '${query.replace(/'/g, "\\'")}'`);
+  } else {
+    clauses.push(`'${folderId.replace(/'/g, "\\'")}' in parents`);
+  }
 
   const params = new URLSearchParams({
     q: clauses.join(" and "),
-    orderBy: "modifiedTime desc",
+    // "folder,name" sorts folders first, then alphabetically.
+    orderBy: "folder,name",
     pageSize: String(max),
     fields:
       "files(id,name,mimeType,iconLink,thumbnailLink,hasThumbnail,modifiedTime,size)",
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
-    corpora: "allDrives",
   });
 
   const data = await driveGet<{
@@ -116,6 +123,7 @@ export async function searchDriveFiles(
       modifiedMs: f.modifiedTime ? Date.parse(f.modifiedTime) : 0,
       size: f.size ? Number(f.size) : 0,
       isGoogleDoc: isGoogleApps(f.mimeType || ""),
+      isFolder: (f.mimeType || "") === DRIVE_FOLDER_MIME,
     }));
 }
 
