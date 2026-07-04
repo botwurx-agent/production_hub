@@ -22,6 +22,7 @@ const TYPE_ICON: Record<string, string> = {
   audio: "Audio",
   office: "Doc",
   text: "Text",
+  image: "Image",
   other: "File",
 };
 
@@ -35,7 +36,9 @@ function Preview({
   onOpen?: () => void;
 }) {
   const link = version?.signedUrl ?? version?.url ?? null;
-  const kind = version ? viewerKind(version.mime_type) : "other";
+  const kind = version
+    ? viewerKind(version.mime_type, version.storage_path ?? version.url)
+    : "other";
   const canOpen = Boolean(version && link && onOpen);
 
   const inner = (

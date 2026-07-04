@@ -23,14 +23,48 @@ const OFFICE_MIMES = new Set([
   "application/vnd.ms-powerpoint",
 ]);
 
-export function viewerKind(mime: string | null | undefined): ViewerKind {
+// Extension fallback, since imported/uploaded files often arrive with a missing
+// or generic mime type (e.g. application/octet-stream).
+const EXT_KIND: Record<string, ViewerKind> = {
+  jpg: "image", jpeg: "image", png: "image", gif: "image", webp: "image",
+  bmp: "image", svg: "image", avif: "image", heic: "image", heif: "image", tiff: "image",
+  mp4: "video", mov: "video", webm: "video", m4v: "video", avi: "video", mkv: "video",
+  mp3: "audio", wav: "audio", m4a: "audio", aac: "audio", ogg: "audio", flac: "audio",
+  pdf: "pdf",
+  doc: "office", docx: "office", xls: "office", xlsx: "office",
+  ppt: "office", pptx: "office",
+  txt: "text", xml: "text", json: "text", csv: "text", md: "text",
+  log: "text", yml: "text", yaml: "text", html: "text", htm: "text", rtf: "text",
+};
+
+function extOf(...candidates: (string | null | undefined)[]): string {
+  for (const c of candidates) {
+    if (!c) continue;
+    const clean = c.split("?")[0].split("#")[0];
+    const dot = clean.lastIndexOf(".");
+    if (dot >= 0 && dot < clean.length - 1) return clean.slice(dot + 1).toLowerCase();
+  }
+  return "";
+}
+
+// Decides how to preview a file, preferring a specific mime type and falling
+// back to the file extension (from the path, url, or name) when the mime is
+// missing or generic.
+export function viewerKind(
+  mime: string | null | undefined,
+  hint?: string | null
+): ViewerKind {
   const m = mime ?? "";
   if (m.startsWith("image/")) return "image";
   if (m.startsWith("video/")) return "video";
   if (m.startsWith("audio/")) return "audio";
   if (m === "application/pdf") return "pdf";
   if (OFFICE_MIMES.has(m)) return "office";
+  if (m === "application/xml" || m === "application/json") return "text";
   if (m.startsWith("text/")) return "text";
+  // Mime was unhelpful (empty, octet-stream, etc.): use the extension.
+  const byExt = EXT_KIND[extOf(hint)];
+  if (byExt) return byExt;
   return "other";
 }
 
@@ -83,7 +117,10 @@ export function AssetViewer({
   if (!open) return null;
 
   const link = version.signedUrl ?? version.url;
-  const kind = viewerKind(version.mime_type);
+  const kind = viewerKind(
+    version.mime_type,
+    version.storage_path ?? version.url ?? name
+  );
   // For Office files the browser can't display the raw bytes, so "Open in new
   // tab" points at the Office web viewer instead of downloading.
   const openLink =
@@ -170,6 +207,12 @@ export function AssetViewer({
           ) : kind === "office" ? (
             <iframe
               src={officeEmbedUrl(link)}
+              title={name}
+              className="h-[78vh] w-full rounded-[10px] border border-border bg-white"
+            />
+          ) : kind === "text" ? (
+            <iframe
+              src={link}
               title={name}
               className="h-[78vh] w-full rounded-[10px] border border-border bg-white"
             />
