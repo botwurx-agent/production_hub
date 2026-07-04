@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AssetStatusMenu } from "@/components/projects/asset-status-menu";
 import { AddVersionForm } from "@/components/projects/add-version-form";
 import { ReviewModal } from "@/components/projects/review-modal";
+import { AssetViewer, viewerKind } from "@/components/projects/asset-viewer";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag } from "@/components/status-tag";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
@@ -15,34 +16,58 @@ import {
   type VersionRow,
 } from "@/components/projects/asset-types";
 
+const TYPE_ICON: Record<string, string> = {
+  pdf: "PDF",
+  video: "Video",
+  audio: "Audio",
+  text: "Text",
+  other: "File",
+};
+
 function Preview({
   version,
   hue,
+  onOpen,
 }: {
   version: VersionRow | undefined;
   hue: string;
+  onOpen?: () => void;
 }) {
-  const isImage =
-    version?.signedUrl && version.mime_type?.startsWith("image/");
+  const link = version?.signedUrl ?? version?.url ?? null;
+  const kind = version ? viewerKind(version.mime_type) : "other";
+  const canOpen = Boolean(version && link && onOpen);
 
-  return (
-    <div
-      className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[12px]"
-      style={{ backgroundColor: `var(--h-${hue}-bg)` }}
-    >
-      {isImage ? (
+  const inner = (
+    <>
+      {kind === "image" && link ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={version!.signedUrl!}
-          alt=""
+        <img src={link} alt="" className="h-full w-full object-cover" />
+      ) : kind === "video" && link ? (
+        // A muted video element shows the first frame as a thumbnail.
+        <video
+          src={link}
+          muted
+          playsInline
+          preload="metadata"
           className="h-full w-full object-cover"
         />
+      ) : version ? (
+        <span
+          className="flex flex-col items-center gap-1 text-xs font-bold"
+          style={{ color: `var(--h-${hue})` }}
+        >
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+          </svg>
+          {TYPE_ICON[kind] ?? "File"}
+        </span>
       ) : (
         <span
           className="text-xs font-semibold"
           style={{ color: `var(--h-${hue})` }}
         >
-          {version ? "No preview" : "No version yet"}
+          No version yet
         </span>
       )}
       {version && (
@@ -50,6 +75,36 @@ function Preview({
           v{version.version_number}
         </span>
       )}
+      {canOpen && (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+          <span className="rounded-pill bg-white/95 px-3 py-1 text-xs font-bold text-black shadow-sm">
+            Open
+          </span>
+        </span>
+      )}
+    </>
+  );
+
+  const cls =
+    "group relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[12px]";
+
+  if (canOpen) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`${cls} w-full cursor-pointer`}
+        style={{ backgroundColor: `var(--h-${hue}-bg)` }}
+        aria-label="Open file"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div className={cls} style={{ backgroundColor: `var(--h-${hue}-bg)` }}>
+      {inner}
     </div>
   );
 }
@@ -68,6 +123,7 @@ export function AssetCard({
   const [addOpen, setAddOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [reviewVersion, setReviewVersion] = useState<VersionRow | null>(null);
+  const [viewVersion, setViewVersion] = useState<VersionRow | null>(null);
   const hue = ASSET_TYPE_HUE[asset.type] ?? "cyan";
   const current =
     asset.versions.find((v) => v.id === asset.current_version_id) ??
@@ -76,7 +132,11 @@ export function AssetCard({
 
   return (
     <div className="rounded-[15px] border border-border bg-surface p-3 shadow-sm">
-      <Preview version={current} hue={hue} />
+      <Preview
+        version={current}
+        hue={hue}
+        onOpen={current ? () => setViewVersion(current) : undefined}
+      />
 
       <div className="mt-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -153,6 +213,14 @@ export function AssetCard({
                     )}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
+                    {link && (
+                      <button
+                        onClick={() => setViewVersion(v)}
+                        className="text-xs font-semibold text-accent hover:underline"
+                      >
+                        View
+                      </button>
+                    )}
                     <button
                       onClick={() => setReviewVersion(v)}
                       className="text-xs font-semibold text-accent hover:underline"
@@ -194,6 +262,15 @@ export function AssetCard({
           assetName={asset.name}
           version={reviewVersion}
           currentUserId={currentUserId}
+        />
+      )}
+
+      {viewVersion && (
+        <AssetViewer
+          open={Boolean(viewVersion)}
+          onClose={() => setViewVersion(null)}
+          name={asset.name}
+          version={viewVersion}
         />
       )}
     </div>
