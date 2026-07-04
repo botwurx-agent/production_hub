@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   DashboardIcon,
   ProjectsIcon,
+  BoardsIcon,
   ClientsIcon,
   LeadsIcon,
   SettingsIcon,
@@ -15,6 +16,7 @@ import { CommunicationBadge } from "@/components/app-shell/communication-badge";
 const nav = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
   { href: "/projects", label: "Projects", Icon: ProjectsIcon },
+  { href: "/boards", label: "Boards", Icon: BoardsIcon },
   { href: "/communication", label: "Communication", Icon: CommunicationIcon },
   { href: "/clients", label: "Clients", Icon: ClientsIcon },
   { href: "/leads", label: "Leads", Icon: LeadsIcon },

@@ -194,6 +194,99 @@ export type Database = {
           },
         ];
       };
+      boards: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string | null;
+          name: string;
+          position: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id?: string | null;
+          name: string;
+          position?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string | null;
+          name?: string;
+          position?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      board_items: {
+        Row: {
+          id: string;
+          studio_id: string;
+          board_id: string;
+          kind: string;
+          name: string | null;
+          mime_type: string | null;
+          storage_path: string | null;
+          url: string | null;
+          text: string | null;
+          hue: string | null;
+          x: number;
+          y: number;
+          w: number;
+          h: number;
+          z: number;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          board_id: string;
+          kind?: string;
+          name?: string | null;
+          mime_type?: string | null;
+          storage_path?: string | null;
+          url?: string | null;
+          text?: string | null;
+          hue?: string | null;
+          x?: number;
+          y?: number;
+          w?: number;
+          h?: number;
+          z?: number;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          board_id?: string;
+          kind?: string;
+          name?: string | null;
+          mime_type?: string | null;
+          storage_path?: string | null;
+          url?: string | null;
+          text?: string | null;
+          hue?: string | null;
+          x?: number;
+          y?: number;
+          w?: number;
+          h?: number;
+          z?: number;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       brief_attachments: {
         Row: {
           brief_id: string;
@@ -1006,6 +1099,8 @@ export type Approval = Tables<"approvals">;
 export type Activity = Tables<"activity">;
 export type ReviewComment = Tables<"review_comments">;
 export type ReviewLink = Tables<"review_links">;
+export type Board = Tables<"boards">;
+export type BoardItem = Tables<"board_items">;
 export type EmailAccount = Tables<"email_accounts">;
 export type EmailThread = Tables<"email_threads">;
 export type SlackChannel = Tables<"slack_channels">;

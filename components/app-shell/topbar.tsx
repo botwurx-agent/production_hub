@@ -8,6 +8,7 @@ import { BellIcon } from "@/components/app-shell/nav-icons";
 
 const nav = [
   { href: "/projects", label: "Projects" },
+  { href: "/boards", label: "Boards" },
   { href: "/communication", label: "Comms" },
   { href: "/clients", label: "Clients" },
   { href: "/leads", label: "Leads" },
