@@ -11,6 +11,8 @@ import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { addClientContact } from "@/app/(app)/clients/actions";
 import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
+import { ChatPanel } from "@/components/communication/gchat-panel";
+import { chatConnected, chatCanSend } from "@/lib/googlechat";
 import { PROJECT_STATUS } from "@/lib/status";
 import { shortDate } from "@/lib/format";
 import type { Contact } from "@/lib/database.types";
@@ -37,6 +39,7 @@ export default async function ClientDetailPage({
     { data: emailAccount },
     { data: slackChannels },
     { data: slackAccount },
+    { data: chatSpaces },
   ] = await Promise.all([
     supabase
       .from("contacts")
@@ -70,6 +73,11 @@ export default async function ClientDetailPage({
       .eq("provider", "slack")
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("chat_spaces")
+      .select("id, space_name, space_display_name")
+      .eq("client_id", params.id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const revalidate = `/clients/${params.id}`;
@@ -179,6 +187,18 @@ export default async function ClientDetailPage({
             connected={Boolean(slackAccount)}
             canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
             channels={slackChannels ?? []}
+          />
+        </Card>
+
+        {/* Google Chat */}
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-base font-bold">Google Chat</h2>
+          <ChatPanel
+            ownerType="client"
+            ownerId={client.id}
+            connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
+            canSend={chatCanSend(emailAccount?.scope)}
+            spaces={chatSpaces ?? []}
           />
         </Card>
       </div>

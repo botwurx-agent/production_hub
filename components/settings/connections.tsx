@@ -22,11 +22,11 @@ type ProviderMeta = {
 const PROVIDERS: ProviderMeta[] = [
   {
     key: "google",
-    label: "Gmail",
+    label: "Google",
     glyph: "G",
     startPath: "/auth/google/start",
     blurb:
-      "Bring a project, lead, or client's email into the app and pull attachments into assets.",
+      "Bring Gmail email (with attachment import) and Google Chat spaces into the app, tied to the right job. Reconnect to grant Chat access.",
   },
   {
     key: "slack",

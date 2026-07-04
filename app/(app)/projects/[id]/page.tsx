@@ -9,6 +9,8 @@ import { AssetCard } from "@/components/projects/asset-card";
 import { AddAssetButton } from "@/components/projects/add-asset-button";
 import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
+import { ChatPanel } from "@/components/communication/gchat-panel";
+import { chatConnected, chatCanSend } from "@/lib/googlechat";
 import {
   ActivityPanel,
   type ActivityItem,
@@ -47,6 +49,7 @@ export default async function ProjectDetailPage({
     { data: emailAccount },
     { data: slackChannels },
     { data: slackAccount },
+    { data: chatSpaces },
   ] = await Promise.all([
       supabase
         .from("briefs")
@@ -92,6 +95,11 @@ export default async function ProjectDetailPage({
         .eq("provider", "slack")
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from("chat_spaces")
+        .select("id, space_name, space_display_name")
+        .eq("project_id", params.id)
+        .order("created_at", { ascending: false }),
     ]);
 
   // Batch-sign all stored files so private previews and downloads work.
@@ -249,6 +257,18 @@ export default async function ProjectDetailPage({
               connected={Boolean(slackAccount)}
               canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
               channels={slackChannels ?? []}
+            />
+          </Card>
+
+          {/* Google Chat */}
+          <Card className="p-5">
+            <h2 className="mb-4 font-display text-base font-bold">Google Chat</h2>
+            <ChatPanel
+              ownerType="project"
+              ownerId={project.id}
+              connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
+              canSend={chatCanSend(emailAccount?.scope)}
+              spaces={chatSpaces ?? []}
             />
           </Card>
         </div>

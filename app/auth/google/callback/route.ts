@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { exchangeCodeForTokens, emailFromIdToken } from "@/lib/google";
+import {
+  exchangeCodeForTokens,
+  emailFromIdToken,
+  subFromIdToken,
+} from "@/lib/google";
 
 // Completes the Google OAuth flow: exchanges the code, then stores the
 // connected account + tokens against the signed-in user's studio.
@@ -45,6 +49,7 @@ export async function GET(request: NextRequest) {
 
   const email = emailFromIdToken(tokens.id_token);
   if (!email) return settings("error=google_email");
+  const googleUserId = subFromIdToken(tokens.id_token);
 
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   const { error } = await supabase.from("email_accounts").upsert(
@@ -57,6 +62,7 @@ export async function GET(request: NextRequest) {
       refresh_token: tokens.refresh_token ?? null,
       token_expiry: expiry,
       scope: tokens.scope,
+      external_ref: googleUserId ? { user_id: googleUserId } : null,
     },
     { onConflict: "user_id,provider,email" }
   );

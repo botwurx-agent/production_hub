@@ -8,6 +8,9 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
+  // Google Chat: list the user's spaces, read messages, and post as the user.
+  "https://www.googleapis.com/auth/chat.spaces.readonly",
+  "https://www.googleapis.com/auth/chat.messages",
   "openid",
   "email",
   "profile",
@@ -64,18 +67,30 @@ export async function exchangeCodeForTokens(
   return (await res.json()) as GoogleTokens;
 }
 
-// Extracts the account email from the OpenID id_token (no signature check
-// needed: the token came directly from Google's token endpoint over TLS).
-export function emailFromIdToken(idToken: string | undefined): string | null {
+function idTokenPayload(
+  idToken: string | undefined
+): Record<string, unknown> | null {
   if (!idToken) return null;
   const parts = idToken.split(".");
   if (parts.length < 2) return null;
   try {
-    const payload = JSON.parse(
-      Buffer.from(parts[1], "base64").toString("utf8")
-    );
-    return typeof payload.email === "string" ? payload.email : null;
+    return JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
   } catch {
     return null;
   }
+}
+
+// Extracts the account email from the OpenID id_token (no signature check
+// needed: the token came directly from Google's token endpoint over TLS).
+export function emailFromIdToken(idToken: string | undefined): string | null {
+  const email = idTokenPayload(idToken)?.email;
+  return typeof email === "string" ? email : null;
+}
+
+// The Google user id (OpenID `sub`). This is the same numeric id Google Chat
+// uses in a User resource name ("users/{sub}"), so we store it to recognize the
+// connected user's own Chat messages.
+export function subFromIdToken(idToken: string | undefined): string | null {
+  const sub = idTokenPayload(idToken)?.sub;
+  return typeof sub === "string" ? sub : null;
 }

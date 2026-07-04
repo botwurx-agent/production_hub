@@ -11,6 +11,8 @@ import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { addLeadContact } from "@/app/(app)/leads/actions";
 import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
+import { ChatPanel } from "@/components/communication/gchat-panel";
+import { chatConnected, chatCanSend } from "@/lib/googlechat";
 import type { Contact } from "@/lib/database.types";
 
 export default async function LeadDetailPage({
@@ -34,6 +36,7 @@ export default async function LeadDetailPage({
     { data: emailAccount },
     { data: slackChannels },
     { data: slackAccount },
+    { data: chatSpaces },
   ] = await Promise.all([
     supabase.from("contacts").select("*").eq("lead_id", params.id).order("created_at"),
     supabase
@@ -58,6 +61,11 @@ export default async function LeadDetailPage({
       .eq("provider", "slack")
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("chat_spaces")
+      .select("id, space_name, space_display_name")
+      .eq("lead_id", params.id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const revalidate = `/leads/${params.id}`;
@@ -138,6 +146,17 @@ export default async function LeadDetailPage({
             connected={Boolean(slackAccount)}
             canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
             channels={slackChannels ?? []}
+          />
+        </Card>
+
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-base font-bold">Google Chat</h2>
+          <ChatPanel
+            ownerType="lead"
+            ownerId={lead.id}
+            connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
+            canSend={chatCanSend(emailAccount?.scope)}
+            spaces={chatSpaces ?? []}
           />
         </Card>
       </div>

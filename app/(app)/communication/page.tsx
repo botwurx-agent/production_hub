@@ -13,6 +13,11 @@ import {
   SlackReader,
   type LinkedSlackChannel,
 } from "@/components/communication/slack-panel";
+import {
+  ChatReader,
+  type LinkedChatSpace,
+} from "@/components/communication/gchat-panel";
+import { chatCanSend } from "@/lib/googlechat";
 import type { Hue } from "@/components/status-tag";
 
 type OwnerJoins = {
@@ -22,6 +27,7 @@ type OwnerJoins = {
 };
 type EmailRow = LinkedThread & OwnerJoins;
 type SlackRow = LinkedSlackChannel & OwnerJoins;
+type ChatRow = LinkedChatSpace & OwnerJoins;
 
 type Group = {
   key: string;
@@ -32,15 +38,18 @@ type Group = {
   projectId?: string;
   email: EmailRow[];
   slack: SlackRow[];
+  chat: ChatRow[];
 };
 
 const CHANNELS: { key: string; label: string; live: boolean; hue: Hue }[] = [
   { key: "email", label: "Email", live: true, hue: "blue" },
   { key: "slack", label: "Slack", live: true, hue: "purple" },
-  { key: "gchat", label: "Google Chat", live: false, hue: "cyan" },
+  { key: "gchat", label: "Google Chat", live: true, hue: "cyan" },
 ];
 
-function classify(r: OwnerJoins): Omit<Group, "email" | "slack"> | null {
+function classify(
+  r: OwnerJoins
+): Omit<Group, "email" | "slack" | "chat"> | null {
   if (r.project)
     return {
       key: `project:${r.project.id}`,
@@ -76,6 +85,7 @@ export default async function CommunicationPage() {
   const [
     { data: emailRaw },
     { data: slackRaw },
+    { data: chatRaw },
     { data: googleAccount },
     { data: slackAccount },
   ] = await Promise.all([
@@ -89,6 +99,12 @@ export default async function CommunicationPage() {
         .from("slack_channels")
         .select(
           "id, slack_channel_id, channel_name, project:projects(id, title), lead:leads(id, company), client:clients(id, name)"
+        )
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("chat_spaces")
+        .select(
+          "id, space_name, space_display_name, project:projects(id, title), lead:leads(id, company), client:clients(id, name)"
         )
         .order("created_at", { ascending: false }),
       supabase
@@ -107,13 +123,17 @@ export default async function CommunicationPage() {
 
   const emails = (emailRaw ?? []) as unknown as EmailRow[];
   const slacks = (slackRaw ?? []) as unknown as SlackRow[];
+  const chats = (chatRaw ?? []) as unknown as ChatRow[];
   const canSend = Boolean(googleAccount?.scope?.includes("gmail.send"));
   const slackCanSend = Boolean(slackAccount?.scope?.includes("chat:write"));
-  const anyConnection = emails.length > 0 || slacks.length > 0;
+  const chatCanSendMsg = chatCanSend(googleAccount?.scope);
+  const anyConnection =
+    emails.length > 0 || slacks.length > 0 || chats.length > 0;
 
   const groups = new Map<string, Group>();
-  const ensure = (base: Omit<Group, "email" | "slack">): Group => {
-    const g = groups.get(base.key) ?? { ...base, email: [], slack: [] };
+  const ensure = (base: Omit<Group, "email" | "slack" | "chat">): Group => {
+    const g =
+      groups.get(base.key) ?? { ...base, email: [], slack: [], chat: [] };
     groups.set(base.key, g);
     return g;
   };
@@ -124,6 +144,10 @@ export default async function CommunicationPage() {
   for (const r of slacks) {
     const base = classify(r);
     if (base) ensure(base).slack.push(r);
+  }
+  for (const r of chats) {
+    const base = classify(r);
+    if (base) ensure(base).chat.push(r);
   }
 
   return (
@@ -166,7 +190,7 @@ export default async function CommunicationPage() {
         <EmptyState
           icon={<CommunicationIcon className="h-7 w-7" />}
           title="No conversations linked yet"
-          description="Link a Gmail thread or Slack channel from a lead, client, or project and it will show up here. Connect channels in Settings."
+          description="Link a Gmail thread, Slack channel, or Google Chat space from a lead, client, or project and it will show up here. Connect channels in Settings."
           action={
             <Link
               href="/settings"
@@ -195,8 +219,8 @@ export default async function CommunicationPage() {
                   {g.kind}
                 </StatusTag>
                 <span className="text-xs font-medium text-text-faint">
-                  {g.email.length + g.slack.length}{" "}
-                  {g.email.length + g.slack.length === 1
+                  {g.email.length + g.slack.length + g.chat.length}{" "}
+                  {g.email.length + g.slack.length + g.chat.length === 1
                     ? "conversation"
                     : "conversations"}
                 </span>
@@ -217,6 +241,14 @@ export default async function CommunicationPage() {
                     channel={c}
                     projectId={g.projectId}
                     canSend={slackCanSend}
+                    revalidate="/communication"
+                  />
+                ))}
+                {g.chat.map((s) => (
+                  <ChatReader
+                    key={s.id}
+                    space={s}
+                    canSend={chatCanSendMsg}
                     revalidate="/communication"
                   />
                 ))}

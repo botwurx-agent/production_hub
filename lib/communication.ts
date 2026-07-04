@@ -5,6 +5,7 @@ import {
   countNewIncoming as countNewGmail,
 } from "@/lib/gmail";
 import { countNewIncoming as countNewSlack } from "@/lib/slack";
+import { countNewIncoming as countNewChat } from "@/lib/googlechat";
 
 // Cap how many conversations we poll per provider so the badge stays cheap.
 const MAX_CONVERSATIONS = 60;
@@ -19,6 +20,7 @@ export async function getUnreadTotal(): Promise<number> {
   const [
     { data: threads },
     { data: channels },
+    { data: spaces },
     { data: googleAccount },
     { data: slackAccount },
   ] = await Promise.all([
@@ -33,8 +35,13 @@ export async function getUnreadTotal(): Promise<number> {
       .order("created_at", { ascending: false })
       .limit(MAX_CONVERSATIONS),
     supabase
+      .from("chat_spaces")
+      .select("space_name, last_read_at")
+      .order("created_at", { ascending: false })
+      .limit(MAX_CONVERSATIONS),
+    supabase
       .from("email_accounts")
-      .select("id, access_token, refresh_token, token_expiry")
+      .select("id, access_token, refresh_token, token_expiry, external_ref")
       .eq("provider", "google")
       .order("created_at", { ascending: true })
       .limit(1)
@@ -50,11 +57,15 @@ export async function getUnreadTotal(): Promise<number> {
 
   let total = 0;
 
-  // Email: one lean threads.get per linked thread.
-  if (googleAccount?.access_token && (threads?.length ?? 0) > 0) {
+  // Email + Google Chat share the one Google token.
+  if (
+    googleAccount?.access_token &&
+    ((threads?.length ?? 0) > 0 || (spaces?.length ?? 0) > 0)
+  ) {
     try {
       const token = await getAccessToken(supabase, googleAccount);
-      const counts = await Promise.all(
+
+      const emailCounts = await Promise.all(
         (threads ?? []).map((t) =>
           countNewGmail(
             token,
@@ -63,9 +74,27 @@ export async function getUnreadTotal(): Promise<number> {
           ).catch(() => 0)
         )
       );
-      total += counts.reduce((a, b) => a + b, 0);
+      total += emailCounts.reduce((a, b) => a + b, 0);
+
+      if ((spaces?.length ?? 0) > 0) {
+        const googleUserId =
+          (googleAccount.external_ref as { user_id?: string } | null)
+            ?.user_id ?? "";
+        const myChatUser = googleUserId ? `users/${googleUserId}` : "";
+        const chatCounts = await Promise.all(
+          (spaces ?? []).map((s) =>
+            countNewChat(
+              token,
+              s.space_name,
+              s.last_read_at ? Date.parse(s.last_read_at) : 0,
+              myChatUser
+            ).catch(() => 0)
+          )
+        );
+        total += chatCounts.reduce((a, b) => a + b, 0);
+      }
     } catch {
-      // Gmail unavailable (token/scope); contribute nothing.
+      // Google unavailable (token/scope); contribute nothing.
     }
   }
 

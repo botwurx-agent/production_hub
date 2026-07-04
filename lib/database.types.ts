@@ -496,6 +496,48 @@ export type Database = {
           },
         ];
       };
+      chat_spaces: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string | null;
+          lead_id: string | null;
+          client_id: string | null;
+          account_id: string;
+          space_name: string;
+          space_display_name: string | null;
+          last_read_at: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id?: string | null;
+          lead_id?: string | null;
+          client_id?: string | null;
+          account_id: string;
+          space_name: string;
+          space_display_name?: string | null;
+          last_read_at?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string | null;
+          lead_id?: string | null;
+          client_id?: string | null;
+          account_id?: string;
+          space_name?: string;
+          space_display_name?: string | null;
+          last_read_at?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       leads: {
         Row: {
           company: string;
