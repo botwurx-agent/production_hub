@@ -147,3 +147,26 @@ export async function generateProjectSummary(context: string): Promise<string> {
 export async function generateClientUpdate(context: string): Promise<string> {
   return complete(CLIENT_UPDATE_SYSTEM, clientUpdateUserMessage(context));
 }
+
+const OUTREACH_SYSTEM = `You are drafting an outreach or follow-up message that a producer at a boutique commercial production studio will send to a prospect (a lead). It goes out under the producer's name.
+
+Write a warm, brief, human note from the lead data provided. Not salesy.
+
+Rules:
+- If there is prior email history, write a natural follow-up that moves things forward. If the lead is brand new, write a short, specific introduction.
+- Include one clear, low-friction next step (a quick call, a specific question, or sharing relevant work).
+- Address the contact by first name if the data gives one; otherwise keep it general (no [placeholder] tokens).
+- Never invent facts (past meetings, promises, project details) that are not in the data.
+- Keep it under about 130 words.
+- Plain text only. No markdown headers, no bold. Do not use em dashes; use commas, colons, or parentheses instead.
+- End with a simple sign-off line like "Best," on its own line (no name; the producer adds theirs).
+- This is a draft the producer will review and edit before sending.`;
+
+function outreachUserMessage(context: string): string {
+  return `Draft an outreach or follow-up message for this lead.\n\n${context}`;
+}
+
+// Generates an outreach/follow-up draft for a lead from its context.
+export async function generateOutreach(context: string): Promise<string> {
+  return complete(OUTREACH_SYSTEM, outreachUserMessage(context));
+}

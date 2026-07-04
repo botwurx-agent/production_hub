@@ -13,6 +13,9 @@ import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
+import { OutreachDraft } from "@/components/leads/outreach-draft";
+import { aiConfigured } from "@/lib/ai";
+import type { UpdateDestination } from "@/components/projects/client-update";
 import type { Contact } from "@/lib/database.types";
 
 export default async function LeadDetailPage({
@@ -71,6 +74,36 @@ export default async function LeadDetailPage({
   const revalidate = `/leads/${params.id}`;
   const primaryEmail = (contacts ?? []).find((c) => c.email)?.email ?? "";
 
+  // Channels linked to this lead that outreach can be sent through.
+  const emailCanSend = Boolean(emailAccount?.scope?.includes("gmail.send"));
+  const slackCanSend = Boolean(slackAccount?.scope?.includes("chat:write"));
+  const outreachDestinations: UpdateDestination[] = [
+    ...(emailCanSend
+      ? (emailThreads ?? []).map((t) => ({
+          kind: "email" as const,
+          id: `email:${t.id}`,
+          label: `Email: ${t.subject || "thread"}`,
+          gmailThreadId: t.gmail_thread_id,
+        }))
+      : []),
+    ...(slackCanSend
+      ? (slackChannels ?? []).map((c) => ({
+          kind: "slack" as const,
+          id: `slack:${c.id}`,
+          label: `Slack: #${c.channel_name || "channel"}`,
+          channelId: c.slack_channel_id,
+        }))
+      : []),
+    ...(chatCanSend(emailAccount?.scope)
+      ? (chatSpaces ?? []).map((s) => ({
+          kind: "chat" as const,
+          id: `chat:${s.id}`,
+          label: `Chat: ${s.space_display_name || "space"}`,
+          spaceName: s.space_name,
+        }))
+      : []),
+  ];
+
   return (
     <div>
       <Link
@@ -124,6 +157,24 @@ export default async function LeadDetailPage({
             />
           </div>
           <AddContactForm action={addLeadContact.bind(null, lead.id)} />
+        </Card>
+
+        {/* AI outreach draft */}
+        <Card className="p-5 lg:col-span-2">
+          <div className="mb-4 flex items-center gap-2">
+            <h2 className="font-display text-base font-bold">Outreach</h2>
+            <span
+              className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
+              style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+            >
+              AI
+            </span>
+          </div>
+          <OutreachDraft
+            leadId={lead.id}
+            connected={aiConfigured()}
+            destinations={outreachDestinations}
+          />
         </Card>
 
         <Card className="p-5 lg:col-span-2">
