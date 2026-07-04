@@ -4,7 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { ProductionTabs } from "@/components/production/production-tabs";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
-import type { Shot, CallSheet, CallSheetEntry } from "@/lib/database.types";
+import type { CardView } from "@/components/production/shot-board-editor";
+import type {
+  CallSheet,
+  CallSheetEntry,
+  ShotBoard,
+  ShotBoardFlavor,
+  ShotGroup,
+} from "@/lib/database.types";
+
+const SIGNED_TTL = 60 * 60;
 
 export default async function ProductionPage({
   params,
@@ -21,18 +30,61 @@ export default async function ProductionPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: shots }, { data: callSheet }] = await Promise.all([
-    supabase
-      .from("shots")
+  const [{ data: board }, { data: groups }, { data: callSheet }] =
+    await Promise.all([
+      supabase.from("shot_boards").select("*").eq("project_id", params.id).maybeSingle(),
+      supabase
+        .from("shot_groups")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("position", { ascending: true }),
+      supabase.from("call_sheets").select("*").eq("project_id", params.id).maybeSingle(),
+    ]);
+
+  // Flavors + cards + call sheet entries (depend on the above ids).
+  let flavors: ShotBoardFlavor[] = [];
+  if (board) {
+    const { data } = await supabase
+      .from("shot_board_flavors")
       .select("*")
-      .eq("project_id", params.id)
-      .order("position", { ascending: true }),
-    supabase
-      .from("call_sheets")
+      .eq("board_id", (board as ShotBoard).id)
+      .order("position", { ascending: true });
+    flavors = (data ?? []) as ShotBoardFlavor[];
+  }
+
+  const groupIds = (groups ?? []).map((g) => g.id);
+  let cards: CardView[] = [];
+  if (groupIds.length > 0) {
+    const { data: cardRows } = await supabase
+      .from("shot_cards")
       .select("*")
-      .eq("project_id", params.id)
-      .maybeSingle(),
-  ]);
+      .in("group_id", groupIds)
+      .order("position", { ascending: true });
+    const paths = (cardRows ?? [])
+      .map((c) => c.storage_path)
+      .filter((p): p is string => Boolean(p));
+    const signed = new Map<string, string>();
+    if (paths.length > 0) {
+      const { data: list } = await supabase.storage
+        .from("assets")
+        .createSignedUrls(paths, SIGNED_TTL);
+      for (const s of list ?? []) if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+    }
+    cards = (cardRows ?? []).map((c) => ({
+      id: c.id,
+      group_id: c.group_id,
+      position: c.position,
+      code: c.code,
+      day: c.day,
+      flavor_name: c.flavor_name,
+      flavor_hue: c.flavor_hue,
+      description: c.description,
+      vo: c.vo,
+      tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
+      signedUrl: c.storage_path ? (signed.get(c.storage_path) ?? null) : null,
+      image_name: c.image_name,
+    }));
+  }
 
   let entries: CallSheetEntry[] = [];
   if (callSheet) {
@@ -60,7 +112,10 @@ export default async function ProductionPage({
       <ProductionTabs
         projectId={project.id}
         projectTitle={project.title}
-        shots={(shots ?? []) as Shot[]}
+        board={(board as ShotBoard | null) ?? null}
+        flavors={flavors}
+        groups={(groups ?? []) as ShotGroup[]}
+        cards={cards}
         callSheet={(callSheet as CallSheet | null) ?? null}
         entries={entries}
       />

@@ -2,14 +2,20 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { ShotList } from "@/components/production/shot-list";
+import { ShotBoardEditor, type CardView } from "@/components/production/shot-board-editor";
 import { CallSheet } from "@/components/production/call-sheet";
-import type { Shot, CallSheet as CS, CallSheetEntry } from "@/lib/database.types";
+import type {
+  CallSheet as CS,
+  CallSheetEntry,
+  ShotBoard,
+  ShotBoardFlavor,
+  ShotGroup,
+} from "@/lib/database.types";
 
-type Tab = "shots" | "callsheet" | "budget" | "gear" | "delivery";
+type Tab = "board" | "callsheet" | "budget" | "gear" | "delivery";
 
 const TABS: { key: Tab; label: string; soon?: boolean }[] = [
-  { key: "shots", label: "Shot list" },
+  { key: "board", label: "Shot board" },
   { key: "callsheet", label: "Call sheet" },
   { key: "budget", label: "Budget", soon: true },
   { key: "gear", label: "Gear & crew", soon: true },
@@ -19,17 +25,23 @@ const TABS: { key: Tab; label: string; soon?: boolean }[] = [
 export function ProductionTabs({
   projectId,
   projectTitle,
-  shots,
+  board,
+  flavors,
+  groups,
+  cards,
   callSheet,
   entries,
 }: {
   projectId: string;
   projectTitle: string;
-  shots: Shot[];
+  board: ShotBoard | null;
+  flavors: ShotBoardFlavor[];
+  groups: ShotGroup[];
+  cards: CardView[];
   callSheet: CS | null;
   entries: CallSheetEntry[];
 }) {
-  const [tab, setTab] = useState<Tab>("shots");
+  const [tab, setTab] = useState<Tab>("board");
 
   return (
     <div>
@@ -58,7 +70,16 @@ export function ProductionTabs({
       </div>
 
       <Card className="p-5">
-        {tab === "shots" && <ShotList projectId={projectId} shots={shots} />}
+        {tab === "board" && (
+          <ShotBoardEditor
+            projectId={projectId}
+            projectTitle={projectTitle}
+            board={board}
+            flavors={flavors}
+            groups={groups}
+            cards={cards}
+          />
+        )}
         {tab === "callsheet" && (
           <CallSheet
             projectId={projectId}
