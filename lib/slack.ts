@@ -157,6 +157,7 @@ export type SlackFile = {
   mimetype: string;
   size: number;
   urlPrivateDownload: string;
+  thumb360?: string; // image thumbnail (files.slack.com), needs the token
 };
 export type SlackMessage = {
   ts: string;
@@ -182,6 +183,7 @@ export async function getConversationHistory(
         mimetype?: string;
         size?: number;
         url_private_download?: string;
+        thumb_360?: string;
       }[];
     }[];
   }>(token, "conversations.history", {
@@ -221,6 +223,7 @@ export async function getConversationHistory(
           mimetype: f.mimetype || "application/octet-stream",
           size: f.size || 0,
           urlPrivateDownload: f.url_private_download!,
+          thumb360: f.thumb_360,
         })),
     });
   }

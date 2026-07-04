@@ -34,6 +34,8 @@ export async function GET(request: Request) {
   const fileUrl = searchParams.get("url");
   const filename = searchParams.get("filename") || "file";
   const mime = searchParams.get("mime") || "application/octet-stream";
+  // Inline mode is used for image thumbnails in the attachment grid.
+  const inline = searchParams.get("disp") === "inline";
   if (!fileUrl || !isSlackFileUrl(fileUrl))
     return new Response("Invalid file URL", { status: 400 });
 
@@ -53,9 +55,9 @@ export async function GET(request: Request) {
     return new Response(new Uint8Array(bytes), {
       headers: {
         "Content-Type": mime,
-        "Content-Disposition": disposition(filename),
+        "Content-Disposition": inline ? "inline" : disposition(filename),
         "Content-Length": String(bytes.length),
-        "Cache-Control": "private, no-store",
+        "Cache-Control": inline ? "private, max-age=600" : "private, no-store",
       },
     });
   } catch {

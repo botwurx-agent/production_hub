@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
+import { AttachmentCard } from "@/components/attachments/attachment-card";
 import { PlusIcon, HashIcon } from "@/components/app-shell/nav-icons";
-import { fileSize, longDate } from "@/lib/format";
+import { longDate } from "@/lib/format";
 import {
   searchSlackConversations,
   linkSlackChannel,
@@ -89,26 +90,24 @@ function FileRow({
   }
 
   const downloadHref = `/api/attachments/slack?url=${encodeURIComponent(file.urlPrivateDownload)}&filename=${encodeURIComponent(file.name)}&mime=${encodeURIComponent(file.mimetype)}`;
+  // Prefer Slack's small thumbnail for the preview; fall back to the full file.
+  const thumbSrc = file.thumb360 ?? file.urlPrivateDownload;
+  const previewUrl = `/api/attachments/slack?url=${encodeURIComponent(thumbSrc)}&filename=${encodeURIComponent(file.name)}&mime=${encodeURIComponent(file.mimetype)}&disp=inline`;
 
   return (
-    <div className="flex items-center justify-between gap-2 text-xs">
-      <span className="min-w-0 truncate text-text-muted">
-        {file.name}
-        {file.size ? ` · ${fileSize(file.size)}` : ""}
-      </span>
-      <span className="flex shrink-0 items-center gap-2">
-        <a
-          href={downloadHref}
-          download={file.name}
-          className="font-semibold text-accent hover:underline"
-        >
-          Download
-        </a>
+    <AttachmentCard
+      name={file.name}
+      mime={file.mimetype}
+      size={file.size}
+      previewUrl={previewUrl}
+      downloadUrl={downloadHref}
+    >
+      <div className="flex flex-col items-end gap-1">
         {!projectId && (
           <select
             value={target}
             onChange={(e) => setTarget(e.target.value)}
-            className="max-w-[8rem] rounded-[8px] border border-border bg-surface px-1.5 py-1 text-xs"
+            className="max-w-[7rem] rounded-[8px] border border-border bg-surface px-1.5 py-1 text-[11px]"
           >
             <option value="">Project...</option>
             {(projects ?? []).map((p) => (
@@ -124,11 +123,11 @@ function FileRow({
           disabled={done || busy || !target}
           onClick={add}
         >
-          {done ? "Imported" : busy ? "..." : "Add to assets"}
+          {done ? "Imported" : busy ? "..." : "Add"}
         </Button>
-        {err && <span className="text-red">{err}</span>}
-      </span>
-    </div>
+        {err && <span className="text-[11px] text-red">{err}</span>}
+      </div>
+    </AttachmentCard>
   );
 }
 
@@ -255,7 +254,7 @@ export function SlackReader({
                     {m.text}
                   </p>
                   {m.files.length > 0 && (
-                    <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3">
                       {m.files.map((f) => (
                         <FileRow
                           key={f.id}

@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { LinkEmailModal } from "@/components/projects/link-email-modal";
 import { ImportAttachment } from "@/components/projects/import-attachment";
+import { AttachmentCard } from "@/components/attachments/attachment-card";
 import { PlusIcon, EnvelopeIcon } from "@/components/app-shell/nav-icons";
-import { fileSize, longDate, shortDate } from "@/lib/format";
+import { longDate, shortDate } from "@/lib/format";
 import {
   getThreadMessages,
   unlinkThread,
@@ -184,24 +185,18 @@ export function ThreadReader({
                     {m.bodyText}
                   </p>
                   {m.attachments.length > 0 && (
-                    <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-                      {m.attachments.map((att) => (
-                        <div
-                          key={att.attachmentId}
-                          className="flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="min-w-0 truncate text-text-muted">
-                            {att.filename}
-                            {att.size ? ` · ${fileSize(att.size)}` : ""}
-                          </span>
-                          <span className="flex shrink-0 items-center gap-3">
-                            <a
-                              href={`/api/attachments/gmail?message=${encodeURIComponent(m.id)}&attachment=${encodeURIComponent(att.attachmentId)}&filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType)}`}
-                              download={att.filename}
-                              className="font-semibold text-accent hover:underline"
-                            >
-                              Download
-                            </a>
+                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3">
+                      {m.attachments.map((att) => {
+                        const base = `/api/attachments/gmail?message=${encodeURIComponent(m.id)}&attachment=${encodeURIComponent(att.attachmentId)}&filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType)}`;
+                        return (
+                          <AttachmentCard
+                            key={att.attachmentId}
+                            name={att.filename}
+                            mime={att.mimeType}
+                            size={att.size}
+                            previewUrl={`${base}&disp=inline`}
+                            downloadUrl={base}
+                          >
                             <ImportAttachment
                               projectId={projectId}
                               messageId={m.id}
@@ -209,9 +204,9 @@ export function ThreadReader({
                               filename={att.filename}
                               mimeType={att.mimeType}
                             />
-                          </span>
-                        </div>
-                      ))}
+                          </AttachmentCard>
+                        );
+                      })}
                     </div>
                   )}
                 </li>
