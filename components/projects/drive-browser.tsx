@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,6 +195,9 @@ export function DrivePickerModal({
   const [results, setResults] = useState<DriveFile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
+  // Portal target: only available after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const currentFolder = crumbs[crumbs.length - 1];
 
@@ -264,13 +268,13 @@ export function DrivePickerModal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const folders = (results ?? []).filter((f) => f.isFolder);
   const files = (results ?? []).filter((f) => !f.isFolder);
   const selectedCount = selectedIds?.size ?? 0;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-start justify-center p-4 sm:items-center">
       <div
         className="fixed inset-0 bg-black/40 backdrop-blur-sm"
@@ -406,6 +410,7 @@ export function DrivePickerModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
