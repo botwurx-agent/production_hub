@@ -515,6 +515,129 @@ export type Database = {
         };
         Relationships: [];
       };
+      gear_items: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          position: number;
+          category: string;
+          name: string;
+          qty: number;
+          confirmed: boolean;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          position?: number;
+          category?: string;
+          name?: string;
+          qty?: number;
+          confirmed?: boolean;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          position?: number;
+          category?: string;
+          name?: string;
+          qty?: number;
+          confirmed?: boolean;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      deliverables: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          position: number;
+          name: string;
+          spec: string | null;
+          due_date: string | null;
+          status: string;
+          link: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          position?: number;
+          name?: string;
+          spec?: string | null;
+          due_date?: string | null;
+          status?: string;
+          link?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          position?: number;
+          name?: string;
+          spec?: string | null;
+          due_date?: string | null;
+          status?: string;
+          link?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      project_billing: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          status: string;
+          amount: number | null;
+          invoice_no: string | null;
+          notes: string | null;
+          created_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          status?: string;
+          amount?: number | null;
+          invoice_no?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          status?: string;
+          amount?: number | null;
+          invoice_no?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       budget_lines: {
         Row: {
           id: string;
@@ -1523,6 +1646,9 @@ export type ShotCard = Tables<"shot_cards">;
 export type CallSheet = Tables<"call_sheets">;
 export type CallSheetEntry = Tables<"call_sheet_entries">;
 export type BudgetLine = Tables<"budget_lines">;
+export type GearItem = Tables<"gear_items">;
+export type Deliverable = Tables<"deliverables">;
+export type ProjectBilling = Tables<"project_billing">;
 export type EmailAccount = Tables<"email_accounts">;
 export type EmailThread = Tables<"email_threads">;
 export type SlackChannel = Tables<"slack_channels">;

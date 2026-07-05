@@ -12,6 +12,9 @@ import type {
   ShotBoardFlavor,
   ShotGroup,
   BudgetLine,
+  GearItem,
+  Deliverable,
+  ProjectBilling,
 } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
@@ -31,8 +34,15 @@ export default async function ProductionPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: board }, { data: groups }, { data: callSheet }, { data: budgetLines }] =
-    await Promise.all([
+  const [
+    { data: board },
+    { data: groups },
+    { data: callSheet },
+    { data: budgetLines },
+    { data: gearItems },
+    { data: deliverables },
+    { data: billing },
+  ] = await Promise.all([
       supabase.from("shot_boards").select("*").eq("project_id", params.id).maybeSingle(),
       supabase
         .from("shot_groups")
@@ -45,6 +55,17 @@ export default async function ProductionPage({
         .select("*")
         .eq("project_id", params.id)
         .order("position", { ascending: true }),
+      supabase
+        .from("gear_items")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("position", { ascending: true }),
+      supabase
+        .from("deliverables")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("position", { ascending: true }),
+      supabase.from("project_billing").select("*").eq("project_id", params.id).maybeSingle(),
     ]);
 
   // Flavors + cards + call sheet entries (depend on the above ids).
@@ -125,6 +146,9 @@ export default async function ProductionPage({
         callSheet={(callSheet as CallSheet | null) ?? null}
         entries={entries}
         budgetLines={(budgetLines ?? []) as BudgetLine[]}
+        gearItems={(gearItems ?? []) as GearItem[]}
+        deliverables={(deliverables ?? []) as Deliverable[]}
+        billing={(billing as ProjectBilling | null) ?? null}
       />
     </div>
   );

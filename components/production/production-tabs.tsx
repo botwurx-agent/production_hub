@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { ShotBoardEditor, type CardView } from "@/components/production/shot-board-editor";
 import { CallSheet } from "@/components/production/call-sheet";
 import { BudgetTable } from "@/components/production/budget-table";
+import { GearList } from "@/components/production/gear-list";
+import { DeliveryPanel } from "@/components/production/delivery-panel";
 import type {
   CallSheet as CS,
   CallSheetEntry,
@@ -12,6 +14,9 @@ import type {
   ShotBoardFlavor,
   ShotGroup,
   BudgetLine,
+  GearItem,
+  Deliverable,
+  ProjectBilling,
 } from "@/lib/database.types";
 
 type Tab = "board" | "callsheet" | "budget" | "gear" | "delivery";
@@ -20,8 +25,8 @@ const TABS: { key: Tab; label: string; soon?: boolean }[] = [
   { key: "board", label: "Shot board" },
   { key: "callsheet", label: "Call sheet" },
   { key: "budget", label: "Budget" },
-  { key: "gear", label: "Gear & crew", soon: true },
-  { key: "delivery", label: "Delivery", soon: true },
+  { key: "gear", label: "Gear & crew" },
+  { key: "delivery", label: "Delivery" },
 ];
 
 export function ProductionTabs({
@@ -34,6 +39,9 @@ export function ProductionTabs({
   callSheet,
   entries,
   budgetLines,
+  gearItems,
+  deliverables,
+  billing,
 }: {
   projectId: string;
   projectTitle: string;
@@ -44,6 +52,9 @@ export function ProductionTabs({
   callSheet: CS | null;
   entries: CallSheetEntry[];
   budgetLines: BudgetLine[];
+  gearItems: GearItem[];
+  deliverables: Deliverable[];
+  billing: ProjectBilling | null;
 }) {
   const [tab, setTab] = useState<Tab>("board");
 
@@ -94,6 +105,14 @@ export function ProductionTabs({
         )}
         {tab === "budget" && (
           <BudgetTable projectId={projectId} lines={budgetLines} />
+        )}
+        {tab === "gear" && <GearList projectId={projectId} items={gearItems} />}
+        {tab === "delivery" && (
+          <DeliveryPanel
+            projectId={projectId}
+            deliverables={deliverables}
+            billing={billing}
+          />
         )}
       </Card>
     </div>
