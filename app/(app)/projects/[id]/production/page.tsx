@@ -11,6 +11,7 @@ import type {
   ShotBoard,
   ShotBoardFlavor,
   ShotGroup,
+  BudgetLine,
 } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
@@ -30,7 +31,7 @@ export default async function ProductionPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: board }, { data: groups }, { data: callSheet }] =
+  const [{ data: board }, { data: groups }, { data: callSheet }, { data: budgetLines }] =
     await Promise.all([
       supabase.from("shot_boards").select("*").eq("project_id", params.id).maybeSingle(),
       supabase
@@ -39,6 +40,11 @@ export default async function ProductionPage({
         .eq("project_id", params.id)
         .order("position", { ascending: true }),
       supabase.from("call_sheets").select("*").eq("project_id", params.id).maybeSingle(),
+      supabase
+        .from("budget_lines")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("position", { ascending: true }),
     ]);
 
   // Flavors + cards + call sheet entries (depend on the above ids).
@@ -118,6 +124,7 @@ export default async function ProductionPage({
         cards={cards}
         callSheet={(callSheet as CallSheet | null) ?? null}
         entries={entries}
+        budgetLines={(budgetLines ?? []) as BudgetLine[]}
       />
     </div>
   );

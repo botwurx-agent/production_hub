@@ -4,12 +4,14 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { ShotBoardEditor, type CardView } from "@/components/production/shot-board-editor";
 import { CallSheet } from "@/components/production/call-sheet";
+import { BudgetTable } from "@/components/production/budget-table";
 import type {
   CallSheet as CS,
   CallSheetEntry,
   ShotBoard,
   ShotBoardFlavor,
   ShotGroup,
+  BudgetLine,
 } from "@/lib/database.types";
 
 type Tab = "board" | "callsheet" | "budget" | "gear" | "delivery";
@@ -17,7 +19,7 @@ type Tab = "board" | "callsheet" | "budget" | "gear" | "delivery";
 const TABS: { key: Tab; label: string; soon?: boolean }[] = [
   { key: "board", label: "Shot board" },
   { key: "callsheet", label: "Call sheet" },
-  { key: "budget", label: "Budget", soon: true },
+  { key: "budget", label: "Budget" },
   { key: "gear", label: "Gear & crew", soon: true },
   { key: "delivery", label: "Delivery", soon: true },
 ];
@@ -31,6 +33,7 @@ export function ProductionTabs({
   cards,
   callSheet,
   entries,
+  budgetLines,
 }: {
   projectId: string;
   projectTitle: string;
@@ -40,6 +43,7 @@ export function ProductionTabs({
   cards: CardView[];
   callSheet: CS | null;
   entries: CallSheetEntry[];
+  budgetLines: BudgetLine[];
 }) {
   const [tab, setTab] = useState<Tab>("board");
 
@@ -87,6 +91,9 @@ export function ProductionTabs({
             callSheet={callSheet}
             entries={entries}
           />
+        )}
+        {tab === "budget" && (
+          <BudgetTable projectId={projectId} lines={budgetLines} />
         )}
       </Card>
     </div>

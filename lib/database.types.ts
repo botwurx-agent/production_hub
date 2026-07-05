@@ -515,6 +515,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      budget_lines: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          position: number;
+          category: string;
+          description: string;
+          estimated: number;
+          actual: number;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          position?: number;
+          category?: string;
+          description?: string;
+          estimated?: number;
+          actual?: number;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          position?: number;
+          category?: string;
+          description?: string;
+          estimated?: number;
+          actual?: number;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       call_sheets: {
         Row: {
           id: string;
@@ -1480,6 +1522,7 @@ export type ShotGroup = Tables<"shot_groups">;
 export type ShotCard = Tables<"shot_cards">;
 export type CallSheet = Tables<"call_sheets">;
 export type CallSheetEntry = Tables<"call_sheet_entries">;
+export type BudgetLine = Tables<"budget_lines">;
 export type EmailAccount = Tables<"email_accounts">;
 export type EmailThread = Tables<"email_threads">;
 export type SlackChannel = Tables<"slack_channels">;
