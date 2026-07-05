@@ -134,14 +134,89 @@ The order follows real grief: the stuff that hurts most on real jobs comes first
 
 ## 9. Current status and next step
 
-Strategy, scope, data model, and design direction are decided.
+Strategy, scope, data model, and design direction are decided. Deployed on
+Vercel (git-integration auto-deploy on push to `main`), live on Supabase
+(project ref `wvcodunxakdiojgelbgc`). Naming still a placeholder ("The Hub").
+The build has moved well beyond v1; the roadmap phases below have been largely
+implemented (out of strict order, driven by the operator's real needs).
 
-Phase 1 (foundation) is built:
-- Next.js (App Router, TypeScript) scaffolded, Tailwind wired token-first to the OKLCH tokens as CSS variables, dual-theme (data-theme: system default + manual toggle + localStorage) and data-accent (indigo default), fonts Plus Jakarta Sans + Hanken Grotesk. Token/theme reference page at /dev/tokens.
-- Supabase project provisioned (org GuthubAi, project "production-hub", ref wvcodunxakdiojgelbgc). Client/server helpers + auth middleware in place.
-- Schema applied (see supabase/migrations): full data-model spine, multi-tenancy (studios, memberships, roles), RLS scoped by studio membership, private assets storage bucket, signup studio-bootstrap trigger. TypeScript types in lib/database.types.ts.
-- Auth (email/password) with studio bootstrap on signup. App shell (sidebar Projects/Clients/Leads/Settings + topbar theme toggle). Projects (list + color-as-signal board Pre-pro/Shoot/Post/Delivered + detail with brief, assets, manual version history, internal activity). Clients + contacts. Leads with pipeline stage and convert-to-client then start-a-project. Settings (studio, team, appearance).
+### Foundation (Phase 1) — done
+- Next.js (App Router, TS) + Tailwind token-first OKLCH CSS vars; dual theme
+  (data-theme system/toggle/localStorage) + data-accent (indigo). Fonts Plus
+  Jakarta Sans + Hanken Grotesk. Token reference at /dev/tokens.
+- Supabase: full data-model spine, multi-tenancy (studios/memberships/roles),
+  RLS scoped by `is_studio_member`, private `assets` storage bucket, signup
+  studio-bootstrap trigger. Types in lib/database.types.ts (hand-maintained
+  alongside migrations; add new tables to it when you add a migration).
+- Auth (email/password), app shell (sidebar + topbar), Projects (list + board +
+  detail with brief/assets/manual versioning/activity), Clients + contacts,
+  Leads (pipeline + convert), Settings.
 
-Verified: build/typecheck pass; signup trigger, RLS studio-isolation, and authenticated insert checks verified directly against the live database. Full in-app runtime click-through was not exercised here because this sandbox's network egress allowlist blocks the app's server-side calls to *.supabase.co (environment config, not a code issue; Vercel is unaffected).
+### Built since v1
+- Dashboard home (KPI tiles, production calendar, My Day, Needs You, Upcoming,
+  Pipeline, Recent activity, Messages; customizable widget show/hide).
+- Communication: Gmail, Slack, Google Chat connectors (link threads/channels/
+  spaces to a project/lead/client, read + reply/post, unread badge). Attachment
+  handling: download, import to assets, attach on send (device files + project
+  assets + Drive files). Visual attachment cards.
+- Connectors (Phase 6): Google (Gmail + Chat + Drive + Calendar on one OAuth,
+  scopes added incrementally) and Figma (separate OAuth). Drive: browse My Drive
+  folders / search, import files as assets. Figma: paste file link, import
+  frames as image assets. Calendar: two-way on the dashboard (view/create/delete
+  events, Google Meet links, one-click join; can't embed the call). Settings →
+  Connections manages all.
+- Client review portal (Phase 2): per-asset public share link (`/r/[token]`,
+  no login) to preview/comment/approve; feedback flows back into the project.
+  Uses a SERVICE-ROLE Supabase client gated by token (lib/supabase/service.ts,
+  lib/review-links.ts) + token-guarded file proxy.
+- AI layer (Phase 4): provider-agnostic (lib/ai.ts, Anthropic or OpenAI).
+  Project summary, AI-drafted client update, AI-drafted lead outreach. Rules-
+  based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
+  flags (lib/leads-followup.ts).
+- CRM depth (Phase 5): leads pipeline board, follow-up flags, AI outreach,
+  editable lead notes.
+- Boards: freeform moodboard/storyboard canvas (studio-wide, project-linkable),
+  tabs, drag/resize/z-order, notes, zoom, desktop drag-drop, dots/grid/plain
+  background; import via upload/project assets/Drive/Figma.
+- Production-ops (Phase 8): per-project Production workspace
+  (/projects/[id]/production) with tabs: Shot board (cover + Shots/groups +
+  cards, present/export view at /production/board), Call sheet (industry layout,
+  PDF export at /production/callsheet), Budget (bid vs actual), Gear & crew,
+  Delivery + billing. PDF export = print view with app chrome hidden and forced
+  light/exact colors.
+- Studio logo upload (Settings → Branding); shows on sidebar, call sheet, shot
+  board cover.
+- Modals render via portal to document.body (avoids fixed-in-transform bugs).
 
-Next step: deploy to Vercel (set the two NEXT_PUBLIC_SUPABASE_* env vars), run a real job through it, and let friction drive the Phase 2 backlog. Naming still a placeholder ("The Hub"). See docs/DEVELOPMENT.md for setup.
+### Environment variables (set in Vercel; needed to reproduce in a new env)
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)
+- `SUPABASE_SERVICE_ROLE_KEY` (required for the client review portal `/r/...`)
+- `NEXT_PUBLIC_SITE_URL` (optional; canonical origin)
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (Gmail/Chat/Drive/Calendar). Enable
+  those APIs + add scopes in Google Cloud; users reconnect to grant new scopes.
+- `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`
+- `FIGMA_CLIENT_ID`, `FIGMA_CLIENT_SECRET` (Figma app scope: `file_content:read`;
+  redirect `<domain>/auth/figma/callback`)
+- AI (optional): `OPENAI_API_KEY` (+ `OPENAI_MODEL`, default gpt-5-mini) or
+  `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one.
+
+### Schema / migrations
+DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
+files in supabase/migrations (through 0023: production-ops). When adding a
+table/column, also hand-update lib/database.types.ts.
+
+### Working notes for a fresh session
+- Dev branch: `claude/production-hub-phase-1-km1k0k`. Deploy = push to `main`
+  (Vercel auto-deploys). Pushes go to github.com directly (the in-env git relay
+  + GitHub MCP are read-only).
+- Commits show as "Unverified" (no GPG/SSH signing key in this environment);
+  committer email is already noreply@anthropic.com. This is expected; do not try
+  to fix it by rebasing deployed history.
+- Standing style rule: no em dashes in any generated content.
+
+### Next step
+Run a real job through Production and the connectors; let friction drive the
+backlog. Remaining roadmap: Phase 7 (AI-video pipeline), a notifications/inbox
+layer, and deepening (e.g. PDF export for budget/gear/delivery, per-card Drive/
+Figma import on the shot board, public share link for the shot board/call sheet).
+See docs/DEVELOPMENT.md for setup.
