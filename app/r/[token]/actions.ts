@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import { getValidLink } from "@/lib/review-links";
+import { createNotification } from "@/lib/notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ReviewLink, ApprovalStatus } from "@/lib/database.types";
 
@@ -65,6 +66,14 @@ export async function submitClientComment(
   if (error) return { error: error.message };
 
   await logActivity(service, link, `${reviewer} commented in client review`);
+  await createNotification(service, {
+    studio_id: link.studio_id,
+    project_id: link.project_id,
+    type: "client_comment",
+    title: `${reviewer} commented in client review`,
+    body: text.slice(0, 140),
+    href: `/projects/${link.project_id}`,
+  });
   revalidatePath(`/r/${token}`);
   revalidatePath(`/projects/${link.project_id}`);
   return null;
@@ -116,6 +125,13 @@ export async function submitClientDecision(
   const label =
     status === "approved" ? "approved this asset" : "requested changes";
   await logActivity(service, link, `${reviewer} ${label} in client review`);
+  await createNotification(service, {
+    studio_id: link.studio_id,
+    project_id: link.project_id,
+    type: status === "approved" ? "client_approved" : "client_changes",
+    title: `${reviewer} ${label}`,
+    href: `/projects/${link.project_id}`,
+  });
   revalidatePath(`/r/${token}`);
   revalidatePath(`/projects/${link.project_id}`);
   return null;

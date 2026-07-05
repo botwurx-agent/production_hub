@@ -602,6 +602,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      notifications: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string | null;
+          type: string;
+          title: string;
+          body: string | null;
+          href: string | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id?: string | null;
+          type: string;
+          title: string;
+          body?: string | null;
+          href?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string | null;
+          type?: string;
+          title?: string;
+          body?: string | null;
+          href?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       project_billing: {
         Row: {
           id: string;
@@ -1649,6 +1685,7 @@ export type BudgetLine = Tables<"budget_lines">;
 export type GearItem = Tables<"gear_items">;
 export type Deliverable = Tables<"deliverables">;
 export type ProjectBilling = Tables<"project_billing">;
+export type Notification = Tables<"notifications">;
 export type EmailAccount = Tables<"email_accounts">;
 export type EmailThread = Tables<"email_threads">;
 export type SlackChannel = Tables<"slack_channels">;

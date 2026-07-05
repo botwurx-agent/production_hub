@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/app-shell/user-menu";
-import { BellIcon } from "@/components/app-shell/nav-icons";
+import { NotificationBell } from "@/components/app-shell/notification-bell";
 
 const nav = [
   { href: "/projects", label: "Projects" },
@@ -58,22 +58,7 @@ export function Topbar({
         <div className="hidden flex-1 md:block" />
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/projects"
-            aria-label={`${needsYouCount} items need you`}
-            title="Needs you"
-            className="relative inline-flex h-9 w-9 items-center justify-center rounded-[11px] border border-border bg-surface text-text-muted shadow-sm transition hover:border-border-strong hover:text-text"
-          >
-            <BellIcon />
-            {needsYouCount > 0 && (
-              <span
-                className="absolute -right-1 -top-1 grid h-4 min-w-[16px] place-items-center rounded-full px-1 text-[10px] font-bold text-white"
-                style={{ backgroundColor: "var(--h-red)" }}
-              >
-                {needsYouCount > 9 ? "9+" : needsYouCount}
-              </span>
-            )}
-          </Link>
+          <NotificationBell needsYouCount={needsYouCount} />
           <ThemeToggle />
           <UserMenu email={email} />
         </div>
