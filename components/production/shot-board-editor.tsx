@@ -71,6 +71,21 @@ const MOVEMENTS = [
   "Steadicam", "Gimbal",
 ];
 
+// Fixed, learnable colors per shot column so the list scans at a glance.
+const COL = { size: "blue", type: "purple", move: "green" } as const;
+
+// Colored chip styling for a shot field once it has a value (else plain input).
+function chipStyle(value: string, hue: string): React.CSSProperties | undefined {
+  return value.trim()
+    ? {
+        backgroundColor: `var(--h-${hue}-bg)`,
+        color: `var(--h-${hue})`,
+        borderColor: "transparent",
+        fontWeight: 600,
+      }
+    : undefined;
+}
+
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -455,9 +470,9 @@ export function ShotBoardEditor({
                   <span className="w-[130px] shrink-0">Image</span>
                   <span className="w-7 shrink-0 text-center">#</span>
                   <span className="flex-1">Description</span>
-                  <span className="w-36 shrink-0">Shot size</span>
-                  <span className="w-36 shrink-0">Shot type</span>
-                  <span className="w-36 shrink-0">Movement</span>
+                  <span className="w-36 shrink-0" style={{ color: `var(--h-${COL.size})` }}>Shot size</span>
+                  <span className="w-36 shrink-0" style={{ color: `var(--h-${COL.type})` }}>Shot type</span>
+                  <span className="w-36 shrink-0" style={{ color: `var(--h-${COL.move})` }}>Movement</span>
                   <span className="w-6 shrink-0" />
                 </div>
               )}
@@ -521,6 +536,12 @@ function ShotRow({
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, startUpload] = useTransition();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Local mirrors so the colored chips update live as you type.
+  const [size, setSize] = useState(card.shot_size ?? "");
+  const [stype, setSType] = useState(card.shot_type ?? "");
+  const [move, setMove] = useState(card.movement ?? "");
+  // Row identity color: the flavor if set, else a calm default.
+  const rowHue = card.flavor_name && card.flavor_hue ? card.flavor_hue : "indigo";
 
   function upload(files: FileList | null) {
     if (!files?.[0]) return;
@@ -544,9 +565,14 @@ function ShotRow({
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-[12px] border bg-surface p-3 lg:flex-row lg:items-start ${
-        selected ? "border-accent" : "border-border"
+      className={`flex flex-col gap-3 rounded-[12px] border bg-surface p-3 transition lg:flex-row lg:items-start ${
+        selected ? "ring-2 ring-accent" : ""
       }`}
+      style={{
+        borderColor: "var(--border)",
+        borderLeftColor: `var(--h-${rowHue})`,
+        borderLeftWidth: "4px",
+      }}
     >
       <div className="flex items-start gap-3 lg:contents">
         <input
@@ -631,14 +657,24 @@ function ShotRow({
           )}
         </div>
 
-        <div className="hidden w-7 shrink-0 pt-2 text-center text-sm font-extrabold tabular-nums text-text lg:block">
-          {number}
+        <div className="hidden shrink-0 pt-1.5 lg:block">
+          <span
+            className="grid h-7 w-7 place-items-center rounded-[8px] text-xs font-extrabold tabular-nums text-white"
+            style={{ backgroundColor: `var(--h-${rowHue})` }}
+          >
+            {number}
+          </span>
         </div>
       </div>
 
       {/* Fields */}
       <div className="min-w-0 flex-1 space-y-2">
-        <div className="text-xs font-bold text-text-faint lg:hidden">Shot {number}</div>
+        <div
+          className="text-xs font-bold lg:hidden"
+          style={{ color: `var(--h-${rowHue})` }}
+        >
+          Shot {number}
+        </div>
         <textarea
           defaultValue={card.description ?? ""}
           onBlur={(e) => updateCard(projectId, card.id, { description: e.target.value })}
@@ -648,24 +684,30 @@ function ShotRow({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <input
             list="shot-sizes"
-            defaultValue={card.shot_size ?? ""}
+            value={size}
+            onChange={(e) => setSize(e.target.value)}
             onBlur={(e) => updateCard(projectId, card.id, { shot_size: e.target.value })}
             placeholder="Shot size..."
             className={field}
+            style={chipStyle(size, COL.size)}
           />
           <input
             list="shot-types"
-            defaultValue={card.shot_type ?? ""}
+            value={stype}
+            onChange={(e) => setSType(e.target.value)}
             onBlur={(e) => updateCard(projectId, card.id, { shot_type: e.target.value })}
             placeholder="Shot type..."
             className={field}
+            style={chipStyle(stype, COL.type)}
           />
           <input
             list="shot-movements"
-            defaultValue={card.movement ?? ""}
+            value={move}
+            onChange={(e) => setMove(e.target.value)}
             onBlur={(e) => updateCard(projectId, card.id, { movement: e.target.value })}
             placeholder="Camera movement..."
             className={field}
+            style={chipStyle(move, COL.move)}
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
