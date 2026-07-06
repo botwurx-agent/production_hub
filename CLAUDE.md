@@ -168,7 +168,13 @@ implemented (out of strict order, driven by the operator's real needs).
 - Client review portal (Phase 2): per-asset public share link (`/r/[token]`,
   no login) to preview/comment/approve; feedback flows back into the project.
   Uses a SERVICE-ROLE Supabase client gated by token (lib/supabase/service.ts,
-  lib/review-links.ts) + token-guarded file proxy.
+  lib/review-links.ts) + token-guarded file proxy. IMAGE assets get Frame.io-
+  style PINNED comments: click the image to drop a numbered pin + matching
+  comment, synced sidebar, resolve toggle (components/review/pin-review.tsx;
+  review_comments gained pin_number/pos_x/pos_y/resolved_at in migration 0026;
+  actions submitClientComment(pin) + resolveClientComment). Non-image assets
+  keep the flat comment flow. PinReview is built context-agnostic (parent passes
+  onPost/onResolve) so it can later be reused on the internal asset view + docs.
 - AI layer (Phase 4): provider-agnostic (lib/ai.ts, Anthropic or OpenAI).
   Project summary, AI-drafted client update, AI-drafted lead outreach. Rules-
   based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
@@ -247,7 +253,7 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0025: shot_card_fields). When adding a
+files in supabase/migrations (through 0026: review_comment_pins). When adding a
 table/column, also hand-update lib/database.types.ts.
 
 ### Working notes for a fresh session

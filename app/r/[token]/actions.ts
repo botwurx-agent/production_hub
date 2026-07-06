@@ -42,7 +42,9 @@ export async function submitClientComment(
   token: string,
   versionId: string,
   name: string,
-  body: string
+  body: string,
+  // Optional Frame.io-style pin position (percent coords on the asset).
+  pin?: { x: number; y: number } | null
 ): Promise<PortalState> {
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const reviewer = name.trim();
@@ -56,12 +58,33 @@ export async function submitClientComment(
   if (!(await versionInLink(service, link, versionId)))
     return { error: "That version is not part of this review." };
 
+  // When pinned, assign the next pin number for this version.
+  let pinNumber: number | null = null;
+  let posX: number | null = null;
+  let posY: number | null = null;
+  if (pin && Number.isFinite(pin.x) && Number.isFinite(pin.y)) {
+    posX = Math.max(0, Math.min(100, pin.x));
+    posY = Math.max(0, Math.min(100, pin.y));
+    const { data: lastPin } = await service
+      .from("review_comments")
+      .select("pin_number")
+      .eq("version_id", versionId)
+      .not("pin_number", "is", null)
+      .order("pin_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    pinNumber = ((lastPin?.pin_number as number | null) ?? 0) + 1;
+  }
+
   const { error } = await service.from("review_comments").insert({
     studio_id: link.studio_id,
     version_id: versionId,
     review_link_id: link.id,
     reviewer_name: reviewer,
     body: text,
+    pin_number: pinNumber,
+    pos_x: posX,
+    pos_y: posY,
   });
   if (error) return { error: error.message };
 
@@ -76,6 +99,35 @@ export async function submitClientComment(
   });
   revalidatePath(`/r/${token}`);
   revalidatePath(`/projects/${link.project_id}`);
+  return null;
+}
+
+// Toggles a comment's resolved state. Token-gated and scoped to the link's asset.
+export async function resolveClientComment(
+  token: string,
+  commentId: string,
+  resolved: boolean
+): Promise<PortalState> {
+  if (!serviceConfigured()) return { error: "Review portal is not configured." };
+  const service = createServiceClient();
+  const link = await getValidLink(service, token);
+  if (!link) return { error: "This review link is no longer active." };
+
+  const { data: comment } = await service
+    .from("review_comments")
+    .select("id, version_id")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!comment || !(await versionInLink(service, link, comment.version_id)))
+    return { error: "That comment is not part of this review." };
+
+  const { error } = await service
+    .from("review_comments")
+    .update({ resolved_at: resolved ? new Date().toISOString() : null })
+    .eq("id", commentId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/r/${token}`);
   return null;
 }
 

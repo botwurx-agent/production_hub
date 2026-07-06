@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { viewerKind, officeEmbedUrl } from "@/lib/file-kind";
 import { fileSize, shortDate, timeAgo } from "@/lib/format";
+import { PinReview } from "@/components/review/pin-review";
 import {
   submitClientComment,
   submitClientDecision,
+  resolveClientComment,
 } from "@/app/r/[token]/actions";
 import type { PortalData } from "@/lib/review-links";
 
@@ -52,9 +54,39 @@ export function ClientReview({
   const comments = current
     ? data.comments.filter((c) => c.version_id === current.id)
     : [];
+  const isImage = current
+    ? viewerKind(current.mime_type, data.asset.name) === "image"
+    : false;
 
   function fileUrl(versionId: string) {
     return `${origin}/r/${token}/file?v=${versionId}`;
+  }
+
+  // Pin-review post handler: returns whether it succeeded (so the pin clears).
+  async function postPinned(
+    text: string,
+    pin: { x: number; y: number } | null
+  ): Promise<boolean> {
+    if (!current) return false;
+    if (!name.trim()) {
+      setError("Add your name first.");
+      return false;
+    }
+    setError(null);
+    const res = await submitClientComment(token, current.id, name, text, pin);
+    if (res?.error) {
+      setError(res.error);
+      return false;
+    }
+    router.refresh();
+    return true;
+  }
+
+  function resolve(id: string, resolved: boolean) {
+    start(async () => {
+      await resolveClientComment(token, id, resolved);
+      router.refresh();
+    });
   }
 
   function sendComment() {
@@ -63,12 +95,7 @@ export function ClientReview({
     if (!comment.trim()) return setError("Write a comment first.");
     setError(null);
     start(async () => {
-      const res = await submitClientComment(
-        token,
-        current.id,
-        name,
-        comment
-      );
+      const res = await submitClientComment(token, current.id, name, comment);
       if (res?.error) setError(res.error);
       else {
         setComment("");
@@ -90,9 +117,84 @@ export function ClientReview({
 
   const decided = data.myDecision;
 
+  const nameField = (
+    <div>
+      <label className="text-xs font-bold uppercase tracking-wide text-text-faint">
+        Your name
+      </label>
+      <input
+        value={name}
+        onChange={(e) => rememberName(e.target.value)}
+        placeholder="e.g. Jordan at Acme"
+        className="mt-1.5 w-full rounded-[11px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong"
+      />
+    </div>
+  );
+
+  const metaRow = current && (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-text-faint">
+      <span>
+        Version {current.version_number}
+        {current.size_bytes ? ` · ${fileSize(current.size_bytes)}` : ""}
+        {current.created_at ? ` · ${shortDate(current.created_at)}` : ""}
+        {previous.length > 0 && (
+          <>
+            {"  ·  Previous: "}
+            {previous.map((v, i) => (
+              <span key={v.id}>
+                {i > 0 ? ", " : ""}
+                <a
+                  href={fileUrl(v.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-accent hover:underline"
+                >
+                  v{v.version_number}
+                </a>
+              </span>
+            ))}
+          </>
+        )}
+      </span>
+      <a
+        href={fileUrl(current.id)}
+        download={data.asset.name}
+        className="font-semibold text-accent hover:underline"
+      >
+        Download
+      </a>
+    </div>
+  );
+
+  const decision = (
+    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <button
+        onClick={() => decide("approved")}
+        disabled={busy}
+        className={`flex-1 rounded-[12px] border px-4 py-3 text-sm font-bold transition disabled:opacity-50 ${
+          decided === "approved"
+            ? "border-green bg-green-bg text-green"
+            : "border-border-strong text-text-muted hover:border-green hover:text-green"
+        }`}
+      >
+        {decided === "approved" ? "You approved this" : "Approve"}
+      </button>
+      <button
+        onClick={() => decide("changes_requested")}
+        disabled={busy}
+        className={`flex-1 rounded-[12px] border px-4 py-3 text-sm font-bold transition disabled:opacity-50 ${
+          decided === "changes_requested"
+            ? "border-red bg-red-bg text-red"
+            : "border-border-strong text-text-muted hover:border-red hover:text-red"
+        }`}
+      >
+        {decided === "changes_requested" ? "You requested changes" : "Request changes"}
+      </button>
+    </div>
+  );
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:py-12">
-      {/* Header: project + asset, quiet studio attribution */}
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-wide text-text-faint">
           {data.studioName} · {data.projectTitle}
@@ -101,7 +203,9 @@ export function ClientReview({
           {data.asset.name}
         </h1>
         <p className="mt-1 text-sm text-text-muted">
-          Please review and approve, or request changes.
+          {isImage
+            ? "Click anywhere on the image to leave a pinned comment, then approve or request changes."
+            : "Please review and approve, or request changes."}
         </p>
       </div>
 
@@ -109,6 +213,26 @@ export function ClientReview({
         <p className="rounded-[14px] border border-dashed border-border px-4 py-12 text-center text-sm text-text-faint">
           There is nothing to review here yet.
         </p>
+      ) : isImage ? (
+        <>
+          <div className="mb-4 max-w-md">{nameField}</div>
+          <PinReview
+            imageUrl={fileUrl(current.id)}
+            alt={data.asset.name}
+            comments={comments}
+            disabled={!name.trim()}
+            disabledHint="Add your name above to comment."
+            onPost={postPinned}
+            onResolve={resolve}
+          />
+          {metaRow}
+          {decision}
+          {error && (
+            <p className="mt-4 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
+              {error}
+            </p>
+          )}
+        </>
       ) : (
         <>
           <ReviewPreview
@@ -117,103 +241,25 @@ export function ClientReview({
             url={fileUrl(current.id)}
             mime={current.mime_type}
           />
+          {metaRow}
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-text-faint">
-            <span>
-              Version {current.version_number}
-              {current.size_bytes ? ` · ${fileSize(current.size_bytes)}` : ""}
-              {current.created_at ? ` · ${shortDate(current.created_at)}` : ""}
-            </span>
-            <a
-              href={fileUrl(current.id)}
-              download={data.asset.name}
-              className="font-semibold text-accent hover:underline"
-            >
-              Download
-            </a>
-          </div>
+          <div className="mt-8 max-w-md">{nameField}</div>
+          {decision}
 
-          {previous.length > 0 && (
-            <div className="mt-3 text-xs text-text-faint">
-              Previous:{" "}
-              {previous.map((v, i) => (
-                <span key={v.id}>
-                  {i > 0 ? ", " : ""}
-                  <a
-                    href={fileUrl(v.id)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-accent hover:underline"
-                  >
-                    v{v.version_number}
-                  </a>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Your name */}
-          <div className="mt-8">
-            <label className="text-xs font-bold uppercase tracking-wide text-text-faint">
-              Your name
-            </label>
-            <input
-              value={name}
-              onChange={(e) => rememberName(e.target.value)}
-              placeholder="e.g. Jordan at Acme"
-              className="mt-1.5 w-full rounded-[11px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong"
-            />
-          </div>
-
-          {/* Decision */}
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <button
-              onClick={() => decide("approved")}
-              disabled={busy}
-              className={`flex-1 rounded-[12px] border px-4 py-3 text-sm font-bold transition disabled:opacity-50 ${
-                decided === "approved"
-                  ? "border-green bg-green-bg text-green"
-                  : "border-border-strong text-text-muted hover:border-green hover:text-green"
-              }`}
-            >
-              {decided === "approved" ? "You approved this" : "Approve"}
-            </button>
-            <button
-              onClick={() => decide("changes_requested")}
-              disabled={busy}
-              className={`flex-1 rounded-[12px] border px-4 py-3 text-sm font-bold transition disabled:opacity-50 ${
-                decided === "changes_requested"
-                  ? "border-red bg-red-bg text-red"
-                  : "border-border-strong text-text-muted hover:border-red hover:text-red"
-              }`}
-            >
-              {decided === "changes_requested"
-                ? "You requested changes"
-                : "Request changes"}
-            </button>
-          </div>
-
-          {/* Comments */}
           <div className="mt-8 border-t border-border pt-6">
-            <h2 className="font-display text-base font-bold text-text">
-              Comments
-            </h2>
+            <h2 className="font-display text-base font-bold text-text">Comments</h2>
             {comments.length > 0 ? (
               <ol className="mt-4 space-y-4">
                 {comments.map((c) => (
                   <li key={c.id}>
                     <div className="mb-0.5 flex items-center gap-2">
-                      <span className="text-sm font-semibold text-text">
-                        {c.author}
-                      </span>
+                      <span className="text-sm font-semibold text-text">{c.author}</span>
                       {!c.isClient && (
                         <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text-muted">
                           Studio
                         </span>
                       )}
-                      <span className="text-xs text-text-faint">
-                        {timeAgo(c.created_at)}
-                      </span>
+                      <span className="text-xs text-text-faint">{timeAgo(c.created_at)}</span>
                     </div>
                     <p className="whitespace-pre-wrap break-words text-sm text-text-muted">
                       {c.body}
@@ -281,11 +327,7 @@ function ReviewPreview({
     return (
       <div className={`${frame} flex items-center justify-center`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt={name}
-          className="max-h-[70vh] w-full object-contain"
-        />
+        <img src={url} alt={name} className="max-h-[70vh] w-full object-contain" />
       </div>
     );
   }

@@ -32,6 +32,11 @@ export type PortalComment = {
   created_at: string;
   author: string; // display name (studio name for team, reviewer_name for client)
   isClient: boolean;
+  // Frame.io-style pin: numbered marker at (x, y) percent on the asset.
+  pinNumber: number | null;
+  x: number | null;
+  y: number | null;
+  resolved: boolean;
 };
 
 export type PortalVersion = {
@@ -99,7 +104,9 @@ export async function gatherReview(
     const [{ data: commentsRaw }, { data: myApproval }] = await Promise.all([
       service
         .from("review_comments")
-        .select("id, version_id, body, created_at, author_id, reviewer_name")
+        .select(
+          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, resolved_at"
+        )
         .in("version_id", versionIds)
         .order("created_at", { ascending: true }),
       // The client's decision on the current version, made through this link.
@@ -123,6 +130,10 @@ export async function gatherReview(
         created_at: c.created_at,
         author: isClient ? (c.reviewer_name as string) : studioName,
         isClient,
+        pinNumber: c.pin_number ?? null,
+        x: c.pos_x ?? null,
+        y: c.pos_y ?? null,
+        resolved: Boolean(c.resolved_at),
       };
     });
 

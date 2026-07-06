@@ -1408,6 +1408,10 @@ export type Database = {
           reviewer_name: string | null;
           studio_id: string;
           version_id: string;
+          pin_number: number | null;
+          pos_x: number | null;
+          pos_y: number | null;
+          resolved_at: string | null;
         };
         Insert: {
           author_id?: string | null;
@@ -1418,6 +1422,10 @@ export type Database = {
           reviewer_name?: string | null;
           studio_id: string;
           version_id: string;
+          pin_number?: number | null;
+          pos_x?: number | null;
+          pos_y?: number | null;
+          resolved_at?: string | null;
         };
         Update: {
           author_id?: string | null;
@@ -1428,6 +1436,10 @@ export type Database = {
           reviewer_name?: string | null;
           studio_id?: string;
           version_id?: string;
+          pin_number?: number | null;
+          pos_x?: number | null;
+          pos_y?: number | null;
+          resolved_at?: string | null;
         };
         Relationships: [
           {
