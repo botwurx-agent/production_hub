@@ -431,6 +431,10 @@ export type Database = {
           image_name: string | null;
           description: string | null;
           vo: string | null;
+          shot_size: string | null;
+          shot_type: string | null;
+          movement: string | null;
+          asset_id: string | null;
           tags: Json;
           created_by: string | null;
           created_at: string;
@@ -449,6 +453,10 @@ export type Database = {
           image_name?: string | null;
           description?: string | null;
           vo?: string | null;
+          shot_size?: string | null;
+          shot_type?: string | null;
+          movement?: string | null;
+          asset_id?: string | null;
           tags?: Json;
           created_by?: string | null;
           created_at?: string;
@@ -467,6 +475,10 @@ export type Database = {
           image_name?: string | null;
           description?: string | null;
           vo?: string | null;
+          shot_size?: string | null;
+          shot_type?: string | null;
+          movement?: string | null;
+          asset_id?: string | null;
           tags?: Json;
           created_by?: string | null;
           created_at?: string;

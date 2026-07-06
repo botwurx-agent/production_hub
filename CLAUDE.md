@@ -178,9 +178,15 @@ implemented (out of strict order, driven by the operator's real needs).
 - Boards: freeform moodboard/storyboard canvas (studio-wide, project-linkable),
   tabs, drag/resize/z-order, notes, zoom, desktop drag-drop, dots/grid/plain
   background; import via upload/project assets/Drive/Figma.
+- Shot list (own page, off the production tab strip): /projects/[id]/shot-list
+  renders ShotBoardEditor (cover + flavor palette + sections/groups). Each shot
+  is a ROW: asset selector (pick a project asset via setCardAsset, or upload) +
+  Description + Shot Size + Shot Type + Camera Movement (datalist comboboxes with
+  industry presets, free text allowed) + compact code/day/flavor. shot_cards
+  gained shot_size/shot_type/movement/asset_id (migration 0025). Present/export
+  view still at /production/board. Hub "Shot list" card links here.
 - Production-ops (Phase 8): per-project Production workspace
-  (/projects/[id]/production) with tabs: Shot board (cover + Shots/groups +
-  cards, present/export view at /production/board), Call sheet (industry layout,
+  (/projects/[id]/production) with tabs: Call sheet (industry layout,
   PDF export at /production/callsheet), Budget (bid vs actual), Gear & crew,
   Delivery + billing. PDF export = print view with app chrome hidden and forced
   light/exact colors.
@@ -234,7 +240,7 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0023: production-ops). When adding a
+files in supabase/migrations (through 0025: shot_card_fields). When adding a
 table/column, also hand-update lib/database.types.ts.
 
 ### Working notes for a fresh session

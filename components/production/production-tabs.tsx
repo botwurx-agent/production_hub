@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { ShotBoardEditor, type CardView } from "@/components/production/shot-board-editor";
 import { CallSheet } from "@/components/production/call-sheet";
 import { BudgetTable } from "@/components/production/budget-table";
 import { GearList } from "@/components/production/gear-list";
@@ -10,19 +9,15 @@ import { DeliveryPanel } from "@/components/production/delivery-panel";
 import type {
   CallSheet as CS,
   CallSheetEntry,
-  ShotBoard,
-  ShotBoardFlavor,
-  ShotGroup,
   BudgetLine,
   GearItem,
   Deliverable,
   ProjectBilling,
 } from "@/lib/database.types";
 
-type Tab = "board" | "callsheet" | "budget" | "gear" | "delivery";
+type Tab = "callsheet" | "budget" | "gear" | "delivery";
 
 const TABS: { key: Tab; label: string; soon?: boolean }[] = [
-  { key: "board", label: "Shot list" },
   { key: "callsheet", label: "Call sheet" },
   { key: "budget", label: "Budget" },
   { key: "gear", label: "Gear & crew" },
@@ -32,24 +27,16 @@ const TABS: { key: Tab; label: string; soon?: boolean }[] = [
 export function ProductionTabs({
   projectId,
   projectTitle,
-  board,
-  flavors,
-  groups,
-  cards,
   callSheet,
   entries,
   budgetLines,
   gearItems,
   deliverables,
   billing,
-  initialTab = "board",
+  initialTab = "callsheet",
 }: {
   projectId: string;
   projectTitle: string;
-  board: ShotBoard | null;
-  flavors: ShotBoardFlavor[];
-  groups: ShotGroup[];
-  cards: CardView[];
   callSheet: CS | null;
   entries: CallSheetEntry[];
   budgetLines: BudgetLine[];
@@ -87,16 +74,6 @@ export function ProductionTabs({
       </div>
 
       <Card className="p-5">
-        {tab === "board" && (
-          <ShotBoardEditor
-            projectId={projectId}
-            projectTitle={projectTitle}
-            board={board}
-            flavors={flavors}
-            groups={groups}
-            cards={cards}
-          />
-        )}
         {tab === "callsheet" && (
           <CallSheet
             projectId={projectId}

@@ -9,6 +9,7 @@ export type BoardActionState = { error?: string } | null;
 function rp(projectId: string) {
   revalidatePath(`/projects/${projectId}/production`);
   revalidatePath(`/projects/${projectId}/production/board`);
+  revalidatePath(`/projects/${projectId}/shot-list`);
 }
 
 async function ensureBoard(
@@ -200,12 +201,81 @@ export async function updateCard(
     flavor_hue?: string;
     description?: string;
     vo?: string;
+    shot_size?: string;
+    shot_type?: string;
+    movement?: string;
     tags?: string[];
   }
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
   await supabase.from("shot_cards").update(patch).eq("id", id);
+  rp(projectId);
+}
+
+// Links a project asset to a shot row and copies its current version's image so
+// the shot displays it. Keeps asset_id for the connection-ready reference.
+export async function setCardAsset(
+  projectId: string,
+  cardId: string,
+  assetId: string
+): Promise<BoardActionState> {
+  await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: asset } = await supabase
+    .from("assets")
+    .select("name, current_version_id")
+    .eq("id", assetId)
+    .maybeSingle();
+  if (!asset) return { error: "That asset is no longer available." };
+
+  // Prefer the asset's current version; fall back to its newest.
+  let version: { storage_path: string | null; mime_type: string | null } | null =
+    null;
+  if (asset.current_version_id) {
+    const { data } = await supabase
+      .from("versions")
+      .select("storage_path, mime_type")
+      .eq("id", asset.current_version_id)
+      .maybeSingle();
+    version = data;
+  }
+  if (!version) {
+    const { data } = await supabase
+      .from("versions")
+      .select("storage_path, mime_type")
+      .eq("asset_id", assetId)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    version = data;
+  }
+
+  await supabase
+    .from("shot_cards")
+    .update({
+      asset_id: assetId,
+      storage_path: version?.storage_path ?? null,
+      mime_type: version?.mime_type ?? null,
+      image_name: asset.name,
+    })
+    .eq("id", cardId);
+  rp(projectId);
+  return null;
+}
+
+// Clears the linked asset and its image from a shot row.
+export async function clearCardAsset(
+  projectId: string,
+  cardId: string
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("shot_cards")
+    .update({ asset_id: null, storage_path: null, mime_type: null, image_name: null })
+    .eq("id", cardId);
   rp(projectId);
 }
 

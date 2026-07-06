@@ -430,7 +430,7 @@ export default async function ProjectDetailPage({
           <BandLabel hue="purple" label="Visualize" />
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
-              href={`/projects/${project.id}/production?tab=board`}
+              href={`/projects/${project.id}/shot-list`}
               hue="purple"
               title="Shot list"
               sub={`${shotCount} shots · ${groupIds.length} groups`}
