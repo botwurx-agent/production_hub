@@ -34,8 +34,10 @@ function Meta({ label, value }: { label: string; value?: string | null }) {
 
 export default async function ShotBoardViewPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { list?: string };
 }) {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -92,6 +94,13 @@ export default async function ShotBoardViewPage({
     }));
   }
 
+  // Which lists to present: a specific one via ?list=<id>, or all by default.
+  const selectedList =
+    searchParams?.list && searchParams.list !== "all" ? searchParams.list : null;
+  const visibleGroups = selectedList
+    ? groupList.filter((g) => g.id === selectedList)
+    : groupList;
+
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
   const title = b?.title?.trim() || project.title;
   const clientName =
@@ -104,13 +113,45 @@ export default async function ShotBoardViewPage({
     <div className="mx-auto max-w-5xl">
       <div className="mb-4 flex items-center justify-between print:hidden">
         <Link
-          href={`/projects/${project.id}/production`}
+          href={`/projects/${project.id}/shot-list`}
           className="inline-flex items-center gap-1 text-sm font-semibold text-text-muted transition hover:text-text"
         >
-          <ChevronLeftIcon /> Back to production
+          <ChevronLeftIcon /> Back to shot list
         </Link>
         <PrintButton />
       </div>
+
+      {/* List selector: present all, or a single shot list. */}
+      {groupList.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5 print:hidden">
+          <span className="mr-1 text-xs font-bold uppercase tracking-wide text-text-faint">
+            Export
+          </span>
+          <Link
+            href={`/projects/${project.id}/production/board`}
+            className={`rounded-pill px-3 py-1 text-xs font-semibold transition ${
+              !selectedList
+                ? "bg-accent-soft text-accent"
+                : "border border-border text-text-muted hover:text-text"
+            }`}
+          >
+            All lists
+          </Link>
+          {groupList.map((g) => (
+            <Link
+              key={g.id}
+              href={`/projects/${project.id}/production/board?list=${g.id}`}
+              className={`rounded-pill px-3 py-1 text-xs font-semibold transition ${
+                selectedList === g.id
+                  ? "bg-accent-soft text-accent"
+                  : "border border-border text-text-muted hover:text-text"
+              }`}
+            >
+              {g.title?.trim() || "Untitled list"}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Cover (dark) */}
       <div
@@ -205,7 +246,7 @@ export default async function ShotBoardViewPage({
 
       {/* Shots (light) */}
       <div data-theme="light" className="mt-6 space-y-10">
-        {groupList.map((g, gi) => {
+        {visibleGroups.map((g, gi) => {
           const groupCards = cards.filter((c) => c.group_id === g.id);
           return (
             <section key={g.id} className="break-inside-avoid">
@@ -326,9 +367,9 @@ export default async function ShotBoardViewPage({
           );
         })}
 
-        {groupList.length === 0 && (
+        {visibleGroups.length === 0 && (
           <p className="py-12 text-center text-sm text-text-faint">
-            This board is empty. Add shots and cards under Production.
+            Nothing to show. Add shots on the shot list, then present them here.
           </p>
         )}
       </div>
