@@ -22,7 +22,7 @@ import type {
 type Tab = "board" | "callsheet" | "budget" | "gear" | "delivery";
 
 const TABS: { key: Tab; label: string; soon?: boolean }[] = [
-  { key: "board", label: "Shot board" },
+  { key: "board", label: "Shot list" },
   { key: "callsheet", label: "Call sheet" },
   { key: "budget", label: "Budget" },
   { key: "gear", label: "Gear & crew" },

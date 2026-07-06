@@ -375,7 +375,7 @@ export default async function ProjectDetailPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Module hub */}
         <div className="lg:col-span-2">
-          <BandLabel hue="purple" label="Create" />
+          <BandLabel hue="blue" label="Plan" />
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
               href={`/projects/${project.id}/brief`}
@@ -424,6 +424,66 @@ export default async function ProjectDetailPage({
                   Upload cuts, boards, and stills. Every version is kept.
                 </p>
               )}
+            </HubCard>
+          </div>
+
+          <BandLabel hue="purple" label="Visualize" />
+          <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <HubCard
+              href={`/projects/${project.id}/production?tab=board`}
+              hue="purple"
+              title="Shot list"
+              sub={`${shotCount} shots · ${groupIds.length} groups`}
+              footer={shotCount > 0 ? "Present & export" : "Build the shot list"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M3 9h18M9 3v18" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                {shotCount > 0
+                  ? "Shots, groups, and a client-ready cover."
+                  : "Lay out every shot for the shoot."}
+              </p>
+            </HubCard>
+
+            <HubCard
+              href="/boards"
+              hue="indigo"
+              title="Storyboards"
+              sub="On the boards canvas"
+              footer="Open boards"
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M2 9h20M8 4v5M16 4v5M8 20v-5M16 20v-5" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                Sequence frames to plan the edit on the freeform canvas.
+              </p>
+            </HubCard>
+
+            <HubCard
+              href="/boards"
+              hue="cyan"
+              title="Moodboard"
+              sub="On the boards canvas"
+              footer="Open boards"
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                Collect references, styles, and inspiration in one place.
+              </p>
             </HubCard>
           </div>
 
@@ -502,22 +562,39 @@ export default async function ProjectDetailPage({
           <BandLabel hue="green" label="Produce" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
-              href={`/projects/${project.id}/production?tab=board`}
-              hue="green"
-              title="Shot board"
-              sub={`${shotCount} shots · ${groupIds.length} groups`}
-              footer={shotCount > 0 ? "Present & export" : "Build the board"}
+              href="#"
+              soon
+              hue="orange"
+              title="Project contacts"
+              sub="Crew, talent & clients"
               icon={
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <path d="M3 9h18M9 3v18" />
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
                 </svg>
               }
             >
               <p className="text-[13px] text-text-muted">
-                {shotCount > 0
-                  ? "Shots, groups, and a client-ready cover."
-                  : "Lay out the shots for the shoot."}
+                One roster of crew, talent, and client contacts for the job.
+              </p>
+            </HubCard>
+
+            <HubCard
+              href="#"
+              soon
+              hue="blue"
+              title="Calendar"
+              sub="Shoot & delivery dates"
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                A per-project timeline of shoot, review, and delivery dates.
               </p>
             </HubCard>
 

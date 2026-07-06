@@ -12,6 +12,7 @@ export function HubCard({
   sub,
   footer,
   children,
+  soon = false,
 }: {
   href: string;
   hue: string;
@@ -20,7 +21,50 @@ export function HubCard({
   sub?: string;
   footer?: ReactNode;
   children?: ReactNode;
+  // Renders a visible-but-disabled card for a module that is not built yet, so
+  // the intended structure is honest without shipping a dead link.
+  soon?: boolean;
 }) {
+  const inner = (
+    <>
+      <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+        <span
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px]"
+          style={{
+            backgroundColor: `var(--h-${hue}-bg)`,
+            color: `var(--h-${hue})`,
+          }}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-display text-[15px] font-bold leading-tight text-text">
+              {title}
+            </span>
+            <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-text-faint">
+              Soon
+            </span>
+          </div>
+          {sub && (
+            <div className="truncate text-xs font-semibold text-text-faint">
+              {sub}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="flex-1 px-4 pb-4">{children}</div>
+    </>
+  );
+
+  if (soon) {
+    return (
+      <div className="flex flex-col overflow-hidden rounded-[16px] border border-dashed border-border bg-surface/60 opacity-70">
+        {inner}
+      </div>
+    );
+  }
+
   return (
     <Link
       href={href}

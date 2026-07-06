@@ -194,7 +194,11 @@ implemented (out of strict order, driven by the operator's real needs).
   launcher; the operator asked for bolder + more visible, NOT dialed down):
   /projects/[id]/page.tsx = hub (hero w/ gradient bar + status + lifecycle
   stepper, KPI row, AI summary, then module cards grouped in phase bands
-  Create/Review/Produce, + a right rail of Needs-attention + Activity). Each
+  Plan (Brief, Assets) / Visualize (Shot list, Storyboards, Moodboard) /
+  Review (Review & approvals, Communication) / Produce (Project contacts +
+  Calendar = "Soon" stubs, Call sheet, Budget, Delivery & billing), + a right
+  rail of Needs-attention + Activity. Storyboards + Moodboard both point to the
+  Boards canvas for now. Each
   module card shows LIVE data (brief snippet, asset thumbrows + status, review
   actions, comms counts, shot count, call sheet date, budget bid-vs-actual bar,
   delivery progress) and links to its own focused page:
