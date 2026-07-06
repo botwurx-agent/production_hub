@@ -10,18 +10,35 @@ export function ProjectBoard({ projects }: { projects: ProjectRow[] }) {
         const items = projects.filter((p) => p.status === status);
         return (
           <div key={status} className="flex flex-col">
-            <div className="mb-3 flex items-center gap-2 px-1">
+            <div
+              className="mb-3 flex items-center gap-2 rounded-[11px] px-3 py-2"
+              style={{ backgroundColor: `var(--h-${meta.hue}-bg)` }}
+            >
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: `var(--h-${meta.hue})` }}
                 aria-hidden="true"
               />
-              <span className="text-sm font-bold text-text">{meta.label}</span>
-              <span className="ml-auto rounded-pill bg-surface-2 px-2 py-0.5 text-xs font-semibold text-text-muted">
+              <span
+                className="text-sm font-extrabold"
+                style={{ color: `var(--h-${meta.hue})` }}
+              >
+                {meta.label}
+              </span>
+              <span
+                className="ml-auto rounded-pill px-2 py-0.5 text-xs font-bold"
+                style={{
+                  backgroundColor: "var(--surface)",
+                  color: `var(--h-${meta.hue})`,
+                }}
+              >
                 {items.length}
               </span>
             </div>
-            <div className="flex flex-1 flex-col gap-3 rounded-[16px] bg-surface-2/50 p-2.5">
+            <div
+              className="flex flex-1 flex-col gap-3 rounded-[16px] border-t-2 bg-surface-2/50 p-2.5"
+              style={{ borderColor: `var(--h-${meta.hue})` }}
+            >
               {items.length === 0 ? (
                 <p className="px-2 py-6 text-center text-xs text-text-faint">
                   Nothing here yet

@@ -31,6 +31,8 @@ export default async function ProjectsPage() {
       <PageHeader
         title="Projects"
         subtitle="Every job, one board."
+        icon={<ProjectsIcon className="h-6 w-6" />}
+        hue="indigo"
         action={<NewProjectButton clients={clientOptions} />}
       />
       <NeedsYou items={outstanding} />

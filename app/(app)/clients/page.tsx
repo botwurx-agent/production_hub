@@ -23,6 +23,8 @@ export default async function ClientsPage() {
       <PageHeader
         title="Clients"
         subtitle="The brands and agencies you work with."
+        icon={<ClientsIcon className="h-6 w-6" />}
+        hue="cyan"
         action={<NewClientButton />}
       />
       {rows.length === 0 ? (

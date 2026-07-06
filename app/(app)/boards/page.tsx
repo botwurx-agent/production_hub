@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { PageHeader } from "@/components/page-header";
+import { BoardsIcon } from "@/components/app-shell/nav-icons";
 import { BoardsWorkspace } from "@/components/boards/boards-workspace";
 import { driveConnected } from "@/lib/googledrive";
 import type { Board } from "@/lib/database.types";
@@ -32,6 +33,8 @@ export default async function BoardsPage() {
       <PageHeader
         title="Boards"
         subtitle="Moodboards and storyboards. Drag, drop, and arrange your visuals."
+        icon={<BoardsIcon className="h-6 w-6" />}
+        hue="purple"
       />
       <BoardsWorkspace
         initialBoards={(boards ?? []) as Board[]}

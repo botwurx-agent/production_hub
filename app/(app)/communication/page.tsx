@@ -155,6 +155,8 @@ export default async function CommunicationPage() {
       <PageHeader
         title="Communication"
         subtitle="Every conversation, from first contact to delivery, in one place."
+        icon={<CommunicationIcon className="h-6 w-6" />}
+        hue="blue"
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">

@@ -207,6 +207,14 @@ implemented (out of strict order, driven by the operator's real needs).
   backlog: docs/competitor-research/assessment.md.
 - EmptyState (components/ui/card.tsx) supports rich empty states with an optional
   "here's how it works" 3-step row + hue; used on Projects/Leads/project Assets.
+- Bolder visual language rolled app-wide (operator wanted it less dialed down):
+  shared IconTile (components/ui/icon-tile.tsx) = colored per-hue rounded icon
+  chip for identity/wayfinding. PageHeader takes icon+hue and draws a quiet
+  gradient accent under every page top. Dashboard StatTiles have a colored edge
+  + tinted chip; dashboard section cards (TitledCard) have colored icon headers;
+  Projects + Leads boards have tinted per-status/stage column headers with a
+  colored top border. Status stays as chips (StatusTag); module/section/nav color
+  is identity, kept separate so the two never compete.
 
 ### Environment variables (set in Vercel; needed to reproduce in a new env)
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)

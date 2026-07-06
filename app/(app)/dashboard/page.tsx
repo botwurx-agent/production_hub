@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { PageHeader } from "@/components/page-header";
+import { DashboardIcon } from "@/components/app-shell/nav-icons";
 import { DashboardBody } from "@/components/dashboard/dashboard-body";
 import type { Stat } from "@/components/dashboard/stat-tiles";
 import { getOutstanding } from "@/lib/outstanding";
@@ -116,7 +117,12 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title={ctx.studio.name} subtitle="Your studio at a glance." />
+      <PageHeader
+        title={ctx.studio.name}
+        subtitle="Your studio at a glance."
+        icon={<DashboardIcon className="h-6 w-6" />}
+        hue="indigo"
+      />
       <DashboardBody
         stats={stats}
         outstanding={outstanding}

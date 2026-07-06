@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Card } from "@/components/ui/card";
+import { IconTile } from "@/components/ui/icon-tile";
 import { StatTiles, type Stat } from "@/components/dashboard/stat-tiles";
 import { Calendar } from "@/components/dashboard/calendar";
 import { Upcoming } from "@/components/dashboard/upcoming";
@@ -33,10 +34,41 @@ function GearIcon() {
   );
 }
 
-function TitledCard({ title, children }: { title: string; children: React.ReactNode }) {
+const S = (path: ReactNode) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {path}
+  </svg>
+);
+
+const SECTION_ICONS = {
+  myday: S(<><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>),
+  upcoming: S(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>),
+  messages: S(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />),
+  pipeline: S(<><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></>),
+  activity: S(<path d="M22 12h-4l-3 9L9 3l-3 9H2" />),
+} as const;
+
+function TitledCard({
+  title,
+  icon,
+  hue = "indigo",
+  children,
+}: {
+  title: string;
+  icon?: ReactNode;
+  hue?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Card className="p-5">
-      <h2 className="mb-3 font-display text-base font-bold">{title}</h2>
+      <div className="mb-3 flex items-center gap-2.5">
+        {icon && (
+          <IconTile hue={hue} size="sm">
+            {icon}
+          </IconTile>
+        )}
+        <h2 className="font-display text-base font-bold">{title}</h2>
+      </div>
       {children}
     </Card>
   );
@@ -110,22 +142,22 @@ export function DashboardBody({
   // Right column widgets, in order, that are currently visible.
   const rightColumn = [
     show("upcoming") && (
-      <TitledCard key="upcoming" title="Upcoming">
+      <TitledCard key="upcoming" title="Upcoming" icon={SECTION_ICONS.upcoming} hue="green">
         <Upcoming events={upcoming} />
       </TitledCard>
     ),
     show("messages") && (
-      <TitledCard key="messages" title="Messages">
+      <TitledCard key="messages" title="Messages" icon={SECTION_ICONS.messages} hue="blue">
         <UnreadWidget />
       </TitledCard>
     ),
     show("pipeline") && (
-      <TitledCard key="pipeline" title="Pipeline">
+      <TitledCard key="pipeline" title="Pipeline" icon={SECTION_ICONS.pipeline} hue="pink">
         <PipelineSnapshot counts={counts} followUps={followUpCount} />
       </TitledCard>
     ),
     show("activity") && (
-      <TitledCard key="activity" title="Recent activity">
+      <TitledCard key="activity" title="Recent activity" icon={SECTION_ICONS.activity} hue="purple">
         <RecentActivity items={activity} />
       </TitledCard>
     ),
@@ -182,7 +214,7 @@ export function DashboardBody({
       <StatTiles stats={stats} />
 
       {show("myday") && (
-        <TitledCard title="My day">
+        <TitledCard title="My day" icon={SECTION_ICONS.myday} hue="orange">
           <MyDay events={todayEvents} outstandingCount={outstanding.length} />
         </TitledCard>
       )}

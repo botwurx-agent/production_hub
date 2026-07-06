@@ -4,6 +4,7 @@ import { googleConfigured } from "@/lib/google";
 import { slackConfigured } from "@/lib/slack";
 import { figmaConfigured } from "@/lib/figma";
 import { PageHeader } from "@/components/page-header";
+import { SettingsIcon } from "@/components/app-shell/nav-icons";
 import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/status-tag";
 import { Appearance } from "@/components/settings/appearance";
@@ -72,7 +73,12 @@ export default async function SettingsPage({
 
   return (
     <div className="max-w-3xl">
-      <PageHeader title="Settings" subtitle="Your studio and workspace." />
+      <PageHeader
+        title="Settings"
+        subtitle="Your studio and workspace."
+        icon={<SettingsIcon className="h-6 w-6" />}
+        hue="indigo"
+      />
 
       {searchParams.connected && (
         <div className="mb-6 rounded-[12px] bg-green-bg px-4 py-3 text-sm font-medium text-green">

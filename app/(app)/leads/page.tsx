@@ -27,6 +27,8 @@ export default async function LeadsPage() {
       <PageHeader
         title="Leads"
         subtitle="Prospects, from first contact to won."
+        icon={<LeadsIcon className="h-6 w-6" />}
+        hue="pink"
         action={<NewLeadButton />}
       />
       {rows.length === 0 ? (
