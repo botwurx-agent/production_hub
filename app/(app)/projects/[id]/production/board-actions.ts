@@ -122,14 +122,32 @@ export async function addGroup(projectId: string): Promise<BoardActionState> {
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const { error } = await supabase.from("shot_groups").insert({
-    studio_id: ctx.studio.id,
-    project_id: projectId,
-    position: (last?.position ?? -1) + 1,
-    title: "",
-    created_by: ctx.userId,
-  });
+  const { data: group, error } = await supabase
+    .from("shot_groups")
+    .insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      position: (last?.position ?? -1) + 1,
+      title: "",
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  // A shot list starts with a minimum of 3 empty shots to fill in.
+  if (group) {
+    await supabase.from("shot_cards").insert(
+      [0, 1, 2].map((position) => ({
+        studio_id: ctx.studio.id,
+        group_id: group.id,
+        position,
+        tags: [],
+        created_by: ctx.userId,
+      }))
+    );
+  }
+
   rp(projectId);
   return null;
 }
