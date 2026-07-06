@@ -286,6 +286,73 @@ export async function deleteCard(projectId: string, id: string): Promise<void> {
   rp(projectId);
 }
 
+// Duplicates a shot into the same list, right after the source.
+export async function duplicateCard(
+  projectId: string,
+  id: string
+): Promise<BoardActionState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const { data: src } = await supabase
+    .from("shot_cards")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (!src) return { error: "That shot no longer exists." };
+  const { data: last } = await supabase
+    .from("shot_cards")
+    .select("position")
+    .eq("group_id", src.group_id)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { error } = await supabase.from("shot_cards").insert({
+    studio_id: ctx.studio.id,
+    group_id: src.group_id,
+    position: (last?.position ?? -1) + 1,
+    code: src.code,
+    day: src.day,
+    flavor_name: src.flavor_name,
+    flavor_hue: src.flavor_hue,
+    storage_path: src.storage_path,
+    mime_type: src.mime_type,
+    image_name: src.image_name,
+    description: src.description,
+    vo: src.vo,
+    shot_size: src.shot_size,
+    shot_type: src.shot_type,
+    movement: src.movement,
+    asset_id: src.asset_id,
+    tags: src.tags ?? [],
+    created_by: ctx.userId,
+  });
+  if (error) return { error: error.message };
+  rp(projectId);
+  return null;
+}
+
+// Moves a shot to another list (group), appending it to the end.
+export async function moveCard(
+  projectId: string,
+  cardId: string,
+  targetGroupId: string
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data: last } = await supabase
+    .from("shot_cards")
+    .select("position")
+    .eq("group_id", targetGroupId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  await supabase
+    .from("shot_cards")
+    .update({ group_id: targetGroupId, position: (last?.position ?? -1) + 1 })
+    .eq("id", cardId);
+  rp(projectId);
+}
+
 export async function swapCards(
   projectId: string,
   a: { id: string; position: number },

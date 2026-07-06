@@ -179,12 +179,16 @@ implemented (out of strict order, driven by the operator's real needs).
   tabs, drag/resize/z-order, notes, zoom, desktop drag-drop, dots/grid/plain
   background; import via upload/project assets/Drive/Figma.
 - Shot list (own page, off the production tab strip): /projects/[id]/shot-list
-  renders ShotBoardEditor (cover + flavor palette + sections/groups). Each shot
-  is a ROW: asset selector (pick a project asset via setCardAsset, or upload) +
-  Description + Shot Size + Shot Type + Camera Movement (datalist comboboxes with
-  industry presets, free text allowed) + compact code/day/flavor. shot_cards
-  gained shot_size/shot_type/movement/asset_id (migration 0025). Present/export
-  view still at /production/board. Hub "Shot list" card links here.
+  renders ShotBoardEditor as a StudioBinder-style two-pane: LEFT sidebar = the
+  project's shot lists (each shot_group = one list, with count + "New shot list"),
+  RIGHT = the active list's shots as ROWS. Each row: select checkbox + asset
+  selector (pick a project asset via setCardAsset, or upload) + Description +
+  Shot Size + Shot Type + Camera Movement (datalist comboboxes, free text ok) +
+  compact code/day/flavor. Selecting rows shows a toolbar: Duplicate / Move to
+  (another list) / Delete + select-all (duplicateCard, moveCard, deleteCard;
+  bulk = client loop). Cover + flavor palette live in a collapsible "Cover &
+  palette". shot_cards gained shot_size/shot_type/movement/asset_id (migration
+  0025). Present/export view still at /production/board. Hub card links here.
 - Production-ops (Phase 8): per-project Production workspace
   (/projects/[id]/production) with tabs: Call sheet (industry layout,
   PDF export at /production/callsheet), Budget (bid vs actual), Gear & crew,
