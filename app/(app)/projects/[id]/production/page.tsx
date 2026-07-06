@@ -19,13 +19,24 @@ import type {
 
 const SIGNED_TTL = 60 * 60;
 
+const PRODUCTION_TABS = ["board", "callsheet", "budget", "gear", "delivery"] as const;
+type ProductionTab = (typeof PRODUCTION_TABS)[number];
+
 export default async function ProductionPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { tab?: string };
 }) {
   await requireStudioContext();
   const supabase = createClient();
+
+  const initialTab: ProductionTab = PRODUCTION_TABS.includes(
+    searchParams?.tab as ProductionTab
+  )
+    ? (searchParams?.tab as ProductionTab)
+    : "board";
 
   const { data: project } = await supabase
     .from("projects")
@@ -149,6 +160,7 @@ export default async function ProductionPage({
         gearItems={(gearItems ?? []) as GearItem[]}
         deliverables={(deliverables ?? []) as Deliverable[]}
         billing={(billing as ProjectBilling | null) ?? null}
+        initialTab={initialTab}
       />
     </div>
   );

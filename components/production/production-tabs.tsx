@@ -42,6 +42,7 @@ export function ProductionTabs({
   gearItems,
   deliverables,
   billing,
+  initialTab = "board",
 }: {
   projectId: string;
   projectTitle: string;
@@ -55,8 +56,9 @@ export function ProductionTabs({
   gearItems: GearItem[];
   deliverables: Deliverable[];
   billing: ProjectBilling | null;
+  initialTab?: Tab;
 }) {
-  const [tab, setTab] = useState<Tab>("board");
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   return (
     <div>

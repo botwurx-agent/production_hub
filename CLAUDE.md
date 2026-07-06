@@ -190,12 +190,21 @@ implemented (out of strict order, driven by the operator's real needs).
 - Notifications layer: studio-scoped `notifications` table (0024), bell dropdown
   in the topbar (unread badge, poll, mark read/all, needs-you row); client
   review actions generate notifications (lib/notifications.ts).
-- Project workspace is phase-organized (StudioBinder-inspired, our quiet visual
-  language): components/projects/project-workspace.tsx renders a phase nav
-  (Overview / Brief / Assets / Communication in-page tabs + Production as a link
-  to /production) with an always-present Activity rail. Per-phase color is quiet
-  wayfinding (a small hue dot), kept distinct from status color. See
-  docs/competitor-research/assessment.md for the rationale + backlog.
+- Project workspace is a colorful, everything-upfront HUB (StudioBinder-inspired
+  launcher; the operator asked for bolder + more visible, NOT dialed down):
+  /projects/[id]/page.tsx = hub (hero w/ gradient bar + status + lifecycle
+  stepper, KPI row, AI summary, then module cards grouped in phase bands
+  Create/Review/Produce, + a right rail of Needs-attention + Activity). Each
+  module card shows LIVE data (brief snippet, asset thumbrows + status, review
+  actions, comms counts, shot count, call sheet date, budget bid-vs-actual bar,
+  delivery progress) and links to its own focused page:
+  /projects/[id]/{brief,assets,communication} and /production?tab=... (deep-link
+  via initialTab). Shared asset loader: lib/project-data.ts (loadProjectAssets).
+  Card shell + band label: components/projects/hub-card.tsx; sub-page header:
+  components/projects/project-subhead.tsx. Module color = IDENTITY (icon tiles,
+  band dots); status stays as chips (StatusTag) so the two color systems never
+  compete. Client update card lives on the communication sub-page. Rationale +
+  backlog: docs/competitor-research/assessment.md.
 - EmptyState (components/ui/card.tsx) supports rich empty states with an optional
   "here's how it works" 3-step row + hue; used on Projects/Leads/project Assets.
 

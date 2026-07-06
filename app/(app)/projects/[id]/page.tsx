@@ -2,40 +2,87 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { Card, EmptyState } from "@/components/ui/card";
-import { ProjectWorkspace } from "@/components/projects/project-workspace";
+import { Card } from "@/components/ui/card";
 import { StatusMenu } from "@/components/projects/status-menu";
-import { BriefEditor } from "@/components/projects/brief-editor";
-import { AssetCard } from "@/components/projects/asset-card";
-import { AddAssetButton } from "@/components/projects/add-asset-button";
-import { DriveImportButton } from "@/components/projects/drive-import-button";
-import { FigmaImportButton } from "@/components/projects/figma-import-button";
-import { driveConnected } from "@/lib/googledrive";
-import { EmailPanel } from "@/components/projects/project-email";
-import { SlackPanel } from "@/components/communication/slack-panel";
-import { ChatPanel } from "@/components/communication/gchat-panel";
-import { chatConnected, chatCanSend } from "@/lib/googlechat";
+import { HubCard, BandLabel } from "@/components/projects/hub-card";
 import { ProjectSummary } from "@/components/projects/project-summary";
-import {
-  ClientUpdate,
-  type UpdateDestination,
-} from "@/components/projects/client-update";
 import { ProjectAttention } from "@/components/projects/project-attention";
 import { getProjectOutstanding } from "@/lib/outstanding";
 import { aiConfigured } from "@/lib/ai";
+import { loadProjectAssets } from "@/lib/project-data";
 import {
   ActivityPanel,
   type ActivityItem,
 } from "@/components/projects/activity-panel";
+import { StatusTag } from "@/components/status-tag";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { longDate } from "@/lib/format";
-import type {
-  AssetWithVersions,
-  VersionComment,
-  VersionApproval,
-} from "@/components/projects/asset-types";
+import {
+  PROJECT_STATUS,
+  PROJECT_STATUS_ORDER,
+  ASSET_STATUS,
+} from "@/lib/status";
+import type { ProjectStatus } from "@/lib/database.types";
 
-const SIGNED_URL_TTL = 60 * 60; // 1 hour
+function daysUntil(date: string): number {
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - now.getTime()) / 86400000);
+}
+
+function money(n: number): string {
+  if (Math.abs(n) >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${Math.round(n)}`;
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
+// Small presentational helpers, kept local to the hub.
+function Kpi({
+  label,
+  value,
+  unit,
+  alert = false,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  alert?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-[12px] border p-4 shadow-sm"
+      style={
+        alert
+          ? { backgroundColor: "var(--h-yellow-bg)", borderColor: "transparent" }
+          : { backgroundColor: "var(--surface)", borderColor: "var(--border)" }
+      }
+    >
+      <div
+        className="text-[11px] font-bold uppercase tracking-wide"
+        style={{ color: alert ? "var(--h-yellow)" : "var(--text-faint)" }}
+      >
+        {label}
+      </div>
+      <div
+        className="mt-1.5 text-2xl font-extrabold tracking-tight tabular-nums"
+        style={alert ? { color: "var(--h-yellow)" } : undefined}
+      >
+        {value}
+        {unit && (
+          <span className="ml-1 text-sm font-semibold text-text-muted">
+            {unit}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default async function ProjectDetailPage({
   params,
@@ -50,197 +97,146 @@ export default async function ProjectDetailPage({
     .select("id, title, status, due_date, shoot_date, client:clients(name)")
     .eq("id", params.id)
     .maybeSingle();
-
   if (!project) notFound();
 
   const [
     { data: brief },
-    { data: assetsRaw },
     { data: activityRaw },
-    { data: emailThreads },
-    { data: emailAccount },
-    { data: slackChannels },
-    { data: slackAccount },
-    { data: chatSpaces },
     { data: summary },
-    { data: reviewLinks },
-    { data: figmaAccount },
+    { data: emailThreads },
+    { data: slackChannels },
+    { data: chatSpaces },
+    { data: shotGroups },
+    { data: callSheet },
+    { data: budgetLines },
+    { data: deliverables },
   ] = await Promise.all([
-      supabase
-        .from("briefs")
-        .select("content")
-        .eq("project_id", params.id)
-        .maybeSingle(),
-      supabase
-        .from("assets")
-        .select(
-          "id, name, type, status, current_version_id, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
-        )
-        .eq("project_id", params.id)
-        .order("created_at", { ascending: true })
-        .order("version_number", {
-          referencedTable: "versions",
-          ascending: false,
-        }),
-      supabase
-        .from("activity")
-        .select("id, content, type, created_at, author_id")
-        .eq("project_id", params.id)
-        .order("created_at", { ascending: false })
-        .limit(100),
-      supabase
-        .from("email_threads")
-        .select("id, gmail_thread_id, subject, last_message_at")
-        .eq("project_id", params.id)
-        .order("last_message_at", { ascending: false, nullsFirst: false }),
-      supabase
-        .from("email_accounts")
-        .select("id, scope")
-        .eq("provider", "google")
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("slack_channels")
-        .select("id, slack_channel_id, channel_name")
-        .eq("project_id", params.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("email_accounts")
-        .select("id, scope")
-        .eq("provider", "slack")
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("chat_spaces")
-        .select("id, space_name, space_display_name")
-        .eq("project_id", params.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("project_summaries")
-        .select("content, created_at")
-        .eq("project_id", params.id)
-        .maybeSingle(),
-      supabase
-        .from("review_links")
-        .select("id, asset_id, token")
-        .eq("project_id", params.id)
-        .eq("revoked", false)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("email_accounts")
-        .select("id")
-        .eq("provider", "figma")
-        .limit(1)
-        .maybeSingle(),
-    ]);
+    supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
+    supabase
+      .from("activity")
+      .select("id, content, type, created_at, author_id")
+      .eq("project_id", params.id)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("project_summaries")
+      .select("content, created_at")
+      .eq("project_id", params.id)
+      .maybeSingle(),
+    supabase.from("email_threads").select("id").eq("project_id", params.id),
+    supabase.from("slack_channels").select("id").eq("project_id", params.id),
+    supabase.from("chat_spaces").select("id").eq("project_id", params.id),
+    supabase.from("shot_groups").select("id").eq("project_id", params.id),
+    supabase
+      .from("call_sheets")
+      .select("shoot_date, call_time, crew_call, location")
+      .eq("project_id", params.id)
+      .maybeSingle(),
+    supabase
+      .from("budget_lines")
+      .select("estimated, actual")
+      .eq("project_id", params.id),
+    supabase.from("deliverables").select("status").eq("project_id", params.id),
+  ]);
 
-  // Newest active review link per asset (studios share one stable link each).
-  const reviewLinkByAsset = new Map<string, { id: string; token: string }>();
-  for (const l of reviewLinks ?? []) {
-    if (!reviewLinkByAsset.has(l.asset_id)) {
-      reviewLinkByAsset.set(l.asset_id, { id: l.id, token: l.token });
-    }
+  const [attention, { assets, reviewLinkByAsset }] = await Promise.all([
+    getProjectOutstanding(params.id),
+    loadProjectAssets(supabase, params.id),
+  ]);
+
+  // Shot count needs group ids.
+  const groupIds = (shotGroups ?? []).map((g) => g.id);
+  let shotCount = 0;
+  if (groupIds.length > 0) {
+    const { count } = await supabase
+      .from("shot_cards")
+      .select("id", { count: "exact", head: true })
+      .in("group_id", groupIds);
+    shotCount = count ?? 0;
   }
 
-  // Batch-sign all stored files so private previews and downloads work.
-  const paths = (assetsRaw ?? [])
-    .flatMap((a) => a.versions ?? [])
-    .map((v) => v.storage_path)
-    .filter((p): p is string => Boolean(p));
+  const clientName = (project.client as { name: string } | null)?.name ?? null;
+  const status = project.status as ProjectStatus;
+  const statusInfo = PROJECT_STATUS[status];
+  const currentOrder = statusInfo?.order ?? 0;
 
-  const signed = new Map<string, string>();
-  if (paths.length > 0) {
-    const { data: signedList } = await supabase.storage
-      .from("assets")
-      .createSignedUrls(paths, SIGNED_URL_TTL);
-    for (const s of signedList ?? []) {
-      if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+  // KPI derivations.
+  const versionCount = assets.reduce((n, a) => n + a.versions.length, 0);
+  const shootDays = project.shoot_date ? daysUntil(project.shoot_date) : null;
+  const budgetEstimated = (budgetLines ?? []).reduce((n, b) => n + (b.estimated ?? 0), 0);
+  const budgetActual = (budgetLines ?? []).reduce((n, b) => n + (b.actual ?? 0), 0);
+  const budgetPct =
+    budgetEstimated > 0 ? Math.round((budgetActual / budgetEstimated) * 100) : null;
+
+  // Brief preview.
+  const briefText = (brief?.content ?? "").trim();
+  const briefSnippet = briefText.length > 150 ? `${briefText.slice(0, 150)}…` : briefText;
+
+  // Assets preview (most recent 3, with the current version's status).
+  const recentAssets = assets.slice(0, 3).map((a) => {
+    const cur = a.versions[0];
+    const st = ASSET_STATUS[a.status as keyof typeof ASSET_STATUS];
+    return {
+      id: a.id,
+      name: a.name,
+      hue: st?.hue ?? "cyan",
+      label: st?.label ?? a.status,
+      version: cur ? `v${cur.version_number}` : "",
+    };
+  });
+
+  // Review derivations.
+  let pendingCount = 0;
+  let changesCount = 0;
+  type ReviewAction = { name: string; text: string; hue: string; at: string };
+  const reviewActions: ReviewAction[] = [];
+  for (const a of assets) {
+    for (const v of a.versions) {
+      for (const ap of v.approvals) {
+        if (ap.status === "changes_requested") changesCount++;
+        else if (ap.status === "pending") pendingCount++;
+        reviewActions.push({
+          name: ap.reviewer_name ?? "Someone",
+          text:
+            ap.status === "approved"
+              ? `approved ${a.name}`
+              : ap.status === "changes_requested"
+                ? `requested changes on ${a.name}`
+                : `is reviewing ${a.name}`,
+          hue:
+            ap.status === "approved"
+              ? "green"
+              : ap.status === "changes_requested"
+                ? "red"
+                : "yellow",
+          at: ap.created_at,
+        });
+      }
+      for (const c of v.comments) {
+        reviewActions.push({
+          name: c.reviewer_name ?? "Someone",
+          text: `commented on ${a.name}`,
+          hue: "blue",
+          at: c.created_at,
+        });
+      }
     }
   }
+  reviewActions.sort((x, y) => (x.at < y.at ? 1 : -1));
+  const recentReview = reviewActions.slice(0, 2);
+  const reviewLinkCount = reviewLinkByAsset.size;
 
-  // Review data (comments + internal sign-offs) for every version.
-  const versionIds = (assetsRaw ?? []).flatMap((a) =>
-    (a.versions ?? []).map((v) => v.id)
-  );
-  const commentsByVersion = new Map<string, VersionComment[]>();
-  const approvalsByVersion = new Map<string, VersionApproval[]>();
-  if (versionIds.length > 0) {
-    const [{ data: comments }, { data: approvals }] = await Promise.all([
-      supabase
-        .from("review_comments")
-        .select("id, body, created_at, author_id, reviewer_name, version_id")
-        .in("version_id", versionIds),
-      supabase
-        .from("approvals")
-        .select("id, status, reviewer_user_id, reviewer_name, created_at, target_id")
-        .eq("target_type", "version")
-        .in("target_id", versionIds),
-    ]);
-    for (const c of comments ?? []) {
-      const list = commentsByVersion.get(c.version_id) ?? [];
-      list.push(c);
-      commentsByVersion.set(c.version_id, list);
-    }
-    for (const a of approvals ?? []) {
-      const list = approvalsByVersion.get(a.target_id) ?? [];
-      list.push(a);
-      approvalsByVersion.set(a.target_id, list);
-    }
-  }
+  // Communication counts.
+  const emailCount = (emailThreads ?? []).length;
+  const slackCount = (slackChannels ?? []).length;
+  const chatCount = (chatSpaces ?? []).length;
+  const commsTotal = emailCount + slackCount + chatCount;
 
-  const assets: AssetWithVersions[] = (assetsRaw ?? []).map((a) => ({
-    id: a.id,
-    name: a.name,
-    type: a.type,
-    status: a.status,
-    current_version_id: a.current_version_id,
-    versions: (a.versions ?? []).map((v) => ({
-      ...v,
-      signedUrl: v.storage_path ? (signed.get(v.storage_path) ?? null) : null,
-      comments: commentsByVersion.get(v.id) ?? [],
-      approvals: approvalsByVersion.get(v.id) ?? [],
-    })),
-  }));
+  // Produce derivations.
+  const deliveredCount = (deliverables ?? []).filter((d) => d.status === "delivered").length;
+  const deliverTotal = (deliverables ?? []).length;
 
   const activity = (activityRaw ?? []) as ActivityItem[];
-  const clientName = (project.client as { name: string } | null)?.name ?? null;
-  const dateBits = [
-    project.shoot_date ? `Shoot ${longDate(project.shoot_date)}` : null,
-    project.due_date ? `Due ${longDate(project.due_date)}` : null,
-  ].filter(Boolean);
-
-  const attention = await getProjectOutstanding(params.id);
-
-  // Channels this update can be sent through: linked to the project and the
-  // provider is connected with send access.
-  const emailCanSend = Boolean(emailAccount?.scope?.includes("gmail.send"));
-  const slackCanSend = Boolean(slackAccount?.scope?.includes("chat:write"));
-  const updateDestinations: UpdateDestination[] = [
-    ...(emailCanSend
-      ? (emailThreads ?? []).map((t) => ({
-          kind: "email" as const,
-          id: `email:${t.id}`,
-          label: `Email: ${t.subject || "thread"}`,
-          gmailThreadId: t.gmail_thread_id,
-        }))
-      : []),
-    ...(slackCanSend
-      ? (slackChannels ?? []).map((c) => ({
-          kind: "slack" as const,
-          id: `slack:${c.id}`,
-          label: `Slack: #${c.channel_name || "channel"}`,
-          channelId: c.slack_channel_id,
-        }))
-      : []),
-    ...(chatCanSend(emailAccount?.scope)
-      ? (chatSpaces ?? []).map((s) => ({
-          kind: "chat" as const,
-          id: `chat:${s.id}`,
-          label: `Chat: ${s.space_display_name || "space"}`,
-          spaceName: s.space_name,
-        }))
-      : []),
-  ];
 
   return (
     <div>
@@ -251,44 +247,373 @@ export default async function ProjectDetailPage({
         <ChevronLeftIcon /> Projects
       </Link>
 
-      {/* Project header: title is the hero, meta sits quieter beneath. */}
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
-            {project.title}
-          </h1>
-          <p className="mt-1.5 text-sm text-text-muted">
-            {clientName ?? "No client"}
-            {dateBits.length > 0 && (
-              <span className="text-text-faint">
-                {"  ·  "}
-                {dateBits.join("  ·  ")}
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <StatusMenu projectId={project.id} status={project.status} />
+      {/* Hero */}
+      <div className="relative mb-5 overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
+        <div
+          className="h-1 w-full"
+          style={{
+            background:
+              "linear-gradient(90deg, var(--h-purple), var(--h-pink) 40%, var(--h-cyan) 72%, var(--h-green))",
+          }}
+        />
+        <div className="p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              {statusInfo && (
+                <StatusTag hue={statusInfo.hue} className="mb-2">
+                  {statusInfo.label}
+                </StatusTag>
+              )}
+              <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
+                {project.title}
+              </h1>
+              <p className="mt-1.5 text-sm text-text-muted">
+                {clientName ?? "No client"}
+                {project.shoot_date && (
+                  <span className="text-text-faint">
+                    {"  ·  "}Shoot {longDate(project.shoot_date)}
+                  </span>
+                )}
+                {project.due_date && (
+                  <span className="text-text-faint">
+                    {"  ·  "}Due {longDate(project.due_date)}
+                  </span>
+                )}
+              </p>
+            </div>
+            <StatusMenu projectId={project.id} status={project.status} />
+          </div>
+
+          {/* Lifecycle stepper */}
+          <div className="mt-5 flex flex-wrap gap-2">
+            {PROJECT_STATUS_ORDER.map((s, i) => {
+              const info = PROJECT_STATUS[s];
+              const state =
+                info.order < currentOrder
+                  ? "done"
+                  : info.order === currentOrder
+                    ? "current"
+                    : "todo";
+              return (
+                <div
+                  key={s}
+                  className="inline-flex items-center gap-2 rounded-pill px-3 py-1.5 text-xs font-bold"
+                  style={{
+                    backgroundColor:
+                      state === "current"
+                        ? "var(--accent-soft)"
+                        : "var(--surface-2)",
+                    color:
+                      state === "current"
+                        ? "var(--accent)"
+                        : state === "done"
+                          ? "var(--text-muted)"
+                          : "var(--text-faint)",
+                  }}
+                >
+                  <span
+                    className="grid h-4 w-4 place-items-center rounded-full text-[10px] text-white"
+                    style={{
+                      backgroundColor:
+                        state === "done"
+                          ? "var(--h-green)"
+                          : state === "current"
+                            ? "var(--accent)"
+                            : "var(--border-strong)",
+                    }}
+                  >
+                    {state === "done" ? "✓" : i + 1}
+                  </span>
+                  {info.label}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Phase-organized workspace: the job's lifecycle, left to right.
-          Overview -> Brief -> Assets -> Communication, with Production as a
-          link into the deeper ops workspace, and Activity always present. */}
-      <ProjectWorkspace
-        phases={[
-          { key: "overview", label: "Overview", hue: "indigo" },
-          { key: "brief", label: "Brief", hue: "blue" },
-          { key: "assets", label: "Assets", hue: "purple" },
-          { key: "comms", label: "Communication", hue: "cyan" },
-          {
-            key: "production",
-            label: "Production",
-            hue: "green",
-            href: `/projects/${project.id}/production`,
-          },
-        ]}
-        rail={
+      {/* KPI row */}
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi
+          label="Needs attention"
+          value={String(attention.length)}
+          unit={attention.length === 1 ? "item" : "items"}
+          alert={attention.length > 0}
+        />
+        <Kpi label="Assets" value={String(assets.length)} unit={`· ${versionCount} versions`} />
+        <Kpi
+          label="Shoot in"
+          value={shootDays === null ? "—" : shootDays < 0 ? "Shot" : String(shootDays)}
+          unit={shootDays !== null && shootDays >= 0 ? "days" : undefined}
+        />
+        <Kpi
+          label="Budget used"
+          value={budgetPct === null ? "—" : String(budgetPct)}
+          unit={budgetPct === null ? undefined : "%"}
+        />
+      </div>
+
+      {/* AI summary */}
+      <Card className="mb-6 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="font-display text-base font-bold">Project summary</h2>
+          <span
+            className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
+            style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+          >
+            AI
+          </span>
+        </div>
+        <ProjectSummary
+          projectId={project.id}
+          connected={aiConfigured()}
+          initialContent={summary?.content ?? null}
+          initialAt={summary?.created_at ?? null}
+        />
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Module hub */}
+        <div className="lg:col-span-2">
+          <BandLabel hue="purple" label="Create" />
+          <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <HubCard
+              href={`/projects/${project.id}/brief`}
+              hue="blue"
+              title="Brief"
+              sub={briefText ? "Creative direction" : "Not started"}
+              footer={briefText ? "View & edit" : "Add the brief"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+                  <path d="M14 4v5h5M8 13h8M8 17h6" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] leading-relaxed text-text-muted">
+                {briefSnippet || "No creative direction captured yet."}
+              </p>
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/assets`}
+              hue="purple"
+              title="Assets"
+              sub={`${assets.length} ${assets.length === 1 ? "deliverable" : "deliverables"} · ${versionCount} versions`}
+              footer={recentAssets.map((a) => a.name).join(" · ") || "Add your first asset"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+                </svg>
+              }
+            >
+              {recentAssets.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {recentAssets.map((a) => (
+                    <div key={a.id} className="flex items-center gap-2 text-[13px]">
+                      <StatusTag hue={a.hue as never}>{a.label}</StatusTag>
+                      <span className="truncate font-semibold text-text">{a.name}</span>
+                      <span className="ml-auto shrink-0 text-xs text-text-faint">{a.version}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  Upload cuts, boards, and stills. Every version is kept.
+                </p>
+              )}
+            </HubCard>
+          </div>
+
+          <BandLabel hue="pink" label="Review" />
+          <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <HubCard
+              href={`/projects/${project.id}/assets`}
+              hue="pink"
+              title="Review & approvals"
+              sub={`${pendingCount} pending · ${changesCount} changes`}
+              footer={
+                reviewLinkCount > 0
+                  ? `${reviewLinkCount} active review ${reviewLinkCount === 1 ? "link" : "links"}`
+                  : "Share an asset to review"
+              }
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11l3 3 8-8" />
+                  <path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+                </svg>
+              }
+            >
+              {recentReview.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {recentReview.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[13px]">
+                      <span
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white"
+                        style={{ backgroundColor: `var(--h-${r.hue})` }}
+                      >
+                        {initials(r.name)}
+                      </span>
+                      <span className="truncate text-text-muted">
+                        <span className="font-semibold text-text">{r.name}</span> {r.text}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  No review activity yet. Share an asset to collect sign-off.
+                </p>
+              )}
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/communication`}
+              hue="cyan"
+              title="Communication"
+              sub="Gmail · Slack · Chat"
+              footer={
+                commsTotal > 0
+                  ? `${commsTotal} linked ${commsTotal === 1 ? "conversation" : "conversations"}`
+                  : "Link a conversation"
+              }
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              }
+            >
+              {commsTotal > 0 ? (
+                <div className="flex flex-wrap gap-2 text-[13px]">
+                  {emailCount > 0 && <StatusTag hue="red" dot={false}>{emailCount} email</StatusTag>}
+                  {slackCount > 0 && <StatusTag hue="purple" dot={false}>{slackCount} Slack</StatusTag>}
+                  {chatCount > 0 && <StatusTag hue="green" dot={false}>{chatCount} Chat</StatusTag>}
+                </div>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  Link Gmail threads, Slack channels, or Chat spaces to this job.
+                </p>
+              )}
+            </HubCard>
+          </div>
+
+          <BandLabel hue="green" label="Produce" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <HubCard
+              href={`/projects/${project.id}/production?tab=board`}
+              hue="green"
+              title="Shot board"
+              sub={`${shotCount} shots · ${groupIds.length} groups`}
+              footer={shotCount > 0 ? "Present & export" : "Build the board"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M3 9h18M9 3v18" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                {shotCount > 0
+                  ? "Shots, groups, and a client-ready cover."
+                  : "Lay out the shots for the shoot."}
+              </p>
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/production?tab=callsheet`}
+              hue="green"
+              title="Call sheet"
+              sub={callSheet?.shoot_date ? longDate(callSheet.shoot_date) : "Not created"}
+              footer={callSheet ? "View & export PDF" : "Create call sheet"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+              }
+            >
+              {callSheet ? (
+                <div className="flex flex-col gap-1 text-[13px] text-text-muted">
+                  <span>
+                    <span className="font-bold text-text">{callSheet.crew_call || callSheet.call_time || "—"}</span>{" "}
+                    crew call
+                  </span>
+                  {callSheet.location && <span className="truncate">📍 {callSheet.location}</span>}
+                </div>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  Industry-standard call sheet with PDF export.
+                </p>
+              )}
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/production?tab=budget`}
+              hue="indigo"
+              title="Budget"
+              sub="Bid vs actual"
+              footer={
+                budgetEstimated > 0
+                  ? `${money(budgetEstimated - budgetActual)} remaining`
+                  : "Start the budget"
+              }
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+              }
+            >
+              {budgetEstimated > 0 ? (
+                <div>
+                  <div className="mb-2 h-2.5 overflow-hidden rounded-pill bg-surface-2">
+                    <div
+                      className="h-full rounded-pill"
+                      style={{
+                        width: `${Math.min(100, budgetPct ?? 0)}%`,
+                        background: "linear-gradient(90deg, var(--h-green), var(--h-cyan))",
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[13px]">
+                    <span className="font-bold tabular-nums">{money(budgetActual)} <span className="font-medium text-text-faint">actual</span></span>
+                    <span className="font-bold tabular-nums">{money(budgetEstimated)} <span className="font-medium text-text-faint">bid</span></span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  Track estimate against actual spend.
+                </p>
+              )}
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/production?tab=delivery`}
+              hue="green"
+              title="Delivery & billing"
+              sub={`${deliveredCount} of ${deliverTotal} delivered`}
+              footer={deliverTotal > 0 ? "Manage delivery" : "Add deliverables"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7h13v10H3zM16 10h3l2 3v4h-5" />
+                  <circle cx="7" cy="18" r="2" />
+                  <circle cx="18" cy="18" r="2" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                {deliverTotal > 0
+                  ? "Final deliverables and billing status."
+                  : "List the final deliverables and invoice."}
+              </p>
+            </HubCard>
+          </div>
+        </div>
+
+        {/* Right rail: what needs you + activity, always present */}
+        <div className="space-y-6 lg:col-span-1">
+          <ProjectAttention items={attention} />
           <Card className="p-5">
             <h2 className="mb-4 font-display text-base font-bold">
               Activity &amp; notes
@@ -299,168 +624,8 @@ export default async function ProjectDetailPage({
               currentUserId={ctx.userId}
             />
           </Card>
-        }
-        panels={{
-          overview: (
-            <div className="space-y-6">
-              {/* Needs attention (stalled sign-offs / unactioned revisions) */}
-              <ProjectAttention items={attention} />
-
-              {/* AI project summary */}
-              <Card className="p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <h2 className="font-display text-base font-bold">
-                    Project summary
-                  </h2>
-                  <span
-                    className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
-                    style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
-                  >
-                    AI
-                  </span>
-                </div>
-                <ProjectSummary
-                  projectId={project.id}
-                  connected={aiConfigured()}
-                  initialContent={summary?.content ?? null}
-                  initialAt={summary?.created_at ?? null}
-                />
-              </Card>
-
-              {/* AI client update */}
-              <Card className="p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <h2 className="font-display text-base font-bold">Client update</h2>
-                  <span
-                    className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
-                    style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
-                  >
-                    AI
-                  </span>
-                </div>
-                <ClientUpdate
-                  projectId={project.id}
-                  connected={aiConfigured()}
-                  destinations={updateDestinations}
-                />
-              </Card>
-            </div>
-          ),
-          brief: (
-            <Card className="p-5">
-              <h2 className="mb-1 font-display text-base font-bold">Brief</h2>
-              <p className="mb-3 text-xs text-text-faint">
-                The creative direction for this job. Everything downstream
-                references it.
-              </p>
-              <BriefEditor
-                projectId={project.id}
-                initialContent={brief?.content ?? ""}
-              />
-            </Card>
-          ),
-          assets: (
-            <Card className="p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display text-base font-bold">Assets</h2>
-                <div className="flex items-center gap-2">
-                  {figmaAccount && <FigmaImportButton projectId={project.id} />}
-                  {driveConnected(emailAccount?.scope) && (
-                    <DriveImportButton projectId={project.id} />
-                  )}
-                  <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
-                </div>
-              </div>
-              {assets.length === 0 ? (
-                <EmptyState
-                  hue="purple"
-                  icon={
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <circle cx="9" cy="9" r="2" />
-                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                    </svg>
-                  }
-                  title="No assets yet"
-                  description="Assets are the deliverables for this job: cuts, boards, stills, references. Each keeps its full version history so nothing gets lost."
-                  action={
-                    <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
-                  }
-                  steps={[
-                    {
-                      title: "Add or import",
-                      text: "Upload a file, or pull it straight from Drive or Figma.",
-                    },
-                    {
-                      title: "Version as you go",
-                      text: "Upload a new version any time; the history stays intact.",
-                    },
-                    {
-                      title: "Send for review",
-                      text: "Share a link so clients can comment and approve.",
-                    },
-                  ]}
-                />
-              ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {assets.map((a) => (
-                    <AssetCard
-                      key={a.id}
-                      asset={a}
-                      projectId={project.id}
-                      studioId={ctx.studio.id}
-                      currentUserId={ctx.userId}
-                      reviewLink={reviewLinkByAsset.get(a.id) ?? null}
-                    />
-                  ))}
-                </div>
-              )}
-            </Card>
-          ),
-          comms: (
-            <div className="space-y-6">
-              {/* Email / communication */}
-              <Card className="p-5">
-                <h2 className="mb-4 font-display text-base font-bold">Email</h2>
-                <EmailPanel
-                  ownerType="project"
-                  ownerId={project.id}
-                  projectId={project.id}
-                  connected={Boolean(emailAccount)}
-                  canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
-                  defaultQuery={clientName ?? ""}
-                  threads={emailThreads ?? []}
-                />
-              </Card>
-
-              {/* Slack */}
-              <Card className="p-5">
-                <h2 className="mb-4 font-display text-base font-bold">Slack</h2>
-                <SlackPanel
-                  ownerType="project"
-                  ownerId={project.id}
-                  projectId={project.id}
-                  connected={Boolean(slackAccount)}
-                  canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
-                  channels={slackChannels ?? []}
-                />
-              </Card>
-
-              {/* Google Chat */}
-              <Card className="p-5">
-                <h2 className="mb-4 font-display text-base font-bold">Google Chat</h2>
-                <ChatPanel
-                  ownerType="project"
-                  ownerId={project.id}
-                  connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
-                  canSend={chatCanSend(emailAccount?.scope)}
-                  spaces={chatSpaces ?? []}
-                />
-              </Card>
-            </div>
-          ),
-        }}
-      />
+        </div>
+      </div>
     </div>
   );
 }
