@@ -30,11 +30,17 @@ export default async function BriefPage({
         projectTitle={project.title}
         section="Brief"
         hue="blue"
+        subtitle="The creative direction for this job."
+        icon={
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+            <path d="M14 4v5h5M8 13h8M8 17h6" />
+          </svg>
+        }
       />
       <Card className="p-5">
         <p className="mb-3 text-sm text-text-muted">
-          The creative direction for this job. Everything downstream (assets,
-          shots, approvals) references it.
+          Everything downstream (assets, shots, approvals) references it.
         </p>
         <BriefEditor
           projectId={project.id}
