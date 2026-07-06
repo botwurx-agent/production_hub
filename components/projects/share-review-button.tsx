@@ -29,12 +29,12 @@ export function ShareReviewButton({
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
 
-  const url =
-    token && typeof window !== "undefined"
-      ? `${window.location.origin}/r/${token}`
-      : token
-        ? `/r/${token}`
-        : "";
+  // Prefer the canonical public origin so links never point at a protected
+  // preview deployment; fall back to the current origin.
+  const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
+  const origin =
+    siteOrigin || (typeof window !== "undefined" ? window.location.origin : "");
+  const url = token ? `${origin}/r/${token}` : "";
 
   function ensureLink() {
     setError(null);
