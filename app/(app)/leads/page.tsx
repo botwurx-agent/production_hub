@@ -31,10 +31,25 @@ export default async function LeadsPage() {
       />
       {rows.length === 0 ? (
         <EmptyState
+          hue="pink"
           icon={<LeadsIcon className="h-7 w-7" />}
           title="No leads yet"
-          description="Capture a prospect, track its stage, and convert it to a client when you win the work."
+          description="Leads are prospects at the front of the pipeline. Track them through your stages and convert the ones you win into clients."
           action={<NewLeadButton />}
+          steps={[
+            {
+              title: "Capture",
+              text: "Add a prospect with its source and a note.",
+            },
+            {
+              title: "Qualify",
+              text: "Move it along the pipeline as it heats up.",
+            },
+            {
+              title: "Convert",
+              text: "Turn a won lead into a client and start a project.",
+            },
+          ]}
         />
       ) : (
         <LeadsView leads={rows} followUps={followUps} />

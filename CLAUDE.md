@@ -187,6 +187,17 @@ implemented (out of strict order, driven by the operator's real needs).
 - Studio logo upload (Settings → Branding); shows on sidebar, call sheet, shot
   board cover.
 - Modals render via portal to document.body (avoids fixed-in-transform bugs).
+- Notifications layer: studio-scoped `notifications` table (0024), bell dropdown
+  in the topbar (unread badge, poll, mark read/all, needs-you row); client
+  review actions generate notifications (lib/notifications.ts).
+- Project workspace is phase-organized (StudioBinder-inspired, our quiet visual
+  language): components/projects/project-workspace.tsx renders a phase nav
+  (Overview / Brief / Assets / Communication in-page tabs + Production as a link
+  to /production) with an always-present Activity rail. Per-phase color is quiet
+  wayfinding (a small hue dot), kept distinct from status color. See
+  docs/competitor-research/assessment.md for the rationale + backlog.
+- EmptyState (components/ui/card.tsx) supports rich empty states with an optional
+  "here's how it works" 3-step row + hue; used on Projects/Leads/project Assets.
 
 ### Environment variables (set in Vercel; needed to reproduce in a new env)
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)

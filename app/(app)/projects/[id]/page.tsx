@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { Card } from "@/components/ui/card";
+import { Card, EmptyState } from "@/components/ui/card";
+import { ProjectWorkspace } from "@/components/projects/project-workspace";
 import { StatusMenu } from "@/components/projects/status-menu";
 import { BriefEditor } from "@/components/projects/brief-editor";
 import { AssetCard } from "@/components/projects/asset-card";
@@ -267,147 +268,27 @@ export default async function ProjectDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            href={`/projects/${project.id}/production`}
-            className="inline-flex items-center gap-1.5 rounded-[11px] border border-border bg-surface px-3 py-2 text-sm font-semibold text-text-muted shadow-sm transition hover:bg-surface-2 hover:text-text"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m4 4 12 6-12 6z" />
-              <path d="M20 4v12" />
-            </svg>
-            Production
-          </Link>
           <StatusMenu projectId={project.id} status={project.status} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          {/* Needs attention (stalled sign-offs / unactioned revisions) */}
-          <ProjectAttention items={attention} />
-
-          {/* AI project summary */}
-          <Card className="p-5">
-            <div className="mb-4 flex items-center gap-2">
-              <h2 className="font-display text-base font-bold">
-                Project summary
-              </h2>
-              <span
-                className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
-                style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
-              >
-                AI
-              </span>
-            </div>
-            <ProjectSummary
-              projectId={project.id}
-              connected={aiConfigured()}
-              initialContent={summary?.content ?? null}
-              initialAt={summary?.created_at ?? null}
-            />
-          </Card>
-
-          {/* Brief */}
-          <Card className="p-5">
-            <h2 className="mb-3 font-display text-base font-bold">Brief</h2>
-            <BriefEditor
-              projectId={project.id}
-              initialContent={brief?.content ?? ""}
-            />
-          </Card>
-
-          {/* Assets */}
-          <Card className="p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-base font-bold">Assets</h2>
-              <div className="flex items-center gap-2">
-                {figmaAccount && <FigmaImportButton projectId={project.id} />}
-                {driveConnected(emailAccount?.scope) && (
-                  <DriveImportButton projectId={project.id} />
-                )}
-                <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
-              </div>
-            </div>
-            {assets.length === 0 ? (
-              <p className="rounded-[12px] border border-dashed border-border py-10 text-center text-sm text-text-faint">
-                No assets yet. Add your first deliverable and its versions.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {assets.map((a) => (
-                  <AssetCard
-                    key={a.id}
-                    asset={a}
-                    projectId={project.id}
-                    studioId={ctx.studio.id}
-                    currentUserId={ctx.userId}
-                    reviewLink={reviewLinkByAsset.get(a.id) ?? null}
-                  />
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* AI client update */}
-          <Card className="p-5">
-            <div className="mb-4 flex items-center gap-2">
-              <h2 className="font-display text-base font-bold">Client update</h2>
-              <span
-                className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
-                style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
-              >
-                AI
-              </span>
-            </div>
-            <ClientUpdate
-              projectId={project.id}
-              connected={aiConfigured()}
-              destinations={updateDestinations}
-            />
-          </Card>
-
-          {/* Email / communication */}
-          <Card className="p-5">
-            <h2 className="mb-4 font-display text-base font-bold">Email</h2>
-            <EmailPanel
-              ownerType="project"
-              ownerId={project.id}
-              projectId={project.id}
-              connected={Boolean(emailAccount)}
-              canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
-              defaultQuery={clientName ?? ""}
-              threads={emailThreads ?? []}
-            />
-          </Card>
-
-          {/* Slack */}
-          <Card className="p-5">
-            <h2 className="mb-4 font-display text-base font-bold">Slack</h2>
-            <SlackPanel
-              ownerType="project"
-              ownerId={project.id}
-              projectId={project.id}
-              connected={Boolean(slackAccount)}
-              canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
-              channels={slackChannels ?? []}
-            />
-          </Card>
-
-          {/* Google Chat */}
-          <Card className="p-5">
-            <h2 className="mb-4 font-display text-base font-bold">Google Chat</h2>
-            <ChatPanel
-              ownerType="project"
-              ownerId={project.id}
-              connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
-              canSend={chatCanSend(emailAccount?.scope)}
-              spaces={chatSpaces ?? []}
-            />
-          </Card>
-        </div>
-
-        {/* Activity */}
-        <div className="lg:col-span-1">
+      {/* Phase-organized workspace: the job's lifecycle, left to right.
+          Overview -> Brief -> Assets -> Communication, with Production as a
+          link into the deeper ops workspace, and Activity always present. */}
+      <ProjectWorkspace
+        phases={[
+          { key: "overview", label: "Overview", hue: "indigo" },
+          { key: "brief", label: "Brief", hue: "blue" },
+          { key: "assets", label: "Assets", hue: "purple" },
+          { key: "comms", label: "Communication", hue: "cyan" },
+          {
+            key: "production",
+            label: "Production",
+            hue: "green",
+            href: `/projects/${project.id}/production`,
+          },
+        ]}
+        rail={
           <Card className="p-5">
             <h2 className="mb-4 font-display text-base font-bold">
               Activity &amp; notes
@@ -418,8 +299,168 @@ export default async function ProjectDetailPage({
               currentUserId={ctx.userId}
             />
           </Card>
-        </div>
-      </div>
+        }
+        panels={{
+          overview: (
+            <div className="space-y-6">
+              {/* Needs attention (stalled sign-offs / unactioned revisions) */}
+              <ProjectAttention items={attention} />
+
+              {/* AI project summary */}
+              <Card className="p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <h2 className="font-display text-base font-bold">
+                    Project summary
+                  </h2>
+                  <span
+                    className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
+                    style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+                  >
+                    AI
+                  </span>
+                </div>
+                <ProjectSummary
+                  projectId={project.id}
+                  connected={aiConfigured()}
+                  initialContent={summary?.content ?? null}
+                  initialAt={summary?.created_at ?? null}
+                />
+              </Card>
+
+              {/* AI client update */}
+              <Card className="p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <h2 className="font-display text-base font-bold">Client update</h2>
+                  <span
+                    className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
+                    style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+                  >
+                    AI
+                  </span>
+                </div>
+                <ClientUpdate
+                  projectId={project.id}
+                  connected={aiConfigured()}
+                  destinations={updateDestinations}
+                />
+              </Card>
+            </div>
+          ),
+          brief: (
+            <Card className="p-5">
+              <h2 className="mb-1 font-display text-base font-bold">Brief</h2>
+              <p className="mb-3 text-xs text-text-faint">
+                The creative direction for this job. Everything downstream
+                references it.
+              </p>
+              <BriefEditor
+                projectId={project.id}
+                initialContent={brief?.content ?? ""}
+              />
+            </Card>
+          ),
+          assets: (
+            <Card className="p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-display text-base font-bold">Assets</h2>
+                <div className="flex items-center gap-2">
+                  {figmaAccount && <FigmaImportButton projectId={project.id} />}
+                  {driveConnected(emailAccount?.scope) && (
+                    <DriveImportButton projectId={project.id} />
+                  )}
+                  <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
+                </div>
+              </div>
+              {assets.length === 0 ? (
+                <EmptyState
+                  hue="purple"
+                  icon={
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="9" cy="9" r="2" />
+                      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                    </svg>
+                  }
+                  title="No assets yet"
+                  description="Assets are the deliverables for this job: cuts, boards, stills, references. Each keeps its full version history so nothing gets lost."
+                  action={
+                    <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
+                  }
+                  steps={[
+                    {
+                      title: "Add or import",
+                      text: "Upload a file, or pull it straight from Drive or Figma.",
+                    },
+                    {
+                      title: "Version as you go",
+                      text: "Upload a new version any time; the history stays intact.",
+                    },
+                    {
+                      title: "Send for review",
+                      text: "Share a link so clients can comment and approve.",
+                    },
+                  ]}
+                />
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {assets.map((a) => (
+                    <AssetCard
+                      key={a.id}
+                      asset={a}
+                      projectId={project.id}
+                      studioId={ctx.studio.id}
+                      currentUserId={ctx.userId}
+                      reviewLink={reviewLinkByAsset.get(a.id) ?? null}
+                    />
+                  ))}
+                </div>
+              )}
+            </Card>
+          ),
+          comms: (
+            <div className="space-y-6">
+              {/* Email / communication */}
+              <Card className="p-5">
+                <h2 className="mb-4 font-display text-base font-bold">Email</h2>
+                <EmailPanel
+                  ownerType="project"
+                  ownerId={project.id}
+                  projectId={project.id}
+                  connected={Boolean(emailAccount)}
+                  canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
+                  defaultQuery={clientName ?? ""}
+                  threads={emailThreads ?? []}
+                />
+              </Card>
+
+              {/* Slack */}
+              <Card className="p-5">
+                <h2 className="mb-4 font-display text-base font-bold">Slack</h2>
+                <SlackPanel
+                  ownerType="project"
+                  ownerId={project.id}
+                  projectId={project.id}
+                  connected={Boolean(slackAccount)}
+                  canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
+                  channels={slackChannels ?? []}
+                />
+              </Card>
+
+              {/* Google Chat */}
+              <Card className="p-5">
+                <h2 className="mb-4 font-display text-base font-bold">Google Chat</h2>
+                <ChatPanel
+                  ownerType="project"
+                  ownerId={project.id}
+                  connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
+                  canSend={chatCanSend(emailAccount?.scope)}
+                  spaces={chatSpaces ?? []}
+                />
+              </Card>
+            </div>
+          ),
+        }}
+      />
     </div>
   );
 }

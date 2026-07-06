@@ -36,10 +36,25 @@ export default async function ProjectsPage() {
       <NeedsYou items={outstanding} />
       {rows.length === 0 ? (
         <EmptyState
+          hue="indigo"
           icon={<ProjectsIcon className="h-7 w-7" />}
           title="No projects yet"
-          description="Start your first job to see it on the board, organized by stage."
+          description="A project is a single job or production. It holds the brief, assets, approvals, and everything else in one place."
           action={<NewProjectButton clients={clientOptions} />}
+          steps={[
+            {
+              title: "Start a job",
+              text: "Create a project and tie it to a client.",
+            },
+            {
+              title: "Work through stages",
+              text: "Move it from brief to review to shooting to delivered.",
+            },
+            {
+              title: "See it on the board",
+              text: "Every job, color-tagged by status, at a glance.",
+            },
+          ]}
         />
       ) : (
         <ProjectsView projects={rows} />
