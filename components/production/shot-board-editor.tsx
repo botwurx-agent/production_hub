@@ -5,9 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   saveBoard,
-  addFlavor,
-  updateFlavor,
-  deleteFlavor,
   addGroup,
   updateGroup,
   deleteGroup,
@@ -20,11 +17,7 @@ import {
   setCardAsset,
   clearCardAsset,
 } from "@/app/(app)/projects/[id]/production/board-actions";
-import type {
-  ShotBoard,
-  ShotBoardFlavor,
-  ShotGroup,
-} from "@/lib/database.types";
+import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 export type CardView = {
   id: string;
@@ -47,7 +40,6 @@ export type CardView = {
 
 export type PickableAsset = { id: string; name: string; signedUrl: string | null };
 
-const HUES = ["green", "pink", "red", "orange", "yellow", "cyan", "blue", "purple", "indigo"];
 const field =
   "w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong";
 const cell =
@@ -101,7 +93,6 @@ export function ShotBoardEditor({
   projectId,
   projectTitle,
   board,
-  flavors,
   groups,
   cards,
   assets,
@@ -109,7 +100,6 @@ export function ShotBoardEditor({
   projectId: string;
   projectTitle: string;
   board: ShotBoard | null;
-  flavors: ShotBoardFlavor[];
   groups: ShotGroup[];
   cards: CardView[];
   assets: PickableAsset[];
@@ -197,7 +187,7 @@ export function ShotBoardEditor({
           >
             <path d="m9 18 6-6-6-6" />
           </svg>
-          Cover &amp; palette
+          Cover
         </button>
         <Link
           href={`/projects/${projectId}/production/board`}
@@ -238,61 +228,6 @@ export function ShotBoardEditor({
                 />
               </Labeled>
             ))}
-          </div>
-
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
-                Flavor palette
-              </div>
-              <button
-                onClick={() => act(() => addFlavor(projectId))}
-                disabled={busy}
-                className="text-xs font-semibold text-accent hover:underline"
-              >
-                + Flavor
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {flavors.map((fl) => (
-                <div
-                  key={fl.id}
-                  className="flex items-center gap-1.5 rounded-[10px] border border-border p-1.5"
-                >
-                  <span
-                    className="h-6 w-6 shrink-0 rounded-[7px]"
-                    style={{
-                      background: `linear-gradient(135deg, var(--h-${fl.hue}) 0%, var(--h-${fl.hue}-bg) 130%)`,
-                    }}
-                  />
-                  <input
-                    defaultValue={fl.name}
-                    onBlur={(e) => updateFlavor(projectId, fl.id, { name: e.target.value })}
-                    placeholder="Flavor"
-                    className="w-24 rounded-[6px] border border-transparent bg-transparent px-1 py-0.5 text-xs text-text outline-none focus:border-border"
-                  />
-                  <select
-                    defaultValue={fl.hue}
-                    onChange={(e) => updateFlavor(projectId, fl.id, { hue: e.target.value })}
-                    className="rounded-[6px] border border-border bg-surface px-1 py-0.5 text-[11px]"
-                  >
-                    {HUES.map((h) => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => act(() => deleteFlavor(projectId, fl.id))}
-                    className="text-text-faint hover:text-red"
-                    aria-label="Remove flavor"
-                  >
-                    &times;
-                  </button>
-                </div>
-              ))}
-              {flavors.length === 0 && (
-                <span className="text-xs text-text-faint">No flavors yet.</span>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -484,7 +419,6 @@ export function ShotBoardEditor({
                     projectId={projectId}
                     card={c}
                     number={i + 1}
-                    flavors={flavors}
                     assets={assets}
                     busy={busy}
                     selected={selected.has(c.id)}
@@ -514,7 +448,6 @@ function ShotRow({
   projectId,
   card,
   number,
-  flavors,
   assets,
   busy,
   selected,
@@ -525,7 +458,6 @@ function ShotRow({
   projectId: string;
   card: CardView;
   number: number;
-  flavors: ShotBoardFlavor[];
   assets: PickableAsset[];
   busy: boolean;
   selected: boolean;
@@ -540,8 +472,8 @@ function ShotRow({
   const [size, setSize] = useState(card.shot_size ?? "");
   const [stype, setSType] = useState(card.shot_type ?? "");
   const [move, setMove] = useState(card.movement ?? "");
-  // Row identity color: the flavor if set, else a calm default.
-  const rowHue = card.flavor_name && card.flavor_hue ? card.flavor_hue : "indigo";
+  // Calm identity color for the row accent + number badge.
+  const rowHue = "indigo";
 
   function upload(files: FileList | null) {
     if (!files?.[0]) return;
@@ -723,16 +655,6 @@ function ShotRow({
             placeholder="Day"
             className={`${cell} w-20 border-border`}
           />
-          <select
-            defaultValue={card.flavor_name ?? ""}
-            onChange={(e) => updateCard(projectId, card.id, { flavor_name: e.target.value })}
-            className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs text-text-muted"
-          >
-            <option value="">Flavor…</option>
-            {flavors.map((fl) => (
-              <option key={fl.id} value={fl.name}>{fl.name}</option>
-            ))}
-          </select>
           <button
             onClick={() => onStructural(() => deleteCard(projectId, card.id))}
             className="ml-auto text-text-faint hover:text-red"

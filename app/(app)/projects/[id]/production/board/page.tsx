@@ -7,7 +7,6 @@ import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { signedLogoUrl } from "@/lib/branding";
 import type {
   ShotBoard,
-  ShotBoardFlavor,
   ShotGroup,
   ShotCard,
 } from "@/lib/database.types";
@@ -58,16 +57,6 @@ export default async function ShotBoardViewPage({
       .order("position", { ascending: true }),
   ]);
   const b = board as ShotBoard | null;
-
-  let flavors: ShotBoardFlavor[] = [];
-  if (b) {
-    const { data } = await supabase
-      .from("shot_board_flavors")
-      .select("*")
-      .eq("board_id", b.id)
-      .order("position", { ascending: true });
-    flavors = (data ?? []) as ShotBoardFlavor[];
-  }
 
   const groupList = (groups ?? []) as ShotGroup[];
   const groupIds = groupList.map((g) => g.id);
@@ -196,25 +185,6 @@ export default async function ShotBoardViewPage({
               <p className="mt-3 max-w-md text-base text-text-muted">{b.subtitle}</p>
             )}
           </div>
-
-          {flavors.length > 0 && (
-            <div className="flex flex-wrap items-start gap-3 md:justify-end">
-              {flavors.map((fl) => (
-                <div
-                  key={fl.id}
-                  style={{
-                    ...printExact,
-                    background: `linear-gradient(150deg, var(--h-${fl.hue}) 0%, var(--h-${fl.hue}-bg) 130%)`,
-                  }}
-                  className="flex h-24 w-24 items-end rounded-[16px] p-2"
-                >
-                  <span className="text-[11px] font-extrabold uppercase leading-tight text-black/80">
-                    {fl.name || "Flavor"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         <div className="mt-8 grid grid-cols-2 gap-5 border-t border-border-strong pt-5 md:grid-cols-4">
@@ -316,20 +286,6 @@ export default async function ShotBoardViewPage({
                         </span>
                       </div>
                       <div className="space-y-2 p-3">
-                        {c.flavor_name?.trim() && (
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              style={{
-                                ...printExact,
-                                backgroundColor: `var(--h-${c.flavor_hue || "green"})`,
-                              }}
-                              className="h-2.5 w-2.5 rounded-full"
-                            />
-                            <span className="text-xs font-bold uppercase tracking-wide text-text">
-                              {c.flavor_name}
-                            </span>
-                          </div>
-                        )}
                         {c.description?.trim() && (
                           <p className="text-sm text-text">{c.description}</p>
                         )}

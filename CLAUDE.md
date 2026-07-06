@@ -184,11 +184,14 @@ implemented (out of strict order, driven by the operator's real needs).
   RIGHT = the active list's shots as ROWS. Each row: select checkbox + asset
   selector (pick a project asset via setCardAsset, or upload) + Description +
   Shot Size + Shot Type + Camera Movement (datalist comboboxes, free text ok) +
-  compact code/day/flavor. Selecting rows shows a toolbar: Duplicate / Move to
+  compact code/day. Selecting rows shows a toolbar: Duplicate / Move to
   (another list) / Delete + select-all (duplicateCard, moveCard, deleteCard;
-  bulk = client loop). Cover + flavor palette live in a collapsible "Cover &
-  palette". shot_cards gained shot_size/shot_type/movement/asset_id (migration
-  0025). Present/export view still at /production/board. Hub card links here.
+  bulk = client loop). Cover (client/agency/director/etc.) lives in a collapsible
+  "Cover". New lists seed 3 empty shots. shot_cards gained
+  shot_size/shot_type/movement/asset_id (migration 0025). The flavor feature
+  (palette + per-row tag) was removed from the UI; flavor_name/flavor_hue columns
+  remain unused. Present/export view still at /production/board (list selector:
+  all or one). Hub card links here.
 - Production-ops (Phase 8): per-project Production workspace
   (/projects/[id]/production) with tabs: Call sheet (industry layout,
   PDF export at /production/callsheet), Budget (bid vs actual), Gear & crew,

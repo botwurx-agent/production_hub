@@ -8,11 +8,7 @@ import {
   type PickableAsset,
 } from "@/components/production/shot-board-editor";
 import { loadProjectAssets } from "@/lib/project-data";
-import type {
-  ShotBoard,
-  ShotBoardFlavor,
-  ShotGroup,
-} from "@/lib/database.types";
+import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
 
@@ -39,16 +35,6 @@ export default async function ShotListPage({
       .eq("project_id", params.id)
       .order("position", { ascending: true }),
   ]);
-
-  let flavors: ShotBoardFlavor[] = [];
-  if (board) {
-    const { data } = await supabase
-      .from("shot_board_flavors")
-      .select("*")
-      .eq("board_id", (board as ShotBoard).id)
-      .order("position", { ascending: true });
-    flavors = (data ?? []) as ShotBoardFlavor[];
-  }
 
   const groupIds = (groups ?? []).map((g) => g.id);
   let cards: CardView[] = [];
@@ -115,7 +101,6 @@ export default async function ShotListPage({
         projectId={project.id}
         projectTitle={project.title}
         board={(board as ShotBoard | null) ?? null}
-        flavors={flavors}
         groups={(groups ?? []) as ShotGroup[]}
         cards={cards}
         assets={pickable}
