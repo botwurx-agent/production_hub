@@ -223,6 +223,25 @@ implemented (out of strict order, driven by the operator's real needs).
   loadDocSurface (lib/review-links.ts, client-agnostic, used by both the service
   portal and the RLS internal path) + lib/doc-review-data.ts
   (loadDocReviewsForProject summary, loadDocReviewDetail for the modal).
+- Produce band, real pages (were "Soon" stubs):
+  - Project contacts (/projects/[id]/contacts): one roster per job. contacts
+    gained project_id + company (migration 0033). "This production" = contacts
+    with project_id set (crew/talent/vendors; add/edit/delete via
+    contact-actions.ts addProjectContact/updateProjectContact/
+    deleteProjectContact); "Client & agency" = contacts of the linked client
+    (read-only here, managed on the client). components/projects/
+    project-contacts.tsx (roster + ContactModal). Hub card shows roster count.
+  - Project calendar (/projects/[id]/calendar): month + agenda, NO Gantt
+    (deliberate: a task-level Gantt is overkill/rots for short boutique jobs;
+    the useful timeline is a future STUDIO-wide slate view, one lane per
+    project). Shows the project's shoot_date/due_date as read-only milestones
+    plus project_events (migration 0034: title/date/end_date/kind/notes; kinds
+    prepro/shoot/review/delivery/other, colored) which the producer adds/edits/
+    deletes. components/projects/project-calendar.tsx + calendar-actions.ts
+    (addProjectEvent/updateProjectEvent/deleteProjectEvent). Multi-day events
+    expand across the range in month view. Not wired to Google Calendar (the
+    dashboard calendar covers account-wide Google events); this is the
+    project's own dates. Hub card shows next date / event count.
 - AI layer (Phase 4): provider-agnostic (lib/ai.ts, Anthropic or OpenAI).
   Project summary, AI-drafted client update, AI-drafted lead outreach. Rules-
   based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
@@ -262,8 +281,8 @@ implemented (out of strict order, driven by the operator's real needs).
   /projects/[id]/page.tsx = hub (hero w/ gradient bar + status + lifecycle
   stepper, KPI row, AI summary, then module cards grouped in phase bands
   Plan (Brief, Assets) / Visualize (Storyboards, Shot list, Moodboard) /
-  Review (Review & approvals, Communication) / Produce (Project contacts +
-  Calendar = "Soon" stubs, Call sheet, Budget, Delivery & billing), + a right
+  Review (Review & approvals, Communication) / Produce (Project contacts,
+  Calendar, Call sheet, Budget, Delivery & billing), + a right
   rail of Needs-attention + Activity. Visualize's Storyboards + Moodboard are
   SEPARATE project pages, distinct from each other and from the studio-wide
   /boards. Storyboards (/projects/[id]/storyboards) = a STRUCTURED frame grid
@@ -315,7 +334,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0032: doc_reviews; 0031 =
+files in supabase/migrations (through 0034: project_events; 0033 =
+project_contacts; 0032 = doc_reviews; 0031 =
 doc_approval_targets; 0030 = generic_review_target). When adding a
 table/column, also hand-update lib/database.types.ts.
 

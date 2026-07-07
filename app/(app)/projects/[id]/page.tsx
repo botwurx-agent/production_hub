@@ -110,6 +110,8 @@ export default async function ProjectDetailPage({
     { data: callSheet },
     { data: budgetLines },
     { data: deliverables },
+    { data: rosterContacts },
+    { data: upcomingEvents },
   ] = await Promise.all([
     supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
     supabase
@@ -137,6 +139,12 @@ export default async function ProjectDetailPage({
       .select("estimated, actual")
       .eq("project_id", params.id),
     supabase.from("deliverables").select("status").eq("project_id", params.id),
+    supabase.from("contacts").select("id").eq("project_id", params.id),
+    supabase
+      .from("project_events")
+      .select("title, date")
+      .eq("project_id", params.id)
+      .order("date", { ascending: true }),
   ]);
 
   const [attention, { assets, reviewLinkByAsset }] = await Promise.all([
@@ -154,6 +162,11 @@ export default async function ProjectDetailPage({
       .in("group_id", groupIds);
     shotCount = count ?? 0;
   }
+
+  const rosterCount = (rosterContacts ?? []).length;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const eventCount = (upcomingEvents ?? []).length;
+  const nextEvent = (upcomingEvents ?? []).find((e) => e.date >= todayStr) ?? null;
 
   const clientName = (project.client as { name: string } | null)?.name ?? null;
   const status = project.status as ProjectStatus;
@@ -562,11 +575,11 @@ export default async function ProjectDetailPage({
           <BandLabel hue="green" label="Produce" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
-              href="#"
-              soon
+              href={`/projects/${project.id}/contacts`}
               hue="orange"
               title="Project contacts"
               sub="Crew, talent & clients"
+              footer={rosterCount > 0 ? "View roster" : "Add crew & talent"}
               icon={
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -576,16 +589,18 @@ export default async function ProjectDetailPage({
               }
             >
               <p className="text-[13px] text-text-muted">
-                One roster of crew, talent, and client contacts for the job.
+                {rosterCount > 0
+                  ? `${rosterCount} on this production, plus the client's contacts.`
+                  : "One roster of crew, talent, and client contacts for the job."}
               </p>
             </HubCard>
 
             <HubCard
-              href="#"
-              soon
+              href={`/projects/${project.id}/calendar`}
               hue="blue"
               title="Calendar"
               sub="Shoot & delivery dates"
+              footer={eventCount > 0 ? `${eventCount} scheduled` : "Add key dates"}
               icon={
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -593,9 +608,20 @@ export default async function ProjectDetailPage({
                 </svg>
               }
             >
-              <p className="text-[13px] text-text-muted">
-                A per-project timeline of shoot, review, and delivery dates.
-              </p>
+              {nextEvent ? (
+                <p className="text-[13px] text-text-muted">
+                  Next: <span className="font-semibold text-text">{nextEvent.title}</span>{" "}
+                  · {longDate(nextEvent.date)}
+                </p>
+              ) : project.shoot_date ? (
+                <p className="text-[13px] text-text-muted">
+                  Shoot <span className="font-semibold text-text">{longDate(project.shoot_date)}</span>
+                </p>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  Track shoot, review, and delivery dates for this job.
+                </p>
+              )}
             </HubCard>
 
             <HubCard

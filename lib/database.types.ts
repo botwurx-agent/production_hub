@@ -1060,6 +1060,8 @@ export type Database = {
       contacts: {
         Row: {
           client_id: string | null;
+          project_id: string | null;
+          company: string | null;
           created_at: string;
           email: string | null;
           id: string;
@@ -1072,6 +1074,8 @@ export type Database = {
         };
         Insert: {
           client_id?: string | null;
+          project_id?: string | null;
+          company?: string | null;
           created_at?: string;
           email?: string | null;
           id?: string;
@@ -1084,6 +1088,8 @@ export type Database = {
         };
         Update: {
           client_id?: string | null;
+          project_id?: string | null;
+          company?: string | null;
           created_at?: string;
           email?: string | null;
           id?: string;
@@ -1452,6 +1458,45 @@ export type Database = {
           },
         ];
       };
+      project_events: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          title: string;
+          date: string;
+          end_date: string | null;
+          kind: string;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          title: string;
+          date: string;
+          end_date?: string | null;
+          kind?: string;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          title?: string;
+          date?: string;
+          end_date?: string | null;
+          kind?: string;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       doc_reviews: {
         Row: {
           id: string;
@@ -1807,6 +1852,7 @@ export type Activity = Tables<"activity">;
 export type ReviewComment = Tables<"review_comments">;
 export type ReviewLink = Tables<"review_links">;
 export type DocReview = Tables<"doc_reviews">;
+export type ProjectEvent = Tables<"project_events">;
 export type Board = Tables<"boards">;
 export type BoardItem = Tables<"board_items">;
 export type Shot = Tables<"shots">;
