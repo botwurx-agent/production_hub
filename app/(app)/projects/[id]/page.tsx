@@ -625,7 +625,7 @@ export default async function ProjectDetailPage({
             </HubCard>
 
             <HubCard
-              href={`/projects/${project.id}/production?tab=callsheet`}
+              href={`/projects/${project.id}/callsheet`}
               hue="green"
               title="Call sheet"
               sub={callSheet?.shoot_date ? longDate(callSheet.shoot_date) : "Not created"}
@@ -653,7 +653,7 @@ export default async function ProjectDetailPage({
             </HubCard>
 
             <HubCard
-              href={`/projects/${project.id}/production?tab=budget`}
+              href={`/projects/${project.id}/budget`}
               hue="indigo"
               title="Budget"
               sub="Bid vs actual"
@@ -692,7 +692,24 @@ export default async function ProjectDetailPage({
             </HubCard>
 
             <HubCard
-              href={`/projects/${project.id}/production?tab=delivery`}
+              href={`/projects/${project.id}/gear`}
+              hue="amber"
+              title="Gear & crew"
+              sub="Equipment & crew needs"
+              footer="Plan gear & crew"
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                List camera, lighting, grip, and crew needs for the shoot.
+              </p>
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/delivery`}
               hue="green"
               title="Delivery & billing"
               sub={`${deliveredCount} of ${deliverTotal} delivered`}

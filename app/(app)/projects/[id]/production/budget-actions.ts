@@ -7,7 +7,8 @@ import { requireStudioContext } from "@/lib/studio";
 export type BudgetState = { error?: string } | null;
 
 function rp(projectId: string) {
-  revalidatePath(`/projects/${projectId}/production`);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}`);
 }
 
 export async function addBudgetLine(

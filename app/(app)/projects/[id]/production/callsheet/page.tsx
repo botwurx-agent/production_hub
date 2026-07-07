@@ -160,10 +160,10 @@ export default async function CallSheetPrintPage({
     <div className="mx-auto max-w-4xl">
       <div className="mb-4 flex items-center justify-between print:hidden">
         <Link
-          href={`/projects/${project.id}/production`}
+          href={`/projects/${project.id}/callsheet`}
           className="inline-flex items-center gap-1 text-sm font-semibold text-text-muted transition hover:text-text"
         >
-          <ChevronLeftIcon /> Back to production
+          <ChevronLeftIcon /> Back to call sheet
         </Link>
         <PrintButton />
       </div>

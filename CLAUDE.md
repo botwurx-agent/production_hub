@@ -271,11 +271,15 @@ implemented (out of strict order, driven by the operator's real needs).
   (palette + per-row tag) was removed from the UI; flavor_name/flavor_hue columns
   remain unused. Present/export view still at /production/board (list selector:
   all or one). Hub card links here.
-- Production-ops (Phase 8): per-project Production workspace
-  (/projects/[id]/production) with tabs: Call sheet (industry layout,
-  PDF export at /production/callsheet), Budget (bid vs actual), Gear & crew,
-  Delivery + billing. PDF export = print view with app chrome hidden and forced
-  light/exact colors.
+- Production-ops (Phase 8): four SEPARATE pages, each linked from the hub's
+  Produce band (no more shared tab strip): Call sheet (/projects/[id]/callsheet,
+  industry layout, PDF export still at /production/callsheet), Budget
+  (/projects/[id]/budget, bid vs actual), Gear & crew (/projects/[id]/gear),
+  Delivery + billing (/projects/[id]/delivery). Each page = ProjectSubhead +
+  the module component in a Card; server actions (actions.ts/budget-actions.ts/
+  ops-actions.ts) revalidate their own page. Old /projects/[id]/production (and
+  its ?tab= deep links) now redirect to the hub; production-tabs.tsx removed.
+  PDF export = print view with app chrome hidden and forced light/exact colors.
 - Studio logo upload (Settings → Branding); shows on sidebar, call sheet, shot
   board cover.
 - Modals render via portal to document.body (avoids fixed-in-transform bugs).
@@ -303,7 +307,7 @@ implemented (out of strict order, driven by the operator's real needs).
   module card shows LIVE data (brief snippet, asset thumbrows + status, review
   actions, comms counts, shot count, call sheet date, budget bid-vs-actual bar,
   delivery progress) and links to its own focused page:
-  /projects/[id]/{brief,assets,review,communication} and /production?tab=...
+  /projects/[id]/{brief,assets,review,communication,callsheet,budget,gear,delivery}
   (deep-link via initialTab). Assets vs Review split (operator's mental model):
   Assets = the full project LIBRARY (all files/refs, any status; upload/import);
   Review (/projects/[id]/review) = only assets in the review cycle (status

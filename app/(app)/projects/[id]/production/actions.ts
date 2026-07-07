@@ -7,7 +7,9 @@ import { requireStudioContext } from "@/lib/studio";
 export type ProdState = { error?: string } | null;
 
 function rp(projectId: string) {
-  revalidatePath(`/projects/${projectId}/production`);
+  revalidatePath(`/projects/${projectId}/callsheet`);
+  revalidatePath(`/projects/${projectId}/production/callsheet`);
+  revalidatePath(`/projects/${projectId}`);
 }
 
 // ---- Shots ------------------------------------------------------------------
