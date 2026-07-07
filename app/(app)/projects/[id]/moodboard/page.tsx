@@ -66,6 +66,7 @@ export default async function ProjectMoodboardPage({
         figmaConnected={Boolean(figmaAccount)}
         scope={{ kind: "moodboard", projectId: project.id }}
         noun="moodboard"
+        reviewKind="moodboard"
       />
     </div>
   );

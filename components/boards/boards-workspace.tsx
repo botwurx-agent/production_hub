@@ -20,6 +20,7 @@ import {
   addDriveItems,
   type BoardItemView,
 } from "@/app/(app)/boards/actions";
+import { ShareDocButton } from "@/components/review/share-doc-button";
 import type { Board } from "@/lib/database.types";
 
 type ProjectRef = { id: string; title: string };
@@ -31,6 +32,7 @@ export function BoardsWorkspace({
   figmaConnected,
   scope = { kind: "general" },
   noun = "board",
+  reviewKind,
 }: {
   initialBoards: Board[];
   projects: ProjectRef[];
@@ -39,6 +41,9 @@ export function BoardsWorkspace({
   // What new boards belong to: a project-scoped kind, or the global scratch.
   scope?: { kind?: string; projectId?: string };
   noun?: string;
+  // When set (with a project scope), the active board can be shared for client
+  // review as this doc kind (e.g. "moodboard").
+  reviewKind?: "moodboard" | "storyboard";
 }) {
   const [boards, setBoards] = useState<Board[]>(initialBoards);
   const [activeId, setActiveId] = useState<string | null>(
@@ -283,6 +288,13 @@ export function BoardsWorkspace({
                   </button>
                 ))}
               </div>
+              {reviewKind && scope.projectId && (
+                <ShareDocButton
+                  projectId={scope.projectId}
+                  kind={reviewKind}
+                  targetId={active.id}
+                />
+              )}
               <button className={toolBtn} onClick={() => setSettingsOpen(true)}>
                 Board settings
               </button>

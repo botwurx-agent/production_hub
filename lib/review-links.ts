@@ -27,7 +27,7 @@ export async function getValidLink(
 
 export type PortalComment = {
   id: string;
-  version_id: string;
+  version_id: string | null;
   body: string;
   created_at: string;
   author: string; // display name (studio name for team, reviewer_name for client)
@@ -67,6 +67,7 @@ export async function gatherReview(
   service: SupabaseClient<Database>,
   link: ReviewLink
 ): Promise<PortalData | null> {
+  if (!link.asset_id) return null;
   const [{ data: asset }, { data: studio }, { data: project }] =
     await Promise.all([
       service
@@ -153,6 +154,275 @@ export async function gatherReview(
       currentVersionId: asset.current_version_id,
     },
     versions,
+    comments,
+    myDecision,
+  };
+}
+
+// ---- Doc review (shot list / storyboard / moodboard) ------------------------
+// A link can target a whole doc surface instead of an asset version. The client
+// sees a read-only render of the live doc and drops the same numbered pins.
+
+export type DocKind = "shot_list" | "storyboard" | "moodboard";
+
+export function isDocKind(v: string | null | undefined): v is DocKind {
+  return v === "shot_list" || v === "storyboard" || v === "moodboard";
+}
+
+export type DocShotCard = {
+  id: string;
+  code: string | null;
+  day: string | null;
+  description: string | null;
+  shotSize: string | null;
+  shotType: string | null;
+  movement: string | null;
+  signedUrl: string | null;
+};
+export type DocShotGroup = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  cards: DocShotCard[];
+};
+export type DocFrame = {
+  id: string;
+  scene: string | null;
+  description: string | null;
+  sound: string | null;
+  notes: string | null;
+  signedUrl: string | null;
+};
+export type DocMoodItem = {
+  id: string;
+  kind: string;
+  name: string | null;
+  text: string | null;
+  hue: string | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z: number;
+  signedUrl: string | null;
+};
+
+export type DocSurface =
+  | {
+      kind: "shot_list";
+      cover: { title: string | null; subtitle: string | null } | null;
+      groups: DocShotGroup[];
+    }
+  | { kind: "storyboard"; frames: DocFrame[] }
+  | { kind: "moodboard"; items: DocMoodItem[] };
+
+export type DocReviewData = {
+  studioName: string;
+  projectTitle: string;
+  docTitle: string;
+  kind: DocKind;
+  surface: DocSurface;
+  comments: PortalComment[];
+  myDecision: ApprovalStatus | null;
+};
+
+const DOC_SIGNED_TTL = 60 * 60;
+
+async function signPaths(
+  service: SupabaseClient<Database>,
+  paths: string[]
+): Promise<Map<string, string>> {
+  const signed = new Map<string, string>();
+  const clean = paths.filter(Boolean);
+  if (clean.length === 0) return signed;
+  const { data } = await service.storage
+    .from("assets")
+    .createSignedUrls(clean, DOC_SIGNED_TTL);
+  for (const s of data ?? []) if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+  return signed;
+}
+
+// Assembles the read-only doc surface + its comments + this link's decision.
+// Runs with the service client, so it only reads rows tied to the link's
+// target_id / studio_id.
+export async function gatherDocReview(
+  service: SupabaseClient<Database>,
+  link: ReviewLink
+): Promise<DocReviewData | null> {
+  const kind = link.target_type;
+  const targetId = link.target_id;
+  if (!isDocKind(kind) || !targetId) return null;
+
+  const [{ data: studio }, { data: project }] = await Promise.all([
+    service.from("studios").select("name").eq("id", link.studio_id).maybeSingle(),
+    service.from("projects").select("title").eq("id", link.project_id).maybeSingle(),
+  ]);
+  const studioName = studio?.name ?? "The studio";
+  const projectTitle = project?.title ?? "Project";
+
+  let surface: DocSurface | null = null;
+  let docTitle = "";
+
+  if (kind === "shot_list") {
+    // target_id = project id; the whole shot board (all lists).
+    const [{ data: board }, { data: groups }] = await Promise.all([
+      service
+        .from("shot_boards")
+        .select("title, subtitle")
+        .eq("project_id", targetId)
+        .maybeSingle(),
+      service
+        .from("shot_groups")
+        .select("id, title, subtitle")
+        .eq("project_id", targetId)
+        .order("position", { ascending: true }),
+    ]);
+    const groupIds = (groups ?? []).map((g) => g.id);
+    let cardRows: Array<Record<string, unknown>> = [];
+    if (groupIds.length > 0) {
+      const { data } = await service
+        .from("shot_cards")
+        .select(
+          "id, group_id, position, code, day, description, shot_size, shot_type, movement, storage_path"
+        )
+        .in("group_id", groupIds)
+        .order("position", { ascending: true });
+      cardRows = (data ?? []) as Array<Record<string, unknown>>;
+    }
+    const signed = await signPaths(
+      service,
+      cardRows.map((c) => c.storage_path as string).filter(Boolean)
+    );
+    surface = {
+      kind: "shot_list",
+      cover: board ?? null,
+      groups: (groups ?? []).map((g) => ({
+        id: g.id,
+        title: g.title || "Untitled list",
+        subtitle: g.subtitle ?? null,
+        cards: cardRows
+          .filter((c) => c.group_id === g.id)
+          .map((c) => ({
+            id: c.id as string,
+            code: (c.code as string) ?? null,
+            day: (c.day as string) ?? null,
+            description: (c.description as string) ?? null,
+            shotSize: (c.shot_size as string) ?? null,
+            shotType: (c.shot_type as string) ?? null,
+            movement: (c.movement as string) ?? null,
+            signedUrl: c.storage_path
+              ? signed.get(c.storage_path as string) ?? null
+              : null,
+          })),
+      })),
+    };
+    docTitle = board?.title || "Shot list";
+  } else {
+    // storyboard | moodboard: target_id = boards.id
+    const { data: boardRow } = await service
+      .from("boards")
+      .select("id, name")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!boardRow) return null;
+    docTitle = boardRow.name || (kind === "storyboard" ? "Storyboard" : "Moodboard");
+
+    if (kind === "storyboard") {
+      const { data: frameRows } = await service
+        .from("storyboard_frames")
+        .select("id, scene, description, sound, notes, storage_path")
+        .eq("board_id", targetId)
+        .order("position", { ascending: true });
+      const signed = await signPaths(
+        service,
+        (frameRows ?? []).map((f) => f.storage_path as string).filter(Boolean)
+      );
+      surface = {
+        kind: "storyboard",
+        frames: (frameRows ?? []).map((f) => ({
+          id: f.id,
+          scene: f.scene,
+          description: f.description,
+          sound: f.sound,
+          notes: f.notes,
+          signedUrl: f.storage_path ? signed.get(f.storage_path) ?? null : null,
+        })),
+      };
+    } else {
+      const { data: itemRows } = await service
+        .from("board_items")
+        .select("id, kind, name, mime_type, text, hue, x, y, w, h, z, storage_path, url")
+        .eq("board_id", targetId)
+        .order("z", { ascending: true });
+      const signed = await signPaths(
+        service,
+        (itemRows ?? []).map((i) => i.storage_path as string).filter(Boolean)
+      );
+      surface = {
+        kind: "moodboard",
+        items: (itemRows ?? []).map((i) => ({
+          id: i.id,
+          kind: i.kind,
+          name: i.name,
+          text: i.text,
+          hue: i.hue,
+          x: i.x,
+          y: i.y,
+          w: i.w,
+          h: i.h,
+          z: i.z,
+          signedUrl: i.storage_path ? signed.get(i.storage_path) ?? null : i.url,
+        })),
+      };
+    }
+  }
+
+  if (!surface) return null;
+
+  const [{ data: commentsRaw }, { data: myApproval }] = await Promise.all([
+    service
+      .from("review_comments")
+      .select(
+        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at"
+      )
+      .eq("target_type", kind)
+      .eq("target_id", targetId)
+      .order("created_at", { ascending: true }),
+    service
+      .from("approvals")
+      .select("status")
+      .eq("target_type", kind)
+      .eq("target_id", targetId)
+      .eq("review_link_id", link.id)
+      .maybeSingle(),
+  ]);
+
+  const comments: PortalComment[] = (commentsRaw ?? []).map((c) => {
+    const isClient = Boolean(c.reviewer_name) && !c.author_id;
+    return {
+      id: c.id,
+      version_id: null,
+      body: c.body,
+      created_at: c.created_at,
+      author: isClient ? (c.reviewer_name as string) : studioName,
+      isClient,
+      pinNumber: c.pin_number ?? null,
+      x: c.pos_x ?? null,
+      y: c.pos_y ?? null,
+      timecode: c.timecode ?? null,
+      resolved: Boolean(c.resolved_at),
+    };
+  });
+
+  const myDecision =
+    (myApproval as { status?: ApprovalStatus } | null)?.status ?? null;
+
+  return {
+    studioName,
+    projectTitle,
+    docTitle,
+    kind,
+    surface,
     comments,
     myDecision,
   };

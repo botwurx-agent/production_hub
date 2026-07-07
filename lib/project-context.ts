@@ -88,6 +88,7 @@ export async function gatherProjectContext(
       approvalsByVersion.set(a.target_id, list);
     }
     for (const c of comments ?? []) {
+      if (!c.version_id) continue;
       commentsByVersion.set(
         c.version_id,
         (commentsByVersion.get(c.version_id) ?? 0) + 1

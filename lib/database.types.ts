@@ -1461,7 +1461,9 @@ export type Database = {
           review_link_id: string | null;
           reviewer_name: string | null;
           studio_id: string;
-          version_id: string;
+          version_id: string | null;
+          target_type: string | null;
+          target_id: string | null;
           pin_number: number | null;
           pos_x: number | null;
           pos_y: number | null;
@@ -1476,7 +1478,9 @@ export type Database = {
           review_link_id?: string | null;
           reviewer_name?: string | null;
           studio_id: string;
-          version_id: string;
+          version_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
           pin_number?: number | null;
           pos_x?: number | null;
           pos_y?: number | null;
@@ -1491,7 +1495,9 @@ export type Database = {
           review_link_id?: string | null;
           reviewer_name?: string | null;
           studio_id?: string;
-          version_id?: string;
+          version_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
           pin_number?: number | null;
           pos_x?: number | null;
           pos_y?: number | null;
@@ -1517,7 +1523,9 @@ export type Database = {
       };
       review_links: {
         Row: {
-          asset_id: string;
+          asset_id: string | null;
+          target_type: string | null;
+          target_id: string | null;
           created_at: string;
           created_by: string | null;
           expires_at: string | null;
@@ -1529,7 +1537,9 @@ export type Database = {
           token: string;
         };
         Insert: {
-          asset_id: string;
+          asset_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           expires_at?: string | null;
@@ -1541,7 +1551,9 @@ export type Database = {
           token: string;
         };
         Update: {
-          asset_id?: string;
+          asset_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           expires_at?: string | null;
@@ -1691,7 +1703,12 @@ export type Database = {
     Enums: {
       activity_type: "note" | "activity" | "status_change" | "upload" | "approval";
       approval_status: "pending" | "approved" | "changes_requested";
-      approval_target: "asset" | "version";
+      approval_target:
+        | "asset"
+        | "version"
+        | "shot_list"
+        | "storyboard"
+        | "moodboard";
       asset_status:
         | "draft"
         | "in_review"

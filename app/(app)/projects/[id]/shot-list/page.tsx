@@ -8,6 +8,7 @@ import {
   type PickableAsset,
 } from "@/components/production/shot-board-editor";
 import { loadProjectAssets } from "@/lib/project-data";
+import { ShareDocButton } from "@/components/review/share-doc-button";
 import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
@@ -95,6 +96,13 @@ export default async function ShotListPage({
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <path d="M3 9h18M9 3v18" />
           </svg>
+        }
+        action={
+          <ShareDocButton
+            projectId={project.id}
+            kind="shot_list"
+            targetId={project.id}
+          />
         }
       />
       <ShotBoardEditor

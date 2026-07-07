@@ -51,6 +51,62 @@ export async function createReviewLink(
   return { token };
 }
 
+// Creates (or returns the existing active) client review link for a doc
+// surface: the shot list (target = project), a storyboard, or a moodboard
+// (target = boards.id). Verifies the target belongs to this project + studio.
+export async function createDocReviewLink(
+  projectId: string,
+  kind: "shot_list" | "storyboard" | "moodboard",
+  targetId: string
+): Promise<{ token: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  if (kind === "shot_list") {
+    if (targetId !== projectId) return { error: "Invalid shot list target." };
+    const { data: project } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (!project) return { error: "Project not found." };
+  } else {
+    const { data: board } = await supabase
+      .from("boards")
+      .select("id")
+      .eq("id", targetId)
+      .eq("project_id", projectId)
+      .eq("kind", kind)
+      .maybeSingle();
+    if (!board) return { error: "That board was not found." };
+  }
+
+  const { data: existing } = await supabase
+    .from("review_links")
+    .select("token")
+    .eq("target_type", kind)
+    .eq("target_id", targetId)
+    .eq("revoked", false)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) return { token: existing.token };
+
+  const token = generateReviewToken();
+  const { error } = await supabase.from("review_links").insert({
+    studio_id: ctx.studio.id,
+    project_id: projectId,
+    target_type: kind,
+    target_id: targetId,
+    token,
+    created_by: ctx.userId,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/projects/${projectId}`);
+  return { token };
+}
+
 export async function revokeReviewLink(
   projectId: string,
   linkId: string

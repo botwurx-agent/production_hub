@@ -16,6 +16,7 @@ import {
   clearFrameImage,
 } from "@/app/(app)/projects/[id]/storyboard-actions";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
+import { ShareDocButton } from "@/components/review/share-doc-button";
 
 export type StoryboardBoard = { id: string; name: string };
 export type FrameView = {
@@ -142,6 +143,11 @@ export function StoryboardEditor({
               <span className="shrink-0 text-xs font-semibold text-text-faint">
                 {activeFrames.length} {activeFrames.length === 1 ? "frame" : "frames"}
               </span>
+              <ShareDocButton
+                projectId={projectId}
+                kind="storyboard"
+                targetId={active.id}
+              />
               <button
                 onClick={() => {
                   act(() => deleteStoryboard(projectId, active.id));

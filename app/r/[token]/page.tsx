@@ -1,8 +1,14 @@
 import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
-import { getValidLink, gatherReview } from "@/lib/review-links";
+import {
+  getValidLink,
+  gatherReview,
+  gatherDocReview,
+  isDocKind,
+} from "@/lib/review-links";
 import { ClientReview } from "@/components/review/client-review";
+import { DocReview } from "@/components/review/doc-review";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +58,24 @@ export default async function ReviewPortalPage({
         </p>
       </Centered>
     );
+  }
+
+  // Doc surfaces (shot list / storyboard / moodboard) render live with pins.
+  if (isDocKind(link.target_type)) {
+    const doc = await gatherDocReview(service, link);
+    if (!doc) {
+      return (
+        <Centered>
+          <h1 className="font-display text-xl font-bold text-text">
+            Nothing to review
+          </h1>
+          <p className="mt-2 text-sm text-text-muted">
+            The shared item is no longer available.
+          </p>
+        </Centered>
+      );
+    }
+    return <DocReview token={params.token} data={doc} />;
   }
 
   const data = await gatherReview(service, link);

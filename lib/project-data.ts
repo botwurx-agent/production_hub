@@ -43,7 +43,7 @@ export async function loadProjectAssets(
 
   const reviewLinkByAsset = new Map<string, { id: string; token: string }>();
   for (const l of reviewLinks ?? []) {
-    if (!reviewLinkByAsset.has(l.asset_id)) {
+    if (l.asset_id && !reviewLinkByAsset.has(l.asset_id)) {
       reviewLinkByAsset.set(l.asset_id, { id: l.id, token: l.token });
     }
   }
@@ -85,6 +85,7 @@ export async function loadProjectAssets(
         .in("target_id", versionIds),
     ]);
     for (const c of comments ?? []) {
+      if (!c.version_id) continue;
       const list = commentsByVersion.get(c.version_id) ?? [];
       list.push(c);
       commentsByVersion.set(c.version_id, list);

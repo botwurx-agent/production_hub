@@ -21,6 +21,11 @@ export async function GET(
       status: 404,
     });
   }
+  // This proxy only serves asset/version files; doc links carry no asset.
+  const assetId = link.asset_id;
+  if (!assetId) {
+    return new NextResponse("This link has no file.", { status: 404 });
+  }
 
   const requestedVersion = request.nextUrl.searchParams.get("v");
 
@@ -30,7 +35,7 @@ export async function GET(
     const { data: asset } = await service
       .from("assets")
       .select("current_version_id")
-      .eq("id", link.asset_id)
+      .eq("id", assetId)
       .maybeSingle();
     versionId = asset?.current_version_id ?? null;
   }
@@ -42,7 +47,7 @@ export async function GET(
     .from("versions")
     .select("storage_path, mime_type")
     .eq("id", versionId)
-    .eq("asset_id", link.asset_id)
+    .eq("asset_id", assetId)
     .maybeSingle();
   if (!version?.storage_path) {
     return new NextResponse("File not found.", { status: 404 });
