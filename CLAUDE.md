@@ -221,14 +221,20 @@ implemented (out of strict order, driven by the operator's real needs).
   launcher; the operator asked for bolder + more visible, NOT dialed down):
   /projects/[id]/page.tsx = hub (hero w/ gradient bar + status + lifecycle
   stepper, KPI row, AI summary, then module cards grouped in phase bands
-  Plan (Brief, Assets) / Visualize (Shot list, Storyboards, Moodboard) /
+  Plan (Brief, Assets) / Visualize (Storyboards, Shot list, Moodboard) /
   Review (Review & approvals, Communication) / Produce (Project contacts +
   Calendar = "Soon" stubs, Call sheet, Budget, Delivery & billing), + a right
   rail of Needs-attention + Activity. Visualize's Storyboards + Moodboard are
-  SEPARATE project pages (/projects/[id]/storyboards, /moodboard), distinct from
-  each other and from the studio-wide /boards. All three use BoardsWorkspace;
-  boards.kind ('general' = left-nav scratch, else 'moodboard'/'storyboard') +
-  project scope separate them (migration 0028). Each
+  SEPARATE project pages, distinct from each other and from the studio-wide
+  /boards. Storyboards (/projects/[id]/storyboards) = a STRUCTURED frame grid
+  (StudioBinder-style): a storyboard is a boards row (kind='storyboard') and its
+  ordered frames live in storyboard_frames (image + scene/description/sound/notes;
+  migration 0029). components/production/storyboard-editor.tsx (two-pane: list of
+  storyboards + active board's frame grid; per-frame upload/asset-pick);
+  storyboard-actions.ts. Moodboard (/projects/[id]/moodboard) + the global /boards
+  use the freeform BoardsWorkspace; boards.kind ('general' = left-nav scratch,
+  else 'moodboard'/'storyboard') + project scope separate them (migration 0028).
+  In Visualize, Storyboards comes before Shot list (it's the earlier step). Each
   module card shows LIVE data (brief snippet, asset thumbrows + status, review
   actions, comms counts, shot count, call sheet date, budget bid-vs-actual bar,
   delivery progress) and links to its own focused page:
@@ -269,7 +275,7 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0028: board_kind). When adding a
+files in supabase/migrations (through 0029: storyboard_frames). When adding a
 table/column, also hand-update lib/database.types.ts.
 
 ### Working notes for a fresh session

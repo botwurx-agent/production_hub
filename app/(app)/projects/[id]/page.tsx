@@ -430,6 +430,24 @@ export default async function ProjectDetailPage({
           <BandLabel hue="purple" label="Visualize" />
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
+              href={`/projects/${project.id}/storyboards`}
+              hue="indigo"
+              title="Storyboards"
+              sub="Plan the edit, frame by frame"
+              footer="Open storyboards"
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <path d="M2 9h20M8 4v5M16 4v5M8 20v-5M16 20v-5" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                Sketch the sequence in frames before the shot list.
+              </p>
+            </HubCard>
+
+            <HubCard
               href={`/projects/${project.id}/shot-list`}
               hue="purple"
               title="Shot list"
@@ -446,24 +464,6 @@ export default async function ProjectDetailPage({
                 {shotCount > 0
                   ? "Shots, groups, and a client-ready cover."
                   : "Lay out every shot for the shoot."}
-              </p>
-            </HubCard>
-
-            <HubCard
-              href={`/projects/${project.id}/storyboards`}
-              hue="indigo"
-              title="Storyboards"
-              sub="Plan the edit, frame by frame"
-              footer="Open storyboards"
-              icon={
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="4" width="20" height="16" rx="2" />
-                  <path d="M2 9h20M8 4v5M16 4v5M8 20v-5M16 20v-5" />
-                </svg>
-              }
-            >
-              <p className="text-[13px] text-text-muted">
-                Sequence frames to plan the edit on the freeform canvas.
               </p>
             </HubCard>
 

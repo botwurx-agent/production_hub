@@ -419,6 +419,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      storyboard_frames: {
+        Row: {
+          id: string;
+          studio_id: string;
+          board_id: string;
+          position: number;
+          scene: string | null;
+          description: string | null;
+          sound: string | null;
+          notes: string | null;
+          storage_path: string | null;
+          mime_type: string | null;
+          image_name: string | null;
+          asset_id: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          board_id: string;
+          position?: number;
+          scene?: string | null;
+          description?: string | null;
+          sound?: string | null;
+          notes?: string | null;
+          storage_path?: string | null;
+          mime_type?: string | null;
+          image_name?: string | null;
+          asset_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          board_id?: string;
+          position?: number;
+          scene?: string | null;
+          description?: string | null;
+          sound?: string | null;
+          notes?: string | null;
+          storage_path?: string | null;
+          mime_type?: string | null;
+          image_name?: string | null;
+          asset_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       shot_cards: {
         Row: {
           id: string;
@@ -1709,6 +1760,7 @@ export type ShotBoard = Tables<"shot_boards">;
 export type ShotBoardFlavor = Tables<"shot_board_flavors">;
 export type ShotGroup = Tables<"shot_groups">;
 export type ShotCard = Tables<"shot_cards">;
+export type StoryboardFrame = Tables<"storyboard_frames">;
 export type CallSheet = Tables<"call_sheets">;
 export type CallSheetEntry = Tables<"call_sheet_entries">;
 export type BudgetLine = Tables<"budget_lines">;
