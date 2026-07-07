@@ -10,13 +10,11 @@ export type CallSheetBlock = {
   body?: string; // custom text blocks
 };
 
-// Fixed (built-in) block types + their labels, in the default order.
+// The masthead (logo, company, contacts, title, call badge, schedule, weather)
+// is always rendered at the top of the sheet and is not a reorderable block.
+// FIXED_BLOCKS are the BODY sections you can reorder / hide / re-add below it.
 export const FIXED_BLOCKS: { type: string; label: string }[] = [
-  { type: "header", label: "Header" },
-  { type: "schedule", label: "Schedule & times" },
   { type: "locations", label: "Locations & safety" },
-  { type: "contacts", label: "Key contacts" },
-  { type: "company", label: "Production company" },
   { type: "cast", label: "Cast & talent" },
   { type: "crew", label: "Crew" },
   { type: "notes", label: "Notes" },

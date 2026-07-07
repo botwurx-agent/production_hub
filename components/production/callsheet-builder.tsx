@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -21,6 +21,8 @@ import type { CallSheet as CS, CallSheetEntry } from "@/lib/database.types";
 
 const ACCENTS = ["indigo", "blue", "cyan", "green", "amber", "orange", "red", "purple", "pink"];
 
+// Inline, edit-in-place field: reads as document text, reveals a border on
+// hover/focus.
 const line =
   "w-full rounded-[6px] border border-transparent bg-transparent px-1.5 py-1 text-sm text-text outline-none transition hover:border-border focus:border-border-strong focus:bg-surface";
 const labelCls = "text-[10px] font-bold uppercase tracking-wide text-text-faint";
@@ -37,17 +39,18 @@ export function CallSheetBuilder({
   projectTitle,
   callSheet,
   entries,
+  logoUrl,
 }: {
   projectId: string;
   callSheetId: string;
   projectTitle: string;
   callSheet: CS | null;
   entries: CallSheetEntry[];
+  logoUrl: string | null;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
 
-  // Header / structured fields (local, saved on blur).
   const [f, setF] = useState({
     production_title: callSheet?.production_title ?? "",
     day_of: callSheet?.day_of ?? "",
@@ -79,7 +82,17 @@ export function CallSheetBuilder({
   const save = (k: string, v: string) =>
     void saveCallSheet(projectId, callSheetId, { [k]: v || null } as CallSheetPatch);
 
-  // Cast / crew rows.
+  // Reusable inline field bound to `f`.
+  const F = (k: string, ph: string, cls = "") => (
+    <input
+      value={(f as Record<string, string>)[k] ?? ""}
+      onChange={(e) => set(k, e.target.value)}
+      onBlur={() => save(k, (f as Record<string, string>)[k] ?? "")}
+      placeholder={ph}
+      className={`${line} ${cls}`}
+    />
+  );
+
   const [rows, setRows] = useState<CallSheetEntry[]>(entries);
   const sig = entries.map((e) => e.id).join(",");
   useEffect(() => setRows(entries), [sig]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -98,7 +111,6 @@ export function CallSheetBuilder({
     });
   };
 
-  // Layout (block order / hidden / custom text).
   const [layout, setLayout] = useState<CallSheetBlock[]>(() =>
     normalizeLayout(callSheet?.layout)
   );
@@ -106,15 +118,21 @@ export function CallSheetBuilder({
     setLayout(next);
     void saveCallSheetLayout(projectId, callSheetId, next);
   };
-  const visible = layout.filter((b) => !b.hidden);
+  // Only body blocks are reorderable; ignore any legacy masthead block types.
+  const BODY_TYPES = new Set([...FIXED_BLOCKS.map((b) => b.type), "text"]);
+  const body = layout.filter((b) => BODY_TYPES.has(b.type));
+  const visible = body.filter((b) => !b.hidden);
 
   function move(id: string, dir: -1 | 1) {
-    const i = layout.findIndex((b) => b.id === id);
+    const ids = body.map((b) => b.id);
+    const i = ids.indexOf(id);
     const j = i + dir;
-    if (i < 0 || j < 0 || j >= layout.length) return;
-    const next = [...layout];
-    [next[i], next[j]] = [next[j], next[i]];
-    commit(next);
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    // reorder within the full layout, preserving non-body entries
+    const reordered = [...body];
+    [reordered[i], reordered[j]] = [reordered[j], reordered[i]];
+    const others = layout.filter((b) => !BODY_TYPES.has(b.type));
+    commit([...others, ...reordered]);
   }
   function hideOrRemove(b: CallSheetBlock) {
     if (b.type === "text") commit(layout.filter((x) => x.id !== b.id));
@@ -132,7 +150,6 @@ export function CallSheetBuilder({
     commit(layout.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   }
 
-  // Accent.
   const [accent, setAccent] = useState<string | null>(callSheet?.accent ?? null);
   const accentVar = accent ? `var(--h-${accent})` : "var(--accent)";
   const accentBg = accent ? `var(--h-${accent}-bg)` : "var(--accent-soft)";
@@ -141,17 +158,15 @@ export function CallSheetBuilder({
     void saveCallSheetAccent(projectId, callSheetId, a);
   }
 
-  // Blocks that can be added (hidden fixed ones + custom text).
   const addable = FIXED_BLOCKS.filter((fb) => {
     const b = layout.find((x) => x.type === fb.type);
     return !b || b.hidden;
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const ctx: BlockCtx = {
-    f, set, save, projectId, callSheetId, projectTitle,
-    rows, editRow, addRow, delRow, busy, accentVar, accentBg,
-    updateText,
+  const bodyCtx: BlockCtx = {
+    F, rows, editRow, addRow, delRow, projectId, accentVar, updateText, notes: f.notes,
+    setNotes: (v: string) => set("notes", v), saveNotes: () => save("notes", f.notes),
   };
 
   return (
@@ -188,7 +203,6 @@ export function CallSheetBuilder({
           )}
         </div>
 
-        {/* Accent */}
         <div className="flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-2 py-1.5">
           <span className="text-[11px] font-semibold text-text-faint">Accent</span>
           <button
@@ -220,20 +234,121 @@ export function CallSheetBuilder({
       {/* The sheet (paper) */}
       <div className="overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
         <div className="h-1.5 w-full" style={{ backgroundColor: accentVar }} />
-        <div className="space-y-1 p-5 sm:p-7">
-          {visible.map((b, i) => (
-            <BlockShell
-              key={b.id}
-              first={i === 0}
-              last={i === visible.length - 1}
-              onUp={() => move(b.id, -1)}
-              onDown={() => move(b.id, 1)}
-              onHide={() => hideOrRemove(b)}
-              isText={b.type === "text"}
-            >
-              <BlockBody block={b} ctx={ctx} />
-            </BlockShell>
-          ))}
+        <div className="p-5 sm:p-7">
+          {/* ---- Masthead: the real call sheet header ---- */}
+          <div className="grid grid-cols-1 gap-5 border-b-2 pb-5 md:grid-cols-[1.1fr_1fr_1fr]" style={{ borderColor: accentVar }}>
+            {/* Left: logo + company + contacts */}
+            <div>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="" className="mb-2 max-h-14 w-auto max-w-[180px] object-contain" />
+              ) : (
+                <Link
+                  href="/settings"
+                  className="mb-2 inline-flex items-center gap-1.5 rounded-[8px] border border-dashed border-border px-3 py-2 text-xs font-semibold text-text-faint transition hover:border-border-strong hover:text-text"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                  Add logo
+                </Link>
+              )}
+              {F("company_name", "Production company", "font-display text-base font-extrabold")}
+              {F("company_phone", "Phone", "text-xs text-text-muted")}
+              {F("company_address", "Address", "text-xs text-text-muted")}
+              <div className="mt-2 space-y-1">
+                {([
+                  ["producer", "producer_phone", "Producer"],
+                  ["director", "director_phone", "Director"],
+                  ["pm", "pm_phone", "Prod. mgr"],
+                ] as const).map(([n, p, l]) => (
+                  <div key={n} className="flex items-center gap-1.5">
+                    <span className="w-16 shrink-0 text-[10px] font-bold uppercase tracking-wide text-text-faint">{l}</span>
+                    {F(n, "Name", "flex-1 text-xs")}
+                    {F(p, "Phone", "w-28 text-xs text-text-muted")}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Center: title + call badge */}
+            <div className="flex flex-col items-center justify-start text-center">
+              <input
+                value={f.production_title}
+                onChange={(e) => set("production_title", e.target.value)}
+                onBlur={() => save("production_title", f.production_title)}
+                placeholder={projectTitle}
+                className={`${line} text-center font-display text-xl font-extrabold`}
+              />
+              <div
+                className="mt-2 w-full max-w-[220px] rounded-[16px] border-2 px-3 py-3"
+                style={{ borderColor: accentVar, backgroundColor: accentBg }}
+              >
+                <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accentVar }}>
+                  General call
+                </div>
+                <input
+                  value={f.crew_call}
+                  onChange={(e) => set("crew_call", e.target.value)}
+                  onBlur={() => save("crew_call", f.crew_call)}
+                  placeholder="7:00 AM"
+                  className="w-full bg-transparent text-center font-display text-3xl font-extrabold text-text outline-none"
+                />
+                <div className="mt-1 flex items-center justify-center gap-2">
+                  <input
+                    type="date"
+                    value={f.shoot_date}
+                    onChange={(e) => set("shoot_date", e.target.value)}
+                    onBlur={() => save("shoot_date", f.shoot_date)}
+                    className="rounded-[6px] bg-transparent px-1 py-0.5 text-center text-xs font-semibold text-text outline-none focus:bg-surface"
+                  />
+                </div>
+              </div>
+              <input
+                value={f.day_of}
+                onChange={(e) => set("day_of", e.target.value)}
+                onBlur={() => save("day_of", f.day_of)}
+                placeholder="Day 1 of 3"
+                className={`${line} mt-1 max-w-[160px] text-center text-xs font-semibold`}
+              />
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-text-faint">Shooting call</span>
+                {F("shoot_call", "—", "w-24 text-xs")}
+              </div>
+            </div>
+
+            {/* Right: info table */}
+            <div className="overflow-hidden rounded-[10px] border border-border">
+              {([
+                ["breakfast", "Breakfast"],
+                ["lunch", "Lunch"],
+                ["wrap", "Est. wrap"],
+                ["sunrise", "Sunrise"],
+                ["sunset", "Sunset"],
+                ["weather", "Weather"],
+              ] as const).map(([k, l], i) => (
+                <div key={k} className={`flex items-center gap-2 px-2.5 py-1 ${i > 0 ? "border-t border-border" : ""}`}>
+                  <span className="w-20 shrink-0 text-[10px] font-bold uppercase tracking-wide text-text-faint">{l}</span>
+                  {F(k, "—", "flex-1 text-sm")}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ---- Body blocks ---- */}
+          <div className="mt-2 space-y-1">
+            {visible.map((b, i) => (
+              <BlockShell
+                key={b.id}
+                first={i === 0}
+                last={i === visible.length - 1}
+                onUp={() => move(b.id, -1)}
+                onDown={() => move(b.id, 1)}
+                onHide={() => hideOrRemove(b)}
+                isText={b.type === "text"}
+              >
+                <BodyBlock block={b} ctx={bodyCtx} />
+              </BlockShell>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -241,30 +356,21 @@ export function CallSheetBuilder({
 }
 
 type BlockCtx = {
-  f: Record<string, string>;
-  set: (k: string, v: string) => void;
-  save: (k: string, v: string) => void;
-  projectId: string;
-  callSheetId: string;
-  projectTitle: string;
+  F: (k: string, ph: string, cls?: string) => React.ReactNode;
   rows: CallSheetEntry[];
   editRow: (id: string, patch: Partial<CallSheetEntry>) => void;
   addRow: (kind: "cast" | "crew") => void;
   delRow: (id: string) => void;
-  busy: boolean;
+  projectId: string;
   accentVar: string;
-  accentBg: string;
   updateText: (id: string, patch: Partial<CallSheetBlock>) => void;
+  notes: string;
+  setNotes: (v: string) => void;
+  saveNotes: () => void;
 };
 
 function BlockShell({
-  children,
-  first,
-  last,
-  onUp,
-  onDown,
-  onHide,
-  isText,
+  children, first, last, onUp, onDown, onHide, isText,
 }: {
   children: React.ReactNode;
   first: boolean;
@@ -307,95 +413,17 @@ function SectionLabel({ children, accent }: { children: React.ReactNode; accent:
   );
 }
 
-function BlockBody({ block, ctx }: { block: CallSheetBlock; ctx: BlockCtx }) {
-  const { f, set, save, accentVar } = ctx;
-  const F = (k: string, ph: string, cls = "") => (
-    <input
-      value={f[k] ?? ""}
-      onChange={(e) => set(k, e.target.value)}
-      onBlur={() => save(k, f[k] ?? "")}
-      placeholder={ph}
-      className={`${line} ${cls}`}
-    />
-  );
-
+function BodyBlock({ block, ctx }: { block: CallSheetBlock; ctx: BlockCtx }) {
+  const { F, accentVar } = ctx;
   switch (block.type) {
-    case "header":
-      return (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.4fr_1fr]">
-          <div>
-            <input
-              value={f.production_title}
-              onChange={(e) => set("production_title", e.target.value)}
-              onBlur={() => save("production_title", f.production_title)}
-              placeholder={ctx.projectTitle}
-              className={`${line} font-display text-2xl font-extrabold`}
-            />
-            <div className="mt-1 flex flex-wrap gap-2">
-              <span className="rounded-pill px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: ctx.accentBg, color: accentVar }}>
-                Call sheet
-              </span>
-              {F("day_of", "Day 1 of 3", "max-w-[140px] text-xs")}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><div className={labelCls}>Date</div>
-              <input type="date" value={f.shoot_date} onChange={(e) => set("shoot_date", e.target.value)} onBlur={() => save("shoot_date", f.shoot_date)} className={line} /></div>
-            <div><div className={labelCls}>General call</div>{F("crew_call", "7:00 AM")}</div>
-            <div className="col-span-2"><div className={labelCls}>Weather</div>{F("weather", "Sunny, high 72")}</div>
-          </div>
-        </div>
-      );
-    case "schedule":
-      return (
-        <div>
-          <SectionLabel accent={accentVar}>Schedule &amp; times</SectionLabel>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {[["crew_call","Crew call"],["shoot_call","Shooting call"],["breakfast","Breakfast"],["lunch","Lunch"],["wrap","Est. wrap"]].map(([k,l]) => (
-              <div key={k}><div className={labelCls}>{l}</div>{F(k, "—")}</div>
-            ))}
-          </div>
-        </div>
-      );
     case "locations":
       return (
         <div>
           <SectionLabel accent={accentVar}>Locations &amp; safety</SectionLabel>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div><div className={labelCls}>Set location</div>{F("location", "Address or studio")}</div>
             <div><div className={labelCls}>Parking</div>{F("parking", "Where crew parks")}</div>
             <div><div className={labelCls}>Nearest hospital</div>{F("hospital", "Name & address")}</div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><div className={labelCls}>Sunrise</div>{F("sunrise", "6:04 AM")}</div>
-              <div><div className={labelCls}>Sunset</div>{F("sunset", "7:58 PM")}</div>
-            </div>
-          </div>
-        </div>
-      );
-    case "contacts":
-      return (
-        <div>
-          <SectionLabel accent={accentVar}>Key contacts</SectionLabel>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {[["producer","producer_phone","Producer"],["director","director_phone","Director"],["pm","pm_phone","Production mgr"]].map(([n,p,l]) => (
-              <div key={n} className="rounded-[10px] border border-border p-2">
-                <div className={labelCls}>{l}</div>
-                {F(n, "Name")}
-                {F(p, "Phone", "text-xs text-text-muted")}
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    case "company":
-      return (
-        <div>
-          <SectionLabel accent={accentVar}>Production company</SectionLabel>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div><div className={labelCls}>Company</div>{F("company_name", "Studio name")}</div>
-            <div><div className={labelCls}>Phone</div>{F("company_phone", "—")}</div>
-            <div><div className={labelCls}>Website</div>{F("company_website", "—")}</div>
-            <div><div className={labelCls}>Address</div>{F("company_address", "—")}</div>
           </div>
         </div>
       );
@@ -408,9 +436,9 @@ function BlockBody({ block, ctx }: { block: CallSheetBlock; ctx: BlockCtx }) {
         <div>
           <SectionLabel accent={accentVar}>Notes</SectionLabel>
           <textarea
-            value={f.notes}
-            onChange={(e) => set("notes", e.target.value)}
-            onBlur={() => save("notes", f.notes)}
+            value={ctx.notes}
+            onChange={(e) => ctx.setNotes(e.target.value)}
+            onBlur={ctx.saveNotes}
             placeholder="Catering, wardrobe, safety notes, special instructions..."
             className={`${line} min-h-[64px]`}
           />
@@ -439,10 +467,7 @@ function BlockBody({ block, ctx }: { block: CallSheetBlock; ctx: BlockCtx }) {
 }
 
 function PeopleBlock({
-  ctx,
-  kind,
-  title,
-  roleLabel,
+  ctx, kind, title, roleLabel,
 }: {
   ctx: BlockCtx;
   kind: "cast" | "crew";
@@ -470,7 +495,7 @@ function PeopleBlock({
         </p>
       ) : (
         <div className="overflow-hidden rounded-[10px] border border-border">
-          <div className="grid grid-cols-[1.4fr_1.2fr_0.8fr_1.2fr_auto] gap-2 border-b border-border bg-surface-2/50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-text-faint">
+          <div className="grid grid-cols-[1.4fr_1.2fr_0.8fr_1.2fr_auto] gap-2 border-b border-border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: accentVar }}>
             <span>Name</span><span>{roleLabel}</span><span>Call</span><span>Contact</span><span />
           </div>
           {people.map((r) => (

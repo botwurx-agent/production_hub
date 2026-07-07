@@ -289,9 +289,14 @@ implemented (out of strict order, driven by the operator's real needs).
   by id + entry CRUD by call_sheet_id). call-sheet.tsx takes callSheetId; PDF
   export at /production/callsheet?cs=<id>. (Old call-sheet actions in
   production/actions.ts are now dead.)
-  BLOCK-BUILDER editor (edit-on-the-sheet): the active sheet renders as a
-  document you edit in place, composed of ordered BLOCKS. call_sheets gained
-  layout jsonb + accent (migration 0037). lib/callsheet-blocks.ts = block model
+  BLOCK-BUILDER editor (edit-on-the-sheet, WYSIWYG): the active sheet renders as
+  the REAL call sheet you edit in place. Top is a fixed MASTHEAD (industry
+  layout, always shown): left = studio logo (from Settings->Branding, passed
+  page->workspace->builder as logoUrl; dashed "Add logo" link if none) + company
+  + key contacts; center = production title + a CALL badge (general call time,
+  date, day-of) + shooting call; right = info table (breakfast/lunch/wrap/
+  sunrise/sunset/weather). Below the masthead are reorderable BODY blocks.
+  call_sheets gained layout jsonb + accent (migration 0037). lib/callsheet-blocks.ts = block model
   (CallSheetBlock, FIXED_BLOCKS header/schedule/locations/contacts/company/cast/
   crew/notes, defaultLayout, normalizeLayout). components/production/
   callsheet-builder.tsx (replaces the old form CallSheet in the workspace):

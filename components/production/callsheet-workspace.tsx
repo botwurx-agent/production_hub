@@ -25,11 +25,13 @@ export function CallSheetWorkspace({
   projectTitle,
   sheets,
   entries,
+  logoUrl,
 }: {
   projectId: string;
   projectTitle: string;
   sheets: CS[];
   entries: CallSheetEntry[];
+  logoUrl: string | null;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -183,6 +185,7 @@ export function CallSheetWorkspace({
               projectTitle={projectTitle}
               callSheet={active}
               entries={activeEntries}
+              logoUrl={logoUrl}
             />
           </div>
         )}

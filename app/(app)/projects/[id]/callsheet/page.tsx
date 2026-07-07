@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { signedLogoUrl } from "@/lib/branding";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { CallSheetWorkspace } from "@/components/production/callsheet-workspace";
 import type { CallSheet as CS, CallSheetEntry } from "@/lib/database.types";
@@ -10,8 +11,9 @@ export default async function CallSheetPage({
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
+  const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
 
   const { data: project } = await supabase
     .from("projects")
@@ -57,6 +59,7 @@ export default async function CallSheetPage({
         projectTitle={project.title}
         sheets={(sheets ?? []) as CS[]}
         entries={entries}
+        logoUrl={logoUrl}
       />
     </div>
   );
