@@ -29,11 +29,16 @@ export function BoardsWorkspace({
   projects,
   driveConnected,
   figmaConnected,
+  scope = { kind: "general" },
+  noun = "board",
 }: {
   initialBoards: Board[];
   projects: ProjectRef[];
   driveConnected: boolean;
   figmaConnected: boolean;
+  // What new boards belong to: a project-scoped kind, or the global scratch.
+  scope?: { kind?: string; projectId?: string };
+  noun?: string;
 }) {
   const [boards, setBoards] = useState<Board[]>(initialBoards);
   const [activeId, setActiveId] = useState<string | null>(
@@ -69,7 +74,7 @@ export function BoardsWorkspace({
 
   function newBoard() {
     startBusy(async () => {
-      const res = await createBoard();
+      const res = await createBoard(undefined, scope.projectId, scope.kind);
       if ("board" in res) {
         setBoards((prev) => [...prev, res.board]);
         setActiveId(res.board.id);
@@ -223,7 +228,7 @@ export function BoardsWorkspace({
           disabled={busy}
           className="shrink-0 rounded-[10px] px-3 py-1.5 text-sm font-semibold text-text-faint transition hover:bg-surface-2 hover:text-text"
         >
-          + New board
+          + New {noun}
         </button>
       </div>
 
@@ -231,10 +236,10 @@ export function BoardsWorkspace({
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <p className="mb-3 text-sm text-text-muted">
-              No boards yet. Create one to start collecting visuals.
+              No {noun}s yet. Create one to start collecting visuals.
             </p>
             <Button onClick={newBoard} disabled={busy}>
-              Create your first board
+              Create your first {noun}
             </Button>
           </div>
         </div>
@@ -430,23 +435,25 @@ function BoardSettings({
           </label>
           <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" />
         </div>
-        <div>
-          <label className="text-xs font-bold uppercase tracking-wide text-text-faint">
-            Linked project (optional)
-          </label>
-          <Select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            className="mt-1.5"
-          >
-            <option value="">No project</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </Select>
-        </div>
+        {projects.length > 0 && (
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wide text-text-faint">
+              Linked project (optional)
+            </label>
+            <Select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="mt-1.5"
+            >
+              <option value="">No project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
         <div className="flex items-center justify-between border-t border-border pt-4">
           {confirm ? (
             <button

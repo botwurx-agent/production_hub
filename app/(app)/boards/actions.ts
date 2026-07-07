@@ -37,7 +37,8 @@ export type BoardItemView = {
 
 export async function createBoard(
   name?: string,
-  projectId?: string
+  projectId?: string,
+  kind: string = "general"
 ): Promise<{ board: Board } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -54,6 +55,7 @@ export async function createBoard(
       studio_id: ctx.studio.id,
       name: name?.trim() || "Untitled board",
       project_id: projectId || null,
+      kind,
       position,
       created_by: ctx.userId,
     })
@@ -61,6 +63,10 @@ export async function createBoard(
     .single();
   if (error) return { error: error.message };
   revalidatePath("/boards");
+  if (projectId) {
+    revalidatePath(`/projects/${projectId}/moodboard`);
+    revalidatePath(`/projects/${projectId}/storyboards`);
+  }
   return { board: data as Board };
 }
 

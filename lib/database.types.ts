@@ -202,6 +202,7 @@ export type Database = {
           name: string;
           position: number;
           background: string;
+          kind: string;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -213,6 +214,7 @@ export type Database = {
           name: string;
           position?: number;
           background?: string;
+          kind?: string;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -224,6 +226,7 @@ export type Database = {
           name?: string;
           position?: number;
           background?: string;
+          kind?: string;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;

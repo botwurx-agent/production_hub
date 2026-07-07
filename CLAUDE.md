@@ -224,8 +224,11 @@ implemented (out of strict order, driven by the operator's real needs).
   Plan (Brief, Assets) / Visualize (Shot list, Storyboards, Moodboard) /
   Review (Review & approvals, Communication) / Produce (Project contacts +
   Calendar = "Soon" stubs, Call sheet, Budget, Delivery & billing), + a right
-  rail of Needs-attention + Activity. Storyboards + Moodboard both point to the
-  Boards canvas for now. Each
+  rail of Needs-attention + Activity. Visualize's Storyboards + Moodboard are
+  SEPARATE project pages (/projects/[id]/storyboards, /moodboard), distinct from
+  each other and from the studio-wide /boards. All three use BoardsWorkspace;
+  boards.kind ('general' = left-nav scratch, else 'moodboard'/'storyboard') +
+  project scope separate them (migration 0028). Each
   module card shows LIVE data (brief snippet, asset thumbrows + status, review
   actions, comms counts, shot count, call sheet date, budget bid-vs-actual bar,
   delivery progress) and links to its own focused page:
@@ -266,8 +269,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0027: review_comment_timecode). When
-adding a table/column, also hand-update lib/database.types.ts.
+files in supabase/migrations (through 0028: board_kind). When adding a
+table/column, also hand-update lib/database.types.ts.
 
 ### Working notes for a fresh session
 - Dev branch: `claude/production-hub-phase-1-km1k0k`. Deploy = push to `main`

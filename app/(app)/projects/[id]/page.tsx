@@ -450,11 +450,11 @@ export default async function ProjectDetailPage({
             </HubCard>
 
             <HubCard
-              href="/boards"
+              href={`/projects/${project.id}/storyboards`}
               hue="indigo"
               title="Storyboards"
-              sub="On the boards canvas"
-              footer="Open boards"
+              sub="Plan the edit, frame by frame"
+              footer="Open storyboards"
               icon={
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -468,11 +468,11 @@ export default async function ProjectDetailPage({
             </HubCard>
 
             <HubCard
-              href="/boards"
+              href={`/projects/${project.id}/moodboard`}
               hue="cyan"
               title="Moodboard"
-              sub="On the boards canvas"
-              footer="Open boards"
+              sub="References, styles & inspiration"
+              footer="Open moodboard"
               icon={
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="3" width="18" height="18" rx="2" />

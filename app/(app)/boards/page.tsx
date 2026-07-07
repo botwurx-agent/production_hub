@@ -12,7 +12,11 @@ export default async function BoardsPage() {
 
   const [{ data: boards }, { data: projects }, { data: googleAccount }, { data: figmaAccount }] =
     await Promise.all([
-      supabase.from("boards").select("*").order("position", { ascending: true }),
+      supabase
+        .from("boards")
+        .select("*")
+        .eq("kind", "general")
+        .order("position", { ascending: true }),
       supabase.from("projects").select("id, title").order("created_at", { ascending: false }),
       supabase
         .from("email_accounts")
