@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -130,12 +131,12 @@ export function RecipientsPanel({
       </p>
 
       {/* Pick from project contacts */}
-      {available.length > 0 && (
-        <div className="rounded-[12px] border border-border bg-surface-2/30 p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wide text-text-faint">
-              Add from project contacts
-            </span>
+      <div className="rounded-[12px] border border-border bg-surface-2/30 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wide text-text-faint">
+            Add from project contacts
+          </span>
+          {available.length > 0 && (
             <button
               onClick={addPicked}
               disabled={busy || picked.size === 0}
@@ -143,7 +144,26 @@ export function RecipientsPanel({
             >
               Add selected{picked.size > 0 ? ` (${picked.size})` : ""}
             </button>
-          </div>
+          )}
+        </div>
+        {available.length === 0 ? (
+          <p className="py-2 text-xs text-text-muted">
+            {contactOptions.length === 0 ? (
+              <>
+                No one on this project&apos;s roster yet.{" "}
+                <Link
+                  href={`/projects/${projectId}/contacts`}
+                  className="font-semibold text-accent hover:underline"
+                >
+                  Add crew &amp; talent on the Contacts page
+                </Link>
+                , then pick them here.
+              </>
+            ) : (
+              "Everyone on the roster has already been added below."
+            )}
+          </p>
+        ) : (
           <div className="max-h-44 space-y-0.5 overflow-y-auto">
             {available.map((c) => {
               const on = picked.has(c.id);
@@ -170,8 +190,8 @@ export function RecipientsPanel({
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Add manually */}
       <div className="flex flex-col gap-2 sm:flex-row">
