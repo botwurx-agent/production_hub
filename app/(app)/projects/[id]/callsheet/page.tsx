@@ -21,10 +21,32 @@ export default async function CallSheetPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title")
+    .select("id, title, client_id")
     .eq("id", params.id)
     .maybeSingle();
   if (!project) notFound();
+
+  // Project roster + linked client contacts, to pick recipients from.
+  const [{ data: rosterRows }, { data: clientRows }] = await Promise.all([
+    supabase
+      .from("contacts")
+      .select("id, name, role, email")
+      .eq("project_id", project.id)
+      .order("created_at", { ascending: true }),
+    project.client_id
+      ? supabase
+          .from("contacts")
+          .select("id, name, role, email")
+          .eq("client_id", project.client_id)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] as { id: string; name: string; role: string | null; email: string | null }[] }),
+  ]);
+  const contactOptions = [...(rosterRows ?? []), ...(clientRows ?? [])].map((c) => ({
+    id: c.id,
+    name: c.name,
+    role: c.role,
+    email: c.email,
+  }));
 
   const { data: sheets } = await supabase
     .from("call_sheets")
@@ -73,6 +95,7 @@ export default async function CallSheetPage({
         sheets={(sheets ?? []) as CS[]}
         entries={entries}
         recipients={recipients}
+        contactOptions={contactOptions}
         logoUrl={logoUrl}
       />
     </div>

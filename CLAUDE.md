@@ -318,9 +318,12 @@ implemented (out of strict order, driven by the operator's real needs).
   confirmCallSheet (sets confirmed_at + activity + notification
   'callsheet_confirmed'). Loaders in lib/callsheet-links.ts. In-app: a "Send"
   button in the sheet header opens a RecipientsPanel (components/production/
-  recipients-panel.tsx) = add name/email -> copy that recipient's /c/<token>
-  link, with Viewed/Confirmed columns; recipient actions
-  addCallSheetRecipient/deleteCallSheetRecipient in callsheet-actions.ts. The
+  recipients-panel.tsx) = add name/email OR check people from the project
+  contacts roster (production + linked client contacts, passed page->workspace->
+  panel as contactOptions; already-added filtered out) -> copy that recipient's
+  /c/<token> link, with Viewed/Confirmed columns; recipient actions
+  addCallSheetRecipient/addCallSheetRecipients(bulk)/deleteCallSheetRecipient in
+  callsheet-actions.ts. The
   Send button shows confirmed/total. NEXT (later): deeper styles + saved
   templates; optional in-app email send.
 - Studio logo upload (Settings → Branding); shows on sidebar, call sheet, shot

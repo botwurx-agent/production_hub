@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { CallSheetBuilder } from "@/components/production/callsheet-builder";
-import { RecipientsPanel } from "@/components/production/recipients-panel";
+import { RecipientsPanel, type ContactOption } from "@/components/production/recipients-panel";
 import { shortDate } from "@/lib/format";
 import {
   createCallSheet,
@@ -32,6 +32,7 @@ export function CallSheetWorkspace({
   sheets,
   entries,
   recipients,
+  contactOptions,
   logoUrl,
 }: {
   projectId: string;
@@ -39,6 +40,7 @@ export function CallSheetWorkspace({
   sheets: CS[];
   entries: CallSheetEntry[];
   recipients: CallSheetRecipient[];
+  contactOptions: ContactOption[];
   logoUrl: string | null;
 }) {
   const router = useRouter();
@@ -225,6 +227,7 @@ export function CallSheetWorkspace({
                 projectId={projectId}
                 callSheetId={active.id}
                 recipients={activeRecipients}
+                contactOptions={contactOptions}
               />
             </Modal>
           </div>

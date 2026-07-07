@@ -255,6 +255,32 @@ export async function addCallSheetRecipient(
   return { token };
 }
 
+// Add several recipients at once (e.g. picked from the project contacts list).
+export async function addCallSheetRecipients(
+  projectId: string,
+  callSheetId: string,
+  people: { name: string; email?: string | null }[]
+): Promise<{ added: number } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const rows = people
+    .map((p) => ({ name: p.name.trim(), email: p.email?.trim() || null }))
+    .filter((p) => p.name)
+    .map((p) => ({
+      studio_id: ctx.studio.id,
+      call_sheet_id: callSheetId,
+      name: p.name,
+      email: p.email,
+      token: generateReviewToken(),
+    }));
+  if (rows.length === 0) return { added: 0 };
+
+  const supabase = createClient();
+  const { error } = await supabase.from("call_sheet_recipients").insert(rows);
+  if (error) return { error: error.message };
+  rp(projectId);
+  return { added: rows.length };
+}
+
 export async function deleteCallSheetRecipient(
   projectId: string,
   recipientId: string
