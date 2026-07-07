@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CallSheet } from "@/components/production/call-sheet";
+import { CallSheetBuilder } from "@/components/production/callsheet-builder";
 import { shortDate } from "@/lib/format";
 import {
   createCallSheet,
@@ -176,7 +176,7 @@ export function CallSheetWorkspace({
               </button>
             </div>
 
-            <CallSheet
+            <CallSheetBuilder
               key={active.id}
               projectId={projectId}
               callSheetId={active.id}

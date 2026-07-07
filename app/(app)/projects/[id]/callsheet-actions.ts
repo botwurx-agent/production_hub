@@ -132,6 +132,39 @@ export async function setCallSheetStatus(
   return null;
 }
 
+// Persist the block layout (order / hidden / custom text blocks).
+export async function saveCallSheetLayout(
+  projectId: string,
+  callSheetId: string,
+  layout: unknown
+): Promise<CallSheetState> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("call_sheets")
+    .update({ layout: layout as never, updated_at: new Date().toISOString() })
+    .eq("id", callSheetId);
+  if (error) return { error: error.message };
+  rp(projectId);
+  return null;
+}
+
+export async function saveCallSheetAccent(
+  projectId: string,
+  callSheetId: string,
+  accent: string | null
+): Promise<CallSheetState> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("call_sheets")
+    .update({ accent })
+    .eq("id", callSheetId);
+  if (error) return { error: error.message };
+  rp(projectId);
+  return null;
+}
+
 export async function deleteCallSheet(
   projectId: string,
   callSheetId: string

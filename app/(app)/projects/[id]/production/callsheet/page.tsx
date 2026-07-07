@@ -5,6 +5,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { PrintButton } from "@/components/production/print-button";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { signedLogoUrl } from "@/lib/branding";
+import { normalizeLayout } from "@/lib/callsheet-blocks";
 import type { CallSheet, CallSheetEntry } from "@/lib/database.types";
 
 // "Tuesday 2/17/26" from a YYYY-MM-DD string (parsed as a local date).
@@ -60,15 +61,20 @@ function People({
   roleLabel,
   extraLabel,
   people,
+  accent = "var(--accent)",
 }: {
   title: string;
   roleLabel: string;
   extraLabel: string;
   people: CallSheetEntry[];
+  accent?: string;
 }) {
   return (
     <div className="mt-4">
-      <div className="border border-border bg-surface-2/60 px-2 py-1 text-center text-xs font-bold uppercase tracking-wide text-text">
+      <div
+        className="border border-border px-2 py-1 text-center text-xs font-bold uppercase tracking-wide text-white"
+        style={{ backgroundColor: accent }}
+      >
         {title}
       </div>
       <table className="w-full border-collapse text-sm">
@@ -151,6 +157,16 @@ export default async function CallSheetPrintPage({
 
   const cast = entries.filter((e) => e.kind === "cast");
   const crew = entries.filter((e) => e.kind !== "cast");
+
+  // Honor the builder's layout: hidden sections, custom text blocks, accent.
+  const blocks = normalizeLayout(s?.layout);
+  const hidden = new Set(blocks.filter((b) => b.hidden).map((b) => b.type));
+  const show = (t: string) => !hidden.has(t);
+  const textBlocks = blocks.filter(
+    (b) => b.type === "text" && (b.title?.trim() || b.body?.trim())
+  );
+  const accent = s?.accent ? `var(--h-${s.accent})` : "var(--accent)";
+
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
   const title = s?.production_title?.trim() || project.title;
   const company = s?.company_name?.trim() || ctx.studio.name;
@@ -179,23 +195,29 @@ export default async function CallSheetPrintPage({
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {/* Company + key contacts */}
           <div className="border border-border p-3">
-            <div className="text-base font-extrabold text-text">{company}</div>
-            {s?.company_address?.trim() && (
-              <div className="text-xs text-text-muted">{s.company_address}</div>
+            {show("company") && (
+              <>
+                <div className="text-base font-extrabold text-text">{company}</div>
+                {s?.company_address?.trim() && (
+                  <div className="text-xs text-text-muted">{s.company_address}</div>
+                )}
+                {s?.company_website?.trim() && (
+                  <div className="text-xs text-text-faint">{s.company_website}</div>
+                )}
+                {s?.company_phone?.trim() && (
+                  <div className="text-xs text-text-muted">{s.company_phone}</div>
+                )}
+              </>
             )}
-            {s?.company_website?.trim() && (
-              <div className="text-xs text-text-faint">{s.company_website}</div>
+            {show("contacts") && (
+              <table className="mt-2 w-full border-collapse">
+                <tbody>
+                  <ContactRow role="Producer" name={s?.producer} phone={s?.producer_phone} />
+                  <ContactRow role="Director" name={s?.director} phone={s?.director_phone} />
+                  <ContactRow role="PM" name={s?.pm} phone={s?.pm_phone} />
+                </tbody>
+              </table>
             )}
-            {s?.company_phone?.trim() && (
-              <div className="text-xs text-text-muted">{s.company_phone}</div>
-            )}
-            <table className="mt-2 w-full border-collapse">
-              <tbody>
-                <ContactRow role="Producer" name={s?.producer} phone={s?.producer_phone} />
-                <ContactRow role="Director" name={s?.director} phone={s?.director_phone} />
-                <ContactRow role="PM" name={s?.pm} phone={s?.pm_phone} />
-              </tbody>
-            </table>
           </div>
 
           {/* Title + CALL badge */}
@@ -211,7 +233,10 @@ export default async function CallSheetPrintPage({
             <h1 className="font-display text-xl font-extrabold leading-tight tracking-tight text-text">
               {title}
             </h1>
-            <div className="grid h-32 w-32 place-items-center rounded-full border-4 border-border-strong">
+            <div
+              className="grid h-32 w-32 place-items-center rounded-full border-4"
+              style={{ borderColor: accent }}
+            >
               <div className="text-center">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-text-faint">
                   Call
@@ -246,45 +271,67 @@ export default async function CallSheetPrintPage({
         </div>
 
         {/* Location + notes */}
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="border border-border p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-text-faint">
-              Location
-            </div>
-            <div className="mt-0.5 text-sm font-medium text-text">
-              {s?.location?.trim() || "—"}
-            </div>
-            {mapsHref && (
-              <a
-                href={mapsHref}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs font-semibold text-accent hover:underline"
-              >
-                Open in Google Maps
-              </a>
-            )}
-            {s?.parking?.trim() && (
-              <div className="mt-2">
+        {(show("locations") || show("notes")) && (
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {show("locations") && (
+              <div className="border border-border p-3">
                 <div className="text-[10px] font-bold uppercase tracking-wide text-text-faint">
-                  Parking
+                  Location
                 </div>
-                <div className="text-sm text-text-muted">{s.parking}</div>
+                <div className="mt-0.5 text-sm font-medium text-text">
+                  {s?.location?.trim() || "—"}
+                </div>
+                {mapsHref && (
+                  <a
+                    href={mapsHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-accent hover:underline"
+                  >
+                    Open in Google Maps
+                  </a>
+                )}
+                {s?.parking?.trim() && (
+                  <div className="mt-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-text-faint">
+                      Parking
+                    </div>
+                    <div className="text-sm text-text-muted">{s.parking}</div>
+                  </div>
+                )}
+              </div>
+            )}
+            {show("notes") && (
+              <div className="border border-border p-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-text-faint">
+                  Production notes
+                </div>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm text-text-muted">
+                  {s?.notes?.trim() || "—"}
+                </p>
               </div>
             )}
           </div>
-          <div className="border border-border p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-text-faint">
-              Production notes
-            </div>
-            <p className="mt-0.5 whitespace-pre-wrap text-sm text-text-muted">
-              {s?.notes?.trim() || "—"}
-            </p>
-          </div>
-        </div>
+        )}
 
-        <People title="Cast & talent" roleLabel="Character" extraLabel="Notes" people={cast} />
-        <People title="Crew" roleLabel="Role" extraLabel="Contact" people={crew} />
+        {/* Custom text blocks from the builder */}
+        {textBlocks.map((b) => (
+          <div key={b.id} className="mt-3 border border-border p-3">
+            {b.title?.trim() && (
+              <div className="text-[10px] font-bold uppercase tracking-wide text-text-faint">
+                {b.title}
+              </div>
+            )}
+            <p className="mt-0.5 whitespace-pre-wrap text-sm text-text-muted">{b.body}</p>
+          </div>
+        ))}
+
+        {show("cast") && (
+          <People title="Cast & talent" roleLabel="Character" extraLabel="Notes" people={cast} accent={accent} />
+        )}
+        {show("crew") && (
+          <People title="Crew" roleLabel="Role" extraLabel="Contact" people={crew} accent={accent} />
+        )}
 
         <div className="mt-4 flex items-center justify-between text-[10px] text-text-faint">
           <span>

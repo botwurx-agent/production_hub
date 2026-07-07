@@ -816,6 +816,8 @@ export type Database = {
           title: string | null;
           status: string;
           position: number;
+          layout: Json | null;
+          accent: string | null;
           created_by: string | null;
           updated_at: string;
         };
@@ -852,6 +854,8 @@ export type Database = {
           title?: string | null;
           status?: string;
           position?: number;
+          layout?: Json | null;
+          accent?: string | null;
           created_by?: string | null;
           updated_at?: string;
         };
@@ -888,6 +892,8 @@ export type Database = {
           title?: string | null;
           status?: string;
           position?: number;
+          layout?: Json | null;
+          accent?: string | null;
           created_by?: string | null;
           updated_at?: string;
         };

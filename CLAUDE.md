@@ -288,11 +288,23 @@ implemented (out of strict order, driven by the operator's real needs).
   (createCallSheet/renameCallSheet/setCallSheetStatus/deleteCallSheet/saveCallSheet
   by id + entry CRUD by call_sheet_id). call-sheet.tsx takes callSheetId; PDF
   export at /production/callsheet?cs=<id>. (Old call-sheet actions in
-  production/actions.ts are now dead.) NEXT call-sheet ships (operator wants a
-  full StudioBinder-style builder): (2) send via shareable link + who-viewed/
-  who-confirmed tracking [operator chose the link+tracking route, not in-app
-  email]; (3) block-builder editor (edit-on-sheet, add/reorder/hide blocks) +
-  style controls + saved templates.
+  production/actions.ts are now dead.)
+  BLOCK-BUILDER editor (edit-on-the-sheet): the active sheet renders as a
+  document you edit in place, composed of ordered BLOCKS. call_sheets gained
+  layout jsonb + accent (migration 0037). lib/callsheet-blocks.ts = block model
+  (CallSheetBlock, FIXED_BLOCKS header/schedule/locations/contacts/company/cast/
+  crew/notes, defaultLayout, normalizeLayout). components/production/
+  callsheet-builder.tsx (replaces the old form CallSheet in the workspace):
+  fixed blocks map to the structured columns (edit-in-place, save on blur);
+  custom "text" blocks store title/body in layout; per-block hover rail =
+  move up/down + hide (fixed) / remove (text); "Add block" palette re-adds
+  hidden blocks or a custom text block; accent color picker. Persists via
+  saveCallSheetLayout / saveCallSheetAccent (callsheet-actions.ts). The print
+  view (/production/callsheet) honors hidden blocks + custom text blocks +
+  accent, but keeps the industry 3-col header layout (full section reorder in
+  the PDF is not yet reflected). NEXT: (3) send via shareable link + who-viewed/
+  who-confirmed tracking [operator chose link+tracking, not in-app email];
+  later, deeper styles + saved templates.
 - Studio logo upload (Settings → Branding); shows on sidebar, call sheet, shot
   board cover.
 - Modals render via portal to document.body (avoids fixed-in-transform bugs).
@@ -357,7 +369,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0035: contact_details; 0034 =
+files in supabase/migrations (through 0037: call_sheet_layout; 0036 =
+call_sheets_multi; 0035: contact_details; 0034 =
 project_events; 0033 = project_contacts; 0032 = doc_reviews; 0031 =
 doc_approval_targets; 0030 = generic_review_target). When adding a
 table/column, also hand-update lib/database.types.ts.
