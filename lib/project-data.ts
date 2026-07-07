@@ -72,7 +72,9 @@ export async function loadProjectAssets(
     const [{ data: comments }, { data: approvals }] = await Promise.all([
       supabase
         .from("review_comments")
-        .select("id, body, created_at, author_id, reviewer_name, version_id")
+        .select(
+          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pos_x, pos_y, timecode, resolved_at"
+        )
         .in("version_id", versionIds),
       supabase
         .from("approvals")

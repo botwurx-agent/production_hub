@@ -9,12 +9,16 @@ export function Modal({
   onClose,
   title,
   children,
+  size = "md",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
+  size?: "md" | "lg" | "xl";
 }) {
+  const maxW =
+    size === "xl" ? "max-w-5xl" : size === "lg" ? "max-w-2xl" : "max-w-md";
   // Portal target: only available after mount (avoids SSR/hydration issues).
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -41,7 +45,7 @@ export function Modal({
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 w-full max-w-md rounded-[18px] border border-border bg-surface shadow-lg">
+      <div className={`relative z-10 w-full ${maxW} rounded-[18px] border border-border bg-surface shadow-lg`}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="font-display text-lg font-bold text-text">{title}</h2>
           <button

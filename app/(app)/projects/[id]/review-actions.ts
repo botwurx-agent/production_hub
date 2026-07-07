@@ -31,6 +31,77 @@ export async function addReviewComment(
   return null;
 }
 
+// Add an internal review comment with an optional anchor: an image pin
+// (percent coords) or a video timecode (seconds). Both get a marker number.
+export async function addReviewCommentAt(
+  projectId: string,
+  versionId: string,
+  body: string,
+  pin?: { x: number; y: number } | null,
+  timecode?: number | null
+): Promise<ReviewState> {
+  const ctx = await requireStudioContext();
+  const text = body.trim();
+  if (!text) return { error: "Write a comment first." };
+
+  const supabase = createClient();
+
+  const hasPin = pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
+  const hasTime = timecode != null && Number.isFinite(timecode);
+  let pinNumber: number | null = null;
+  let posX: number | null = null;
+  let posY: number | null = null;
+  let time: number | null = null;
+  if (hasPin || hasTime) {
+    if (hasPin) {
+      posX = Math.max(0, Math.min(100, pin!.x));
+      posY = Math.max(0, Math.min(100, pin!.y));
+    }
+    if (hasTime) time = Math.max(0, timecode as number);
+    const { data: lastPin } = await supabase
+      .from("review_comments")
+      .select("pin_number")
+      .eq("version_id", versionId)
+      .not("pin_number", "is", null)
+      .order("pin_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    pinNumber = ((lastPin?.pin_number as number | null) ?? 0) + 1;
+  }
+
+  const { error } = await supabase.from("review_comments").insert({
+    studio_id: ctx.studio.id,
+    version_id: versionId,
+    author_id: ctx.userId,
+    body: text,
+    pin_number: pinNumber,
+    pos_x: posX,
+    pos_y: posY,
+    timecode: time,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/assets`);
+  return null;
+}
+
+// Toggle a review comment's resolved state (RLS scopes it to the studio).
+export async function resolveReviewComment(
+  projectId: string,
+  commentId: string,
+  resolved: boolean
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("review_comments")
+    .update({ resolved_at: resolved ? new Date().toISOString() : null })
+    .eq("id", commentId);
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/assets`);
+}
+
 // Record (or clear) the current team member's internal sign-off on a version.
 // status "pending" retracts an existing decision.
 export async function setVersionApproval(

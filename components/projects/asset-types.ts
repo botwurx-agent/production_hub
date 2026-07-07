@@ -6,6 +6,11 @@ export type VersionComment = {
   created_at: string;
   author_id: string | null;
   reviewer_name: string | null;
+  pin_number: number | null;
+  pos_x: number | null;
+  pos_y: number | null;
+  timecode: number | null;
+  resolved_at: string | null;
 };
 
 export type VersionApproval = {

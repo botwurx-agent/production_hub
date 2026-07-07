@@ -177,8 +177,12 @@ implemented (out of strict order, driven by the operator's real needs).
   moment, markers on a timeline, click a comment to seek; review_comments.timecode
   (migration 0027); submitClientComment takes an optional timecode. Other file
   types keep the flat comment flow. PinReview/VideoReview are context-agnostic
-  (parent passes onPost/onResolve) so they can be reused on the internal asset
-  view + docs.
+  (parent passes onPost/onResolve). The in-app Review button (components/projects/
+  review-modal.tsx, opened from AssetCard) reuses the SAME canvas: image -> pins,
+  video -> timecodes, else flat, in an xl Modal, above the internal sign-off.
+  Team + client comments share one stream per version (internal actions
+  addReviewCommentAt / resolveReviewComment; no name gate for logged-in users).
+  Modal gained a size prop (md/lg/xl). Next reuse target: docs.
 - AI layer (Phase 4): provider-agnostic (lib/ai.ts, Anthropic or OpenAI).
   Project summary, AI-drafted client update, AI-drafted lead outreach. Rules-
   based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
