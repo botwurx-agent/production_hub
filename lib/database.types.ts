@@ -1452,6 +1452,42 @@ export type Database = {
           },
         ];
       };
+      doc_reviews: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          target_type: string;
+          target_id: string;
+          status: string;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          target_type: string;
+          target_id: string;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          target_type?: string;
+          target_id?: string;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       review_comments: {
         Row: {
           author_id: string | null;
@@ -1770,6 +1806,7 @@ export type Approval = Tables<"approvals">;
 export type Activity = Tables<"activity">;
 export type ReviewComment = Tables<"review_comments">;
 export type ReviewLink = Tables<"review_links">;
+export type DocReview = Tables<"doc_reviews">;
 export type Board = Tables<"boards">;
 export type BoardItem = Tables<"board_items">;
 export type Shot = Tables<"shots">;

@@ -200,8 +200,29 @@ implemented (out of strict order, driven by the operator's real needs).
   "Share for review" button, wired into the shot list (subhead action), the
   storyboard editor header (per active board), and the moodboard (BoardsWorkspace
   reviewKind prop, per active board). /r/[token] branches on target_type: a doc
-  link renders the live doc with pins, else the existing asset review. The
-  in-app Review button on docs is a possible fast follow (not built yet).
+  link renders the live doc with pins, else the existing asset review.
+- Doc review cycle (internal + external, two layers like assets): a doc can be
+  put into the project's internal review pipeline so it shows on the Review page
+  (/projects/[id]/review) alongside assets, grouped by the same status buckets
+  (in_review / needs_changes / approved). doc_reviews table (migration 0032:
+  studio/project/target_type/target_id/status, unique per target) is the pipeline
+  row. Doc pages now carry a "Send to review" button (components/projects/
+  send-to-review-button.tsx) instead of the client-share button; it calls
+  sendDocToReview and, once in review, becomes a quiet "In review · View" chip.
+  On the Review page each doc renders a DocReviewCard (components/review/
+  doc-review-card.tsx): opens DocReviewModal (components/review/doc-review-modal.tsx
+  = the SAME PinCanvas over DocSurfaceView + a team internal sign-off = the
+  greenlight), and carries the client-share button (ShareDocButton, relocated
+  here from the doc pages) so the flow is: send to review -> internal pins +
+  greenlight -> share with client. Internal team comments reuse review_comments
+  (author_id set, target_type/target_id); internal sign-off reuses approvals
+  (target_type=kind, target_id, reviewer_user_id) and moves doc_reviews.status
+  (approve->approved, request->needs_changes). doc-review-actions.ts:
+  sendDocToReview / removeDocFromReview / addDocReviewCommentAt /
+  resolveDocReviewComment / setDocApproval / getDocReviewDetail. Shared loaders:
+  loadDocSurface (lib/review-links.ts, client-agnostic, used by both the service
+  portal and the RLS internal path) + lib/doc-review-data.ts
+  (loadDocReviewsForProject summary, loadDocReviewDetail for the modal).
 - AI layer (Phase 4): provider-agnostic (lib/ai.ts, Anthropic or OpenAI).
   Project summary, AI-drafted client update, AI-drafted lead outreach. Rules-
   based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
@@ -294,8 +315,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0031: doc_approval_targets; 0030 =
-generic_review_target). When adding a
+files in supabase/migrations (through 0032: doc_reviews; 0031 =
+doc_approval_targets; 0030 = generic_review_target). When adding a
 table/column, also hand-update lib/database.types.ts.
 
 ### Working notes for a fresh session

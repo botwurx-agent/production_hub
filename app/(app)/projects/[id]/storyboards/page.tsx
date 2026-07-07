@@ -66,6 +66,13 @@ export default async function ProjectStoryboardsPage({
     }));
   }
 
+  const { data: docReviews } = await supabase
+    .from("doc_reviews")
+    .select("target_id")
+    .eq("project_id", project.id)
+    .eq("target_type", "storyboard");
+  const reviewedIds = (docReviews ?? []).map((d) => d.target_id);
+
   const { assets } = await loadProjectAssets(supabase, project.id);
   const pickable: PickableAsset[] = assets.map((a) => {
     const cur =
@@ -93,6 +100,7 @@ export default async function ProjectStoryboardsPage({
         boards={boards}
         frames={frames}
         assets={pickable}
+        reviewedIds={reviewedIds}
       />
     </div>
   );

@@ -16,7 +16,7 @@ import {
   clearFrameImage,
 } from "@/app/(app)/projects/[id]/storyboard-actions";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
-import { ShareDocButton } from "@/components/review/share-doc-button";
+import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 
 export type StoryboardBoard = { id: string; name: string };
 export type FrameView = {
@@ -39,11 +39,13 @@ export function StoryboardEditor({
   boards,
   frames,
   assets,
+  reviewedIds = [],
 }: {
   projectId: string;
   boards: StoryboardBoard[];
   frames: FrameView[];
   assets: PickableAsset[];
+  reviewedIds?: string[];
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -143,10 +145,11 @@ export function StoryboardEditor({
               <span className="shrink-0 text-xs font-semibold text-text-faint">
                 {activeFrames.length} {activeFrames.length === 1 ? "frame" : "frames"}
               </span>
-              <ShareDocButton
+              <SendToReviewButton
                 projectId={projectId}
                 kind="storyboard"
                 targetId={active.id}
+                inReview={reviewedIds.includes(active.id)}
               />
               <button
                 onClick={() => {

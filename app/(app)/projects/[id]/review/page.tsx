@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { Card, EmptyState } from "@/components/ui/card";
 import { AssetCard } from "@/components/projects/asset-card";
+import { DocReviewCard } from "@/components/review/doc-review-card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { StatusTag } from "@/components/status-tag";
 import { ASSET_STATUS } from "@/lib/status";
 import { loadProjectAssets } from "@/lib/project-data";
+import { loadDocReviewsForProject } from "@/lib/doc-review-data";
 import type { AssetStatus } from "@/lib/database.types";
 
 // The review pipeline: assets that are in the review cycle, grouped by state.
@@ -37,6 +39,7 @@ export default async function ReviewPage({
     supabase,
     project.id
   );
+  const docReviews = await loadDocReviewsForProject(supabase, project.id);
 
   const inReview = assets.filter((a) =>
     SECTIONS.some((s) => s.status === a.status)
@@ -49,7 +52,7 @@ export default async function ReviewPage({
         projectTitle={project.title}
         section="Review & approvals"
         hue="pink"
-        subtitle="Assets in the review cycle. Comment, sign off, or share with the client."
+        subtitle="Assets and documents in the review cycle. Comment, sign off, or share with the client."
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 11l3 3 8-8" />
@@ -58,7 +61,7 @@ export default async function ReviewPage({
         }
       />
 
-      {inReview.length === 0 ? (
+      {inReview.length === 0 && docReviews.length === 0 ? (
         <EmptyState
           hue="pink"
           icon={
@@ -68,7 +71,7 @@ export default async function ReviewPage({
             </svg>
           }
           title="Nothing in review yet"
-          description="When a deliverable is ready for feedback, set its status to “In review” on the Assets page and it will appear here."
+          description="When a deliverable is ready for feedback, set an asset to “In review” or hit “Send to review” on a shot list, storyboard, or moodboard, and it will appear here."
           action={
             <Link
               href={`/projects/${project.id}/assets`}
@@ -96,14 +99,15 @@ export default async function ReviewPage({
         <div className="space-y-8">
           {SECTIONS.map((section) => {
             const items = inReview.filter((a) => a.status === section.status);
-            if (items.length === 0) return null;
+            const docs = docReviews.filter((d) => d.status === section.status);
+            if (items.length === 0 && docs.length === 0) return null;
             const meta = ASSET_STATUS[section.status];
             return (
               <div key={section.status}>
                 <div className="mb-3 flex items-center gap-2">
                   <StatusTag hue={meta.hue}>{section.label}</StatusTag>
                   <span className="text-xs font-semibold text-text-faint">
-                    {items.length}
+                    {items.length + docs.length}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -116,6 +120,9 @@ export default async function ReviewPage({
                       currentUserId={ctx.userId}
                       reviewLink={reviewLinkByAsset.get(a.id) ?? null}
                     />
+                  ))}
+                  {docs.map((d) => (
+                    <DocReviewCard key={d.id} projectId={project.id} doc={d} />
                   ))}
                 </div>
               </div>

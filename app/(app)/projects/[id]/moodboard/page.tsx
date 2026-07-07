@@ -43,6 +43,13 @@ export default async function ProjectMoodboardPage({
         .maybeSingle(),
     ]);
 
+  const { data: docReviews } = await supabase
+    .from("doc_reviews")
+    .select("target_id")
+    .eq("project_id", project.id)
+    .eq("target_type", "moodboard");
+  const reviewedIds = (docReviews ?? []).map((d) => d.target_id);
+
   return (
     <div>
       <ProjectSubhead
@@ -67,6 +74,7 @@ export default async function ProjectMoodboardPage({
         scope={{ kind: "moodboard", projectId: project.id }}
         noun="moodboard"
         reviewKind="moodboard"
+        reviewedIds={reviewedIds}
       />
     </div>
   );

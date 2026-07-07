@@ -20,7 +20,7 @@ import {
   addDriveItems,
   type BoardItemView,
 } from "@/app/(app)/boards/actions";
-import { ShareDocButton } from "@/components/review/share-doc-button";
+import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { Board } from "@/lib/database.types";
 
 type ProjectRef = { id: string; title: string };
@@ -33,6 +33,7 @@ export function BoardsWorkspace({
   scope = { kind: "general" },
   noun = "board",
   reviewKind,
+  reviewedIds = [],
 }: {
   initialBoards: Board[];
   projects: ProjectRef[];
@@ -41,9 +42,11 @@ export function BoardsWorkspace({
   // What new boards belong to: a project-scoped kind, or the global scratch.
   scope?: { kind?: string; projectId?: string };
   noun?: string;
-  // When set (with a project scope), the active board can be shared for client
-  // review as this doc kind (e.g. "moodboard").
+  // When set (with a project scope), the active board can be sent to review as
+  // this doc kind (e.g. "moodboard").
   reviewKind?: "moodboard" | "storyboard";
+  // Board ids already in the review cycle.
+  reviewedIds?: string[];
 }) {
   const [boards, setBoards] = useState<Board[]>(initialBoards);
   const [activeId, setActiveId] = useState<string | null>(
@@ -289,10 +292,11 @@ export function BoardsWorkspace({
                 ))}
               </div>
               {reviewKind && scope.projectId && (
-                <ShareDocButton
+                <SendToReviewButton
                   projectId={scope.projectId}
                   kind={reviewKind}
                   targetId={active.id}
+                  inReview={reviewedIds.includes(active.id)}
                 />
               )}
               <button className={toolBtn} onClick={() => setSettingsOpen(true)}>

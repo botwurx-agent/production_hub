@@ -8,7 +8,7 @@ import {
   type PickableAsset,
 } from "@/components/production/shot-board-editor";
 import { loadProjectAssets } from "@/lib/project-data";
-import { ShareDocButton } from "@/components/review/share-doc-button";
+import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
@@ -28,14 +28,21 @@ export default async function ShotListPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: board }, { data: groups }] = await Promise.all([
-    supabase.from("shot_boards").select("*").eq("project_id", params.id).maybeSingle(),
-    supabase
-      .from("shot_groups")
-      .select("*")
-      .eq("project_id", params.id)
-      .order("position", { ascending: true }),
-  ]);
+  const [{ data: board }, { data: groups }, { data: docReview }] =
+    await Promise.all([
+      supabase.from("shot_boards").select("*").eq("project_id", params.id).maybeSingle(),
+      supabase
+        .from("shot_groups")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("position", { ascending: true }),
+      supabase
+        .from("doc_reviews")
+        .select("id")
+        .eq("target_type", "shot_list")
+        .eq("target_id", params.id)
+        .maybeSingle(),
+    ]);
 
   const groupIds = (groups ?? []).map((g) => g.id);
   let cards: CardView[] = [];
@@ -98,10 +105,11 @@ export default async function ShotListPage({
           </svg>
         }
         action={
-          <ShareDocButton
+          <SendToReviewButton
             projectId={project.id}
             kind="shot_list"
             targetId={project.id}
+            inReview={Boolean(docReview)}
           />
         }
       />

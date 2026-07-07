@@ -245,6 +245,138 @@ async function signPaths(
 // Assembles the read-only doc surface + its comments + this link's decision.
 // Runs with the service client, so it only reads rows tied to the link's
 // target_id / studio_id.
+// Loads a read-only render of a doc surface + its display title. Works with any
+// SupabaseClient (the service client for the public portal, or the RLS client
+// for internal in-app review), so both review paths share one renderer.
+export async function loadDocSurface(
+  client: SupabaseClient<Database>,
+  kind: DocKind,
+  targetId: string
+): Promise<{ surface: DocSurface; docTitle: string } | null> {
+  if (kind === "shot_list") {
+    // target_id = project id; the whole shot board (all lists).
+    const [{ data: board }, { data: groups }] = await Promise.all([
+      client
+        .from("shot_boards")
+        .select("title, subtitle")
+        .eq("project_id", targetId)
+        .maybeSingle(),
+      client
+        .from("shot_groups")
+        .select("id, title, subtitle")
+        .eq("project_id", targetId)
+        .order("position", { ascending: true }),
+    ]);
+    const groupIds = (groups ?? []).map((g) => g.id);
+    let cardRows: Array<Record<string, unknown>> = [];
+    if (groupIds.length > 0) {
+      const { data } = await client
+        .from("shot_cards")
+        .select(
+          "id, group_id, position, code, day, description, shot_size, shot_type, movement, storage_path"
+        )
+        .in("group_id", groupIds)
+        .order("position", { ascending: true });
+      cardRows = (data ?? []) as Array<Record<string, unknown>>;
+    }
+    const signed = await signPaths(
+      client,
+      cardRows.map((c) => c.storage_path as string).filter(Boolean)
+    );
+    return {
+      surface: {
+        kind: "shot_list",
+        cover: board ?? null,
+        groups: (groups ?? []).map((g) => ({
+          id: g.id,
+          title: g.title || "Untitled list",
+          subtitle: g.subtitle ?? null,
+          cards: cardRows
+            .filter((c) => c.group_id === g.id)
+            .map((c) => ({
+              id: c.id as string,
+              code: (c.code as string) ?? null,
+              day: (c.day as string) ?? null,
+              description: (c.description as string) ?? null,
+              shotSize: (c.shot_size as string) ?? null,
+              shotType: (c.shot_type as string) ?? null,
+              movement: (c.movement as string) ?? null,
+              signedUrl: c.storage_path
+                ? signed.get(c.storage_path as string) ?? null
+                : null,
+            })),
+        })),
+      },
+      docTitle: board?.title || "Shot list",
+    };
+  }
+
+  // storyboard | moodboard: target_id = boards.id
+  const { data: boardRow } = await client
+    .from("boards")
+    .select("id, name")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (!boardRow) return null;
+  const docTitle =
+    boardRow.name || (kind === "storyboard" ? "Storyboard" : "Moodboard");
+
+  if (kind === "storyboard") {
+    const { data: frameRows } = await client
+      .from("storyboard_frames")
+      .select("id, scene, description, sound, notes, storage_path")
+      .eq("board_id", targetId)
+      .order("position", { ascending: true });
+    const signed = await signPaths(
+      client,
+      (frameRows ?? []).map((f) => f.storage_path as string).filter(Boolean)
+    );
+    return {
+      surface: {
+        kind: "storyboard",
+        frames: (frameRows ?? []).map((f) => ({
+          id: f.id,
+          scene: f.scene,
+          description: f.description,
+          sound: f.sound,
+          notes: f.notes,
+          signedUrl: f.storage_path ? signed.get(f.storage_path) ?? null : null,
+        })),
+      },
+      docTitle,
+    };
+  }
+
+  const { data: itemRows } = await client
+    .from("board_items")
+    .select("id, kind, name, mime_type, text, hue, x, y, w, h, z, storage_path, url")
+    .eq("board_id", targetId)
+    .order("z", { ascending: true });
+  const signed = await signPaths(
+    client,
+    (itemRows ?? []).map((i) => i.storage_path as string).filter(Boolean)
+  );
+  return {
+    surface: {
+      kind: "moodboard",
+      items: (itemRows ?? []).map((i) => ({
+        id: i.id,
+        kind: i.kind,
+        name: i.name,
+        text: i.text,
+        hue: i.hue,
+        x: i.x,
+        y: i.y,
+        w: i.w,
+        h: i.h,
+        z: i.z,
+        signedUrl: i.storage_path ? signed.get(i.storage_path) ?? null : i.url,
+      })),
+    },
+    docTitle,
+  };
+}
+
 export async function gatherDocReview(
   service: SupabaseClient<Database>,
   link: ReviewLink
@@ -260,124 +392,9 @@ export async function gatherDocReview(
   const studioName = studio?.name ?? "The studio";
   const projectTitle = project?.title ?? "Project";
 
-  let surface: DocSurface | null = null;
-  let docTitle = "";
-
-  if (kind === "shot_list") {
-    // target_id = project id; the whole shot board (all lists).
-    const [{ data: board }, { data: groups }] = await Promise.all([
-      service
-        .from("shot_boards")
-        .select("title, subtitle")
-        .eq("project_id", targetId)
-        .maybeSingle(),
-      service
-        .from("shot_groups")
-        .select("id, title, subtitle")
-        .eq("project_id", targetId)
-        .order("position", { ascending: true }),
-    ]);
-    const groupIds = (groups ?? []).map((g) => g.id);
-    let cardRows: Array<Record<string, unknown>> = [];
-    if (groupIds.length > 0) {
-      const { data } = await service
-        .from("shot_cards")
-        .select(
-          "id, group_id, position, code, day, description, shot_size, shot_type, movement, storage_path"
-        )
-        .in("group_id", groupIds)
-        .order("position", { ascending: true });
-      cardRows = (data ?? []) as Array<Record<string, unknown>>;
-    }
-    const signed = await signPaths(
-      service,
-      cardRows.map((c) => c.storage_path as string).filter(Boolean)
-    );
-    surface = {
-      kind: "shot_list",
-      cover: board ?? null,
-      groups: (groups ?? []).map((g) => ({
-        id: g.id,
-        title: g.title || "Untitled list",
-        subtitle: g.subtitle ?? null,
-        cards: cardRows
-          .filter((c) => c.group_id === g.id)
-          .map((c) => ({
-            id: c.id as string,
-            code: (c.code as string) ?? null,
-            day: (c.day as string) ?? null,
-            description: (c.description as string) ?? null,
-            shotSize: (c.shot_size as string) ?? null,
-            shotType: (c.shot_type as string) ?? null,
-            movement: (c.movement as string) ?? null,
-            signedUrl: c.storage_path
-              ? signed.get(c.storage_path as string) ?? null
-              : null,
-          })),
-      })),
-    };
-    docTitle = board?.title || "Shot list";
-  } else {
-    // storyboard | moodboard: target_id = boards.id
-    const { data: boardRow } = await service
-      .from("boards")
-      .select("id, name")
-      .eq("id", targetId)
-      .maybeSingle();
-    if (!boardRow) return null;
-    docTitle = boardRow.name || (kind === "storyboard" ? "Storyboard" : "Moodboard");
-
-    if (kind === "storyboard") {
-      const { data: frameRows } = await service
-        .from("storyboard_frames")
-        .select("id, scene, description, sound, notes, storage_path")
-        .eq("board_id", targetId)
-        .order("position", { ascending: true });
-      const signed = await signPaths(
-        service,
-        (frameRows ?? []).map((f) => f.storage_path as string).filter(Boolean)
-      );
-      surface = {
-        kind: "storyboard",
-        frames: (frameRows ?? []).map((f) => ({
-          id: f.id,
-          scene: f.scene,
-          description: f.description,
-          sound: f.sound,
-          notes: f.notes,
-          signedUrl: f.storage_path ? signed.get(f.storage_path) ?? null : null,
-        })),
-      };
-    } else {
-      const { data: itemRows } = await service
-        .from("board_items")
-        .select("id, kind, name, mime_type, text, hue, x, y, w, h, z, storage_path, url")
-        .eq("board_id", targetId)
-        .order("z", { ascending: true });
-      const signed = await signPaths(
-        service,
-        (itemRows ?? []).map((i) => i.storage_path as string).filter(Boolean)
-      );
-      surface = {
-        kind: "moodboard",
-        items: (itemRows ?? []).map((i) => ({
-          id: i.id,
-          kind: i.kind,
-          name: i.name,
-          text: i.text,
-          hue: i.hue,
-          x: i.x,
-          y: i.y,
-          w: i.w,
-          h: i.h,
-          z: i.z,
-          signedUrl: i.storage_path ? signed.get(i.storage_path) ?? null : i.url,
-        })),
-      };
-    }
-  }
-
-  if (!surface) return null;
+  const loaded = await loadDocSurface(service, kind, targetId);
+  if (!loaded) return null;
+  const { surface, docTitle } = loaded;
 
   const [{ data: commentsRaw }, { data: myApproval }] = await Promise.all([
     service
