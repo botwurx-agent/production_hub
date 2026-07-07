@@ -182,7 +182,26 @@ implemented (out of strict order, driven by the operator's real needs).
   video -> timecodes, else flat, in an xl Modal, above the internal sign-off.
   Team + client comments share one stream per version (internal actions
   addReviewCommentAt / resolveReviewComment; no name gate for logged-in users).
-  Modal gained a size prop (md/lg/xl). Next reuse target: docs.
+  Modal gained a size prop (md/lg/xl).
+- Generalized doc review (client-facing): the SAME Frame.io pin + approve/
+  request-changes flow now works on whole doc surfaces, not just asset versions.
+  review_links + review_comments gained nullable target_type/target_id (migration
+  0030) and approval_target enum gained shot_list/storyboard/moodboard (migration
+  0031). A doc link carries no asset/version: target_type in ('shot_list',
+  'storyboard','moodboard'), target_id = project id (shot_list, the whole shot
+  board) or boards.id (storyboard/moodboard). PinReview was refactored to
+  delegate to a generic components/review/pin-canvas.tsx (pins over any surface
+  node); components/review/doc-surface.tsx renders read-only shot list /
+  storyboard / moodboard as the pinnable stage; components/review/doc-review.tsx
+  is the portal shell (name gate + PinCanvas + decision). lib/review-links.ts
+  gained gatherDocReview + DocKind/DocReviewData/DocSurface; r/[token]/actions.ts
+  gained submitDocComment/resolveDocComment/submitDocDecision; share-actions.ts
+  gained createDocReviewLink; components/review/share-doc-button.tsx is the
+  "Share for review" button, wired into the shot list (subhead action), the
+  storyboard editor header (per active board), and the moodboard (BoardsWorkspace
+  reviewKind prop, per active board). /r/[token] branches on target_type: a doc
+  link renders the live doc with pins, else the existing asset review. The
+  in-app Review button on docs is a possible fast follow (not built yet).
 - AI layer (Phase 4): provider-agnostic (lib/ai.ts, Anthropic or OpenAI).
   Project summary, AI-drafted client update, AI-drafted lead outreach. Rules-
   based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
@@ -275,7 +294,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0029: storyboard_frames). When adding a
+files in supabase/migrations (through 0031: doc_approval_targets; 0030 =
+generic_review_target). When adding a
 table/column, also hand-update lib/database.types.ts.
 
 ### Working notes for a fresh session
