@@ -278,6 +278,15 @@ adding a table/column, also hand-update lib/database.types.ts.
   to fix it by rebasing deployed history.
 - Standing style rule: no em dashes in any generated content.
 
+### Open decisions to revisit (after the operator tests the full flow)
+- Assets vs Review UI: operator leans toward NO review capabilities on the
+  Assets page (keep it a pure library). Deferred until they run the end-to-end
+  flow and decide. When picked up: strip the Review-canvas button, the review/
+  sign-off signal, and the ShareReviewButton from AssetCard when it's on the
+  Assets page (add a `review` prop, default off) but keep them on the Review
+  page. Also decide how a file enters Review: (1) a "Send to review" button on
+  the asset [recommended], or (2) an "Add to review" picker on the Review page.
+
 ### Next step
 Run a real job through Production and the connectors; let friction drive the
 backlog. Remaining roadmap: Phase 7 (AI-video pipeline), a notifications/inbox
