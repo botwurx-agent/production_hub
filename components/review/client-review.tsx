@@ -195,18 +195,34 @@ export function ClientReview({
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-      <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-text-faint">
-          {data.studioName} · {data.projectTitle}
-        </p>
-        <h1 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-text">
-          {data.asset.name}
-        </h1>
-        <p className="mt-1 text-sm text-text-muted">
-          {isImage
-            ? "Click anywhere on the image to leave a pinned comment, then approve or request changes."
-            : "Please review and approve, or request changes."}
-        </p>
+      <div className="mb-6 overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
+        <div
+          className="h-1 w-full"
+          style={{
+            background:
+              "linear-gradient(90deg, var(--accent), var(--h-purple) 55%, var(--h-cyan))",
+          }}
+        />
+        <div className="flex flex-wrap items-start justify-between gap-4 p-5">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-faint">
+              {data.studioName} · {data.projectTitle}
+            </p>
+            <h1 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-text">
+              {data.asset.name}
+            </h1>
+            <p className="mt-1 text-sm text-text-muted">
+              {isImage
+                ? "Click anywhere on the image to leave a pinned comment, then approve or request changes."
+                : "Please review and approve, or request changes."}
+            </p>
+          </div>
+          {current && (
+            <span className="shrink-0 rounded-pill border border-border-strong px-3 py-1 text-xs font-bold text-text-muted">
+              Version {current.version_number}
+            </span>
+          )}
+        </div>
       </div>
 
       {!current ? (

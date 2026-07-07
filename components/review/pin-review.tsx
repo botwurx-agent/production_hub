@@ -4,9 +4,9 @@ import { useRef, useState } from "react";
 import { timeAgo } from "@/lib/format";
 import type { PortalComment } from "@/lib/review-links";
 
-// Frame.io-style pinned review: click the image to drop a numbered pin and open
-// a matching comment; the sidebar stays in sync. Context-agnostic: the parent
-// supplies the post/resolve handlers (authenticated app or token portal).
+// Frame.io-style pinned review: click the image to drop the next numbered pin
+// and open a matching comment; the sidebar stays in sync. Context-agnostic:
+// the parent supplies the post/resolve handlers (authenticated app or portal).
 export function PinReview({
   imageUrl,
   alt,
@@ -33,12 +33,14 @@ export function PinReview({
   const [sending, setSending] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
 
-  // Pins render only for unresolved, positioned comments.
   const pins = comments.filter(
     (c) => !c.resolved && c.x != null && c.y != null && c.pinNumber != null
   );
   const resolvedCount = comments.filter((c) => c.resolved).length;
   const visible = comments.filter((c) => showResolved || !c.resolved);
+  // The number the next pin will get, shown live on the pending marker.
+  const nextPin =
+    comments.reduce((m, c) => (c.pinNumber && c.pinNumber > m ? c.pinNumber : m), 0) + 1;
 
   function placePin(e: React.MouseEvent) {
     const el = wrapRef.current;
@@ -52,7 +54,7 @@ export function PinReview({
 
   async function post() {
     const t = text.trim();
-    if (!t || sending) return;
+    if (!t || sending || disabled) return;
     setSending(true);
     const ok = await onPost(t, pending);
     setSending(false);
@@ -62,10 +64,16 @@ export function PinReview({
     }
   }
 
+  const teardrop =
+    "grid h-7 w-7 place-items-center rounded-[50%_50%_50%_2px] border-2 border-white text-xs font-extrabold text-white shadow-lg";
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-      {/* Stage */}
-      <div className="flex items-start justify-center rounded-[16px] border border-border bg-surface-2/40 p-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
+      {/* Stage — a stable dark viewing environment for judging the work */}
+      <div
+        className="flex items-center justify-center rounded-[16px] p-4"
+        style={{ backgroundColor: "#141118" }}
+      >
         <div
           ref={wrapRef}
           onClick={placePin}
@@ -75,7 +83,7 @@ export function PinReview({
           <img
             src={imageUrl}
             alt={alt}
-            className="block max-h-[68vh] w-auto max-w-full rounded-[10px] object-contain"
+            className="block max-h-[66vh] w-auto max-w-full rounded-[10px] object-contain shadow-2xl"
             draggable={false}
           />
 
@@ -87,15 +95,17 @@ export function PinReview({
                 setActiveId(c.id);
                 setPending(null);
               }}
-              className="absolute z-10"
+              className="absolute z-10 transition-transform hover:scale-110"
               style={{ left: `${c.x}%`, top: `${c.y}%`, transform: "translate(-50%,-100%)" }}
               aria-label={`Comment ${c.pinNumber}`}
             >
               <span
-                className={`grid h-6 w-6 place-items-center rounded-[50%_50%_50%_2px] border-2 border-white text-[11px] font-extrabold text-white shadow-md ${
-                  activeId === c.id ? "ring-2 ring-accent-soft" : ""
-                }`}
-                style={{ backgroundColor: "var(--accent)", transform: "rotate(45deg)" }}
+                className={teardrop}
+                style={{
+                  backgroundColor: "var(--accent)",
+                  transform: "rotate(45deg)",
+                  outline: activeId === c.id ? "3px solid var(--accent-soft)" : "none",
+                }}
               >
                 <span style={{ transform: "rotate(-45deg)" }}>{c.pinNumber}</span>
               </span>
@@ -108,10 +118,10 @@ export function PinReview({
               style={{ left: `${pending.x}%`, top: `${pending.y}%`, transform: "translate(-50%,-100%)" }}
             >
               <span
-                className="grid h-6 w-6 place-items-center rounded-[50%_50%_50%_2px] border-2 border-white text-white shadow-md"
+                className={teardrop}
                 style={{ backgroundColor: "var(--h-amber)", transform: "rotate(45deg)" }}
               >
-                <span style={{ transform: "rotate(-45deg)" }}>+</span>
+                <span style={{ transform: "rotate(-45deg)" }}>{nextPin}</span>
               </span>
             </span>
           )}
@@ -119,9 +129,17 @@ export function PinReview({
       </div>
 
       {/* Comments */}
-      <div className="flex min-h-[300px] flex-col rounded-[16px] border border-border bg-surface">
+      <div className="flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <span className="font-display text-sm font-bold text-text">Comments</span>
+          <div className="flex items-center gap-2">
+            <span className="font-display text-sm font-bold text-text">Comments</span>
+            <span
+              className="rounded-pill px-2 py-0.5 text-xs font-bold"
+              style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+            >
+              {comments.length}
+            </span>
+          </div>
           {resolvedCount > 0 && (
             <button
               onClick={() => setShowResolved((v) => !v)}
@@ -134,9 +152,20 @@ export function PinReview({
 
         <div className="flex-1 overflow-y-auto">
           {visible.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-text-faint">
-              Click the image to leave the first comment.
-            </p>
+            <div className="px-4 py-10 text-center">
+              <div
+                className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-[13px]"
+                style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-text">No comments yet</p>
+              <p className="mt-1 text-xs text-text-muted">
+                Click anywhere on the image to drop a pin and start.
+              </p>
+            </div>
           ) : (
             visible.map((c) => (
               <div
@@ -144,9 +173,9 @@ export function PinReview({
                 onClick={() => setActiveId(c.id)}
                 className={`flex cursor-pointer gap-2.5 border-l-[3px] px-4 py-3 transition ${
                   activeId === c.id
-                    ? "border-accent bg-accent-soft/60"
+                    ? "border-accent bg-accent-soft/50"
                     : "border-transparent hover:bg-surface-2/60"
-                } ${c.resolved ? "opacity-60" : ""}`}
+                } ${c.resolved ? "opacity-55" : ""}`}
               >
                 {c.pinNumber != null ? (
                   <span
@@ -200,11 +229,18 @@ export function PinReview({
 
         {/* Composer */}
         <div className="border-t border-border p-3">
-          {pending && (
-            <p className="mb-2 text-[11.5px] font-bold text-amber" style={{ color: "var(--h-amber)" }}>
-              📍 Pin placed — write your note
+          {disabled && disabledHint ? (
+            <p
+              className="mb-2 rounded-[8px] px-2.5 py-1.5 text-[12px] font-semibold"
+              style={{ backgroundColor: "var(--h-amber-bg)", color: "var(--h-amber)" }}
+            >
+              {disabledHint}
             </p>
-          )}
+          ) : pending ? (
+            <p className="mb-2 text-[11.5px] font-bold" style={{ color: "var(--h-amber)" }}>
+              📍 Pin {nextPin} placed — write your note
+            </p>
+          ) : null}
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -220,14 +256,14 @@ export function PinReview({
                 Clear pin
               </button>
             ) : (
-              <span className="text-[11px] text-text-faint">{disabled ? disabledHint : ""}</span>
+              <span />
             )}
             <button
               onClick={post}
               disabled={disabled || sending || !text.trim()}
-              className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:bg-accent-strong disabled:opacity-50"
+              className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
             >
-              {sending ? "Posting…" : "Post"}
+              {sending ? "Posting…" : "Post comment"}
             </button>
           </div>
         </div>
