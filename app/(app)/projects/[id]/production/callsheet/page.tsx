@@ -116,8 +116,10 @@ function People({
 
 export default async function CallSheetPrintPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { cs?: string };
 }) {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -129,11 +131,12 @@ export default async function CallSheetPrintPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const { data: cs } = await supabase
-    .from("call_sheets")
-    .select("*")
-    .eq("project_id", params.id)
-    .maybeSingle();
+  // A specific call sheet (?cs=id), else the project's first by order.
+  let query = supabase.from("call_sheets").select("*").eq("project_id", params.id);
+  query = searchParams?.cs
+    ? query.eq("id", searchParams.cs)
+    : query.order("position", { ascending: true });
+  const { data: cs } = await query.limit(1).maybeSingle();
   const s = cs as CallSheet | null;
 
   let entries: CallSheetEntry[] = [];

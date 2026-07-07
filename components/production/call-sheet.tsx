@@ -10,7 +10,7 @@ import {
   updateCallSheetEntry,
   deleteCallSheetEntry,
   type CallSheetPatch,
-} from "@/app/(app)/projects/[id]/production/actions";
+} from "@/app/(app)/projects/[id]/callsheet-actions";
 import type { CallSheet as CS, CallSheetEntry } from "@/lib/database.types";
 
 const field =
@@ -31,11 +31,13 @@ function Labeled({ label, children }: { label: string; children: React.ReactNode
 
 export function CallSheet({
   projectId,
+  callSheetId,
   projectTitle,
   callSheet,
   entries,
 }: {
   projectId: string;
+  callSheetId: string;
   projectTitle: string;
   callSheet: CS | null;
   entries: CallSheetEntry[];
@@ -74,7 +76,7 @@ export function CallSheet({
     setF((prev) => ({ ...prev, [k]: v }));
   }
   function save(k: keyof CallSheetPatch, v: string) {
-    void saveCallSheet(projectId, { [k]: v || null });
+    void saveCallSheet(projectId, callSheetId, { [k]: v || null });
   }
 
   const [rows, setRows] = useState<CallSheetEntry[]>(entries);
@@ -90,7 +92,7 @@ export function CallSheet({
   }
   function addRow(kind: "cast" | "crew") {
     start(async () => {
-      await addCallSheetEntry(projectId, kind);
+      await addCallSheetEntry(projectId, callSheetId, kind);
       router.refresh();
     });
   }
@@ -112,7 +114,7 @@ export function CallSheet({
           Fill in the shoot details. Everything saves automatically.
         </p>
         <Link
-          href={`/projects/${projectId}/production/callsheet`}
+          href={`/projects/${projectId}/production/callsheet?cs=${callSheetId}`}
           className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

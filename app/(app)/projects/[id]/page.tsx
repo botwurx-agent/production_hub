@@ -133,6 +133,8 @@ export default async function ProjectDetailPage({
       .from("call_sheets")
       .select("shoot_date, call_time, crew_call, location")
       .eq("project_id", params.id)
+      .order("position", { ascending: true })
+      .limit(1)
       .maybeSingle(),
     supabase
       .from("budget_lines")

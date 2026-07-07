@@ -1,13 +1,9 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
-import { CallSheet } from "@/components/production/call-sheet";
-import type {
-  CallSheet as CS,
-  CallSheetEntry,
-} from "@/lib/database.types";
+import { CallSheetWorkspace } from "@/components/production/callsheet-workspace";
+import type { CallSheet as CS, CallSheetEntry } from "@/lib/database.types";
 
 export default async function CallSheetPage({
   params,
@@ -24,18 +20,19 @@ export default async function CallSheetPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const { data: callSheet } = await supabase
+  const { data: sheets } = await supabase
     .from("call_sheets")
     .select("*")
     .eq("project_id", params.id)
-    .maybeSingle();
+    .order("position", { ascending: true });
 
+  const sheetIds = (sheets ?? []).map((s) => s.id);
   let entries: CallSheetEntry[] = [];
-  if (callSheet) {
+  if (sheetIds.length > 0) {
     const { data } = await supabase
       .from("call_sheet_entries")
       .select("*")
-      .eq("call_sheet_id", callSheet.id)
+      .in("call_sheet_id", sheetIds)
       .order("position", { ascending: true });
     entries = (data ?? []) as CallSheetEntry[];
   }
@@ -47,7 +44,7 @@ export default async function CallSheetPage({
         projectTitle={project.title}
         section="Call sheet"
         hue="green"
-        subtitle="Industry-standard call sheet with PDF export."
+        subtitle="Build one or more call sheets per shoot day, with PDF export."
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -55,14 +52,12 @@ export default async function CallSheetPage({
           </svg>
         }
       />
-      <Card className="p-5">
-        <CallSheet
-          projectId={project.id}
-          projectTitle={project.title}
-          callSheet={(callSheet as CS | null) ?? null}
-          entries={entries}
-        />
-      </Card>
+      <CallSheetWorkspace
+        projectId={project.id}
+        projectTitle={project.title}
+        sheets={(sheets ?? []) as CS[]}
+        entries={entries}
+      />
     </div>
   );
 }

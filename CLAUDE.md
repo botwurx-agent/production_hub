@@ -280,6 +280,19 @@ implemented (out of strict order, driven by the operator's real needs).
   ops-actions.ts) revalidate their own page. Old /projects/[id]/production (and
   its ?tab= deep links) now redirect to the hub; production-tabs.tsx removed.
   PDF export = print view with app chrome hidden and forced light/exact colors.
+  Call sheet is MULTI (like shot lists): call_sheets dropped its one-per-project
+  unique + gained title/status/position (migration 0036); the page is a
+  StudioBinder-style two-pane (components/production/callsheet-workspace.tsx:
+  left = list of sheets w/ status chip + date + New call sheet; right = active
+  sheet editor). Per-sheet actions in app/(app)/projects/[id]/callsheet-actions.ts
+  (createCallSheet/renameCallSheet/setCallSheetStatus/deleteCallSheet/saveCallSheet
+  by id + entry CRUD by call_sheet_id). call-sheet.tsx takes callSheetId; PDF
+  export at /production/callsheet?cs=<id>. (Old call-sheet actions in
+  production/actions.ts are now dead.) NEXT call-sheet ships (operator wants a
+  full StudioBinder-style builder): (2) send via shareable link + who-viewed/
+  who-confirmed tracking [operator chose the link+tracking route, not in-app
+  email]; (3) block-builder editor (edit-on-sheet, add/reorder/hide blocks) +
+  style controls + saved templates.
 - Studio logo upload (Settings → Branding); shows on sidebar, call sheet, shot
   board cover.
 - Modals render via portal to document.body (avoids fixed-in-transform bugs).

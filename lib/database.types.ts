@@ -813,6 +813,9 @@ export type Database = {
           pm: string | null;
           pm_phone: string | null;
           breakfast: string | null;
+          title: string | null;
+          status: string;
+          position: number;
           created_by: string | null;
           updated_at: string;
         };
@@ -846,6 +849,9 @@ export type Database = {
           pm?: string | null;
           pm_phone?: string | null;
           breakfast?: string | null;
+          title?: string | null;
+          status?: string;
+          position?: number;
           created_by?: string | null;
           updated_at?: string;
         };
@@ -879,6 +885,9 @@ export type Database = {
           pm?: string | null;
           pm_phone?: string | null;
           breakfast?: string | null;
+          title?: string | null;
+          status?: string;
+          position?: number;
           created_by?: string | null;
           updated_at?: string;
         };
