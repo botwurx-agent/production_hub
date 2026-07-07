@@ -36,6 +36,8 @@ export type PortalComment = {
   pinNumber: number | null;
   x: number | null;
   y: number | null;
+  // Video review: seconds into the timeline this comment is tied to.
+  timecode: number | null;
   resolved: boolean;
 };
 
@@ -105,7 +107,7 @@ export async function gatherReview(
       service
         .from("review_comments")
         .select(
-          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, resolved_at"
+          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at"
         )
         .in("version_id", versionIds)
         .order("created_at", { ascending: true }),
@@ -133,6 +135,7 @@ export async function gatherReview(
         pinNumber: c.pin_number ?? null,
         x: c.pos_x ?? null,
         y: c.pos_y ?? null,
+        timecode: c.timecode ?? null,
         resolved: Boolean(c.resolved_at),
       };
     });

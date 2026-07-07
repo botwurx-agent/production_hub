@@ -172,9 +172,13 @@ implemented (out of strict order, driven by the operator's real needs).
   style PINNED comments: click the image to drop a numbered pin + matching
   comment, synced sidebar, resolve toggle (components/review/pin-review.tsx;
   review_comments gained pin_number/pos_x/pos_y/resolved_at in migration 0026;
-  actions submitClientComment(pin) + resolveClientComment). Non-image assets
-  keep the flat comment flow. PinReview is built context-agnostic (parent passes
-  onPost/onResolve) so it can later be reused on the internal asset view + docs.
+  actions submitClientComment(pin) + resolveClientComment). VIDEO assets get
+  timecode comments (components/review/video-review.tsx): pause + comment on a
+  moment, markers on a timeline, click a comment to seek; review_comments.timecode
+  (migration 0027); submitClientComment takes an optional timecode. Other file
+  types keep the flat comment flow. PinReview/VideoReview are context-agnostic
+  (parent passes onPost/onResolve) so they can be reused on the internal asset
+  view + docs.
 - AI layer (Phase 4): provider-agnostic (lib/ai.ts, Anthropic or OpenAI).
   Project summary, AI-drafted client update, AI-drafted lead outreach. Rules-
   based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
@@ -253,8 +257,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0026: review_comment_pins). When adding a
-table/column, also hand-update lib/database.types.ts.
+files in supabase/migrations (through 0027: review_comment_timecode). When
+adding a table/column, also hand-update lib/database.types.ts.
 
 ### Working notes for a fresh session
 - Dev branch: `claude/production-hub-phase-1-km1k0k`. Deploy = push to `main`

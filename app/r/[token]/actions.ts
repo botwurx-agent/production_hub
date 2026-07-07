@@ -43,8 +43,10 @@ export async function submitClientComment(
   versionId: string,
   name: string,
   body: string,
-  // Optional Frame.io-style pin position (percent coords on the asset).
-  pin?: { x: number; y: number } | null
+  // Optional Frame.io-style anchor: an image pin (percent coords) or, for
+  // video, a timecode in seconds. Both get a sequential marker number.
+  pin?: { x: number; y: number } | null,
+  timecode?: number | null
 ): Promise<PortalState> {
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const reviewer = name.trim();
@@ -58,13 +60,20 @@ export async function submitClientComment(
   if (!(await versionInLink(service, link, versionId)))
     return { error: "That version is not part of this review." };
 
-  // When pinned, assign the next pin number for this version.
+  const hasPin = pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
+  const hasTime = timecode != null && Number.isFinite(timecode);
+
   let pinNumber: number | null = null;
   let posX: number | null = null;
   let posY: number | null = null;
-  if (pin && Number.isFinite(pin.x) && Number.isFinite(pin.y)) {
-    posX = Math.max(0, Math.min(100, pin.x));
-    posY = Math.max(0, Math.min(100, pin.y));
+  let time: number | null = null;
+  if (hasPin || hasTime) {
+    if (hasPin) {
+      posX = Math.max(0, Math.min(100, pin!.x));
+      posY = Math.max(0, Math.min(100, pin!.y));
+    }
+    if (hasTime) time = Math.max(0, timecode as number);
+    // Assign the next marker number for this version (shared by pins + times).
     const { data: lastPin } = await service
       .from("review_comments")
       .select("pin_number")
@@ -85,6 +94,7 @@ export async function submitClientComment(
     pin_number: pinNumber,
     pos_x: posX,
     pos_y: posY,
+    timecode: time,
   });
   if (error) return { error: error.message };
 

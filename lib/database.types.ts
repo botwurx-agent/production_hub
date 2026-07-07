@@ -1411,6 +1411,7 @@ export type Database = {
           pin_number: number | null;
           pos_x: number | null;
           pos_y: number | null;
+          timecode: number | null;
           resolved_at: string | null;
         };
         Insert: {
@@ -1425,6 +1426,7 @@ export type Database = {
           pin_number?: number | null;
           pos_x?: number | null;
           pos_y?: number | null;
+          timecode?: number | null;
           resolved_at?: string | null;
         };
         Update: {
@@ -1439,6 +1441,7 @@ export type Database = {
           pin_number?: number | null;
           pos_x?: number | null;
           pos_y?: number | null;
+          timecode?: number | null;
           resolved_at?: string | null;
         };
         Relationships: [

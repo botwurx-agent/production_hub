@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { viewerKind, officeEmbedUrl } from "@/lib/file-kind";
 import { fileSize, shortDate, timeAgo } from "@/lib/format";
 import { PinReview } from "@/components/review/pin-review";
+import { VideoReview } from "@/components/review/video-review";
 import {
   submitClientComment,
   submitClientDecision,
@@ -54,9 +55,9 @@ export function ClientReview({
   const comments = current
     ? data.comments.filter((c) => c.version_id === current.id)
     : [];
-  const isImage = current
-    ? viewerKind(current.mime_type, data.asset.name) === "image"
-    : false;
+  const kind = current ? viewerKind(current.mime_type, data.asset.name) : null;
+  const isImage = kind === "image";
+  const isVideo = kind === "video";
 
   function fileUrl(versionId: string) {
     return `${origin}/r/${token}/file?v=${versionId}`;
@@ -74,6 +75,30 @@ export function ClientReview({
     }
     setError(null);
     const res = await submitClientComment(token, current.id, name, text, pin);
+    if (res?.error) {
+      setError(res.error);
+      return false;
+    }
+    router.refresh();
+    return true;
+  }
+
+  // Video post handler: attaches a timecode instead of an (x,y) pin.
+  async function postTimed(text: string, timecode: number): Promise<boolean> {
+    if (!current) return false;
+    if (!name.trim()) {
+      setError("Add your name first.");
+      return false;
+    }
+    setError(null);
+    const res = await submitClientComment(
+      token,
+      current.id,
+      name,
+      text,
+      null,
+      timecode
+    );
     if (res?.error) {
       setError(res.error);
       return false;
@@ -214,7 +239,9 @@ export function ClientReview({
             <p className="mt-1 text-sm text-text-muted">
               {isImage
                 ? "Click anywhere on the image to leave a pinned comment, then approve or request changes."
-                : "Please review and approve, or request changes."}
+                : isVideo
+                  ? "Pause at any moment and comment on that timecode, then approve or request changes."
+                  : "Please review and approve, or request changes."}
             </p>
           </div>
           {current && (
@@ -239,6 +266,25 @@ export function ClientReview({
             disabled={!name.trim()}
             disabledHint="Add your name above to comment."
             onPost={postPinned}
+            onResolve={resolve}
+          />
+          {metaRow}
+          {decision}
+          {error && (
+            <p className="mt-4 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
+              {error}
+            </p>
+          )}
+        </>
+      ) : isVideo ? (
+        <>
+          <div className="mb-4 max-w-md">{nameField}</div>
+          <VideoReview
+            videoUrl={fileUrl(current.id)}
+            comments={comments}
+            disabled={!name.trim()}
+            disabledHint="Add your name above to comment."
+            onPost={postTimed}
             onResolve={resolve}
           />
           {metaRow}
