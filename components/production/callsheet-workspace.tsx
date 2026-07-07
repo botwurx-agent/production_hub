@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/modal";
 import { CallSheetBuilder } from "@/components/production/callsheet-builder";
+import { RecipientsPanel } from "@/components/production/recipients-panel";
 import { shortDate } from "@/lib/format";
 import {
   createCallSheet,
@@ -10,7 +12,11 @@ import {
   setCallSheetStatus,
   deleteCallSheet,
 } from "@/app/(app)/projects/[id]/callsheet-actions";
-import type { CallSheet as CS, CallSheetEntry } from "@/lib/database.types";
+import type {
+  CallSheet as CS,
+  CallSheetEntry,
+  CallSheetRecipient,
+} from "@/lib/database.types";
 
 const STATUSES: { key: string; label: string; hue: string }[] = [
   { key: "draft", label: "Draft", hue: "amber" },
@@ -25,22 +31,29 @@ export function CallSheetWorkspace({
   projectTitle,
   sheets,
   entries,
+  recipients,
   logoUrl,
 }: {
   projectId: string;
   projectTitle: string;
   sheets: CS[];
   entries: CallSheetEntry[];
+  recipients: CallSheetRecipient[];
   logoUrl: string | null;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(sheets[0]?.id ?? null);
+  const [sendOpen, setSendOpen] = useState(false);
 
   const active = sheets.find((s) => s.id === activeId) ?? sheets[0] ?? null;
   const activeEntries = active
     ? entries.filter((e) => e.call_sheet_id === active.id)
     : [];
+  const activeRecipients = active
+    ? recipients.filter((r) => r.call_sheet_id === active.id)
+    : [];
+  const confirmedCount = activeRecipients.filter((r) => r.confirmed_at).length;
 
   function newSheet() {
     start(async () => {
@@ -167,6 +180,20 @@ export function CallSheetWorkspace({
                 })}
               </div>
               <button
+                onClick={() => setSendOpen(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-accent px-3 py-1.5 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                </svg>
+                Send
+                {activeRecipients.length > 0 && (
+                  <span className="rounded-pill bg-white/25 px-1.5 text-[11px] font-bold">
+                    {confirmedCount}/{activeRecipients.length}
+                  </span>
+                )}
+              </button>
+              <button
                 onClick={() => remove(active.id)}
                 disabled={busy}
                 className="shrink-0 text-text-faint transition hover:text-red"
@@ -187,6 +214,19 @@ export function CallSheetWorkspace({
               entries={activeEntries}
               logoUrl={logoUrl}
             />
+
+            <Modal
+              open={sendOpen}
+              onClose={() => setSendOpen(false)}
+              title={`Send "${active.title || "Call sheet"}"`}
+              size="lg"
+            >
+              <RecipientsPanel
+                projectId={projectId}
+                callSheetId={active.id}
+                recipients={activeRecipients}
+              />
+            </Modal>
           </div>
         )}
       </div>

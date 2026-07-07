@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { generateReviewToken } from "@/lib/review-links";
 
 export type CallSheetState = { error?: string } | null;
 
@@ -226,5 +227,40 @@ export async function deleteCallSheetEntry(
   await requireStudioContext();
   const supabase = createClient();
   await supabase.from("call_sheet_entries").delete().eq("id", id);
+  rp(projectId);
+}
+
+// ---- Recipients (send + track) ---------------------------------------------
+
+export async function addCallSheetRecipient(
+  projectId: string,
+  callSheetId: string,
+  name: string,
+  email?: string
+): Promise<{ token: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const clean = name.trim();
+  if (!clean) return { error: "Add a name." };
+  const supabase = createClient();
+  const token = generateReviewToken();
+  const { error } = await supabase.from("call_sheet_recipients").insert({
+    studio_id: ctx.studio.id,
+    call_sheet_id: callSheetId,
+    name: clean,
+    email: email?.trim() || null,
+    token,
+  });
+  if (error) return { error: error.message };
+  rp(projectId);
+  return { token };
+}
+
+export async function deleteCallSheetRecipient(
+  projectId: string,
+  recipientId: string
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("call_sheet_recipients").delete().eq("id", recipientId);
   rp(projectId);
 }

@@ -4,7 +4,11 @@ import { requireStudioContext } from "@/lib/studio";
 import { signedLogoUrl } from "@/lib/branding";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { CallSheetWorkspace } from "@/components/production/callsheet-workspace";
-import type { CallSheet as CS, CallSheetEntry } from "@/lib/database.types";
+import type {
+  CallSheet as CS,
+  CallSheetEntry,
+  CallSheetRecipient,
+} from "@/lib/database.types";
 
 export default async function CallSheetPage({
   params,
@@ -30,13 +34,22 @@ export default async function CallSheetPage({
 
   const sheetIds = (sheets ?? []).map((s) => s.id);
   let entries: CallSheetEntry[] = [];
+  let recipients: CallSheetRecipient[] = [];
   if (sheetIds.length > 0) {
-    const { data } = await supabase
-      .from("call_sheet_entries")
-      .select("*")
-      .in("call_sheet_id", sheetIds)
-      .order("position", { ascending: true });
-    entries = (data ?? []) as CallSheetEntry[];
+    const [{ data: entryRows }, { data: recipientRows }] = await Promise.all([
+      supabase
+        .from("call_sheet_entries")
+        .select("*")
+        .in("call_sheet_id", sheetIds)
+        .order("position", { ascending: true }),
+      supabase
+        .from("call_sheet_recipients")
+        .select("*")
+        .in("call_sheet_id", sheetIds)
+        .order("created_at", { ascending: true }),
+    ]);
+    entries = (entryRows ?? []) as CallSheetEntry[];
+    recipients = (recipientRows ?? []) as CallSheetRecipient[];
   }
 
   return (
@@ -59,6 +72,7 @@ export default async function CallSheetPage({
         projectTitle={project.title}
         sheets={(sheets ?? []) as CS[]}
         entries={entries}
+        recipients={recipients}
         logoUrl={logoUrl}
       />
     </div>

@@ -307,9 +307,22 @@ implemented (out of strict order, driven by the operator's real needs).
   saveCallSheetLayout / saveCallSheetAccent (callsheet-actions.ts). The print
   view (/production/callsheet) honors hidden blocks + custom text blocks +
   accent, but keeps the industry 3-col header layout (full section reorder in
-  the PDF is not yet reflected). NEXT: (3) send via shareable link + who-viewed/
-  who-confirmed tracking [operator chose link+tracking, not in-app email];
-  later, deeper styles + saved templates.
+  the PDF is not yet reflected).
+  SEND + ENGAGEMENT TRACKING: per-recipient shareable links with view/confirm
+  tracking (like the client review portal, no in-app email). call_sheet_recipients
+  (migration 0038: name/email/token/viewed_at/confirmed_at). The read-only sheet
+  renderer was extracted to components/production/callsheet-document.tsx (shared
+  by the print/export view AND the public page). Public page /c/[token]
+  (force-dynamic, noindex, service-role gated by token): records viewed_at on
+  open, shows a Confirm bar; app/c/[token]/actions.ts recordCallSheetView +
+  confirmCallSheet (sets confirmed_at + activity + notification
+  'callsheet_confirmed'). Loaders in lib/callsheet-links.ts. In-app: a "Send"
+  button in the sheet header opens a RecipientsPanel (components/production/
+  recipients-panel.tsx) = add name/email -> copy that recipient's /c/<token>
+  link, with Viewed/Confirmed columns; recipient actions
+  addCallSheetRecipient/deleteCallSheetRecipient in callsheet-actions.ts. The
+  Send button shows confirmed/total. NEXT (later): deeper styles + saved
+  templates; optional in-app email send.
 - Studio logo upload (Settings → Branding); shows on sidebar, call sheet, shot
   board cover.
 - Modals render via portal to document.body (avoids fixed-in-transform bugs).
@@ -374,8 +387,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0037: call_sheet_layout; 0036 =
-call_sheets_multi; 0035: contact_details; 0034 =
+files in supabase/migrations (through 0038: call_sheet_recipients; 0037 =
+call_sheet_layout; 0036 = call_sheets_multi; 0035: contact_details; 0034 =
 project_events; 0033 = project_contacts; 0032 = doc_reviews; 0031 =
 doc_approval_targets; 0030 = generic_review_target). When adding a
 table/column, also hand-update lib/database.types.ts.
