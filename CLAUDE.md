@@ -224,13 +224,19 @@ implemented (out of strict order, driven by the operator's real needs).
   portal and the RLS internal path) + lib/doc-review-data.ts
   (loadDocReviewsForProject summary, loadDocReviewDetail for the modal).
 - Produce band, real pages (were "Soon" stubs):
-  - Project contacts (/projects/[id]/contacts): one roster per job. contacts
-    gained project_id + company (migration 0033). "This production" = contacts
-    with project_id set (crew/talent/vendors; add/edit/delete via
-    contact-actions.ts addProjectContact/updateProjectContact/
-    deleteProjectContact); "Client & agency" = contacts of the linked client
-    (read-only here, managed on the client). components/projects/
-    project-contacts.tsx (roster + ContactModal). Hub card shows roster count.
+  - Project contacts (/projects/[id]/contacts): one roster per job, organized
+    into FOLDER TABS (All / Crew / Talent / Extras / Clients) with counts.
+    contacts gained project_id + company (0033) and type (category) + rate +
+    notes (0035). Each production contact has a category (type) + position
+    (role, a searchable combobox seeded from lib/crew-positions.ts POSITIONS by
+    category, free text ok) + company + email + phone + day rate + notes. The
+    linked client's contacts are merged in read-only under the Client folder.
+    add/edit via contact-actions.ts (addProjectContact/updateProjectContact/
+    deleteProjectContact; ContactInput carries type/rate/notes). components/
+    projects/project-contacts.tsx = tabs + colored ContactCard (category top
+    border + chip) + a lively on-brand ContactModal (category chips, PositionCombobox
+    that actually opens, rate $/day, notes, Save & add another). Hub card shows
+    roster count. (Multi-role per contact is a possible later add.)
   - Project calendar (/projects/[id]/calendar): month + agenda, NO Gantt
     (deliberate: a task-level Gantt is overkill/rots for short boutique jobs;
     the useful timeline is a future STUDIO-wide slate view, one lane per
@@ -334,8 +340,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0034: project_events; 0033 =
-project_contacts; 0032 = doc_reviews; 0031 =
+files in supabase/migrations (through 0035: contact_details; 0034 =
+project_events; 0033 = project_contacts; 0032 = doc_reviews; 0031 =
 doc_approval_targets; 0030 = generic_review_target). When adding a
 table/column, also hand-update lib/database.types.ts.
 

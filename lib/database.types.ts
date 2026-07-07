@@ -1062,6 +1062,9 @@ export type Database = {
           client_id: string | null;
           project_id: string | null;
           company: string | null;
+          type: string | null;
+          rate: number | null;
+          notes: string | null;
           created_at: string;
           email: string | null;
           id: string;
@@ -1076,6 +1079,9 @@ export type Database = {
           client_id?: string | null;
           project_id?: string | null;
           company?: string | null;
+          type?: string | null;
+          rate?: number | null;
+          notes?: string | null;
           created_at?: string;
           email?: string | null;
           id?: string;
@@ -1090,6 +1096,9 @@ export type Database = {
           client_id?: string | null;
           project_id?: string | null;
           company?: string | null;
+          type?: string | null;
+          rate?: number | null;
+          notes?: string | null;
           created_at?: string;
           email?: string | null;
           id?: string;

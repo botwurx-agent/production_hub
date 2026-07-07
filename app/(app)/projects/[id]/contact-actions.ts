@@ -8,15 +8,28 @@ export type ContactState = { error?: string } | null;
 
 export type ContactInput = {
   name: string;
-  role?: string | null;
+  type?: string | null; // category: crew | talent | extras | client
+  role?: string | null; // position
   company?: string | null;
   email?: string | null;
   phone?: string | null;
+  rate?: number | null;
+  notes?: string | null;
 };
 
 function clean(v: string | null | undefined): string | null {
   const t = (v ?? "").trim();
   return t || null;
+}
+
+function cleanRate(v: number | null | undefined): number | null {
+  if (v == null || Number.isNaN(v) || v <= 0) return null;
+  return v;
+}
+
+const CATEGORIES = ["crew", "talent", "extras", "client"];
+function cleanType(v: string | null | undefined): string {
+  return CATEGORIES.includes(v ?? "") ? (v as string) : "crew";
 }
 
 // Add a person to this production's roster (crew, talent, vendor). These are
@@ -43,10 +56,13 @@ export async function addProjectContact(
     studio_id: ctx.studio.id,
     project_id: projectId,
     name,
+    type: cleanType(input.type),
     role: clean(input.role),
     company: clean(input.company),
     email: clean(input.email),
     phone: clean(input.phone),
+    rate: cleanRate(input.rate),
+    notes: clean(input.notes),
   });
   if (error) return { error: error.message };
 
@@ -68,10 +84,13 @@ export async function updateProjectContact(
     .from("contacts")
     .update({
       name,
+      type: cleanType(input.type),
       role: clean(input.role),
       company: clean(input.company),
       email: clean(input.email),
       phone: clean(input.phone),
+      rate: cleanRate(input.rate),
+      notes: clean(input.notes),
     })
     .eq("id", contactId);
   if (error) return { error: error.message };

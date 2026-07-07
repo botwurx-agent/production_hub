@@ -7,7 +7,7 @@ import {
   type ContactRow,
 } from "@/components/projects/project-contacts";
 
-const SELECT = "id, name, role, company, email, phone";
+const SELECT = "id, name, type, role, company, email, phone, rate, notes";
 
 export default async function ProjectContactsPage({
   params,
