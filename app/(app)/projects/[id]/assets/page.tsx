@@ -48,7 +48,7 @@ export default async function AssetsPage({
         projectTitle={project.title}
         section="Assets"
         hue="purple"
-        subtitle="Deliverables and their version history."
+        subtitle="The project library: every file, reference, and its version history."
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -81,8 +81,8 @@ export default async function AssetsPage({
                 <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
               </svg>
             }
-            title="No assets yet"
-            description="Assets are the deliverables for this job: cuts, boards, stills, references. Each keeps its full version history so nothing gets lost."
+            title="No files yet"
+            description="This is the project library: cuts, boards, stills, references, docs. Upload anything the job touches; each file keeps its full version history. Send one to the client from Review."
             action={
               <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
             }

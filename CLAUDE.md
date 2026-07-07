@@ -229,8 +229,13 @@ implemented (out of strict order, driven by the operator's real needs).
   module card shows LIVE data (brief snippet, asset thumbrows + status, review
   actions, comms counts, shot count, call sheet date, budget bid-vs-actual bar,
   delivery progress) and links to its own focused page:
-  /projects/[id]/{brief,assets,communication} and /production?tab=... (deep-link
-  via initialTab). Shared asset loader: lib/project-data.ts (loadProjectAssets).
+  /projects/[id]/{brief,assets,review,communication} and /production?tab=...
+  (deep-link via initialTab). Assets vs Review split (operator's mental model):
+  Assets = the full project LIBRARY (all files/refs, any status; upload/import);
+  Review (/projects/[id]/review) = only assets in the review cycle (status
+  in_review/needs_changes/approved), grouped by state, each opening the
+  pin/timecode canvas + share. Move an asset into review via its AssetStatusMenu
+  ("In review"). Shared asset loader: lib/project-data.ts (loadProjectAssets).
   Card shell + band label: components/projects/hub-card.tsx; sub-page header:
   components/projects/project-subhead.tsx. Module color = IDENTITY (icon tiles,
   band dots); status stays as chips (StatusTag) so the two color systems never
