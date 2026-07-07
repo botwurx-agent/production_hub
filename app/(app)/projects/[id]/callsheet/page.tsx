@@ -8,6 +8,7 @@ import type {
   CallSheet as CS,
   CallSheetEntry,
   CallSheetRecipient,
+  CallSheetTemplate,
 } from "@/lib/database.types";
 
 export default async function CallSheetPage({
@@ -48,11 +49,17 @@ export default async function CallSheetPage({
     email: c.email,
   }));
 
-  const { data: sheets } = await supabase
-    .from("call_sheets")
-    .select("*")
-    .eq("project_id", params.id)
-    .order("position", { ascending: true });
+  const [{ data: sheets }, { data: templates }] = await Promise.all([
+    supabase
+      .from("call_sheets")
+      .select("*")
+      .eq("project_id", params.id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("call_sheet_templates")
+      .select("*")
+      .order("created_at", { ascending: false }),
+  ]);
 
   const sheetIds = (sheets ?? []).map((s) => s.id);
   let entries: CallSheetEntry[] = [];
@@ -96,6 +103,7 @@ export default async function CallSheetPage({
         entries={entries}
         recipients={recipients}
         contactOptions={contactOptions}
+        templates={(templates ?? []) as CallSheetTemplate[]}
         logoUrl={logoUrl}
       />
     </div>

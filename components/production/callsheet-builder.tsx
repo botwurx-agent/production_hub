@@ -7,6 +7,8 @@ import {
   saveCallSheet,
   saveCallSheetLayout,
   saveCallSheetAccent,
+  saveCallSheetTemplate,
+  deleteCallSheetTemplate,
   addCallSheetEntry,
   updateCallSheetEntry,
   deleteCallSheetEntry,
@@ -17,7 +19,11 @@ import {
   FIXED_BLOCKS,
   type CallSheetBlock,
 } from "@/lib/callsheet-blocks";
-import type { CallSheet as CS, CallSheetEntry } from "@/lib/database.types";
+import type {
+  CallSheet as CS,
+  CallSheetEntry,
+  CallSheetTemplate,
+} from "@/lib/database.types";
 
 const ACCENTS = ["indigo", "blue", "cyan", "green", "amber", "orange", "red", "purple", "pink"];
 
@@ -39,6 +45,7 @@ export function CallSheetBuilder({
   projectTitle,
   callSheet,
   entries,
+  templates = [],
   logoUrl,
 }: {
   projectId: string;
@@ -46,6 +53,7 @@ export function CallSheetBuilder({
   projectTitle: string;
   callSheet: CS | null;
   entries: CallSheetEntry[];
+  templates?: CallSheetTemplate[];
   logoUrl: string | null;
 }) {
   const router = useRouter();
@@ -134,6 +142,18 @@ export function CallSheetBuilder({
     const others = layout.filter((b) => !BODY_TYPES.has(b.type));
     commit([...others, ...reordered]);
   }
+  // Drag-and-drop: drop the dragged block at the target block's position.
+  function moveBlockTo(dragId: string, targetId: string) {
+    if (dragId === targetId) return;
+    const arr = [...body];
+    const from = arr.findIndex((b) => b.id === dragId);
+    const to = arr.findIndex((b) => b.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [m] = arr.splice(from, 1);
+    arr.splice(to, 0, m);
+    const others = layout.filter((b) => !BODY_TYPES.has(b.type));
+    commit([...others, ...arr]);
+  }
   function hideOrRemove(b: CallSheetBlock) {
     if (b.type === "text") commit(layout.filter((x) => x.id !== b.id));
     else commit(layout.map((x) => (x.id === b.id ? { ...x, hidden: true } : x)));
@@ -163,6 +183,34 @@ export function CallSheetBuilder({
     return !b || b.hidden;
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+
+  // Templates (studio-scoped layout + accent presets).
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tplName, setTplName] = useState("");
+  function applyTemplate(t: CallSheetTemplate) {
+    const next = normalizeLayout(t.layout);
+    setLayout(next);
+    void saveCallSheetLayout(projectId, callSheetId, next);
+    chooseAccent(t.accent ?? null);
+    setTplOpen(false);
+  }
+  function saveTemplate() {
+    const name = tplName.trim();
+    if (!name) return;
+    start(async () => {
+      await saveCallSheetTemplate(projectId, name, layout, accent);
+      setTplName("");
+      setTplOpen(false);
+      router.refresh();
+    });
+  }
+  function removeTemplate(id: string) {
+    start(async () => {
+      await deleteCallSheetTemplate(projectId, id);
+      router.refresh();
+    });
+  }
 
   const bodyCtx: BlockCtx = {
     F, rows, editRow, addRow, delRow, projectId, accentVar, updateText, notes: f.notes,
@@ -220,6 +268,66 @@ export function CallSheetBuilder({
               aria-label={a}
             />
           ))}
+        </div>
+
+        {/* Templates */}
+        <div className="relative">
+          <button
+            onClick={() => setTplOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
+            Templates
+          </button>
+          {tplOpen && (
+            <div className="absolute z-30 mt-1 w-64 rounded-[12px] border border-border bg-surface p-2 shadow-lg">
+              <div className="mb-1.5 flex gap-1.5">
+                <input
+                  value={tplName}
+                  onChange={(e) => setTplName(e.target.value)}
+                  placeholder="Save current as…"
+                  className="min-w-0 flex-1 rounded-[8px] border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none focus:border-accent"
+                />
+                <button
+                  onClick={saveTemplate}
+                  disabled={busy || !tplName.trim()}
+                  className="rounded-[8px] bg-accent px-2.5 py-1.5 text-xs font-semibold text-accent-fg transition hover:bg-accent-strong disabled:opacity-40"
+                >
+                  Save
+                </button>
+              </div>
+              {templates.length === 0 ? (
+                <p className="px-2 py-2 text-xs text-text-faint">
+                  No templates yet. Arrange the blocks + accent, then save this as a
+                  reusable template.
+                </p>
+              ) : (
+                <div className="max-h-56 space-y-0.5 overflow-y-auto">
+                  {templates.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-1 rounded-[9px] px-1 transition hover:bg-surface-2"
+                    >
+                      <button
+                        onClick={() => applyTemplate(t)}
+                        className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm font-medium text-text"
+                        title={`Apply "${t.name}"`}
+                      >
+                        {t.name}
+                      </button>
+                      <button
+                        onClick={() => removeTemplate(t.id)}
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-text-faint transition hover:bg-red-bg hover:text-red"
+                        aria-label="Delete template"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <Link
@@ -344,6 +452,13 @@ export function CallSheetBuilder({
                 onDown={() => move(b.id, 1)}
                 onHide={() => hideOrRemove(b)}
                 isText={b.type === "text"}
+                dragging={dragId === b.id}
+                onDragStart={() => setDragId(b.id)}
+                onDragEnd={() => setDragId(null)}
+                onDropBlock={() => {
+                  if (dragId) moveBlockTo(dragId, b.id);
+                  setDragId(null);
+                }}
               >
                 <BodyBlock block={b} ctx={bodyCtx} />
               </BlockShell>
@@ -371,6 +486,7 @@ type BlockCtx = {
 
 function BlockShell({
   children, first, last, onUp, onDown, onHide, isText,
+  dragging, onDragStart, onDragEnd, onDropBlock,
 }: {
   children: React.ReactNode;
   first: boolean;
@@ -379,12 +495,34 @@ function BlockShell({
   onDown: () => void;
   onHide: () => void;
   isText: boolean;
+  dragging?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  onDropBlock?: () => void;
 }) {
   const ctrl =
     "grid h-6 w-6 place-items-center rounded-[6px] text-text-faint transition hover:bg-surface-2 hover:text-text disabled:opacity-25";
   return (
-    <div className="group relative rounded-[10px] px-2 py-3 transition hover:bg-surface-2/30">
+    <div
+      onDragOver={(e) => {
+        if (onDropBlock) e.preventDefault();
+      }}
+      onDrop={() => onDropBlock?.()}
+      className={`group relative rounded-[10px] px-2 py-3 transition hover:bg-surface-2/30 ${
+        dragging ? "opacity-40" : ""
+      }`}
+    >
       <div className="absolute -left-1 top-2 z-10 flex flex-col gap-0.5 opacity-0 transition group-hover:opacity-100 print:hidden">
+        <button
+          draggable
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          className={`${ctrl} cursor-grab active:cursor-grabbing`}
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
+        </button>
         <button onClick={onUp} disabled={first} className={ctrl} aria-label="Move up">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
         </button>

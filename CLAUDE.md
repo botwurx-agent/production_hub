@@ -324,8 +324,15 @@ implemented (out of strict order, driven by the operator's real needs).
   /c/<token> link, with Viewed/Confirmed columns; recipient actions
   addCallSheetRecipient/addCallSheetRecipients(bulk)/deleteCallSheetRecipient in
   callsheet-actions.ts. The
-  Send button shows confirmed/total. NEXT (later): deeper styles + saved
-  templates; optional in-app email send.
+  Send button shows confirmed/total.
+  TEMPLATES + DRAG-AND-DROP: call_sheet_templates (migration 0039, studio-scoped
+  name/layout/accent). The builder toolbar has a Templates menu: save the current
+  layout+accent as a named template, apply a saved one to the active sheet
+  (client sets layout+accent + persists), or delete. Templates loaded studio-wide
+  in the page -> workspace -> builder. Body blocks now reorder via native HTML5
+  drag-and-drop (grip handle in the block rail; the up/down arrows remain).
+  Actions saveCallSheetTemplate/deleteCallSheetTemplate. NEXT (later): optional
+  in-app email send; per-sheet logo; full PDF section reorder.
 - Studio logo upload (Settings → Branding); shows on sidebar, call sheet, shot
   board cover.
 - Modals render via portal to document.body (avoids fixed-in-transform bugs).
@@ -390,8 +397,9 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0038: call_sheet_recipients; 0037 =
-call_sheet_layout; 0036 = call_sheets_multi; 0035: contact_details; 0034 =
+files in supabase/migrations (through 0039: call_sheet_templates; 0038 =
+call_sheet_recipients; 0037 = call_sheet_layout; 0036 = call_sheets_multi;
+0035: contact_details; 0034 =
 project_events; 0033 = project_contacts; 0032 = doc_reviews; 0031 =
 doc_approval_targets; 0030 = generic_review_target). When adding a
 table/column, also hand-update lib/database.types.ts.

@@ -16,6 +16,7 @@ import type {
   CallSheet as CS,
   CallSheetEntry,
   CallSheetRecipient,
+  CallSheetTemplate,
 } from "@/lib/database.types";
 
 const STATUSES: { key: string; label: string; hue: string }[] = [
@@ -33,6 +34,7 @@ export function CallSheetWorkspace({
   entries,
   recipients,
   contactOptions,
+  templates,
   logoUrl,
 }: {
   projectId: string;
@@ -41,6 +43,7 @@ export function CallSheetWorkspace({
   entries: CallSheetEntry[];
   recipients: CallSheetRecipient[];
   contactOptions: ContactOption[];
+  templates: CallSheetTemplate[];
   logoUrl: string | null;
 }) {
   const router = useRouter();
@@ -214,6 +217,7 @@ export function CallSheetWorkspace({
               projectTitle={projectTitle}
               callSheet={active}
               entries={activeEntries}
+              templates={templates}
               logoUrl={logoUrl}
             />
 

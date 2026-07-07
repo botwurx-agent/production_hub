@@ -1072,6 +1072,36 @@ export type Database = {
           },
         ];
       };
+      call_sheet_templates: {
+        Row: {
+          id: string;
+          studio_id: string;
+          name: string;
+          layout: Json | null;
+          accent: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          name: string;
+          layout?: Json | null;
+          accent?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          name?: string;
+          layout?: Json | null;
+          accent?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       call_sheet_recipients: {
         Row: {
           id: string;
@@ -1914,6 +1944,7 @@ export type ReviewLink = Tables<"review_links">;
 export type DocReview = Tables<"doc_reviews">;
 export type ProjectEvent = Tables<"project_events">;
 export type CallSheetRecipient = Tables<"call_sheet_recipients">;
+export type CallSheetTemplate = Tables<"call_sheet_templates">;
 export type Board = Tables<"boards">;
 export type BoardItem = Tables<"board_items">;
 export type Shot = Tables<"shots">;

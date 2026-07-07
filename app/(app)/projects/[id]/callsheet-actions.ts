@@ -230,6 +230,40 @@ export async function deleteCallSheetEntry(
   rp(projectId);
 }
 
+// ---- Templates (studio-scoped, reusable layout + accent) -------------------
+
+export async function saveCallSheetTemplate(
+  projectId: string,
+  name: string,
+  layout: unknown,
+  accent: string | null
+): Promise<CallSheetState> {
+  const ctx = await requireStudioContext();
+  const clean = name.trim();
+  if (!clean) return { error: "Name the template." };
+  const supabase = createClient();
+  const { error } = await supabase.from("call_sheet_templates").insert({
+    studio_id: ctx.studio.id,
+    name: clean,
+    layout: layout as never,
+    accent,
+    created_by: ctx.userId,
+  });
+  if (error) return { error: error.message };
+  rp(projectId);
+  return null;
+}
+
+export async function deleteCallSheetTemplate(
+  projectId: string,
+  templateId: string
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("call_sheet_templates").delete().eq("id", templateId);
+  rp(projectId);
+}
+
 // ---- Recipients (send + track) ---------------------------------------------
 
 export async function addCallSheetRecipient(
