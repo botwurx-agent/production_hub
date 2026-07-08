@@ -1,8 +1,41 @@
 # FreshBooks billing connector — build spec
 
-Status: **planned, not implemented.** Roadmap Phase 6/8 (connections + production-ops).
+Status: **Phase 1 BUILT and deployed, but the whole billing area is ON HOLD**
+pending a platform decision (see "Billing platform decision" below). Do not
+extend billing until confirmed. Roadmap Phase 6/8 (connections + production-ops).
 Principle: orchestrate, don't replace — The Hub is the control surface; FreshBooks
 stays the system of record for money + accounting.
+
+## Billing platform decision (OPEN — reason for the hold)
+Deciding between **FreshBooks** and **Melio (melio.com)** before optimizing the
+billing/invoicing/delivery flow + IA.
+- **FreshBooks**: orchestrate-only. Its API creates invoices/estimates, but the
+  document editor, the hosted invoice page, and payment collection all live on
+  FreshBooks' surface. The Hub always hands off. This limitation is why the
+  operator paused: the in-app create modal was rejected, and the agreed-but-
+  unbuilt direction was to replace it with a hand-off that opens FreshBooks'
+  own editor.
+- **Melio**: a payments / AP-AR platform. Its API + embeddable pieces could let
+  the invoice experience AND payment (ACH/card) happen inside the Hub, not on a
+  third-party surface. Likely direction; needs confirmation of what it enables.
+- Also live alongside this: a **native invoice/estimate generator** (no external
+  platform) — see CLAUDE.md "Billing / invoicing". Slice 1 built (editable doc +
+  billing profile); PDF export + send link were the next slice, now paused.
+
+## What is actually built (Phase 1, deployed, dormant unless connected)
+- OAuth: `app/auth/freshbooks/{start,callback}`; Settings->Connections FreshBooks
+  card; `freshbooksConfigured()`.
+- `lib/freshbooks.ts` (OAuth + create/send/get for invoice AND estimate +
+  `documentViewUrl`), `lib/billing.ts` (token load/refresh/persist + status map),
+  `app/(app)/projects/[id]/billing-actions.ts`
+  (createProjectDocument/sendProjectDocument/syncProjectDocument).
+- Tables `billing_accounts` (0041) + `project_invoices` (0041, +kind/recipient
+  in 0043). UI `components/production/invoicing-panel.tsx` on the Delivery page.
+- Env FRESHBOOKS_CLIENT_ID/SECRET set in Vercel; GitHub App registered with
+  redirect production-hub-steel.vercel.app/auth/freshbooks/callback.
+The rest of this doc is the original build spec, kept for reference.
+
+---
 
 ## Verdict
 Feasible. FreshBooks has a REST API (OAuth2) covering create client, create

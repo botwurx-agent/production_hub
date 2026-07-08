@@ -393,6 +393,44 @@ implemented (out of strict order, driven by the operator's real needs).
   colored top border. Status stays as chips (StatusTag); module/section/nav color
   is identity, kept separate so the two never compete.
 
+### Billing / invoicing — BUILT BUT ON HOLD (do not extend until platform is decided)
+Two invoicing paths were built and are deployed on `main`, but the whole area is
+PAUSED pending a decision on the billing platform. Both are non-intrusive (see
+below); leave them parked. The operator wants to choose the integration before
+optimizing the flow + IA of this whole section.
+- The open decision: **FreshBooks vs Melio (melio.com)**. FreshBooks =
+  orchestrate-only (its API creates invoices but the document editor, hosted
+  invoice page, and payments all live on FreshBooks' surface, so we always hand
+  off; that limitation is why this is paused). Melio = a payments/AP-AR platform
+  whose API/embeddable pieces could let the invoice experience AND the payment
+  (ACH/card) happen inside the Hub. Melio is the likely direction because it
+  keeps layout + pay in-app. Revisit the whole flow once confirmed.
+- Path A — FreshBooks connector (Phase 1, migrations 0041/0043): OAuth
+  (app/auth/freshbooks/*), Settings->Connections card, lib/freshbooks.ts
+  (create/send/get invoice+estimate, documentViewUrl), lib/billing.ts (token
+  refresh), billing-actions.ts (createProjectDocument/send/sync), the
+  billing_accounts + project_invoices tables. UI = components/production/
+  invoicing-panel.tsx on the Delivery page (New invoice/estimate ->
+  recipient + line items). NOTE: operator rejected the in-app create modal;
+  the agreed direction (not yet built) was to REPLACE it with a hand-off that
+  opens FreshBooks' own editor. Env: FRESHBOOKS_CLIENT_ID/SECRET (set in Vercel;
+  App registered, redirect production-hub-steel.vercel.app/auth/freshbooks/callback).
+  Only shows/acts when FreshBooks is connected.
+- Path B — native invoice/estimate generator (slice 1, migration 0044): a
+  built-in, FreshBooks-independent document maker modeled on call sheets.
+  billing_profiles (studio From-block + number series; edit in Settings ->
+  Billing profile), billing_documents + billing_document_lines (per-line tax %).
+  Page /projects/[id]/invoices = components/production/invoice-workspace.tsx
+  (two-pane: doc list + WYSIWYG editable invoice: From/logo, Bill-To fill-from-
+  contact, line items w/ per-line "+ Tax" % popover, subtotal/tax/discount/
+  total, Notes + Terms; autosave). native-invoice-actions.ts. Reached via a link
+  on the Delivery page. NOT yet built: PDF export + shareable send link w/ view/
+  paid tracking (was the next slice). It's its own page, so nothing hits it
+  unless navigated to.
+- If asked to clean up the billing area while paused: hide the two entry points
+  (the "Open invoice generator" link + the InvoicingPanel on
+  app/(app)/projects/[id]/delivery/page.tsx). The DB tables are additive/dormant.
+
 ### Environment variables (set in Vercel; needed to reproduce in a new env)
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (required)
 - `SUPABASE_SERVICE_ROLE_KEY` (required for the client review portal `/r/...`)
@@ -402,26 +440,40 @@ implemented (out of strict order, driven by the operator's real needs).
 - `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`
 - `FIGMA_CLIENT_ID`, `FIGMA_CLIENT_SECRET` (Figma app scope: `file_content:read`;
   redirect `<domain>/auth/figma/callback`)
+- `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` (billing connector, ON HOLD;
+  redirect `<domain>/auth/freshbooks/callback`, e.g.
+  production-hub-steel.vercel.app). Set in Vercel already.
 - AI (optional): `OPENAI_API_KEY` (+ `OPENAI_MODEL`, default gpt-5-mini) or
   `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0040: project_archive; 0039 =
+files in supabase/migrations (through 0044: native_invoice_generator; 0043 =
+project_documents_kind_recipient; 0042 = contacts_allow_project_parent; 0041 =
+freshbooks_billing; 0040 = project_archive; 0039 =
 call_sheet_templates; 0038 =
 call_sheet_recipients; 0037 = call_sheet_layout; 0036 = call_sheets_multi;
 0035: contact_details; 0034 =
 project_events; 0033 = project_contacts; 0032 = doc_reviews; 0031 =
 doc_approval_targets; 0030 = generic_review_target). When adding a
 table/column, also hand-update lib/database.types.ts.
+Note (0042): the contacts_one_parent check now allows project_id as the sole
+parent (it predated project-level contacts and was rejecting them).
 
 ### Working notes for a fresh session
 - Dev branch: `claude/production-hub-phase-1-km1k0k`. Deploy = push to `main`
-  (Vercel auto-deploys). Pushes go to github.com directly (the in-env git relay
-  + GitHub MCP are read-only).
-- Commits show as "Unverified" (no GPG/SSH signing key in this environment);
-  committer email is already noreply@anthropic.com. This is expected; do not try
-  to fix it by rebasing deployed history.
+  (Vercel auto-deploys). `main` and the dev branch are kept converged (same
+  history); push commits to both.
+- GitHub write now works via the Claude GitHub App (installed with Contents:
+  read+write on the repo). Both `git push` and the GitHub MCP push. Vercel shows
+  these commits as VERIFIED. (History: earlier in the session the App was
+  read-only, which blocked all pushes until it was granted write. If pushes ever
+  403 again with "Resource not accessible by integration" or "denied to
+  botwurx-agent", the App lost write access -> re-grant it, do not fight git.)
+- A local stop-hook flags every commit as "Unverified" because it can only see
+  local state (no signing key in-env); ignore it. Author is already
+  noreply@anthropic.com and GitHub verifies the App-pushed commits. Do NOT
+  rebase deployed history to satisfy it.
 - Standing style rule: no em dashes in any generated content.
 
 ### Open decisions to revisit (after the operator tests the full flow)
@@ -434,8 +486,10 @@ table/column, also hand-update lib/database.types.ts.
   the asset [recommended], or (2) an "Add to review" picker on the Review page.
 
 ### Next step
-Run a real job through Production and the connectors; let friction drive the
-backlog. Remaining roadmap: Phase 7 (AI-video pipeline), a notifications/inbox
-layer, and deepening (e.g. PDF export for budget/gear/delivery, per-card Drive/
-Figma import on the shot board, public share link for the shot board/call sheet).
-See docs/DEVELOPMENT.md for setup.
+BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
+pending the FreshBooks-vs-Melio decision; do not extend it until confirmed.
+Otherwise: run a real job through Production and the connectors; let friction
+drive the backlog. Remaining roadmap: Phase 7 (AI-video pipeline), a
+notifications/inbox layer, and deepening (e.g. PDF export for budget/gear/
+delivery, per-card Drive/Figma import on the shot board, public share link for
+the shot board/call sheet). See docs/DEVELOPMENT.md for setup.
