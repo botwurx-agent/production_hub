@@ -5,6 +5,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { StatusMenu } from "@/components/projects/status-menu";
 import { ArchiveProjectButton } from "@/components/projects/archive-project-button";
+import { ProjectClientPicker } from "@/components/projects/project-client-picker";
 import { HubCard, BandLabel } from "@/components/projects/hub-card";
 import { ProjectSummary } from "@/components/projects/project-summary";
 import { ProjectAttention } from "@/components/projects/project-attention";
@@ -95,10 +96,15 @@ export default async function ProjectDetailPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title, status, due_date, shoot_date, archived_at, client:clients(name)")
+    .select("id, title, status, due_date, shoot_date, archived_at, client_id, client:clients(name)")
     .eq("id", params.id)
     .maybeSingle();
   if (!project) notFound();
+
+  const { data: clientOptions } = await supabase
+    .from("clients")
+    .select("id, name")
+    .order("name");
 
   const [
     { data: brief },
@@ -283,8 +289,13 @@ export default async function ProjectDetailPage({
               <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
                 {project.title}
               </h1>
-              <p className="mt-1.5 text-sm text-text-muted">
-                {clientName ?? "No client"}
+              <div className="mt-1.5 flex flex-wrap items-center text-sm text-text-muted">
+                <ProjectClientPicker
+                  projectId={project.id}
+                  clientId={project.client_id}
+                  clientName={clientName}
+                  clients={clientOptions ?? []}
+                />
                 {project.shoot_date && (
                   <span className="text-text-faint">
                     {"  ·  "}Shoot {longDate(project.shoot_date)}
@@ -295,7 +306,7 @@ export default async function ProjectDetailPage({
                     {"  ·  "}Due {longDate(project.due_date)}
                   </span>
                 )}
-              </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <ArchiveProjectButton
