@@ -11,6 +11,8 @@ import { StatusTag } from "@/components/status-tag";
 import { Appearance } from "@/components/settings/appearance";
 import { Connections } from "@/components/settings/connections";
 import { LogoUpload } from "@/components/settings/logo-upload";
+import { BillingProfileForm } from "@/components/settings/billing-profile";
+import type { BillingProfile } from "@/lib/database.types";
 import { signedLogoUrl } from "@/lib/branding";
 import type { Hue } from "@/components/status-tag";
 
@@ -81,6 +83,12 @@ export default async function SettingsPage({
         .eq("provider", "freshbooks")
         .maybeSingle(),
     ]);
+
+  const { data: billingProfile } = await supabase
+    .from("billing_profiles")
+    .select("*")
+    .eq("studio_id", ctx.studio.id)
+    .maybeSingle();
 
   const errorMsg = searchParams.error
     ? (connectionError[searchParams.error] ?? "Something went wrong.")
@@ -181,6 +189,11 @@ export default async function SettingsPage({
                 : null,
             }}
           />
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="mb-4 font-display text-base font-bold">Billing profile</h2>
+          <BillingProfileForm profile={(billingProfile as BillingProfile | null) ?? null} />
         </Card>
 
         <Card className="p-5">

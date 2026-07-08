@@ -97,6 +97,24 @@ export default async function DeliveryPage({
         }
       />
 
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-sm font-bold text-text">
+            Build an invoice or estimate in the app
+          </p>
+          <p className="text-xs text-text-muted">
+            A branded, editable invoice/estimate with per-line tax, notes, and
+            terms. No FreshBooks required.
+          </p>
+        </div>
+        <a
+          href={`/projects/${project.id}/invoices`}
+          className="inline-flex items-center gap-2 rounded-[11px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
+        >
+          Open invoice generator
+        </a>
+      </Card>
+
       <Card className="p-5">
         <InvoicingPanel
           projectId={project.id}
