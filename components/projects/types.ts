@@ -7,4 +7,5 @@ export type ProjectRow = {
   due_date: string | null;
   shoot_date: string | null;
   client: { name: string } | null;
+  archived: boolean;
 };

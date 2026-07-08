@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { StatusMenu } from "@/components/projects/status-menu";
+import { ArchiveProjectButton } from "@/components/projects/archive-project-button";
 import { HubCard, BandLabel } from "@/components/projects/hub-card";
 import { ProjectSummary } from "@/components/projects/project-summary";
 import { ProjectAttention } from "@/components/projects/project-attention";
@@ -94,7 +95,7 @@ export default async function ProjectDetailPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title, status, due_date, shoot_date, client:clients(name)")
+    .select("id, title, status, due_date, shoot_date, archived_at, client:clients(name)")
     .eq("id", params.id)
     .maybeSingle();
   if (!project) notFound();
@@ -296,7 +297,13 @@ export default async function ProjectDetailPage({
                 )}
               </p>
             </div>
-            <StatusMenu projectId={project.id} status={project.status} />
+            <div className="flex items-center gap-2">
+              <ArchiveProjectButton
+                projectId={project.id}
+                archived={Boolean((project as { archived_at: string | null }).archived_at)}
+              />
+              <StatusMenu projectId={project.id} status={project.status} />
+            </div>
           </div>
 
           {/* Lifecycle stepper */}

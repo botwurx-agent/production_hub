@@ -372,6 +372,16 @@ implemented (out of strict order, driven by the operator's real needs).
   band dots); status stays as chips (StatusTag) so the two color systems never
   compete. Client update card lives on the communication sub-page. Rationale +
   backlog: docs/competitor-research/assessment.md.
+- Project archive (soft, non-destructive): projects.archived_at (migration 0040,
+  null=active). Delivery stays a manual status; archiving is a deliberate click.
+  actions.ts archiveProject/unarchiveProject (+ activity log). Archived projects
+  are excluded from the Projects list/board default AND the dashboard query
+  (.is("archived_at", null)); ProjectsView has an "Archived (n)" toggle to view
+  them. Hub hero carries components/projects/archive-project-button.tsx (Archive
+  w/ inline confirm -> back to /projects; Unarchive when archived). Single
+  project pages still open when archived; the client detail page still lists a
+  client's archived projects (history). NO hard delete yet (deferred; would also
+  need to purge storage blobs).
 - EmptyState (components/ui/card.tsx) supports rich empty states with an optional
   "here's how it works" 3-step row + hue; used on Projects/Leads/project Assets.
 - Bolder visual language rolled app-wide (operator wanted it less dialed down):
@@ -397,7 +407,8 @@ implemented (out of strict order, driven by the operator's real needs).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0039: call_sheet_templates; 0038 =
+files in supabase/migrations (through 0040: project_archive; 0039 =
+call_sheet_templates; 0038 =
 call_sheet_recipients; 0037 = call_sheet_layout; 0036 = call_sheets_multi;
 0035: contact_details; 0034 =
 project_events; 0033 = project_contacts; 0032 = doc_reviews; 0031 =

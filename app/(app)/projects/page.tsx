@@ -17,13 +17,21 @@ export default async function ProjectsPage() {
     await Promise.all([
       supabase
         .from("projects")
-        .select("id, title, status, due_date, shoot_date, client:clients(name)")
+        .select("id, title, status, due_date, shoot_date, archived_at, client:clients(name)")
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name").order("name"),
       getOutstanding(),
     ]);
 
-  const rows = (projects ?? []) as unknown as ProjectRow[];
+  const rows: ProjectRow[] = (projects ?? []).map((p) => ({
+    id: p.id,
+    title: p.title,
+    status: p.status,
+    due_date: p.due_date,
+    shoot_date: p.shoot_date,
+    client: (p.client as { name: string } | null) ?? null,
+    archived: Boolean((p as { archived_at: string | null }).archived_at),
+  }));
   const clientOptions = clients ?? [];
 
   return (

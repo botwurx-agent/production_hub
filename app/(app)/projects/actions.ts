@@ -69,6 +69,46 @@ export async function updateProjectStatus(
   revalidatePath(`/projects/${projectId}`);
 }
 
+// Soft-archive: tuck a delivered/wrapped project out of the active list without
+// deleting anything. Reversible via unarchiveProject.
+export async function archiveProject(projectId: string) {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("projects")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", projectId);
+  await supabase.from("activity").insert({
+    studio_id: ctx.studio.id,
+    project_id: projectId,
+    author_id: ctx.userId,
+    type: "activity",
+    content: "Archived the project",
+  });
+  revalidatePath("/projects");
+  revalidatePath("/dashboard");
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function unarchiveProject(projectId: string) {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("projects")
+    .update({ archived_at: null })
+    .eq("id", projectId);
+  await supabase.from("activity").insert({
+    studio_id: ctx.studio.id,
+    project_id: projectId,
+    author_id: ctx.userId,
+    type: "activity",
+    content: "Restored the project from the archive",
+  });
+  revalidatePath("/projects");
+  revalidatePath("/dashboard");
+  revalidatePath(`/projects/${projectId}`);
+}
+
 export async function updateProject(
   projectId: string,
   patch: {

@@ -1499,6 +1499,7 @@ export type Database = {
           owner_id: string | null;
           shoot_date: string | null;
           status: Database["public"]["Enums"]["project_status"];
+          archived_at: string | null;
           studio_id: string;
           title: string;
           updated_at: string;
@@ -1513,6 +1514,7 @@ export type Database = {
           owner_id?: string | null;
           shoot_date?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
+          archived_at?: string | null;
           studio_id: string;
           title: string;
           updated_at?: string;
@@ -1527,6 +1529,7 @@ export type Database = {
           owner_id?: string | null;
           shoot_date?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
+          archived_at?: string | null;
           studio_id?: string;
           title?: string;
           updated_at?: string;

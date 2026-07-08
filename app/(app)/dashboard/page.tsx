@@ -29,7 +29,8 @@ export default async function DashboardPage() {
   ] = await Promise.all([
       supabase
         .from("projects")
-        .select("id, title, status, shoot_date, due_date, client:clients(name)"),
+        .select("id, title, status, shoot_date, due_date, client:clients(name)")
+        .is("archived_at", null),
       supabase.from("leads").select("id, stage"),
       supabase
         .from("activity")
