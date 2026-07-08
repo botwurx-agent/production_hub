@@ -49,6 +49,8 @@ const config: Config = {
         "green-bg": "var(--h-green-bg)",
         yellow: "var(--h-yellow)",
         "yellow-bg": "var(--h-yellow-bg)",
+        amber: "var(--h-amber)",
+        "amber-bg": "var(--h-amber-bg)",
         orange: "var(--h-orange)",
         "orange-bg": "var(--h-orange-bg)",
         pink: "var(--h-pink)",

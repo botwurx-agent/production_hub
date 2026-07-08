@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { IconTile } from "@/components/ui/icon-tile";
 import {
   addGearItem,
   updateGearItem,
@@ -64,49 +65,108 @@ export function GearList({
 
   const confirmed = rows.filter((r) => r.confirmed).length;
 
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center rounded-[12px] border border-dashed border-border px-6 py-12 text-center">
+        <IconTile hue="amber" size="lg">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+        </IconTile>
+        <p className="mt-4 text-sm font-bold text-text">No gear or crew yet</p>
+        <p className="mt-1 max-w-sm text-sm text-text-muted">
+          Build the checklist for the shoot: cameras, lenses, grip, crew roles.
+          Tick each line as it gets confirmed.
+        </p>
+        <Button
+          size="sm"
+          className="mt-4"
+          style={{ backgroundColor: "var(--h-amber)" }}
+          onClick={() => addLine("New category")}
+          disabled={busy}
+        >
+          Add a category
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm text-text-muted">
-          {rows.length} item{rows.length === 1 ? "" : "s"}
-          {rows.length > 0 && (
-            <span className="text-text-faint"> · {confirmed} confirmed</span>
-          )}
-        </p>
-        <Button size="sm" variant="secondary" onClick={() => addLine("New category")} disabled={busy}>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-text">
+            {confirmed}/{rows.length} confirmed
+          </p>
+          <div className="mt-1.5 h-1.5 max-w-[16rem] overflow-hidden rounded-pill bg-surface-2">
+            <div
+              className="h-full rounded-pill transition-all"
+              style={{
+                width: `${rows.length ? Math.round((confirmed / rows.length) * 100) : 0}%`,
+                background: "linear-gradient(90deg, var(--h-amber), var(--h-green))",
+              }}
+            />
+          </div>
+        </div>
+        <Button
+          size="sm"
+          style={{ backgroundColor: "var(--h-amber)" }}
+          onClick={() => addLine("New category")}
+          disabled={busy}
+        >
           + Category
         </Button>
       </div>
 
-      {rows.length === 0 ? (
-        <p className="rounded-[12px] border border-dashed border-border py-10 text-center text-sm text-text-faint">
-          No gear or crew yet. Add a category to start your list.
-        </p>
-      ) : (
-        <div className="space-y-4">
-          {groups.map(([category, gItems]) => (
-            <div key={category} className="overflow-hidden rounded-[12px] border border-border">
-              <div className="flex items-center justify-between border-b border-border bg-surface-2/50 px-3 py-2">
-                <input
-                  defaultValue={category}
-                  onBlur={(e) => {
-                    const to = e.target.value.trim();
-                    if (to && to !== category)
-                      start(async () => {
-                        await renameGearCategory(projectId, category, to);
-                        router.refresh();
-                      });
-                  }}
-                  className="rounded-[6px] border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-text outline-none hover:border-border focus:border-border-strong focus:bg-surface"
-                />
-                <span className="text-xs font-semibold text-text-muted">
-                  {gItems.filter((i) => i.confirmed).length}/{gItems.length}
+      <div className="space-y-4">
+        {groups.map(([category, gItems]) => {
+          const done = gItems.filter((i) => i.confirmed).length;
+          const allDone = done === gItems.length && gItems.length > 0;
+          return (
+            <div
+              key={category}
+              className="overflow-hidden rounded-[12px] border border-border"
+              style={{ borderTop: "3px solid var(--h-amber)" }}
+            >
+              <div
+                className="flex items-center justify-between border-b border-border px-3 py-2"
+                style={{ backgroundColor: "var(--h-amber-bg)" }}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: "var(--h-amber)" }}
+                  />
+                  <input
+                    defaultValue={category}
+                    onBlur={(e) => {
+                      const to = e.target.value.trim();
+                      if (to && to !== category)
+                        start(async () => {
+                          await renameGearCategory(projectId, category, to);
+                          router.refresh();
+                        });
+                    }}
+                    className="min-w-0 rounded-[6px] border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold text-text outline-none hover:border-border focus:border-border-strong focus:bg-surface"
+                  />
+                </div>
+                <span
+                  className="shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-bold"
+                  style={
+                    allDone
+                      ? { backgroundColor: "var(--h-green-bg)", color: "var(--h-green)" }
+                      : { backgroundColor: "var(--surface)", color: "var(--h-amber)" }
+                  }
+                >
+                  {done}/{gItems.length}
                 </span>
               </div>
               {gItems.map((r) => (
                 <div
                   key={r.id}
-                  className="grid grid-cols-[auto_3rem_1fr_1fr_auto] items-center gap-2 border-b border-border px-2 py-1 last:border-0"
+                  className={`grid grid-cols-[auto_3rem_1fr_1fr_auto] items-center gap-2 border-b border-border px-2 py-1 last:border-0 ${
+                    r.confirmed ? "bg-green-bg/30" : ""
+                  }`}
                 >
                   <button
                     onClick={() => toggle(r)}
@@ -135,7 +195,7 @@ export function GearList({
                     onChange={(e) => edit(r.id, { name: e.target.value })}
                     onBlur={() => updateGearItem(projectId, r.id, { name: r.name })}
                     placeholder="Item / role"
-                    className={`${cell} ${r.confirmed ? "text-text-muted" : ""}`}
+                    className={`${cell} ${r.confirmed ? "text-text-muted line-through" : ""}`}
                   />
                   <input
                     value={r.notes ?? ""}
@@ -158,14 +218,15 @@ export function GearList({
               <button
                 onClick={() => addLine(category)}
                 disabled={busy}
-                className="w-full px-3 py-1.5 text-left text-xs font-semibold text-accent transition hover:bg-surface-2"
+                className="w-full px-3 py-1.5 text-left text-xs font-semibold transition hover:bg-surface-2"
+                style={{ color: "var(--h-amber)" }}
               >
                 + Item
               </button>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
