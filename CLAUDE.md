@@ -493,3 +493,11 @@ drive the backlog. Remaining roadmap: Phase 7 (AI-video pipeline), a
 notifications/inbox layer, and deepening (e.g. PDF export for budget/gear/
 delivery, per-card Drive/Figma import on the shot board, public share link for
 the shot board/call sheet). See docs/DEVELOPMENT.md for setup.
+
+AI PIPELINE (Phase 7, the flagship differentiator): architecture is DECIDED and
+specced in docs/ai-pipeline.md. Key decision: one Project, same spine, with
+production method as a PER-SHOT property (generated | live) so a single project
+is all-AI, all-live, or hybrid; organize-don't-generate; provenance/lineage is
+the moat; stages-as-data for future-proofing. A clickable mockup (Sequence /
+Shot cockpit / Triage) was shown to the operator. Next: confirm first-slice
+scope (recommended: spine + Sequence board + image-stage triage loop) then build.
