@@ -729,6 +729,9 @@ export type Database = {
           project_id: string;
           fb_invoice_id: string;
           fb_client_id: string | null;
+          kind: string;
+          recipient_name: string | null;
+          recipient_email: string | null;
           number: string | null;
           status: string;
           amount: number | null;
@@ -745,6 +748,9 @@ export type Database = {
           project_id: string;
           fb_invoice_id: string;
           fb_client_id?: string | null;
+          kind?: string;
+          recipient_name?: string | null;
+          recipient_email?: string | null;
           number?: string | null;
           status?: string;
           amount?: number | null;
@@ -761,6 +767,9 @@ export type Database = {
           project_id?: string;
           fb_invoice_id?: string;
           fb_client_id?: string | null;
+          kind?: string;
+          recipient_name?: string | null;
+          recipient_email?: string | null;
           number?: string | null;
           status?: string;
           amount?: number | null;

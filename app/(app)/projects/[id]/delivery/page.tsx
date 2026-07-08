@@ -4,11 +4,19 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { DeliveryPanel } from "@/components/production/delivery-panel";
+import { InvoicingPanel } from "@/components/production/invoicing-panel";
 import type {
   Deliverable,
   ProjectBilling,
   ProjectInvoice,
 } from "@/lib/database.types";
+
+type ContactOption = {
+  id: string;
+  name: string;
+  email: string | null;
+  company: string | null;
+};
 
 export default async function DeliveryPage({
   params,
@@ -20,12 +28,12 @@ export default async function DeliveryPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title")
+    .select("id, title, client_id")
     .eq("id", params.id)
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: deliverables }, { data: billing }, { data: invoices }, { data: billingAccount }] =
+  const [{ data: deliverables }, { data: billing }, { data: invoices }, { data: billingAccount }, { data: rosterContacts }] =
     await Promise.all([
       supabase
         .from("deliverables")
@@ -48,16 +56,38 @@ export default async function DeliveryPage({
         .eq("studio_id", ctx.studio.id)
         .eq("provider", "freshbooks")
         .maybeSingle(),
+      supabase
+        .from("contacts")
+        .select("id, name, email, company")
+        .eq("project_id", params.id)
+        .order("name"),
     ]);
 
+  // Recipients: the project's own contacts plus the linked client's contacts.
+  let clientContacts: ContactOption[] = [];
+  if (project.client_id) {
+    const { data } = await supabase
+      .from("contacts")
+      .select("id, name, email, company")
+      .eq("client_id", project.client_id)
+      .order("name");
+    clientContacts = (data ?? []) as ContactOption[];
+  }
+  const contacts: ContactOption[] = [
+    ...((rosterContacts ?? []) as ContactOption[]),
+    ...clientContacts,
+  ];
+
+  const deliverableList = (deliverables ?? []) as Deliverable[];
+
   return (
-    <div>
+    <div className="space-y-6">
       <ProjectSubhead
         projectId={project.id}
         projectTitle={project.title}
         section="Delivery & billing"
         hue="green"
-        subtitle="Final deliverables and billing status."
+        subtitle="Final deliverables, invoices, and billing status."
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 7h13v10H3zM16 10h3l2 3v4h-5" />
@@ -66,13 +96,26 @@ export default async function DeliveryPage({
           </svg>
         }
       />
+
+      <Card className="p-5">
+        <InvoicingPanel
+          projectId={project.id}
+          invoices={(invoices ?? []) as ProjectInvoice[]}
+          freshbooksConnected={Boolean(billingAccount)}
+          contacts={contacts}
+          deliverables={deliverableList.map((d) => ({
+            name: d.name,
+            rate: d.rate,
+            qty: d.qty,
+          }))}
+        />
+      </Card>
+
       <Card className="p-5">
         <DeliveryPanel
           projectId={project.id}
-          deliverables={(deliverables ?? []) as Deliverable[]}
+          deliverables={deliverableList}
           billing={(billing as ProjectBilling | null) ?? null}
-          invoices={(invoices ?? []) as ProjectInvoice[]}
-          freshbooksConnected={Boolean(billingAccount)}
         />
       </Card>
     </div>

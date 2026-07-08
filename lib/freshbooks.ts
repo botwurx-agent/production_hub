@@ -191,52 +191,71 @@ export async function createClient(
   return String(id);
 }
 
-// --- Invoices ---------------------------------------------------------------
+// --- Documents: invoices + estimates ---------------------------------------
+// The two share the same shape; only the URL segment, body key, and id/number
+// fields differ, so one set of functions handles both.
 
-export type FbInvoiceLine = {
+export type DocKind = "invoice" | "estimate";
+
+export type FbLine = {
   name: string;
   description?: string;
   qty: number;
-  // unit price as a decimal string (FreshBooks expects amount as string)
-  unitCost: number;
+  unitCost: number; // unit price
 };
 
-export type CreateInvoiceInput = {
-  clientId: string;        // FreshBooks customerid
-  createDate: string;      // YYYY-MM-DD
-  currencyCode?: string;   // default USD
+export type CreateDocInput = {
+  clientId: string; // FreshBooks customerid
+  createDate: string; // YYYY-MM-DD
+  currencyCode?: string; // default USD
   poNumber?: string;
   notes?: string;
-  lines: FbInvoiceLine[];
+  lines: FbLine[];
 };
 
-type InvoiceResult = {
+type DocResult = {
   id?: number;
   invoiceid?: number;
+  estimateid?: number;
   invoice_number?: string;
+  estimate_number?: string;
   amount?: { amount?: string; code?: string };
   outstanding?: { amount?: string; code?: string };
   v3_status?: string;
 };
-type InvoiceResponse = { response?: { result?: { invoice?: InvoiceResult } } };
+type DocResponse = { response?: { result?: Record<string, DocResult | undefined> } };
 
-function mapInvoice(inv: InvoiceResult | undefined) {
-  const id = inv?.id ?? inv?.invoiceid;
+function docSegment(kind: DocKind) {
+  return kind === "estimate" ? "estimates/estimates" : "invoices/invoices";
+}
+function docBodyKey(kind: DocKind) {
+  return kind === "estimate" ? "estimate" : "invoice";
+}
+
+function mapDoc(d: DocResult | undefined) {
+  const id = d?.id ?? d?.invoiceid ?? d?.estimateid;
   return {
-    fbInvoiceId: id != null ? String(id) : null,
-    number: inv?.invoice_number ?? null,
-    amount: inv?.amount?.amount != null ? Number(inv.amount.amount) : null,
+    fbDocId: id != null ? String(id) : null,
+    number: d?.invoice_number ?? d?.estimate_number ?? null,
+    amount: d?.amount?.amount != null ? Number(d.amount.amount) : null,
     outstanding:
-      inv?.outstanding?.amount != null ? Number(inv.outstanding.amount) : null,
-    currency: inv?.amount?.code ?? "USD",
-    status: inv?.v3_status ?? null,
+      d?.outstanding?.amount != null ? Number(d.outstanding.amount) : null,
+    currency: d?.amount?.code ?? "USD",
+    status: d?.v3_status ?? null,
   };
 }
 
-export async function createInvoice(
+// The FreshBooks web app URL for a document (operator-facing; they view it while
+// logged into FreshBooks). Good enough for an in-app "View" link.
+export function documentViewUrl(kind: DocKind, accountId: string, docId: string) {
+  return `https://my.freshbooks.com/#/${kind}/${accountId}-${docId}`;
+}
+
+export async function createDocument(
+  kind: DocKind,
   accountId: string,
   token: string,
-  input: CreateInvoiceInput,
+  input: CreateDocInput,
 ) {
   const lines = input.lines.map((l) => ({
     type: 0,
@@ -248,12 +267,12 @@ export async function createInvoice(
       code: input.currencyCode ?? "USD",
     },
   }));
-  const data = await apiSend<InvoiceResponse>(
+  const data = await apiSend<DocResponse>(
     "POST",
-    `/accounting/account/${accountId}/invoices/invoices`,
+    `/accounting/account/${accountId}/${docSegment(kind)}`,
     token,
     {
-      invoice: {
+      [docBodyKey(kind)]: {
         customerid: Number(input.clientId),
         create_date: input.createDate,
         currency_code: input.currencyCode ?? "USD",
@@ -263,22 +282,23 @@ export async function createInvoice(
       },
     },
   );
-  return mapInvoice(data.response?.result?.invoice);
+  return mapDoc(data.response?.result?.[docBodyKey(kind)]);
 }
 
-// Send/email the invoice to the client (also flips it out of draft to "sent").
-export async function sendInvoice(
+// Email the document to the recipient (also moves it out of draft to "sent").
+export async function sendDocument(
+  kind: DocKind,
   accountId: string,
   token: string,
-  invoiceId: string,
+  docId: string,
   recipients?: string[],
 ) {
-  const data = await apiSend<InvoiceResponse>(
+  const data = await apiSend<DocResponse>(
     "PUT",
-    `/accounting/account/${accountId}/invoices/invoices/${invoiceId}`,
+    `/accounting/account/${accountId}/${docSegment(kind)}/${docId}`,
     token,
     {
-      invoice: {
+      [docBodyKey(kind)]: {
         action_email: true,
         ...(recipients && recipients.length
           ? { email_recipients: recipients }
@@ -286,17 +306,18 @@ export async function sendInvoice(
       },
     },
   );
-  return mapInvoice(data.response?.result?.invoice);
+  return mapDoc(data.response?.result?.[docBodyKey(kind)]);
 }
 
-export async function getInvoice(
+export async function getDocument(
+  kind: DocKind,
   accountId: string,
   token: string,
-  invoiceId: string,
+  docId: string,
 ) {
-  const data = await apiGet<InvoiceResponse>(
-    `/accounting/account/${accountId}/invoices/invoices/${invoiceId}`,
+  const data = await apiGet<DocResponse>(
+    `/accounting/account/${accountId}/${docSegment(kind)}/${docId}`,
     token,
   );
-  return mapInvoice(data.response?.result?.invoice);
+  return mapDoc(data.response?.result?.[docBodyKey(kind)]);
 }
