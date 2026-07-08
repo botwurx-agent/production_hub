@@ -4,14 +4,18 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { DeliveryPanel } from "@/components/production/delivery-panel";
-import type { Deliverable, ProjectBilling } from "@/lib/database.types";
+import type {
+  Deliverable,
+  ProjectBilling,
+  ProjectInvoice,
+} from "@/lib/database.types";
 
 export default async function DeliveryPage({
   params,
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const { data: project } = await supabase
@@ -21,18 +25,30 @@ export default async function DeliveryPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: deliverables }, { data: billing }] = await Promise.all([
-    supabase
-      .from("deliverables")
-      .select("*")
-      .eq("project_id", params.id)
-      .order("position", { ascending: true }),
-    supabase
-      .from("project_billing")
-      .select("*")
-      .eq("project_id", params.id)
-      .maybeSingle(),
-  ]);
+  const [{ data: deliverables }, { data: billing }, { data: invoices }, { data: billingAccount }] =
+    await Promise.all([
+      supabase
+        .from("deliverables")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("position", { ascending: true }),
+      supabase
+        .from("project_billing")
+        .select("*")
+        .eq("project_id", params.id)
+        .maybeSingle(),
+      supabase
+        .from("project_invoices")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("billing_accounts")
+        .select("id")
+        .eq("studio_id", ctx.studio.id)
+        .eq("provider", "freshbooks")
+        .maybeSingle(),
+    ]);
 
   return (
     <div>
@@ -55,6 +71,8 @@ export default async function DeliveryPage({
           projectId={project.id}
           deliverables={(deliverables ?? []) as Deliverable[]}
           billing={(billing as ProjectBilling | null) ?? null}
+          invoices={(invoices ?? []) as ProjectInvoice[]}
+          freshbooksConnected={Boolean(billingAccount)}
         />
       </Card>
     </div>

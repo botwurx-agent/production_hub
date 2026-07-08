@@ -11,3 +11,14 @@ export async function disconnectEmailAccount(id: string) {
   await supabase.from("email_accounts").delete().eq("id", id);
   revalidatePath("/settings");
 }
+
+export async function disconnectFreshbooks() {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("billing_accounts")
+    .delete()
+    .eq("studio_id", ctx.studio.id)
+    .eq("provider", "freshbooks");
+  revalidatePath("/settings");
+}

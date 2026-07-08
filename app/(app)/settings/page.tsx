@@ -3,6 +3,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { googleConfigured } from "@/lib/google";
 import { slackConfigured } from "@/lib/slack";
 import { figmaConfigured } from "@/lib/figma";
+import { freshbooksConfigured } from "@/lib/freshbooks";
 import { PageHeader } from "@/components/page-header";
 import { SettingsIcon } from "@/components/app-shell/nav-icons";
 import { Card } from "@/components/ui/card";
@@ -36,6 +37,14 @@ const connectionError: Record<string, string> = {
   figma_state: "Connection could not be verified. Please try again.",
   figma_exchange: "Could not complete the Figma connection. Please retry.",
   figma_store: "Connected, but saving the account failed. Please retry.",
+  freshbooks_not_configured:
+    "FreshBooks is not configured yet (missing credentials).",
+  freshbooks_denied: "FreshBooks connection was cancelled.",
+  freshbooks_state: "Connection could not be verified. Please try again.",
+  freshbooks_exchange: "Could not complete the FreshBooks connection. Please retry.",
+  freshbooks_identity: "Could not read your FreshBooks account. Please retry.",
+  freshbooks_account: "No FreshBooks business was found on that account.",
+  freshbooks_store: "Connected, but saving the account failed. Please retry.",
   no_studio: "No studio found for your account.",
 };
 
@@ -43,6 +52,7 @@ const connectedLabel: Record<string, string> = {
   slack: "Slack",
   figma: "Figma",
   google: "Gmail",
+  freshbooks: "FreshBooks",
 };
 
 export default async function SettingsPage({
@@ -53,17 +63,24 @@ export default async function SettingsPage({
   const ctx = await requireStudioContext();
   const supabase = createClient();
 
-  const [{ data: members }, { data: accounts }] = await Promise.all([
-    supabase
-      .from("memberships")
-      .select("id, role, user_id")
-      .eq("studio_id", ctx.studio.id)
-      .order("created_at"),
-    supabase
-      .from("email_accounts")
-      .select("id, provider, email")
-      .order("created_at"),
-  ]);
+  const [{ data: members }, { data: accounts }, { data: billingAccount }] =
+    await Promise.all([
+      supabase
+        .from("memberships")
+        .select("id, role, user_id")
+        .eq("studio_id", ctx.studio.id)
+        .order("created_at"),
+      supabase
+        .from("email_accounts")
+        .select("id, provider, email")
+        .order("created_at"),
+      supabase
+        .from("billing_accounts")
+        .select("fb_identity_email")
+        .eq("studio_id", ctx.studio.id)
+        .eq("provider", "freshbooks")
+        .maybeSingle(),
+    ]);
 
   const errorMsg = searchParams.error
     ? (connectionError[searchParams.error] ?? "Something went wrong.")
@@ -155,8 +172,14 @@ export default async function SettingsPage({
               google: googleConfigured(),
               slack: slackConfigured(),
               figma: figmaConfigured(),
+              freshbooks: freshbooksConfigured(),
             }}
             accounts={accounts ?? []}
+            freshbooks={{
+              connectedEmail: billingAccount
+                ? (billingAccount.fb_identity_email ?? "")
+                : null,
+            }}
           />
         </Card>
 

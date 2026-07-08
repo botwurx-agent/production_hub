@@ -35,6 +35,12 @@ function clientSecret() {
   return s;
 }
 
+export function freshbooksConfigured(): boolean {
+  return Boolean(
+    process.env.FRESHBOOKS_CLIENT_ID && process.env.FRESHBOOKS_CLIENT_SECRET,
+  );
+}
+
 // The scopes we request. FreshBooks may grant broad access if granular scopes
 // are not enabled on the app; that is fine.
 const SCOPES = [
@@ -84,13 +90,12 @@ export function exchangeCode(code: string, redirectUri: string) {
   });
 }
 
-export function refreshTokens(refreshToken: string, redirectUri: string) {
+export function refreshTokens(refreshToken: string) {
   return tokenRequest({
     grant_type: "refresh_token",
     client_id: clientId(),
     client_secret: clientSecret(),
     refresh_token: refreshToken,
-    redirect_uri: redirectUri,
   });
 }
 

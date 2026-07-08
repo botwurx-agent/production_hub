@@ -105,6 +105,8 @@ export async function updateDeliverable(
     status?: string;
     link?: string;
     notes?: string;
+    rate?: number | null;
+    qty?: number;
   }
 ): Promise<void> {
   await requireStudioContext();

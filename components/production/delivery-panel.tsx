@@ -3,14 +3,23 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { StatusTag } from "@/components/status-tag";
+import { StatusTag, type Hue } from "@/components/status-tag";
 import {
   addDeliverable,
   updateDeliverable,
   deleteDeliverable,
   saveBilling,
 } from "@/app/(app)/projects/[id]/production/ops-actions";
-import type { Deliverable, ProjectBilling } from "@/lib/database.types";
+import {
+  createInvoiceForProject,
+  sendInvoiceForProject,
+  syncInvoiceForProject,
+} from "@/app/(app)/projects/[id]/billing-actions";
+import type {
+  Deliverable,
+  ProjectBilling,
+  ProjectInvoice,
+} from "@/lib/database.types";
 
 const field =
   "w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong";
@@ -28,14 +37,38 @@ const BSTATUS: Record<string, { label: string; hue: "yellow" | "blue" | "green" 
   paid: { label: "Paid", hue: "green" },
 };
 
+// FreshBooks invoice status -> chip.
+const ISTATUS: Record<string, { label: string; hue: Hue }> = {
+  draft: { label: "Draft", hue: "yellow" },
+  sent: { label: "Sent", hue: "blue" },
+  viewed: { label: "Viewed", hue: "cyan" },
+  partial: { label: "Partly paid", hue: "purple" },
+  paid: { label: "Paid", hue: "green" },
+  overdue: { label: "Overdue", hue: "red" },
+  disputed: { label: "Disputed", hue: "red" },
+};
+
+function money(n: number | null | undefined, currency = "USD") {
+  if (n == null) return "";
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
+  } catch {
+    return `$${n.toFixed(2)}`;
+  }
+}
+
 export function DeliveryPanel({
   projectId,
   deliverables,
   billing,
+  invoices,
+  freshbooksConnected,
 }: {
   projectId: string;
   deliverables: Deliverable[];
   billing: ProjectBilling | null;
+  invoices: ProjectInvoice[];
+  freshbooksConnected: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Deliverable[]>(deliverables);
@@ -45,6 +78,10 @@ export function DeliveryPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
   const [busy, start] = useTransition();
+
+  // Invoicing action state.
+  const [invBusy, startInv] = useTransition();
+  const [invError, setInvError] = useState<string | null>(null);
 
   const [bill, setBill] = useState({
     status: billing?.status ?? "not_invoiced",
@@ -71,6 +108,20 @@ export function DeliveryPanel({
   }
 
   const delivered = rows.filter((r) => r.status === "delivered").length;
+  const invoiceTotal = rows.reduce(
+    (sum, r) => sum + (r.rate != null && r.rate > 0 ? r.rate * (r.qty ?? 1) : 0),
+    0,
+  );
+  const pricedCount = rows.filter((r) => r.rate != null && r.rate > 0).length;
+
+  function runInvoiceAction(fn: () => Promise<{ error?: string } | null | undefined>) {
+    setInvError(null);
+    startInv(async () => {
+      const res = await fn();
+      if (res?.error) setInvError(res.error);
+      router.refresh();
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -90,7 +141,8 @@ export function DeliveryPanel({
 
         {rows.length === 0 ? (
           <p className="rounded-[12px] border border-dashed border-border py-10 text-center text-sm text-text-faint">
-            No deliverables yet. List what ships to the client.
+            No deliverables yet. List what ships to the client, with a rate to
+            bill it.
           </p>
         ) : (
           <div className="space-y-2">
@@ -128,7 +180,35 @@ export function DeliveryPanel({
                     </svg>
                   </button>
                 </div>
-                <div className="mt-1 grid grid-cols-1 gap-2 pl-1 sm:grid-cols-3">
+                <div className="mt-1 grid grid-cols-2 gap-2 pl-1 sm:grid-cols-4">
+                  <label className="flex items-center gap-1 rounded-[8px] border border-transparent px-1 focus-within:border-border-strong">
+                    <span className="text-xs font-semibold text-text-faint">$</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={r.rate ?? ""}
+                      onChange={(e) =>
+                        edit(r.id, {
+                          rate: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                      onBlur={() => updateDeliverable(projectId, r.id, { rate: r.rate })}
+                      placeholder="Rate"
+                      className="w-full bg-transparent py-1 text-sm text-text outline-none"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1 rounded-[8px] border border-transparent px-1 focus-within:border-border-strong">
+                    <span className="text-xs font-semibold text-text-faint">×</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={r.qty ?? 1}
+                      onChange={(e) => edit(r.id, { qty: Number(e.target.value) || 1 })}
+                      onBlur={() => updateDeliverable(projectId, r.id, { qty: r.qty ?? 1 })}
+                      placeholder="Qty"
+                      className="w-full bg-transparent py-1 text-sm text-text outline-none"
+                    />
+                  </label>
                   <input
                     value={r.spec ?? ""}
                     onChange={(e) => edit(r.id, { spec: e.target.value })}
@@ -145,21 +225,134 @@ export function DeliveryPanel({
                     }
                     className={cell}
                   />
-                  <input
-                    value={r.link ?? ""}
-                    onChange={(e) => edit(r.id, { link: e.target.value })}
-                    onBlur={() => updateDeliverable(projectId, r.id, { link: r.link ?? "" })}
-                    placeholder="Delivery link"
-                    className={cell}
-                  />
                 </div>
               </div>
             ))}
           </div>
         )}
+        {pricedCount > 0 && (
+          <p className="mt-2 text-right text-xs font-semibold text-text-muted">
+            Invoice total: {money(invoiceTotal)}{" "}
+            <span className="text-text-faint">
+              ({pricedCount} priced line{pricedCount === 1 ? "" : "s"})
+            </span>
+          </p>
+        )}
       </div>
 
-      {/* Billing */}
+      {/* Invoicing (FreshBooks) */}
+      <div className="rounded-[14px] border border-border p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-text">Invoicing</h3>
+          <span className="text-xs font-semibold text-text-faint">FreshBooks</span>
+        </div>
+
+        {!freshbooksConnected ? (
+          <p className="rounded-[10px] bg-yellow-bg px-3 py-2 text-sm font-medium text-yellow">
+            Connect FreshBooks in{" "}
+            <a href="/settings" className="underline">
+              Settings
+            </a>{" "}
+            to create and send invoices from this project.
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() =>
+                  runInvoiceAction(() => createInvoiceForProject(projectId))
+                }
+                disabled={invBusy || pricedCount === 0}
+              >
+                {invBusy ? "Working..." : "Create invoice"}
+                {pricedCount > 0 ? ` · ${money(invoiceTotal)}` : ""}
+              </Button>
+              {pricedCount === 0 && (
+                <span className="text-xs text-text-faint">
+                  Set a rate on a deliverable first.
+                </span>
+              )}
+            </div>
+
+            {invError && (
+              <p className="mt-2 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
+                {invError}
+              </p>
+            )}
+
+            {invoices.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {invoices.map((inv) => {
+                  const s = ISTATUS[inv.status] ?? { label: inv.status, hue: "blue" as Hue };
+                  const isDraft = inv.status === "draft";
+                  return (
+                    <div
+                      key={inv.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-[11px] border border-border px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-text">
+                          {inv.number ? `Invoice #${inv.number}` : "Draft invoice"}
+                          <span className="ml-2 font-normal text-text-muted">
+                            {money(inv.amount, inv.currency)}
+                          </span>
+                          {inv.amount_paid > 0 && (
+                            <span className="ml-2 text-xs font-semibold text-green">
+                              {money(inv.amount_paid, inv.currency)} paid
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <StatusTag hue={s.hue}>{s.label}</StatusTag>
+                        {isDraft && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={invBusy}
+                            onClick={() =>
+                              runInvoiceAction(() =>
+                                sendInvoiceForProject(projectId, inv.id),
+                              )
+                            }
+                          >
+                            Send
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={invBusy}
+                          onClick={() =>
+                            runInvoiceAction(() =>
+                              syncInvoiceForProject(projectId, inv.id),
+                            )
+                          }
+                        >
+                          Refresh
+                        </Button>
+                        {inv.hosted_url && (
+                          <a
+                            href={inv.hosted_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-[9px] border border-border-strong px-2.5 py-1 text-xs font-semibold text-text hover:border-accent hover:text-accent"
+                          >
+                            View / Pay
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Billing (manual status, kept in sync when invoicing) */}
       <div className="rounded-[14px] border border-border p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-bold text-text">Billing</h3>
