@@ -512,12 +512,19 @@ Shot cockpit / Triage) was shown to the operator.
   review" button on the shot header (components/production/pipeline-workspace.tsx)
   calls sendDocToReview(projectId,'ai_shot',shotId); the shot then shows on the
   project Review page as a DocReviewCard -> DocReviewModal (PinCanvas over the
-  shot's picked media = start/end frames + take, rendered by AiShotSurface in
-  components/review/doc-surface.tsx) with the internal team greenlight, plus the
-  ShareDocButton for the client via /r/[token] (DocReview portal, same pins +
-  approve/request-changes). loadDocSurface gained an ai_shot branch (frames/take
-  from ai_generations that carry a role); loadDocReviewsForProject resolves the
-  shot title; targetInProject + createDocReviewLink validate the shot belongs to
-  the project. NEXT for pipeline review: timecode-scrub comments on the take
-  video (reuse VideoReview) instead of pin-on-poster; site-wide guest "view-only"
-  invites deferred (share links cover external review for now).
+  shot's picked media) with the internal team greenlight, plus the ShareDocButton
+  for the client via /r/[token] (DocReview portal, same review + approve/request-
+  changes). loadDocSurface gained an ai_shot branch (frames + take + a playable
+  takeVideoUrl from ai_generations that carry a role); loadDocReviewsForProject
+  resolves the shot title; targetInProject + createDocReviewLink validate the
+  shot belongs to the project. The review canvas ADAPTS to the pipeline stage
+  (components/review/ai-shot-review-canvas.tsx): a picked take VIDEO -> the
+  timecode scrubber (reuse VideoReview: pause + comment at a moment, markers on a
+  timeline, click to seek), with the start/end frames shown as a reference strip
+  above; before a take exists (image stage) -> the pin canvas over the frames.
+  Comment actions carry timecode as well as pin (addDocReviewCommentAt +
+  submitDocComment gained a timecode arg; review_comments.timecode already
+  existed from asset video review). Both the internal DocReviewModal and the
+  client DocReview portal branch on surface.kind==='ai_shot'. NEXT for pipeline
+  review: site-wide guest "view-only" invites deferred (share links cover
+  external review for now).

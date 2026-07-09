@@ -235,7 +235,9 @@ export type DocSurface =
       kind: "ai_shot";
       title: string;
       beat: string | null;
-      media: DocShotMedia[];
+      frames: DocShotMedia[]; // start + end (images): reference + pin fallback
+      take: DocShotMedia | null; // the picked take (usually video)
+      takeVideoUrl: string | null; // playable take video -> timecode review
     };
 
 export type DocReviewData = {
@@ -353,30 +355,46 @@ export async function loadDocSurface(
       client,
       rows.map((g) => g.file_path as string).filter(Boolean)
     );
-    const ORDER: Record<string, number> = { start: 0, end: 1, take: 2, final: 2 };
     const LABEL: Record<string, string> = {
       start: "Start frame",
       end: "End frame",
       take: "Take",
       final: "Take",
     };
-    const media: DocShotMedia[] = rows
-      .map((g) => {
-        const isVideo = g.kind === "video" || g.stage === "video";
-        const disp = g.file_path ? signed.get(g.file_path) ?? null : null;
-        return {
-          id: g.id,
-          role: g.role as string,
-          label: LABEL[g.role as string] ?? "Selected",
-          isVideo,
-          signedUrl: isVideo ? g.thumb_url ?? null : disp ?? g.external_url ?? null,
-          openUrl: g.external_url ?? disp ?? null,
-          model: g.model ?? null,
-        };
-      })
-      .sort((a, b) => (ORDER[a.role] ?? 9) - (ORDER[b.role] ?? 9));
+    const toMedia = (g: (typeof rows)[number]): DocShotMedia => {
+      const isVideo = g.kind === "video" || g.stage === "video";
+      const disp = g.file_path ? signed.get(g.file_path) ?? null : null;
+      return {
+        id: g.id,
+        role: g.role as string,
+        label: LABEL[g.role as string] ?? "Selected",
+        isVideo,
+        signedUrl: isVideo ? g.thumb_url ?? null : disp ?? g.external_url ?? null,
+        openUrl: g.external_url ?? disp ?? null,
+        model: g.model ?? null,
+      };
+    };
+    const frames: DocShotMedia[] = rows
+      .filter((g) => g.role === "start" || g.role === "end")
+      .map(toMedia)
+      .sort((a, b) => (a.role === "start" ? 0 : 1) - (b.role === "start" ? 0 : 1));
+    const takeRow = rows.find((g) => g.role === "take" || g.role === "final") ?? null;
+    const take = takeRow ? toMedia(takeRow) : null;
+    // Prefer the stored (signed) file so the <video> element can actually play
+    // it; a share-page external_url won't. Only offer video review for a take
+    // that is a video and has a playable source.
+    const takeSigned = takeRow?.file_path ? signed.get(takeRow.file_path) ?? null : null;
+    const takeVideoUrl =
+      take && take.isVideo ? takeSigned ?? takeRow?.external_url ?? null : null;
     return {
-      surface: { kind: "ai_shot", title: shot.title || "Shot", beat: shot.beat, media },
+      surface: {
+        kind: "ai_shot",
+        title: shot.title || "Shot",
+        beat: shot.beat,
+        frames,
+        take,
+        takeVideoUrl,
+      },
       docTitle: shot.title || "Shot",
     };
   }

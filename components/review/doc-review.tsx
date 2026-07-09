@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { PinCanvas } from "@/components/review/pin-canvas";
 import { DocSurfaceView } from "@/components/review/doc-surface";
 import {
+  AiShotReviewCanvas,
+  type ShotAnchor,
+} from "@/components/review/ai-shot-review-canvas";
+import {
   submitDocComment,
   submitDocDecision,
   resolveDocComment,
@@ -46,16 +50,19 @@ export function DocReview({
     } catch {}
   }
 
-  async function postPinned(
-    text: string,
-    pin: { x: number; y: number } | null
-  ): Promise<boolean> {
+  async function post(text: string, anchor: ShotAnchor): Promise<boolean> {
     if (!name.trim()) {
       setError("Add your name first.");
       return false;
     }
     setError(null);
-    const res = await submitDocComment(token, name, text, pin);
+    const res = await submitDocComment(
+      token,
+      name,
+      text,
+      anchor.pin ?? null,
+      anchor.timecode ?? null
+    );
     if (res?.error) {
       setError(res.error);
       return false;
@@ -103,8 +110,9 @@ export function DocReview({
               {data.docTitle}
             </h1>
             <p className="mt-1 text-sm text-text-muted">
-              Click anywhere on the {noun} to leave a pinned comment, then approve
-              or request changes.
+              {data.surface.kind === "ai_shot" && data.surface.takeVideoUrl
+                ? "Pause the take where you want feedback and comment at that moment, then approve or request changes."
+                : `Click anywhere on the ${noun} to leave a pinned comment, then approve or request changes.`}
             </p>
           </div>
           <span className="shrink-0 rounded-pill border border-border-strong px-3 py-1 text-xs font-bold uppercase tracking-wide text-text-muted">
@@ -125,17 +133,28 @@ export function DocReview({
         />
       </div>
 
-      <PinCanvas
-        stage={<DocSurfaceView surface={data.surface} />}
-        stageBg="var(--surface-2)"
-        fit="full"
-        comments={data.comments}
-        disabled={!name.trim()}
-        disabledHint="Add your name above to comment."
-        emptyHint={`Click anywhere on the ${noun} to drop a pin and start.`}
-        onPost={postPinned}
-        onResolve={resolve}
-      />
+      {data.surface.kind === "ai_shot" ? (
+        <AiShotReviewCanvas
+          surface={data.surface}
+          comments={data.comments}
+          disabled={!name.trim()}
+          disabledHint="Add your name above to comment."
+          onPost={post}
+          onResolve={resolve}
+        />
+      ) : (
+        <PinCanvas
+          stage={<DocSurfaceView surface={data.surface} />}
+          stageBg="var(--surface-2)"
+          fit="full"
+          comments={data.comments}
+          disabled={!name.trim()}
+          disabledHint="Add your name above to comment."
+          emptyHint={`Click anywhere on the ${noun} to drop a pin and start.`}
+          onPost={(text, pin) => post(text, { pin })}
+          onResolve={resolve}
+        />
+      )}
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <button

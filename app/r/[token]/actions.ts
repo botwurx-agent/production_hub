@@ -220,7 +220,8 @@ export async function submitDocComment(
   token: string,
   name: string,
   body: string,
-  pin?: { x: number; y: number } | null
+  pin?: { x: number; y: number } | null,
+  timecode?: number | null
 ): Promise<PortalState> {
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const reviewer = name.trim();
@@ -235,13 +236,18 @@ export async function submitDocComment(
     return { error: "This is not a document review." };
 
   const hasPin = pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
+  const hasTime = timecode != null && Number.isFinite(timecode);
   let pinNumber: number | null = null;
   let posX: number | null = null;
   let posY: number | null = null;
-  if (hasPin) {
-    posX = Math.max(0, Math.min(100, pin!.x));
-    posY = Math.max(0, Math.min(100, pin!.y));
-    // Next marker number for this doc target.
+  let time: number | null = null;
+  if (hasPin || hasTime) {
+    if (hasPin) {
+      posX = Math.max(0, Math.min(100, pin!.x));
+      posY = Math.max(0, Math.min(100, pin!.y));
+    }
+    if (hasTime) time = Math.max(0, timecode as number);
+    // Next marker number for this doc target (shared by pins + timecodes).
     const { data: lastPin } = await service
       .from("review_comments")
       .select("pin_number")
@@ -264,6 +270,7 @@ export async function submitDocComment(
     pin_number: pinNumber,
     pos_x: posX,
     pos_y: posY,
+    timecode: time,
   });
   if (error) return { error: error.message };
 

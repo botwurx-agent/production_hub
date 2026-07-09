@@ -21,7 +21,7 @@ function AiShotSurface({
 }: {
   surface: Extract<DocSurface, { kind: "ai_shot" }>;
 }) {
-  const { media } = surface;
+  const media = [...surface.frames, ...(surface.take ? [surface.take] : [])];
   return (
     <div className="w-full rounded-[12px] bg-surface p-4 text-text sm:p-6">
       <div className="mb-5 border-b border-border pb-4">

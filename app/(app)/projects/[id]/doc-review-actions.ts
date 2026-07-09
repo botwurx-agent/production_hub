@@ -115,14 +115,16 @@ export async function removeDocFromReview(
   return null;
 }
 
-// Internal team comment on a doc, with an optional pin (percent coords). Pin
-// numbers are shared with client comments on the same doc.
+// Internal team comment on a doc, with an optional anchor: an image pin (percent
+// coords) or a video timecode (seconds, for an AI shot's take). Marker numbers
+// are shared across pins + timecodes and with client comments on the same doc.
 export async function addDocReviewCommentAt(
   projectId: string,
   kind: DocKind,
   targetId: string,
   body: string,
-  pin?: { x: number; y: number } | null
+  pin?: { x: number; y: number } | null,
+  timecode?: number | null
 ): Promise<DocReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -131,12 +133,17 @@ export async function addDocReviewCommentAt(
   const supabase = createClient();
 
   const hasPin = pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
+  const hasTime = timecode != null && Number.isFinite(timecode);
   let pinNumber: number | null = null;
   let posX: number | null = null;
   let posY: number | null = null;
-  if (hasPin) {
-    posX = Math.max(0, Math.min(100, pin!.x));
-    posY = Math.max(0, Math.min(100, pin!.y));
+  let time: number | null = null;
+  if (hasPin || hasTime) {
+    if (hasPin) {
+      posX = Math.max(0, Math.min(100, pin!.x));
+      posY = Math.max(0, Math.min(100, pin!.y));
+    }
+    if (hasTime) time = Math.max(0, timecode as number);
     const { data: lastPin } = await supabase
       .from("review_comments")
       .select("pin_number")
@@ -158,6 +165,7 @@ export async function addDocReviewCommentAt(
     pin_number: pinNumber,
     pos_x: posX,
     pos_y: posY,
+    timecode: time,
   });
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}/review`);

@@ -6,6 +6,10 @@ import { Modal } from "@/components/ui/modal";
 import { PinCanvas } from "@/components/review/pin-canvas";
 import { DocSurfaceView } from "@/components/review/doc-surface";
 import {
+  AiShotReviewCanvas,
+  type ShotAnchor,
+} from "@/components/review/ai-shot-review-canvas";
+import {
   getDocReviewDetail,
   addDocReviewCommentAt,
   resolveDocReviewComment,
@@ -52,11 +56,15 @@ export function DocReviewModal({
     });
   }, [open, kind, targetId]);
 
-  async function post(
-    text: string,
-    pin: { x: number; y: number } | null
-  ): Promise<boolean> {
-    const res = await addDocReviewCommentAt(projectId, kind, targetId, text, pin);
+  async function post(text: string, anchor: ShotAnchor): Promise<boolean> {
+    const res = await addDocReviewCommentAt(
+      projectId,
+      kind,
+      targetId,
+      text,
+      anchor.pin ?? null,
+      anchor.timecode ?? null
+    );
     if (res?.error) return false;
     await reload();
     router.refresh();
@@ -87,15 +95,24 @@ export function DocReviewModal({
         <p className="py-16 text-center text-sm text-text-faint">Loading…</p>
       ) : (
         <div className="space-y-4">
-          <PinCanvas
-            stage={<DocSurfaceView surface={detail.surface} />}
-            stageBg="var(--surface-2)"
-            fit="full"
-            comments={detail.comments}
-            emptyHint="Click anywhere on the document to drop a pin and start."
-            onPost={post}
-            onResolve={resolve}
-          />
+          {detail.surface.kind === "ai_shot" ? (
+            <AiShotReviewCanvas
+              surface={detail.surface}
+              comments={detail.comments}
+              onPost={post}
+              onResolve={resolve}
+            />
+          ) : (
+            <PinCanvas
+              stage={<DocSurfaceView surface={detail.surface} />}
+              stageBg="var(--surface-2)"
+              fit="full"
+              comments={detail.comments}
+              emptyHint="Click anywhere on the document to drop a pin and start."
+              onPost={(text, pin) => post(text, { pin })}
+              onResolve={resolve}
+            />
+          )}
 
           <div className="rounded-[12px] border border-border bg-surface-2/40 p-3">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-faint">
