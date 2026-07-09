@@ -75,10 +75,31 @@ Two organizing axes, both needed: by **shot** (production structure) and by
   library** (style tokens carried across shots for look consistency).
 - **Generation (candidate)**: every generated image/video, stored as an
   **Asset + Version** (reuse existing storage + version machinery), tagged with
-  shot, stage, source prompt, platform, seed/params, status (candidate |
-  approved | rejected). A video candidate also records its **parent start/end
-  images** — the lineage link. Nullable `source`/external-ref fields per the
-  connection-ready rule.
+  shot, stage, source prompt, status (candidate | approved | rejected). A video
+  candidate also records its **parent start/end images** — the lineage link.
+  Carries the full **provenance/spec** (below). Nullable `source`/external-ref
+  fields per the connection-ready rule.
+
+### Provenance / spec — captured on EVERY generation (non-negotiable)
+In AI video, generations bounce across models, platforms, seeds, and params, and
+multiple people touch one job. So each image and take must carry its own
+complete, self-describing record — no mystery clips, everything reproducible.
+Fields (image + video share most; video adds refs/motion):
+- platform / model + model version (e.g. Nano Banana 2 Pro, Midjourney v7, Flux
+  1.1 for images; Kling 2.1, Veo 3, Runway, Sora for video) — candidates in one
+  batch can come from DIFFERENT platforms; store per generation, not per shot.
+- prompt reference + prompt version used.
+- seed.
+- params: aspect ratio, resolution, guidance/stylize/steps (image); duration,
+  fps, resolution, motion/camera settings, seed (video).
+- reference frames (video only): the start + end image ids (lineage).
+- generated_by (user) + created_at — multi-person attribution.
+- source: external link / file ref to the generation on its platform.
+- optional: cost/credits.
+- status + approved_by + approved_at.
+UI: a compact model/platform badge on every thumbnail; a full spec card on
+select. This provenance is the moat and the thing that keeps a multi-person,
+multi-model project sane.
 - **Gate / approval**: explicit state transitions, internal (team) then client.
   **Reuse the existing review portal** (Frame.io pins + timecode + share link) —
   the approval infra already exists.
