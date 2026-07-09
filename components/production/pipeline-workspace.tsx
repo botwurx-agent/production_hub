@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag, type Hue } from "@/components/status-tag";
+import { uploadAssetFile } from "@/components/projects/upload-file";
 import {
   saveScript,
   addShot,
@@ -47,6 +48,7 @@ function gradFor(id: string) {
 
 function AddGenModal({
   projectId,
+  studioId,
   shot,
   stage,
   promptId,
@@ -55,6 +57,7 @@ function AddGenModal({
   onClose,
 }: {
   projectId: string;
+  studioId: string;
   shot: AiShot;
   stage: Stage;
   promptId: string | null;
@@ -64,6 +67,8 @@ function AddGenModal({
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
+  const [file, setFile] = useState<File | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const [f, setF] = useState({
     external_url: "", platform: "", model: "", model_version: "", seed: "",
     aspect: stage === "image" ? "16:9" : "", resolution: "", fps: "", duration_sec: "",
@@ -72,11 +77,23 @@ function AddGenModal({
   function set(k: keyof typeof f, v: string) { setF((p) => ({ ...p, [k]: v })); }
 
   function submit() {
+    setErr(null);
     start(async () => {
+      let filePath: string | null = null;
+      if (file) {
+        try {
+          const up = await uploadAssetFile({ studioId, projectId, file });
+          filePath = up.storagePath;
+        } catch (e) {
+          setErr(`Upload failed: ${(e as Error).message}`);
+          return;
+        }
+      }
       await addGeneration(projectId, {
         shotId: shot.id,
         stage,
         promptId,
+        file_path: filePath,
         external_url: f.external_url || null,
         platform: f.platform || null,
         model: f.model || null,
@@ -105,10 +122,19 @@ function AddGenModal({
       <div className="space-y-3">
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
-            Media URL <span className="font-normal normal-case text-text-faint">(link to the generated file)</span>
+            Upload the {stage === "image" ? "image" : "video"} file <span className="font-normal normal-case text-text-faint">(recommended)</span>
+          </label>
+          <input type="file" accept={stage === "image" ? "image/*" : "video/*,image/*"}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="mt-1 block w-full text-sm text-text-muted file:mr-3 file:rounded-[8px] file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-accent-fg" />
+          {file && <p className="mt-1 text-xs text-text-faint">{file.name}</p>}
+        </div>
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+            …or a direct file URL <span className="font-normal normal-case text-text-faint">(must end in .png/.jpg/.mp4 — a share page won&apos;t preview)</span>
           </label>
           <input value={f.external_url} onChange={(e) => set("external_url", e.target.value)}
-            placeholder="https://…" className={`mt-1 ${field}`} />
+            placeholder="https://…/image.png" className={`mt-1 ${field}`} />
         </div>
         {stage === "video" && (refStartId || refEndId) && (
           <p className="rounded-[9px] bg-cyan-bg px-3 py-1.5 text-xs font-medium" style={{ color: "var(--h-cyan)" }}>
@@ -151,6 +177,7 @@ function AddGenModal({
         </div>
         <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Notes / extra params</label>
           <input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="negative prompt, LoRA, camera, round…" className={`mt-1 ${field}`} /></div>
+        {err && <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{err}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button size="sm" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add"}</Button>
@@ -191,17 +218,17 @@ function Flow({ label }: { label?: string }) {
 }
 
 // A large, labeled frame slot for the locked Start / End (image) or Take (video).
-function FrameSlot({ label, color, gen, empty, video }: {
-  label: string; color: string; gen: AiGeneration | null; empty: string; video?: boolean;
+function FrameSlot({ label, color, gen, src, empty, video }: {
+  label: string; color: string; gen: AiGeneration | null; src: string | null; empty: string; video?: boolean;
 }) {
   return (
     <div>
       <div className="mb-1 text-[10.5px] font-extrabold uppercase tracking-wide" style={{ color }}>{label}</div>
       {gen ? (
         <div className="relative overflow-hidden rounded-[10px]" style={{ aspectRatio: "16/9", outline: `2px solid ${color}`, outlineOffset: "2px", background: gradFor(gen.id) }}>
-          {gen.external_url && (
+          {src && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={gen.external_url} alt="" className="absolute inset-0 h-full w-full object-cover"
+            <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
           )}
           {video && (
@@ -225,9 +252,9 @@ function FrameSlot({ label, color, gen, empty, video }: {
 // ---- Generation card --------------------------------------------------------
 
 function GenCard({
-  projectId, shot, gen, onRun,
+  projectId, shot, gen, src, onRun,
 }: {
-  projectId: string; shot: AiShot; gen: AiGeneration;
+  projectId: string; shot: AiShot; gen: AiGeneration; src: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
 }) {
   const [spec, setSpec] = useState(false);
@@ -235,14 +262,15 @@ function GenCard({
   const isImage = gen.stage === "image";
   const roleTag = gen.role ? ROLE_TAG[gen.role] ?? null : null;
   const rows = genSpecRows(gen).filter(([, v]) => v != null && v !== "");
+  const openHref = gen.external_url ?? src;
 
   return (
     <div className={`overflow-hidden rounded-[12px] border border-border ${gen.status === "rejected" ? "opacity-45" : ""}`}>
       <button type="button" onClick={() => setOpen(true)}
         className="group relative block w-full" style={{ aspectRatio: "16/9", background: gradFor(gen.id) }}>
-        {gen.external_url && (
+        {src && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={gen.external_url} alt="" className="absolute inset-0 h-full w-full object-cover"
+          <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover"
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
         )}
         {gen.model && (
@@ -268,16 +296,18 @@ function GenCard({
           title={`${isImage ? "Image" : "Take"}${gen.model ? ` · ${gen.model}` : ""}`}>
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-[12px] bg-black" style={{ aspectRatio: "16/9" }}>
-              {gen.external_url ? (
+              {src ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={gen.external_url} alt="" className="absolute inset-0 h-full w-full object-contain" />
+                <img src={src} alt="" className="absolute inset-0 h-full w-full object-contain" />
               ) : (
-                <div className="absolute inset-0 grid place-items-center text-sm text-white/70">No media URL on this generation.</div>
+                <div className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-white/70">
+                  No previewable media. Upload the file, or paste a direct image URL (a share page can&apos;t be shown).
+                </div>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {gen.external_url && (
-                <a href={gen.external_url} target="_blank" rel="noreferrer"
+              {openHref && (
+                <a href={openHref} target="_blank" rel="noreferrer"
                   className="rounded-[9px] border border-border-strong px-3 py-1.5 text-xs font-bold text-text transition hover:border-accent hover:text-accent">
                   Open original ↗
                 </a>
@@ -340,10 +370,10 @@ function GenCard({
 // ---- Stage panel (image or video) ------------------------------------------
 
 function StagePanel({
-  projectId, shot, stage, prompt, gens, refStartId, refEndId, onRun,
+  projectId, studioId, shot, stage, prompt, gens, media, refStartId, refEndId, onRun,
 }: {
-  projectId: string; shot: AiShot; stage: Stage;
-  prompt: AiPrompt | null; gens: AiGeneration[];
+  projectId: string; studioId: string; shot: AiShot; stage: Stage;
+  prompt: AiPrompt | null; gens: AiGeneration[]; media: Record<string, string>;
   refStartId: string | null; refEndId: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
 }) {
@@ -357,6 +387,7 @@ function StagePanel({
   const start = stage === "image" ? gens.find((g) => g.role === "start") ?? null : null;
   const end = stage === "image" ? gens.find((g) => g.role === "end") ?? null : null;
   const take = stage === "video" ? gens.find((g) => g.role === "take" || g.role === "final") ?? null : null;
+  const srcOf = (g: AiGeneration | null) => (g ? media[g.id] ?? g.external_url ?? null : null);
 
   return (
     <div className="rounded-[14px] border border-border p-4" style={{ borderTop: `3px solid var(--h-${hue})` }}>
@@ -378,26 +409,7 @@ function StagePanel({
         <datalist id={`m-${stage}`}>{models.map((m) => <option key={m} value={m} />)}</datalist>
       </div>
 
-      {/* Locked selection lifts out of the candidate pool into its own section */}
-      {stage === "image" ? (
-        <div className="mb-4 rounded-[12px] bg-surface-2 p-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
-            Selected frames · the video animates between these
-          </div>
-          <div className="grid max-w-md grid-cols-2 gap-3">
-            <FrameSlot label="Start" color="var(--h-cyan)" gen={start} empty="Tag a candidate 'Start' below" />
-            <FrameSlot label="End" color="var(--h-pink)" gen={end} empty="Tag a candidate 'End' below" />
-          </div>
-        </div>
-      ) : (
-        <div className="mb-4 rounded-[12px] bg-surface-2 p-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">Picked take</div>
-          <div className="max-w-xs">
-            <FrameSlot label="Final take" color="var(--h-green)" gen={take} empty="Pick a take below" video />
-          </div>
-        </div>
-      )}
-
+      {/* Candidate pool first: generate & triage */}
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs text-text-muted">{stage === "image" ? "Candidates — tag a Start + End" : "Takes — pick one"}</p>
         <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
@@ -411,12 +423,34 @@ function StagePanel({
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {gens.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} onRun={onRun} />)}
+          {gens.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} src={srcOf(g)} onRun={onRun} />)}
+        </div>
+      )}
+
+      <Flow />
+
+      {/* Then the locked selection, lifted out of the pool into its own section */}
+      {stage === "image" ? (
+        <div className="rounded-[12px] bg-surface-2 p-3">
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+            Selected frames · the video animates between these
+          </div>
+          <div className="grid max-w-md grid-cols-2 gap-3">
+            <FrameSlot label="Start" color="var(--h-cyan)" gen={start} src={srcOf(start)} empty="Tag a candidate 'Start' above" />
+            <FrameSlot label="End" color="var(--h-pink)" gen={end} src={srcOf(end)} empty="Tag a candidate 'End' above" />
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-[12px] bg-surface-2 p-3">
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">Picked take</div>
+          <div className="max-w-xs">
+            <FrameSlot label="Final take" color="var(--h-green)" gen={take} src={srcOf(take)} empty="Pick a take above" video />
+          </div>
         </div>
       )}
 
       {adding && (
-        <AddGenModal projectId={projectId} shot={shot} stage={stage}
+        <AddGenModal projectId={projectId} studioId={studioId} shot={shot} stage={stage}
           promptId={prompt?.id ?? null} refStartId={refStartId} refEndId={refEndId}
           onClose={() => setAdding(false)} />
       )}
@@ -427,13 +461,15 @@ function StagePanel({
 // ---- Workspace --------------------------------------------------------------
 
 export function PipelineWorkspace({
-  projectId, script, shots, prompts, generations,
+  projectId, studioId, script, shots, prompts, generations, media,
 }: {
   projectId: string;
+  studioId: string;
   script: AiScript | null;
   shots: AiShot[];
   prompts: AiPrompt[];
   generations: AiGeneration[];
+  media: Record<string, string>;
 }) {
   const router = useRouter();
   const [, start] = useTransition();
@@ -560,14 +596,14 @@ export function PipelineWorkspace({
             ) : (
               <>
                 <Flow label="prompt, generate & pick images" />
-                <StagePanel projectId={projectId} shot={active} stage="image"
+                <StagePanel projectId={projectId} studioId={studioId} shot={active} stage="image"
                   prompt={shotPrompts.get(`${active.id}:image`) ?? null}
-                  gens={imgGens} refStartId={null} refEndId={null} onRun={run} />
+                  gens={imgGens} media={media} refStartId={null} refEndId={null} onRun={run} />
                 <Flow label="lock start + end, then generate video" />
-                <StagePanel projectId={projectId} shot={active} stage="video"
+                <StagePanel projectId={projectId} studioId={studioId} shot={active} stage="video"
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
-                  refStartId={approvedStart?.id ?? null} refEndId={approvedEnd?.id ?? null} onRun={run} />
+                  media={media} refStartId={approvedStart?.id ?? null} refEndId={approvedEnd?.id ?? null} onRun={run} />
               </>
             )}
           </div>

@@ -136,6 +136,7 @@ export async function addGeneration(
     shotId: string;
     stage: "image" | "video";
     promptId?: string | null;
+    file_path?: string | null;
     external_url?: string | null;
     thumb_url?: string | null;
     platform?: string | null;
@@ -164,6 +165,7 @@ export async function addGeneration(
       stage: input.stage,
       kind: input.stage === "video" ? "video" : "image",
       prompt_id: input.promptId ?? null,
+      file_path: input.file_path ?? null,
       external_url: input.external_url ?? null,
       thumb_url: input.thumb_url ?? input.external_url ?? null,
       platform: input.platform ?? null,

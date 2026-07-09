@@ -11,7 +11,7 @@ export default async function PipelinePage({
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const { data: project } = await supabase
@@ -48,6 +48,19 @@ export default async function PipelinePage({
     generations = (g ?? []) as AiGeneration[];
   }
 
+  // Sign uploaded files (private bucket) for display, keyed by generation id.
+  const media: Record<string, string> = {};
+  await Promise.all(
+    generations
+      .filter((g) => g.file_path)
+      .map(async (g) => {
+        const { data } = await supabase.storage
+          .from("assets")
+          .createSignedUrl(g.file_path as string, 60 * 60);
+        if (data?.signedUrl) media[g.id] = data.signedUrl;
+      }),
+  );
+
   return (
     <div>
       <ProjectSubhead
@@ -65,10 +78,12 @@ export default async function PipelinePage({
       <Card className="p-5">
         <PipelineWorkspace
           projectId={project.id}
+          studioId={ctx.studio.id}
           script={(script as AiScript | null) ?? null}
           shots={shotList}
           prompts={prompts}
           generations={generations}
+          media={media}
         />
       </Card>
     </div>
