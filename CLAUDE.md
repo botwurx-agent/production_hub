@@ -393,6 +393,42 @@ implemented (out of strict order, driven by the operator's real needs).
   colored top border. Status stays as chips (StatusTag); module/section/nav color
   is identity, kept separate so the two never compete.
 
+### Team invites / multi-user (migration 0048) — BUILT
+Multiple people can now share one studio (the paid multi-user lever). The tenancy
+plumbing (studios/memberships/roles owner|admin|member + RLS is_studio_member)
+already existed; what was missing was a way to add a second person. Added:
+- `studio_invites` table (studio_id/email/role/token/accepted_at/accepted_by/
+  revoked) + RLS (is_studio_admin manages). Two SECURITY DEFINER helpers do the
+  privileged bits: `studio_invite_preview(token)` (read an invite pre-membership,
+  granted to anon, for the accept page) and `claim_pending_invites()` (join the
+  caller to every studio that invited their email; bypasses the admin-only
+  membership insert). `handle_new_user()` is now invite-aware: it SKIPS creating
+  a personal studio when a pending invite matches the new signup email (so an
+  invited user joins the inviting studio instead of getting a stray own studio).
+- Reliable claim net (covers every auth path incl. email confirmation): signIn
+  calls claim_pending_invites(); signUp-with-invite calls it too; and
+  getStudioContext (lib/studio.ts) claims on the first app load when the user has
+  zero memberships, then re-reads. So a freshly-invited user always lands in the
+  right studio.
+- Settings -> Team (components/settings/team-panel.tsx, app/(app)/settings/
+  team-actions.ts): invite by email + role (member|admin) -> generates a private
+  /invite/<token> link (auto-copied); list members with role dropdown + remove
+  (owner protected, can't remove self); pending invites list with copy-link +
+  revoke. Member emails are resolved from the invite they accepted (accepted_by
+  -> email); the owner shows as the signed-in email. team-actions guards on
+  ctx.role (owner/admin) and RLS enforces it at the DB too.
+- Accept flow: public /invite/[token] page (app/invite/[token]/page.tsx, added to
+  middleware PUBLIC_PATHS). Previews the studio/role via the rpc; if logged in ->
+  AcceptInvite button (components/auth/accept-invite.tsx -> acceptInvite ->
+  claim); if logged out -> an invite-variant SignupForm (hidden invite_token,
+  prefilled read-only email, no studio-name field) or "sign in to auto-join".
+- NOT yet: a locked read-only "viewer" role (would need an RLS write/read split
+  across all tables via an is_studio_editor() helper; deferred). A multi-studio
+  switcher (a user can now belong to 2+ studios but getStudioContext still picks
+  the earliest; switcher deferred). Email delivery of invites (we hand back a
+  link to copy; no transactional email yet). Internal ungated feedback in the
+  working/overview view is the next pipeline step (step 2 of the plan).
+
 ### Billing / invoicing — BUILT BUT ON HOLD (do not extend until platform is decided)
 Two invoicing paths were built and are deployed on `main`, but the whole area is
 PAUSED pending a decision on the billing platform. Both are non-intrusive (see
@@ -448,7 +484,8 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0047: ai_shot_review; 0046 =
+files in supabase/migrations (through 0048: team_invites; 0047 =
+ai_shot_review; 0046 =
 ai_generation_prompt; 0045 =
 ai_pipeline; 0044 = native_invoice_generator; 0043 =
 project_documents_kind_recipient; 0042 = contacts_allow_project_parent; 0041 =

@@ -12,6 +12,7 @@ import { Appearance } from "@/components/settings/appearance";
 import { Connections } from "@/components/settings/connections";
 import { LogoUpload } from "@/components/settings/logo-upload";
 import { BillingProfileForm } from "@/components/settings/billing-profile";
+import { TeamPanel } from "@/components/settings/team-panel";
 import type { BillingProfile } from "@/lib/database.types";
 import { signedLogoUrl } from "@/lib/branding";
 import type { Hue } from "@/components/status-tag";
@@ -90,6 +91,32 @@ export default async function SettingsPage({
     .eq("studio_id", ctx.studio.id)
     .maybeSingle();
 
+  const { data: invites } = await supabase
+    .from("studio_invites")
+    .select("id, email, role, token, accepted_at, accepted_by, revoked, created_at")
+    .eq("studio_id", ctx.studio.id)
+    .order("created_at", { ascending: false });
+
+  // Resolve who each accepted member is by the invite they accepted; the owner
+  // (bootstrap, no invite) resolves to the signed-in email for self.
+  const emailByUser = new Map<string, string>();
+  for (const inv of invites ?? [])
+    if (inv.accepted_by) emailByUser.set(inv.accepted_by, inv.email);
+
+  const memberRows = (members ?? []).map((m) => ({
+    id: m.id,
+    role: m.role,
+    email:
+      m.user_id === ctx.userId
+        ? (ctx.email ?? "You")
+        : (emailByUser.get(m.user_id) ?? null),
+    isSelf: m.user_id === ctx.userId,
+  }));
+  const pendingInvites = (invites ?? [])
+    .filter((i) => !i.revoked && !i.accepted_at)
+    .map((i) => ({ id: i.id, email: i.email, role: i.role, token: i.token }));
+  const canManageTeam = ctx.role === "owner" || ctx.role === "admin";
+
   const errorMsg = searchParams.error
     ? (connectionError[searchParams.error] ?? "Something went wrong.")
     : null;
@@ -149,23 +176,11 @@ export default async function SettingsPage({
 
         <Card className="p-5">
           <h2 className="mb-1 font-display text-base font-bold">Team</h2>
-          <p className="mb-4 text-sm text-text-muted">
-            {members?.length ?? 1} member
-            {(members?.length ?? 1) === 1 ? "" : "s"} in this studio.
-          </p>
-          <ul className="space-y-2">
-            {(members ?? []).map((m) => (
-              <li
-                key={m.id}
-                className="flex items-center justify-between rounded-[11px] border border-border px-3 py-2.5"
-              >
-                <span className="text-sm font-medium text-text">
-                  {m.user_id === ctx.userId ? `${ctx.email} (you)` : "Team member"}
-                </span>
-                <StatusTag hue={roleHue[m.role] ?? "blue"}>{m.role}</StatusTag>
-              </li>
-            ))}
-          </ul>
+          <TeamPanel
+            members={memberRows}
+            pending={pendingInvites}
+            canManage={canManageTeam}
+          />
         </Card>
 
         <Card className="p-5">

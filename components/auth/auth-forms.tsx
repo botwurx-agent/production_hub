@@ -69,26 +69,51 @@ export function LoginForm() {
   );
 }
 
-export function SignupForm() {
+export function SignupForm({
+  inviteToken,
+  inviteEmail,
+  studioName,
+}: {
+  inviteToken?: string;
+  inviteEmail?: string;
+  studioName?: string;
+} = {}) {
   const [state, action] = useFormState(signUp, null);
+  const invited = Boolean(inviteToken);
   return (
     <Card className="p-7">
-      <h1 className="font-display text-xl font-extrabold">Create your studio</h1>
+      <h1 className="font-display text-xl font-extrabold">
+        {invited ? `Join ${studioName ?? "the studio"}` : "Create your studio"}
+      </h1>
       <p className="mt-1 text-sm text-text-muted">
-        Set up your workspace in under a minute.
+        {invited
+          ? "Set a password to accept your invite."
+          : "Set up your workspace in under a minute."}
       </p>
       <form action={action} className="mt-6 space-y-4">
-        <Field label="Studio name" htmlFor="studio_name">
+        {invited ? (
+          <input type="hidden" name="invite_token" value={inviteToken} />
+        ) : (
+          <Field label="Studio name" htmlFor="studio_name">
+            <Input
+              id="studio_name"
+              name="studio_name"
+              type="text"
+              placeholder="e.g. Northlight Studios"
+              required
+            />
+          </Field>
+        )}
+        <Field label="Email" htmlFor="email">
           <Input
-            id="studio_name"
-            name="studio_name"
-            type="text"
-            placeholder="e.g. Northlight Studios"
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            defaultValue={inviteEmail}
+            readOnly={invited}
             required
           />
-        </Field>
-        <Field label="Email" htmlFor="email">
-          <Input id="email" name="email" type="email" autoComplete="email" required />
         </Field>
         <Field
           label="Password"
@@ -104,14 +129,16 @@ export function SignupForm() {
           />
         </Field>
         <Feedback state={state} />
-        <SubmitButton label="Create studio" />
+        <SubmitButton label={invited ? "Join studio" : "Create studio"} />
       </form>
-      <p className="mt-5 text-center text-sm text-text-muted">
-        Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-accent hover:underline">
-          Sign in
-        </Link>
-      </p>
+      {!invited && (
+        <p className="mt-5 text-center text-sm text-text-muted">
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold text-accent hover:underline">
+            Sign in
+          </Link>
+        </p>
+      )}
     </Card>
   );
 }

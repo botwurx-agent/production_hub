@@ -1956,6 +1956,45 @@ export type Database = {
           },
         ];
       };
+      studio_invites: {
+        Row: {
+          id: string;
+          studio_id: string;
+          email: string;
+          role: Database["public"]["Enums"]["membership_role"];
+          token: string;
+          invited_by: string | null;
+          created_at: string;
+          accepted_at: string | null;
+          accepted_by: string | null;
+          revoked: boolean;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          email: string;
+          role?: Database["public"]["Enums"]["membership_role"];
+          token: string;
+          invited_by?: string | null;
+          created_at?: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          revoked?: boolean;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          email?: string;
+          role?: Database["public"]["Enums"]["membership_role"];
+          token?: string;
+          invited_by?: string | null;
+          created_at?: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          revoked?: boolean;
+        };
+        Relationships: [];
+      };
       project_summaries: {
         Row: {
           id: string;
@@ -2371,6 +2410,16 @@ export type Database = {
     Functions: {
       is_studio_admin: { Args: { p_studio: string }; Returns: boolean };
       is_studio_member: { Args: { p_studio: string }; Returns: boolean };
+      claim_pending_invites: { Args: Record<string, never>; Returns: number };
+      studio_invite_preview: {
+        Args: { p_token: string };
+        Returns: {
+          studio_name: string;
+          invite_role: Database["public"]["Enums"]["membership_role"];
+          invite_email: string;
+          valid: boolean;
+        }[];
+      };
     };
     Enums: {
       activity_type: "note" | "activity" | "status_change" | "upload" | "approval";
@@ -2430,6 +2479,7 @@ export type ApprovalStatus = Enums<"approval_status">;
 export type ActivityType = Enums<"activity_type">;
 
 export type Studio = Tables<"studios">;
+export type StudioInvite = Tables<"studio_invites">;
 export type Membership = Tables<"memberships">;
 export type Client = Tables<"clients">;
 export type Lead = Tables<"leads">;
