@@ -1,0 +1,455 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { StatusTag, type Hue } from "@/components/status-tag";
+import {
+  saveScript,
+  addShot,
+  updateShot,
+  deleteShot,
+  savePrompt,
+  addGeneration,
+  setGenerationStatus,
+  setGenerationRole,
+  deleteGeneration,
+} from "@/app/(app)/projects/[id]/pipeline-actions";
+import type { AiScript, AiShot, AiPrompt, AiGeneration } from "@/lib/database.types";
+
+type Stage = "image" | "video";
+
+const IMAGE_MODELS = ["Nano Banana 2 Pro", "Midjourney v7", "Flux 1.1", "Seedream 3", "Ideogram 2"];
+const VIDEO_MODELS = ["Kling 2.1", "Veo 3", "Runway Gen-4", "Sora", "Hailuo", "Pika 2"];
+
+const STAGE_HUE: Record<string, Hue> = {
+  script: "cyan", image: "yellow", video: "blue", post: "purple", delivered: "green",
+};
+const ROLE_TAG: Record<string, { t: string; c: string }> = {
+  start: { t: "START", c: "var(--h-cyan)" }, end: { t: "END", c: "var(--h-pink)" },
+  take: { t: "TAKE", c: "var(--h-green)" }, final: { t: "FINAL", c: "var(--h-green)" },
+};
+
+const field =
+  "w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong";
+const cell =
+  "w-full rounded-[8px] border border-transparent bg-transparent px-2 py-1 text-sm text-text outline-none transition hover:border-border focus:border-border-strong focus:bg-surface";
+
+function gradFor(id: string) {
+  const hues = ["#f59e0b,#b45309", "#6366f1,#a21caf", "#0ea5e9,#164e63", "#10b981,#064e3b", "#f43f5e,#7f1d1d", "#8b5cf6,#4338ca"];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % hues.length;
+  return `linear-gradient(135deg, ${hues[h]})`;
+}
+
+// ---- Add-generation modal (captures the spec/provenance) --------------------
+
+function AddGenModal({
+  projectId,
+  shot,
+  stage,
+  promptId,
+  refStartId,
+  refEndId,
+  onClose,
+}: {
+  projectId: string;
+  shot: AiShot;
+  stage: Stage;
+  promptId: string | null;
+  refStartId: string | null;
+  refEndId: string | null;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+  const [f, setF] = useState({
+    external_url: "", platform: "", model: "", model_version: "", seed: "",
+    aspect: stage === "image" ? "16:9" : "", resolution: "", fps: "", duration_sec: "",
+    guidance: "", cost: "", notes: "", generated_by_name: "",
+  });
+  function set(k: keyof typeof f, v: string) { setF((p) => ({ ...p, [k]: v })); }
+
+  function submit() {
+    start(async () => {
+      await addGeneration(projectId, {
+        shotId: shot.id,
+        stage,
+        promptId,
+        external_url: f.external_url || null,
+        platform: f.platform || null,
+        model: f.model || null,
+        model_version: f.model_version || null,
+        seed: f.seed || null,
+        aspect: f.aspect || null,
+        resolution: f.resolution || null,
+        fps: f.fps ? Number(f.fps) : null,
+        duration_sec: f.duration_sec ? Number(f.duration_sec) : null,
+        guidance: f.guidance ? Number(f.guidance) : null,
+        cost: f.cost ? Number(f.cost) : null,
+        params: f.notes ? { notes: f.notes } : null,
+        parent_start_id: stage === "video" ? refStartId : null,
+        parent_end_id: stage === "video" ? refEndId : null,
+        generated_by_name: f.generated_by_name || null,
+      });
+      onClose();
+      router.refresh();
+    });
+  }
+
+  const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
+
+  return (
+    <Modal open onClose={onClose} size="lg" title={stage === "image" ? "Add image candidate" : "Add video take"}>
+      <div className="space-y-3">
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+            Media URL <span className="font-normal normal-case text-text-faint">(link to the generated file)</span>
+          </label>
+          <input value={f.external_url} onChange={(e) => set("external_url", e.target.value)}
+            placeholder="https://…" className={`mt-1 ${field}`} />
+        </div>
+        {stage === "video" && (refStartId || refEndId) && (
+          <p className="rounded-[9px] bg-cyan-bg px-3 py-1.5 text-xs font-medium" style={{ color: "var(--h-cyan)" }}>
+            Linked to this shot&apos;s approved START + END frames automatically.
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Platform</label>
+            <input value={f.platform} onChange={(e) => set("platform", e.target.value)} placeholder="e.g. fal, Krea" className={`mt-1 ${field}`} /></div>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Model</label>
+            <input list="modellist" value={f.model} onChange={(e) => set("model", e.target.value)} placeholder={models[0]} className={`mt-1 ${field}`} />
+            <datalist id="modellist">{models.map((m) => <option key={m} value={m} />)}</datalist></div>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Version</label>
+            <input value={f.model_version} onChange={(e) => set("model_version", e.target.value)} className={`mt-1 ${field}`} /></div>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Seed</label>
+            <input value={f.seed} onChange={(e) => set("seed", e.target.value)} className={`mt-1 ${field}`} /></div>
+          {stage === "image" ? (
+            <>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Aspect</label>
+                <input value={f.aspect} onChange={(e) => set("aspect", e.target.value)} placeholder="16:9" className={`mt-1 ${field}`} /></div>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Resolution</label>
+                <input value={f.resolution} onChange={(e) => set("resolution", e.target.value)} placeholder="2048²" className={`mt-1 ${field}`} /></div>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Guidance</label>
+                <input value={f.guidance} onChange={(e) => set("guidance", e.target.value)} className={`mt-1 ${field}`} /></div>
+            </>
+          ) : (
+            <>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Duration (s)</label>
+                <input value={f.duration_sec} onChange={(e) => set("duration_sec", e.target.value)} placeholder="5" className={`mt-1 ${field}`} /></div>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">FPS</label>
+                <input value={f.fps} onChange={(e) => set("fps", e.target.value)} placeholder="24" className={`mt-1 ${field}`} /></div>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Resolution</label>
+                <input value={f.resolution} onChange={(e) => set("resolution", e.target.value)} placeholder="1080p" className={`mt-1 ${field}`} /></div>
+            </>
+          )}
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Cost</label>
+            <input value={f.cost} onChange={(e) => set("cost", e.target.value)} placeholder="credits / $" className={`mt-1 ${field}`} /></div>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Generated by</label>
+            <input value={f.generated_by_name} onChange={(e) => set("generated_by_name", e.target.value)} placeholder="name (optional)" className={`mt-1 ${field}`} /></div>
+        </div>
+        <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Notes / extra params</label>
+          <input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="negative prompt, LoRA, camera, round…" className={`mt-1 ${field}`} /></div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button size="sm" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add"}</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---- Generation card --------------------------------------------------------
+
+function GenCard({
+  projectId, shot, gen, onRun,
+}: {
+  projectId: string; shot: AiShot; gen: AiGeneration;
+  onRun: (fn: () => Promise<unknown>) => void;
+}) {
+  const [spec, setSpec] = useState(false);
+  const isImage = gen.stage === "image";
+  const roleTag = gen.role ? ROLE_TAG[gen.role] ?? null : null;
+
+  return (
+    <div className={`overflow-hidden rounded-[12px] border ${gen.status === "rejected" ? "border-border opacity-45" : "border-border"}`}>
+      <div className="relative" style={{ aspectRatio: "16/9", background: gradFor(gen.id) }}>
+        {gen.external_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={gen.external_url} alt="" className="absolute inset-0 h-full w-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+        )}
+        {gen.model && (
+          <span className="absolute right-1.5 top-1.5 rounded-[5px] bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold text-white">
+            {gen.model}
+          </span>
+        )}
+        {roleTag && (
+          <span className="absolute left-1.5 top-1.5 rounded-[5px] px-1.5 py-0.5 text-[9px] font-extrabold text-black" style={{ background: roleTag.c }}>
+            {roleTag.t}
+          </span>
+        )}
+        {gen.status === "approved" && !roleTag && (
+          <span className="absolute left-1.5 top-1.5 rounded-[5px] bg-green px-1.5 py-0.5 text-[9px] font-extrabold text-white">✓</span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-1 p-1.5">
+        {isImage ? (
+          <>
+            <button onClick={() => onRun(() => setGenerationRole(projectId, shot.id, gen.id, gen.role === "start" ? null : "start"))}
+              className="rounded-[6px] px-2 py-1 text-[11px] font-bold" style={{ background: "var(--h-cyan-bg)", color: "var(--h-cyan)" }}>Start</button>
+            <button onClick={() => onRun(() => setGenerationRole(projectId, shot.id, gen.id, gen.role === "end" ? null : "end"))}
+              className="rounded-[6px] px-2 py-1 text-[11px] font-bold" style={{ background: "var(--h-pink-bg)", color: "var(--h-pink)" }}>End</button>
+          </>
+        ) : (
+          <button onClick={() => onRun(() => setGenerationRole(projectId, shot.id, gen.id, gen.role === "take" ? null : "take"))}
+            className="rounded-[6px] px-2 py-1 text-[11px] font-bold" style={{ background: "var(--h-green-bg)", color: "var(--h-green)" }}>Pick take</button>
+        )}
+        <button onClick={() => onRun(() => setGenerationStatus(projectId, gen.id, gen.status === "rejected" ? "candidate" : "rejected"))}
+          className="rounded-[6px] px-2 py-1 text-[11px] font-semibold text-text-faint hover:text-red">
+          {gen.status === "rejected" ? "Restore" : "Reject"}
+        </button>
+        <button onClick={() => setSpec((s) => !s)} className="ml-auto rounded-[6px] px-2 py-1 text-[11px] font-semibold text-text-muted hover:text-text">
+          Spec
+        </button>
+      </div>
+      {spec && (
+        <div className="border-t border-border px-2.5 py-2 text-[11.5px]">
+          {[
+            ["Platform", gen.platform], ["Model", [gen.model, gen.model_version].filter(Boolean).join(" ")],
+            ["Seed", gen.seed], ["Aspect", gen.aspect], ["Resolution", gen.resolution],
+            ["FPS", gen.fps], ["Duration", gen.duration_sec ? `${gen.duration_sec}s` : null],
+            ["Guidance", gen.guidance], ["Cost", gen.cost],
+            ["Refs", gen.parent_start_id ? "start → end" : null],
+            ["By", gen.generated_by_name],
+            ["Notes", (gen.params as { notes?: string } | null)?.notes],
+          ].filter(([, v]) => v != null && v !== "").map(([k, v]) => (
+            <div key={k as string} className="flex justify-between gap-3 border-b border-dashed border-border py-0.5 last:border-0">
+              <span className="text-text-faint">{k}</span>
+              <span className="font-semibold tabular-nums">{String(v)}</span>
+            </div>
+          ))}
+          <button onClick={() => onRun(() => deleteGeneration(projectId, gen.id))} className="mt-1 text-[11px] font-semibold text-red hover:underline">
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Stage panel (image or video) ------------------------------------------
+
+function StagePanel({
+  projectId, shot, stage, prompt, gens, refStartId, refEndId, onRun,
+}: {
+  projectId: string; shot: AiShot; stage: Stage;
+  prompt: AiPrompt | null; gens: AiGeneration[];
+  refStartId: string | null; refEndId: string | null;
+  onRun: (fn: () => Promise<unknown>) => void;
+}) {
+  const [pText, setPText] = useState(prompt?.text ?? "");
+  const [pModel, setPModel] = useState(prompt?.target_model ?? "");
+  const [adding, setAdding] = useState(false);
+  const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
+  const label = stage === "image" ? "Image" : "Video";
+  const hue = stage === "image" ? "amber" : "blue";
+  const kept = gens.filter((g) => g.status !== "rejected").length;
+
+  return (
+    <div className="rounded-[14px] border border-border p-4" style={{ borderTop: `3px solid var(--h-${hue})` }}>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="grid h-7 w-7 place-items-center rounded-[8px] text-sm" style={{ background: `var(--h-${hue}-bg)`, color: `var(--h-${hue})` }}>
+          {stage === "image" ? "◨" : "▶"}
+        </span>
+        <h4 className="text-sm font-bold text-text">{label} stage</h4>
+        <span className="text-xs text-text-faint">{kept} kept · {gens.length} total</span>
+      </div>
+
+      <div className="mb-3 space-y-2">
+        <textarea value={pText} onChange={(e) => setPText(e.target.value)}
+          onBlur={() => savePrompt(projectId, shot.id, stage, { text: pText })}
+          rows={2} placeholder={`${label} prompt…`} className={field} />
+        <input list={`m-${stage}`} value={pModel} onChange={(e) => setPModel(e.target.value)}
+          onBlur={() => savePrompt(projectId, shot.id, stage, { target_model: pModel || null })}
+          placeholder={`Target model (${models[0]})`} className={field} />
+        <datalist id={`m-${stage}`}>{models.map((m) => <option key={m} value={m} />)}</datalist>
+      </div>
+
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs text-text-muted">{stage === "image" ? "Candidates — approve a Start + End" : "Takes — pick one"}</p>
+        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
+          + {stage === "image" ? "Candidate" : "Take"}
+        </Button>
+      </div>
+
+      {gens.length === 0 ? (
+        <p className="rounded-[10px] border border-dashed border-border py-6 text-center text-xs text-text-faint">
+          No {stage === "image" ? "images" : "takes"} yet. Add generations as you make them.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {gens.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} onRun={onRun} />)}
+        </div>
+      )}
+
+      {adding && (
+        <AddGenModal projectId={projectId} shot={shot} stage={stage}
+          promptId={prompt?.id ?? null} refStartId={refStartId} refEndId={refEndId}
+          onClose={() => setAdding(false)} />
+      )}
+    </div>
+  );
+}
+
+// ---- Workspace --------------------------------------------------------------
+
+export function PipelineWorkspace({
+  projectId, script, shots, prompts, generations,
+}: {
+  projectId: string;
+  script: AiScript | null;
+  shots: AiShot[];
+  prompts: AiPrompt[];
+  generations: AiGeneration[];
+}) {
+  const router = useRouter();
+  const [, start] = useTransition();
+  const [activeId, setActiveId] = useState<string | null>(shots[0]?.id ?? null);
+  const [scriptOpen, setScriptOpen] = useState(false);
+  const [scriptText, setScriptText] = useState(script?.content ?? "");
+
+  const active = shots.find((s) => s.id === activeId) ?? null;
+
+  function run(fn: () => Promise<unknown>) {
+    start(async () => { await fn(); router.refresh(); });
+  }
+  function newShot(method: "generated" | "live") {
+    start(async () => { const r = await addShot(projectId, method); if (r?.id) setActiveId(r.id); router.refresh(); });
+  }
+
+  const shotPrompts = useMemo(() => {
+    const m = new Map<string, AiPrompt>();
+    for (const p of prompts) m.set(`${p.shot_id}:${p.stage}`, p);
+    return m;
+  }, [prompts]);
+  const shotGens = useMemo(() => {
+    const m = new Map<string, AiGeneration[]>();
+    for (const g of generations) {
+      const k = `${g.shot_id}:${g.stage}`;
+      const a = m.get(k) ?? []; a.push(g); m.set(k, a);
+    }
+    return m;
+  }, [generations]);
+
+  const imgGens = active ? shotGens.get(`${active.id}:image`) ?? [] : [];
+  const approvedStart = imgGens.find((g) => g.role === "start") ?? null;
+  const approvedEnd = imgGens.find((g) => g.role === "end") ?? null;
+
+  return (
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_1fr]">
+      {/* Left rail */}
+      <div className="space-y-3">
+        <button onClick={() => setScriptOpen((s) => !s)}
+          className="flex w-full items-center gap-2 rounded-[11px] border border-border px-3 py-2 text-left text-sm font-bold text-text hover:border-border-strong">
+          <span className="grid h-6 w-6 place-items-center rounded-[7px]" style={{ background: "var(--h-indigo-bg)", color: "var(--h-indigo)" }}>✎</span>
+          Script <span className="ml-auto text-xs text-text-faint">{scriptOpen ? "hide" : "edit"}</span>
+        </button>
+
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => newShot("generated")} className="flex-1">+ Generated</Button>
+          <Button size="sm" variant="secondary" onClick={() => newShot("live")} className="flex-1">+ Live</Button>
+        </div>
+
+        {shots.length === 0 ? (
+          <p className="rounded-[11px] border border-dashed border-border p-4 text-center text-xs text-text-faint">
+            No shots yet. Break the script into shots.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {shots.map((s, i) => {
+              const on = s.id === activeId;
+              return (
+                <button key={s.id} onClick={() => setActiveId(s.id)}
+                  className={`w-full rounded-[11px] border px-3 py-2 text-left transition ${on ? "border-accent bg-accent-soft" : "border-border hover:border-border-strong"}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-text-faint">Shot {i + 1}</span>
+                    <span className="h-2 w-2 rounded-full" style={{ background: s.method === "live" ? "var(--h-cyan)" : "var(--h-purple)" }} />
+                  </div>
+                  <div className="truncate text-sm font-semibold text-text">{s.title || "Untitled shot"}</div>
+                  <StatusTag hue={STAGE_HUE[s.stage] ?? ("blue" as Hue)}>{s.stage}</StatusTag>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Right: script editor or active shot */}
+      <div>
+        {scriptOpen && (
+          <div className="mb-4 rounded-[14px] border border-border p-4">
+            <h4 className="mb-2 text-sm font-bold text-text">Script — the copy for this project</h4>
+            <textarea value={scriptText} onChange={(e) => setScriptText(e.target.value)}
+              onBlur={() => saveScript(projectId, scriptText)} rows={8}
+              placeholder="Paste or write the script. Break each beat into a shot on the left." className={field} />
+          </div>
+        )}
+
+        {!active ? (
+          <div className="grid place-items-center rounded-[14px] border border-dashed border-border p-16 text-sm text-text-faint">
+            Select or add a shot.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Shot header */}
+            <div className="rounded-[14px] border border-border p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <input defaultValue={active.title} onBlur={(e) => run(() => updateShot(projectId, active.id, { title: e.target.value }))}
+                  placeholder="Shot title" className={`${cell} flex-1 text-base font-bold`} />
+                <div className="flex gap-1">
+                  {(["generated", "live"] as const).map((m) => (
+                    <button key={m} onClick={() => run(() => updateShot(projectId, active.id, { method: m }))}
+                      className="rounded-[8px] px-2.5 py-1 text-xs font-bold"
+                      style={active.method === m
+                        ? { background: m === "live" ? "var(--h-cyan-bg)" : "var(--h-purple-bg)", color: m === "live" ? "var(--h-cyan)" : "var(--h-purple)" }
+                        : { color: "var(--text-faint)" }}>
+                      {m === "live" ? "Live" : "Generated"}
+                    </button>
+                  ))}
+                </div>
+                <select value={active.stage} onChange={(e) => run(() => updateShot(projectId, active.id, { stage: e.target.value }))}
+                  className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold">
+                  {["script", "image", "video", "post", "delivered"].map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <button onClick={() => { if (confirm("Delete this shot?")) { setActiveId(null); run(() => deleteShot(projectId, active.id)); } }}
+                  className="text-xs font-semibold text-red hover:underline">Delete</button>
+              </div>
+              <textarea defaultValue={active.beat ?? ""} onBlur={(e) => updateShot(projectId, active.id, { beat: e.target.value || null })}
+                rows={2} placeholder="Script beat — the action/copy this shot covers" className={`mt-2 ${field}`} />
+            </div>
+
+            {active.method === "live" ? (
+              <div className="rounded-[14px] border border-dashed border-border p-6 text-sm text-text-muted">
+                <b className="text-text">Live / captured shot.</b> This one is shot on-set, not generated. Use the
+                project&apos;s shot list, storyboards, and call sheet for it; it still flows into the same review and
+                delivery. (Deeper live-shot linking comes later.)
+              </div>
+            ) : (
+              <>
+                <StagePanel projectId={projectId} shot={active} stage="image"
+                  prompt={shotPrompts.get(`${active.id}:image`) ?? null}
+                  gens={imgGens} refStartId={null} refEndId={null} onRun={run} />
+                <StagePanel projectId={projectId} shot={active} stage="video"
+                  prompt={shotPrompts.get(`${active.id}:video`) ?? null}
+                  gens={shotGens.get(`${active.id}:video`) ?? []}
+                  refStartId={approvedStart?.id ?? null} refEndId={approvedEnd?.id ?? null} onRun={run} />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,9 +1,27 @@
 # AI film/video generation pipeline — architecture spec
 
-Status: **design agreed, not built.** Roadmap Phase 7 (the forward-looking
-differentiator). This is the spec we build slices against. A clickable mockup of
-the three core views exists (published as a Claude artifact; ask the operator
-for the link).
+Status: **Slice 1 BUILT + deployed.** Roadmap Phase 7 (the forward-looking
+differentiator). This is the spec we build slices against. Clickable mockups
+exist (published as Claude artifacts; the red-annotated flow is the reference).
+
+### Slice 1 (built, migration 0045) — what shipped
+- Tables: ai_scripts, ai_shots (method generated|live + stage), ai_prompts
+  (versioned per shot+stage), ai_generations (image candidates + video takes
+  with full provenance + start/end/take roles + parent-frame lineage).
+- Page /projects/[id]/pipeline (linked from the hub Visualize band): two-pane
+  binder = left shot list (+ script editor, + Generated/Live shot), right the
+  active shot's flow. For a generated shot: Image stage (prompt + target model
+  + add candidates with spec + approve Start/End + per-generation spec card +
+  reject/restore) then Video stage (prompt + add takes, auto-linked to the
+  approved Start/End frames + pick take). Live shots show a "use the standard
+  shot tools" note (deeper live linking later).
+- pipeline-actions.ts: script/shot/prompt/generation CRUD + role/status.
+- Every generation captures platform, model(+version), seed, aspect/res/fps/
+  duration/guidance/cost, free params (notes/negative prompt/LoRA/etc.),
+  generated-by, and (video) parent start/end ids.
+- NOT yet: media upload to storage (uses external URL for now), a top-level
+  "all shots" board/timeline, internal/client review gates wired to the review
+  portal, prompt versioning UI, drag-reorder. See phasing.
 
 ## Guiding principles
 - **Organize, don't generate.** The Hub is the control surface over an exploding

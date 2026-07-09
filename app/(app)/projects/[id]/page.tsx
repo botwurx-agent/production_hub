@@ -463,6 +463,26 @@ export default async function ProjectDetailPage({
           <BandLabel hue="purple" label="Visualize" />
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
+              href={`/projects/${project.id}/pipeline`}
+              hue="purple"
+              title="AI Pipeline"
+              sub="Script → images → video, with provenance"
+              footer="Open the pipeline"
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M3 9h18M8 4v16" />
+                  <circle cx="14.5" cy="14" r="2.5" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                Break the script into shots, then generate and triage images and
+                video, keeping every model, prompt, and seed on record.
+              </p>
+            </HubCard>
+
+            <HubCard
               href={`/projects/${project.id}/storyboards`}
               hue="indigo"
               title="Storyboards"
