@@ -147,6 +147,7 @@ export async function addGeneration(
     shotId: string;
     stage: "image" | "video";
     promptId?: string | null;
+    prompt?: string | null;
     file_path?: string | null;
     external_url?: string | null;
     thumb_url?: string | null;
@@ -176,6 +177,7 @@ export async function addGeneration(
       stage: input.stage,
       kind: input.stage === "video" ? "video" : "image",
       prompt_id: input.promptId ?? null,
+      prompt: input.prompt ?? null,
       file_path: input.file_path ?? null,
       external_url: input.external_url ?? null,
       thumb_url: input.thumb_url ?? input.external_url ?? null,
@@ -210,6 +212,7 @@ export async function addGenerationsBulk(
     shotId: string;
     stage: "image" | "video";
     promptId?: string | null;
+    prompt?: string | null;
     filePaths: string[];
     platform?: string | null;
     model?: string | null;
@@ -236,6 +239,7 @@ export async function addGenerationsBulk(
     stage: input.stage,
     kind: input.stage === "video" ? "video" : "image",
     prompt_id: input.promptId ?? null,
+    prompt: input.prompt ?? null,
     file_path: fp,
     platform: input.platform ?? null,
     model: input.model ?? null,
@@ -308,6 +312,7 @@ export async function updateGeneration(
   projectId: string,
   id: string,
   patch: {
+    prompt?: string | null;
     platform?: string | null;
     model?: string | null;
     model_version?: string | null;

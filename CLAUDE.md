@@ -448,7 +448,8 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0044: native_invoice_generator; 0043 =
+files in supabase/migrations (through 0046: ai_generation_prompt; 0045 =
+ai_pipeline; 0044 = native_invoice_generator; 0043 =
 project_documents_kind_recipient; 0042 = contacts_allow_project_parent; 0041 =
 freshbooks_billing; 0040 = project_archive; 0039 =
 call_sheet_templates; 0038 =

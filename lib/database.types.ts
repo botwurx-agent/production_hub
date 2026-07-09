@@ -1073,6 +1073,7 @@ export type Database = {
           studio_id: string;
           shot_id: string;
           prompt_id: string | null;
+          prompt: string | null;
           stage: string;
           kind: string;
           status: string;
@@ -1104,6 +1105,7 @@ export type Database = {
           studio_id: string;
           shot_id: string;
           prompt_id?: string | null;
+          prompt?: string | null;
           stage?: string;
           kind?: string;
           status?: string;
@@ -1135,6 +1137,7 @@ export type Database = {
           studio_id?: string;
           shot_id?: string;
           prompt_id?: string | null;
+          prompt?: string | null;
           stage?: string;
           kind?: string;
           status?: string;

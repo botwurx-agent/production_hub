@@ -14,6 +14,7 @@ import {
   savePrompt,
   addGeneration,
   addGenerationsBulk,
+  updateGeneration,
   setGenerationStatus,
   setGenerationRole,
   deleteGeneration,
@@ -54,6 +55,7 @@ function AddGenModal({
   shot,
   stage,
   promptId,
+  basePrompt,
   refStartId,
   refEndId,
   onClose,
@@ -63,6 +65,7 @@ function AddGenModal({
   shot: AiShot;
   stage: Stage;
   promptId: string | null;
+  basePrompt: string;
   refStartId: string | null;
   refEndId: string | null;
   onClose: () => void;
@@ -70,6 +73,7 @@ function AddGenModal({
   const router = useRouter();
   const [busy, start] = useTransition();
   const [files, setFiles] = useState<File[]>([]);
+  const [promptText, setPromptText] = useState(basePrompt);
   const [err, setErr] = useState<string | null>(null);
   const [prog, setProg] = useState<string | null>(null);
   const [f, setF] = useState({
@@ -116,6 +120,7 @@ function AddGenModal({
           shotId: shot.id,
           stage,
           promptId,
+          prompt: promptText || null,
           filePaths: paths,
           parent_start_id: stage === "video" ? refStartId : null,
           parent_end_id: stage === "video" ? refEndId : null,
@@ -132,6 +137,7 @@ function AddGenModal({
         shotId: shot.id,
         stage,
         promptId,
+        prompt: promptText || null,
         external_url: f.external_url || null,
         platform: f.platform || null,
         model: f.model || null,
@@ -183,6 +189,13 @@ function AddGenModal({
             Linked to this shot&apos;s approved START + END frames automatically.
           </p>
         )}
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+            Prompt used <span className="font-normal normal-case text-text-faint">(applies to {files.length > 1 ? `all ${files.length}` : "this"} — tweak it per batch)</span>
+          </label>
+          <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={3}
+            placeholder="The exact prompt used to generate these…" className={`mt-1 ${field}`} />
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Platform</label>
             <input value={f.platform} onChange={(e) => set("platform", e.target.value)} placeholder="e.g. fal, Krea" className={`mt-1 ${field}`} /></div>
@@ -361,6 +374,13 @@ function GenCard({
                 <span className="rounded-[7px] px-2 py-1 text-[11px] font-extrabold text-black" style={{ background: roleTag.c }}>{roleTag.t}</span>
               )}
             </div>
+            <div>
+              <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-text-faint">Prompt used</div>
+              <textarea defaultValue={gen.prompt ?? ""} rows={3}
+                onBlur={(e) => onRun(() => updateGeneration(projectId, gen.id, { prompt: e.target.value || null }))}
+                placeholder="The exact prompt for this generation…"
+                className="w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong" />
+            </div>
             {rows.length > 0 && (
               <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
                 {rows.map(([k, v]) => (
@@ -397,6 +417,9 @@ function GenCard({
       </div>
       {spec && (
         <div className="border-t border-border px-2.5 py-2 text-[11.5px]">
+          {gen.prompt && (
+            <p className="mb-1.5 border-b border-dashed border-border pb-1.5 italic text-text-muted">&ldquo;{gen.prompt}&rdquo;</p>
+          )}
           {rows.map(([k, v]) => (
             <div key={k} className="flex justify-between gap-3 border-b border-dashed border-border py-0.5 last:border-0">
               <span className="text-text-faint">{k}</span>
@@ -445,12 +468,15 @@ function StagePanel({
       </div>
 
       <div className="mb-3 space-y-2">
+        <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          Working prompt <span className="font-normal normal-case text-text-faint">· pre-fills each new batch; the exact prompt is saved on every generation</span>
+        </label>
         <textarea value={pText} onChange={(e) => setPText(e.target.value)}
           onBlur={() => savePrompt(projectId, shot.id, stage, { text: pText })}
-          rows={2} placeholder={`${label} prompt…`} className={field} />
+          rows={2} placeholder={`Base ${label.toLowerCase()} prompt…`} className={field} />
         <input list={`m-${stage}`} value={pModel} onChange={(e) => setPModel(e.target.value)}
           onBlur={() => savePrompt(projectId, shot.id, stage, { target_model: pModel || null })}
-          placeholder={`Target model (${models[0]})`} className={field} />
+          placeholder={`Default model (${models[0]})`} className={field} />
         <datalist id={`m-${stage}`}>{models.map((m) => <option key={m} value={m} />)}</datalist>
       </div>
 
@@ -496,7 +522,7 @@ function StagePanel({
 
       {adding && (
         <AddGenModal projectId={projectId} studioId={studioId} shot={shot} stage={stage}
-          promptId={prompt?.id ?? null} refStartId={refStartId} refEndId={refEndId}
+          promptId={prompt?.id ?? null} basePrompt={pText} refStartId={refStartId} refEndId={refEndId}
           onClose={() => setAdding(false)} />
       )}
     </div>
