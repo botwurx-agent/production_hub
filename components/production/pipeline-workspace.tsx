@@ -7,7 +7,6 @@ import { Modal } from "@/components/ui/modal";
 import { StatusTag, type Hue } from "@/components/status-tag";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import {
-  saveScript,
   addShot,
   updateShot,
   deleteShot,
@@ -18,6 +17,7 @@ import {
   setGenerationRole,
   deleteGeneration,
 } from "@/app/(app)/projects/[id]/pipeline-actions";
+import { ScriptEditor } from "@/components/production/script-editor";
 import type { AiScript, AiShot, AiPrompt, AiGeneration } from "@/lib/database.types";
 
 type Stage = "image" | "video";
@@ -519,7 +519,6 @@ export function PipelineWorkspace({
   const [, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(shots[0]?.id ?? null);
   const [scriptOpen, setScriptOpen] = useState(false);
-  const [scriptText, setScriptText] = useState(script?.content ?? "");
 
   const active = shots.find((s) => s.id === activeId) ?? null;
 
@@ -590,11 +589,9 @@ export function PipelineWorkspace({
       {/* Right: script editor or active shot */}
       <div>
         {scriptOpen && (
-          <div className="mb-4 rounded-[14px] border border-border p-4">
+          <div className="mb-4">
             <h4 className="mb-2 text-sm font-bold text-text">Script — the copy for this project</h4>
-            <textarea value={scriptText} onChange={(e) => setScriptText(e.target.value)}
-              onBlur={() => saveScript(projectId, scriptText)} rows={8}
-              placeholder="Paste or write the script. Break each beat into a shot on the left." className={field} />
+            <ScriptEditor projectId={projectId} initial={script?.content ?? ""} />
           </div>
         )}
 
