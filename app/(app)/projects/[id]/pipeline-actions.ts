@@ -191,6 +191,63 @@ export async function addGeneration(
   return { id: data.id };
 }
 
+// Bulk: many files (already uploaded client-side) -> one candidate each,
+// sharing the provenance entered once. Inserts all rows + revalidates once.
+export async function addGenerationsBulk(
+  projectId: string,
+  input: {
+    shotId: string;
+    stage: "image" | "video";
+    promptId?: string | null;
+    filePaths: string[];
+    platform?: string | null;
+    model?: string | null;
+    model_version?: string | null;
+    seed?: string | null;
+    aspect?: string | null;
+    resolution?: string | null;
+    fps?: number | null;
+    duration_sec?: number | null;
+    guidance?: number | null;
+    cost?: number | null;
+    params?: Json | null;
+    parent_start_id?: string | null;
+    parent_end_id?: string | null;
+    generated_by_name?: string | null;
+  },
+): Promise<PipelineState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  if (!input.filePaths.length) return { error: "No files to add." };
+  const rows = input.filePaths.map((fp) => ({
+    studio_id: ctx.studio.id,
+    shot_id: input.shotId,
+    stage: input.stage,
+    kind: input.stage === "video" ? "video" : "image",
+    prompt_id: input.promptId ?? null,
+    file_path: fp,
+    platform: input.platform ?? null,
+    model: input.model ?? null,
+    model_version: input.model_version ?? null,
+    seed: input.seed ?? null,
+    aspect: input.aspect ?? null,
+    resolution: input.resolution ?? null,
+    fps: input.fps ?? null,
+    duration_sec: input.duration_sec ?? null,
+    guidance: input.guidance ?? null,
+    cost: input.cost ?? null,
+    params: input.params ?? null,
+    parent_start_id: input.stage === "video" ? input.parent_start_id ?? null : null,
+    parent_end_id: input.stage === "video" ? input.parent_end_id ?? null : null,
+    generated_by: ctx.userId,
+    generated_by_name: input.generated_by_name ?? null,
+  }));
+  const { error } = await supabase.from("ai_generations").insert(rows);
+  if (error) return { error: error.message };
+  rp(projectId);
+  return null;
+}
+
 export async function setGenerationStatus(
   projectId: string,
   id: string,

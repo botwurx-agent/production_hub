@@ -13,6 +13,7 @@ import {
   deleteShot,
   savePrompt,
   addGeneration,
+  addGenerationsBulk,
   setGenerationStatus,
   setGenerationRole,
   deleteGeneration,
@@ -67,8 +68,9 @@ function AddGenModal({
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [prog, setProg] = useState<string | null>(null);
   const [f, setF] = useState({
     external_url: "", platform: "", model: "", model_version: "", seed: "",
     aspect: stage === "image" ? "16:9" : "", resolution: "", fps: "", duration_sec: "",
@@ -76,24 +78,59 @@ function AddGenModal({
   });
   function set(k: keyof typeof f, v: string) { setF((p) => ({ ...p, [k]: v })); }
 
+  const sharedSpec = () => ({
+    platform: f.platform || null,
+    model: f.model || null,
+    model_version: f.model_version || null,
+    seed: f.seed || null,
+    aspect: f.aspect || null,
+    resolution: f.resolution || null,
+    fps: f.fps ? Number(f.fps) : null,
+    duration_sec: f.duration_sec ? Number(f.duration_sec) : null,
+    guidance: f.guidance ? Number(f.guidance) : null,
+    cost: f.cost ? Number(f.cost) : null,
+    params: f.notes ? { notes: f.notes } : null,
+    generated_by_name: f.generated_by_name || null,
+  });
+
   function submit() {
     setErr(null);
     start(async () => {
-      let filePath: string | null = null;
-      if (file) {
+      // Bulk path: many files, each becomes a candidate sharing the spec.
+      if (files.length > 0) {
+        const paths: string[] = [];
         try {
-          const up = await uploadAssetFile({ studioId, projectId, file });
-          filePath = up.storagePath;
+          for (let i = 0; i < files.length; i++) {
+            setProg(`Uploading ${i + 1}/${files.length}…`);
+            const up = await uploadAssetFile({ studioId, projectId, file: files[i] });
+            paths.push(up.storagePath);
+          }
         } catch (e) {
           setErr(`Upload failed: ${(e as Error).message}`);
+          setProg(null);
           return;
         }
+        setProg("Saving…");
+        const res = await addGenerationsBulk(projectId, {
+          shotId: shot.id,
+          stage,
+          promptId,
+          filePaths: paths,
+          parent_start_id: stage === "video" ? refStartId : null,
+          parent_end_id: stage === "video" ? refEndId : null,
+          ...sharedSpec(),
+        });
+        setProg(null);
+        if (res?.error) { setErr(res.error); return; }
+        onClose();
+        router.refresh();
+        return;
       }
+      // Single URL path.
       await addGeneration(projectId, {
         shotId: shot.id,
         stage,
         promptId,
-        file_path: filePath,
         external_url: f.external_url || null,
         platform: f.platform || null,
         model: f.model || null,
@@ -122,12 +159,16 @@ function AddGenModal({
       <div className="space-y-3">
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
-            Upload the {stage === "image" ? "image" : "video"} file <span className="font-normal normal-case text-text-faint">(recommended)</span>
+            Upload {stage === "image" ? "image" : "video"} files <span className="font-normal normal-case text-text-faint">(pick one or many · recommended)</span>
           </label>
-          <input type="file" accept={stage === "image" ? "image/*" : "video/*,image/*"}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          <input type="file" multiple accept={stage === "image" ? "image/*" : "video/*,image/*"}
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             className="mt-1 block w-full text-sm text-text-muted file:mr-3 file:rounded-[8px] file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-accent-fg" />
-          {file && <p className="mt-1 text-xs text-text-faint">{file.name}</p>}
+          {files.length > 0 && (
+            <p className="mt-1 text-xs text-text-faint">
+              {files.length} file{files.length === 1 ? "" : "s"} selected · the spec below applies to all of them
+            </p>
+          )}
         </div>
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
@@ -178,9 +219,12 @@ function AddGenModal({
         <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Notes / extra params</label>
           <input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="negative prompt, LoRA, camera, round…" className={`mt-1 ${field}`} /></div>
         {err && <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{err}</p>}
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex items-center justify-end gap-3 pt-1">
+          {busy && prog && <span className="mr-auto text-xs font-medium text-text-muted">{prog}</span>}
           <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button size="sm" onClick={submit} disabled={busy}>{busy ? "Adding…" : "Add"}</Button>
+          <Button size="sm" onClick={submit} disabled={busy}>
+            {busy ? "Working…" : files.length > 1 ? `Add ${files.length} candidates` : "Add"}
+          </Button>
         </div>
       </div>
     </Modal>
