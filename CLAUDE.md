@@ -510,10 +510,18 @@ Shot cockpit / Triage) was shown to the operator.
   new DocKind `ai_shot` (approval_target gained 'ai_shot', migration 0047; no new
   tables, reuses doc_reviews/review_comments/approvals/review_links). A "Send to
   review" button on the shot header (components/production/pipeline-workspace.tsx)
-  calls sendDocToReview(projectId,'ai_shot',shotId); the shot then shows on the
-  project Review page as a DocReviewCard -> DocReviewModal (PinCanvas over the
-  shot's picked media) with the internal team greenlight, plus the ShareDocButton
-  for the client via /r/[token] (DocReview portal, same review + approve/request-
+  calls sendDocToReview(projectId,'ai_shot',shotId) via a confirm modal
+  (SendToReviewControl) that SPELLS OUT what's being sent (this shot + which of
+  start/end frames + take are picked), so it's never a black box; once in review
+  the header shows an "In review · Open" chip linking to the shot's review page.
+  The shot then shows on the project Review page as a DocReviewCard whose "Open
+  review" goes to a FULL PAGE (app/(app)/projects/[id]/review/shot/[shotId]/
+  page.tsx -> components/review/shot-review-view.tsx), NOT the cramped modal, so
+  media is large (frames render one-per-row, object-contain; the take gets the
+  full timecode scrubber). Docs (shot_list/storyboard/moodboard) still use the
+  DocReviewModal; only ai_shot got the full page. The page carries the internal
+  team greenlight + a "what's in this review" chip row + the ShareDocButton for
+  the client via /r/[token] (DocReview portal, same review + approve/request-
   changes). loadDocSurface gained an ai_shot branch (frames + take + a playable
   takeVideoUrl from ai_generations that carry a role); loadDocReviewsForProject
   resolves the shot title; targetInProject + createDocReviewLink validate the

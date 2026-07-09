@@ -72,6 +72,9 @@ export function DocReviewCard({
   const [open, setOpen] = useState(false);
   const [busy, start] = useTransition();
   const meta = KIND[doc.kind];
+  // AI shots review on their own full page (big media); docs open in the modal.
+  const isShot = doc.kind === "ai_shot";
+  const reviewHref = `/projects/${projectId}/review/shot/${doc.targetId}`;
 
   const clientBadge =
     doc.clientDecision === "approved"
@@ -141,12 +144,21 @@ export function DocReviewCard({
       </div>
 
       <div className="mt-auto flex items-center gap-2 border-t border-border p-3">
-        <button
-          onClick={() => setOpen(true)}
-          className="rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
-        >
-          Review
-        </button>
+        {isShot ? (
+          <Link
+            href={reviewHref}
+            className="rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
+          >
+            Open review
+          </Link>
+        ) : (
+          <button
+            onClick={() => setOpen(true)}
+            className="rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
+          >
+            Review
+          </button>
+        )}
         <ShareDocButton projectId={projectId} kind={doc.kind} targetId={doc.targetId} />
         <button
           onClick={remove}
@@ -158,14 +170,16 @@ export function DocReviewCard({
         </button>
       </div>
 
-      <DocReviewModal
-        open={open}
-        onClose={() => setOpen(false)}
-        projectId={projectId}
-        kind={doc.kind}
-        targetId={doc.targetId}
-        title={doc.title}
-      />
+      {!isShot && (
+        <DocReviewModal
+          open={open}
+          onClose={() => setOpen(false)}
+          projectId={projectId}
+          kind={doc.kind}
+          targetId={doc.targetId}
+          title={doc.title}
+        />
+      )}
     </div>
   );
 }
