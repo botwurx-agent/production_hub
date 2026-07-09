@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -10,6 +10,7 @@ import {
   addShot,
   updateShot,
   deleteShot,
+  reorderShots,
   savePrompt,
   addGeneration,
   addGenerationsBulk,
@@ -502,6 +503,91 @@ function StagePanel({
   );
 }
 
+// ---- Sequence strip (all shots at once, drag to reorder) --------------------
+
+function SequenceStrip({
+  shots, thumbs, activeId, onSelect, onReorder,
+}: {
+  shots: AiShot[];
+  thumbs: Map<string, string | null>;
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onReorder: (ids: string[]) => void;
+}) {
+  const sig = shots.map((s) => s.id).join(",");
+  const [order, setOrder] = useState<string[]>(shots.map((s) => s.id));
+  useEffect(() => {
+    setOrder(shots.map((s) => s.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
+  const byId = useMemo(() => {
+    const m = new Map<string, AiShot>();
+    shots.forEach((s) => m.set(s.id, s));
+    return m;
+  }, [shots]);
+  const dragIx = useRef<number | null>(null);
+  const [overIx, setOverIx] = useState<number | null>(null);
+
+  function drop(i: number) {
+    const from = dragIx.current;
+    dragIx.current = null;
+    setOverIx(null);
+    if (from == null || from === i) return;
+    const next = [...order];
+    const [moved] = next.splice(from, 1);
+    next.splice(i, 0, moved);
+    setOrder(next);
+    onReorder(next);
+  }
+
+  return (
+    <div className="rounded-[14px] border border-border p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Sequence</span>
+        <span className="text-xs text-text-faint">{shots.length} shot{shots.length === 1 ? "" : "s"} · drag to reorder</span>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {order.map((id, i) => {
+          const s = byId.get(id);
+          if (!s) return null;
+          const on = id === activeId;
+          const url = thumbs.get(id) ?? null;
+          return (
+            <div
+              key={id}
+              draggable
+              onDragStart={() => { dragIx.current = i; }}
+              onDragOver={(e) => { e.preventDefault(); setOverIx(i); }}
+              onDragLeave={() => setOverIx((v) => (v === i ? null : v))}
+              onDrop={() => drop(i)}
+              onClick={() => onSelect(id)}
+              className={`w-[136px] shrink-0 cursor-pointer rounded-[10px] border p-1.5 transition ${
+                on ? "border-accent bg-accent-soft" : overIx === i ? "border-accent" : "border-border hover:border-border-strong"
+              }`}
+            >
+              <div className="relative overflow-hidden rounded-[7px]" style={{ aspectRatio: "16/9", background: gradFor(id) }}>
+                {url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                )}
+                <span className="absolute left-1 top-1 rounded-[4px] bg-black/55 px-1.5 py-0.5 text-[9px] font-extrabold text-white">{i + 1}</span>
+                <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full"
+                  style={{ background: s.method === "live" ? "var(--h-cyan)" : "var(--h-purple)", boxShadow: "0 0 0 2px rgba(0,0,0,.35)" }}
+                  title={s.method === "live" ? "Live" : "Generated"} />
+              </div>
+              <div className="mt-1 truncate text-[12px] font-semibold text-text">{s.title || "Untitled shot"}</div>
+              <div className="mt-0.5">
+                <StatusTag hue={STAGE_HUE[s.stage] ?? ("blue" as Hue)}>{s.stage}</StatusTag>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---- Workspace --------------------------------------------------------------
 
 export function PipelineWorkspace({
@@ -547,60 +633,69 @@ export function PipelineWorkspace({
   const approvedStart = imgGens.find((g) => g.role === "start") ?? null;
   const approvedEnd = imgGens.find((g) => g.role === "end") ?? null;
 
+  // Representative thumbnail per shot: final take > take > start > any image > any.
+  const shotThumb = useMemo(() => {
+    const byShot = new Map<string, AiGeneration[]>();
+    for (const g of generations) {
+      const a = byShot.get(g.shot_id) ?? []; a.push(g); byShot.set(g.shot_id, a);
+    }
+    const m = new Map<string, string | null>();
+    for (const s of shots) {
+      const gs = byShot.get(s.id) ?? [];
+      const rep =
+        gs.find((g) => g.role === "final") ??
+        gs.find((g) => g.role === "take") ??
+        gs.find((g) => g.role === "start") ??
+        gs.find((g) => g.stage === "image") ??
+        gs[0];
+      m.set(s.id, rep ? media[rep.id] ?? rep.external_url ?? null : null);
+    }
+    return m;
+  }, [generations, shots, media]);
+
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_1fr]">
-      {/* Left rail */}
-      <div className="space-y-3">
+    <div className="space-y-5">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setScriptOpen((s) => !s)}
-          className="flex w-full items-center gap-2 rounded-[11px] border border-border px-3 py-2 text-left text-sm font-bold text-text hover:border-border-strong">
+          className="flex items-center gap-2 rounded-[11px] border border-border px-3 py-2 text-sm font-bold text-text hover:border-border-strong">
           <span className="grid h-6 w-6 place-items-center rounded-[7px]" style={{ background: "var(--h-indigo-bg)", color: "var(--h-indigo)" }}>✎</span>
-          Script <span className="ml-auto text-xs text-text-faint">{scriptOpen ? "hide" : "edit"}</span>
+          Script <span className="text-xs font-normal text-text-faint">{scriptOpen ? "hide" : "edit"}</span>
         </button>
-
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => newShot("generated")} className="flex-1">+ Generated</Button>
-          <Button size="sm" variant="secondary" onClick={() => newShot("live")} className="flex-1">+ Live</Button>
-        </div>
-
-        {shots.length === 0 ? (
-          <p className="rounded-[11px] border border-dashed border-border p-4 text-center text-xs text-text-faint">
-            No shots yet. Break the script into shots.
-          </p>
-        ) : (
-          <div className="space-y-1.5">
-            {shots.map((s, i) => {
-              const on = s.id === activeId;
-              return (
-                <button key={s.id} onClick={() => setActiveId(s.id)}
-                  className={`w-full rounded-[11px] border px-3 py-2 text-left transition ${on ? "border-accent bg-accent-soft" : "border-border hover:border-border-strong"}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-text-faint">Shot {i + 1}</span>
-                    <span className="h-2 w-2 rounded-full" style={{ background: s.method === "live" ? "var(--h-cyan)" : "var(--h-purple)" }} />
-                  </div>
-                  <div className="truncate text-sm font-semibold text-text">{s.title || "Untitled shot"}</div>
-                  <StatusTag hue={STAGE_HUE[s.stage] ?? ("blue" as Hue)}>{s.stage}</StatusTag>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <span className="flex-1" />
+        <Button size="sm" onClick={() => newShot("generated")}>+ Generated shot</Button>
+        <Button size="sm" variant="secondary" onClick={() => newShot("live")}>+ Live shot</Button>
       </div>
 
-      {/* Right: script editor or active shot */}
-      <div>
-        {scriptOpen && (
-          <div className="mb-4">
-            <h4 className="mb-2 text-sm font-bold text-text">Script — the copy for this project</h4>
-            <ScriptEditor projectId={projectId} initial={script?.content ?? ""} />
-          </div>
-        )}
+      {scriptOpen && (
+        <div>
+          <h4 className="mb-2 text-sm font-bold text-text">Script — the copy for this project</h4>
+          <ScriptEditor projectId={projectId} initial={script?.content ?? ""} />
+        </div>
+      )}
 
-        {!active ? (
-          <div className="grid place-items-center rounded-[14px] border border-dashed border-border p-16 text-sm text-text-faint">
-            Select or add a shot.
-          </div>
-        ) : (
-          <div className="space-y-4">
+      {/* Sequence: all shots at once */}
+      {shots.length > 0 && (
+        <SequenceStrip
+          shots={shots}
+          thumbs={shotThumb}
+          activeId={activeId}
+          onSelect={setActiveId}
+          onReorder={(ids) => run(() => reorderShots(projectId, ids))}
+        />
+      )}
+
+      {/* Active shot */}
+      {shots.length === 0 ? (
+        <div className="grid place-items-center rounded-[14px] border border-dashed border-border p-16 text-center text-sm text-text-faint">
+          No shots yet. Break the script into shots with <b className="mx-1 text-text">+ Generated shot</b> or <b className="mx-1 text-text">+ Live shot</b>.
+        </div>
+      ) : !active ? (
+        <div className="grid place-items-center rounded-[14px] border border-dashed border-border p-16 text-sm text-text-faint">
+          Select a shot from the sequence above.
+        </div>
+      ) : (
+        <div className="space-y-4">
             {/* Shot header */}
             <div className="rounded-[14px] border border-border p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -649,7 +744,6 @@ export function PipelineWorkspace({
             )}
           </div>
         )}
-      </div>
     </div>
   );
 }

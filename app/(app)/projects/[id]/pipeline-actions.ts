@@ -86,6 +86,17 @@ export async function deleteShot(projectId: string, id: string): Promise<void> {
   rp(projectId);
 }
 
+export async function reorderShots(projectId: string, ids: string[]): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await Promise.all(
+    ids.map((id, i) =>
+      supabase.from("ai_shots").update({ position: i }).eq("id", id),
+    ),
+  );
+  rp(projectId);
+}
+
 // ---- Prompts (one current row per shot + stage; versioned column) ----------
 
 export async function savePrompt(
