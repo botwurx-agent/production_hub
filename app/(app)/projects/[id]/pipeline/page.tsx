@@ -48,6 +48,17 @@ export default async function PipelinePage({
     generations = (g ?? []) as AiGeneration[];
   }
 
+  // Which shots are already in the review cycle (so the header can show status).
+  let reviewingShotIds: string[] = [];
+  if (shotIds.length) {
+    const { data: docRev } = await supabase
+      .from("doc_reviews")
+      .select("target_id")
+      .eq("project_id", params.id)
+      .eq("target_type", "ai_shot");
+    reviewingShotIds = (docRev ?? []).map((r) => r.target_id);
+  }
+
   // Sign uploaded files (private bucket) for display, keyed by generation id.
   const media: Record<string, string> = {};
   await Promise.all(
@@ -84,6 +95,7 @@ export default async function PipelinePage({
           prompts={prompts}
           generations={generations}
           media={media}
+          reviewingShotIds={reviewingShotIds}
         />
       </Card>
     </div>

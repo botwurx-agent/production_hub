@@ -12,7 +12,106 @@ const shotChip =
 export function DocSurfaceView({ surface }: { surface: DocSurface }) {
   if (surface.kind === "shot_list") return <ShotListSurface surface={surface} />;
   if (surface.kind === "storyboard") return <StoryboardSurface surface={surface} />;
+  if (surface.kind === "ai_shot") return <AiShotSurface surface={surface} />;
   return <MoodboardSurface surface={surface} />;
+}
+
+function AiShotSurface({
+  surface,
+}: {
+  surface: Extract<DocSurface, { kind: "ai_shot" }>;
+}) {
+  const { media } = surface;
+  return (
+    <div className="w-full rounded-[12px] bg-surface p-4 text-text sm:p-6">
+      <div className="mb-5 border-b border-border pb-4">
+        <h2 className="font-display text-xl font-extrabold tracking-tight">
+          {surface.title}
+        </h2>
+        {surface.beat && (
+          <p className="mt-0.5 whitespace-pre-wrap text-sm text-text-muted">
+            {surface.beat}
+          </p>
+        )}
+      </div>
+
+      {media.length === 0 ? (
+        <p className="py-10 text-center text-sm text-text-faint">
+          No frames or take picked for this shot yet. Tag a Start + End (and a Take)
+          in the pipeline, then they show up here for review.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {media.map((m) => (
+            <div
+              key={m.id}
+              className="flex flex-col overflow-hidden rounded-[14px] border border-border bg-surface shadow-sm"
+            >
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                <span
+                  className="rounded-[6px] px-1.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide"
+                  style={{
+                    backgroundColor:
+                      m.role === "start"
+                        ? "var(--h-cyan-bg)"
+                        : m.role === "end"
+                          ? "var(--h-pink-bg)"
+                          : "var(--h-green-bg)",
+                    color:
+                      m.role === "start"
+                        ? "var(--h-cyan)"
+                        : m.role === "end"
+                          ? "var(--h-pink)"
+                          : "var(--h-green)",
+                  }}
+                >
+                  {m.label}
+                </span>
+                {m.model && (
+                  <span className="ml-auto rounded-[5px] bg-surface-2 px-1.5 py-0.5 text-[10px] font-bold text-text-muted">
+                    {m.model}
+                  </span>
+                )}
+              </div>
+              <div className="relative grid aspect-[16/9] place-items-center overflow-hidden bg-black/80">
+                {m.isVideo ? (
+                  <>
+                    {m.signedUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.signedUrl} alt="" className="h-full w-full object-cover" />
+                    ) : null}
+                    <span className="absolute inset-0 grid place-items-center">
+                      <span className="grid h-10 w-10 place-items-center rounded-full bg-white/85 text-base text-black">
+                        ▶
+                      </span>
+                    </span>
+                  </>
+                ) : m.signedUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={m.signedUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-xs font-semibold text-white/60">No preview</span>
+                )}
+              </div>
+              {m.openUrl && (
+                <div className="px-3 py-2">
+                  <a
+                    href={m.openUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-xs font-bold text-accent hover:underline"
+                  >
+                    {m.isVideo ? "Play take ↗" : "Open full size ↗"}
+                  </a>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ShotListSurface({

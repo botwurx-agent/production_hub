@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -19,6 +20,7 @@ import {
   setGenerationRole,
   deleteGeneration,
 } from "@/app/(app)/projects/[id]/pipeline-actions";
+import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
 import type { AiScript, AiShot, AiPrompt, AiGeneration } from "@/lib/database.types";
 
@@ -617,7 +619,7 @@ function SequenceStrip({
 // ---- Workspace --------------------------------------------------------------
 
 export function PipelineWorkspace({
-  projectId, studioId, script, shots, prompts, generations, media,
+  projectId, studioId, script, shots, prompts, generations, media, reviewingShotIds = [],
 }: {
   projectId: string;
   studioId: string;
@@ -626,12 +628,14 @@ export function PipelineWorkspace({
   prompts: AiPrompt[];
   generations: AiGeneration[];
   media: Record<string, string>;
+  reviewingShotIds?: string[];
 }) {
   const router = useRouter();
   const [, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(shots[0]?.id ?? null);
   const [scriptOpen, setScriptOpen] = useState(false);
 
+  const reviewing = useMemo(() => new Set(reviewingShotIds), [reviewingShotIds]);
   const active = shots.find((s) => s.id === activeId) ?? null;
 
   function run(fn: () => Promise<unknown>) {
@@ -742,6 +746,23 @@ export function PipelineWorkspace({
                   className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold">
                   {["script", "image", "video", "post", "delivered"].map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
+                {reviewing.has(active.id) ? (
+                  <Link href={`/projects/${projectId}/review`}
+                    className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1 text-xs font-bold"
+                    style={{ background: "var(--h-pink-bg)", color: "var(--h-pink)" }}>
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--h-pink)" }} />
+                    In review · View
+                  </Link>
+                ) : (
+                  <button onClick={() => run(() => sendDocToReview(projectId, "ai_shot", active.id))}
+                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-border px-2.5 py-1 text-xs font-bold text-text-muted transition hover:border-border-strong hover:text-text"
+                    title="Put this shot into the review cycle (internal pins + client share)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+                    </svg>
+                    Send to review
+                  </button>
+                )}
                 <button onClick={() => { if (confirm("Delete this shot?")) { setActiveId(null); run(() => deleteShot(projectId, active.id)); } }}
                   className="text-xs font-semibold text-red hover:underline">Delete</button>
               </div>

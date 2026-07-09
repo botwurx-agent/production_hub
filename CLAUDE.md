@@ -448,7 +448,8 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0046: ai_generation_prompt; 0045 =
+files in supabase/migrations (through 0047: ai_shot_review; 0046 =
+ai_generation_prompt; 0045 =
 ai_pipeline; 0044 = native_invoice_generator; 0043 =
 project_documents_kind_recipient; 0042 = contacts_allow_project_parent; 0041 =
 freshbooks_billing; 0040 = project_archive; 0039 =
@@ -500,5 +501,23 @@ specced in docs/ai-pipeline.md. Key decision: one Project, same spine, with
 production method as a PER-SHOT property (generated | live) so a single project
 is all-AI, all-live, or hybrid; organize-don't-generate; provenance/lineage is
 the moat; stages-as-data for future-proofing. A clickable mockup (Sequence /
-Shot cockpit / Triage) was shown to the operator. Next: confirm first-slice
-scope (recommended: spine + Sequence board + image-stage triage loop) then build.
+Shot cockpit / Triage) was shown to the operator.
+- Slice 1 (BUILT): spine + Script editor (rich text) + Sequence strip + per-shot
+  image/video StagePanels with candidate triage, start/end/take roles, and
+  provenance capture (platform/model/seed/etc) on every generation; bulk upload
+  of candidates; per-candidate prompt (migration 0046).
+- Slice 3 (BUILT): review, reusing the EXISTING doc-review stack. An AI shot is a
+  new DocKind `ai_shot` (approval_target gained 'ai_shot', migration 0047; no new
+  tables, reuses doc_reviews/review_comments/approvals/review_links). A "Send to
+  review" button on the shot header (components/production/pipeline-workspace.tsx)
+  calls sendDocToReview(projectId,'ai_shot',shotId); the shot then shows on the
+  project Review page as a DocReviewCard -> DocReviewModal (PinCanvas over the
+  shot's picked media = start/end frames + take, rendered by AiShotSurface in
+  components/review/doc-surface.tsx) with the internal team greenlight, plus the
+  ShareDocButton for the client via /r/[token] (DocReview portal, same pins +
+  approve/request-changes). loadDocSurface gained an ai_shot branch (frames/take
+  from ai_generations that carry a role); loadDocReviewsForProject resolves the
+  shot title; targetInProject + createDocReviewLink validate the shot belongs to
+  the project. NEXT for pipeline review: timecode-scrub comments on the take
+  video (reuse VideoReview) instead of pin-on-poster; site-wide guest "view-only"
+  invites deferred (share links cover external review for now).

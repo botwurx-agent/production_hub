@@ -56,7 +56,7 @@ export async function createReviewLink(
 // (target = boards.id). Verifies the target belongs to this project + studio.
 export async function createDocReviewLink(
   projectId: string,
-  kind: "shot_list" | "storyboard" | "moodboard",
+  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot",
   targetId: string
 ): Promise<{ token: string } | { error: string }> {
   const ctx = await requireStudioContext();
@@ -70,6 +70,14 @@ export async function createDocReviewLink(
       .eq("id", projectId)
       .maybeSingle();
     if (!project) return { error: "Project not found." };
+  } else if (kind === "ai_shot") {
+    const { data: shot } = await supabase
+      .from("ai_shots")
+      .select("id")
+      .eq("id", targetId)
+      .eq("project_id", projectId)
+      .maybeSingle();
+    if (!shot) return { error: "That shot was not found." };
   } else {
     const { data: board } = await supabase
       .from("boards")

@@ -17,6 +17,7 @@ const NOUN: Record<DocKind, string> = {
   shot_list: "shot list",
   storyboard: "storyboard",
   moodboard: "moodboard",
+  ai_shot: "shot",
 };
 
 // Confirms the target belongs to this project (and, via RLS, this studio).
@@ -32,6 +33,15 @@ async function targetInProject(
       .from("projects")
       .select("id")
       .eq("id", projectId)
+      .maybeSingle();
+    return Boolean(data);
+  }
+  if (kind === "ai_shot") {
+    const { data } = await supabase
+      .from("ai_shots")
+      .select("id")
+      .eq("id", targetId)
+      .eq("project_id", projectId)
       .maybeSingle();
     return Boolean(data);
   }

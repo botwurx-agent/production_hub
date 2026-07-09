@@ -163,10 +163,15 @@ export async function gatherReview(
 // A link can target a whole doc surface instead of an asset version. The client
 // sees a read-only render of the live doc and drops the same numbered pins.
 
-export type DocKind = "shot_list" | "storyboard" | "moodboard";
+export type DocKind = "shot_list" | "storyboard" | "moodboard" | "ai_shot";
 
 export function isDocKind(v: string | null | undefined): v is DocKind {
-  return v === "shot_list" || v === "storyboard" || v === "moodboard";
+  return (
+    v === "shot_list" ||
+    v === "storyboard" ||
+    v === "moodboard" ||
+    v === "ai_shot"
+  );
 }
 
 export type DocShotCard = {
@@ -207,6 +212,17 @@ export type DocMoodItem = {
   signedUrl: string | null;
 };
 
+// One picked piece of media on an AI shot: a start frame, end frame, or take.
+export type DocShotMedia = {
+  id: string;
+  role: string; // start | end | take | final
+  label: string; // "Start frame" | "End frame" | "Take"
+  isVideo: boolean;
+  signedUrl: string | null; // for display (image poster)
+  openUrl: string | null; // full-size / video, opened in a new tab
+  model: string | null;
+};
+
 export type DocSurface =
   | {
       kind: "shot_list";
@@ -214,7 +230,13 @@ export type DocSurface =
       groups: DocShotGroup[];
     }
   | { kind: "storyboard"; frames: DocFrame[] }
-  | { kind: "moodboard"; items: DocMoodItem[] };
+  | { kind: "moodboard"; items: DocMoodItem[] }
+  | {
+      kind: "ai_shot";
+      title: string;
+      beat: string | null;
+      media: DocShotMedia[];
+    };
 
 export type DocReviewData = {
   studioName: string;
@@ -308,6 +330,54 @@ export async function loadDocSurface(
         })),
       },
       docTitle: board?.title || "Shot list",
+    };
+  }
+
+  if (kind === "ai_shot") {
+    // target_id = ai_shots.id; the reviewed surface is the shot's picked media
+    // (start frame, end frame, take). Those are the ai_generations that carry a
+    // role. Ordered start -> end -> take so it reads like the shot itself.
+    const { data: shot } = await client
+      .from("ai_shots")
+      .select("title, beat")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!shot) return null;
+    const { data: gens } = await client
+      .from("ai_generations")
+      .select("id, role, kind, stage, file_path, external_url, thumb_url, model")
+      .eq("shot_id", targetId)
+      .not("role", "is", null);
+    const rows = gens ?? [];
+    const signed = await signPaths(
+      client,
+      rows.map((g) => g.file_path as string).filter(Boolean)
+    );
+    const ORDER: Record<string, number> = { start: 0, end: 1, take: 2, final: 2 };
+    const LABEL: Record<string, string> = {
+      start: "Start frame",
+      end: "End frame",
+      take: "Take",
+      final: "Take",
+    };
+    const media: DocShotMedia[] = rows
+      .map((g) => {
+        const isVideo = g.kind === "video" || g.stage === "video";
+        const disp = g.file_path ? signed.get(g.file_path) ?? null : null;
+        return {
+          id: g.id,
+          role: g.role as string,
+          label: LABEL[g.role as string] ?? "Selected",
+          isVideo,
+          signedUrl: isVideo ? g.thumb_url ?? null : disp ?? g.external_url ?? null,
+          openUrl: g.external_url ?? disp ?? null,
+          model: g.model ?? null,
+        };
+      })
+      .sort((a, b) => (ORDER[a.role] ?? 9) - (ORDER[b.role] ?? 9));
+    return {
+      surface: { kind: "ai_shot", title: shot.title || "Shot", beat: shot.beat, media },
+      docTitle: shot.title || "Shot",
     };
   }
 

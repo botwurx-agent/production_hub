@@ -17,6 +17,7 @@ const KIND_LABEL: Record<string, string> = {
   shot_list: "shot list",
   storyboard: "storyboard",
   moodboard: "moodboard",
+  ai_shot: "shot",
 };
 
 export function DocReview({

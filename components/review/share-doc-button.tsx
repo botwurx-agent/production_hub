@@ -6,12 +6,13 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { createDocReviewLink } from "@/app/(app)/projects/[id]/share-actions";
 
-type DocKind = "shot_list" | "storyboard" | "moodboard";
+type DocKind = "shot_list" | "storyboard" | "moodboard" | "ai_shot";
 
 const NOUN: Record<DocKind, string> = {
   shot_list: "shot list",
   storyboard: "storyboard",
   moodboard: "moodboard",
+  ai_shot: "shot",
 };
 
 // Share a doc surface (shot list / storyboard / moodboard) for client review:

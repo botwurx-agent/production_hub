@@ -213,6 +213,7 @@ const DOC_LABEL: Record<string, string> = {
   shot_list: "shot list",
   storyboard: "storyboard",
   moodboard: "moodboard",
+  ai_shot: "shot",
 };
 
 export async function submitDocComment(

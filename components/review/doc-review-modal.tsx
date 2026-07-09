@@ -14,7 +14,7 @@ import {
 import type { DocReviewDetail } from "@/lib/doc-review-data";
 import type { ApprovalStatus } from "@/lib/database.types";
 
-type DocKind = "shot_list" | "storyboard" | "moodboard";
+type DocKind = "shot_list" | "storyboard" | "moodboard" | "ai_shot";
 
 // In-app internal review of a doc: the same pin canvas the client sees, plus a
 // team sign-off (the greenlight before sharing with the client).

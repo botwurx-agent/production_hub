@@ -47,6 +47,18 @@ const KIND: Record<
       </svg>
     ),
   },
+  ai_shot: {
+    label: "AI shot",
+    hue: "purple",
+    href: (p) => `/projects/${p}/pipeline`,
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 9h18M9 4v16" />
+        <circle cx="14.5" cy="14.5" r="2" />
+      </svg>
+    ),
+  },
 };
 
 export function DocReviewCard({

@@ -29,6 +29,7 @@ const KIND_FALLBACK: Record<DocKind, string> = {
   shot_list: "Shot list",
   storyboard: "Storyboard",
   moodboard: "Moodboard",
+  ai_shot: "Shot",
 };
 
 // All docs in review for a project, with the counts the Review card shows.
@@ -47,11 +48,15 @@ export async function loadDocReviewsForProject(
 
   const targetIds = reviews.map((r) => r.target_id);
   const boardIds = reviews
-    .filter((r) => r.target_type !== "shot_list")
+    .filter((r) => r.target_type === "storyboard" || r.target_type === "moodboard")
+    .map((r) => r.target_id);
+  const aiShotIds = reviews
+    .filter((r) => r.target_type === "ai_shot")
     .map((r) => r.target_id);
 
   const [
     { data: boards },
+    { data: aiShots },
     { data: shotBoard },
     { data: comments },
     { data: approvals },
@@ -60,6 +65,9 @@ export async function loadDocReviewsForProject(
     boardIds.length
       ? supabase.from("boards").select("id, name").in("id", boardIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    aiShotIds.length
+      ? supabase.from("ai_shots").select("id, title").in("id", aiShotIds)
+      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
     supabase
       .from("shot_boards")
       .select("title")
@@ -82,6 +90,7 @@ export async function loadDocReviewsForProject(
   ]);
 
   const boardName = new Map((boards ?? []).map((b) => [b.id, b.name]));
+  const aiShotName = new Map((aiShots ?? []).map((s) => [s.id, s.title]));
   const shareByTarget = new Map<string, { id: string; token: string }>();
   for (const l of links ?? []) {
     if (l.target_id && !shareByTarget.has(l.target_id))
@@ -93,7 +102,9 @@ export async function loadDocReviewsForProject(
     const title =
       kind === "shot_list"
         ? shotBoard?.title || "Shot list"
-        : boardName.get(r.target_id) || KIND_FALLBACK[kind];
+        : kind === "ai_shot"
+          ? aiShotName.get(r.target_id) || KIND_FALLBACK[kind]
+          : boardName.get(r.target_id) || KIND_FALLBACK[kind];
 
     const myComments = (comments ?? []).filter((c) => c.target_id === r.target_id);
     const myApprovals = (approvals ?? []).filter((a) => a.target_id === r.target_id);
