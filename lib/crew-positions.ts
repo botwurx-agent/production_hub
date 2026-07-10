@@ -3,7 +3,7 @@
 // beverage / CPG production. The Position field is a searchable combobox seeded
 // from these but accepts free text, so nothing here is a hard constraint.
 
-export type ContactCategory = "crew" | "talent" | "extras" | "client";
+export type ContactCategory = "crew" | "talent" | "extras" | "vendor" | "client";
 
 export const CATEGORIES: {
   key: ContactCategory;
@@ -14,6 +14,7 @@ export const CATEGORIES: {
   { key: "crew", label: "Crew", plural: "Crew", hue: "blue" },
   { key: "talent", label: "Talent", plural: "Talent", hue: "purple" },
   { key: "extras", label: "Extras", plural: "Extras", hue: "cyan" },
+  { key: "vendor", label: "Vendor", plural: "Vendors", hue: "green" },
   { key: "client", label: "Client", plural: "Clients", hue: "orange" },
 ];
 
@@ -21,6 +22,7 @@ export const CATEGORY_HUE: Record<string, string> = {
   crew: "blue",
   talent: "purple",
   extras: "cyan",
+  vendor: "green",
   client: "orange",
 };
 
@@ -107,6 +109,38 @@ export const POSITIONS: Record<ContactCategory, string[]> = {
     "Stand-in",
     "Photo Double",
     "Silent Bit",
+  ],
+  vendor: [
+    "CGI / 3D Studio",
+    "VFX Studio",
+    "VFX Supervisor",
+    "3D Generalist",
+    "Modeler",
+    "Animator",
+    "Lighting / Render",
+    "Compositor",
+    "Matte Painter",
+    "Motion Graphics",
+    "AI Generation Vendor",
+    "Post House",
+    "Editorial",
+    "Color House",
+    "Retoucher",
+    "Sound Studio",
+    "Composer",
+    "Sound Design",
+    "Mix Engineer",
+    "Music Licensing",
+    "Stock Footage",
+    "Camera Rental",
+    "Lighting & Grip Rental",
+    "Studio / Stage Rental",
+    "Equipment Rental",
+    "Catering",
+    "Transportation",
+    "Insurance",
+    "Permits",
+    "Translation / Subtitles",
   ],
   client: [
     "Brand Manager",

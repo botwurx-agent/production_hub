@@ -10,6 +10,7 @@ import { HubCard, BandLabel } from "@/components/projects/hub-card";
 import { ProjectSummary } from "@/components/projects/project-summary";
 import { ProjectAttention } from "@/components/projects/project-attention";
 import { getProjectOutstanding } from "@/lib/outstanding";
+import { projectType } from "@/lib/project-types";
 import { aiConfigured } from "@/lib/ai";
 import { loadProjectAssets } from "@/lib/project-data";
 import {
@@ -96,10 +97,13 @@ export default async function ProjectDetailPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title, status, due_date, shoot_date, archived_at, client_id, client:clients(name)")
+    .select("id, title, status, due_date, shoot_date, archived_at, client_id, project_type, client:clients(name)")
     .eq("id", params.id)
     .maybeSingle();
   if (!project) notFound();
+
+  const ptype = projectType(project.project_type);
+  const isAiVideo = project.project_type === "ai_video";
 
   const { data: clientOptions } = await supabase
     .from("clients")
@@ -281,11 +285,18 @@ export default async function ProjectDetailPage({
         <div className="p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              {statusInfo && (
-                <StatusTag hue={statusInfo.hue} className="mb-2">
-                  {statusInfo.label}
-                </StatusTag>
-              )}
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                {statusInfo && <StatusTag hue={statusInfo.hue}>{statusInfo.label}</StatusTag>}
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-0.5 text-[11px] font-bold"
+                  style={{ backgroundColor: `var(--h-${ptype.hue}-bg)`, color: `var(--h-${ptype.hue})` }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={ptype.icon} />
+                  </svg>
+                  {ptype.label}
+                </span>
+              </div>
               <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
                 {project.title}
               </h1>
@@ -462,25 +473,27 @@ export default async function ProjectDetailPage({
 
           <BandLabel hue="purple" label="Visualize" />
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <HubCard
-              href={`/projects/${project.id}/pipeline`}
-              hue="purple"
-              title="AI Pipeline"
-              sub="Script → images → video, with provenance"
-              footer="Open the pipeline"
-              icon={
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="16" rx="2" />
-                  <path d="M3 9h18M8 4v16" />
-                  <circle cx="14.5" cy="14" r="2.5" />
-                </svg>
-              }
-            >
-              <p className="text-[13px] text-text-muted">
-                Break the script into shots, then generate and triage images and
-                video, keeping every model, prompt, and seed on record.
-              </p>
-            </HubCard>
+            {isAiVideo && (
+              <HubCard
+                href={`/projects/${project.id}/pipeline`}
+                hue="purple"
+                title="AI Pipeline"
+                sub="Script → images → video, with provenance"
+                footer="Open the pipeline"
+                icon={
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18M8 4v16" />
+                    <circle cx="14.5" cy="14" r="2.5" />
+                  </svg>
+                }
+              >
+                <p className="text-[13px] text-text-muted">
+                  Break the script into shots, then generate and triage images and
+                  video, keeping every model, prompt, and seed on record.
+                </p>
+              </HubCard>
+            )}
 
             <HubCard
               href={`/projects/${project.id}/storyboards`}
@@ -618,7 +631,7 @@ export default async function ProjectDetailPage({
               href={`/projects/${project.id}/contacts`}
               hue="orange"
               title="Project contacts"
-              sub="Crew, talent & clients"
+              sub="Crew, talent, vendors & clients"
               footer={rosterCount > 0 ? "View roster" : "Add crew & talent"}
               icon={
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { PROJECT_STATUS, PROJECT_STATUS_ORDER } from "@/lib/status";
+import { isProjectType } from "@/lib/project-types";
 import type { ProjectStatus } from "@/lib/database.types";
 
 export type FormState = { error?: string } | null;
@@ -29,6 +30,8 @@ export async function createProject(
   const status: ProjectStatus = isStatus(statusRaw) ? statusRaw : "pre_pro";
   const due_date = String(formData.get("due_date") ?? "") || null;
   const shoot_date = String(formData.get("shoot_date") ?? "") || null;
+  const typeRaw = String(formData.get("project_type") ?? "general");
+  const project_type = isProjectType(typeRaw) ? typeRaw : "general";
 
   const { data, error } = await supabase
     .from("projects")
@@ -39,6 +42,7 @@ export async function createProject(
       status,
       due_date,
       shoot_date,
+      project_type,
       owner_id: ctx.userId,
     })
     .select("id")

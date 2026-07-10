@@ -393,6 +393,26 @@ implemented (out of strict order, driven by the operator's real needs).
   colored top border. Status stays as chips (StatusTag); module/section/nav color
   is identity, kept separate so the two never compete.
 
+### Project type + creation wizard + vendor contacts (migration 0049) — BUILT
+- projects.project_type (0049, free text default 'general'): general | live_action
+  | commercial | ai_video | cgi_vfx. Light label that tailors which hub cards
+  surface, never a hard wall. Constants in lib/project-types.ts (PROJECT_TYPES +
+  projectType()/isProjectType()).
+- New project is now a 2-step wizard (components/projects/new-project-button.tsx):
+  step 1 pick a type (icon cards), step 2 the details form (carries project_type
+  as a hidden input). createProject validates + stores it.
+- Hub tailoring (app/(app)/projects/[id]/page.tsx): a colored type badge in the
+  hero; the AI Pipeline card in the Visualize band shows ONLY for ai_video (other
+  types keep storyboards/shot list/moodboard). Everything else is still reachable.
+  CGI/VFX intentionally uses the generic modules for now (no dedicated CGI
+  pipeline yet; deferred until a real CGI job needs it).
+- Vendors: added a `vendor` contact category (lib/crew-positions.ts) so the
+  per-project roster gets a Vendors folder tab + curated vendor positions (CGI/3D
+  studio, VFX, color house, post, sound, rentals, etc.). No migration: contacts.
+  type is free text. External vendors live here; you communicate via the
+  Communication module (linked threads) and review share links. NOT a studio-wide
+  reusable vendor directory yet (deferred; contacts stay per-project).
+
 ### Team invites / multi-user (migration 0048) — BUILT
 Multiple people can now share one studio (the paid multi-user lever). The tenancy
 plumbing (studios/memberships/roles owner|admin|member + RLS is_studio_member)
@@ -484,7 +504,8 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0048: team_invites; 0047 =
+files in supabase/migrations (through 0049: project_type; 0048 =
+team_invites; 0047 =
 ai_shot_review; 0046 =
 ai_generation_prompt; 0045 =
 ai_pipeline; 0044 = native_invoice_generator; 0043 =
