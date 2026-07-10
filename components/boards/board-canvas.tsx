@@ -151,6 +151,7 @@ export function BoardCanvas({
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
   const [connCursor, setConnCursor] = useState<{ x: number; y: number } | null>(null);
   const [selectedConn, setSelectedConn] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const drag = useRef<DragRef>(null);
   const scaleRef = useRef(1);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -565,6 +566,11 @@ export function BoardCanvas({
                 setSelectedConn(null);
               }
             }}
+            onPointerMove={(e) => {
+              if (drag.current || connectFrom) return;
+              setHovered(itemAtPoint(e.clientX, e.clientY, ""));
+            }}
+            onPointerLeave={() => setHovered(null)}
           >
             {/* Connection arrows (behind cards) */}
             <svg
@@ -999,26 +1005,37 @@ export function BoardCanvas({
               );
             })}
 
-            {/* Connect anchor on the selected card (drag to another card) */}
-            {selected &&
-              byId.has(selected) &&
-              (() => {
-                const sel = byId.get(selected)!;
-                return (
-                  <button
-                    title="Drag to connect"
-                    onPointerDown={(e) => startConnect(e, sel)}
-                    style={{
-                      position: "absolute",
-                      left: sel.x + sel.w - 7,
-                      top: sel.y + sel.h / 2 - 7,
-                      zIndex: 9999,
-                      touchAction: "none",
-                    }}
-                    className="h-3.5 w-3.5 rounded-full border-2 border-white bg-accent shadow-md transition hover:scale-125"
-                  />
-                );
-              })()}
+            {/* Connect handle: appears on the hovered or selected card; drag it
+                onto another card to draw an arrow. */}
+            {(() => {
+              const anchorId = connectFrom ? null : hovered ?? selected;
+              const sel = anchorId ? byId.get(anchorId) : null;
+              if (!sel) return null;
+              return (
+                <button
+                  title="Drag to connect to another card"
+                  onPointerDown={(e) => startConnect(e, sel)}
+                  onPointerMove={(e) => e.stopPropagation()}
+                  onPointerEnter={() => setHovered(sel.id)}
+                  style={{
+                    position: "absolute",
+                    left: sel.x + sel.w - 11,
+                    top: sel.y + sel.h / 2 - 11,
+                    zIndex: 9999,
+                    touchAction: "none",
+                  }}
+                  className="group/anchor grid h-[22px] w-[22px] cursor-crosshair place-items-center rounded-full border-2 border-white bg-accent text-white shadow-md transition hover:scale-110"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" />
+                    <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
+                  </svg>
+                  <span className="pointer-events-none absolute left-full ml-1.5 hidden whitespace-nowrap rounded-[6px] bg-text px-1.5 py-0.5 text-[10px] font-semibold text-bg group-hover/anchor:block">
+                    Drag to connect
+                  </span>
+                </button>
+              );
+            })()}
 
             {/* Delete control for the selected connection */}
             {selectedConn &&
