@@ -299,6 +299,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      board_connections: {
+        Row: {
+          id: string;
+          studio_id: string;
+          board_id: string;
+          from_item_id: string;
+          to_item_id: string;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          board_id: string;
+          from_item_id: string;
+          to_item_id: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          board_id?: string;
+          from_item_id?: string;
+          to_item_id?: string;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       shot_boards: {
         Row: {
           id: string;

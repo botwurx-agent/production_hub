@@ -15,6 +15,7 @@ import {
   setBoardProject,
   setBoardBackground,
   getBoardItems,
+  getBoardConnections,
   addUploadItems,
   addNote,
   addTodoItem,
@@ -22,6 +23,7 @@ import {
   addLinkItem,
   addDriveItems,
   type BoardItemView,
+  type BoardConnection,
 } from "@/app/(app)/boards/actions";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { Board } from "@/lib/database.types";
@@ -56,6 +58,7 @@ export function BoardsWorkspace({
     initialBoards[0]?.id ?? null
   );
   const [items, setItems] = useState<BoardItemView[]>([]);
+  const [connections, setConnections] = useState<BoardConnection[]>([]);
   const [loading, startLoad] = useTransition();
   const [busy, startBusy] = useTransition();
 
@@ -74,14 +77,21 @@ export function BoardsWorkspace({
 
   const reload = useCallback((id: string) => {
     startLoad(async () => {
-      const res = await getBoardItems(id);
+      const [res, conns] = await Promise.all([
+        getBoardItems(id),
+        getBoardConnections(id),
+      ]);
       if (!("error" in res)) setItems(res.items);
+      if (!("error" in conns)) setConnections(conns.connections);
     });
   }, []);
 
   useEffect(() => {
     if (activeId) reload(activeId);
-    else setItems([]);
+    else {
+      setItems([]);
+      setConnections([]);
+    }
   }, [activeId, reload]);
 
   function newBoard() {
@@ -355,6 +365,7 @@ export function BoardsWorkspace({
                 boardId={active.id}
                 items={items}
                 setItems={setItems}
+                connections={connections}
                 background={active.background ?? "dots"}
                 onDropFiles={onDropFiles}
                 onReload={() => reload(active.id)}

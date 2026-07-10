@@ -527,6 +527,73 @@ export async function updateItemName(id: string, name: string): Promise<void> {
   await supabase.from("board_items").update({ name }).eq("id", id);
 }
 
+// ---- Connections (arrows between items) ------------------------------------
+
+export type BoardConnection = {
+  id: string;
+  fromItemId: string;
+  toItemId: string;
+};
+
+export async function getBoardConnections(
+  boardId: string
+): Promise<{ connections: BoardConnection[] } | { error: string }> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("board_connections")
+    .select("id, from_item_id, to_item_id")
+    .eq("board_id", boardId);
+  if (error) return { error: error.message };
+  return {
+    connections: (data ?? []).map((c) => ({
+      id: c.id,
+      fromItemId: c.from_item_id,
+      toItemId: c.to_item_id,
+    })),
+  };
+}
+
+export async function addConnection(
+  boardId: string,
+  fromItemId: string,
+  toItemId: string
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  if (fromItemId === toItemId) return { error: "Cannot connect an item to itself." };
+  const supabase = createClient();
+  // Avoid duplicates in either direction.
+  const { data: existing } = await supabase
+    .from("board_connections")
+    .select("id")
+    .eq("board_id", boardId)
+    .or(
+      `and(from_item_id.eq.${fromItemId},to_item_id.eq.${toItemId}),and(from_item_id.eq.${toItemId},to_item_id.eq.${fromItemId})`
+    )
+    .maybeSingle();
+  if (existing) return { id: existing.id };
+
+  const { data, error } = await supabase
+    .from("board_connections")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      from_item_id: fromItemId,
+      to_item_id: toItemId,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  return { id: data.id };
+}
+
+export async function deleteConnection(id: string): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("board_connections").delete().eq("id", id);
+}
+
 // Paste a URL: unfurl it (title/description/preview image) and drop a link card.
 // The preview image is downloaded into our storage so it renders reliably.
 export async function addLinkItem(

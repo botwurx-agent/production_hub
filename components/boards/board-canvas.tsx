@@ -14,7 +14,10 @@ import {
   attachToColumn,
   detachFromColumn,
   setColumnOrder,
+  addConnection,
+  deleteConnection,
   deleteItem,
+  type BoardConnection,
 } from "@/app/(app)/boards/actions";
 
 type TodoRow = { id: string; text: string; done: boolean };
@@ -79,6 +82,35 @@ function columnAtPoint(
   return null;
 }
 
+// Top-level card under a screen point (for drawing a connection to it).
+function itemAtPoint(
+  clientX: number,
+  clientY: number,
+  excludeId: string
+): string | null {
+  const els = document.querySelectorAll("[data-item-id]");
+  for (const el of Array.from(els)) {
+    const id = el.getAttribute("data-item-id");
+    if (!id || id === excludeId) continue;
+    const r = el.getBoundingClientRect();
+    if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom)
+      return id;
+  }
+  return null;
+}
+
+// Point on the border of a box (center cx,cy; half-size hw,hh) in the direction
+// of (tx,ty), so an arrow meets the card edge instead of its center.
+function edgePoint(cx: number, cy: number, hw: number, hh: number, tx: number, ty: number) {
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity;
+  const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity;
+  const s = Math.min(sx, sy);
+  return { x: cx + dx * s, y: cy + dy * s };
+}
+
 function bgStyle(background: string): React.CSSProperties {
   if (background === "grid") {
     return {
@@ -98,6 +130,7 @@ export function BoardCanvas({
   boardId,
   items,
   setItems,
+  connections,
   background,
   onDropFiles,
   onReload,
@@ -105,6 +138,7 @@ export function BoardCanvas({
   boardId: string;
   items: BoardItemView[];
   setItems: React.Dispatch<React.SetStateAction<BoardItemView[]>>;
+  connections: BoardConnection[];
   background: string;
   onDropFiles: (files: FileList, x: number, y: number) => void;
   onReload: () => void;
@@ -112,6 +146,11 @@ export function BoardCanvas({
   const [selected, setSelected] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const [dropActive, setDropActive] = useState(false);
+  // Connection drawing: the item we're dragging an arrow FROM, and the live
+  // cursor point (in canvas coords). selectedConn is the clicked arrow.
+  const [connectFrom, setConnectFrom] = useState<string | null>(null);
+  const [connCursor, setConnCursor] = useState<{ x: number; y: number } | null>(null);
+  const [selectedConn, setSelectedConn] = useState<string | null>(null);
   const drag = useRef<DragRef>(null);
   const scaleRef = useRef(1);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -172,6 +211,31 @@ export function BoardCanvas({
       window.removeEventListener("pointerup", onUp);
     };
   }, [setItems]);
+
+  // Drawing a connection: while a "from" item is armed, track the cursor and, on
+  // release over another card, create the arrow.
+  useEffect(() => {
+    if (!connectFrom) return;
+    function move(e: PointerEvent) {
+      setConnCursor(canvasCoords(e.clientX, e.clientY));
+    }
+    function up(e: PointerEvent) {
+      const target = itemAtPoint(e.clientX, e.clientY, connectFrom as string);
+      if (target)
+        void addConnection(boardId, connectFrom as string, target).then(() =>
+          onReloadRef.current()
+        );
+      setConnectFrom(null);
+      setConnCursor(null);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectFrom, boardId]);
 
   function zoomBy(delta: number) {
     setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(s + delta).toFixed(2))));
@@ -307,6 +371,17 @@ export function BoardCanvas({
     setItems((prev) => prev.filter((p) => p.id !== id && p.parentId !== id));
     void deleteItem(id).then(() => onReloadRef.current());
   }
+  function startConnect(e: React.PointerEvent, it: BoardItemView) {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedConn(null);
+    setConnectFrom(it.id);
+    setConnCursor({ x: it.x + it.w, y: it.y + it.h / 2 });
+  }
+  function deleteConn(id: string) {
+    setSelectedConn(null);
+    void deleteConnection(id).then(() => onReloadRef.current());
+  }
 
   // Compact card rendering for an item that lives inside a column.
   function renderChild(child: BoardItemView, idx: number, kids: BoardItemView[], col: BoardItemView) {
@@ -436,6 +511,25 @@ export function BoardCanvas({
   }
   for (const arr of childrenByParent.values()) arr.sort((a, b) => a.sort - b.sort);
   const topItems = items.filter((i) => !i.parentId);
+  const byId = new Map(topItems.map((i) => [i.id, i]));
+
+  // Connection segments: edge-to-edge, so arrows meet card borders. Skips a
+  // connection whose endpoints aren't both top-level items on this board.
+  const connSegments = connections
+    .map((c) => {
+      const a = byId.get(c.fromItemId);
+      const b = byId.get(c.toItemId);
+      if (!a || !b) return null;
+      const acx = a.x + a.w / 2;
+      const acy = a.y + a.h / 2;
+      const bcx = b.x + b.w / 2;
+      const bcy = b.y + b.h / 2;
+      const p1 = edgePoint(acx, acy, a.w / 2, a.h / 2, bcx, bcy);
+      const p2 = edgePoint(bcx, bcy, b.w / 2, b.h / 2, acx, acy);
+      return { id: c.id, p1, p2, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
+    })
+    .filter((s): s is NonNullable<typeof s> => Boolean(s));
+  const connFromItem = connectFrom ? byId.get(connectFrom) : null;
 
   return (
     <div className="relative h-full w-full">
@@ -466,9 +560,58 @@ export function BoardCanvas({
               ...bgStyle(background),
             }}
             onPointerDown={(e) => {
-              if (e.target === e.currentTarget) setSelected(null);
+              if (e.target === e.currentTarget) {
+                setSelected(null);
+                setSelectedConn(null);
+              }
             }}
           >
+            {/* Connection arrows (behind cards) */}
+            <svg
+              className="pointer-events-none absolute left-0 top-0"
+              width={CANVAS_W}
+              height={CANVAS_H}
+              style={{ zIndex: 0 }}
+            >
+              <defs>
+                <marker id="bc-arrow" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L7,3 L0,6 Z" fill="var(--border-strong)" />
+                </marker>
+                <marker id="bc-arrow-sel" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L7,3 L0,6 Z" fill="var(--accent)" />
+                </marker>
+              </defs>
+              {connSegments.map((s) => {
+                const sel = selectedConn === s.id;
+                return (
+                  <path
+                    key={s.id}
+                    d={`M ${s.p1.x} ${s.p1.y} L ${s.p2.x} ${s.p2.y}`}
+                    stroke={sel ? "var(--accent)" : "var(--border-strong)"}
+                    strokeWidth={sel ? 3 : 2}
+                    fill="none"
+                    markerEnd={`url(#${sel ? "bc-arrow-sel" : "bc-arrow"})`}
+                    style={{ pointerEvents: "stroke", cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedConn(s.id);
+                      setSelected(null);
+                    }}
+                  />
+                );
+              })}
+              {connFromItem && connCursor && (
+                <path
+                  d={`M ${connFromItem.x + connFromItem.w / 2} ${connFromItem.y + connFromItem.h / 2} L ${connCursor.x} ${connCursor.y}`}
+                  stroke="var(--accent)"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  fill="none"
+                  markerEnd="url(#bc-arrow-sel)"
+                />
+              )}
+            </svg>
+
             {topItems.map((it) => {
               const isSel = selected === it.id;
               const common: React.CSSProperties = {
@@ -489,6 +632,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-column-id={it.id}
+                    data-item-id={it.id}
                     style={{
                       position: "absolute",
                       left: it.x,
@@ -565,6 +709,7 @@ export function BoardCanvas({
                 return (
                   <div
                     key={it.id}
+                    data-item-id={it.id}
                     style={{ ...common, backgroundColor: `var(--h-${hue}-bg)`, boxShadow: ring }}
                     className="group flex flex-col overflow-hidden rounded-[10px]"
                   >
@@ -628,6 +773,7 @@ export function BoardCanvas({
                 return (
                   <div
                     key={it.id}
+                    data-item-id={it.id}
                     style={{ ...common, boxShadow: ring }}
                     className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-surface"
                     onPointerDown={(e) => startMove(e, it)}
@@ -692,6 +838,7 @@ export function BoardCanvas({
                 return (
                   <div
                     key={it.id}
+                    data-item-id={it.id}
                     style={{ ...common, boxShadow: ring }}
                     className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-surface"
                   >
@@ -795,6 +942,7 @@ export function BoardCanvas({
               return (
                 <div
                   key={it.id}
+                  data-item-id={it.id}
                   style={{ ...common, boxShadow: ring }}
                   className="group overflow-hidden rounded-[10px] bg-surface"
                   onPointerDown={(e) => startMove(e, it)}
@@ -850,6 +998,52 @@ export function BoardCanvas({
                 </div>
               );
             })}
+
+            {/* Connect anchor on the selected card (drag to another card) */}
+            {selected &&
+              byId.has(selected) &&
+              (() => {
+                const sel = byId.get(selected)!;
+                return (
+                  <button
+                    title="Drag to connect"
+                    onPointerDown={(e) => startConnect(e, sel)}
+                    style={{
+                      position: "absolute",
+                      left: sel.x + sel.w - 7,
+                      top: sel.y + sel.h / 2 - 7,
+                      zIndex: 9999,
+                      touchAction: "none",
+                    }}
+                    className="h-3.5 w-3.5 rounded-full border-2 border-white bg-accent shadow-md transition hover:scale-125"
+                  />
+                );
+              })()}
+
+            {/* Delete control for the selected connection */}
+            {selectedConn &&
+              (() => {
+                const s = connSegments.find((x) => x.id === selectedConn);
+                if (!s) return null;
+                return (
+                  <button
+                    onClick={() => deleteConn(selectedConn)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    title="Delete connection"
+                    style={{
+                      position: "absolute",
+                      left: s.mid.x - 11,
+                      top: s.mid.y - 11,
+                      zIndex: 9998,
+                    }}
+                    className="grid h-[22px] w-[22px] place-items-center rounded-full border border-border bg-surface text-red shadow-md hover:bg-red-bg"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                );
+              })()}
           </div>
         </div>
       </div>

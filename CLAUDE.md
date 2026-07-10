@@ -282,7 +282,19 @@ implemented (out of strict order, driven by the operator's real needs).
     (addNote/addTodoItem gained an optional parentId); other kinds get in by
     dragging. actions: addColumn/attachToColumn/detachFromColumn/setColumnOrder/
     updateItemName; BoardCanvas gained an onReload prop (workspace passes
-    reload) used after structural changes. NEXT: connection lines/arrows.
+    reload) used after structural changes.
+  - Connection lines/arrows (Slice 3, migration 0051): board_connections table
+    (studio/board/from_item_id/to_item_id, RLS is_studio_member, cascade on
+    board_items delete). Drawn as an SVG overlay behind cards (edgePoint() trims
+    each arrow to the card border; arrowhead marker). Create by dragging from a
+    selected card's connect anchor (right-edge dot) onto another card
+    (itemAtPoint() hit-tests [data-item-id] DOM rects on pointer-up ->
+    addConnection). Click a line to select -> a delete X at its midpoint. Live
+    rubber-band line follows the cursor while connecting. Only top-level items
+    connect (endpoints inside columns are skipped). actions: getBoardConnections/
+    addConnection(dedup either direction)/deleteConnection; workspace loads
+    connections alongside items in reload() and passes them to BoardCanvas. This
+    completes the Milanote arc (link cards, to-do, columns, connections).
 - Shot list (own page, off the production tab strip): /projects/[id]/shot-list
   renders ShotBoardEditor as a StudioBinder-style two-pane: LEFT sidebar = the
   project's shot lists (each shot_group = one list, with count + "New shot list"),
