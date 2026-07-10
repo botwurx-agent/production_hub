@@ -61,7 +61,6 @@ export function BoardsWorkspace({
   const [assetOpen, setAssetOpen] = useState(false);
   const [driveOpen, setDriveOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Board | null>(null);
@@ -191,8 +190,6 @@ export function BoardsWorkspace({
 
   const toolBtn =
     "inline-flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-50";
-  const menuItem =
-    "flex w-full items-center gap-2 rounded-[9px] px-3 py-2 text-left text-sm font-semibold text-text transition hover:bg-surface-2";
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">
@@ -269,54 +266,6 @@ export function BoardsWorkspace({
         <>
           {/* Toolbar */}
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
-            <div className="relative">
-              <button
-                className="inline-flex items-center gap-1.5 rounded-[9px] bg-accent px-3 py-1.5 text-xs font-bold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
-                onClick={() => setAddOpen((v) => !v)}
-                disabled={busy}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                Add
-              </button>
-              {addOpen && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setAddOpen(false)} />
-                  <div className="absolute left-0 top-full z-30 mt-1 w-52 rounded-[12px] border border-border bg-surface p-1 shadow-lg">
-                    <button className={menuItem} onClick={() => { setAddOpen(false); addNoteToBoard(); }}>
-                      <span className="text-base">🗒️</span> Note
-                    </button>
-                    <button className={menuItem} onClick={() => { setAddOpen(false); addTodoToBoard(); }}>
-                      <span className="text-base">✅</span> To-do list
-                    </button>
-                    <button className={menuItem} onClick={() => { setAddOpen(false); setLinkOpen(true); }}>
-                      <span className="text-base">🔗</span> Link
-                    </button>
-                    <button className={menuItem} onClick={() => { setAddOpen(false); fileRef.current?.click(); }}>
-                      <span className="text-base">🖼️</span> Upload image
-                    </button>
-                    <div className="my-1 border-t border-border" />
-                    <p className="px-3 pb-0.5 pt-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">
-                      Import
-                    </p>
-                    <button className={menuItem} onClick={() => { setAddOpen(false); setAssetOpen(true); }}>
-                      Project assets
-                    </button>
-                    {driveConnected && (
-                      <button className={menuItem} onClick={() => { setAddOpen(false); setDriveOpen(true); }}>
-                        Google Drive
-                      </button>
-                    )}
-                    {figmaConnected && (
-                      <button className={menuItem} onClick={() => { setAddOpen(false); setFigmaOpen(true); }}>
-                        Figma
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
             <div className="ml-auto flex items-center gap-2">
               {loading && <span className="text-xs text-text-faint">loading...</span>}
               <div className="inline-flex items-center gap-0.5 rounded-[9px] border border-border bg-surface p-0.5">
@@ -356,15 +305,48 @@ export function BoardsWorkspace({
             />
           </div>
 
-          {/* Canvas */}
-          <div className="min-h-0 flex-1">
-            <BoardCanvas
-              boardId={active.id}
-              items={items}
-              setItems={setItems}
-              background={active.background ?? "dots"}
-              onDropFiles={onDropFiles}
-            />
+          {/* Left tool rail (Milanote-style) + canvas */}
+          <div className="flex min-h-0 flex-1 gap-3">
+            <div className="flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
+              <RailBtn label="Note" disabled={busy} onClick={addNoteToBoard}>
+                <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
+              </RailBtn>
+              <RailBtn label="To-do list" disabled={busy} onClick={addTodoToBoard}>
+                <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+              </RailBtn>
+              <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
+                <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
+              </RailBtn>
+              <RailBtn label="Upload image" disabled={busy} onClick={() => fileRef.current?.click()}>
+                <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+              </RailBtn>
+
+              <div className="my-1 h-px w-6 bg-border" />
+
+              <RailBtn label="Project assets" onClick={() => setAssetOpen(true)}>
+                <path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+              </RailBtn>
+              {driveConnected && (
+                <RailBtn label="Google Drive" onClick={() => setDriveOpen(true)}>
+                  <path d="M8 3h8l5 9H13zM3 21l4-7h11l-4 7zM8 3 3 14" />
+                </RailBtn>
+              )}
+              {figmaConnected && (
+                <RailBtn label="Figma" onClick={() => setFigmaOpen(true)}>
+                  <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 4v16" />
+                </RailBtn>
+              )}
+            </div>
+
+            <div className="min-h-0 flex-1">
+              <BoardCanvas
+                boardId={active.id}
+                items={items}
+                setItems={setItems}
+                background={active.background ?? "dots"}
+                onDropFiles={onDropFiles}
+              />
+            </div>
           </div>
         </>
       )}
@@ -451,6 +433,34 @@ export function BoardsWorkspace({
         </div>
       </Modal>
     </div>
+  );
+}
+
+function RailBtn({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="group relative grid h-10 w-10 place-items-center rounded-[10px] text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-40"
+    >
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        {children}
+      </svg>
+      <span className="pointer-events-none absolute left-full z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
+        {label}
+      </span>
+    </button>
   );
 }
 

@@ -257,8 +257,10 @@ implemented (out of strict order, driven by the operator's real needs).
 - Boards: freeform moodboard/storyboard canvas (studio-wide, project-linkable),
   tabs, drag/resize/z-order, notes, zoom, desktop drag-drop, dots/grid/plain
   background; import via upload/project assets/Drive/Figma.
-  - Milanote-like card types (Slice 1): a single "+ Add" tray (Note / To-do /
-    Link / Upload + Import submenu) replaced the scattered add buttons. LINK
+  - Milanote-like card types (Slice 1): a slim vertical TOOL RAIL on the canvas
+    edge (Note / To-do / Link / Upload, divider, then Project assets / Drive /
+    Figma; icon buttons w/ hover labels, components/boards/boards-workspace.tsx
+    RailBtn) replaced the scattered add buttons. LINK
     cards: paste a URL -> lib/unfurl.ts fetches og/twitter meta (title/desc/
     image, SSRF-guarded via isFetchableUrl), the preview image is downloaded to
     storage; board_items kind='link' (url=destination, name=title, text=desc,
