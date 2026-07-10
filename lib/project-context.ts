@@ -10,7 +10,7 @@ import {
   ASSET_TYPE_LABEL,
   APPROVAL_STATUS,
 } from "@/lib/status";
-import { shortDate } from "@/lib/format";
+import { shortDate, htmlToText } from "@/lib/format";
 import { getAccessToken, getThread } from "@/lib/gmail";
 
 export async function gatherProjectContext(
@@ -114,8 +114,9 @@ export async function gatherProjectContext(
   );
   lines.push("");
 
+  const briefText = htmlToText(brief?.content ?? "");
   lines.push("Brief:");
-  lines.push(brief?.content?.trim() ? brief.content.trim() : "(no brief written yet)");
+  lines.push(briefText || "(no brief written yet)");
   lines.push("");
 
   const assetList = assets ?? [];

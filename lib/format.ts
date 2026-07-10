@@ -32,6 +32,28 @@ export function timeAgo(value: string): string {
   return longDate(value);
 }
 
+/**
+ * Flatten rich-text HTML to readable plain text. Used where a rich field (e.g.
+ * the brief) is shown as a snippet or fed to the AI. Backward-compatible: plain
+ * text with no tags passes through unchanged.
+ */
+export function htmlToText(value: string | null | undefined): string {
+  if (!value) return "";
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<\/(p|div|li|h[1-6]|ul|ol)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Human file size. */
 export function fileSize(bytes: number | null | undefined): string {
   if (!bytes || bytes <= 0) return "";

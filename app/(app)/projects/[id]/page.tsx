@@ -19,7 +19,7 @@ import {
 } from "@/components/projects/activity-panel";
 import { StatusTag } from "@/components/status-tag";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
-import { longDate } from "@/lib/format";
+import { longDate, htmlToText } from "@/lib/format";
 import {
   PROJECT_STATUS,
   PROJECT_STATUS_ORDER,
@@ -194,8 +194,8 @@ export default async function ProjectDetailPage({
   const budgetPct =
     budgetEstimated > 0 ? Math.round((budgetActual / budgetEstimated) * 100) : null;
 
-  // Brief preview.
-  const briefText = (brief?.content ?? "").trim();
+  // Brief preview (brief content may be rich-text HTML; flatten for the snippet).
+  const briefText = htmlToText(brief?.content ?? "");
   const briefSnippet = briefText.length > 150 ? `${briefText.slice(0, 150)}…` : briefText;
 
   // Assets preview (most recent 3, with the current version's status).

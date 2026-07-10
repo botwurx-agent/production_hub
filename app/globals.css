@@ -174,5 +174,5 @@
 .rte li { margin: 0.15em 0; }
 .rte b, .rte strong { font-weight: 700; }
 .rte u { text-decoration: underline; }
-.rte a { color: var(--accent); text-decoration: underline; }
+.rte a { color: var(--accent); text-decoration: underline; cursor: pointer; }
 .rte:empty::before { content: attr(data-placeholder); color: var(--text-faint); }
