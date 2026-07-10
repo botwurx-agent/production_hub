@@ -256,6 +256,28 @@ export function BoardCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectFrom, boardId]);
 
+  // Delete/Backspace removes the selected card or connection (not while typing).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+        return;
+      if (selected) {
+        e.preventDefault();
+        const it = items.find((i) => i.id === selected);
+        if (it?.kind === "column") deleteColumn(selected);
+        else remove(selected);
+      } else if (selectedConn) {
+        e.preventDefault();
+        deleteConn(selectedConn);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, selectedConn, items]);
+
   // Dragging a line's endpoint or whole body.
   useEffect(() => {
     function move(e: PointerEvent) {
@@ -345,6 +367,7 @@ export function BoardCanvas({
     )
       return;
     setSelected(it.id);
+    onSelectLine(null);
     drag.current = {
       id: it.id,
       kind: it.kind,
@@ -693,6 +716,7 @@ export function BoardCanvas({
                       e.stopPropagation();
                       setSelectedConn(s.id);
                       setSelected(null);
+                      onSelectLine(null);
                     }}
                   />
                 );

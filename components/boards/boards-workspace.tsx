@@ -183,6 +183,22 @@ export function BoardsWorkspace({
     void deleteItem(id);
   }
 
+  // Delete/Backspace removes the selected line (not while typing in a field).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (!selectedLineId) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+        return;
+      e.preventDefault();
+      deleteLine();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLineId]);
+
   function onDropFiles(files: FileList, x: number, y: number) {
     if (!activeId) return;
     const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
