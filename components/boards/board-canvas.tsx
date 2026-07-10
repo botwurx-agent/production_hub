@@ -7,8 +7,35 @@ import {
   resizeItem,
   bringToFront,
   updateNote,
+  updateItemText,
   deleteItem,
 } from "@/app/(app)/boards/actions";
+
+type TodoRow = { id: string; text: string; done: boolean };
+function parseTodo(text: string | null): TodoRow[] {
+  if (!text) return [];
+  try {
+    const a = JSON.parse(text);
+    if (!Array.isArray(a)) return [];
+    return a
+      .filter((r) => r && typeof r.text === "string")
+      .map((r) => ({
+        id: String(r.id ?? crypto.randomUUID()),
+        text: r.text as string,
+        done: Boolean(r.done),
+      }));
+  } catch {
+    return [];
+  }
+}
+function domainOf(url: string | null): string {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
 
 const NOTE_HUES = ["yellow", "blue", "green", "pink", "purple", "orange"];
 const CANVAS_W = 2400;
@@ -136,7 +163,11 @@ export function BoardCanvas({
 
   function startMove(e: React.PointerEvent, it: BoardItemView) {
     const target = e.target as HTMLElement;
-    if (target.dataset.resize || target.tagName === "TEXTAREA") return;
+    if (
+      target.dataset.resize ||
+      ["TEXTAREA", "INPUT", "BUTTON", "A"].includes(target.tagName)
+    )
+      return;
     setSelected(it.id);
     drag.current = {
       id: it.id,
@@ -184,6 +215,17 @@ export function BoardCanvas({
   function setNoteHue(it: BoardItemView, hue: string) {
     setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, hue } : p)));
     void updateNote(it.id, it.text ?? "", hue);
+  }
+  // Checklist edits. persist=false for keystrokes (persisted on blur); true for
+  // discrete actions (toggle / add / remove).
+  function mutateTodo(
+    it: BoardItemView,
+    fn: (rows: TodoRow[]) => TodoRow[],
+    persist: boolean
+  ) {
+    const text = JSON.stringify(fn(parseTodo(it.text)));
+    setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, text } : p)));
+    if (persist) void updateItemText(it.id, text);
   }
 
   const zoomBtn =
@@ -288,6 +330,170 @@ export function BoardCanvas({
                       className="w-full flex-1 resize-none bg-transparent px-2 pb-2 text-sm outline-none"
                       style={{ color: `var(--h-${hue})` }}
                     />
+                    <span
+                      data-resize="1"
+                      onPointerDown={(e) => startResize(e, it)}
+                      className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
+                      style={{ touchAction: "none" }}
+                    />
+                  </div>
+                );
+              }
+
+              if (it.kind === "link") {
+                const dom = domainOf(it.url);
+                return (
+                  <div
+                    key={it.id}
+                    style={{ ...common, boxShadow: ring }}
+                    className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-surface"
+                    onPointerDown={(e) => startMove(e, it)}
+                  >
+                    <div className="grid flex-1 place-items-center overflow-hidden bg-surface-2">
+                      {it.thumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={it.thumbUrl}
+                          alt=""
+                          draggable={false}
+                          className="h-full w-full select-none object-cover"
+                        />
+                      ) : (
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" />
+                          <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="shrink-0 border-t border-border px-2.5 py-2">
+                      <div className="line-clamp-2 text-xs font-bold text-text">
+                        {it.name || dom || it.url}
+                      </div>
+                      {it.url && (
+                        <a
+                          href={it.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline"
+                        >
+                          {dom || "Open"} ↗
+                        </a>
+                      )}
+                    </div>
+                    {isSel && (
+                      <button
+                        onClick={() => remove(it.id)}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-[7px] bg-black/55 text-white transition hover:bg-red"
+                        aria-label="Delete"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                          <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                    <span
+                      data-resize="1"
+                      onPointerDown={(e) => startResize(e, it)}
+                      className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
+                      style={{ touchAction: "none" }}
+                    />
+                  </div>
+                );
+              }
+
+              if (it.kind === "todo") {
+                const rows = parseTodo(it.text);
+                const hue = it.hue ?? "blue";
+                return (
+                  <div
+                    key={it.id}
+                    style={{ ...common, boxShadow: ring }}
+                    className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-surface"
+                  >
+                    <div
+                      className="flex h-7 shrink-0 cursor-move items-center justify-between px-2"
+                      style={{ backgroundColor: `var(--h-${hue}-bg)`, color: `var(--h-${hue})`, touchAction: "none" }}
+                      onPointerDown={(e) => startMove(e, it)}
+                    >
+                      <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+                        </svg>
+                        To-do
+                      </span>
+                      {isSel && (
+                        <button
+                          onClick={() => remove(it.id)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="grid h-4 w-4 place-items-center rounded-[5px] hover:bg-black/10"
+                          aria-label="Delete checklist"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                            <path d="M18 6 6 18M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-1 overflow-auto px-2 py-2">
+                      {rows.map((r) => (
+                        <div key={r.id} className="flex items-start gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={r.done}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onChange={() =>
+                              mutateTodo(
+                                it,
+                                (rs) => rs.map((x) => (x.id === r.id ? { ...x, done: !x.done } : x)),
+                                true
+                              )
+                            }
+                            className="mt-1 shrink-0 accent-accent"
+                          />
+                          <input
+                            value={r.text}
+                            placeholder="Item…"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              mutateTodo(
+                                it,
+                                (rs) => rs.map((x) => (x.id === r.id ? { ...x, text: e.target.value } : x)),
+                                false
+                              )
+                            }
+                            onBlur={() => void updateItemText(it.id, it.text ?? "[]")}
+                            className={`min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none ${
+                              r.done ? "text-text-faint line-through" : ""
+                            }`}
+                          />
+                          <button
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={() => mutateTodo(it, (rs) => rs.filter((x) => x.id !== r.id), true)}
+                            className="mt-0.5 text-text-faint hover:text-red"
+                            aria-label="Remove item"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                              <path d="M18 6 6 18M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() =>
+                          mutateTodo(
+                            it,
+                            (rs) => [...rs, { id: crypto.randomUUID(), text: "", done: false }],
+                            true
+                          )
+                        }
+                        className="mt-0.5 text-[12px] font-semibold text-accent hover:underline"
+                      >
+                        + Add item
+                      </button>
+                    </div>
                     <span
                       data-resize="1"
                       onPointerDown={(e) => startResize(e, it)}

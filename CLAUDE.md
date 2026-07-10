@@ -257,6 +257,17 @@ implemented (out of strict order, driven by the operator's real needs).
 - Boards: freeform moodboard/storyboard canvas (studio-wide, project-linkable),
   tabs, drag/resize/z-order, notes, zoom, desktop drag-drop, dots/grid/plain
   background; import via upload/project assets/Drive/Figma.
+  - Milanote-like card types (Slice 1): a single "+ Add" tray (Note / To-do /
+    Link / Upload + Import submenu) replaced the scattered add buttons. LINK
+    cards: paste a URL -> lib/unfurl.ts fetches og/twitter meta (title/desc/
+    image, SSRF-guarded via isFetchableUrl), the preview image is downloaded to
+    storage; board_items kind='link' (url=destination, name=title, text=desc,
+    storage_path=thumb). TO-DO cards: kind='todo', items as JSON in text
+    ([{id,text,done}]), checkbox+inline-edit rows. No migration (reused
+    board_items url/text/storage_path). BoardItemView gained url + thumbUrl
+    (thumbUrl = signed storage image only, so a link's destination url is never
+    misread as an image). actions: addLinkItem/addTodoItem/updateItemText.
+    NEXT (bigger, separate slices): Columns (stacks) and connection lines/arrows.
 - Shot list (own page, off the production tab strip): /projects/[id]/shot-list
   renders ShotBoardEditor as a StudioBinder-style two-pane: LEFT sidebar = the
   project's shot lists (each shot_group = one list, with count + "New shot list"),

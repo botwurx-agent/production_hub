@@ -10,6 +10,7 @@ import {
   getImageUrls,
   fetchImageBytes,
 } from "@/lib/figma";
+import { unfurl, isFetchableUrl } from "@/lib/unfurl";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Board } from "@/lib/database.types";
 
@@ -31,6 +32,11 @@ export type BoardItemView = {
   h: number;
   z: number;
   signedUrl: string | null;
+  // Destination URL for a link card (board_items.url).
+  url: string | null;
+  // Signed storage image (null unless the item has a stored file); used as the
+  // preview thumbnail for link cards without misreading a link's destination.
+  thumbUrl: string | null;
 };
 
 // ---- Boards -----------------------------------------------------------------
@@ -149,20 +155,25 @@ export async function getBoardItems(
     }
   }
 
-  const items: BoardItemView[] = (data ?? []).map((i) => ({
-    id: i.id,
-    kind: i.kind,
-    name: i.name,
-    mimeType: i.mime_type,
-    text: i.text,
-    hue: i.hue,
-    x: i.x,
-    y: i.y,
-    w: i.w,
-    h: i.h,
-    z: i.z,
-    signedUrl: i.storage_path ? (signed.get(i.storage_path) ?? null) : i.url,
-  }));
+  const items: BoardItemView[] = (data ?? []).map((i) => {
+    const thumbUrl = i.storage_path ? (signed.get(i.storage_path) ?? null) : null;
+    return {
+      id: i.id,
+      kind: i.kind,
+      name: i.name,
+      mimeType: i.mime_type,
+      text: i.text,
+      hue: i.hue,
+      x: i.x,
+      y: i.y,
+      w: i.w,
+      h: i.h,
+      z: i.z,
+      signedUrl: i.storage_path ? thumbUrl : i.url,
+      url: i.url,
+      thumbUrl,
+    };
+  });
   return { items };
 }
 
@@ -411,6 +422,119 @@ export async function addNote(
     .single();
   if (error) return { error: error.message };
   return { id: data.id };
+}
+
+// Paste a URL: unfurl it (title/description/preview image) and drop a link card.
+// The preview image is downloaded into our storage so it renders reliably.
+export async function addLinkItem(
+  boardId: string,
+  rawUrl: string,
+  x: number,
+  y: number
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const withScheme = /^https?:\/\//i.test(rawUrl.trim())
+    ? rawUrl.trim()
+    : `https://${rawUrl.trim()}`;
+  const u = isFetchableUrl(withScheme);
+  if (!u) return { error: "Enter a valid http(s) link." };
+
+  const supabase = createClient();
+  const meta = await unfurl(u);
+
+  let storagePath: string | null = null;
+  let mime: string | null = null;
+  if (meta.image) {
+    const img = isFetchableUrl(meta.image);
+    if (img) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        const r = await fetch(img.toString(), { signal: controller.signal });
+        clearTimeout(timer);
+        const type = r.headers.get("content-type") ?? "";
+        if (r.ok && type.startsWith("image/")) {
+          const buf = Buffer.from(await r.arrayBuffer());
+          if (buf.length > 0 && buf.length <= 6_000_000) {
+            const ext = (type.split("/")[1] || "jpg").split(";")[0].slice(0, 5);
+            const path = `${ctx.studio.id}/boards/${boardId}/${crypto.randomUUID()}-link.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from("assets")
+              .upload(path, buf, { contentType: type });
+            if (!upErr) {
+              storagePath = path;
+              mime = type;
+            }
+          }
+        }
+      } catch {
+        // No thumbnail; the card still shows the title + domain.
+      }
+    }
+  }
+
+  const z = await nextZ(supabase, boardId);
+  const title = (meta.title || meta.siteName || u.hostname).slice(0, 300);
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "link",
+      name: title,
+      text: meta.description ? meta.description.slice(0, 500) : null,
+      url: u.toString(),
+      storage_path: storagePath,
+      mime_type: mime,
+      x,
+      y,
+      w: 240,
+      h: 210,
+      z,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/boards");
+  return { id: data.id };
+}
+
+// A checklist card. The items live as JSON in text: [{id,text,done}].
+export async function addTodoItem(
+  boardId: string,
+  x: number,
+  y: number
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const z = await nextZ(supabase, boardId);
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "todo",
+      text: "[]",
+      hue: "blue",
+      x,
+      y,
+      w: 240,
+      h: 200,
+      z,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  return { id: data.id };
+}
+
+// Generic text persistence (used by the checklist card).
+export async function updateItemText(id: string, text: string): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("board_items").update({ text }).eq("id", id);
 }
 
 export async function moveItem(id: string, x: number, y: number): Promise<void> {

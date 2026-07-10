@@ -17,6 +17,8 @@ import {
   getBoardItems,
   addUploadItems,
   addNote,
+  addTodoItem,
+  addLinkItem,
   addDriveItems,
   type BoardItemView,
 } from "@/app/(app)/boards/actions";
@@ -59,6 +61,8 @@ export function BoardsWorkspace({
   const [assetOpen, setAssetOpen] = useState(false);
   const [driveOpen, setDriveOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Board | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -108,6 +112,14 @@ export function BoardsWorkspace({
     if (!activeId) return;
     startBusy(async () => {
       await addNote(activeId, 80, 80);
+      reload(activeId);
+    });
+  }
+
+  function addTodoToBoard() {
+    if (!activeId) return;
+    startBusy(async () => {
+      await addTodoItem(activeId, 80, 80);
       reload(activeId);
     });
   }
@@ -179,6 +191,8 @@ export function BoardsWorkspace({
 
   const toolBtn =
     "inline-flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-50";
+  const menuItem =
+    "flex w-full items-center gap-2 rounded-[9px] px-3 py-2 text-left text-sm font-semibold text-text transition hover:bg-surface-2";
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">
@@ -255,25 +269,54 @@ export function BoardsWorkspace({
         <>
           {/* Toolbar */}
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
-            <button className={toolBtn} onClick={() => fileRef.current?.click()} disabled={busy}>
-              Upload
-            </button>
-            <button className={toolBtn} onClick={() => setAssetOpen(true)}>
-              Project assets
-            </button>
-            {driveConnected && (
-              <button className={toolBtn} onClick={() => setDriveOpen(true)}>
-                Drive
+            <div className="relative">
+              <button
+                className="inline-flex items-center gap-1.5 rounded-[9px] bg-accent px-3 py-1.5 text-xs font-bold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
+                onClick={() => setAddOpen((v) => !v)}
+                disabled={busy}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Add
               </button>
-            )}
-            {figmaConnected && (
-              <button className={toolBtn} onClick={() => setFigmaOpen(true)}>
-                Figma
-              </button>
-            )}
-            <button className={toolBtn} onClick={addNoteToBoard} disabled={busy}>
-              + Note
-            </button>
+              {addOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setAddOpen(false)} />
+                  <div className="absolute left-0 top-full z-30 mt-1 w-52 rounded-[12px] border border-border bg-surface p-1 shadow-lg">
+                    <button className={menuItem} onClick={() => { setAddOpen(false); addNoteToBoard(); }}>
+                      <span className="text-base">🗒️</span> Note
+                    </button>
+                    <button className={menuItem} onClick={() => { setAddOpen(false); addTodoToBoard(); }}>
+                      <span className="text-base">✅</span> To-do list
+                    </button>
+                    <button className={menuItem} onClick={() => { setAddOpen(false); setLinkOpen(true); }}>
+                      <span className="text-base">🔗</span> Link
+                    </button>
+                    <button className={menuItem} onClick={() => { setAddOpen(false); fileRef.current?.click(); }}>
+                      <span className="text-base">🖼️</span> Upload image
+                    </button>
+                    <div className="my-1 border-t border-border" />
+                    <p className="px-3 pb-0.5 pt-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">
+                      Import
+                    </p>
+                    <button className={menuItem} onClick={() => { setAddOpen(false); setAssetOpen(true); }}>
+                      Project assets
+                    </button>
+                    {driveConnected && (
+                      <button className={menuItem} onClick={() => { setAddOpen(false); setDriveOpen(true); }}>
+                        Google Drive
+                      </button>
+                    )}
+                    {figmaConnected && (
+                      <button className={menuItem} onClick={() => { setAddOpen(false); setFigmaOpen(true); }}>
+                        Figma
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
             <div className="ml-auto flex items-center gap-2">
               {loading && <span className="text-xs text-text-faint">loading...</span>}
               <div className="inline-flex items-center gap-0.5 rounded-[9px] border border-border bg-surface p-0.5">
@@ -353,6 +396,12 @@ export function BoardsWorkspace({
             selectedIds={new Set(driveSel.map((f) => f.id))}
             onToggle={toggleDrive}
           />
+          <LinkModal
+            boardId={active.id}
+            open={linkOpen}
+            onClose={() => setLinkOpen(false)}
+            onAdded={() => reload(active.id)}
+          />
           <BoardSettings
             board={active}
             projects={projects}
@@ -402,6 +451,79 @@ export function BoardsWorkspace({
         </div>
       </Modal>
     </div>
+  );
+}
+
+function LinkModal({
+  boardId,
+  open,
+  onClose,
+  onAdded,
+}: {
+  boardId: string;
+  open: boolean;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setUrl("");
+      setErr(null);
+      setBusy(false);
+    }
+  }, [open]);
+
+  async function submit() {
+    const u = url.trim();
+    if (!u) return;
+    setBusy(true);
+    setErr(null);
+    const res = await addLinkItem(boardId, u, 80, 80);
+    setBusy(false);
+    if ("error" in res) {
+      setErr(res.error);
+      return;
+    }
+    onAdded();
+    onClose();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Add a link">
+      <div className="space-y-3">
+        <p className="text-sm text-text-muted">
+          Paste any URL. We&apos;ll pull a preview (title and image) and drop a link
+          card on the board.
+        </p>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          autoFocus
+          placeholder="https://…"
+          className="w-full rounded-[11px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong"
+        />
+        {err && (
+          <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
+            {err}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={busy || !url.trim()}>
+            {busy ? "Fetching preview…" : "Add link"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
