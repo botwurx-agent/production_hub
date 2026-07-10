@@ -612,6 +612,15 @@ function LineStylePanel({
         />
       </div>
 
+      {(d.bendX !== 0 || d.bendY !== 0) && (
+        <button
+          onClick={() => onChange({ bendX: 0, bendY: 0 })}
+          className="text-[11px] font-semibold text-accent hover:underline"
+        >
+          Straighten
+        </button>
+      )}
+
       <button
         onClick={onDelete}
         className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"

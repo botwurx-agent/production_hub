@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BoardItemView } from "@/app/(app)/boards/actions";
-import { parseLineData, lineColorVar, type LineData } from "@/lib/board-line";
+import {
+  parseLineData,
+  lineColorVar,
+  lineSvgPath,
+  lineMidPoint,
+  type LineData,
+} from "@/lib/board-line";
 import {
   moveItem,
   resizeItem,
@@ -160,7 +166,7 @@ export function BoardCanvas({
   const drag = useRef<DragRef>(null);
   const lineDrag = useRef<{
     id: string;
-    mode: "a" | "b" | "move";
+    mode: "a" | "b" | "move" | "mid";
     startX: number;
     startY: number;
     orig: LineData;
@@ -266,6 +272,12 @@ export function BoardCanvas({
           } else if (d.mode === "b") {
             data.bx = Math.round(p.x);
             data.by = Math.round(p.y);
+          } else if (d.mode === "mid") {
+            // Bend: store the offset of the dragged point from the straight mid.
+            const midx = (d.orig.ax + d.orig.bx) / 2;
+            const midy = (d.orig.ay + d.orig.by) / 2;
+            data.bendX = Math.round(p.x - midx);
+            data.bendY = Math.round(p.y - midy);
           } else {
             const dx = p.x - d.startX;
             const dy = p.y - d.startY;
@@ -444,7 +456,7 @@ export function BoardCanvas({
   function startLineDrag(
     e: React.PointerEvent,
     it: BoardItemView,
-    mode: "a" | "b" | "move"
+    mode: "a" | "b" | "move" | "mid"
   ) {
     e.stopPropagation();
     setSelected(null);
@@ -1105,9 +1117,8 @@ export function BoardCanvas({
                   const d = parseLineData(it.text);
                   const sel = selectedLineId === it.id;
                   const stroke = lineColorVar(d.color);
-                  const path = `M ${d.ax} ${d.ay} L ${d.bx} ${d.by}`;
-                  const mx = (d.ax + d.bx) / 2;
-                  const my = (d.ay + d.by) / 2;
+                  const path = lineSvgPath(d);
+                  const mid = lineMidPoint(d);
                   return (
                     <g key={it.id}>
                       {/* Fat invisible hit area for easy select/drag */}
@@ -1136,14 +1147,25 @@ export function BoardCanvas({
                       />
                       {d.label && (
                         <g style={{ pointerEvents: "none" }}>
-                          <rect x={mx - d.label.length * 3.4 - 6} y={my - 10} width={d.label.length * 6.8 + 12} height={20} rx={5} fill="var(--surface)" stroke="var(--border)" />
-                          <text x={mx} y={my + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text)">
+                          <rect x={mid.x - d.label.length * 3.4 - 6} y={mid.y - 10} width={d.label.length * 6.8 + 12} height={20} rx={5} fill="var(--surface)" stroke="var(--border)" />
+                          <text x={mid.x} y={mid.y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text)">
                             {d.label}
                           </text>
                         </g>
                       )}
                       {sel && (
                         <>
+                          {/* Bend handle at the curve midpoint */}
+                          <circle
+                            cx={mid.x}
+                            cy={mid.y}
+                            r={5.5}
+                            fill="var(--accent)"
+                            stroke="white"
+                            strokeWidth={2}
+                            style={{ pointerEvents: "auto", cursor: "grab" }}
+                            onPointerDown={(e) => startLineDrag(e, it, "mid")}
+                          />
                           <circle cx={d.ax} cy={d.ay} r={6} fill="white" stroke="var(--accent)" strokeWidth={2} style={{ pointerEvents: "auto", cursor: "grab" }} onPointerDown={(e) => startLineDrag(e, it, "a")} />
                           <circle cx={d.bx} cy={d.by} r={6} fill="white" stroke="var(--accent)" strokeWidth={2} style={{ pointerEvents: "auto", cursor: "grab" }} onPointerDown={(e) => startLineDrag(e, it, "b")} />
                         </>
