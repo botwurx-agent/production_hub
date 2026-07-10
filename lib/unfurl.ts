@@ -12,6 +12,16 @@ export type LinkMeta = {
   siteName: string | null;
 };
 
+// A real browser UA + language so sites (Pinterest, etc.) serve their SSR HTML
+// with Open Graph tags instead of a bot wall. Reused for the image download.
+export const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+// The Facebook link-preview crawler. Many sites (Pinterest, news, shops)
+// whitelist this UA to serve rich Open Graph data even when they wall browsers.
+export const CRAWLER_UA =
+  "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)";
+
 // Reject non-public / non-http(s) hosts to limit SSRF from user-pasted URLs.
 export function isFetchableUrl(raw: string): URL | null {
   let u: URL;
@@ -73,7 +83,7 @@ function metaContent(html: string, keys: string[]): string | null {
   return null;
 }
 
-export async function unfurl(u: URL): Promise<LinkMeta> {
+async function tryUnfurl(u: URL, ua: string): Promise<LinkMeta> {
   const empty: LinkMeta = { title: null, description: null, image: null, siteName: null };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
@@ -82,14 +92,16 @@ export async function unfurl(u: URL): Promise<LinkMeta> {
       signal: controller.signal,
       redirect: "follow",
       headers: {
-        "user-agent":
-          "Mozilla/5.0 (compatible; ProductionHubBot/1.0; +link-preview)",
-        accept: "text/html,application/xhtml+xml",
+        "user-agent": ua,
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
       },
     });
     const ct = res.headers.get("content-type") ?? "";
-    if (!res.ok || !ct.includes("html")) return empty;
-    const html = (await res.text()).slice(0, 400_000);
+    if (!res.ok) return empty;
+    if (ct && !ct.includes("html") && !ct.includes("xml")) return empty;
+    const html = (await res.text()).slice(0, 500_000);
 
     const titleTag = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
     const title =
@@ -101,12 +113,19 @@ export async function unfurl(u: URL): Promise<LinkMeta> {
       "description",
     ]);
     const siteName = metaContent(html, ["og:site_name"]);
-    const rawImg = metaContent(html, [
-      "og:image:secure_url",
-      "og:image",
-      "twitter:image",
-      "twitter:image:src",
-    ]);
+    const rawImg =
+      metaContent(html, [
+        "og:image:secure_url",
+        "og:image:url",
+        "og:image",
+        "twitter:image",
+        "twitter:image:src",
+        "image",
+      ]) ??
+      // <link rel="image_src" href="..."> fallback.
+      html.match(/<link[^>]+rel=["']image_src["'][^>]*?href=["']([^"']+)["']/i)?.[1] ??
+      html.match(/<link[^>]+href=["']([^"']+)["'][^>]*?rel=["']image_src["']/i)?.[1] ??
+      null;
     let image: string | null = null;
     if (rawImg) {
       try {
@@ -121,4 +140,13 @@ export async function unfurl(u: URL): Promise<LinkMeta> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function unfurl(u: URL): Promise<LinkMeta> {
+  // Browser first (best for most sites and image CDNs); if it comes back empty
+  // (a bot wall), retry as the Facebook crawler, which many sites whitelist for
+  // link previews.
+  const first = await tryUnfurl(u, BROWSER_UA);
+  if (first.title || first.image) return first;
+  return tryUnfurl(u, CRAWLER_UA);
 }

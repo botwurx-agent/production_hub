@@ -10,7 +10,7 @@ import {
   getImageUrls,
   fetchImageBytes,
 } from "@/lib/figma";
-import { unfurl, isFetchableUrl } from "@/lib/unfurl";
+import { unfurl, isFetchableUrl, BROWSER_UA } from "@/lib/unfurl";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Board } from "@/lib/database.types";
 
@@ -620,7 +620,16 @@ export async function addLinkItem(
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
-        const r = await fetch(img.toString(), { signal: controller.signal });
+        const r = await fetch(img.toString(), {
+          signal: controller.signal,
+          redirect: "follow",
+          headers: {
+            "user-agent": BROWSER_UA,
+            accept: "image/avif,image/webp,image/png,image/*,*/*;q=0.8",
+            // Some CDNs (e.g. Pinterest's i.pinimg.com) require the page origin.
+            referer: `${u.origin}/`,
+          },
+        });
         clearTimeout(timer);
         const type = r.headers.get("content-type") ?? "";
         if (r.ok && type.startsWith("image/")) {
