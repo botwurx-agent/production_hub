@@ -68,6 +68,8 @@ export function ProjectContacts({
   const [tab, setTab] = useState<Tab>("all");
   const [editing, setEditing] = useState<ContactRow | null>(null);
   const [adding, setAdding] = useState(false);
+  const [prefill, setPrefill] = useState<ContactInput | null>(null);
+  const [pickClient, setPickClient] = useState(false);
 
   // One merged list: editable production contacts + read-only client contacts
   // (the linked client's people, always in the Client folder).
@@ -145,7 +147,14 @@ export function ProjectContacts({
             );
           })}
         </div>
-        <Button onClick={() => setAdding(true)}>+ Add contact</Button>
+        <div className="flex items-center gap-2">
+          {clientContacts.length > 0 && (
+            <Button variant="secondary" onClick={() => setPickClient(true)}>
+              + From {clientName ?? "client"}
+            </Button>
+          )}
+          <Button onClick={() => setAdding(true)}>+ Add contact</Button>
+        </div>
       </div>
 
       {visible.length === 0 ? (
@@ -194,18 +203,114 @@ export function ProjectContacts({
         </Link>
       )}
 
-      {(adding || editing) && (
+      {(adding || editing || prefill) && (
         <ContactModal
           projectId={projectId}
           contact={editing}
+          prefill={prefill}
           defaultCategory={defaultCategory}
           onClose={() => {
             setAdding(false);
             setEditing(null);
+            setPrefill(null);
           }}
         />
       )}
+
+      {pickClient && (
+        <ClientPickerModal
+          contacts={clientContacts}
+          clientName={clientName}
+          onPick={(c) => {
+            setPrefill({
+              name: c.name,
+              type: defaultCategory,
+              role: c.role ?? "",
+              company: c.company ?? "",
+              email: c.email ?? "",
+              phone: c.phone ?? "",
+              rate: c.rate,
+              notes: c.notes ?? "",
+            });
+            setPickClient(false);
+          }}
+          onClose={() => setPickClient(false)}
+        />
+      )}
     </div>
+  );
+}
+
+function ClientPickerModal({
+  contacts,
+  clientName,
+  onPick,
+  onClose,
+}: {
+  contacts: ContactRow[];
+  clientName: string | null;
+  onPick: (c: ContactRow) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const filtered = query
+    ? contacts.filter((c) =>
+        `${c.name} ${c.role ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
+          .toLowerCase()
+          .includes(query)
+      )
+    : contacts;
+
+  return (
+    <Modal open onClose={onClose} title={`Add from ${clientName ?? "client"}`} size="md">
+      <div className="space-y-3">
+        <p className="text-sm text-text-muted">
+          Pull an existing {clientName ?? "client"} contact into this project&apos;s
+          roster. You can set their job role and rate on the next step.
+        </p>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search contacts…"
+          autoFocus
+          className={inputCls}
+        />
+        <div className="max-h-72 space-y-1.5 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="py-6 text-center text-sm text-text-faint">
+              No contacts found.
+            </p>
+          ) : (
+            filtered.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => onPick(c)}
+                className="flex w-full items-center gap-3 rounded-[11px] border border-border p-2.5 text-left transition hover:border-border-strong hover:bg-surface-2"
+              >
+                <span
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
+                  style={{ backgroundColor: "var(--h-orange-bg)", color: "var(--h-orange)" }}
+                >
+                  {initials(c.name)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-text">
+                    {c.name}
+                  </span>
+                  <span className="block truncate text-xs text-text-muted">
+                    {[c.role, c.email].filter(Boolean).join(" · ") || "Client contact"}
+                  </span>
+                </span>
+                <span className="ml-auto shrink-0 text-xs font-semibold text-accent">
+                  Add →
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -302,11 +407,13 @@ function ContactCard({
 function ContactModal({
   projectId,
   contact,
+  prefill,
   defaultCategory,
   onClose,
 }: {
   projectId: string;
   contact: ContactRow | null;
+  prefill?: ContactInput | null;
   defaultCategory: ContactCategory;
   onClose: () => void;
 }) {
@@ -333,7 +440,7 @@ function ContactModal({
           rate: contact.rate,
           notes: contact.notes ?? "",
         }
-      : empty(defaultCategory)
+      : (prefill ?? empty(defaultCategory))
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();

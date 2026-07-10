@@ -412,6 +412,16 @@ implemented (out of strict order, driven by the operator's real needs).
   type is free text. External vendors live here; you communicate via the
   Communication module (linked threads) and review share links. NOT a studio-wide
   reusable vendor directory yet (deferred; contacts stay per-project).
+- "Add from client": the project contacts roster (components/projects/project-
+  contacts.tsx) has a "+ From {client}" button (shown when the linked client has
+  contacts) -> ClientPickerModal (search the client's contacts) -> opens the
+  Add-contact modal PREFILLED (name/role/company/email/phone), category defaults
+  to the active tab, so you pull an existing client contact into the roster and
+  set their job role/rate. (A contact can't be attached to both a client and a
+  project per contacts_one_parent, so this copies rather than links.)
+- Collapsible sidebar (components/app-shell/sidebar.tsx): a Collapse/Expand
+  toggle rails the left nav to icons-only (w-[68px]) for a wider workspace; state
+  persists in localStorage ("sidebar.collapsed"). Main content auto-widens (flex).
 
 ### Team invites / multi-user (migration 0048) — BUILT
 Multiple people can now share one studio (the paid multi-user lever). The tenancy
