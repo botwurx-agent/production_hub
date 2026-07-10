@@ -11,6 +11,7 @@ import {
   APPROVAL_STATUS,
 } from "@/lib/status";
 import { shortDate } from "@/lib/format";
+import { getAccessToken, getThread } from "@/lib/gmail";
 
 export async function gatherProjectContext(
   supabase: SupabaseClient<Database>,
@@ -159,4 +160,79 @@ export async function gatherProjectContext(
   }
 
   return lines.join("\n");
+}
+
+// --- Email communication (linked Gmail threads, fetched live) ----------------
+// Emails are not stored; only the link is. So to let the AI read what was
+// actually discussed, we pull the linked threads from Gmail at generation time.
+// Best-effort: any failure (no Gmail, token expired, API error) returns null and
+// the summary falls back to the rest of the context.
+
+const MAX_EMAIL_THREADS = 5;
+const MAX_MSGS_PER_THREAD = 6;
+const MAX_BODY_CHARS = 500;
+
+// Strip quoted reply history and collapse whitespace so each message is a
+// compact, token-cheap gist rather than a full nested email chain.
+function condenseEmailBody(raw: string): string {
+  const withoutQuotes = raw
+    .split("\n")
+    .filter((l) => !l.trimStart().startsWith(">"))
+    .join("\n");
+  // Drop everything from the first "On <date>, <person> wrote:" reply marker.
+  const beforeReply = withoutQuotes.split(/On .{0,120}wrote:/)[0];
+  const clean = beforeReply.replace(/\s+/g, " ").trim();
+  return clean.length > MAX_BODY_CHARS
+    ? `${clean.slice(0, MAX_BODY_CHARS)}…`
+    : clean;
+}
+
+export async function gatherProjectEmailContext(
+  supabase: SupabaseClient<Database>,
+  projectId: string
+): Promise<string | null> {
+  const { data: account } = await supabase
+    .from("email_accounts")
+    .select("id, access_token, refresh_token, token_expiry, email, scope")
+    .eq("provider", "google")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!account) return null;
+
+  const { data: threads } = await supabase
+    .from("email_threads")
+    .select("gmail_thread_id, subject, last_message_at")
+    .eq("project_id", projectId)
+    .order("last_message_at", { ascending: false })
+    .limit(MAX_EMAIL_THREADS);
+  if (!threads || threads.length === 0) return null;
+
+  let token: string;
+  try {
+    token = await getAccessToken(supabase, account);
+  } catch {
+    return null;
+  }
+
+  const sections: string[] = [];
+  for (const t of threads) {
+    try {
+      const messages = await getThread(token, t.gmail_thread_id);
+      if (messages.length === 0) continue;
+      const recent = messages.slice(-MAX_MSGS_PER_THREAD);
+      const body = recent
+        .map((m) => {
+          const gist = condenseEmailBody(m.bodyText || "");
+          return `  - ${m.from || "unknown"} (${m.date || ""}): ${gist || "(no text)"}`;
+        })
+        .join("\n");
+      sections.push(`Thread "${t.subject || "(no subject)"}":\n${body}`);
+    } catch {
+      // Skip a thread that fails to load; keep the rest.
+    }
+  }
+  if (sections.length === 0) return null;
+
+  return `Email communication (linked Gmail threads, newest first; quoted reply history trimmed):\n${sections.join("\n\n")}`;
 }

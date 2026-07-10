@@ -48,6 +48,7 @@ Rules:
 - Open with a single one-sentence status line (no label, just the sentence).
 - Then short bullet groups, each on its own line, only the ones that apply: "What's done:", "In progress:", "Waiting on:", "Next action:", "Watch:". Put the group label at the start of the line, then the items.
 - Be concrete: reference real asset names, statuses, dates, and people from the data. Never invent facts that are not in the data.
+- When linked email threads are included, read them to capture what has been discussed, agreed, requested, or is awaiting a reply, and reflect that in "Waiting on:" and "Next action:". Attribute who said what when it matters.
 - If the project is early or thin on data, say so plainly rather than padding.
 - Keep the whole thing under about 180 words.
 - Plain text only: start item lines with "- ". No markdown headers, no bold, no tables.

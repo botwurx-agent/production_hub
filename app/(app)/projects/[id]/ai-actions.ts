@@ -9,7 +9,10 @@ import {
   generateClientUpdate,
   aiModel,
 } from "@/lib/ai";
-import { gatherProjectContext } from "@/lib/project-context";
+import {
+  gatherProjectContext,
+  gatherProjectEmailContext,
+} from "@/lib/project-context";
 
 export type SummaryResult =
   | { error: string }
@@ -31,9 +34,13 @@ export async function summarizeProject(
   const supabase = createClient();
   const context = await gatherProjectContext(supabase, projectId);
   if (!context) return { error: "Project not found." };
+  // Pull the actual content of linked Gmail threads so the summary reflects what
+  // has been discussed, agreed, or is awaiting a reply (best-effort).
+  const email = await gatherProjectEmailContext(supabase, projectId);
+  const fullContext = email ? `${context}\n\n${email}` : context;
 
   try {
-    const content = await generateProjectSummary(context);
+    const content = await generateProjectSummary(fullContext);
     if (!content) {
       return { error: "The model returned an empty summary. Please try again." };
     }
@@ -78,9 +85,11 @@ export async function draftClientUpdate(
   const supabase = createClient();
   const context = await gatherProjectContext(supabase, projectId);
   if (!context) return { error: "Project not found." };
+  const email = await gatherProjectEmailContext(supabase, projectId);
+  const fullContext = email ? `${context}\n\n${email}` : context;
 
   try {
-    const draft = await generateClientUpdate(context);
+    const draft = await generateClientUpdate(fullContext);
     if (!draft) {
       return { error: "The model returned an empty draft. Please try again." };
     }
