@@ -250,6 +250,8 @@ export type Database = {
           w: number;
           h: number;
           z: number;
+          parent_id: string | null;
+          sort: number;
           created_by: string | null;
           created_at: string;
         };
@@ -269,6 +271,8 @@ export type Database = {
           w?: number;
           h?: number;
           z?: number;
+          parent_id?: string | null;
+          sort?: number;
           created_by?: string | null;
           created_at?: string;
         };
@@ -288,6 +292,8 @@ export type Database = {
           w?: number;
           h?: number;
           z?: number;
+          parent_id?: string | null;
+          sort?: number;
           created_by?: string | null;
           created_at?: string;
         };

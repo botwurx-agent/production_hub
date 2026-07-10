@@ -269,7 +269,20 @@ implemented (out of strict order, driven by the operator's real needs).
     board_items url/text/storage_path). BoardItemView gained url + thumbUrl
     (thumbUrl = signed storage image only, so a link's destination url is never
     misread as an image). actions: addLinkItem/addTodoItem/updateItemText.
-    NEXT (bigger, separate slices): Columns (stacks) and connection lines/arrows.
+    The "+ Add" dropdown was later replaced by a slim vertical TOOL RAIL on the
+    canvas edge (RailBtn icon buttons w/ hover labels).
+  - Columns / stacks (Slice 2, migration 0050): board_items gained parent_id
+    (self-FK, on delete cascade) + sort. A column is kind='column' (title in
+    name, only width meaningful, height flows from children). Top-level items
+    stay absolutely positioned (parentId null); a column's children flow inside
+    it ordered by sort and are NOT absolutely draggable (reorder via up/down,
+    pop-out via detach). DRAG-INTO-COLUMN: on pointer-up of a top-level card,
+    board-canvas columnAtPoint() hit-tests DOM rects of [data-column-id] and
+    calls attachToColumn. In-column "+ Note / + To-do" add children directly
+    (addNote/addTodoItem gained an optional parentId); other kinds get in by
+    dragging. actions: addColumn/attachToColumn/detachFromColumn/setColumnOrder/
+    updateItemName; BoardCanvas gained an onReload prop (workspace passes
+    reload) used after structural changes. NEXT: connection lines/arrows.
 - Shot list (own page, off the production tab strip): /projects/[id]/shot-list
   renders ShotBoardEditor as a StudioBinder-style two-pane: LEFT sidebar = the
   project's shot lists (each shot_group = one list, with count + "New shot list"),

@@ -37,6 +37,10 @@ export type BoardItemView = {
   // Signed storage image (null unless the item has a stored file); used as the
   // preview thumbnail for link cards without misreading a link's destination.
   thumbUrl: string | null;
+  // Column membership: parentId is the containing column (null = top-level on the
+  // canvas); sort orders the item within its column.
+  parentId: string | null;
+  sort: number;
 };
 
 // ---- Boards -----------------------------------------------------------------
@@ -172,6 +176,8 @@ export async function getBoardItems(
       signedUrl: i.storage_path ? thumbUrl : i.url,
       url: i.url,
       thumbUrl,
+      parentId: i.parent_id,
+      sort: i.sort ?? 0,
     };
   });
   return { items };
@@ -189,6 +195,20 @@ async function nextZ(
     .limit(1)
     .maybeSingle();
   return (data?.z ?? 0) + 1;
+}
+
+async function nextSort(
+  supabase: SupabaseClient<Database>,
+  parentId: string
+): Promise<number> {
+  const { data } = await supabase
+    .from("board_items")
+    .select("sort")
+    .eq("parent_id", parentId)
+    .order("sort", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.sort ?? -1) + 1;
 }
 
 function safeName(name: string): string {
@@ -398,11 +418,13 @@ export async function addFigmaItems(
 export async function addNote(
   boardId: string,
   x: number,
-  y: number
+  y: number,
+  parentId?: string | null
 ): Promise<{ id: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
   const z = await nextZ(supabase, boardId);
+  const sort = parentId ? await nextSort(supabase, parentId) : 0;
   const { data, error } = await supabase
     .from("board_items")
     .insert({
@@ -416,12 +438,93 @@ export async function addNote(
       w: 220,
       h: 160,
       z,
+      parent_id: parentId ?? null,
+      sort,
       created_by: ctx.userId,
     })
     .select("id")
     .single();
   if (error) return { error: error.message };
+  revalidatePath("/boards");
   return { id: data.id };
+}
+
+// A titled container that stacks other items. Only width is meaningful; height
+// flows from its children.
+export async function addColumn(
+  boardId: string,
+  x: number,
+  y: number
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const z = await nextZ(supabase, boardId);
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "column",
+      name: "Column",
+      x,
+      y,
+      w: 260,
+      h: 320,
+      z,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/boards");
+  return { id: data.id };
+}
+
+// Move an existing top-level item into a column (drag-in), appended at the end.
+export async function attachToColumn(
+  itemId: string,
+  columnId: string
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const sort = await nextSort(supabase, columnId);
+  await supabase
+    .from("board_items")
+    .update({ parent_id: columnId, sort })
+    .eq("id", itemId);
+  revalidatePath("/boards");
+}
+
+// Pop an item out of its column back onto the canvas at (x, y).
+export async function detachFromColumn(
+  itemId: string,
+  x: number,
+  y: number
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("board_items")
+    .update({ parent_id: null, sort: 0, x: Math.max(0, x), y: Math.max(0, y) })
+    .eq("id", itemId);
+  revalidatePath("/boards");
+}
+
+// Persist a new order for a column's children (ids in display order).
+export async function setColumnOrder(ids: string[]): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await Promise.all(
+    ids.map((id, i) => supabase.from("board_items").update({ sort: i }).eq("id", id))
+  );
+  revalidatePath("/boards");
+}
+
+// Rename a column (its title) or any item's name.
+export async function updateItemName(id: string, name: string): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("board_items").update({ name }).eq("id", id);
 }
 
 // Paste a URL: unfurl it (title/description/preview image) and drop a link card.
@@ -504,11 +607,13 @@ export async function addLinkItem(
 export async function addTodoItem(
   boardId: string,
   x: number,
-  y: number
+  y: number,
+  parentId?: string | null
 ): Promise<{ id: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
   const z = await nextZ(supabase, boardId);
+  const sort = parentId ? await nextSort(supabase, parentId) : 0;
   const { data, error } = await supabase
     .from("board_items")
     .insert({
@@ -522,11 +627,14 @@ export async function addTodoItem(
       w: 240,
       h: 200,
       z,
+      parent_id: parentId ?? null,
+      sort,
       created_by: ctx.userId,
     })
     .select("id")
     .single();
   if (error) return { error: error.message };
+  revalidatePath("/boards");
   return { id: data.id };
 }
 

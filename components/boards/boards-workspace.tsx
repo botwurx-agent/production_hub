@@ -18,6 +18,7 @@ import {
   addUploadItems,
   addNote,
   addTodoItem,
+  addColumn,
   addLinkItem,
   addDriveItems,
   type BoardItemView,
@@ -119,6 +120,14 @@ export function BoardsWorkspace({
     if (!activeId) return;
     startBusy(async () => {
       await addTodoItem(activeId, 80, 80);
+      reload(activeId);
+    });
+  }
+
+  function addColumnToBoard() {
+    if (!activeId) return;
+    startBusy(async () => {
+      await addColumn(activeId, 80, 80);
       reload(activeId);
     });
   }
@@ -314,6 +323,9 @@ export function BoardsWorkspace({
               <RailBtn label="To-do list" disabled={busy} onClick={addTodoToBoard}>
                 <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
               </RailBtn>
+              <RailBtn label="Column" disabled={busy} onClick={addColumnToBoard}>
+                <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" />
+              </RailBtn>
               <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
                 <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
               </RailBtn>
@@ -345,6 +357,7 @@ export function BoardsWorkspace({
                 setItems={setItems}
                 background={active.background ?? "dots"}
                 onDropFiles={onDropFiles}
+                onReload={() => reload(active.id)}
               />
             </div>
           </div>

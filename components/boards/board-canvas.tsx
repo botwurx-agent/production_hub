@@ -8,6 +8,12 @@ import {
   bringToFront,
   updateNote,
   updateItemText,
+  updateItemName,
+  addNote,
+  addTodoItem,
+  attachToColumn,
+  detachFromColumn,
+  setColumnOrder,
   deleteItem,
 } from "@/app/(app)/boards/actions";
 
@@ -45,6 +51,7 @@ const MAX_SCALE = 2;
 
 type DragRef = {
   id: string;
+  kind: string;
   mode: "move" | "resize";
   startX: number;
   startY: number;
@@ -53,6 +60,24 @@ type DragRef = {
   origW: number;
   origH: number;
 } | null;
+
+// Is the point inside any rendered column (other than excludeId)? Used to drop
+// a dragged card into a column. Reads DOM rects so it ignores z-occlusion.
+function columnAtPoint(
+  clientX: number,
+  clientY: number,
+  excludeId: string
+): string | null {
+  const els = document.querySelectorAll("[data-column-id]");
+  for (const el of Array.from(els)) {
+    const id = el.getAttribute("data-column-id");
+    if (!id || id === excludeId) continue;
+    const r = el.getBoundingClientRect();
+    if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom)
+      return id;
+  }
+  return null;
+}
 
 function bgStyle(background: string): React.CSSProperties {
   if (background === "grid") {
@@ -75,12 +100,14 @@ export function BoardCanvas({
   setItems,
   background,
   onDropFiles,
+  onReload,
 }: {
   boardId: string;
   items: BoardItemView[];
   setItems: React.Dispatch<React.SetStateAction<BoardItemView[]>>;
   background: string;
   onDropFiles: (files: FileList, x: number, y: number) => void;
+  onReload: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
@@ -88,6 +115,8 @@ export function BoardCanvas({
   const drag = useRef<DragRef>(null);
   const scaleRef = useRef(1);
   const contentRef = useRef<HTMLDivElement>(null);
+  const onReloadRef = useRef(onReload);
+  onReloadRef.current = onReload;
   scaleRef.current = scale;
 
   useEffect(() => {
@@ -111,16 +140,28 @@ export function BoardCanvas({
         })
       );
     }
-    function onUp() {
+    function onUp(e: PointerEvent) {
       const d = drag.current;
       if (!d) return;
       drag.current = null;
+      if (d.mode === "resize") {
+        setItems((prev) => {
+          const cur = prev.find((x) => x.id === d.id);
+          if (cur) void resizeItem(cur.id, cur.w, cur.h);
+          return prev;
+        });
+        return;
+      }
+      // Move: if dropped over a column, file it into that column instead.
+      const colId =
+        d.kind !== "column" ? columnAtPoint(e.clientX, e.clientY, d.id) : null;
+      if (colId) {
+        void attachToColumn(d.id, colId).then(() => onReloadRef.current());
+        return;
+      }
       setItems((prev) => {
         const cur = prev.find((x) => x.id === d.id);
-        if (cur) {
-          if (d.mode === "move") void moveItem(cur.id, cur.x, cur.y);
-          else void resizeItem(cur.id, cur.w, cur.h);
-        }
+        if (cur) void moveItem(cur.id, cur.x, cur.y);
         return prev;
       });
     }
@@ -171,6 +212,7 @@ export function BoardCanvas({
     setSelected(it.id);
     drag.current = {
       id: it.id,
+      kind: it.kind,
       mode: "move",
       startX: e.clientX,
       startY: e.clientY,
@@ -191,6 +233,7 @@ export function BoardCanvas({
     setSelected(it.id);
     drag.current = {
       id: it.id,
+      kind: it.kind,
       mode: "resize",
       startX: e.clientX,
       startY: e.clientY,
@@ -228,8 +271,171 @@ export function BoardCanvas({
     if (persist) void updateItemText(it.id, text);
   }
 
+  // ---- Column helpers ----
+  function editColName(id: string, name: string) {
+    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+  }
+  function addChild(kind: "note" | "todo", colId: string) {
+    const fn = kind === "note" ? addNote : addTodoItem;
+    void fn(boardId, 0, 0, colId).then(() => onReloadRef.current());
+  }
+  function reorderChild(kids: BoardItemView[], idx: number, dir: -1 | 1) {
+    const j = idx + dir;
+    if (j < 0 || j >= kids.length) return;
+    const arr = [...kids];
+    const [moved] = arr.splice(idx, 1);
+    arr.splice(j, 0, moved);
+    const ids = arr.map((k) => k.id);
+    setItems((prev) =>
+      prev.map((p) => {
+        const ni = ids.indexOf(p.id);
+        return ni >= 0 ? { ...p, sort: ni } : p;
+      })
+    );
+    void setColumnOrder(ids);
+  }
+  function popOut(child: BoardItemView, col: BoardItemView) {
+    const x = col.x + col.w + 24;
+    const y = col.y;
+    setItems((prev) =>
+      prev.map((p) => (p.id === child.id ? { ...p, parentId: null, x, y, sort: 0 } : p))
+    );
+    void detachFromColumn(child.id, x, y);
+  }
+  function deleteColumn(id: string) {
+    setSelected(null);
+    setItems((prev) => prev.filter((p) => p.id !== id && p.parentId !== id));
+    void deleteItem(id).then(() => onReloadRef.current());
+  }
+
+  // Compact card rendering for an item that lives inside a column.
+  function renderChild(child: BoardItemView, idx: number, kids: BoardItemView[], col: BoardItemView) {
+    const ctrls = (
+      <div className="flex items-center gap-0.5 border-t border-border px-1 py-0.5 text-text-faint">
+        <button className={childBtn} title="Move up" onClick={() => reorderChild(kids, idx, -1)} disabled={idx === 0}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+        </button>
+        <button className={childBtn} title="Move down" onClick={() => reorderChild(kids, idx, 1)} disabled={idx === kids.length - 1}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+        <button className={`${childBtn} ml-auto`} title="Pop out to canvas" onClick={() => popOut(child, col)}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg>
+        </button>
+        <button className={`${childBtn} hover:text-red`} title="Delete" onClick={() => remove(child.id)}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+    );
+
+    let body: React.ReactNode;
+    if (child.kind === "note") {
+      const hue = child.hue ?? "yellow";
+      body = (
+        <textarea
+          value={child.text ?? ""}
+          onChange={(e) => editNote(child.id, e.target.value)}
+          onBlur={() => persistNote(child)}
+          placeholder="Note…"
+          className="min-h-[56px] w-full resize-none px-2 py-1.5 text-[13px] outline-none"
+          style={{ backgroundColor: `var(--h-${hue}-bg)`, color: `var(--h-${hue})` }}
+        />
+      );
+    } else if (child.kind === "todo") {
+      const rows = parseTodo(child.text);
+      body = (
+        <div className="space-y-1 px-2 py-1.5">
+          {rows.map((r) => (
+            <div key={r.id} className="flex items-start gap-1.5">
+              <input
+                type="checkbox"
+                checked={r.done}
+                onChange={() =>
+                  mutateTodo(child, (rs) => rs.map((x) => (x.id === r.id ? { ...x, done: !x.done } : x)), true)
+                }
+                className="mt-1 shrink-0 accent-accent"
+              />
+              <input
+                value={r.text}
+                placeholder="Item…"
+                onChange={(e) =>
+                  mutateTodo(child, (rs) => rs.map((x) => (x.id === r.id ? { ...x, text: e.target.value } : x)), false)
+                }
+                onBlur={() => void updateItemText(child.id, child.text ?? "[]")}
+                className={`min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none ${r.done ? "text-text-faint line-through" : ""}`}
+              />
+            </div>
+          ))}
+          <button
+            onClick={() => mutateTodo(child, (rs) => [...rs, { id: crypto.randomUUID(), text: "", done: false }], true)}
+            className="text-[11px] font-semibold text-accent hover:underline"
+          >
+            + Add item
+          </button>
+        </div>
+      );
+    } else if (child.kind === "link") {
+      const dom = domainOf(child.url);
+      body = (
+        <div>
+          {child.thumbUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={child.thumbUrl} alt="" className="h-24 w-full object-cover" />
+          )}
+          <div className="px-2 py-1.5">
+            <div className="line-clamp-2 text-[12px] font-bold text-text">{child.name || dom}</div>
+            {child.url && (
+              <a href={child.url} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-accent hover:underline">
+                {dom || "Open"} ↗
+              </a>
+            )}
+          </div>
+        </div>
+      );
+    } else {
+      const isImg =
+        child.signedUrl &&
+        (child.mimeType?.startsWith("image/") ||
+          /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(child.name ?? ""));
+      body = isImg ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={child.signedUrl!} alt={child.name ?? ""} className="max-h-40 w-full object-cover" />
+      ) : (
+        <div className="px-2 py-2 text-[12px] font-semibold text-text-muted">
+          {child.name ?? "File"}
+          {child.signedUrl && (
+            <a href={child.signedUrl} target="_blank" rel="noreferrer" className="ml-1 text-accent hover:underline">
+              Open
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div key={child.id} className="overflow-hidden rounded-[9px] border border-border bg-surface">
+        {body}
+        {ctrls}
+      </div>
+    );
+  }
+
   const zoomBtn =
     "grid h-7 w-7 place-items-center rounded-[8px] text-text-muted transition hover:bg-surface-2 hover:text-text";
+  const childBtn =
+    "grid h-5 w-5 place-items-center rounded-[5px] transition hover:bg-surface-2 hover:text-text disabled:opacity-30";
+
+  // Split into top-level (absolutely placed) items and column children (flowed
+  // inside their column, ordered by sort).
+  const childrenByParent = new Map<string, BoardItemView[]>();
+  for (const it of items) {
+    if (it.parentId) {
+      const arr = childrenByParent.get(it.parentId) ?? [];
+      arr.push(it);
+      childrenByParent.set(it.parentId, arr);
+    }
+  }
+  for (const arr of childrenByParent.values()) arr.sort((a, b) => a.sort - b.sort);
+  const topItems = items.filter((i) => !i.parentId);
 
   return (
     <div className="relative h-full w-full">
@@ -263,7 +469,7 @@ export function BoardCanvas({
               if (e.target === e.currentTarget) setSelected(null);
             }}
           >
-            {items.map((it) => {
+            {topItems.map((it) => {
               const isSel = selected === it.id;
               const common: React.CSSProperties = {
                 position: "absolute",
@@ -276,6 +482,83 @@ export function BoardCanvas({
               const ring = isSel
                 ? "0 0 0 2px var(--accent)"
                 : "0 1px 3px rgba(0,0,0,.12)";
+
+              if (it.kind === "column") {
+                const kids = childrenByParent.get(it.id) ?? [];
+                return (
+                  <div
+                    key={it.id}
+                    data-column-id={it.id}
+                    style={{
+                      position: "absolute",
+                      left: it.x,
+                      top: it.y,
+                      width: it.w,
+                      zIndex: it.z,
+                      boxShadow: ring,
+                    }}
+                    className="flex flex-col rounded-[12px] border border-border bg-surface-2/70"
+                  >
+                    <div
+                      className="flex h-8 shrink-0 cursor-move items-center gap-1 rounded-t-[12px] px-1.5"
+                      style={{ touchAction: "none" }}
+                      onPointerDown={(e) => startMove(e, it)}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" opacity="0.4" aria-hidden>
+                        <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
+                      </svg>
+                      <input
+                        value={it.name ?? ""}
+                        placeholder="Column"
+                        onChange={(e) => editColName(it.id, e.target.value)}
+                        onBlur={() => void updateItemName(it.id, it.name ?? "")}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="min-w-0 flex-1 bg-transparent text-sm font-bold text-text outline-none"
+                      />
+                      <span className="shrink-0 text-[11px] font-semibold text-text-faint">{kids.length}</span>
+                      {isSel && (
+                        <button
+                          onClick={() => deleteColumn(it.id)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="grid h-5 w-5 place-items-center rounded-[5px] text-text-faint hover:bg-red-bg hover:text-red"
+                          aria-label="Delete column"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2 p-2">
+                      {kids.length === 0 ? (
+                        <p className="rounded-[8px] border border-dashed border-border py-6 text-center text-[11px] text-text-faint">
+                          Drag cards here, or use + below
+                        </p>
+                      ) : (
+                        kids.map((c, i) => renderChild(c, i, kids, it))
+                      )}
+                      <div className="flex items-center gap-1 pt-0.5">
+                        <button
+                          onClick={() => addChild("note", it.id)}
+                          className="rounded-[7px] border border-border px-2 py-1 text-[11px] font-semibold text-text-muted transition hover:bg-surface hover:text-text"
+                        >
+                          + Note
+                        </button>
+                        <button
+                          onClick={() => addChild("todo", it.id)}
+                          className="rounded-[7px] border border-border px-2 py-1 text-[11px] font-semibold text-text-muted transition hover:bg-surface hover:text-text"
+                        >
+                          + To-do
+                        </button>
+                      </div>
+                    </div>
+                    <span
+                      data-resize="1"
+                      onPointerDown={(e) => startResize(e, it)}
+                      className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
+                      style={{ touchAction: "none" }}
+                    />
+                  </div>
+                );
+              }
 
               if (it.kind === "note") {
                 const hue = it.hue ?? "yellow";
