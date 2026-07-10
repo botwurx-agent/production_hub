@@ -305,6 +305,21 @@ implemented (out of strict order, driven by the operator's real needs).
     color swatches, start/end arrowheads, solid/dashed, weight, an optional
     label, delete. Style edits persist through updateItemText (reused); no new
     action beyond addLine.
+  - Drag tools from the rail onto the board (RailBtn dragKind + HTML5 DnD;
+    canvas onDrop reads dataTransfer 'application/x-board-tool' -> onDropTool
+    creates at the drop point). Click still adds at a default spot.
+  - Delete/Backspace removes the selected card/column/line/connection (guarded
+    against firing while typing in an input/textarea/contentEditable).
+  - Card selection is LIFTED to the workspace (selected/onSelect props on
+    BoardCanvas) so it can render contextual panels over the tool rail, same as
+    the line panel. NOTE cards are now rich text (contentEditable storing HTML;
+    NoteBody in board-canvas, seeded once, saves on blur via updateItemText) with
+    a two-tab NotePanel (boards-workspace): Text tab = execCommand formatting
+    (bold/italic/underline/strike/lists/link/clear, applied to the focused note
+    via a data-item-id query + preventDefault), Box tab = color swatches
+    (updateItemHue). The per-note inline color/delete header was removed in favor
+    of the panel. Applying the same contextual-panel pattern to the other card
+    types (link/todo/image/column) is the next step.
 - Shot list (own page, off the production tab strip): /projects/[id]/shot-list
   renders ShotBoardEditor as a StudioBinder-style two-pane: LEFT sidebar = the
   project's shot lists (each shot_group = one list, with count + "New shot list"),

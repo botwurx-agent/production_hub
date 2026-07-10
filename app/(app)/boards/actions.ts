@@ -766,6 +766,13 @@ export async function updateItemText(id: string, text: string): Promise<void> {
   await supabase.from("board_items").update({ text }).eq("id", id);
 }
 
+// Update only an item's color (hue), without touching its text.
+export async function updateItemHue(id: string, hue: string): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("board_items").update({ hue }).eq("id", id);
+}
+
 export async function moveItem(id: string, x: number, y: number): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();

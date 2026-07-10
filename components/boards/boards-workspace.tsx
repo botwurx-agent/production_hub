@@ -24,6 +24,7 @@ import {
   addLinkItem,
   addDriveItems,
   updateItemText,
+  updateItemHue,
   deleteItem,
   type BoardItemView,
   type BoardConnection,
@@ -76,6 +77,7 @@ export function BoardsWorkspace({
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Board | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -98,6 +100,7 @@ export function BoardsWorkspace({
 
   useEffect(() => {
     setSelectedLineId(null);
+    setSelectedId(null);
     if (activeId) reload(activeId);
     else {
       setItems([]);
@@ -197,6 +200,27 @@ export function BoardsWorkspace({
     if (!id) return;
     setItems((prev) => prev.filter((p) => p.id !== id));
     setSelectedLineId(null);
+    void deleteItem(id);
+  }
+
+  // The selected card (for its contextual panel), and its edit handlers.
+  const selectedItem = selectedId
+    ? items.find((i) => i.id === selectedId) ?? null
+    : null;
+  const selectedNote = selectedItem?.kind === "note" ? selectedItem : null;
+
+  function setCardHue(hue: string) {
+    if (!selectedItem) return;
+    setItems((prev) =>
+      prev.map((p) => (p.id === selectedItem.id ? { ...p, hue } : p))
+    );
+    void updateItemHue(selectedItem.id, hue);
+  }
+  function deleteSelectedCard() {
+    const id = selectedId;
+    if (!id) return;
+    setItems((prev) => prev.filter((p) => p.id !== id));
+    setSelectedId(null);
     void deleteItem(id);
   }
 
@@ -401,7 +425,15 @@ export function BoardsWorkspace({
           {/* Left tool rail (Milanote-style) + canvas. When a line is selected,
               a style panel slides over the rail. */}
           <div className="flex min-h-0 flex-1 gap-3">
-            {selectedLine ? (
+            {selectedNote ? (
+              <NotePanel
+                key={selectedNote.id}
+                note={selectedNote}
+                onHue={setCardHue}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
+            ) : selectedLine ? (
               <LineStylePanel
                 key={selectedLine.id}
                 line={selectedLine}
@@ -458,6 +490,8 @@ export function BoardsWorkspace({
                 onDropFiles={onDropFiles}
                 onDropTool={onDropTool}
                 onReload={() => reload(active.id)}
+                selected={selectedId}
+                onSelect={setSelectedId}
                 selectedLineId={selectedLineId}
                 onSelectLine={setSelectedLineId}
               />
@@ -547,6 +581,116 @@ export function BoardsWorkspace({
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+const NOTE_HUES = ["yellow", "blue", "green", "pink", "purple", "orange", "cyan", "red"];
+
+function NotePanel({
+  note,
+  onHue,
+  onDelete,
+  onClose,
+}: {
+  note: BoardItemView;
+  onHue: (hue: string) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"text" | "box">("text");
+  const hue = note.hue ?? "yellow";
+
+  // Apply formatting to the note's contentEditable (kept focused via preventDefault).
+  function exec(cmd: string, val?: string) {
+    const el = document.querySelector(
+      `[data-item-id="${note.id}"] [contenteditable="true"]`
+    ) as HTMLElement | null;
+    el?.focus();
+    document.execCommand(cmd, false, val);
+  }
+  const hold = (fn: () => void) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    fn();
+  };
+  const fmt =
+    "grid h-8 flex-1 place-items-center rounded-[8px] border border-border text-[13px] font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text";
+  const tabBtn = (active: boolean) =>
+    `flex-1 rounded-[7px] px-2 py-1 text-xs font-bold transition ${
+      active ? "bg-surface text-text shadow-sm" : "text-text-muted"
+    }`;
+
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Note</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
+        <button className={tabBtn(tab === "text")} onClick={() => setTab("text")}>Text</button>
+        <button className={tabBtn(tab === "box")} onClick={() => setTab("box")}>Box</button>
+      </div>
+
+      {tab === "text" ? (
+        <>
+          <div className="flex gap-1.5">
+            <button className={fmt} style={{ fontWeight: 800 }} title="Bold" onMouseDown={hold(() => exec("bold"))}>B</button>
+            <button className={`${fmt} italic`} title="Italic" onMouseDown={hold(() => exec("italic"))}>I</button>
+            <button className={`${fmt} underline`} title="Underline" onMouseDown={hold(() => exec("underline"))}>U</button>
+            <button className={`${fmt} line-through`} title="Strikethrough" onMouseDown={hold(() => exec("strikeThrough"))}>S</button>
+          </div>
+          <div className="flex gap-1.5">
+            <button className={fmt} title="Bulleted list" onMouseDown={hold(() => exec("insertUnorderedList"))}>• List</button>
+            <button className={fmt} title="Numbered list" onMouseDown={hold(() => exec("insertOrderedList"))}>1. List</button>
+          </div>
+          <button
+            className={`${fmt} w-full`}
+            title="Add link"
+            onMouseDown={hold(() => {
+              const url = window.prompt("Link URL (https://…)");
+              if (url) exec("createLink", /^https?:\/\//i.test(url) ? url : `https://${url}`);
+            })}
+          >
+            🔗 Link
+          </button>
+          <button className={`${fmt} w-full`} title="Clear formatting" onMouseDown={hold(() => exec("removeFormat"))}>
+            Clear formatting
+          </button>
+        </>
+      ) : (
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Color</p>
+          <div className="flex flex-wrap gap-1.5">
+            {NOTE_HUES.map((h) => (
+              <button
+                key={h}
+                onClick={() => onHue(h)}
+                aria-label={h}
+                className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+                style={{
+                  backgroundColor: `var(--h-${h}-bg)`,
+                  boxShadow: hue === h ? "0 0 0 2px var(--accent)" : undefined,
+                }}
+              >
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(--h-${h})` }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete note
+      </button>
     </div>
   );
 }

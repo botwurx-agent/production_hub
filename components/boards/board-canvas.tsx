@@ -53,7 +53,6 @@ function domainOf(url: string | null): string {
   }
 }
 
-const NOTE_HUES = ["yellow", "blue", "green", "pink", "purple", "orange"];
 const CANVAS_W = 2400;
 const CANVAS_H = 1600;
 const MIN_SCALE = 0.25;
@@ -142,6 +141,8 @@ export function BoardCanvas({
   onDropFiles,
   onDropTool,
   onReload,
+  selected,
+  onSelect,
   selectedLineId,
   onSelectLine,
 }: {
@@ -153,10 +154,12 @@ export function BoardCanvas({
   onDropFiles: (files: FileList, x: number, y: number) => void;
   onDropTool: (kind: string, x: number, y: number) => void;
   onReload: () => void;
+  selected: string | null;
+  onSelect: (id: string | null) => void;
   selectedLineId: string | null;
   onSelectLine: (id: string | null) => void;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const setSelected = onSelect;
   const [scale, setScale] = useState(1);
   const [dropActive, setDropActive] = useState(false);
   // Connection drawing: the item we're dragging an arrow FROM, and the live
@@ -420,10 +423,6 @@ export function BoardCanvas({
   }
   function persistNote(it: BoardItemView) {
     void updateNote(it.id, it.text ?? "", it.hue ?? "yellow");
-  }
-  function setNoteHue(it: BoardItemView, hue: string) {
-    setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, hue } : p)));
-    void updateNote(it.id, it.text ?? "", hue);
   }
   // Checklist edits. persist=false for keystrokes (persisted on blur); true for
   // discrete actions (toggle / add / remove).
@@ -842,50 +841,29 @@ export function BoardCanvas({
                     style={{ ...common, backgroundColor: `var(--h-${hue}-bg)`, boxShadow: ring }}
                     className="group flex flex-col overflow-hidden rounded-[10px]"
                   >
-                    {/* Drag handle / toolbar (the textarea can't be dragged) */}
+                    {/* Drag handle (the editor can't be dragged) */}
                     <div
-                      className="flex h-6 shrink-0 cursor-move items-center justify-between px-1.5"
+                      className="flex h-5 shrink-0 cursor-move items-center px-1.5"
                       style={{ color: `var(--h-${hue})`, touchAction: "none" }}
                       onPointerDown={(e) => startMove(e, it)}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden opacity="0.7">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden opacity="0.6">
                         <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" />
                         <circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" />
                         <circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
                       </svg>
-                      {isSel && (
-                        <span className="flex items-center gap-1">
-                          {NOTE_HUES.map((h) => (
-                            <button
-                              key={h}
-                              onClick={() => setNoteHue(it, h)}
-                              onPointerDown={(e) => e.stopPropagation()}
-                              className="h-3.5 w-3.5 rounded-full ring-1 ring-black/10"
-                              style={{ backgroundColor: `var(--h-${h})` }}
-                              aria-label={`Color ${h}`}
-                            />
-                          ))}
-                          <button
-                            onClick={() => remove(it.id)}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            className="ml-0.5 grid h-4 w-4 place-items-center rounded-[5px] text-red hover:bg-red-bg"
-                            aria-label="Delete note"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-                              <path d="M18 6 6 18M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </span>
-                      )}
                     </div>
-                    <textarea
-                      value={it.text ?? ""}
-                      onChange={(e) => editNote(it.id, e.target.value)}
-                      onBlur={() => persistNote(it)}
+                    <NoteBody
+                      itemId={it.id}
+                      initial={it.text ?? ""}
+                      color={`var(--h-${hue})`}
                       onFocus={() => setSelected(it.id)}
-                      placeholder="Note..."
-                      className="w-full flex-1 resize-none bg-transparent px-2 pb-2 text-sm outline-none"
-                      style={{ color: `var(--h-${hue})` }}
+                      onSave={(html) => {
+                        setItems((prev) =>
+                          prev.map((p) => (p.id === it.id ? { ...p, text: html } : p))
+                        );
+                        void updateItemText(it.id, html);
+                      }}
                     />
                     <span
                       data-resize="1"
@@ -1297,5 +1275,40 @@ export function BoardCanvas({
         </div>
       )}
     </div>
+  );
+}
+
+// Rich-text body for a note card (contentEditable storing HTML). Seeded once on
+// mount; saves HTML on blur. Formatting is applied from the Note style panel via
+// document.execCommand while this stays focused.
+function NoteBody({
+  itemId,
+  initial,
+  color,
+  onFocus,
+  onSave,
+}: {
+  itemId: string;
+  initial: string;
+  color: string;
+  onFocus: () => void;
+  onSave: (html: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = initial || "";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemId]);
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onFocus={onFocus}
+      onBlur={() => onSave(ref.current?.innerHTML ?? "")}
+      data-placeholder="Note…"
+      className="rte min-h-0 w-full flex-1 cursor-text overflow-auto px-2 pb-2 text-sm outline-none"
+      style={{ color }}
+    />
   );
 }
