@@ -162,6 +162,23 @@ export function BoardsWorkspace({
     });
   }
 
+  // Dropped a rail tool onto the canvas: create it at the drop point.
+  function onDropTool(kind: string, x: number, y: number) {
+    if (!activeId) return;
+    startBusy(async () => {
+      if (kind === "note") await addNote(activeId, x, y);
+      else if (kind === "todo") await addTodoItem(activeId, x, y);
+      else if (kind === "column") await addColumn(activeId, x, y);
+      else if (kind === "line") {
+        const res = await addLine(activeId, x, y, x + 200, y + 60);
+        reload(activeId);
+        if ("id" in res) setSelectedLineId(res.id);
+        return;
+      }
+      reload(activeId);
+    });
+  }
+
   const selectedLine = selectedLineId
     ? items.find((i) => i.id === selectedLineId && i.kind === "line") ?? null
     : null;
@@ -394,16 +411,16 @@ export function BoardsWorkspace({
               />
             ) : (
               <div className="flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
-                <RailBtn label="Note" disabled={busy} onClick={addNoteToBoard}>
+                <RailBtn label="Note" disabled={busy} dragKind="note" onClick={addNoteToBoard}>
                   <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
                 </RailBtn>
-                <RailBtn label="To-do list" disabled={busy} onClick={addTodoToBoard}>
+                <RailBtn label="To-do list" disabled={busy} dragKind="todo" onClick={addTodoToBoard}>
                   <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
                 </RailBtn>
-                <RailBtn label="Column" disabled={busy} onClick={addColumnToBoard}>
+                <RailBtn label="Column" disabled={busy} dragKind="column" onClick={addColumnToBoard}>
                   <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" />
                 </RailBtn>
-                <RailBtn label="Line / arrow" disabled={busy} onClick={addLineToBoard}>
+                <RailBtn label="Line / arrow" disabled={busy} dragKind="line" onClick={addLineToBoard}>
                   <path d="M5 19 19 5" /><path d="M11 5h8v8" />
                 </RailBtn>
                 <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
@@ -439,6 +456,7 @@ export function BoardsWorkspace({
                 connections={connections}
                 background={active.background ?? "dots"}
                 onDropFiles={onDropFiles}
+                onDropTool={onDropTool}
                 onReload={() => reload(active.id)}
                 selectedLineId={selectedLineId}
                 onSelectLine={setSelectedLineId}
@@ -654,11 +672,15 @@ function RailBtn({
   label,
   onClick,
   disabled,
+  dragKind,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  // When set, the tool can also be dragged onto the board to place it at the
+  // drop point (in addition to click-to-add).
+  dragKind?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -666,7 +688,18 @@ function RailBtn({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="group relative grid h-10 w-10 place-items-center rounded-[10px] text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-40"
+      draggable={Boolean(dragKind)}
+      onDragStart={
+        dragKind
+          ? (e) => {
+              e.dataTransfer.setData("application/x-board-tool", dragKind);
+              e.dataTransfer.effectAllowed = "copy";
+            }
+          : undefined
+      }
+      className={`group relative grid h-10 w-10 place-items-center rounded-[10px] text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-40 ${
+        dragKind ? "cursor-grab active:cursor-grabbing" : ""
+      }`}
     >
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
         {children}

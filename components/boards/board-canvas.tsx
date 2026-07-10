@@ -140,6 +140,7 @@ export function BoardCanvas({
   connections,
   background,
   onDropFiles,
+  onDropTool,
   onReload,
   selectedLineId,
   onSelectLine,
@@ -150,6 +151,7 @@ export function BoardCanvas({
   connections: BoardConnection[];
   background: string;
   onDropFiles: (files: FileList, x: number, y: number) => void;
+  onDropTool: (kind: string, x: number, y: number) => void;
   onReload: () => void;
   selectedLineId: string | null;
   onSelectLine: (id: string | null) => void;
@@ -353,6 +355,12 @@ export function BoardCanvas({
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDropActive(false);
+    const tool = e.dataTransfer.getData("application/x-board-tool");
+    if (tool) {
+      const { x, y } = canvasCoords(e.clientX, e.clientY);
+      onDropTool(tool, Math.round(x), Math.round(y));
+      return;
+    }
     if (e.dataTransfer.files?.length) {
       const { x, y } = canvasCoords(e.clientX, e.clientY);
       onDropFiles(e.dataTransfer.files, Math.round(x), Math.round(y));
@@ -1284,7 +1292,7 @@ export function BoardCanvas({
       {dropActive && (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[14px] bg-accent-soft/40">
           <span className="rounded-pill bg-surface px-4 py-2 text-sm font-semibold text-accent shadow">
-            Drop images to add
+            Drop here to add
           </span>
         </div>
       )}
