@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BoardItemView } from "@/app/(app)/boards/actions";
+import { parseLineData, lineColorVar, type LineData } from "@/lib/board-line";
 import {
   moveItem,
   resizeItem,
@@ -134,6 +135,8 @@ export function BoardCanvas({
   background,
   onDropFiles,
   onReload,
+  selectedLineId,
+  onSelectLine,
 }: {
   boardId: string;
   items: BoardItemView[];
@@ -142,6 +145,8 @@ export function BoardCanvas({
   background: string;
   onDropFiles: (files: FileList, x: number, y: number) => void;
   onReload: () => void;
+  selectedLineId: string | null;
+  onSelectLine: (id: string | null) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
@@ -153,6 +158,13 @@ export function BoardCanvas({
   const [selectedConn, setSelectedConn] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const drag = useRef<DragRef>(null);
+  const lineDrag = useRef<{
+    id: string;
+    mode: "a" | "b" | "move";
+    startX: number;
+    startY: number;
+    orig: LineData;
+  } | null>(null);
   const scaleRef = useRef(1);
   const contentRef = useRef<HTMLDivElement>(null);
   const onReloadRef = useRef(onReload);
@@ -237,6 +249,52 @@ export function BoardCanvas({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectFrom, boardId]);
+
+  // Dragging a line's endpoint or whole body.
+  useEffect(() => {
+    function move(e: PointerEvent) {
+      const d = lineDrag.current;
+      if (!d) return;
+      const p = canvasCoords(e.clientX, e.clientY);
+      setItems((prev) =>
+        prev.map((it) => {
+          if (it.id !== d.id) return it;
+          const data = { ...d.orig };
+          if (d.mode === "a") {
+            data.ax = Math.round(p.x);
+            data.ay = Math.round(p.y);
+          } else if (d.mode === "b") {
+            data.bx = Math.round(p.x);
+            data.by = Math.round(p.y);
+          } else {
+            const dx = p.x - d.startX;
+            const dy = p.y - d.startY;
+            data.ax = Math.round(d.orig.ax + dx);
+            data.ay = Math.round(d.orig.ay + dy);
+            data.bx = Math.round(d.orig.bx + dx);
+            data.by = Math.round(d.orig.by + dy);
+          }
+          return { ...it, text: JSON.stringify(data) };
+        })
+      );
+    }
+    function up() {
+      const d = lineDrag.current;
+      if (!d) return;
+      lineDrag.current = null;
+      setItems((prev) => {
+        const cur = prev.find((x) => x.id === d.id);
+        if (cur?.text) void updateItemText(cur.id, cur.text);
+        return prev;
+      });
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [setItems]);
 
   function zoomBy(delta: number) {
     setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(s + delta).toFixed(2))));
@@ -383,6 +441,24 @@ export function BoardCanvas({
     setSelectedConn(null);
     void deleteConnection(id).then(() => onReloadRef.current());
   }
+  function startLineDrag(
+    e: React.PointerEvent,
+    it: BoardItemView,
+    mode: "a" | "b" | "move"
+  ) {
+    e.stopPropagation();
+    setSelected(null);
+    setSelectedConn(null);
+    onSelectLine(it.id);
+    const p = canvasCoords(e.clientX, e.clientY);
+    lineDrag.current = {
+      id: it.id,
+      mode,
+      startX: p.x,
+      startY: p.y,
+      orig: parseLineData(it.text),
+    };
+  }
 
   // Compact card rendering for an item that lives inside a column.
   function renderChild(child: BoardItemView, idx: number, kids: BoardItemView[], col: BoardItemView) {
@@ -512,7 +588,9 @@ export function BoardCanvas({
   }
   for (const arr of childrenByParent.values()) arr.sort((a, b) => a.sort - b.sort);
   const topItems = items.filter((i) => !i.parentId);
-  const byId = new Map(topItems.map((i) => [i.id, i]));
+  const cardItems = topItems.filter((i) => i.kind !== "line");
+  const lineItems = topItems.filter((i) => i.kind === "line");
+  const byId = new Map(cardItems.map((i) => [i.id, i]));
 
   // Connection segments: edge-to-edge, so arrows meet card borders. Skips a
   // connection whose endpoints aren't both top-level items on this board.
@@ -564,6 +642,7 @@ export function BoardCanvas({
               if (e.target === e.currentTarget) {
                 setSelected(null);
                 setSelectedConn(null);
+                onSelectLine(null);
               }
             }}
             onPointerMove={(e) => {
@@ -618,7 +697,7 @@ export function BoardCanvas({
               )}
             </svg>
 
-            {topItems.map((it) => {
+            {cardItems.map((it) => {
               const isSel = selected === it.id;
               const common: React.CSSProperties = {
                 position: "absolute",
@@ -1004,6 +1083,76 @@ export function BoardCanvas({
                 </div>
               );
             })}
+
+            {/* Standalone line/arrow objects (above cards, but only the stroke +
+                endpoints are interactive so cards stay clickable). */}
+            {lineItems.length > 0 && (
+              <svg
+                className="absolute left-0 top-0"
+                width={CANVAS_W}
+                height={CANVAS_H}
+                style={{ zIndex: 4000, pointerEvents: "none" }}
+              >
+                <defs>
+                  <marker id="ln-end" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto" markerUnits="strokeWidth">
+                    <path d="M0,0 L6,3 L0,6 Z" fill="context-stroke" />
+                  </marker>
+                  <marker id="ln-start" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
+                    <path d="M0,0 L6,3 L0,6 Z" fill="context-stroke" />
+                  </marker>
+                </defs>
+                {lineItems.map((it) => {
+                  const d = parseLineData(it.text);
+                  const sel = selectedLineId === it.id;
+                  const stroke = lineColorVar(d.color);
+                  const path = `M ${d.ax} ${d.ay} L ${d.bx} ${d.by}`;
+                  const mx = (d.ax + d.bx) / 2;
+                  const my = (d.ay + d.by) / 2;
+                  return (
+                    <g key={it.id}>
+                      {/* Fat invisible hit area for easy select/drag */}
+                      <path
+                        d={path}
+                        stroke="transparent"
+                        strokeWidth={Math.max(14, d.weight + 12)}
+                        fill="none"
+                        style={{ pointerEvents: "stroke", cursor: "move" }}
+                        onPointerDown={(e) => startLineDrag(e, it, "move")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectLine(it.id);
+                        }}
+                      />
+                      <path
+                        d={path}
+                        stroke={stroke}
+                        strokeWidth={d.weight}
+                        strokeLinecap="round"
+                        fill="none"
+                        strokeDasharray={d.dashed ? `${d.weight * 2.5} ${d.weight * 2.5}` : undefined}
+                        markerStart={d.startArrow ? "url(#ln-start)" : undefined}
+                        markerEnd={d.endArrow ? "url(#ln-end)" : undefined}
+                        style={{ pointerEvents: "none" }}
+                      />
+                      {d.label && (
+                        <g style={{ pointerEvents: "none" }}>
+                          <rect x={mx - d.label.length * 3.4 - 6} y={my - 10} width={d.label.length * 6.8 + 12} height={20} rx={5} fill="var(--surface)" stroke="var(--border)" />
+                          <text x={mx} y={my + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text)">
+                            {d.label}
+                          </text>
+                        </g>
+                      )}
+                      {sel && (
+                        <>
+                          <circle cx={d.ax} cy={d.ay} r={6} fill="white" stroke="var(--accent)" strokeWidth={2} style={{ pointerEvents: "auto", cursor: "grab" }} onPointerDown={(e) => startLineDrag(e, it, "a")} />
+                          <circle cx={d.bx} cy={d.by} r={6} fill="white" stroke="var(--accent)" strokeWidth={2} style={{ pointerEvents: "auto", cursor: "grab" }} onPointerDown={(e) => startLineDrag(e, it, "b")} />
+                        </>
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            )}
 
             {/* Connect handle: appears on the hovered or selected card; drag it
                 onto another card to draw an arrow. */}

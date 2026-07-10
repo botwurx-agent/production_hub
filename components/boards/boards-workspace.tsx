@@ -20,11 +20,20 @@ import {
   addNote,
   addTodoItem,
   addColumn,
+  addLine,
   addLinkItem,
   addDriveItems,
+  updateItemText,
+  deleteItem,
   type BoardItemView,
   type BoardConnection,
 } from "@/app/(app)/boards/actions";
+import {
+  parseLineData,
+  LINE_COLORS,
+  LINE_WEIGHTS,
+  type LineData,
+} from "@/lib/board-line";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { Board } from "@/lib/database.types";
 
@@ -66,6 +75,7 @@ export function BoardsWorkspace({
   const [driveOpen, setDriveOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Board | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -87,6 +97,7 @@ export function BoardsWorkspace({
   }, []);
 
   useEffect(() => {
+    setSelectedLineId(null);
     if (activeId) reload(activeId);
     else {
       setItems([]);
@@ -140,6 +151,36 @@ export function BoardsWorkspace({
       await addColumn(activeId, 80, 80);
       reload(activeId);
     });
+  }
+
+  function addLineToBoard() {
+    if (!activeId) return;
+    startBusy(async () => {
+      const res = await addLine(activeId, 140, 160, 340, 220);
+      reload(activeId);
+      if ("id" in res) setSelectedLineId(res.id);
+    });
+  }
+
+  const selectedLine = selectedLineId
+    ? items.find((i) => i.id === selectedLineId && i.kind === "line") ?? null
+    : null;
+
+  function updateLineStyle(patch: Partial<LineData>) {
+    if (!selectedLine) return;
+    const text = JSON.stringify({ ...parseLineData(selectedLine.text), ...patch });
+    setItems((prev) =>
+      prev.map((p) => (p.id === selectedLine.id ? { ...p, text } : p))
+    );
+    void updateItemText(selectedLine.id, text);
+  }
+
+  function deleteLine() {
+    const id = selectedLineId;
+    if (!id) return;
+    setItems((prev) => prev.filter((p) => p.id !== id));
+    setSelectedLineId(null);
+    void deleteItem(id);
   }
 
   function onDropFiles(files: FileList, x: number, y: number) {
@@ -324,41 +365,55 @@ export function BoardsWorkspace({
             />
           </div>
 
-          {/* Left tool rail (Milanote-style) + canvas */}
+          {/* Left tool rail (Milanote-style) + canvas. When a line is selected,
+              a style panel slides over the rail. */}
           <div className="flex min-h-0 flex-1 gap-3">
-            <div className="flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
-              <RailBtn label="Note" disabled={busy} onClick={addNoteToBoard}>
-                <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
-              </RailBtn>
-              <RailBtn label="To-do list" disabled={busy} onClick={addTodoToBoard}>
-                <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
-              </RailBtn>
-              <RailBtn label="Column" disabled={busy} onClick={addColumnToBoard}>
-                <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" />
-              </RailBtn>
-              <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
-                <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
-              </RailBtn>
-              <RailBtn label="Upload image" disabled={busy} onClick={() => fileRef.current?.click()}>
-                <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
-              </RailBtn>
-
-              <div className="my-1 h-px w-6 bg-border" />
-
-              <RailBtn label="Project assets" onClick={() => setAssetOpen(true)}>
-                <path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-              </RailBtn>
-              {driveConnected && (
-                <RailBtn label="Google Drive" onClick={() => setDriveOpen(true)}>
-                  <path d="M8 3h8l5 9H13zM3 21l4-7h11l-4 7zM8 3 3 14" />
+            {selectedLine ? (
+              <LineStylePanel
+                key={selectedLine.id}
+                line={selectedLine}
+                onChange={updateLineStyle}
+                onDelete={deleteLine}
+                onClose={() => setSelectedLineId(null)}
+              />
+            ) : (
+              <div className="flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
+                <RailBtn label="Note" disabled={busy} onClick={addNoteToBoard}>
+                  <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
                 </RailBtn>
-              )}
-              {figmaConnected && (
-                <RailBtn label="Figma" onClick={() => setFigmaOpen(true)}>
-                  <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 4v16" />
+                <RailBtn label="To-do list" disabled={busy} onClick={addTodoToBoard}>
+                  <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
                 </RailBtn>
-              )}
-            </div>
+                <RailBtn label="Column" disabled={busy} onClick={addColumnToBoard}>
+                  <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" />
+                </RailBtn>
+                <RailBtn label="Line / arrow" disabled={busy} onClick={addLineToBoard}>
+                  <path d="M5 19 19 5" /><path d="M11 5h8v8" />
+                </RailBtn>
+                <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
+                  <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
+                </RailBtn>
+                <RailBtn label="Upload image" disabled={busy} onClick={() => fileRef.current?.click()}>
+                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+                </RailBtn>
+
+                <div className="my-1 h-px w-6 bg-border" />
+
+                <RailBtn label="Project assets" onClick={() => setAssetOpen(true)}>
+                  <path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+                </RailBtn>
+                {driveConnected && (
+                  <RailBtn label="Google Drive" onClick={() => setDriveOpen(true)}>
+                    <path d="M8 3h8l5 9H13zM3 21l4-7h11l-4 7zM8 3 3 14" />
+                  </RailBtn>
+                )}
+                {figmaConnected && (
+                  <RailBtn label="Figma" onClick={() => setFigmaOpen(true)}>
+                    <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 4v16" />
+                  </RailBtn>
+                )}
+              </div>
+            )}
 
             <div className="min-h-0 flex-1">
               <BoardCanvas
@@ -369,6 +424,8 @@ export function BoardsWorkspace({
                 background={active.background ?? "dots"}
                 onDropFiles={onDropFiles}
                 onReload={() => reload(active.id)}
+                selectedLineId={selectedLineId}
+                onSelectLine={setSelectedLineId}
               />
             </div>
           </div>
@@ -456,6 +513,114 @@ export function BoardsWorkspace({
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+function LineStylePanel({
+  line,
+  onChange,
+  onDelete,
+  onClose,
+}: {
+  line: BoardItemView;
+  onChange: (patch: Partial<LineData>) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const d = parseLineData(line.text);
+  const label =
+    "mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint";
+  const chip = (active: boolean) =>
+    `flex-1 rounded-[8px] border px-2 py-1.5 text-xs font-semibold transition ${
+      active
+        ? "border-accent bg-accent-soft text-accent"
+        : "border-border text-text-muted hover:text-text"
+    }`;
+
+  return (
+    <div className="flex w-[176px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">
+          Line
+        </span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <div>
+        <p className={label}>Color</p>
+        <div className="flex flex-wrap gap-1.5">
+          {LINE_COLORS.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => onChange({ color: c.key })}
+              aria-label={c.key}
+              className="h-5 w-5 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+              style={{
+                backgroundColor: c.var,
+                boxShadow: d.color === c.key ? "0 0 0 2px var(--accent)" : undefined,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className={label}>Arrowheads</p>
+        <div className="flex gap-1.5">
+          <button className={chip(d.startArrow)} onClick={() => onChange({ startArrow: !d.startArrow })}>
+            Start
+          </button>
+          <button className={chip(d.endArrow)} onClick={() => onChange({ endArrow: !d.endArrow })}>
+            End
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <p className={label}>Style</p>
+        <button className={`w-full ${chip(d.dashed)}`} onClick={() => onChange({ dashed: !d.dashed })}>
+          {d.dashed ? "Dashed" : "Solid"}
+        </button>
+      </div>
+
+      <div>
+        <p className={label}>Weight</p>
+        <div className="flex gap-1.5">
+          {LINE_WEIGHTS.map((w) => (
+            <button
+              key={w}
+              onClick={() => onChange({ weight: w })}
+              className="flex h-8 flex-1 items-center justify-center rounded-[8px] border transition"
+              style={{ borderColor: d.weight === w ? "var(--accent)" : "var(--border)" }}
+            >
+              <span style={{ height: w, width: 20, background: "var(--text-muted)", borderRadius: 3 }} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className={label}>Label</p>
+        <input
+          defaultValue={d.label}
+          onBlur={(e) => onChange({ label: e.target.value })}
+          placeholder="Optional"
+          className="w-full rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-border-strong"
+        />
+      </div>
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete line
+      </button>
     </div>
   );
 }

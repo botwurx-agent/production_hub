@@ -449,6 +449,51 @@ export async function addNote(
   return { id: data.id };
 }
 
+// A standalone line/arrow. Endpoints + style are JSON in text; x/y mirror the
+// start endpoint. Reuses updateItemText for edits and deleteItem for removal.
+export async function addLine(
+  boardId: string,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const z = await nextZ(supabase, boardId);
+  const data = {
+    ax,
+    ay,
+    bx,
+    by,
+    color: "slate",
+    weight: 2,
+    dashed: false,
+    startArrow: false,
+    endArrow: true,
+    label: "",
+  };
+  const { data: row, error } = await supabase
+    .from("board_items")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "line",
+      text: JSON.stringify(data),
+      x: Math.round(ax),
+      y: Math.round(ay),
+      w: Math.round(bx - ax),
+      h: Math.round(by - ay),
+      z,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/boards");
+  return { id: row.id };
+}
+
 // A titled container that stacks other items. Only width is meaningful; height
 // flows from its children.
 export async function addColumn(

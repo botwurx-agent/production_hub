@@ -295,6 +295,16 @@ implemented (out of strict order, driven by the operator's real needs).
     addConnection(dedup either direction)/deleteConnection; workspace loads
     connections alongside items in reload() and passes them to BoardCanvas. This
     completes the Milanote arc (link cards, to-do, columns, connections).
+  - Standalone line/arrow objects (no migration; kind='line' board_items row,
+    endpoints + style as JSON in text via lib/board-line.ts parseLineData). Rail
+    gets a Line tool (addLine). Rendered in their own interactive SVG above cards
+    (only stroke + endpoints capture pointer events, so cards stay clickable);
+    both endpoints drag, the body drags the whole line (lineDrag ref + effect in
+    board-canvas). Selecting a line (selectedLineId lifted to the workspace via
+    onSelectLine) swaps the tool rail for a LineStylePanel (boards-workspace):
+    color swatches, start/end arrowheads, solid/dashed, weight, an optional
+    label, delete. Style edits persist through updateItemText (reused); no new
+    action beyond addLine.
 - Shot list (own page, off the production tab strip): /projects/[id]/shot-list
   renders ShotBoardEditor as a StudioBinder-style two-pane: LEFT sidebar = the
   project's shot lists (each shot_group = one list, with count + "New shot list"),
