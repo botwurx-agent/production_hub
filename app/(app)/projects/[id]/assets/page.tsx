@@ -59,17 +59,11 @@ export default async function AssetsPage({
         }
       />
 
-      <AssetsDropzone projectId={project.id} studioId={ctx.studio.id}>
       <Card className="p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-display text-base font-bold">
-              {assets.length} {assets.length === 1 ? "deliverable" : "deliverables"}
-            </h2>
-            <p className="mt-0.5 hidden text-xs text-text-faint sm:block">
-              Tip: drag files anywhere here to upload.
-            </p>
-          </div>
+          <h2 className="font-display text-base font-bold">
+            {assets.length} {assets.length === 1 ? "deliverable" : "deliverables"}
+          </h2>
           <div className="flex items-center gap-2">
             {figmaAccount && <FigmaImportButton projectId={project.id} />}
             {driveConnected(emailAccount?.scope) && (
@@ -78,6 +72,7 @@ export default async function AssetsPage({
             <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
           </div>
         </div>
+        <AssetsDropzone projectId={project.id} studioId={ctx.studio.id}>
         {assets.length === 0 ? (
           <EmptyState
             hue="purple"
@@ -122,8 +117,8 @@ export default async function AssetsPage({
             ))}
           </div>
         )}
+        </AssetsDropzone>
       </Card>
-      </AssetsDropzone>
     </div>
   );
 }

@@ -38,6 +38,7 @@ export function AssetsDropzone({
   const [notice, setNotice] = useState<string | null>(null);
   const depth = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   function flash(msg: string) {
     setNotice(msg);
@@ -107,6 +108,30 @@ export function AssetsDropzone({
         void handleFiles(Array.from(e.dataTransfer.files));
       }}
     >
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          void handleFiles(Array.from(e.target.files ?? []));
+          if (fileRef.current) fileRef.current.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={!!status}
+        className="mb-4 flex w-full items-center justify-center gap-2.5 rounded-[12px] border-2 border-dashed border-border bg-surface-2/40 px-4 py-4 text-sm text-text-muted transition hover:border-accent hover:bg-accent-soft/40 hover:text-accent disabled:opacity-60"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v12m0-12 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </svg>
+        <span className="font-semibold">
+          Drag &amp; drop files here, or <span className="underline">click to browse</span>
+        </span>
+      </button>
+
       {children}
 
       {(active || status) && (
