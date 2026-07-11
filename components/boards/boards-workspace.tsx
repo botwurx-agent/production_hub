@@ -16,7 +16,7 @@ import {
   setBoardBackground,
   getBoardItems,
   getBoardConnections,
-  addUploadItems,
+  registerUploadedBoardItems,
   addNote,
   addTodoItem,
   addColumn,
@@ -48,6 +48,14 @@ import {
   NOTE_COLORS,
 } from "@/lib/board-note-style";
 import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
+
+const MAX_UPLOAD_MB = 40;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+
+function safeFileName(name: string): string {
+  return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "image";
+}
 import { videoEmbed } from "@/lib/video-embed";
 import { parseMediaMeta, serializeMediaMeta } from "@/lib/board-media";
 import type { Board } from "@/lib/database.types";
@@ -55,6 +63,7 @@ import type { Board } from "@/lib/database.types";
 type ProjectRef = { id: string; title: string };
 
 export function BoardsWorkspace({
+  studioId,
   initialBoards,
   projects,
   driveConnected,
@@ -64,6 +73,7 @@ export function BoardsWorkspace({
   reviewKind,
   reviewedIds = [],
 }: {
+  studioId: string;
   initialBoards: Board[];
   projects: ProjectRef[];
   driveConnected: boolean;
@@ -95,6 +105,13 @@ export function BoardsWorkspace({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function showNotice(msg: string) {
+    setNotice(msg);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 5000);
+  }
   const [deleteConfirm, setDeleteConfirm] = useState<Board | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -203,14 +220,38 @@ export function BoardsWorkspace({
   // and clipboard paste).
   function uploadImageFiles(files: File[], at: { x: number; y: number }) {
     if (!activeId || files.length === 0) return;
-    const fd = new FormData();
-    fd.set("boardId", activeId);
-    fd.set("x", String(at.x));
-    fd.set("y", String(at.y));
-    for (const f of files) fd.append("files", f);
+    const over = files.filter((f) => f.size > MAX_UPLOAD_BYTES);
+    const ok = files.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+    if (over.length > 0) {
+      showNotice(
+        over.length === 1
+          ? `"${over[0].name || "Image"}" is over the ${MAX_UPLOAD_MB} MB limit and was skipped.`
+          : `${over.length} images are over the ${MAX_UPLOAD_MB} MB limit and were skipped.`
+      );
+    }
+    if (ok.length === 0) return;
+    const boardId = activeId;
     startBusy(async () => {
-      await addUploadItems(fd);
-      reload(activeId);
+      // Upload the bytes straight to Storage (bypasses the serverless body cap),
+      // then record the board items in one small server call.
+      const supabase = createBrowserSupabase();
+      const uploaded: { path: string; name: string; mime: string | null }[] = [];
+      for (const f of ok) {
+        const path = `${studioId}/boards/${boardId}/${crypto.randomUUID()}-${safeFileName(f.name)}`;
+        const { error } = await supabase.storage
+          .from("assets")
+          .upload(path, f, { contentType: f.type || undefined, upsert: false });
+        if (error) {
+          showNotice(`Couldn't upload "${f.name || "image"}": ${error.message}`);
+          continue;
+        }
+        uploaded.push({ path, name: f.name || "image", mime: f.type || null });
+      }
+      if (uploaded.length > 0) {
+        const res = await registerUploadedBoardItems(boardId, uploaded, at.x, at.y);
+        if (res?.error) showNotice(res.error);
+        reload(boardId);
+      }
     });
   }
 
@@ -820,6 +861,20 @@ export function BoardsWorkspace({
           </div>
         </div>
       </Modal>
+
+      {notice && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[100] flex justify-center px-4">
+          <div className="pointer-events-auto flex max-w-md items-start gap-2.5 rounded-[12px] border border-border bg-surface px-4 py-3 text-sm text-text shadow-lg">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--h-amber)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><path d="M12 9v4M12 17h.01" />
+            </svg>
+            <span className="flex-1">{notice}</span>
+            <button onClick={() => setNotice(null)} className="shrink-0 text-text-faint hover:text-text" aria-label="Dismiss">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

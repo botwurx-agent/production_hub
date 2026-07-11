@@ -307,6 +307,42 @@ export async function addUploadItems(formData: FormData): Promise<BoardState> {
   return null;
 }
 
+// Record board_items for files the browser already uploaded straight to Storage
+// (direct-to-storage upload, which bypasses the serverless request-body limit).
+// Paths are validated to live under the caller's studio.
+export async function registerUploadedBoardItems(
+  boardId: string,
+  files: { path: string; name: string; mime: string | null }[],
+  baseX: number,
+  baseY: number
+): Promise<BoardState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  let z = await nextZ(supabase, boardId);
+  let offset = 0;
+  for (const f of files) {
+    if (!f.path.startsWith(`${ctx.studio.id}/`)) continue;
+    const { error } = await supabase.from("board_items").insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "image",
+      name: f.name,
+      mime_type: f.mime || null,
+      storage_path: f.path,
+      x: baseX + offset,
+      y: baseY + offset,
+      w: DEFAULT_W,
+      h: DEFAULT_H,
+      z: z++,
+      created_by: ctx.userId,
+    });
+    if (error) return { error: error.message };
+    offset += 28;
+  }
+  revalidatePath("/boards");
+  return null;
+}
+
 // Add existing project assets (their current stored file) onto a board.
 export async function addAssetItems(
   boardId: string,

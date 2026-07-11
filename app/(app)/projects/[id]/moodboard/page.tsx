@@ -11,7 +11,7 @@ export default async function ProjectMoodboardPage({
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const { data: project } = await supabase
@@ -67,6 +67,7 @@ export default async function ProjectMoodboardPage({
         }
       />
       <BoardsWorkspace
+        studioId={ctx.studio.id}
         initialBoards={(boards ?? []) as Board[]}
         projects={[]}
         driveConnected={driveConnected(googleAccount?.scope)}

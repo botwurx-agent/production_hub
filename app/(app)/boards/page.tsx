@@ -7,7 +7,7 @@ import { driveConnected } from "@/lib/googledrive";
 import type { Board } from "@/lib/database.types";
 
 export default async function BoardsPage() {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const [{ data: boards }, { data: projects }, { data: googleAccount }, { data: figmaAccount }] =
@@ -41,6 +41,7 @@ export default async function BoardsPage() {
         hue="purple"
       />
       <BoardsWorkspace
+        studioId={ctx.studio.id}
         initialBoards={(boards ?? []) as Board[]}
         projects={projects ?? []}
         driveConnected={driveConnected(googleAccount?.scope)}
