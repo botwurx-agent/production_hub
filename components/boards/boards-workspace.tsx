@@ -35,6 +35,11 @@ import {
   LINE_WEIGHTS,
   type LineData,
 } from "@/lib/board-line";
+import {
+  parseNoteStyle,
+  serializeNoteStyle,
+  NOTE_COLORS,
+} from "@/lib/board-note-style";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { Board } from "@/lib/database.types";
 
@@ -585,8 +590,6 @@ export function BoardsWorkspace({
   );
 }
 
-const NOTE_HUES = ["yellow", "blue", "green", "pink", "purple", "orange", "cyan", "red"];
-
 function NotePanel({
   note,
   onHue,
@@ -599,7 +602,12 @@ function NotePanel({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"text" | "box">("text");
-  const hue = note.hue ?? "yellow";
+  // The note's color key for the "match note" first text-color swatch. Falls
+  // back to a token hue (never a raw hex or "none", which aren't valid --h vars).
+  const noteHueKey = (() => {
+    const c = parseNoteStyle(note.hue).color;
+    return c && !c.startsWith("#") ? c : "yellow";
+  })();
 
   // Apply formatting to the note's contentEditable (kept focused via preventDefault).
   function exec(cmd: string, val?: string) {
@@ -637,7 +645,7 @@ function NotePanel({
     document.execCommand("hiliteColor", false, cssVar ? resolveColor(cssVar) : "transparent");
   }
   const textColors = [
-    `var(--h-${hue})`,
+    `var(--h-${noteHueKey})`,
     "var(--text)",
     "var(--h-red)",
     "var(--h-amber)",
@@ -773,25 +781,101 @@ function NotePanel({
           </button>
         </>
       ) : (
-        <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Color</p>
-          <div className="flex flex-wrap gap-1.5">
-            {NOTE_HUES.map((h) => (
-              <button
-                key={h}
-                onClick={() => onHue(h)}
-                aria-label={h}
-                className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
-                style={{
-                  backgroundColor: `var(--h-${h}-bg)`,
-                  boxShadow: hue === h ? "0 0 0 2px var(--accent)" : undefined,
-                }}
+        (() => {
+          const ns = parseNoteStyle(note.hue);
+          const isCustom = !!ns.color && ns.color.startsWith("#");
+          // Apply a color while preserving whether the current mode is a strip
+          // (a plain color pick on a "none" note falls back to a full fill).
+          const pickColor = (color: string) =>
+            onHue(serializeNoteStyle({ mode: ns.mode === "strip" ? "strip" : "fill", color }));
+          const seg = (active: boolean) =>
+            `flex-1 rounded-[7px] px-2 py-1 text-xs font-bold transition ${
+              active ? "bg-surface text-text shadow-sm" : "text-text-muted"
+            }`;
+          return (
+            <div className="flex flex-col gap-3">
+              {/* Background vs Top strip */}
+              <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
+                <button
+                  className={seg(ns.mode !== "strip")}
+                  onClick={() =>
+                    onHue(serializeNoteStyle({ mode: "fill", color: ns.color ?? "yellow" }))
+                  }
+                >
+                  Background
+                </button>
+                <button
+                  className={seg(ns.mode === "strip")}
+                  onClick={() =>
+                    onHue(serializeNoteStyle({ mode: "strip", color: ns.color ?? "yellow" }))
+                  }
+                >
+                  Top strip
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {/* None / transparent */}
+                <button
+                  onClick={() => onHue("none")}
+                  aria-label="No color"
+                  title="No color"
+                  className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(45deg,var(--surface-2) 25%,transparent 25%,transparent 75%,var(--surface-2) 75%),linear-gradient(45deg,var(--surface-2) 25%,var(--surface) 25%,var(--surface) 75%,var(--surface-2) 75%)",
+                    backgroundSize: "8px 8px",
+                    backgroundPosition: "0 0,4px 4px",
+                    boxShadow: ns.mode === "none" ? "0 0 0 2px var(--accent)" : undefined,
+                  }}
+                />
+                {NOTE_COLORS.map((h) => {
+                  const active = ns.mode !== "none" && ns.color === h;
+                  return (
+                    <button
+                      key={h}
+                      onClick={() => pickColor(h)}
+                      aria-label={h}
+                      className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+                      style={{
+                        backgroundColor: `var(--h-${h}-bg)`,
+                        boxShadow: active ? "0 0 0 2px var(--accent)" : undefined,
+                      }}
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: `var(--h-${h})` }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom color */}
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-xs font-semibold transition hover:bg-surface-2 ${
+                  isCustom ? "border-accent text-accent" : "border-border text-text-muted"
+                }`}
               >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(--h-${h})` }} />
-              </button>
-            ))}
-          </div>
-        </div>
+                <span
+                  className="h-4 w-4 rounded-full ring-1 ring-black/10"
+                  style={{
+                    background: isCustom
+                      ? (ns.color as string)
+                      : "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
+                  }}
+                />
+                Custom color
+                <input
+                  type="color"
+                  className="sr-only"
+                  defaultValue={isCustom ? (ns.color as string) : "#5b8def"}
+                  onChange={(e) => pickColor(e.target.value)}
+                />
+              </label>
+            </div>
+          );
+        })()
       )}
 
       <button

@@ -9,6 +9,7 @@ import {
   lineMidPoint,
   type LineData,
 } from "@/lib/board-line";
+import { parseNoteStyle, noteColorVars } from "@/lib/board-note-style";
 import {
   moveItem,
   resizeItem,
@@ -833,30 +834,47 @@ export function BoardCanvas({
               }
 
               if (it.kind === "note") {
-                const hue = it.hue ?? "yellow";
+                const ns = parseNoteStyle(it.hue);
+                const nc = noteColorVars(ns.color);
+                const noteBg =
+                  ns.mode === "fill" ? nc.bg : ns.mode === "strip" ? "var(--surface)" : "transparent";
+                const bodyColor = ns.mode === "fill" ? nc.accent : "var(--text)";
                 return (
                   <div
                     key={it.id}
                     data-item-id={it.id}
-                    style={{ ...common, backgroundColor: `var(--h-${hue}-bg)`, boxShadow: ring }}
+                    style={{
+                      ...common,
+                      backgroundColor: noteBg,
+                      boxShadow: ring,
+                      border: ns.mode === "none" ? "1px solid var(--border)" : undefined,
+                    }}
                     className="group flex flex-col overflow-hidden rounded-[10px]"
                   >
-                    {/* Drag handle (the editor can't be dragged) */}
+                    {/* Drag handle (the editor can't be dragged). In strip mode it
+                        becomes the colored top band; otherwise a subtle dotted grip. */}
                     <div
-                      className="flex h-5 shrink-0 cursor-move items-center px-1.5"
-                      style={{ color: `var(--h-${hue})`, touchAction: "none" }}
+                      className="flex shrink-0 cursor-move items-center px-1.5"
+                      style={{
+                        height: ns.mode === "strip" ? 10 : 20,
+                        backgroundColor: ns.mode === "strip" ? nc.accent : "transparent",
+                        color: ns.mode === "fill" ? nc.accent : "var(--text-faint)",
+                        touchAction: "none",
+                      }}
                       onPointerDown={(e) => startMove(e, it)}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden opacity="0.6">
-                        <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" />
-                        <circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" />
-                        <circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
-                      </svg>
+                      {ns.mode !== "strip" && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden opacity="0.6">
+                          <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" />
+                          <circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" />
+                          <circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
+                        </svg>
+                      )}
                     </div>
                     <NoteBody
                       itemId={it.id}
                       initial={it.text ?? ""}
-                      color={`var(--h-${hue})`}
+                      color={bodyColor}
                       onFocus={() => setSelected(it.id)}
                       onSave={(html) => {
                         setItems((prev) =>
