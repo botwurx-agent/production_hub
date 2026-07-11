@@ -377,7 +377,9 @@ export function BoardsWorkspace({
 
   function onDropFiles(files: FileList, x: number, y: number) {
     if (!activeId) return;
-    const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const imgs = Array.from(files).filter(
+      (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
+    );
     if (imgs.length === 0) return;
     const fd = new FormData();
     fd.set("boardId", activeId);
@@ -550,7 +552,7 @@ export function BoardsWorkspace({
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               className="hidden"
               onChange={(e) => onUpload(e.target.files)}
@@ -645,7 +647,7 @@ export function BoardsWorkspace({
                 <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
                   <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
                 </RailBtn>
-                <RailBtn label="Upload image" disabled={busy} onClick={() => fileRef.current?.click()}>
+                <RailBtn label="Upload image or video" disabled={busy} onClick={() => fileRef.current?.click()}>
                   <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
                 </RailBtn>
                 <RailBtn label="Color swatch" disabled={busy} dragKind="color" onClick={addColorToBoard}>
