@@ -133,6 +133,7 @@ export default async function ShotListPage({
               projectId={project.id}
               kind="shot_list"
               targetId={project.id}
+              label="Share"
             />
           </div>
         }

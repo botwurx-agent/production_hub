@@ -166,6 +166,7 @@ export function StoryboardEditor({
                 projectId={projectId}
                 kind="storyboard"
                 targetId={active.id}
+                label="Share"
               />
               <button
                 onClick={() => {
