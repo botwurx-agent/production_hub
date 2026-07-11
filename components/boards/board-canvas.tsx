@@ -164,6 +164,7 @@ export function BoardCanvas({
   onSelectLine,
   hint,
   onDismissHint,
+  placementRef,
 }: {
   boardId: string;
   items: BoardItemView[];
@@ -179,6 +180,7 @@ export function BoardCanvas({
   onSelectLine: (id: string | null) => void;
   hint: { kind: string; itemId: string } | null;
   onDismissHint: () => void;
+  placementRef?: React.MutableRefObject<(() => { x: number; y: number }) | null>;
 }) {
   const setSelected = onSelect;
   const [scale, setScale] = useState(1);
@@ -199,6 +201,7 @@ export function BoardCanvas({
   } | null>(null);
   const scaleRef = useRef(1);
   const contentRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const onReloadRef = useRef(onReload);
   onReloadRef.current = onReload;
   scaleRef.current = scale;
@@ -375,6 +378,15 @@ export function BoardCanvas({
       y: Math.max(0, (clientY - rect.top) / s),
     };
   }
+  // Canvas coords at the center of the currently visible viewport, so new items
+  // (uploads, clicked tools) land where the user is looking, not off-screen.
+  function viewportCenter() {
+    const r = scrollRef.current?.getBoundingClientRect();
+    if (!r) return { x: 80, y: 80 };
+    const c = canvasCoords(r.left + r.width / 2, r.top + r.height / 2);
+    return { x: Math.round(c.x), y: Math.round(c.y) };
+  }
+  if (placementRef) placementRef.current = viewportCenter;
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -676,6 +688,7 @@ export function BoardCanvas({
   return (
     <div className="relative h-full w-full">
       <div
+        ref={scrollRef}
         className={`h-full w-full overflow-auto rounded-[14px] border bg-surface transition-colors ${
           dropActive ? "border-accent" : "border-border"
         }`}

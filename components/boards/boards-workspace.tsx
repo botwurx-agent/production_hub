@@ -93,6 +93,12 @@ export function BoardsWorkspace({
   const [editName, setEditName] = useState("");
   const [driveSel, setDriveSel] = useState<PickedDriveFile[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Set by BoardCanvas; returns canvas coords at the center of the visible
+  // viewport so new items land where the user is looking (not off-screen).
+  const placeRef = useRef<(() => { x: number; y: number }) | null>(null);
+  function spot() {
+    return placeRef.current?.() ?? { x: 80, y: 80 };
+  }
 
   // First-use hint: a small anchored note the first time each card type is used.
   const [hint, setHint] = useState<{ kind: string; itemId: string } | null>(null);
@@ -157,10 +163,11 @@ export function BoardsWorkspace({
 
   function onUpload(files: FileList | null) {
     if (!files || !activeId) return;
+    const at = spot();
     const fd = new FormData();
     fd.set("boardId", activeId);
-    fd.set("x", "60");
-    fd.set("y", "60");
+    fd.set("x", String(at.x));
+    fd.set("y", String(at.y));
     for (const f of Array.from(files)) fd.append("files", f);
     if (fileRef.current) fileRef.current.value = "";
     startBusy(async () => {
@@ -171,8 +178,9 @@ export function BoardsWorkspace({
 
   function addNoteToBoard() {
     if (!activeId) return;
+    const at = spot();
     startBusy(async () => {
-      const res = await addNote(activeId, 80, 80);
+      const res = await addNote(activeId, at.x, at.y);
       reload(activeId);
       if ("id" in res) maybeHint("note", res.id);
     });
@@ -180,8 +188,9 @@ export function BoardsWorkspace({
 
   function addTodoToBoard() {
     if (!activeId) return;
+    const at = spot();
     startBusy(async () => {
-      const res = await addTodoItem(activeId, 80, 80);
+      const res = await addTodoItem(activeId, at.x, at.y);
       reload(activeId);
       if ("id" in res) maybeHint("todo", res.id);
     });
@@ -189,8 +198,9 @@ export function BoardsWorkspace({
 
   function addColumnToBoard() {
     if (!activeId) return;
+    const at = spot();
     startBusy(async () => {
-      const res = await addColumn(activeId, 80, 80);
+      const res = await addColumn(activeId, at.x, at.y);
       reload(activeId);
       if ("id" in res) maybeHint("column", res.id);
     });
@@ -198,8 +208,9 @@ export function BoardsWorkspace({
 
   function addLineToBoard() {
     if (!activeId) return;
+    const at = spot();
     startBusy(async () => {
-      const res = await addLine(activeId, 140, 160, 340, 220);
+      const res = await addLine(activeId, at.x, at.y + 20, at.x + 200, at.y + 80);
       reload(activeId);
       if ("id" in res) {
         setSelectedLineId(res.id);
@@ -210,8 +221,9 @@ export function BoardsWorkspace({
 
   function addColorToBoard() {
     if (!activeId) return;
+    const at = spot();
     startBusy(async () => {
-      const res = await addColorItem(activeId, 80, 80);
+      const res = await addColorItem(activeId, at.x, at.y);
       reload(activeId);
       if ("id" in res) {
         setSelectedId(res.id);
@@ -222,8 +234,9 @@ export function BoardsWorkspace({
 
   function addHeadingToBoard() {
     if (!activeId) return;
+    const at = spot();
     startBusy(async () => {
-      const res = await addHeadingItem(activeId, 80, 80);
+      const res = await addHeadingItem(activeId, at.x, at.y);
       reload(activeId);
       if ("id" in res) {
         setSelectedId(res.id);
@@ -673,6 +686,7 @@ export function BoardsWorkspace({
                 onSelectLine={setSelectedLineId}
                 hint={hint}
                 onDismissHint={dismissHint}
+                placementRef={placeRef}
               />
             </div>
           </div>
