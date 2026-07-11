@@ -38,7 +38,28 @@ const HINT_TEXT: Record<string, { title: string; body: string }> = {
   line: { title: "Line", body: "Drag either end to reconnect, or the middle to bend it." },
   link: { title: "Link", body: "A saved web link with a preview. Click it to open the page." },
   image: { title: "Image", body: "Drop images anywhere, or import from assets, Drive, or Figma." },
+  color: { title: "Color", body: "A palette swatch. Pick any hex in the panel on the left." },
+  heading: { title: "Heading", body: "A big section label to organize areas of the board. Just type." },
 };
+
+// Normalize a stored hex ("#abc", "abcdef") to "#RRGGBB"-ish; fall back to accent.
+function normalizeHex(raw: string | null): string {
+  const s = (raw ?? "").trim();
+  const m = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(s);
+  if (!m) return "#6366F1";
+  return s.startsWith("#") ? s : `#${s}`;
+}
+// Is a hex color light enough to want dark text on top?
+function isLightHex(hex: string): boolean {
+  let h = hex.replace("#", "");
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  if (h.length < 6) return true;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  // Perceived luminance.
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
+}
 
 function domainOf(url: string | null): string {
   if (!url) return "";
@@ -1052,6 +1073,118 @@ export function BoardCanvas({
                 );
               }
 
+              if (it.kind === "color") {
+                const hex = normalizeHex(it.text);
+                const light = isLightHex(hex);
+                return (
+                  <div
+                    key={it.id}
+                    data-item-id={it.id}
+                    style={{ ...common, boxShadow: ring, backgroundColor: hex }}
+                    className="group flex cursor-move flex-col justify-end overflow-hidden rounded-[10px] border border-border"
+                    onPointerDown={(e) => startMove(e, it)}
+                  >
+                    <div className="px-2.5 py-2">
+                      <span
+                        className="text-[12px] font-bold uppercase tracking-wide"
+                        style={{ color: light ? "rgba(0,0,0,0.72)" : "rgba(255,255,255,0.94)" }}
+                      >
+                        {hex}
+                      </span>
+                    </div>
+                    <span
+                      data-resize="1"
+                      onPointerDown={(e) => startResize(e, it)}
+                      className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
+                      style={{ touchAction: "none" }}
+                    />
+                  </div>
+                );
+              }
+
+              if (it.kind === "heading") {
+                const hcolor = it.hue ? `var(--h-${it.hue})` : "var(--text)";
+                return (
+                  <div
+                    key={it.id}
+                    data-item-id={it.id}
+                    style={{
+                      position: "absolute",
+                      left: it.x,
+                      top: it.y,
+                      width: it.w,
+                      zIndex: it.z,
+                      outline: isSel ? "2px solid var(--accent)" : undefined,
+                      outlineOffset: 4,
+                      borderRadius: 4,
+                    }}
+                    className="group"
+                  >
+                    {/* Drag grip (the text is editable, so it can't be dragged) */}
+                    <div
+                      className="absolute -left-5 top-1 hidden h-6 w-5 cursor-move place-items-center rounded-[5px] text-text-faint group-hover:grid"
+                      style={{ touchAction: "none", boxShadow: isSel ? "0 0 0 2px var(--accent)" : undefined }}
+                      onPointerDown={(e) => startMove(e, it)}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" opacity="0.6" aria-hidden>
+                        <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
+                      </svg>
+                    </div>
+                    <HeadingBody
+                      itemId={it.id}
+                      initial={it.text ?? ""}
+                      color={hcolor}
+                      onFocus={() => setSelected(it.id)}
+                      onSave={(html) => {
+                        setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, text: html } : p)));
+                        void updateItemText(it.id, html);
+                      }}
+                    />
+                  </div>
+                );
+              }
+
+              const isVideo =
+                it.signedUrl &&
+                (it.mimeType?.startsWith("video/") ||
+                  /\.(mp4|webm|mov|m4v|ogv)$/i.test(it.name ?? ""));
+              if (isVideo) {
+                return (
+                  <div
+                    key={it.id}
+                    data-item-id={it.id}
+                    style={{ ...common, boxShadow: ring }}
+                    className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-black"
+                  >
+                    {/* Drag handle so the video's own controls stay clickable */}
+                    <div
+                      className="flex h-5 shrink-0 cursor-move items-center bg-surface px-1.5 text-text-faint"
+                      style={{ touchAction: "none" }}
+                      onPointerDown={(e) => startMove(e, it)}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" opacity="0.5" aria-hidden>
+                        <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
+                      </svg>
+                    </div>
+                    <video
+                      src={it.signedUrl!}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className={`min-h-0 w-full flex-1 ${it.text === "contain" ? "object-contain" : "object-cover"}`}
+                      style={{ background: "#000" }}
+                    />
+                    <span
+                      data-resize="1"
+                      onPointerDown={(e) => startResize(e, it)}
+                      className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
+                      style={{ touchAction: "none" }}
+                    />
+                  </div>
+                );
+              }
+
               const isImage =
                 it.signedUrl &&
                 (it.mimeType?.startsWith("image/") ||
@@ -1364,6 +1497,40 @@ function NoteBody({
       onBlur={() => onSave(ref.current?.innerHTML ?? "")}
       data-placeholder="Note…"
       className="rte min-h-0 w-full flex-1 cursor-text overflow-auto px-2 pb-2 text-sm outline-none"
+      style={{ color }}
+    />
+  );
+}
+
+// Large section-heading text (contentEditable, plain text). Transparent, no box.
+function HeadingBody({
+  itemId,
+  initial,
+  color,
+  onFocus,
+  onSave,
+}: {
+  itemId: string;
+  initial: string;
+  color: string;
+  onFocus: () => void;
+  onSave: (text: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.textContent = initial || "";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemId]);
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onFocus={onFocus}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={() => onSave(ref.current?.textContent ?? "")}
+      data-placeholder="Heading"
+      className="ce-ph w-full cursor-text text-[26px] font-extrabold leading-tight tracking-tight outline-none"
       style={{ color }}
     />
   );

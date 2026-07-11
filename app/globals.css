@@ -178,3 +178,4 @@
 .rte pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 0.5em 0.7em; margin: 0.4em 0; white-space: pre-wrap; overflow-x: auto; }
 .rte blockquote { border-left: 3px solid var(--border-strong); padding-left: 0.8em; margin: 0.4em 0; color: var(--text-muted); font-style: italic; }
 .rte:empty::before { content: attr(data-placeholder); color: var(--text-faint); }
+.ce-ph:empty::before { content: attr(data-placeholder); color: var(--text-faint); }

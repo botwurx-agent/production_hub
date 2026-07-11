@@ -21,6 +21,8 @@ import {
   addTodoItem,
   addColumn,
   addLine,
+  addColorItem,
+  addHeadingItem,
   addLinkItem,
   addDriveItems,
   updateItemText,
@@ -206,6 +208,30 @@ export function BoardsWorkspace({
     });
   }
 
+  function addColorToBoard() {
+    if (!activeId) return;
+    startBusy(async () => {
+      const res = await addColorItem(activeId, 80, 80);
+      reload(activeId);
+      if ("id" in res) {
+        setSelectedId(res.id);
+        maybeHint("color", res.id);
+      }
+    });
+  }
+
+  function addHeadingToBoard() {
+    if (!activeId) return;
+    startBusy(async () => {
+      const res = await addHeadingItem(activeId, 80, 80);
+      reload(activeId);
+      if ("id" in res) {
+        setSelectedId(res.id);
+        maybeHint("heading", res.id);
+      }
+    });
+  }
+
   // Dropped a rail tool onto the canvas: create it at the drop point.
   function onDropTool(kind: string, x: number, y: number) {
     if (!activeId) return;
@@ -228,6 +254,20 @@ export function BoardsWorkspace({
         if ("id" in res) {
           setSelectedLineId(res.id);
           maybeHint("line", res.id);
+        }
+      } else if (kind === "color") {
+        const res = await addColorItem(activeId, x, y);
+        reload(activeId);
+        if ("id" in res) {
+          setSelectedId(res.id);
+          maybeHint("color", res.id);
+        }
+      } else if (kind === "heading") {
+        const res = await addHeadingItem(activeId, x, y);
+        reload(activeId);
+        if ("id" in res) {
+          setSelectedId(res.id);
+          maybeHint("heading", res.id);
         }
       }
     });
@@ -263,6 +303,8 @@ export function BoardsWorkspace({
   const selectedColumn = selectedItem?.kind === "column" ? selectedItem : null;
   const selectedLink = selectedItem?.kind === "link" ? selectedItem : null;
   const selectedImage = selectedItem?.kind === "image" ? selectedItem : null;
+  const selectedColor = selectedItem?.kind === "color" ? selectedItem : null;
+  const selectedHeading = selectedItem?.kind === "heading" ? selectedItem : null;
 
   function setSelectedName(name: string) {
     if (!selectedItem) return;
@@ -546,6 +588,22 @@ export function BoardsWorkspace({
                 onDelete={deleteSelectedCard}
                 onClose={() => setSelectedId(null)}
               />
+            ) : selectedColor ? (
+              <ColorPanel
+                key={selectedColor.id}
+                color={selectedColor}
+                onHex={setSelectedText}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
+            ) : selectedHeading ? (
+              <HeadingPanel
+                key={selectedHeading.id}
+                heading={selectedHeading}
+                onHue={setCardHue}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
             ) : selectedLine ? (
               <LineStylePanel
                 key={selectedLine.id}
@@ -558,6 +616,9 @@ export function BoardsWorkspace({
               <div className="flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
                 <RailBtn label="Note" disabled={busy} dragKind="note" onClick={addNoteToBoard}>
                   <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
+                </RailBtn>
+                <RailBtn label="Heading" disabled={busy} dragKind="heading" onClick={addHeadingToBoard}>
+                  <path d="M6 4v16M18 4v16M6 12h12" />
                 </RailBtn>
                 <RailBtn label="To-do list" disabled={busy} dragKind="todo" onClick={addTodoToBoard}>
                   <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
@@ -573,6 +634,9 @@ export function BoardsWorkspace({
                 </RailBtn>
                 <RailBtn label="Upload image" disabled={busy} onClick={() => fileRef.current?.click()}>
                   <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+                </RailBtn>
+                <RailBtn label="Color swatch" disabled={busy} dragKind="color" onClick={addColorToBoard}>
+                  <circle cx="13.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="10.5" r="2.5" /><circle cx="8.5" cy="7.5" r="2.5" /><path d="M12 22a10 10 0 1 1 0-20 8 8 0 0 1 0 16h-1.5a1.5 1.5 0 0 0 0 3z" />
                 </RailBtn>
 
                 <div className="my-1 h-px w-6 bg-border" />
@@ -1228,6 +1292,11 @@ function ImagePanel({
     !!image.signedUrl &&
     (image.mimeType?.startsWith("image/") ||
       /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(image.name ?? ""));
+  const isVid =
+    !!image.signedUrl &&
+    (image.mimeType?.startsWith("video/") ||
+      /\.(mp4|webm|mov|m4v|ogv)$/i.test(image.name ?? ""));
+  const label = isImg ? "Image" : isVid ? "Video" : "File";
   const fit = image.text === "contain" ? "contain" : "cover";
   const chip = (active: boolean) =>
     `flex-1 rounded-[8px] border px-2 py-1.5 text-xs font-semibold transition ${
@@ -1236,13 +1305,13 @@ function ImagePanel({
   return (
     <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">{isImg ? "Image" : "File"}</span>
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">{label}</span>
         <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
 
-      {isImg && (
+      {(isImg || isVid) && (
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Fit</p>
           <div className="flex gap-1.5">
@@ -1272,6 +1341,148 @@ function ImagePanel({
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
         </svg>
         Delete
+      </button>
+    </div>
+  );
+}
+
+function ColorPanel({
+  color,
+  onHex,
+  onDelete,
+  onClose,
+}: {
+  color: BoardItemView;
+  onHex: (hex: string) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const hex = /^#?[0-9a-fA-F]{3,8}$/.test((color.text ?? "").trim())
+    ? (color.text ?? "").trim().startsWith("#")
+      ? (color.text as string).trim()
+      : `#${(color.text as string).trim()}`
+    : "#6366F1";
+  const swatches = [
+    "#111827", "#6B7280", "#EF4444", "#F97316", "#F59E0B",
+    "#10B981", "#06B6D4", "#3B82F6", "#6366F1", "#EC4899",
+  ];
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Color</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <div className="h-14 w-full rounded-[9px] ring-1 ring-black/10" style={{ backgroundColor: hex }} />
+
+      <div className="flex flex-wrap gap-1.5">
+        {swatches.map((s) => (
+          <button
+            key={s}
+            onClick={() => onHex(s)}
+            aria-label={s}
+            className="h-7 w-7 rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+            style={{
+              backgroundColor: s,
+              boxShadow: hex.toUpperCase() === s.toUpperCase() ? "0 0 0 2px var(--accent)" : undefined,
+            }}
+          />
+        ))}
+      </div>
+
+      <div>
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Hex</p>
+        <div className="flex items-center gap-1.5">
+          <label className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-[8px] ring-1 ring-black/10" style={{ backgroundColor: hex }}>
+            <input type="color" value={hex.length === 7 ? hex : "#6366F1"} onChange={(e) => onHex(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
+          </label>
+          <input
+            key={hex}
+            defaultValue={hex}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (/^#?[0-9a-fA-F]{3,8}$/.test(v)) onHex(v.startsWith("#") ? v : `#${v}`);
+            }}
+            className="min-w-0 flex-1 rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs uppercase text-text outline-none focus:border-border-strong"
+          />
+        </div>
+      </div>
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete swatch
+      </button>
+    </div>
+  );
+}
+
+function HeadingPanel({
+  heading,
+  onHue,
+  onDelete,
+  onClose,
+}: {
+  heading: BoardItemView;
+  onHue: (hue: string) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Heading</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <div>
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Text color</p>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => onHue("")}
+            aria-label="Default"
+            title="Default"
+            className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+            style={{
+              backgroundColor: "var(--surface-2)",
+              boxShadow: !heading.hue ? "0 0 0 2px var(--accent)" : undefined,
+            }}
+          >
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--text)" }} />
+          </button>
+          {NOTE_COLORS.map((h) => (
+            <button
+              key={h}
+              onClick={() => onHue(h)}
+              aria-label={h}
+              className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+              style={{
+                backgroundColor: `var(--h-${h}-bg)`,
+                boxShadow: heading.hue === h ? "0 0 0 2px var(--accent)" : undefined,
+              }}
+            >
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(--h-${h})` }} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete heading
       </button>
     </div>
   );

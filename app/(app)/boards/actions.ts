@@ -525,6 +525,66 @@ export async function addColumn(
   return { id: data.id };
 }
 
+// A color swatch card. The hex value lives in `text`; an optional label in name.
+export async function addColorItem(
+  boardId: string,
+  x: number,
+  y: number
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const z = await nextZ(supabase, boardId);
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "color",
+      text: "#6366F1",
+      x,
+      y,
+      w: 160,
+      h: 160,
+      z,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/boards");
+  return { id: data.id };
+}
+
+// A large section-heading label (transparent, no box). Text lives in `text`.
+export async function addHeadingItem(
+  boardId: string,
+  x: number,
+  y: number
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const z = await nextZ(supabase, boardId);
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "heading",
+      text: "",
+      x,
+      y,
+      w: 360,
+      h: 60,
+      z,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/boards");
+  return { id: data.id };
+}
+
 // Move an existing top-level item into a column (drag-in), appended at the end.
 export async function attachToColumn(
   itemId: string,
