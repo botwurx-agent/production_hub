@@ -29,6 +29,17 @@ import {
   type BoardConnection,
 } from "@/app/(app)/boards/actions";
 
+// One-time "here's what this is" hint shown the first time a card type is used,
+// anchored to the freshly created item (Milanote-style).
+const HINT_TEXT: Record<string, { title: string; body: string }> = {
+  note: { title: "Note", body: "Click to type. The left panel styles the text and the box." },
+  todo: { title: "To-do", body: "A checklist. Add items and tick them off as you go." },
+  column: { title: "Column", body: "Columns group cards together. Drag cards inside to stack them." },
+  line: { title: "Line", body: "Drag either end to reconnect, or the middle to bend it." },
+  link: { title: "Link", body: "A saved web link with a preview. Click it to open the page." },
+  image: { title: "Image", body: "Drop images anywhere, or import from assets, Drive, or Figma." },
+};
+
 function domainOf(url: string | null): string {
   if (!url) return "";
   try {
@@ -130,6 +141,8 @@ export function BoardCanvas({
   onSelect,
   selectedLineId,
   onSelectLine,
+  hint,
+  onDismissHint,
 }: {
   boardId: string;
   items: BoardItemView[];
@@ -143,6 +156,8 @@ export function BoardCanvas({
   onSelect: (id: string | null) => void;
   selectedLineId: string | null;
   onSelectLine: (id: string | null) => void;
+  hint: { kind: string; itemId: string } | null;
+  onDismissHint: () => void;
 }) {
   const setSelected = onSelect;
   const [scale, setScale] = useState(1);
@@ -741,6 +756,21 @@ export function BoardCanvas({
 
               if (it.kind === "column") {
                 const kids = childrenByParent.get(it.id) ?? [];
+                // Box appearance (Milanote-style), shared encoding with notes. A
+                // column with no hue keeps the neutral default look.
+                const cs = it.hue ? parseNoteStyle(it.hue) : null;
+                const cc = cs ? noteColorVars(cs.color) : null;
+                const colBg =
+                  !cs
+                    ? undefined
+                    : cs.mode === "fill"
+                    ? cc!.bg
+                    : cs.mode === "strip"
+                    ? "var(--surface-2)"
+                    : "transparent";
+                const stripBg = cs?.mode === "strip" ? cc!.accent : undefined;
+                const headText =
+                  cs?.mode === "fill" ? cc!.accent : cs?.mode === "strip" ? "#fff" : undefined;
                 return (
                   <div
                     key={it.id}
@@ -753,12 +783,15 @@ export function BoardCanvas({
                       width: it.w,
                       zIndex: it.z,
                       boxShadow: ring,
+                      backgroundColor: colBg,
                     }}
-                    className="flex flex-col rounded-[12px] border border-border bg-surface-2/70"
+                    className={`flex flex-col rounded-[12px] border border-border ${
+                      cs ? "" : "bg-surface-2/70"
+                    }`}
                   >
                     <div
                       className="flex h-8 shrink-0 cursor-move items-center gap-1 rounded-t-[12px] px-1.5"
-                      style={{ touchAction: "none" }}
+                      style={{ touchAction: "none", backgroundColor: stripBg, color: headText }}
                       onPointerDown={(e) => startMove(e, it)}
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" opacity="0.4" aria-hidden>
@@ -770,19 +803,15 @@ export function BoardCanvas({
                         onChange={(e) => editColName(it.id, e.target.value)}
                         onBlur={() => void updateItemName(it.id, it.name ?? "")}
                         onPointerDown={(e) => e.stopPropagation()}
-                        className="min-w-0 flex-1 bg-transparent text-sm font-bold text-text outline-none"
+                        className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none"
+                        style={{ color: headText ?? "var(--text)" }}
                       />
-                      <span className="shrink-0 text-[11px] font-semibold text-text-faint">{kids.length}</span>
-                      {isSel && (
-                        <button
-                          onClick={() => deleteColumn(it.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="grid h-5 w-5 place-items-center rounded-[5px] text-text-faint hover:bg-red-bg hover:text-red"
-                          aria-label="Delete column"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                        </button>
-                      )}
+                      <span
+                        className="shrink-0 text-[11px] font-semibold"
+                        style={{ color: headText ?? "var(--text-faint)", opacity: headText ? 0.85 : 1 }}
+                      >
+                        {kids.length}
+                      </span>
                     </div>
                     <div className="space-y-2 p-2">
                       {kids.length === 0 ? (
@@ -1230,6 +1259,61 @@ export function BoardCanvas({
                       <path d="M18 6 6 18M6 6l12 12" />
                     </svg>
                   </button>
+                );
+              })()}
+            {hint &&
+              (() => {
+                const it = items.find((i) => i.id === hint.itemId);
+                const info = HINT_TEXT[hint.kind];
+                if (!it || !info) return null;
+                let left: number;
+                let top: number;
+                if (it.kind === "line") {
+                  const d = parseLineData(it.text);
+                  left = Math.max(d.ax, d.bx) + 16;
+                  top = (d.ay + d.by) / 2 - 20;
+                } else {
+                  left = it.x + (it.w || 220) + 16;
+                  top = it.y;
+                }
+                return (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left,
+                      top,
+                      transform: `scale(${1 / scale})`,
+                      transformOrigin: "0 0",
+                      zIndex: 9999,
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <div
+                      className="relative w-[212px] rounded-[12px] p-3 shadow-lg"
+                      style={{ background: "var(--text)", color: "var(--surface)" }}
+                    >
+                      <span
+                        className="absolute left-[-4px] top-4 h-2.5 w-2.5 rotate-45"
+                        style={{ background: "var(--text)" }}
+                      />
+                      <button
+                        onClick={onDismissHint}
+                        aria-label="Dismiss"
+                        className="absolute right-2 top-2 opacity-60 transition hover:opacity-100"
+                        style={{ color: "var(--surface)" }}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                      </button>
+                      <p className="mb-1 pr-4 text-[13px] font-bold">{info.title}</p>
+                      <p className="text-[12px] leading-snug opacity-90">{info.body}</p>
+                      <button
+                        onClick={onDismissHint}
+                        className="mt-2 text-[11px] font-bold uppercase tracking-wide opacity-70 transition hover:opacity-100"
+                      >
+                        Got it
+                      </button>
+                    </div>
+                  </div>
                 );
               })()}
           </div>

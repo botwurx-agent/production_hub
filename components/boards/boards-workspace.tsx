@@ -91,6 +91,34 @@ export function BoardsWorkspace({
   const [driveSel, setDriveSel] = useState<PickedDriveFile[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // First-use hint: a small anchored note the first time each card type is used.
+  const [hint, setHint] = useState<{ kind: string; itemId: string } | null>(null);
+  const seenHintsRef = useRef<Set<string> | null>(null);
+  if (seenHintsRef.current === null) {
+    let seen = new Set<string>();
+    try {
+      if (typeof window !== "undefined")
+        seen = new Set(JSON.parse(localStorage.getItem("board.hints.v1") || "[]"));
+    } catch {}
+    seenHintsRef.current = seen;
+  }
+  function maybeHint(kind: string, itemId: string) {
+    if (seenHintsRef.current?.has(kind)) return;
+    setHint({ kind, itemId });
+  }
+  function dismissHint() {
+    if (hint) {
+      seenHintsRef.current?.add(hint.kind);
+      try {
+        localStorage.setItem(
+          "board.hints.v1",
+          JSON.stringify([...(seenHintsRef.current ?? [])])
+        );
+      } catch {}
+    }
+    setHint(null);
+  }
+
   const active = boards.find((b) => b.id === activeId) ?? null;
 
   const reload = useCallback((id: string) => {
@@ -141,24 +169,27 @@ export function BoardsWorkspace({
   function addNoteToBoard() {
     if (!activeId) return;
     startBusy(async () => {
-      await addNote(activeId, 80, 80);
+      const res = await addNote(activeId, 80, 80);
       reload(activeId);
+      if ("id" in res) maybeHint("note", res.id);
     });
   }
 
   function addTodoToBoard() {
     if (!activeId) return;
     startBusy(async () => {
-      await addTodoItem(activeId, 80, 80);
+      const res = await addTodoItem(activeId, 80, 80);
       reload(activeId);
+      if ("id" in res) maybeHint("todo", res.id);
     });
   }
 
   function addColumnToBoard() {
     if (!activeId) return;
     startBusy(async () => {
-      await addColumn(activeId, 80, 80);
+      const res = await addColumn(activeId, 80, 80);
       reload(activeId);
+      if ("id" in res) maybeHint("column", res.id);
     });
   }
 
@@ -167,7 +198,10 @@ export function BoardsWorkspace({
     startBusy(async () => {
       const res = await addLine(activeId, 140, 160, 340, 220);
       reload(activeId);
-      if ("id" in res) setSelectedLineId(res.id);
+      if ("id" in res) {
+        setSelectedLineId(res.id);
+        maybeHint("line", res.id);
+      }
     });
   }
 
@@ -175,16 +209,26 @@ export function BoardsWorkspace({
   function onDropTool(kind: string, x: number, y: number) {
     if (!activeId) return;
     startBusy(async () => {
-      if (kind === "note") await addNote(activeId, x, y);
-      else if (kind === "todo") await addTodoItem(activeId, x, y);
-      else if (kind === "column") await addColumn(activeId, x, y);
-      else if (kind === "line") {
+      if (kind === "note") {
+        const res = await addNote(activeId, x, y);
+        reload(activeId);
+        if ("id" in res) maybeHint("note", res.id);
+      } else if (kind === "todo") {
+        const res = await addTodoItem(activeId, x, y);
+        reload(activeId);
+        if ("id" in res) maybeHint("todo", res.id);
+      } else if (kind === "column") {
+        const res = await addColumn(activeId, x, y);
+        reload(activeId);
+        if ("id" in res) maybeHint("column", res.id);
+      } else if (kind === "line") {
         const res = await addLine(activeId, x, y, x + 200, y + 60);
         reload(activeId);
-        if ("id" in res) setSelectedLineId(res.id);
-        return;
+        if ("id" in res) {
+          setSelectedLineId(res.id);
+          maybeHint("line", res.id);
+        }
       }
-      reload(activeId);
     });
   }
 
@@ -215,6 +259,7 @@ export function BoardsWorkspace({
     : null;
   const selectedNote = selectedItem?.kind === "note" ? selectedItem : null;
   const selectedTodo = selectedItem?.kind === "todo" ? selectedItem : null;
+  const selectedColumn = selectedItem?.kind === "column" ? selectedItem : null;
 
   function setCardHue(hue: string) {
     if (!selectedItem) return;
@@ -235,9 +280,10 @@ export function BoardsWorkspace({
   function deleteSelectedCard() {
     const id = selectedId;
     if (!id) return;
-    setItems((prev) => prev.filter((p) => p.id !== id));
+    // A column deletes its children too (DB cascades on parent_id).
+    setItems((prev) => prev.filter((p) => p.id !== id && p.parentId !== id));
     setSelectedId(null);
-    void deleteItem(id);
+    void deleteItem(id).then(() => activeId && reload(activeId));
   }
 
   // Delete/Backspace removes the selected line (not while typing in a field).
@@ -458,6 +504,14 @@ export function BoardsWorkspace({
                 onDelete={deleteSelectedCard}
                 onClose={() => setSelectedId(null)}
               />
+            ) : selectedColumn ? (
+              <ColumnPanel
+                key={selectedColumn.id}
+                column={selectedColumn}
+                onHue={setCardHue}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
             ) : selectedLine ? (
               <LineStylePanel
                 key={selectedLine.id}
@@ -519,6 +573,8 @@ export function BoardsWorkspace({
                 onSelect={setSelectedId}
                 selectedLineId={selectedLineId}
                 onSelectLine={setSelectedLineId}
+                hint={hint}
+                onDismissHint={dismissHint}
               />
             </div>
           </div>
@@ -556,7 +612,10 @@ export function BoardsWorkspace({
             boardId={active.id}
             open={linkOpen}
             onClose={() => setLinkOpen(false)}
-            onAdded={() => reload(active.id)}
+            onAdded={(id) => {
+              reload(active.id);
+              if (id) maybeHint("link", id);
+            }}
           />
           <BoardSettings
             board={active}
@@ -801,101 +860,7 @@ function NotePanel({
           </button>
         </>
       ) : (
-        (() => {
-          const ns = parseNoteStyle(note.hue);
-          const isCustom = !!ns.color && ns.color.startsWith("#");
-          // Apply a color while preserving whether the current mode is a strip
-          // (a plain color pick on a "none" note falls back to a full fill).
-          const pickColor = (color: string) =>
-            onHue(serializeNoteStyle({ mode: ns.mode === "strip" ? "strip" : "fill", color }));
-          const seg = (active: boolean) =>
-            `flex-1 rounded-[7px] px-2 py-1 text-xs font-bold transition ${
-              active ? "bg-surface text-text shadow-sm" : "text-text-muted"
-            }`;
-          return (
-            <div className="flex flex-col gap-3">
-              {/* Background vs Top strip */}
-              <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
-                <button
-                  className={seg(ns.mode !== "strip")}
-                  onClick={() =>
-                    onHue(serializeNoteStyle({ mode: "fill", color: ns.color ?? "yellow" }))
-                  }
-                >
-                  Background
-                </button>
-                <button
-                  className={seg(ns.mode === "strip")}
-                  onClick={() =>
-                    onHue(serializeNoteStyle({ mode: "strip", color: ns.color ?? "yellow" }))
-                  }
-                >
-                  Top strip
-                </button>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                {/* None / transparent */}
-                <button
-                  onClick={() => onHue("none")}
-                  aria-label="No color"
-                  title="No color"
-                  className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(45deg,var(--surface-2) 25%,transparent 25%,transparent 75%,var(--surface-2) 75%),linear-gradient(45deg,var(--surface-2) 25%,var(--surface) 25%,var(--surface) 75%,var(--surface-2) 75%)",
-                    backgroundSize: "8px 8px",
-                    backgroundPosition: "0 0,4px 4px",
-                    boxShadow: ns.mode === "none" ? "0 0 0 2px var(--accent)" : undefined,
-                  }}
-                />
-                {NOTE_COLORS.map((h) => {
-                  const active = ns.mode !== "none" && ns.color === h;
-                  return (
-                    <button
-                      key={h}
-                      onClick={() => pickColor(h)}
-                      aria-label={h}
-                      className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
-                      style={{
-                        backgroundColor: `var(--h-${h}-bg)`,
-                        boxShadow: active ? "0 0 0 2px var(--accent)" : undefined,
-                      }}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: `var(--h-${h})` }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Custom color */}
-              <label
-                className={`flex cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-xs font-semibold transition hover:bg-surface-2 ${
-                  isCustom ? "border-accent text-accent" : "border-border text-text-muted"
-                }`}
-              >
-                <span
-                  className="h-4 w-4 rounded-full ring-1 ring-black/10"
-                  style={{
-                    background: isCustom
-                      ? (ns.color as string)
-                      : "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
-                  }}
-                />
-                Custom color
-                <input
-                  type="color"
-                  className="sr-only"
-                  defaultValue={isCustom ? (ns.color as string) : "#5b8def"}
-                  onChange={(e) => pickColor(e.target.value)}
-                />
-              </label>
-            </div>
-          );
-        })()
+        <BoxOptions rawHue={note.hue} onHue={onHue} />
       )}
 
       <button
@@ -1013,6 +978,140 @@ function TodoPanel({
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
         </svg>
         Delete checklist
+      </button>
+    </div>
+  );
+}
+
+// Milanote-style "box" appearance options (Background / Top strip / color /
+// none / custom), shared by the Note and Column panels. Reads/writes the item's
+// hue string via lib/board-note-style.
+function BoxOptions({
+  rawHue,
+  onHue,
+}: {
+  rawHue: string | null;
+  onHue: (hue: string) => void;
+}) {
+  const ns = parseNoteStyle(rawHue);
+  const styled = !!rawHue;
+  const mode = styled ? ns.mode : "fill";
+  const isCustom = !!ns.color && ns.color.startsWith("#");
+  // Apply a color while preserving the current strip/fill mode.
+  const pickColor = (color: string) =>
+    onHue(serializeNoteStyle({ mode: mode === "strip" ? "strip" : "fill", color }));
+  const seg = (active: boolean) =>
+    `flex-1 rounded-[7px] px-2 py-1 text-xs font-bold transition ${
+      active ? "bg-surface text-text shadow-sm" : "text-text-muted"
+    }`;
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Background vs Top strip */}
+      <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
+        <button
+          className={seg(mode !== "strip")}
+          onClick={() => onHue(serializeNoteStyle({ mode: "fill", color: ns.color ?? "yellow" }))}
+        >
+          Background
+        </button>
+        <button
+          className={seg(mode === "strip")}
+          onClick={() => onHue(serializeNoteStyle({ mode: "strip", color: ns.color ?? "yellow" }))}
+        >
+          Top strip
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {/* None / transparent */}
+        <button
+          onClick={() => onHue("none")}
+          aria-label="No color"
+          title="No color"
+          className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+          style={{
+            backgroundImage:
+              "linear-gradient(45deg,var(--surface-2) 25%,transparent 25%,transparent 75%,var(--surface-2) 75%),linear-gradient(45deg,var(--surface-2) 25%,var(--surface) 25%,var(--surface) 75%,var(--surface-2) 75%)",
+            backgroundSize: "8px 8px",
+            backgroundPosition: "0 0,4px 4px",
+            boxShadow: styled && ns.mode === "none" ? "0 0 0 2px var(--accent)" : undefined,
+          }}
+        />
+        {NOTE_COLORS.map((h) => {
+          const active = styled && ns.mode !== "none" && ns.color === h;
+          return (
+            <button
+              key={h}
+              onClick={() => pickColor(h)}
+              aria-label={h}
+              className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+              style={{
+                backgroundColor: `var(--h-${h}-bg)`,
+                boxShadow: active ? "0 0 0 2px var(--accent)" : undefined,
+              }}
+            >
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(--h-${h})` }} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Custom color */}
+      <label
+        className={`flex cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-xs font-semibold transition hover:bg-surface-2 ${
+          isCustom ? "border-accent text-accent" : "border-border text-text-muted"
+        }`}
+      >
+        <span
+          className="h-4 w-4 rounded-full ring-1 ring-black/10"
+          style={{
+            background: isCustom
+              ? (ns.color as string)
+              : "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
+          }}
+        />
+        Custom color
+        <input
+          type="color"
+          className="sr-only"
+          defaultValue={isCustom ? (ns.color as string) : "#5b8def"}
+          onChange={(e) => pickColor(e.target.value)}
+        />
+      </label>
+    </div>
+  );
+}
+
+function ColumnPanel({
+  column,
+  onHue,
+  onDelete,
+  onClose,
+}: {
+  column: BoardItemView;
+  onHue: (hue: string) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Column</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      <BoxOptions rawHue={column.hue} onHue={onHue} />
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete column
       </button>
     </div>
   );
@@ -1187,7 +1286,7 @@ function LinkModal({
   boardId: string;
   open: boolean;
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: (id: string | null) => void;
 }) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1212,7 +1311,7 @@ function LinkModal({
       setErr(res.error);
       return;
     }
-    onAdded();
+    onAdded("id" in res ? res.id : null);
     onClose();
   }
 
