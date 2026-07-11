@@ -609,6 +609,31 @@ function NotePanel({
     el?.focus();
     document.execCommand(cmd, false, val);
   }
+  // Resolve a CSS var to a concrete color (theme-aware at apply time) so
+  // execCommand foreColor gets a real value, then set the text color.
+  function applyTextColor(cssVar: string) {
+    const probe = document.createElement("span");
+    probe.style.color = cssVar;
+    document.body.appendChild(probe);
+    const resolved = getComputedStyle(probe).color || cssVar;
+    probe.remove();
+    const el = document.querySelector(
+      `[data-item-id="${note.id}"] [contenteditable="true"]`
+    ) as HTMLElement | null;
+    el?.focus();
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand("foreColor", false, resolved);
+  }
+  const textColors = [
+    `var(--h-${hue})`,
+    "var(--text)",
+    "var(--h-red)",
+    "var(--h-amber)",
+    "var(--h-green)",
+    "var(--h-blue)",
+    "var(--h-purple)",
+    "var(--h-pink)",
+  ];
   const hold = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
     fn();
@@ -656,6 +681,22 @@ function NotePanel({
           >
             🔗 Link
           </button>
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">
+              Text color
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {textColors.map((cv, i) => (
+                <button
+                  key={i}
+                  title={i === 0 ? "Default" : "Text color"}
+                  onMouseDown={hold(() => applyTextColor(cv))}
+                  className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                  style={{ backgroundColor: cv }}
+                />
+              ))}
+            </div>
+          </div>
           <button className={`${fmt} w-full`} title="Clear formatting" onMouseDown={hold(() => exec("removeFormat"))}>
             Clear formatting
           </button>
