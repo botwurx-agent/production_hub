@@ -191,6 +191,9 @@ export function BoardCanvas({
   const setSelected = onSelect;
   const [scale, setScale] = useState(1);
   const [dropActive, setDropActive] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   // Connection drawing: the item we're dragging an arrow FROM, and the live
   // cursor point (in canvas coords). selectedConn is the clicked arrow.
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
@@ -369,6 +372,69 @@ export function BoardCanvas({
   function zoomBy(delta: number) {
     setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(s + delta).toFixed(2))));
   }
+  function setZoom(pct: number) {
+    setScale(Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(pct / 100).toFixed(2))));
+  }
+
+  // Fit every top-level item into the viewport and center it.
+  function scaleToFit() {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const it of items) {
+      if (it.parentId) continue;
+      if (it.kind === "line") {
+        const d = parseLineData(it.text);
+        minX = Math.min(minX, d.ax, d.bx);
+        minY = Math.min(minY, d.ay, d.by);
+        maxX = Math.max(maxX, d.ax, d.bx);
+        maxY = Math.max(maxY, d.ay, d.by);
+      } else {
+        minX = Math.min(minX, it.x);
+        minY = Math.min(minY, it.y);
+        maxX = Math.max(maxX, it.x + (it.w || 220));
+        maxY = Math.max(maxY, it.y + (it.h || 160));
+      }
+    }
+    if (!Number.isFinite(minX)) return;
+    const pad = 60;
+    const bw = maxX - minX + pad * 2;
+    const bh = maxY - minY + pad * 2;
+    const vw = sc.clientWidth;
+    const vh = sc.clientHeight;
+    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, +Math.min(vw / bw, vh / bh).toFixed(2)));
+    setScale(s);
+    requestAnimationFrame(() => {
+      const sc2 = scrollRef.current;
+      if (!sc2) return;
+      const contentW = bw * s;
+      const contentH = bh * s;
+      const offX = Math.max(0, (vw - contentW) / 2);
+      const offY = Math.max(0, (vh - contentH) / 2);
+      sc2.scrollLeft = Math.max(0, (minX - pad) * s - offX);
+      sc2.scrollTop = Math.max(0, (minY - pad) * s - offY);
+    });
+  }
+
+  // Presentation mode: fullscreen the board (its chrome siblings vanish) and
+  // drop the dot grid for a clean view. Esc exits.
+  function togglePresent() {
+    setZoomOpen(false);
+    const el = rootRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void el.requestFullscreen?.();
+  }
+  useEffect(() => {
+    function onFs() {
+      setPresenting(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
 
   function onWheel(e: React.WheelEvent) {
     if (!(e.ctrlKey || e.metaKey)) return;
@@ -707,12 +773,12 @@ export function BoardCanvas({
   const connFromItem = connectFrom ? byId.get(connectFrom) : null;
 
   return (
-    <div className="relative h-full w-full">
+    <div ref={rootRef} className="relative h-full w-full bg-bg">
       <div
         ref={scrollRef}
-        className={`h-full w-full overflow-auto rounded-[14px] border bg-surface transition-colors ${
-          dropActive ? "border-accent" : "border-border"
-        }`}
+        className={`h-full w-full overflow-auto border bg-surface transition-colors ${
+          presenting ? "rounded-none" : "rounded-[14px]"
+        } ${dropActive ? "border-accent" : "border-border"}`}
         onWheel={onWheel}
         onDragOver={(e) => {
           e.preventDefault();
@@ -734,7 +800,7 @@ export function BoardCanvas({
               height: CANVAS_H,
               transform: `scale(${scale})`,
               transformOrigin: "0 0",
-              ...bgStyle(background),
+              ...bgStyle(presenting ? "plain" : background),
             }}
             onPointerDown={(e) => {
               if (e.target === e.currentTarget) {
@@ -1564,26 +1630,78 @@ export function BoardCanvas({
         </div>
       </div>
 
-      {/* Zoom controls */}
-      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-0.5 rounded-[10px] border border-border bg-surface/95 p-1 shadow-sm backdrop-blur">
-        <button className={zoomBtn} onClick={() => zoomBy(-0.1)} aria-label="Zoom out">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-            <path d="M5 12h14" />
-          </svg>
-        </button>
-        <button
-          className="min-w-[3rem] rounded-[8px] px-1 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
-          onClick={() => setScale(1)}
-          title="Reset zoom"
-        >
-          {Math.round(scale * 100)}%
-        </button>
-        <button className={zoomBtn} onClick={() => zoomBy(0.1)} aria-label="Zoom in">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+      {/* Zoom + present popover */}
+      <div className="absolute bottom-3 right-3 z-20">
+        {zoomOpen && (
+          <>
+            <div className="fixed inset-0 z-0" onClick={() => setZoomOpen(false)} />
+            <div className="absolute bottom-11 right-0 z-10 w-64 rounded-[14px] border border-border bg-surface p-3 shadow-lg">
+              <p className="text-sm font-bold text-text">Zoom</p>
+              <p className="mt-0.5 text-[11px] text-text-muted">
+                Tip: hold ⌘ / Ctrl and use the mouse wheel to zoom.
+              </p>
+              <div className="mt-2.5 flex items-center gap-2">
+                <button className={zoomBtn} onClick={() => zoomBy(-0.1)} aria-label="Zoom out">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14" /></svg>
+                </button>
+                <input
+                  type="range"
+                  min={Math.round(MIN_SCALE * 100)}
+                  max={Math.round(MAX_SCALE * 100)}
+                  value={Math.round(scale * 100)}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="h-1 flex-1 cursor-pointer accent-accent"
+                />
+                <button className={zoomBtn} onClick={() => zoomBy(0.1)} aria-label="Zoom in">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                </button>
+              </div>
+              <button
+                onClick={() => { scaleToFit(); setZoomOpen(false); }}
+                className="mt-2.5 w-full rounded-[9px] border border-border py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+              >
+                Scale to fit
+              </button>
+              <div className="my-3 h-px bg-border" />
+              <p className="text-sm font-bold text-text">Presentation mode</p>
+              <p className="mt-0.5 text-[11px] text-text-muted">
+                Go full-screen and hide the toolbar and dot grid.
+              </p>
+              <button
+                onClick={togglePresent}
+                className="mt-2.5 w-full rounded-[9px] bg-text py-2 text-xs font-bold text-bg transition hover:opacity-90"
+              >
+                {presenting ? "Exit presentation" : "Present"}
+              </button>
+            </div>
+          </>
+        )}
+        <div className="flex items-center gap-0.5 rounded-[10px] border border-border bg-surface/95 p-1 shadow-sm backdrop-blur">
+          <button className={zoomBtn} onClick={() => zoomBy(-0.1)} aria-label="Zoom out">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14" /></svg>
+          </button>
+          <button
+            className="min-w-[3rem] rounded-[8px] px-1 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+            onClick={() => setZoomOpen((o) => !o)}
+            title="Zoom and presentation options"
+          >
+            {Math.round(scale * 100)}%
+          </button>
+          <button className={zoomBtn} onClick={() => zoomBy(0.1)} aria-label="Zoom in">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          </button>
+        </div>
       </div>
+
+      {presenting && (
+        <button
+          onClick={togglePresent}
+          className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-[10px] border border-border bg-surface/95 px-3 py-1.5 text-xs font-semibold text-text-muted shadow-sm backdrop-blur transition hover:text-text"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          Exit (Esc)
+        </button>
+      )}
 
       {dropActive && (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[14px] bg-accent-soft/40">
