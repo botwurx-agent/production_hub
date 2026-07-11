@@ -25,6 +25,7 @@ import {
   addDriveItems,
   updateItemText,
   updateItemHue,
+  updateItemName,
   deleteItem,
   type BoardItemView,
   type BoardConnection,
@@ -260,6 +261,23 @@ export function BoardsWorkspace({
   const selectedNote = selectedItem?.kind === "note" ? selectedItem : null;
   const selectedTodo = selectedItem?.kind === "todo" ? selectedItem : null;
   const selectedColumn = selectedItem?.kind === "column" ? selectedItem : null;
+  const selectedLink = selectedItem?.kind === "link" ? selectedItem : null;
+  const selectedImage = selectedItem?.kind === "image" ? selectedItem : null;
+
+  function setSelectedName(name: string) {
+    if (!selectedItem) return;
+    setItems((prev) =>
+      prev.map((p) => (p.id === selectedItem.id ? { ...p, name } : p))
+    );
+    void updateItemName(selectedItem.id, name);
+  }
+  function setSelectedText(text: string) {
+    if (!selectedItem) return;
+    setItems((prev) =>
+      prev.map((p) => (p.id === selectedItem.id ? { ...p, text } : p))
+    );
+    void updateItemText(selectedItem.id, text);
+  }
 
   function setCardHue(hue: string) {
     if (!selectedItem) return;
@@ -509,6 +527,22 @@ export function BoardsWorkspace({
                 key={selectedColumn.id}
                 column={selectedColumn}
                 onHue={setCardHue}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
+            ) : selectedLink ? (
+              <LinkPanel
+                key={selectedLink.id}
+                link={selectedLink}
+                onTitle={setSelectedName}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
+            ) : selectedImage ? (
+              <ImagePanel
+                key={selectedImage.id}
+                image={selectedImage}
+                onFit={setSelectedText}
                 onDelete={deleteSelectedCard}
                 onClose={() => setSelectedId(null)}
               />
@@ -1112,6 +1146,132 @@ function ColumnPanel({
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
         </svg>
         Delete column
+      </button>
+    </div>
+  );
+}
+
+function LinkPanel({
+  link,
+  onTitle,
+  onDelete,
+  onClose,
+}: {
+  link: BoardItemView;
+  onTitle: (name: string) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Link</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      {link.url && (
+        <a
+          href={link.url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-center gap-1.5 rounded-[9px] border border-accent bg-accent-soft px-2 py-1.5 text-xs font-bold text-accent transition hover:brightness-95"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6M10 14 21 3" /></svg>
+          Open link
+        </a>
+      )}
+
+      <div>
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Title</p>
+        <input
+          defaultValue={link.name ?? ""}
+          onBlur={(e) => onTitle(e.target.value)}
+          placeholder="Link title"
+          className="w-full rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-border-strong"
+        />
+      </div>
+
+      {link.url && (
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Destination</p>
+          <p className="break-all rounded-[8px] bg-surface-2 px-2 py-1.5 text-[11px] text-text-muted">{link.url}</p>
+        </div>
+      )}
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete link
+      </button>
+    </div>
+  );
+}
+
+function ImagePanel({
+  image,
+  onFit,
+  onDelete,
+  onClose,
+}: {
+  image: BoardItemView;
+  onFit: (fit: string) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const isImg =
+    !!image.signedUrl &&
+    (image.mimeType?.startsWith("image/") ||
+      /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(image.name ?? ""));
+  const fit = image.text === "contain" ? "contain" : "cover";
+  const chip = (active: boolean) =>
+    `flex-1 rounded-[8px] border px-2 py-1.5 text-xs font-semibold transition ${
+      active ? "border-accent bg-accent-soft text-accent" : "border-border text-text-muted hover:text-text"
+    }`;
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">{isImg ? "Image" : "File"}</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      {isImg && (
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Fit</p>
+          <div className="flex gap-1.5">
+            <button className={chip(fit === "cover")} onClick={() => onFit("cover")} title="Crop to fill the frame">Fill</button>
+            <button className={chip(fit === "contain")} onClick={() => onFit("contain")} title="Show the whole image">Fit</button>
+          </div>
+        </div>
+      )}
+
+      {image.signedUrl && (
+        <a
+          href={image.signedUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
+          Open full size
+        </a>
+      )}
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete
       </button>
     </div>
   );

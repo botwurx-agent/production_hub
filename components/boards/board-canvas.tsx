@@ -952,18 +952,6 @@ export function BoardCanvas({
                         </a>
                       )}
                     </div>
-                    {isSel && (
-                      <button
-                        onClick={() => remove(it.id)}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-[7px] bg-black/55 text-white transition hover:bg-red"
-                        aria-label="Delete"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                          <path d="M18 6 6 18M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
                     <span
                       data-resize="1"
                       onPointerDown={(e) => startResize(e, it)}
@@ -1083,7 +1071,9 @@ export function BoardCanvas({
                       src={it.signedUrl!}
                       alt={it.name ?? ""}
                       draggable={false}
-                      className="h-full w-full select-none object-cover"
+                      className={`h-full w-full select-none ${
+                        it.text === "contain" ? "object-contain" : "object-cover"
+                      }`}
                     />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-text-muted">
@@ -1106,18 +1096,6 @@ export function BoardCanvas({
                         </a>
                       )}
                     </div>
-                  )}
-                  {isSel && (
-                    <button
-                      onClick={() => remove(it.id)}
-                      className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-[7px] bg-black/55 text-white transition hover:bg-red"
-                      aria-label="Delete"
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
                   )}
                   <span
                     data-resize="1"
