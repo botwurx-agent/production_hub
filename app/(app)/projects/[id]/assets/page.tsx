@@ -4,6 +4,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card, EmptyState } from "@/components/ui/card";
 import { AssetCard } from "@/components/projects/asset-card";
 import { AddAssetButton } from "@/components/projects/add-asset-button";
+import { AssetsDropzone } from "@/components/projects/assets-dropzone";
 import { DriveImportButton } from "@/components/projects/drive-import-button";
 import { FigmaImportButton } from "@/components/projects/figma-import-button";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
@@ -58,11 +59,17 @@ export default async function AssetsPage({
         }
       />
 
+      <AssetsDropzone projectId={project.id} studioId={ctx.studio.id}>
       <Card className="p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold">
-            {assets.length} {assets.length === 1 ? "deliverable" : "deliverables"}
-          </h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-base font-bold">
+              {assets.length} {assets.length === 1 ? "deliverable" : "deliverables"}
+            </h2>
+            <p className="mt-0.5 hidden text-xs text-text-faint sm:block">
+              Tip: drag files anywhere here to upload.
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             {figmaAccount && <FigmaImportButton projectId={project.id} />}
             {driveConnected(emailAccount?.scope) && (
@@ -116,6 +123,7 @@ export default async function AssetsPage({
           </div>
         )}
       </Card>
+      </AssetsDropzone>
     </div>
   );
 }
