@@ -610,19 +610,31 @@ function NotePanel({
     document.execCommand(cmd, false, val);
   }
   // Resolve a CSS var to a concrete color (theme-aware at apply time) so
-  // execCommand foreColor gets a real value, then set the text color.
-  function applyTextColor(cssVar: string) {
+  // execCommand color commands get a real value.
+  function resolveColor(cssVar: string): string {
     const probe = document.createElement("span");
     probe.style.color = cssVar;
     document.body.appendChild(probe);
     const resolved = getComputedStyle(probe).color || cssVar;
     probe.remove();
+    return resolved;
+  }
+  function focusNote() {
     const el = document.querySelector(
       `[data-item-id="${note.id}"] [contenteditable="true"]`
     ) as HTMLElement | null;
     el?.focus();
+  }
+  function applyTextColor(cssVar: string) {
+    const resolved = resolveColor(cssVar);
+    focusNote();
     document.execCommand("styleWithCSS", false, "true");
     document.execCommand("foreColor", false, resolved);
+  }
+  function applyHighlight(cssVar: string | null) {
+    focusNote();
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand("hiliteColor", false, cssVar ? resolveColor(cssVar) : "transparent");
   }
   const textColors = [
     `var(--h-${hue})`,
@@ -633,6 +645,24 @@ function NotePanel({
     "var(--h-blue)",
     "var(--h-purple)",
     "var(--h-pink)",
+  ];
+  const highlights = [
+    "var(--h-yellow-bg)",
+    "var(--h-blue-bg)",
+    "var(--h-green-bg)",
+    "var(--h-amber-bg)",
+    "var(--h-pink-bg)",
+    "var(--h-purple-bg)",
+  ];
+  // Milanote-style block presets (execCommand formatBlock; PRE = code, BLOCKQUOTE
+  // = quote). Small text uses an inline size.
+  const styles: { label: string; run: () => void }[] = [
+    { label: "Large heading", run: () => exec("formatBlock", "H1") },
+    { label: "Heading", run: () => exec("formatBlock", "H2") },
+    { label: "Normal text", run: () => exec("formatBlock", "P") },
+    { label: "Small text", run: () => exec("fontSize", "2") },
+    { label: "Code block", run: () => exec("formatBlock", "PRE") },
+    { label: "Quote block", run: () => exec("formatBlock", "BLOCKQUOTE") },
   ];
   const hold = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -661,6 +691,23 @@ function NotePanel({
 
       {tab === "text" ? (
         <>
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">
+              Text style
+            </p>
+            <div className="flex flex-col gap-1">
+              {styles.map((s) => (
+                <button
+                  key={s.label}
+                  title={s.label}
+                  onMouseDown={hold(s.run)}
+                  className="rounded-[8px] border border-border px-2 py-1.5 text-left text-[12px] font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-1.5">
             <button className={fmt} style={{ fontWeight: 800 }} title="Bold" onMouseDown={hold(() => exec("bold"))}>B</button>
             <button className={`${fmt} italic`} title="Italic" onMouseDown={hold(() => exec("italic"))}>I</button>
@@ -695,6 +742,30 @@ function NotePanel({
                   style={{ backgroundColor: cv }}
                 />
               ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">
+              Highlight
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {highlights.map((cv, i) => (
+                <button
+                  key={i}
+                  title="Highlight"
+                  onMouseDown={hold(() => applyHighlight(cv))}
+                  className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                  style={{ backgroundColor: cv }}
+                />
+              ))}
+              <button
+                title="No highlight"
+                onMouseDown={hold(() => applyHighlight(null))}
+                className="grid h-6 w-6 place-items-center rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                style={{ backgroundColor: "var(--surface)" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="text-text-faint"><path d="M18 6 6 18M6 6l12 12" /></svg>
+              </button>
             </div>
           </div>
           <button className={`${fmt} w-full`} title="Clear formatting" onMouseDown={hold(() => exec("removeFormat"))}>
