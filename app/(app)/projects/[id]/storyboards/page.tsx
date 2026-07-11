@@ -73,6 +73,20 @@ export default async function ProjectStoryboardsPage({
     .eq("target_type", "storyboard");
   const reviewedIds = (docReviews ?? []).map((d) => d.target_id);
 
+  // Client comments returned per storyboard (from shared review links).
+  const commentCounts: Record<string, number> = {};
+  if (boardIds.length > 0) {
+    const { data: commentRows } = await supabase
+      .from("review_comments")
+      .select("target_id")
+      .eq("target_type", "storyboard")
+      .in("target_id", boardIds)
+      .is("author_id", null);
+    for (const r of commentRows ?? []) {
+      if (r.target_id) commentCounts[r.target_id] = (commentCounts[r.target_id] ?? 0) + 1;
+    }
+  }
+
   const { assets } = await loadProjectAssets(supabase, project.id);
   const pickable: PickableAsset[] = assets.map((a) => {
     const cur =
@@ -101,6 +115,7 @@ export default async function ProjectStoryboardsPage({
         frames={frames}
         assets={pickable}
         reviewedIds={reviewedIds}
+        commentCounts={commentCounts}
       />
     </div>
   );

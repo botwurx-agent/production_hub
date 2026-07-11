@@ -18,6 +18,7 @@ import {
 import type { PickableAsset } from "@/components/production/shot-board-editor";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
+import { DocFeedbackChip } from "@/components/review/doc-feedback-chip";
 
 export type StoryboardBoard = { id: string; name: string };
 export type FrameView = {
@@ -41,12 +42,14 @@ export function StoryboardEditor({
   frames,
   assets,
   reviewedIds = [],
+  commentCounts = {},
 }: {
   projectId: string;
   boards: StoryboardBoard[];
   frames: FrameView[];
   assets: PickableAsset[];
   reviewedIds?: string[];
+  commentCounts?: Record<string, number>;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -146,6 +149,7 @@ export function StoryboardEditor({
               <span className="shrink-0 text-xs font-semibold text-text-faint">
                 {activeFrames.length} {activeFrames.length === 1 ? "frame" : "frames"}
               </span>
+              <DocFeedbackChip projectId={projectId} count={commentCounts[active.id] ?? 0} />
               <SendToReviewButton
                 projectId={projectId}
                 kind="storyboard"

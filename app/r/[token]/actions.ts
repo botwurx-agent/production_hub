@@ -39,6 +39,27 @@ async function logActivity(
   });
 }
 
+// When a client leaves feedback on a shared doc that isn't formally in the review
+// cycle yet, add it to the pipeline so the feedback surfaces on the Review page.
+async function ensureDocReview(service: SupabaseClient<Database>, link: ReviewLink) {
+  if (!isDocKind(link.target_type) || !link.target_id || !link.project_id) return;
+  const { data: existing } = await service
+    .from("doc_reviews")
+    .select("id")
+    .eq("target_type", link.target_type)
+    .eq("target_id", link.target_id)
+    .maybeSingle();
+  if (existing) return;
+  await service.from("doc_reviews").insert({
+    studio_id: link.studio_id,
+    project_id: link.project_id,
+    target_type: link.target_type,
+    target_id: link.target_id,
+    status: "in_review",
+    created_by: null,
+  });
+}
+
 export async function submitClientComment(
   token: string,
   versionId: string,
@@ -274,6 +295,7 @@ export async function submitDocComment(
   });
   if (error) return { error: error.message };
 
+  await ensureDocReview(service, link);
   const noun = DOC_LABEL[link.target_type] ?? "document";
   await logActivity(service, link, `${reviewer} commented on the ${noun}`);
   await createNotification(service, {
@@ -364,6 +386,7 @@ export async function submitDocDecision(
     if (error) return { error: error.message };
   }
 
+  await ensureDocReview(service, link);
   const noun = DOC_LABEL[link.target_type] ?? "document";
   const label =
     status === "approved" ? `approved the ${noun}` : `requested changes on the ${noun}`;

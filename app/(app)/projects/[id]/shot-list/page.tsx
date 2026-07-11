@@ -10,6 +10,7 @@ import {
 import { loadProjectAssets } from "@/lib/project-data";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
+import { DocFeedbackChip } from "@/components/review/doc-feedback-chip";
 import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
@@ -44,6 +45,14 @@ export default async function ShotListPage({
         .eq("target_id", params.id)
         .maybeSingle(),
     ]);
+
+  // Client comments returned on this shot list (from shared review links).
+  const { count: shotCommentCount } = await supabase
+    .from("review_comments")
+    .select("id", { count: "exact", head: true })
+    .eq("target_type", "shot_list")
+    .eq("target_id", params.id)
+    .is("author_id", null);
 
   const groupIds = (groups ?? []).map((g) => g.id);
   let cards: CardView[] = [];
@@ -107,6 +116,7 @@ export default async function ShotListPage({
         }
         action={
           <div className="flex items-center gap-2">
+            <DocFeedbackChip projectId={project.id} count={shotCommentCount ?? 0} />
             <SendToReviewButton
               projectId={project.id}
               kind="shot_list"
