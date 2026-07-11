@@ -864,25 +864,29 @@ export function BoardCanvas({
                     }}
                     className="group flex flex-col overflow-hidden rounded-[10px]"
                   >
-                    {/* Drag handle (the editor can't be dragged). In strip mode it
-                        becomes the colored top band; otherwise a subtle dotted grip. */}
+                    {/* Header bar (the editor can't be dragged), matching the
+                        To-do / Column headers: grip dots + a type label. Colored
+                        per box mode. */}
                     <div
-                      className="flex shrink-0 cursor-move items-center px-1.5"
+                      className="flex h-7 shrink-0 cursor-move items-center gap-1.5 px-2"
                       style={{
-                        height: ns.mode === "strip" ? 10 : 20,
                         backgroundColor: ns.mode === "strip" ? nc.accent : "transparent",
-                        color: ns.mode === "fill" ? nc.accent : "var(--text-faint)",
+                        color:
+                          ns.mode === "strip"
+                            ? "#fff"
+                            : ns.mode === "fill"
+                            ? nc.accent
+                            : "var(--text-muted)",
                         touchAction: "none",
                       }}
                       onPointerDown={(e) => startMove(e, it)}
                     >
-                      {ns.mode !== "strip" && (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden opacity="0.6">
-                          <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" />
-                          <circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" />
-                          <circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
-                        </svg>
-                      )}
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden opacity="0.5">
+                        <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" />
+                        <circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" />
+                        <circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
+                      </svg>
+                      <span className="text-[11px] font-extrabold uppercase tracking-wide">Note</span>
                     </div>
                     <NoteBody
                       itemId={it.id}
