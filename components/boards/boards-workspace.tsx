@@ -158,6 +158,37 @@ export function BoardsWorkspace({
     }
   }, [activeId, reload]);
 
+  // Paste an image straight onto the board (e.g. copied from an email or the web).
+  // Ignored while typing in a field or a card's editor so normal paste still works.
+  useEffect(() => {
+    if (!activeId) return;
+    function onPaste(e: ClipboardEvent) {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+        return;
+      const dt = e.clipboardData;
+      if (!dt) return;
+      const files: File[] = [];
+      for (const item of Array.from(dt.items || [])) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const f = item.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length === 0 && dt.files?.length) {
+        for (const f of Array.from(dt.files)) {
+          if (f.type.startsWith("image/")) files.push(f);
+        }
+      }
+      if (files.length === 0) return;
+      e.preventDefault();
+      uploadImageFiles(files, spot());
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
   function newBoard() {
     startBusy(async () => {
       const res = await createBoard(undefined, scope.projectId, scope.kind);
@@ -168,19 +199,26 @@ export function BoardsWorkspace({
     });
   }
 
-  function onUpload(files: FileList | null) {
-    if (!files || !activeId) return;
-    const at = spot();
+  // Upload image files at a canvas point (shared by the upload button, drag-drop,
+  // and clipboard paste).
+  function uploadImageFiles(files: File[], at: { x: number; y: number }) {
+    if (!activeId || files.length === 0) return;
     const fd = new FormData();
     fd.set("boardId", activeId);
     fd.set("x", String(at.x));
     fd.set("y", String(at.y));
-    for (const f of Array.from(files)) fd.append("files", f);
-    if (fileRef.current) fileRef.current.value = "";
+    for (const f of files) fd.append("files", f);
     startBusy(async () => {
       await addUploadItems(fd);
       reload(activeId);
     });
+  }
+
+  function onUpload(files: FileList | null) {
+    if (!files || !activeId) return;
+    const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (fileRef.current) fileRef.current.value = "";
+    uploadImageFiles(imgs, spot());
   }
 
   function addNoteToBoard() {
@@ -384,18 +422,8 @@ export function BoardsWorkspace({
   }, [selectedLineId]);
 
   function onDropFiles(files: FileList, x: number, y: number) {
-    if (!activeId) return;
     const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    if (imgs.length === 0) return;
-    const fd = new FormData();
-    fd.set("boardId", activeId);
-    fd.set("x", String(x));
-    fd.set("y", String(y));
-    for (const f of imgs) fd.append("files", f);
-    startBusy(async () => {
-      await addUploadItems(fd);
-      reload(activeId);
-    });
+    uploadImageFiles(imgs, { x, y });
   }
 
   function startRename(b: Board) {
