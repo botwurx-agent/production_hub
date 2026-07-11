@@ -30,6 +30,9 @@ import {
   updateItemHue,
   updateItemName,
   deleteItem,
+  getBoardShare,
+  createBoardShare,
+  revokeBoardShare,
   type BoardItemView,
   type BoardConnection,
 } from "@/app/(app)/boards/actions";
@@ -47,7 +50,6 @@ import {
 import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
 import { videoEmbed } from "@/lib/video-embed";
 import { parseMediaMeta, serializeMediaMeta } from "@/lib/board-media";
-import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { Board } from "@/lib/database.types";
 
 type ProjectRef = { id: string; title: string };
@@ -92,6 +94,7 @@ export function BoardsWorkspace({
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Board | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -395,14 +398,6 @@ export function BoardsWorkspace({
     });
   }
 
-  function chooseBackground(bg: string) {
-    if (!active) return;
-    setBoards((prev) =>
-      prev.map((b) => (b.id === active.id ? { ...b, background: bg } : b))
-    );
-    void setBoardBackground(active.id, bg);
-  }
-
   function startRename(b: Board) {
     setEditingId(b.id);
     setEditName(b.name);
@@ -525,29 +520,15 @@ export function BoardsWorkspace({
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
             <div className="ml-auto flex items-center gap-2">
               {loading && <span className="text-xs text-text-faint">loading...</span>}
-              <div className="inline-flex items-center gap-0.5 rounded-[9px] border border-border bg-surface p-0.5">
-                {(["dots", "grid", "plain"] as const).map((bg) => (
-                  <button
-                    key={bg}
-                    onClick={() => chooseBackground(bg)}
-                    className={`rounded-[7px] px-2 py-1 text-xs font-semibold capitalize transition ${
-                      (active.background ?? "dots") === bg
-                        ? "bg-accent-soft text-accent"
-                        : "text-text-muted hover:text-text"
-                    }`}
-                  >
-                    {bg}
-                  </button>
-                ))}
-              </div>
-              {reviewKind && scope.projectId && (
-                <SendToReviewButton
-                  projectId={scope.projectId}
-                  kind={reviewKind}
-                  targetId={active.id}
-                  inReview={reviewedIds.includes(active.id)}
-                />
-              )}
+              <button
+                className="inline-flex items-center gap-1.5 rounded-[9px] border border-accent bg-accent-soft px-3 py-1.5 text-xs font-bold text-accent transition hover:brightness-95"
+                onClick={() => setShareOpen(true)}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
+                </svg>
+                Share
+              </button>
               <button className={toolBtn} onClick={() => setSettingsOpen(true)}>
                 Board settings
               </button>
@@ -756,6 +737,12 @@ export function BoardsWorkspace({
                 maybeHint("video", id);
               }
             }}
+          />
+          <ShareBoardModal
+            boardId={active.id}
+            boardName={active.name}
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
           />
           <BoardSettings
             board={active}
@@ -1950,6 +1937,101 @@ function VideoModal({
   );
 }
 
+function ShareBoardModal({
+  boardId,
+  boardName,
+  open,
+  onClose,
+}: {
+  boardId: string;
+  boardName: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    setCopied(false);
+    getBoardShare(boardId).then((s) => {
+      setToken(s && !s.revoked ? s.token : null);
+      setLoading(false);
+    });
+  }, [open, boardId]);
+
+  const link = token ? `${typeof window !== "undefined" ? window.location.origin : ""}/b/${token}` : "";
+
+  async function enable() {
+    setBusy(true);
+    const res = await createBoardShare(boardId);
+    setBusy(false);
+    if ("token" in res) setToken(res.token);
+  }
+  async function disable() {
+    setBusy(true);
+    await revokeBoardShare(boardId);
+    setBusy(false);
+    setToken(null);
+    setCopied(false);
+  }
+  function copy() {
+    if (!link) return;
+    void navigator.clipboard?.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Share board">
+      <div className="space-y-4">
+        <p className="text-sm text-text-muted">
+          Share <span className="font-semibold text-text">{boardName}</span> with a
+          public, view-only link. Anyone with the link can see the board (no login),
+          but can&apos;t edit it.
+        </p>
+
+        {loading ? (
+          <p className="text-sm text-text-faint">Loading…</p>
+        ) : token ? (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={link}
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-xs text-text outline-none"
+              />
+              <Button onClick={copy}>{copied ? "Copied" : "Copy"}</Button>
+            </div>
+            <div className="flex items-center justify-between border-t border-border pt-3">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-green">
+                <span className="h-2 w-2 rounded-full bg-green" /> Link is on
+              </span>
+              <button
+                onClick={disable}
+                disabled={busy}
+                className="text-xs font-semibold text-red hover:underline disabled:opacity-50"
+              >
+                Turn off link
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex justify-end">
+            <Button onClick={enable} disabled={busy}>
+              {busy ? "Creating…" : "Create share link"}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 function BoardSettings({
   board,
   projects,
@@ -1967,6 +2049,7 @@ function BoardSettings({
 }) {
   const [name, setName] = useState(board.name);
   const [projectId, setProjectId] = useState(board.project_id ?? "");
+  const [background, setBackground] = useState(board.background ?? "dots");
   const [confirm, setConfirm] = useState(false);
   const [busy, start] = useTransition();
 
@@ -1974,6 +2057,7 @@ function BoardSettings({
     if (open) {
       setName(board.name);
       setProjectId(board.project_id ?? "");
+      setBackground(board.background ?? "dots");
       setConfirm(false);
     }
   }, [open, board]);
@@ -1982,7 +2066,13 @@ function BoardSettings({
     start(async () => {
       await renameBoard(board.id, name);
       await setBoardProject(board.id, projectId || null);
-      onSaved({ ...board, name: name.trim() || "Untitled board", project_id: projectId || null });
+      await setBoardBackground(board.id, background);
+      onSaved({
+        ...board,
+        name: name.trim() || "Untitled board",
+        project_id: projectId || null,
+        background,
+      });
       onClose();
     });
   }
@@ -2015,6 +2105,24 @@ function BoardSettings({
             </Select>
           </div>
         )}
+        <div>
+          <label className="text-xs font-bold uppercase tracking-wide text-text-faint">
+            Canvas background
+          </label>
+          <div className="mt-1.5 inline-flex items-center gap-0.5 rounded-[9px] border border-border bg-surface-2 p-0.5">
+            {(["dots", "grid", "plain"] as const).map((bg) => (
+              <button
+                key={bg}
+                onClick={() => setBackground(bg)}
+                className={`rounded-[7px] px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                  background === bg ? "bg-surface text-text shadow-sm" : "text-text-muted hover:text-text"
+                }`}
+              >
+                {bg}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex items-center justify-between border-t border-border pt-4">
           {confirm ? (
             <button

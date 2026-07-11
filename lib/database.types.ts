@@ -329,6 +329,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      board_shares: {
+        Row: {
+          id: string;
+          studio_id: string;
+          board_id: string;
+          token: string;
+          revoked: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          board_id: string;
+          token: string;
+          revoked?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          board_id?: string;
+          token?: string;
+          revoked?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       shot_boards: {
         Row: {
           id: string;

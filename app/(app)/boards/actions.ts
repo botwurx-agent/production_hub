@@ -183,6 +183,54 @@ export async function getBoardItems(
   return { items };
 }
 
+// ---- Public share links -----------------------------------------------------
+
+export async function getBoardShare(
+  boardId: string
+): Promise<{ token: string; revoked: boolean } | null> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("board_shares")
+    .select("token, revoked")
+    .eq("board_id", boardId)
+    .maybeSingle();
+  return data ?? null;
+}
+
+// Ensure an active (non-revoked) share exists for the board and return its token.
+export async function createBoardShare(
+  boardId: string
+): Promise<{ token: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const { data: existing } = await supabase
+    .from("board_shares")
+    .select("token, revoked")
+    .eq("board_id", boardId)
+    .maybeSingle();
+  if (existing) {
+    if (existing.revoked) {
+      await supabase.from("board_shares").update({ revoked: false }).eq("board_id", boardId);
+    }
+    return { token: existing.token };
+  }
+  const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
+  const { data, error } = await supabase
+    .from("board_shares")
+    .insert({ studio_id: ctx.studio.id, board_id: boardId, token })
+    .select("token")
+    .single();
+  if (error) return { error: error.message };
+  return { token: data.token };
+}
+
+export async function revokeBoardShare(boardId: string): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("board_shares").update({ revoked: true }).eq("board_id", boardId);
+}
+
 async function nextZ(
   supabase: SupabaseClient<Database>,
   boardId: string

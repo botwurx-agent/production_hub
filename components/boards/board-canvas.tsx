@@ -168,6 +168,7 @@ export function BoardCanvas({
   hint,
   onDismissHint,
   placementRef,
+  readOnly = false,
 }: {
   boardId: string;
   items: BoardItemView[];
@@ -184,6 +185,8 @@ export function BoardCanvas({
   hint: { kind: string; itemId: string } | null;
   onDismissHint: () => void;
   placementRef?: React.MutableRefObject<(() => { x: number; y: number }) | null>;
+  // Public share view: render the board but disable all editing/interaction.
+  readOnly?: boolean;
 }) {
   const setSelected = onSelect;
   const [scale, setScale] = useState(1);
@@ -290,6 +293,7 @@ export function BoardCanvas({
 
   // Delete/Backspace removes the selected card or connection (not while typing).
   useEffect(() => {
+    if (readOnly) return;
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       const el = document.activeElement as HTMLElement | null;
@@ -308,7 +312,7 @@ export function BoardCanvas({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, selectedConn, items]);
+  }, [selected, selectedConn, items, readOnly]);
 
   // Dragging a line's endpoint or whole body.
   useEffect(() => {
@@ -400,6 +404,7 @@ export function BoardCanvas({
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setDropActive(false);
+    if (readOnly) return;
     const tool = e.dataTransfer.getData("application/x-board-tool");
     if (tool) {
       const { x, y } = canvasCoords(e.clientX, e.clientY);
@@ -413,6 +418,7 @@ export function BoardCanvas({
   }
 
   function startMove(e: React.PointerEvent, it: BoardItemView) {
+    if (readOnly) return;
     const target = e.target as HTMLElement;
     if (
       target.dataset.resize ||
@@ -440,6 +446,7 @@ export function BoardCanvas({
   }
 
   function startResize(e: React.PointerEvent, it: BoardItemView) {
+    if (readOnly) return;
     e.stopPropagation();
     setSelected(it.id);
     drag.current = {
@@ -473,6 +480,7 @@ export function BoardCanvas({
     fn: (rows: TodoRow[]) => TodoRow[],
     persist: boolean
   ) {
+    if (readOnly) return;
     const text = JSON.stringify(fn(parseTodo(it.text)));
     setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, text } : p)));
     if (persist) void updateItemText(it.id, text);
@@ -480,9 +488,11 @@ export function BoardCanvas({
 
   // ---- Column helpers ----
   function editColName(id: string, name: string) {
+    if (readOnly) return;
     setItems((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
   }
   function addChild(kind: "note" | "todo", colId: string) {
+    if (readOnly) return;
     const fn = kind === "note" ? addNote : addTodoItem;
     void fn(boardId, 0, 0, colId).then(() => onReloadRef.current());
   }
@@ -515,6 +525,7 @@ export function BoardCanvas({
     void deleteItem(id).then(() => onReloadRef.current());
   }
   function startConnect(e: React.PointerEvent, it: BoardItemView) {
+    if (readOnly) return;
     e.stopPropagation();
     e.preventDefault();
     setSelectedConn(null);
@@ -530,6 +541,7 @@ export function BoardCanvas({
     it: BoardItemView,
     mode: "a" | "b" | "move" | "mid"
   ) {
+    if (readOnly) return;
     e.stopPropagation();
     setSelected(null);
     setSelectedConn(null);
@@ -716,6 +728,7 @@ export function BoardCanvas({
           <div
             ref={contentRef}
             className="relative"
+            data-readonly={readOnly ? "1" : undefined}
             style={{
               width: CANVAS_W,
               height: CANVAS_H,
@@ -731,7 +744,7 @@ export function BoardCanvas({
               }
             }}
             onPointerMove={(e) => {
-              if (drag.current || connectFrom) return;
+              if (readOnly || drag.current || connectFrom) return;
               setHovered(itemAtPoint(e.clientX, e.clientY, ""));
             }}
             onPointerLeave={() => setHovered(null)}
@@ -935,6 +948,7 @@ export function BoardCanvas({
                       itemId={it.id}
                       initial={it.text ?? ""}
                       color={bodyColor}
+                      editable={!readOnly}
                       onFocus={() => setSelected(it.id)}
                       onSave={(html) => {
                         setItems((prev) =>
@@ -1156,6 +1170,7 @@ export function BoardCanvas({
                         <CaptionBody
                           itemId={it.id}
                           initial={vmeta.caption}
+                          editable={!readOnly}
                           onFocus={() => setSelected(it.id)}
                           onSave={(html) => saveMediaCaption(it, html)}
                         />
@@ -1232,6 +1247,7 @@ export function BoardCanvas({
                       itemId={it.id}
                       initial={it.text ?? ""}
                       color={hcolor}
+                      editable={!readOnly}
                       onFocus={() => setSelected(it.id)}
                       onSave={(html) => {
                         setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, text: html } : p)));
@@ -1337,6 +1353,7 @@ export function BoardCanvas({
                       <CaptionBody
                         itemId={it.id}
                         initial={media.caption}
+                        editable={!readOnly}
                         onFocus={() => setSelected(it.id)}
                         onSave={(html) => saveMediaCaption(it, html)}
                       />
@@ -1588,12 +1605,14 @@ function NoteBody({
   color,
   onFocus,
   onSave,
+  editable = true,
 }: {
   itemId: string;
   initial: string;
   color: string;
   onFocus: () => void;
   onSave: (html: string) => void;
+  editable?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1603,12 +1622,12 @@ function NoteBody({
   return (
     <div
       ref={ref}
-      contentEditable
+      contentEditable={editable}
       suppressContentEditableWarning
       onFocus={onFocus}
       onBlur={() => onSave(ref.current?.innerHTML ?? "")}
       data-placeholder="Note…"
-      className="rte min-h-0 w-full flex-1 cursor-text overflow-auto px-2 pb-2 text-sm outline-none"
+      className={`rte min-h-0 w-full flex-1 overflow-auto px-2 pb-2 text-sm outline-none ${editable ? "cursor-text" : ""}`}
       style={{ color }}
     />
   );
@@ -1621,12 +1640,14 @@ function HeadingBody({
   color,
   onFocus,
   onSave,
+  editable = true,
 }: {
   itemId: string;
   initial: string;
   color: string;
   onFocus: () => void;
   onSave: (text: string) => void;
+  editable?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1636,13 +1657,13 @@ function HeadingBody({
   return (
     <div
       ref={ref}
-      contentEditable
+      contentEditable={editable}
       suppressContentEditableWarning
       onFocus={onFocus}
       onPointerDown={(e) => e.stopPropagation()}
       onBlur={() => onSave(ref.current?.textContent ?? "")}
       data-placeholder="Heading"
-      className="ce-ph w-full cursor-text text-[26px] font-extrabold leading-tight tracking-tight outline-none"
+      className={`ce-ph w-full text-[26px] font-extrabold leading-tight tracking-tight outline-none ${editable ? "cursor-text" : ""}`}
       style={{ color }}
     />
   );
@@ -1655,11 +1676,13 @@ function CaptionBody({
   initial,
   onFocus,
   onSave,
+  editable = true,
 }: {
   itemId: string;
   initial: string;
   onFocus: () => void;
   onSave: (html: string) => void;
+  editable?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1669,13 +1692,13 @@ function CaptionBody({
   return (
     <div
       ref={ref}
-      contentEditable
+      contentEditable={editable}
       suppressContentEditableWarning
       onFocus={onFocus}
       onPointerDown={(e) => e.stopPropagation()}
       onBlur={() => onSave(ref.current?.innerHTML ?? "")}
       data-placeholder="Add a caption"
-      className="rte w-full cursor-text px-2.5 py-2 text-[13px] text-text outline-none"
+      className={`rte w-full px-2.5 py-2 text-[13px] text-text outline-none ${editable ? "cursor-text" : ""}`}
     />
   );
 }

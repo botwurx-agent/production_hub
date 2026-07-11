@@ -179,3 +179,5 @@
 .rte blockquote { border-left: 3px solid var(--border-strong); padding-left: 0.8em; margin: 0.4em 0; color: var(--text-muted); font-style: italic; }
 .rte:empty::before { content: attr(data-placeholder); color: var(--text-faint); }
 .ce-ph:empty::before { content: attr(data-placeholder); color: var(--text-faint); }
+/* Read-only shared board: hide edit-only affordances. */
+[data-readonly="1"] [data-resize] { display: none; }
