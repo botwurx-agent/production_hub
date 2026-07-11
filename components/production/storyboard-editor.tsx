@@ -17,6 +17,7 @@ import {
 } from "@/app/(app)/projects/[id]/storyboard-actions";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
+import { ShareDocButton } from "@/components/review/share-doc-button";
 
 export type StoryboardBoard = { id: string; name: string };
 export type FrameView = {
@@ -150,6 +151,11 @@ export function StoryboardEditor({
                 kind="storyboard"
                 targetId={active.id}
                 inReview={reviewedIds.includes(active.id)}
+              />
+              <ShareDocButton
+                projectId={projectId}
+                kind="storyboard"
+                targetId={active.id}
               />
               <button
                 onClick={() => {

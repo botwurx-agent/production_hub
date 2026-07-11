@@ -9,6 +9,7 @@ import {
 } from "@/components/production/shot-board-editor";
 import { loadProjectAssets } from "@/lib/project-data";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
+import { ShareDocButton } from "@/components/review/share-doc-button";
 import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
@@ -105,12 +106,19 @@ export default async function ShotListPage({
           </svg>
         }
         action={
-          <SendToReviewButton
-            projectId={project.id}
-            kind="shot_list"
-            targetId={project.id}
-            inReview={Boolean(docReview)}
-          />
+          <div className="flex items-center gap-2">
+            <SendToReviewButton
+              projectId={project.id}
+              kind="shot_list"
+              targetId={project.id}
+              inReview={Boolean(docReview)}
+            />
+            <ShareDocButton
+              projectId={project.id}
+              kind="shot_list"
+              targetId={project.id}
+            />
+          </div>
         }
       />
       <ShotBoardEditor
