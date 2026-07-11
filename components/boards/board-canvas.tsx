@@ -10,6 +10,7 @@ import {
   type LineData,
 } from "@/lib/board-line";
 import { parseNoteStyle, noteColorVars } from "@/lib/board-note-style";
+import { parseTodo, type TodoRow } from "@/lib/board-todo";
 import {
   moveItem,
   resizeItem,
@@ -28,23 +29,6 @@ import {
   type BoardConnection,
 } from "@/app/(app)/boards/actions";
 
-type TodoRow = { id: string; text: string; done: boolean };
-function parseTodo(text: string | null): TodoRow[] {
-  if (!text) return [];
-  try {
-    const a = JSON.parse(text);
-    if (!Array.isArray(a)) return [];
-    return a
-      .filter((r) => r && typeof r.text === "string")
-      .map((r) => ({
-        id: String(r.id ?? crypto.randomUUID()),
-        text: r.text as string,
-        done: Boolean(r.done),
-      }));
-  } catch {
-    return [];
-  }
-}
 function domainOf(url: string | null): string {
   if (!url) return "";
   try {
@@ -978,18 +962,6 @@ export function BoardCanvas({
                         </svg>
                         To-do
                       </span>
-                      {isSel && (
-                        <button
-                          onClick={() => remove(it.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="grid h-4 w-4 place-items-center rounded-[5px] hover:bg-black/10"
-                          aria-label="Delete checklist"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-                            <path d="M18 6 6 18M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
                     </div>
                     <div className="flex-1 space-y-1 overflow-auto px-2 py-2">
                       {rows.map((r) => (

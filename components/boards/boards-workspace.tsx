@@ -40,6 +40,7 @@ import {
   serializeNoteStyle,
   NOTE_COLORS,
 } from "@/lib/board-note-style";
+import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { Board } from "@/lib/database.types";
 
@@ -213,6 +214,7 @@ export function BoardsWorkspace({
     ? items.find((i) => i.id === selectedId) ?? null
     : null;
   const selectedNote = selectedItem?.kind === "note" ? selectedItem : null;
+  const selectedTodo = selectedItem?.kind === "todo" ? selectedItem : null;
 
   function setCardHue(hue: string) {
     if (!selectedItem) return;
@@ -220,6 +222,15 @@ export function BoardsWorkspace({
       prev.map((p) => (p.id === selectedItem.id ? { ...p, hue } : p))
     );
     void updateItemHue(selectedItem.id, hue);
+  }
+  // Rewrite the selected to-do's rows (optimistic + persisted).
+  function mutateSelectedTodo(fn: (rows: TodoRow[]) => TodoRow[]) {
+    if (!selectedTodo) return;
+    const text = serializeTodo(fn(parseTodo(selectedTodo.text)));
+    setItems((prev) =>
+      prev.map((p) => (p.id === selectedTodo.id ? { ...p, text } : p))
+    );
+    void updateItemText(selectedTodo.id, text);
   }
   function deleteSelectedCard() {
     const id = selectedId;
@@ -435,6 +446,15 @@ export function BoardsWorkspace({
                 key={selectedNote.id}
                 note={selectedNote}
                 onHue={setCardHue}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
+            ) : selectedTodo ? (
+              <TodoPanel
+                key={selectedTodo.id}
+                todo={selectedTodo}
+                onHue={setCardHue}
+                onMutate={mutateSelectedTodo}
                 onDelete={deleteSelectedCard}
                 onClose={() => setSelectedId(null)}
               />
@@ -886,6 +906,113 @@ function NotePanel({
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
         </svg>
         Delete note
+      </button>
+    </div>
+  );
+}
+
+function TodoPanel({
+  todo,
+  onHue,
+  onMutate,
+  onDelete,
+  onClose,
+}: {
+  todo: BoardItemView;
+  onHue: (hue: string) => void;
+  onMutate: (fn: (rows: TodoRow[]) => TodoRow[]) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const rows = parseTodo(todo.text);
+  const total = rows.length;
+  const done = rows.filter((r) => r.done).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const allDone = total > 0 && done === total;
+  const hue = todo.hue ?? "blue";
+
+  const row =
+    "flex w-full items-center gap-2 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:pointer-events-none disabled:opacity-40";
+
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">To-do</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      {/* Progress */}
+      <div>
+        <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-text-muted">
+          <span>Progress</span>
+          <span>{done}/{total}</span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${pct}%`, backgroundColor: `var(--h-${hue})` }}
+          />
+        </div>
+      </div>
+
+      {/* Row actions */}
+      <div className="flex flex-col gap-1.5">
+        <button
+          className={row}
+          onClick={() => onMutate((rs) => [...rs, { id: crypto.randomUUID(), text: "", done: false }])}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          Add item
+        </button>
+        <button
+          className={row}
+          disabled={total === 0}
+          onClick={() => onMutate((rs) => rs.map((r) => ({ ...r, done: !allDone })))}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></svg>
+          {allDone ? "Uncheck all" : "Check all"}
+        </button>
+        <button
+          className={row}
+          disabled={done === 0}
+          onClick={() => onMutate((rs) => rs.filter((r) => !r.done))}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" /></svg>
+          Clear completed
+        </button>
+      </div>
+
+      {/* Header color */}
+      <div>
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Header color</p>
+        <div className="flex flex-wrap gap-1.5">
+          {NOTE_COLORS.map((h) => (
+            <button
+              key={h}
+              onClick={() => onHue(h)}
+              aria-label={h}
+              className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+              style={{
+                backgroundColor: `var(--h-${h}-bg)`,
+                boxShadow: hue === h ? "0 0 0 2px var(--accent)" : undefined,
+              }}
+            >
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(--h-${h})` }} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete checklist
       </button>
     </div>
   );
