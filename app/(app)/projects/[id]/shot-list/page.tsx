@@ -10,7 +10,7 @@ import {
 import { loadProjectAssets } from "@/lib/project-data";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
-import { DocFeedbackChip } from "@/components/review/doc-feedback-chip";
+import { DocReviewButton } from "@/components/review/doc-review-button";
 import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
@@ -116,7 +116,13 @@ export default async function ShotListPage({
         }
         action={
           <div className="flex items-center gap-2">
-            <DocFeedbackChip projectId={project.id} count={shotCommentCount ?? 0} />
+            <DocReviewButton
+              projectId={project.id}
+              kind="shot_list"
+              targetId={project.id}
+              title="Shot list"
+              count={shotCommentCount ?? 0}
+            />
             <SendToReviewButton
               projectId={project.id}
               kind="shot_list"
