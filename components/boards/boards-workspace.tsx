@@ -46,6 +46,7 @@ import {
 } from "@/lib/board-note-style";
 import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
 import { videoEmbed } from "@/lib/video-embed";
+import { parseMediaMeta, serializeMediaMeta } from "@/lib/board-media";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { Board } from "@/lib/database.types";
 
@@ -1338,7 +1339,7 @@ function ImagePanel({
     (image.mimeType?.startsWith("video/") ||
       /\.(mp4|webm|mov|m4v|ogv)$/i.test(image.name ?? ""));
   const label = isImg ? "Image" : isVid ? "Video" : "File";
-  const fit = image.text === "contain" ? "contain" : "cover";
+  const meta = parseMediaMeta(image.text);
   const chip = (active: boolean) =>
     `flex-1 rounded-[8px] border px-2 py-1.5 text-xs font-semibold transition ${
       active ? "border-accent bg-accent-soft text-accent" : "border-border text-text-muted hover:text-text"
@@ -1356,11 +1357,13 @@ function ImagePanel({
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Fit</p>
           <div className="flex gap-1.5">
-            <button className={chip(fit === "cover")} onClick={() => onFit("cover")} title="Crop to fill the frame">Fill</button>
-            <button className={chip(fit === "contain")} onClick={() => onFit("contain")} title="Show the whole image">Fit</button>
+            <button className={chip(meta.fit === "cover")} onClick={() => onFit(serializeMediaMeta({ ...meta, fit: "cover" }))} title="Crop to fill the frame">Fill</button>
+            <button className={chip(meta.fit === "contain")} onClick={() => onFit(serializeMediaMeta({ ...meta, fit: "contain" }))} title="Show the whole image">Fit</button>
           </div>
         </div>
       )}
+
+      <CaptionTools itemId={image.id} />
 
       {image.signedUrl && (
         <a
@@ -1383,6 +1386,53 @@ function ImagePanel({
         </svg>
         Delete
       </button>
+    </div>
+  );
+}
+
+// Rich-text tools for an image / video card's caption. Applies formatting to the
+// caption contentEditable inside the selected card (found by its data-item-id).
+function CaptionTools({ itemId }: { itemId: string }) {
+  function exec(cmd: string, val?: string) {
+    const el = document.querySelector(
+      `[data-item-id="${itemId}"] [contenteditable="true"]`
+    ) as HTMLElement | null;
+    el?.focus();
+    document.execCommand(cmd, false, val);
+  }
+  const hold = (fn: () => void) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    fn();
+  };
+  const fmt =
+    "grid h-8 flex-1 place-items-center rounded-[8px] border border-border text-[13px] font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text";
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Caption</p>
+      <div className="flex gap-1.5">
+        <button className={fmt} style={{ fontWeight: 800 }} title="Bold" onMouseDown={hold(() => exec("bold"))}>B</button>
+        <button className={`${fmt} italic`} title="Italic" onMouseDown={hold(() => exec("italic"))}>I</button>
+        <button className={`${fmt} underline`} title="Underline" onMouseDown={hold(() => exec("underline"))}>U</button>
+        <button className={`${fmt} line-through`} title="Strikethrough" onMouseDown={hold(() => exec("strikeThrough"))}>S</button>
+      </div>
+      <div className="mt-1.5 flex gap-1.5">
+        <button className={fmt} title="Align left" onMouseDown={hold(() => exec("justifyLeft"))}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h10M4 18h13" /></svg>
+        </button>
+        <button className={fmt} title="Align center" onMouseDown={hold(() => exec("justifyCenter"))}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M7 12h10M6 18h12" /></svg>
+        </button>
+        <button
+          className={fmt}
+          title="Add link"
+          onMouseDown={hold(() => {
+            const url = window.prompt("Link URL (https://…)");
+            if (url) exec("createLink", /^https?:\/\//i.test(url) ? url : `https://${url}`);
+          })}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" /></svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -1411,6 +1461,8 @@ function VideoPanel({
           {emb.title}
         </p>
       )}
+
+      <CaptionTools itemId={video.id} />
 
       {video.url && (
         <a

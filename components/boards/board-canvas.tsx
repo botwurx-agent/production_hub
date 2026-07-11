@@ -12,6 +12,7 @@ import {
 import { parseNoteStyle, noteColorVars } from "@/lib/board-note-style";
 import { parseTodo, type TodoRow } from "@/lib/board-todo";
 import { videoEmbed } from "@/lib/video-embed";
+import { parseMediaMeta, serializeMediaMeta } from "@/lib/board-media";
 import {
   moveItem,
   resizeItem,
@@ -389,6 +390,12 @@ export function BoardCanvas({
     return { x: Math.round(c.x), y: Math.round(c.y) };
   }
   if (placementRef) placementRef.current = viewportCenter;
+  // Persist a caption (HTML) onto an image / video card, preserving its fit.
+  function saveMediaCaption(it: BoardItemView, html: string) {
+    const text = serializeMediaMeta({ ...parseMediaMeta(it.text), caption: html });
+    setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, text } : p)));
+    void updateItemText(it.id, text);
+  }
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -1090,6 +1097,8 @@ export function BoardCanvas({
 
               if (it.kind === "video") {
                 const emb = videoEmbed(it.url);
+                const vmeta = parseMediaMeta(it.text);
+                const showVCap = isSel || !!vmeta.caption;
                 return (
                   <div
                     key={it.id}
@@ -1141,6 +1150,16 @@ export function BoardCanvas({
                         <span className="text-[11px] font-semibold text-accent">Open video ↗</span>
                         <span className="text-[10px] text-text-faint">Unrecognized link</span>
                       </a>
+                    )}
+                    {showVCap && (
+                      <div className="shrink-0 border-t border-border bg-surface" onPointerDown={(e) => e.stopPropagation()}>
+                        <CaptionBody
+                          itemId={it.id}
+                          initial={vmeta.caption}
+                          onFocus={() => setSelected(it.id)}
+                          onSave={(html) => saveMediaCaption(it, html)}
+                        />
+                      </div>
                     )}
                     <span
                       data-resize="1"
@@ -1268,45 +1287,59 @@ export function BoardCanvas({
                 it.signedUrl &&
                 (it.mimeType?.startsWith("image/") ||
                   /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(it.name ?? ""));
+              const media = parseMediaMeta(it.text);
+              const showCap = isSel || !!media.caption;
 
               return (
                 <div
                   key={it.id}
                   data-item-id={it.id}
                   style={{ ...common, boxShadow: ring }}
-                  className="group overflow-hidden rounded-[10px] bg-surface"
+                  className="group flex flex-col overflow-hidden rounded-[10px] bg-surface"
                   onPointerDown={(e) => startMove(e, it)}
                 >
-                  {isImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={it.signedUrl!}
-                      alt={it.name ?? ""}
-                      draggable={false}
-                      className={`h-full w-full select-none ${
-                        it.text === "contain" ? "object-contain" : "object-cover"
-                      }`}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-text-muted">
-                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <path d="M14 2v6h6" />
-                      </svg>
-                      <span className="line-clamp-2 text-xs font-semibold">
-                        {it.name ?? "File"}
-                      </span>
-                      {it.signedUrl && (
-                        <a
-                          href={it.signedUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs font-semibold text-accent hover:underline"
-                          onPointerDown={(e) => e.stopPropagation()}
-                        >
-                          Open
-                        </a>
-                      )}
+                  <div className="relative min-h-0 flex-1">
+                    {isImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={it.signedUrl!}
+                        alt={it.name ?? ""}
+                        draggable={false}
+                        className={`h-full w-full select-none ${
+                          media.fit === "contain" ? "object-contain" : "object-cover"
+                        }`}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-text-muted">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <path d="M14 2v6h6" />
+                        </svg>
+                        <span className="line-clamp-2 text-xs font-semibold">
+                          {it.name ?? "File"}
+                        </span>
+                        {it.signedUrl && (
+                          <a
+                            href={it.signedUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-semibold text-accent hover:underline"
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            Open
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {showCap && (
+                    <div className="shrink-0 border-t border-border bg-surface" onPointerDown={(e) => e.stopPropagation()}>
+                      <CaptionBody
+                        itemId={it.id}
+                        initial={media.caption}
+                        onFocus={() => setSelected(it.id)}
+                        onSave={(html) => saveMediaCaption(it, html)}
+                      />
                     </div>
                   )}
                   <span
@@ -1611,6 +1644,38 @@ function HeadingBody({
       data-placeholder="Heading"
       className="ce-ph w-full cursor-text text-[26px] font-extrabold leading-tight tracking-tight outline-none"
       style={{ color }}
+    />
+  );
+}
+
+// Rich-text caption under an image / video card. Formatting is applied from the
+// card's panel (which finds this via the card's data-item-id).
+function CaptionBody({
+  itemId,
+  initial,
+  onFocus,
+  onSave,
+}: {
+  itemId: string;
+  initial: string;
+  onFocus: () => void;
+  onSave: (html: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = initial || "";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemId]);
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onFocus={onFocus}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={() => onSave(ref.current?.innerHTML ?? "")}
+      data-placeholder="Add a caption"
+      className="rte w-full cursor-text px-2.5 py-2 text-[13px] text-text outline-none"
     />
   );
 }
