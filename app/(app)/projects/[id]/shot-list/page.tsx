@@ -120,7 +120,6 @@ export default async function ShotListPage({
               projectId={project.id}
               kind="shot_list"
               targetId={project.id}
-              title="Shot list"
               count={shotCommentCount ?? 0}
             />
             <SendToReviewButton

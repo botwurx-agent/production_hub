@@ -153,7 +153,6 @@ export function StoryboardEditor({
                 projectId={projectId}
                 kind="storyboard"
                 targetId={active.id}
-                title={active.name || "Storyboard"}
                 count={commentCounts[active.id] ?? 0}
               />
               <SendToReviewButton
