@@ -11,6 +11,7 @@ import {
 } from "@/lib/board-line";
 import { parseNoteStyle, noteColorVars } from "@/lib/board-note-style";
 import { parseTodo, type TodoRow } from "@/lib/board-todo";
+import { videoEmbed } from "@/lib/video-embed";
 import {
   moveItem,
   resizeItem,
@@ -40,6 +41,7 @@ const HINT_TEXT: Record<string, { title: string; body: string }> = {
   image: { title: "Image", body: "Drop images anywhere, or import from assets, Drive, or Figma." },
   color: { title: "Color", body: "A palette swatch. Pick any hex in the panel on the left." },
   heading: { title: "Heading", body: "A big section label to organize areas of the board. Just type." },
+  video: { title: "Video", body: "Plays inline from a YouTube, Vimeo, or Loom link." },
 };
 
 // Normalize a stored hex ("#abc", "abcdef") to "#RRGGBB"-ish; fall back to accent.
@@ -1076,6 +1078,70 @@ export function BoardCanvas({
                         + Add item
                       </button>
                     </div>
+                    <span
+                      data-resize="1"
+                      onPointerDown={(e) => startResize(e, it)}
+                      className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
+                      style={{ touchAction: "none" }}
+                    />
+                  </div>
+                );
+              }
+
+              if (it.kind === "video") {
+                const emb = videoEmbed(it.url);
+                return (
+                  <div
+                    key={it.id}
+                    data-item-id={it.id}
+                    style={{ ...common, boxShadow: ring }}
+                    className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-black"
+                  >
+                    {/* Drag handle so the player controls stay usable */}
+                    <div
+                      className="flex h-5 shrink-0 cursor-move items-center bg-surface px-1.5 text-text-faint"
+                      style={{ touchAction: "none" }}
+                      onPointerDown={(e) => startMove(e, it)}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" opacity="0.5" aria-hidden>
+                        <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
+                      </svg>
+                    </div>
+                    {emb ? (
+                      emb.provider === "file" ? (
+                        <video
+                          src={emb.embedUrl}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="min-h-0 w-full flex-1 object-contain"
+                          style={{ background: "#000" }}
+                        />
+                      ) : (
+                        <iframe
+                          src={emb.embedUrl}
+                          title={emb.title}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="min-h-0 w-full flex-1"
+                          style={{ border: 0 }}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                          allowFullScreen
+                        />
+                      )
+                    ) : (
+                      <a
+                        href={it.url ?? "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="flex flex-1 flex-col items-center justify-center gap-1 bg-surface p-3 text-center"
+                      >
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="1.6"><path d="m10 8 6 4-6 4V8z" /><rect x="2" y="4" width="20" height="16" rx="3" /></svg>
+                        <span className="text-[11px] font-semibold text-accent">Open video ↗</span>
+                        <span className="text-[10px] text-text-faint">Unrecognized link</span>
+                      </a>
+                    )}
                     <span
                       data-resize="1"
                       onPointerDown={(e) => startResize(e, it)}

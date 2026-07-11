@@ -23,6 +23,7 @@ import {
   addLine,
   addColorItem,
   addHeadingItem,
+  addVideoItem,
   addLinkItem,
   addDriveItems,
   updateItemText,
@@ -44,6 +45,7 @@ import {
   NOTE_COLORS,
 } from "@/lib/board-note-style";
 import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
+import { videoEmbed } from "@/lib/video-embed";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import type { Board } from "@/lib/database.types";
 
@@ -85,6 +87,7 @@ export function BoardsWorkspace({
   const [driveOpen, setDriveOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -318,6 +321,7 @@ export function BoardsWorkspace({
   const selectedImage = selectedItem?.kind === "image" ? selectedItem : null;
   const selectedColor = selectedItem?.kind === "color" ? selectedItem : null;
   const selectedHeading = selectedItem?.kind === "heading" ? selectedItem : null;
+  const selectedVideo = selectedItem?.kind === "video" ? selectedItem : null;
 
   function setSelectedName(name: string) {
     if (!selectedItem) return;
@@ -377,9 +381,7 @@ export function BoardsWorkspace({
 
   function onDropFiles(files: FileList, x: number, y: number) {
     if (!activeId) return;
-    const imgs = Array.from(files).filter(
-      (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
-    );
+    const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (imgs.length === 0) return;
     const fd = new FormData();
     fd.set("boardId", activeId);
@@ -552,7 +554,7 @@ export function BoardsWorkspace({
             <input
               ref={fileRef}
               type="file"
-              accept="image/*,video/*"
+              accept="image/*"
               multiple
               className="hidden"
               onChange={(e) => onUpload(e.target.files)}
@@ -592,6 +594,13 @@ export function BoardsWorkspace({
                 key={selectedLink.id}
                 link={selectedLink}
                 onTitle={setSelectedName}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
+            ) : selectedVideo ? (
+              <VideoPanel
+                key={selectedVideo.id}
+                video={selectedVideo}
                 onDelete={deleteSelectedCard}
                 onClose={() => setSelectedId(null)}
               />
@@ -647,7 +656,10 @@ export function BoardsWorkspace({
                 <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
                   <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
                 </RailBtn>
-                <RailBtn label="Upload image or video" disabled={busy} onClick={() => fileRef.current?.click()}>
+                <RailBtn label="Video (paste a link)" onClick={() => setVideoOpen(true)}>
+                  <rect x="2" y="4" width="20" height="16" rx="3" /><path d="m10 8 6 4-6 4V8z" />
+                </RailBtn>
+                <RailBtn label="Upload image" disabled={busy} onClick={() => fileRef.current?.click()}>
                   <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
                 </RailBtn>
                 <RailBtn label="Color swatch" disabled={busy} dragKind="color" onClick={addColorToBoard}>
@@ -729,6 +741,19 @@ export function BoardsWorkspace({
             onAdded={(id) => {
               reload(active.id);
               if (id) maybeHint("link", id);
+            }}
+          />
+          <VideoModal
+            boardId={active.id}
+            open={videoOpen}
+            spot={spot}
+            onClose={() => setVideoOpen(false)}
+            onAdded={(id) => {
+              reload(active.id);
+              if (id) {
+                setSelectedId(id);
+                maybeHint("video", id);
+              }
             }}
           />
           <BoardSettings
@@ -1362,6 +1387,63 @@ function ImagePanel({
   );
 }
 
+function VideoPanel({
+  video,
+  onDelete,
+  onClose,
+}: {
+  video: BoardItemView;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const emb = videoEmbed(video.url);
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Video</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      {emb && (
+        <p className="rounded-[8px] bg-surface-2 px-2 py-1.5 text-[11px] font-semibold text-text-muted">
+          {emb.title}
+        </p>
+      )}
+
+      {video.url && (
+        <a
+          href={video.url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-center gap-1.5 rounded-[9px] border border-accent bg-accent-soft px-2 py-1.5 text-xs font-bold text-accent transition hover:brightness-95"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
+          Open original
+        </a>
+      )}
+
+      {video.url && (
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Link</p>
+          <p className="break-all rounded-[8px] bg-surface-2 px-2 py-1.5 text-[11px] text-text-muted">{video.url}</p>
+        </div>
+      )}
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete video
+      </button>
+    </div>
+  );
+}
+
 function ColorPanel({
   color,
   onHex,
@@ -1730,6 +1812,85 @@ function LinkModal({
           </Button>
           <Button onClick={submit} disabled={busy || !url.trim()}>
             {busy ? "Fetching preview…" : "Add link"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function VideoModal({
+  boardId,
+  open,
+  spot,
+  onClose,
+  onAdded,
+}: {
+  boardId: string;
+  open: boolean;
+  spot: () => { x: number; y: number };
+  onClose: () => void;
+  onAdded: (id: string | null) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setUrl("");
+      setErr(null);
+      setBusy(false);
+    }
+  }, [open]);
+
+  async function submit() {
+    const u = url.trim();
+    if (!u) return;
+    if (!videoEmbed(u)) {
+      setErr("Paste a YouTube, Vimeo, or Loom link (or a direct video file URL).");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    const at = spot();
+    const res = await addVideoItem(boardId, u, at.x, at.y);
+    setBusy(false);
+    if ("error" in res) {
+      setErr(res.error);
+      return;
+    }
+    onAdded("id" in res ? res.id : null);
+    onClose();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Add a video">
+      <div className="space-y-3">
+        <p className="text-sm text-text-muted">
+          Paste a YouTube, Vimeo, or Loom link. It plays inline on the board.
+        </p>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          autoFocus
+          placeholder="https://youtube.com/watch?v=…"
+          className="w-full rounded-[11px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong"
+        />
+        {err && (
+          <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
+            {err}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={busy || !url.trim()}>
+            {busy ? "Adding…" : "Add video"}
           </Button>
         </div>
       </div>

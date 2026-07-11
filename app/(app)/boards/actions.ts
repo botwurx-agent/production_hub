@@ -555,6 +555,40 @@ export async function addColorItem(
   return { id: data.id };
 }
 
+// A video embed card. The pasted URL (YouTube/Vimeo/Loom/direct file) lives in
+// `url`; the board render derives the player embed from it.
+export async function addVideoItem(
+  boardId: string,
+  url: string,
+  x: number,
+  y: number
+): Promise<{ id: string } | { error: string }> {
+  const clean = url.trim();
+  if (!/^https?:\/\//i.test(clean)) return { error: "Enter a valid http(s) video link." };
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const z = await nextZ(supabase, boardId);
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "video",
+      url: clean,
+      x,
+      y,
+      w: 360,
+      h: 222,
+      z,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/boards");
+  return { id: data.id };
+}
+
 // A large section-heading label (transparent, no box). Text lives in `text`.
 export async function addHeadingItem(
   boardId: string,
