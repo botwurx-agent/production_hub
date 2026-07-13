@@ -11,7 +11,7 @@ import {
 } from "@/lib/ai";
 import {
   gatherProjectContext,
-  gatherProjectEmailContext,
+  gatherProjectCommsContext,
 } from "@/lib/project-context";
 
 export type SummaryResult =
@@ -34,10 +34,11 @@ export async function summarizeProject(
   const supabase = createClient();
   const context = await gatherProjectContext(supabase, projectId);
   if (!context) return { error: "Project not found." };
-  // Pull the actual content of linked Gmail threads so the summary reflects what
-  // has been discussed, agreed, or is awaiting a reply (best-effort).
-  const email = await gatherProjectEmailContext(supabase, projectId);
-  const fullContext = email ? `${context}\n\n${email}` : context;
+  // Pull the actual content of linked email, Slack, and Google Chat conversations
+  // so the summary reflects what has been discussed across every channel
+  // (best-effort per channel).
+  const comms = await gatherProjectCommsContext(supabase, projectId);
+  const fullContext = comms ? `${context}\n\n${comms}` : context;
 
   try {
     const content = await generateProjectSummary(fullContext);
@@ -85,8 +86,8 @@ export async function draftClientUpdate(
   const supabase = createClient();
   const context = await gatherProjectContext(supabase, projectId);
   if (!context) return { error: "Project not found." };
-  const email = await gatherProjectEmailContext(supabase, projectId);
-  const fullContext = email ? `${context}\n\n${email}` : context;
+  const comms = await gatherProjectCommsContext(supabase, projectId);
+  const fullContext = comms ? `${context}\n\n${comms}` : context;
 
   try {
     const draft = await generateClientUpdate(fullContext);
