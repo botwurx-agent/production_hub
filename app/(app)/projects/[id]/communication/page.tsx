@@ -12,6 +12,7 @@ import {
 } from "@/components/projects/client-update";
 import { aiConfigured } from "@/lib/ai";
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
+import { getAccessToken, getThreadPreview, type ThreadPreview } from "@/lib/gmail";
 
 export default async function CommunicationPage({
   params,
@@ -37,12 +38,12 @@ export default async function CommunicationPage({
   ] = await Promise.all([
     supabase
       .from("email_threads")
-      .select("id, gmail_thread_id, subject, last_message_at")
+      .select("id, gmail_thread_id, subject, last_message_at, last_read_at")
       .eq("project_id", params.id)
       .order("last_message_at", { ascending: false, nullsFirst: false }),
     supabase
       .from("email_accounts")
-      .select("id, scope")
+      .select("id, scope, access_token, refresh_token, token_expiry")
       .eq("provider", "google")
       .limit(1)
       .maybeSingle(),
@@ -65,6 +66,40 @@ export default async function CommunicationPage({
   ]);
 
   const clientName = (project.client as { name: string } | null)?.name ?? null;
+
+  // Fetch a lightweight preview (latest sender + snippet + unread count) for each
+  // linked email thread, so the Communication page shows a Gmail-like preview and
+  // a per-conversation unread badge. Best-effort and capped so a large project
+  // does not fan out into hundreds of Gmail calls; the rest fall back to no
+  // preview (still readable on click).
+  const threadList = emailThreads ?? [];
+  const previews = new Map<string, ThreadPreview>();
+  if (emailAccount && threadList.length > 0) {
+    try {
+      const token = await getAccessToken(supabase, emailAccount);
+      const capped = threadList.slice(0, 15);
+      const results = await Promise.all(
+        capped.map(async (t) => {
+          const sinceMs = t.last_read_at
+            ? new Date(t.last_read_at).getTime()
+            : 0;
+          try {
+            const p = await getThreadPreview(token, t.gmail_thread_id, sinceMs);
+            return [t.id, p] as const;
+          } catch {
+            return [t.id, null] as const;
+          }
+        })
+      );
+      for (const [id, p] of results) if (p) previews.set(id, p);
+    } catch {
+      // Gmail unavailable (token expired, revoked): skip previews entirely.
+    }
+  }
+  const emailThreadsWithPreview = threadList.map((t) => ({
+    ...t,
+    preview: previews.get(t.id) ?? null,
+  }));
 
   // Channels a client update can be sent through: linked to the project and the
   // provider connected with send access.
@@ -139,7 +174,7 @@ export default async function CommunicationPage({
             connected={Boolean(emailAccount)}
             canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
             defaultQuery={clientName ?? ""}
-            threads={emailThreads ?? []}
+            threads={emailThreadsWithPreview}
           />
         </Card>
 

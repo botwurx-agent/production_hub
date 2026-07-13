@@ -228,6 +228,51 @@ export async function countNewIncoming(
   return n;
 }
 
+export type ThreadPreview = {
+  from: string;
+  snippet: string;
+  dateMs: number;
+  unread: number;
+};
+
+// One metadata call per thread: the latest message's sender + snippet + time,
+// plus the count of incoming messages newer than the last read (for the badge).
+export async function getThreadPreview(
+  accessToken: string,
+  gmailThreadId: string,
+  sinceMs: number
+): Promise<ThreadPreview | null> {
+  const t = await gapi<{
+    messages?: {
+      internalDate?: string;
+      labelIds?: string[];
+      snippet?: string;
+      payload?: { headers?: GmailHeader[] };
+    }[];
+  }>(accessToken, `threads/${gmailThreadId}?format=metadata&metadataHeaders=From`);
+  const msgs = t.messages ?? [];
+  if (msgs.length === 0) return null;
+  let unread = 0;
+  let latest = msgs[0];
+  let latestMs = Number(msgs[0].internalDate ?? 0);
+  for (const m of msgs) {
+    const ms = Number(m.internalDate ?? 0);
+    const labels = m.labelIds ?? [];
+    if (ms > sinceMs && !labels.includes("SENT") && !labels.includes("DRAFT")) unread += 1;
+    if (ms >= latestMs) {
+      latest = m;
+      latestMs = ms;
+    }
+  }
+  const h = headerMap(latest.payload?.headers);
+  return {
+    from: h["from"] || "",
+    snippet: (latest.snippet || "").trim(),
+    dateMs: latestMs,
+    unread,
+  };
+}
+
 export type ReplyContext = {
   to: string;
   subject: string;
