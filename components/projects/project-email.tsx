@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,43 @@ export type LinkedThread = {
   last_message_at: string | null;
   preview?: ThreadPreview | null;
 };
+
+// Renders plain email body text with URLs and email addresses turned into
+// clickable links. Works off the plain text (not HTML), so there is no markup
+// injection: matched spans become <a>, everything else stays literal text.
+const LINK_RE =
+  /(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"]|www\.[^\s<>()]+[^\s<>().,;:!?'"]|[^\s<>()@]+@[^\s<>()@]+\.[^\s<>().,;:!?'"]+)/gi;
+
+function linkify(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  for (const m of text.matchAll(LINK_RE)) {
+    const raw = m[0];
+    const start = m.index ?? 0;
+    if (start > last) nodes.push(text.slice(last, start));
+    const isEmail = raw.includes("@") && !/^https?:\/\//i.test(raw);
+    const href = isEmail
+      ? `mailto:${raw}`
+      : raw.startsWith("www.")
+      ? `https://${raw}`
+      : raw;
+    nodes.push(
+      <a
+        key={`lnk-${key++}`}
+        href={href}
+        target={isEmail ? undefined : "_blank"}
+        rel="noopener noreferrer"
+        className="break-all font-medium text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
+      >
+        {raw}
+      </a>
+    );
+    last = start + raw.length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
 
 // A raw From header ("Jane Doe <jane@x.com>") trimmed to a friendly display
 // name: the quoted/plain name if present, otherwise the address.
@@ -287,7 +324,7 @@ export function ThreadReader({
                   <p
                     className={`whitespace-pre-wrap break-words text-sm text-text-muted ${expanded ? "line-clamp-[12]" : ""}`}
                   >
-                    {m.bodyText}
+                    {linkify(m.bodyText)}
                   </p>
                   {m.attachments.length > 0 && (
                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3">
