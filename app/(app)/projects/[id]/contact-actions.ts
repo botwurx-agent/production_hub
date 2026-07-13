@@ -8,7 +8,7 @@ export type ContactState = { error?: string } | null;
 
 export type ContactInput = {
   name: string;
-  type?: string | null; // category: crew | talent | extras | client
+  type?: string | null; // category: crew | talent | extras | vendor | client
   role?: string | null; // position
   company?: string | null;
   email?: string | null;
@@ -27,7 +27,7 @@ function cleanRate(v: number | null | undefined): number | null {
   return v;
 }
 
-const CATEGORIES = ["crew", "talent", "extras", "client"];
+const CATEGORIES = ["crew", "talent", "extras", "vendor", "client"];
 function cleanType(v: string | null | undefined): string {
   return CATEGORIES.includes(v ?? "") ? (v as string) : "crew";
 }
