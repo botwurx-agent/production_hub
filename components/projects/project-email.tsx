@@ -70,6 +70,68 @@ function linkify(text: string): ReactNode[] {
   return nodes;
 }
 
+// Splits a plain email body into the fresh content and the quoted history that
+// mail clients append (the "On ... wrote:" / ">" trail, Outlook forward blocks).
+// Gmail hides that trail behind a "..." toggle so a reply doesn't run the whole
+// prior thread down the window; we do the same.
+function splitQuoted(text: string): { main: string; quoted: string } {
+  const patterns: RegExp[] = [
+    /^[ \t]*On\b[\s\S]{0,300}?\bwrote:[ \t]*$/m, // Gmail "On ... wrote:" (may wrap)
+    /^[ \t]*-{2,}[ \t]*Original Message[ \t]*-{2,}/im, // Outlook
+    /^[ \t]*_{5,}[ \t]*$/m, // Outlook divider line
+    /^[ \t]*From:[ \t].+[\r\n]+(?:.*[\r\n]+){0,3}?[ \t]*(?:Sent|Date|To):[ \t]/im, // forwarded header block
+    /^[ \t]*>.*$/m, // first quoted line
+  ];
+  let cut = -1;
+  for (const p of patterns) {
+    const m = p.exec(text);
+    if (m && typeof m.index === "number" && (cut === -1 || m.index < cut)) {
+      cut = m.index;
+    }
+  }
+  if (cut < 0) return { main: text.replace(/\s+$/, ""), quoted: "" };
+  return {
+    main: text.slice(0, cut).replace(/\s+$/, ""),
+    quoted: text.slice(cut).replace(/\s+$/, ""),
+  };
+}
+
+// One email's body: the fresh content, with any quoted history tucked behind a
+// "..." button (revealed on click), same as Gmail.
+function MessageBody({ text }: { text: string }) {
+  const [showQuoted, setShowQuoted] = useState(false);
+  const { main, quoted } = splitQuoted(text);
+  const hasMain = main.trim().length > 0;
+  const body = hasMain ? main : quoted;
+  const trailer = hasMain ? quoted : "";
+
+  return (
+    <div className="text-[15px] leading-relaxed text-text">
+      <p className="whitespace-pre-wrap break-words">{linkify(body)}</p>
+      {trailer &&
+        (showQuoted ? (
+          <p className="mt-2 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-[14px] text-text-muted">
+            {linkify(trailer)}
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowQuoted(true)}
+            className="mt-2 inline-flex items-center gap-0.5 rounded-[6px] bg-surface-2 px-2 py-1 text-text-faint transition hover:bg-surface hover:text-text-muted"
+            aria-label="Show quoted text"
+            title="Show trimmed content"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="1.6" />
+              <circle cx="12" cy="12" r="1.6" />
+              <circle cx="19" cy="12" r="1.6" />
+            </svg>
+          </button>
+        ))}
+    </div>
+  );
+}
+
 // A raw From header ("Jane Doe <jane@x.com>") trimmed to a friendly display
 // name: the quoted/plain name if present, otherwise the address.
 function senderName(from: string): string {
@@ -312,20 +374,16 @@ export function ThreadReader({
             )}
             <ol className="space-y-3">
               {shownMessages.map((m) => (
-                <li key={m.id} className="rounded-[10px] bg-surface-2/50 p-3">
-                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-xs font-semibold text-text">
+                <li key={m.id} className="rounded-[10px] bg-surface-2/50 p-3.5">
+                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-sm font-semibold text-text">
                       {m.from}
                     </span>
-                    <span className="text-xs text-text-faint">
+                    <span className="text-xs text-text-muted">
                       {m.dateMs ? longDate(new Date(m.dateMs).toISOString()) : m.date}
                     </span>
                   </div>
-                  <p
-                    className={`whitespace-pre-wrap break-words text-sm text-text-muted ${expanded ? "line-clamp-[12]" : ""}`}
-                  >
-                    {linkify(m.bodyText)}
-                  </p>
+                  <MessageBody text={m.bodyText} />
                   {m.attachments.length > 0 && (
                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3">
                       {m.attachments.map((att) => {
