@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -167,6 +168,12 @@ export function StoryboardEditor({
                 targetId={active.id}
                 label="Share"
               />
+              <Link
+                href={`/projects/${projectId}/storyboards/present`}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg transition hover:bg-accent-strong"
+              >
+                Present / Export
+              </Link>
               <button
                 onClick={() => {
                   act(() => deleteStoryboard(projectId, active.id));
