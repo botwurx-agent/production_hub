@@ -2101,6 +2101,7 @@ export type Database = {
           status: Database["public"]["Enums"]["project_status"];
           archived_at: string | null;
           project_type: string;
+          color: string | null;
           studio_id: string;
           title: string;
           updated_at: string;
@@ -2117,6 +2118,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["project_status"];
           archived_at?: string | null;
           project_type?: string;
+          color?: string | null;
           studio_id: string;
           title: string;
           updated_at?: string;
@@ -2133,6 +2135,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["project_status"];
           archived_at?: string | null;
           project_type?: string;
+          color?: string | null;
           studio_id?: string;
           title?: string;
           updated_at?: string;

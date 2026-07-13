@@ -12,6 +12,20 @@ import type {
  * nothing hardcodes a color. Labels use production language, not db values.
  */
 
+// The curated palette for a project's identity color (wayfinding accent, kept
+// separate from the status signal). Values are hue token keys.
+export const PROJECT_COLORS: Hue[] = [
+  "blue",
+  "green",
+  "cyan",
+  "yellow",
+  "orange",
+  "red",
+  "pink",
+  "purple",
+  "indigo",
+];
+
 export const PROJECT_STATUS: Record<
   ProjectStatus,
   { label: string; hue: Hue; order: number }

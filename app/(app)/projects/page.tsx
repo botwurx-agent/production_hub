@@ -17,7 +17,7 @@ export default async function ProjectsPage() {
     await Promise.all([
       supabase
         .from("projects")
-        .select("id, title, status, due_date, shoot_date, archived_at, client:clients(name)")
+        .select("id, title, status, due_date, shoot_date, archived_at, color, client:clients(name)")
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name").order("name"),
       getOutstanding(),
@@ -31,6 +31,7 @@ export default async function ProjectsPage() {
     shoot_date: p.shoot_date,
     client: (p.client as { name: string } | null) ?? null,
     archived: Boolean((p as { archived_at: string | null }).archived_at),
+    color: (p as { color: string | null }).color ?? null,
   }));
   const clientOptions = clients ?? [];
 

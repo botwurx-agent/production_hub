@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { PROJECT_STATUS, PROJECT_STATUS_ORDER } from "@/lib/status";
+import { PROJECT_STATUS, PROJECT_STATUS_ORDER, PROJECT_COLORS } from "@/lib/status";
 import { isProjectType } from "@/lib/project-types";
 import type { ProjectStatus } from "@/lib/database.types";
 
@@ -69,6 +69,18 @@ export async function updateProjectStatus(
     type: "status_change",
     content: `Moved to ${PROJECT_STATUS[status].label}`,
   });
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// A per-project identity color (a hue token key, or null to clear). Used as a
+// wayfinding accent on the cards; kept separate from the status signal.
+export async function updateProjectColor(projectId: string, color: string | null) {
+  await requireStudioContext();
+  const clean =
+    color && (PROJECT_COLORS as string[]).includes(color) ? color : null;
+  const supabase = createClient();
+  await supabase.from("projects").update({ color: clean }).eq("id", projectId);
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StatusTag } from "@/components/status-tag";
+import { ColorMenu } from "@/components/projects/color-menu";
 import { PROJECT_STATUS } from "@/lib/status";
 import { shortDate } from "@/lib/format";
 import type { ProjectRow } from "@/components/projects/types";
@@ -15,6 +16,7 @@ export function ProjectList({ projects }: { projects: ProjectRow[] }) {
             <th className="px-4 py-3">Stage</th>
             <th className="hidden px-4 py-3 sm:table-cell">Shoot</th>
             <th className="hidden px-4 py-3 sm:table-cell">Due</th>
+            <th className="px-4 py-3" />
           </tr>
         </thead>
         <tbody>
@@ -22,12 +24,23 @@ export function ProjectList({ projects }: { projects: ProjectRow[] }) {
             <tr
               key={p.id}
               className="border-b border-border last:border-0 transition hover:bg-surface-2/60"
+              style={
+                p.color
+                  ? { boxShadow: `inset 4px 0 0 var(--h-${p.color})` }
+                  : undefined
+              }
             >
               <td className="px-4 py-3">
                 <Link
                   href={`/projects/${p.id}`}
-                  className="font-semibold text-text hover:text-accent"
+                  className="flex items-center gap-2 font-semibold text-text hover:text-accent"
                 >
+                  {p.color && (
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: `var(--h-${p.color})` }}
+                    />
+                  )}
                   {p.title}
                 </Link>
               </td>
@@ -44,6 +57,9 @@ export function ProjectList({ projects }: { projects: ProjectRow[] }) {
               </td>
               <td className="hidden px-4 py-3 text-text-muted sm:table-cell">
                 {shortDate(p.due_date) || "—"}
+              </td>
+              <td className="px-4 py-3">
+                <ColorMenu projectId={p.id} color={p.color} />
               </td>
             </tr>
           ))}

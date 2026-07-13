@@ -8,4 +8,5 @@ export type ProjectRow = {
   shoot_date: string | null;
   client: { name: string } | null;
   archived: boolean;
+  color: string | null;
 };
