@@ -8,9 +8,6 @@ import {
   type PickableAsset,
 } from "@/components/production/shot-board-editor";
 import { loadProjectAssets } from "@/lib/project-data";
-import { SendToReviewButton } from "@/components/projects/send-to-review-button";
-import { ShareDocButton } from "@/components/review/share-doc-button";
-import { DocReviewButton } from "@/components/review/doc-review-button";
 import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
@@ -114,30 +111,10 @@ export default async function ShotListPage({
             <path d="M3 9h18M9 3v18" />
           </svg>
         }
-        action={
-          <div className="flex items-center gap-2">
-            <DocReviewButton
-              projectId={project.id}
-              kind="shot_list"
-              targetId={project.id}
-              count={shotCommentCount ?? 0}
-            />
-            <SendToReviewButton
-              projectId={project.id}
-              kind="shot_list"
-              targetId={project.id}
-              inReview={Boolean(docReview)}
-            />
-            <ShareDocButton
-              projectId={project.id}
-              kind="shot_list"
-              targetId={project.id}
-              label="Share"
-            />
-          </div>
-        }
       />
       <ShotBoardEditor
+        commentCount={shotCommentCount ?? 0}
+        inReview={Boolean(docReview)}
         projectId={project.id}
         projectTitle={project.title}
         board={(board as ShotBoard | null) ?? null}

@@ -17,6 +17,9 @@ import {
   setCardAsset,
   clearCardAsset,
 } from "@/app/(app)/projects/[id]/production/board-actions";
+import { DocReviewButton } from "@/components/review/doc-review-button";
+import { SendToReviewButton } from "@/components/projects/send-to-review-button";
+import { ShareDocButton } from "@/components/review/share-doc-button";
 import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 export type CardView = {
@@ -96,6 +99,8 @@ export function ShotBoardEditor({
   groups,
   cards,
   assets,
+  commentCount = 0,
+  inReview = false,
 }: {
   projectId: string;
   projectTitle: string;
@@ -103,6 +108,8 @@ export function ShotBoardEditor({
   groups: ShotGroup[];
   cards: CardView[];
   assets: PickableAsset[];
+  commentCount?: number;
+  inReview?: boolean;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -189,12 +196,27 @@ export function ShotBoardEditor({
           </svg>
           Cover
         </button>
-        <Link
-          href={`/projects/${projectId}/production/board`}
-          className="inline-flex items-center gap-1.5 rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg transition hover:bg-accent-strong"
-        >
-          Present / Export
-        </Link>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <DocReviewButton
+            projectId={projectId}
+            kind="shot_list"
+            targetId={projectId}
+            count={commentCount}
+          />
+          <SendToReviewButton
+            projectId={projectId}
+            kind="shot_list"
+            targetId={projectId}
+            inReview={inReview}
+          />
+          <ShareDocButton projectId={projectId} kind="shot_list" targetId={projectId} label="Share" />
+          <Link
+            href={`/projects/${projectId}/production/board`}
+            className="inline-flex items-center gap-1.5 rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg transition hover:bg-accent-strong"
+          >
+            Present / Export
+          </Link>
+        </div>
       </div>
 
       {/* Cover header (collapsible) */}
