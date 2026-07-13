@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { IconTile } from "@/components/ui/icon-tile";
@@ -87,21 +88,47 @@ export function ProjectNav({
   const isAi = projectType === "ai_video";
 
   const [open, setOpen] = useState<string | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const activeBand = BANDS.find((b) => b.mods.some((m) => m.seg === seg))?.key ?? null;
+
+  function toggle(key: string, el: HTMLElement) {
+    if (open === key) {
+      setOpen(null);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    const width = 300;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    setPos({ top: r.bottom + 6, left });
+    setOpen(key);
+  }
 
   useEffect(() => {
     setOpen(null);
   }, [pathname]);
 
   useEffect(() => {
+    if (!open) return;
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(null);
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(null);
+    }
+    function onScroll() {
+      setOpen(null);
     }
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, []);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
 
   return (
     <div ref={ref} className="relative mb-5 border-b border-border print:hidden">
@@ -130,7 +157,7 @@ export function ProjectNav({
           return (
             <div key={b.key} className="relative shrink-0">
               <button
-                onClick={() => setOpen((o) => (o === b.key ? null : b.key))}
+                onClick={(e) => toggle(b.key, e.currentTarget)}
                 className={`flex items-center gap-1.5 rounded-t-[10px] px-3 py-2.5 text-sm font-semibold transition ${
                   isActive || isOpen ? "text-text" : "text-text-muted hover:text-text"
                 }`}
@@ -157,41 +184,55 @@ export function ProjectNav({
                   style={{ backgroundColor: `var(--h-${b.hue})` }}
                 />
               )}
-
-              {isOpen && (
-                <div className="absolute left-0 top-[calc(100%+6px)] z-40 w-[300px] rounded-[16px] border border-border bg-surface p-2 shadow-xl">
-                  <div className="flex items-center gap-2 px-2 py-1.5">
-                    <span style={{ color: `var(--h-${b.hue})` }}>{b.icon}</span>
-                    <span className="text-sm font-bold text-text">{b.label}</span>
-                  </div>
-                  <div className="mt-0.5 space-y-0.5">
-                    {mods.map((m) => {
-                      const active = seg === m.seg;
-                      return (
-                        <Link
-                          key={m.seg}
-                          href={`${base}/${m.seg}`}
-                          className={`flex items-center gap-3 rounded-[11px] p-2 transition ${
-                            active ? "bg-surface-2" : "hover:bg-surface-2"
-                          }`}
-                        >
-                          <IconTile hue={m.hue} size="sm">
-                            {m.icon}
-                          </IconTile>
-                          <div className="min-w-0">
-                            <div className="text-sm font-bold text-text">{m.label}</div>
-                            <div className="truncate text-xs text-text-muted">{m.sub}</div>
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
       </div>
+
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        (() => {
+          const b = BANDS.find((x) => x.key === open);
+          if (!b) return null;
+          const mods = b.mods.filter((m) => !m.ai || isAi);
+          return createPortal(
+            <div
+              ref={panelRef}
+              style={{ position: "fixed", top: pos.top, left: pos.left, width: 300, zIndex: 60 }}
+              className="rounded-[16px] border border-border bg-surface p-2 shadow-xl"
+            >
+              <div className="flex items-center gap-2 px-2 py-1.5">
+                <span style={{ color: `var(--h-${b.hue})` }}>{b.icon}</span>
+                <span className="text-sm font-bold text-text">{b.label}</span>
+              </div>
+              <div className="mt-0.5 space-y-0.5">
+                {mods.map((m) => {
+                  const active = seg === m.seg;
+                  return (
+                    <Link
+                      key={m.seg}
+                      href={`${base}/${m.seg}`}
+                      onClick={() => setOpen(null)}
+                      className={`flex items-center gap-3 rounded-[11px] p-2 transition ${
+                        active ? "bg-surface-2" : "hover:bg-surface-2"
+                      }`}
+                    >
+                      <IconTile hue={m.hue} size="sm">
+                        {m.icon}
+                      </IconTile>
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-text">{m.label}</div>
+                        <div className="truncate text-xs text-text-muted">{m.sub}</div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>,
+            document.body
+          );
+        })()}
     </div>
   );
 }
