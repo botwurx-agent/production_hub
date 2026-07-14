@@ -22,6 +22,7 @@ export default async function DashboardPage() {
   const [
     { data: projects },
     { data: deals },
+    { data: taskRaw },
     { data: activityRaw },
     { data: googleAccount },
     outstanding,
@@ -31,6 +32,14 @@ export default async function DashboardPage() {
         .select("id, title, status, shoot_date, due_date, client:clients(name)")
         .is("archived_at", null),
       supabase.from("deals").select("id, stage, value"),
+      supabase
+        .from("crm_tasks")
+        .select(
+          "id, title, due_date, deal_id, account_id, deal:deals(title), account:clients(name)"
+        )
+        .eq("done", false)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(12),
       supabase
         .from("activity")
         .select("id, content, type, created_at, project:projects(id, title)")
@@ -102,6 +111,17 @@ export default async function DashboardPage() {
     { label: "Open deals", value: openDeals.length, hue: "cyan" },
   ];
 
+  // Open CRM tasks for the dashboard widget.
+  const tasks = (taskRaw ?? []).map((t) => ({
+    id: t.id,
+    title: t.title,
+    due_date: t.due_date,
+    deal_id: t.deal_id,
+    account_id: t.account_id,
+    deal_title: (t.deal as { title: string } | null)?.title ?? null,
+    account_name: (t.account as { name: string } | null)?.name ?? null,
+  }));
+
   // Recent activity feed.
   const activity: ActivityFeedItem[] = (activityRaw ?? []).flatMap((a) => {
     const project = a.project as { id: string; title: string } | null;
@@ -134,6 +154,7 @@ export default async function DashboardPage() {
         todayEvents={todayEvents}
         counts={counts}
         openValue={openValue}
+        tasks={tasks}
         activity={activity}
         calendarConnected={calendarConnected}
         initialYear={now.getFullYear()}

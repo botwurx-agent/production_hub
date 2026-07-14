@@ -28,11 +28,24 @@ export default async function DealDetailPage({
     .maybeSingle();
   if (!account) notFound();
 
-  const { data: contacts } = await supabase
-    .from("contacts")
-    .select("id, name, role, email")
-    .eq("client_id", account.id)
-    .order("created_at", { ascending: true });
+  const [{ data: contacts }, { data: activities }, { data: tasks }] =
+    await Promise.all([
+      supabase
+        .from("contacts")
+        .select("id, name, role, email")
+        .eq("client_id", account.id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("crm_activities")
+        .select("id, kind, body, occurred_at")
+        .eq("deal_id", deal.id)
+        .order("occurred_at", { ascending: false }),
+      supabase
+        .from("crm_tasks")
+        .select("id, title, due_date, done")
+        .eq("deal_id", deal.id)
+        .order("created_at", { ascending: false }),
+    ]);
 
   return (
     <div>
@@ -50,7 +63,13 @@ export default async function DealDetailPage({
           </Link>
         }
       />
-      <DealDetail deal={deal} account={account} contacts={contacts ?? []} />
+      <DealDetail
+        deal={deal}
+        account={account}
+        contacts={contacts ?? []}
+        activities={activities ?? []}
+        tasks={tasks ?? []}
+      />
     </div>
   );
 }

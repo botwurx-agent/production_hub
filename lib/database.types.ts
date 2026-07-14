@@ -1717,6 +1717,105 @@ export type Database = {
           },
         ];
       };
+      crm_activities: {
+        Row: {
+          account_id: string | null;
+          author_id: string | null;
+          body: string | null;
+          created_at: string;
+          deal_id: string | null;
+          id: string;
+          kind: Database["public"]["Enums"]["crm_activity_kind"];
+          occurred_at: string;
+          studio_id: string;
+        };
+        Insert: {
+          account_id?: string | null;
+          author_id?: string | null;
+          body?: string | null;
+          created_at?: string;
+          deal_id?: string | null;
+          id?: string;
+          kind?: Database["public"]["Enums"]["crm_activity_kind"];
+          occurred_at?: string;
+          studio_id: string;
+        };
+        Update: {
+          account_id?: string | null;
+          author_id?: string | null;
+          body?: string | null;
+          created_at?: string;
+          deal_id?: string | null;
+          id?: string;
+          kind?: Database["public"]["Enums"]["crm_activity_kind"];
+          occurred_at?: string;
+          studio_id?: string;
+        };
+        Relationships: [];
+      };
+      crm_tasks: {
+        Row: {
+          account_id: string | null;
+          assignee_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          deal_id: string | null;
+          done: boolean;
+          done_at: string | null;
+          due_date: string | null;
+          id: string;
+          notes: string | null;
+          studio_id: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          account_id?: string | null;
+          assignee_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          deal_id?: string | null;
+          done?: boolean;
+          done_at?: string | null;
+          due_date?: string | null;
+          id?: string;
+          notes?: string | null;
+          studio_id: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          account_id?: string | null;
+          assignee_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          deal_id?: string | null;
+          done?: boolean;
+          done_at?: string | null;
+          due_date?: string | null;
+          id?: string;
+          notes?: string | null;
+          studio_id?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "crm_tasks_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "crm_tasks_deal_id_fkey";
+            columns: ["deal_id"];
+            isOneToOne: false;
+            referencedRelation: "deals";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       call_sheet_templates: {
         Row: {
           id: string;
@@ -2593,6 +2692,15 @@ export type Database = {
       asset_type: "image" | "video" | "storyboard" | "reference" | "cut" | "other";
       account_status: "prospect" | "active" | "past";
       client_type: "brand" | "agency";
+      crm_activity_kind:
+        | "note"
+        | "call"
+        | "meeting"
+        | "email"
+        | "stage_change"
+        | "created"
+        | "won"
+        | "lost";
       deal_stage: "inbound" | "qualifying" | "bidding" | "awarded" | "lost";
       lead_stage: "new" | "contacted" | "qualified" | "proposal" | "won" | "lost";
       membership_role: "owner" | "admin" | "member";
@@ -2627,6 +2735,7 @@ export type MembershipRole = Enums<"membership_role">;
 export type ClientType = Enums<"client_type">;
 export type AccountStatus = Enums<"account_status">;
 export type DealStage = Enums<"deal_stage">;
+export type CrmActivityKind = Enums<"crm_activity_kind">;
 export type LeadStage = Enums<"lead_stage">;
 export type ProjectStatus = Enums<"project_status">;
 export type AssetType = Enums<"asset_type">;
@@ -2640,6 +2749,8 @@ export type StudioInvite = Tables<"studio_invites">;
 export type Membership = Tables<"memberships">;
 export type Client = Tables<"clients">;
 export type Deal = Tables<"deals">;
+export type CrmActivity = Tables<"crm_activities">;
+export type CrmTask = Tables<"crm_tasks">;
 export type Lead = Tables<"leads">;
 export type Contact = Tables<"contacts">;
 export type Project = Tables<"projects">;

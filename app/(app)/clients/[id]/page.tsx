@@ -13,8 +13,10 @@ import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
-import { PROJECT_STATUS } from "@/lib/status";
-import { shortDate } from "@/lib/format";
+import { ActivityTimeline } from "@/components/crm/activity-timeline";
+import { TaskList } from "@/components/crm/task-list";
+import { PROJECT_STATUS, ACCOUNT_STATUS, DEAL_STAGE } from "@/lib/status";
+import { shortDate, money } from "@/lib/format";
 import type { Contact } from "@/lib/database.types";
 
 export default async function ClientDetailPage({
@@ -27,7 +29,7 @@ export default async function ClientDetailPage({
 
   const { data: client } = await supabase
     .from("clients")
-    .select("id, name, type, notes")
+    .select("id, name, type, notes, account_status")
     .eq("id", params.id)
     .maybeSingle();
   if (!client) notFound();
@@ -35,6 +37,9 @@ export default async function ClientDetailPage({
   const [
     { data: contacts },
     { data: projects },
+    { data: deals },
+    { data: activities },
+    { data: tasks },
     { data: emailThreads },
     { data: emailAccount },
     { data: slackChannels },
@@ -50,6 +55,21 @@ export default async function ClientDetailPage({
       .from("projects")
       .select("id, title, status, shoot_date, due_date")
       .eq("client_id", params.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("deals")
+      .select("id, title, value, stage")
+      .eq("account_id", params.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("crm_activities")
+      .select("id, kind, body, occurred_at")
+      .eq("account_id", params.id)
+      .order("occurred_at", { ascending: false }),
+    supabase
+      .from("crm_tasks")
+      .select("id, title, due_date, done")
+      .eq("account_id", params.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("email_threads")
@@ -98,6 +118,9 @@ export default async function ClientDetailPage({
             <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
               {client.name}
             </h1>
+            <StatusTag hue={ACCOUNT_STATUS[client.account_status].hue}>
+              {ACCOUNT_STATUS[client.account_status].label}
+            </StatusTag>
             <StatusTag hue={client.type === "agency" ? "purple" : "blue"}>
               {client.type === "agency" ? "Agency" : "Brand"}
             </StatusTag>
@@ -163,6 +186,60 @@ export default async function ClientDetailPage({
               ))}
             </ul>
           )}
+        </Card>
+
+        {/* Deals */}
+        <Card className="p-5">
+          <h2 className="mb-4 font-display text-base font-bold">Deals</h2>
+          {(deals ?? []).length === 0 ? (
+            <p className="py-4 text-center text-sm text-text-faint">
+              No deals yet.{" "}
+              <Link
+                href="/pipeline"
+                className="font-semibold text-accent hover:underline"
+              >
+                Add one
+              </Link>
+              .
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {(deals ?? []).map((d) => (
+                <li key={d.id}>
+                  <Link
+                    href={`/pipeline/${d.id}`}
+                    className="flex items-center justify-between gap-3 rounded-[11px] border border-border px-3 py-2.5 transition hover:border-border-strong hover:bg-surface-2/60"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold text-text">
+                        {d.title}
+                      </span>
+                      {d.value != null && (
+                        <span className="text-xs text-text-faint">
+                          {money(d.value)}
+                        </span>
+                      )}
+                    </span>
+                    <StatusTag hue={DEAL_STAGE[d.stage].hue}>
+                      {DEAL_STAGE[d.stage].label}
+                    </StatusTag>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Tasks */}
+        <Card className="p-5">
+          <h2 className="mb-4 font-display text-base font-bold">Tasks</h2>
+          <TaskList accountId={client.id} tasks={tasks ?? []} />
+        </Card>
+
+        {/* Activity */}
+        <Card className="p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-base font-bold">Activity</h2>
+          <ActivityTimeline accountId={client.id} activities={activities ?? []} />
         </Card>
 
         {/* Email */}

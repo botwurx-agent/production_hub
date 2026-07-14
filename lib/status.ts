@@ -4,6 +4,7 @@ import type {
   LeadStage,
   DealStage,
   AccountStatus,
+  CrmActivityKind,
   ProjectStatus,
   ApprovalStatus,
 } from "@/lib/database.types";
@@ -106,6 +107,30 @@ export const ACCOUNT_STATUS: Record<
   active: { label: "Client", hue: "green" },
   past: { label: "Past", hue: "cyan" },
 };
+
+// Relationship timeline entry types. `manual` marks the kinds a user can log
+// (the rest are system events emitted by pipeline actions).
+export const CRM_ACTIVITY: Record<
+  CrmActivityKind,
+  { label: string; hue: Hue; manual: boolean }
+> = {
+  note: { label: "Note", hue: "blue", manual: true },
+  call: { label: "Call", hue: "green", manual: true },
+  meeting: { label: "Meeting", hue: "purple", manual: true },
+  email: { label: "Email", hue: "cyan", manual: true },
+  stage_change: { label: "Stage", hue: "indigo", manual: false },
+  created: { label: "Created", hue: "blue", manual: false },
+  won: { label: "Won", hue: "green", manual: false },
+  lost: { label: "Lost", hue: "red", manual: false },
+};
+
+// The kinds offered in the "log activity" composer.
+export const CRM_MANUAL_ACTIVITY: CrmActivityKind[] = [
+  "note",
+  "call",
+  "meeting",
+  "email",
+];
 
 export const APPROVAL_STATUS: Record<
   ApprovalStatus,

@@ -7,6 +7,7 @@ import { StatTiles, type Stat } from "@/components/dashboard/stat-tiles";
 import { Calendar } from "@/components/dashboard/calendar";
 import { Upcoming } from "@/components/dashboard/upcoming";
 import { PipelineSnapshot } from "@/components/dashboard/pipeline-snapshot";
+import { TaskWidget, type DashboardTask } from "@/components/dashboard/task-widget";
 import { MyDay } from "@/components/dashboard/my-day";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { UnreadWidget } from "@/components/dashboard/unread-widget";
@@ -19,6 +20,7 @@ const STORAGE_KEY = "dashboard.hidden.v1";
 const TOGGLEABLE: { id: string; label: string }[] = [
   { id: "myday", label: "My day" },
   { id: "needsyou", label: "Needs you" },
+  { id: "tasks", label: "Tasks" },
   { id: "upcoming", label: "Upcoming" },
   { id: "pipeline", label: "Pipeline" },
   { id: "activity", label: "Recent activity" },
@@ -46,6 +48,7 @@ const SECTION_ICONS = {
   messages: S(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />),
   pipeline: S(<><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></>),
   activity: S(<path d="M22 12h-4l-3 9L9 3l-3 9H2" />),
+  tasks: S(<><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>),
 } as const;
 
 function TitledCard({
@@ -82,6 +85,7 @@ export function DashboardBody({
   todayEvents,
   counts,
   openValue,
+  tasks,
   activity,
   calendarConnected,
   initialYear,
@@ -95,6 +99,7 @@ export function DashboardBody({
   todayEvents: CalendarEvent[];
   counts: Record<string, number>;
   openValue: number;
+  tasks: DashboardTask[];
   activity: ActivityFeedItem[];
   calendarConnected: boolean;
   initialYear: number;
@@ -141,6 +146,11 @@ export function DashboardBody({
 
   // Right column widgets, in order, that are currently visible.
   const rightColumn = [
+    show("tasks") && (
+      <TitledCard key="tasks" title="Tasks" icon={SECTION_ICONS.tasks} hue="cyan">
+        <TaskWidget tasks={tasks} />
+      </TitledCard>
+    ),
     show("upcoming") && (
       <TitledCard key="upcoming" title="Upcoming" icon={SECTION_ICONS.upcoming} hue="green">
         <Upcoming events={upcoming} />

@@ -11,6 +11,8 @@ import {
   type FormState,
 } from "@/app/(app)/pipeline/actions";
 import { DealStageMenu } from "@/components/deals/deal-stage-menu";
+import { ActivityTimeline, type ActivityItem } from "@/components/crm/activity-timeline";
+import { TaskList, type TaskItem } from "@/components/crm/task-list";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Field } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -38,10 +40,14 @@ export function DealDetail({
   deal,
   account,
   contacts,
+  activities,
+  tasks,
 }: {
   deal: Deal;
   account: { id: string; name: string; account_status: AccountStatus };
   contacts: DealContact[];
+  activities: ActivityItem[];
+  tasks: TaskItem[];
 }) {
   const router = useRouter();
   const update = updateDeal.bind(null, deal.id);
@@ -152,20 +158,32 @@ export function DealDetail({
             Delete deal
           </button>
         </div>
+
+        {/* Activity timeline */}
+        <div className="rounded-[16px] border border-border bg-surface p-5 shadow-sm">
+          <h3 className="mb-3 font-display text-sm font-bold">Activity</h3>
+          <ActivityTimeline dealId={deal.id} activities={activities} />
+        </div>
       </div>
 
-      {/* Right: account contacts (managed on the account) */}
-      <div className="rounded-[16px] border border-border bg-surface p-5 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-display text-sm font-bold">Contacts</h3>
-          <Link
-            href={`/clients/${account.id}`}
-            className="text-xs font-semibold text-accent hover:underline"
-          >
-            Manage
-          </Link>
+      {/* Right rail: tasks + account contacts */}
+      <div className="space-y-6">
+        <div className="rounded-[16px] border border-border bg-surface p-5 shadow-sm">
+          <h3 className="mb-3 font-display text-sm font-bold">Tasks</h3>
+          <TaskList dealId={deal.id} tasks={tasks} />
         </div>
-        {contacts.length === 0 ? (
+
+        <div className="rounded-[16px] border border-border bg-surface p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-display text-sm font-bold">Contacts</h3>
+            <Link
+              href={`/clients/${account.id}`}
+              className="text-xs font-semibold text-accent hover:underline"
+            >
+              Manage
+            </Link>
+          </div>
+          {contacts.length === 0 ? (
           <p className="text-xs text-text-faint">
             No contacts on this company yet.
           </p>
@@ -183,6 +201,7 @@ export function DealDetail({
             ))}
           </ul>
         )}
+        </div>
       </div>
 
       {/* Mark lost modal */}

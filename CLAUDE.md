@@ -283,9 +283,29 @@ implemented (out of strict order, driven by the operator's real needs).
     contacts) and PRESERVES the leads table for rollback. leads-followup.ts /
     lead-context.ts / leads/actions.ts remain but are dormant (unused by the
     dashboard now).
-  - NEXT CRM phases (not built): activity timeline + tasks/reminders (Phase 2,
-    the daily driver), comms auto-logging from Gmail/Calendar/Slack to a
-    relationship timeline (Phase 3, the moat), reporting/forecast + AI
+  - CRM Phase 2 (BUILT, migration 0055): relationship activity timeline +
+    tasks/reminders, both hanging off Account + Deal. crm_activities
+    (studio/account_id/deal_id/kind/body/author_id/occurred_at; kind enum
+    crm_activity_kind = note|call|meeting|email + system stage_change|created|
+    won|lost) and crm_tasks (studio/account_id/deal_id/title/notes/due_date/
+    done/done_at/assignee_id/created_by). An entry ALWAYS carries account_id
+    (derived from the deal when logged on a deal) so an account's timeline/tasks
+    roll up all of its deals' entries while a deal shows just its own. Constants
+    CRM_ACTIVITY / CRM_MANUAL_ACTIVITY in lib/status.ts. Server actions in
+    app/(app)/pipeline/crm-actions.ts (logActivity/deleteActivity/addTask/
+    toggleTask/deleteTask + recordDealEvent, a server-internal helper). Pipeline
+    actions (createDeal/updateDealStage/markDealLost) now emit system activity
+    events (created / Moved to X / won / lost). UI: components/crm/
+    activity-timeline.tsx (kind-pill composer + timeline) + components/crm/
+    task-list.tsx (add w/ due date, check to complete, delete), shown on the
+    deal detail page (/pipeline/[id]) and the account detail page (/clients/[id],
+    which also gained a Deals card + account_status chip). Dashboard got a
+    customizable "Tasks" widget (components/dashboard/task-widget.tsx: open tasks
+    by due date, overdue in red, one-click complete, link to deal/account).
+    Assignee defaults to the creator (no picker yet); author attribution on the
+    timeline is not surfaced yet (both deferred).
+  - NEXT CRM phases (not built): comms auto-logging from Gmail/Calendar/Slack to
+    the relationship timeline (Phase 3, the moat), reporting/forecast + AI
     next-best-action (Phase 4), saved views/CSV import/custom fields/dedupe
     (Phase 5). All hang off the Deal/Account objects, so each is additive.
 - Boards: freeform moodboard/storyboard canvas (studio-wide, project-linkable),

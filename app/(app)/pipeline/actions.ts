@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient as db } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { DEAL_STAGE_ORDER } from "@/lib/status";
+import { DEAL_STAGE, DEAL_STAGE_ORDER } from "@/lib/status";
+import { recordDealEvent } from "@/app/(app)/pipeline/crm-actions";
 import type { DealStage } from "@/lib/database.types";
 
 export type FormState = { error?: string } | null;
@@ -62,64 +63,110 @@ export async function createDeal(
     accountId = account.id;
   }
 
-  const { error } = await supabase.from("deals").insert({
-    studio_id: ctx.studio.id,
-    account_id: accountId,
-    title,
-    value: parseValue(formData.get("value")),
-    expected_close_date:
-      String(formData.get("expected_close_date") ?? "").trim() || null,
-    source: String(formData.get("source") ?? "").trim() || null,
-    notes: String(formData.get("notes") ?? "").trim() || null,
-    owner_id: ctx.userId,
-    ...stagePatch(stage),
-  });
+  const { data: deal, error } = await supabase
+    .from("deals")
+    .insert({
+      studio_id: ctx.studio.id,
+      account_id: accountId,
+      title,
+      value: parseValue(formData.get("value")),
+      expected_close_date:
+        String(formData.get("expected_close_date") ?? "").trim() || null,
+      source: String(formData.get("source") ?? "").trim() || null,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+      owner_id: ctx.userId,
+      ...stagePatch(stage),
+    })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  if (deal) {
+    await recordDealEvent(
+      supabase,
+      ctx.studio.id,
+      ctx.userId,
+      deal.id,
+      accountId,
+      "created",
+      "Deal created"
+    );
+  }
 
   revalidatePath("/pipeline");
   return null;
 }
 
 export async function updateDealStage(dealId: string, stage: DealStage) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   if (!isStage(stage)) return;
   const supabase = db();
 
   const patch = stagePatch(stage);
   await supabase.from("deals").update(patch).eq("id", dealId);
 
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("account_id")
+    .eq("id", dealId)
+    .maybeSingle();
+  const accountId = deal?.account_id ?? null;
+
   // Winning a deal activates its account (a prospect becomes a client).
-  if (stage === "awarded") {
-    const { data: deal } = await supabase
-      .from("deals")
-      .select("account_id")
-      .eq("id", dealId)
-      .maybeSingle();
-    if (deal?.account_id) {
-      await supabase
-        .from("clients")
-        .update({ account_status: "active" })
-        .eq("id", deal.account_id)
-        .eq("account_status", "prospect");
-    }
+  if (stage === "awarded" && accountId) {
+    await supabase
+      .from("clients")
+      .update({ account_status: "active" })
+      .eq("id", accountId)
+      .eq("account_status", "prospect");
   }
+
+  // Log the transition on the relationship timeline.
+  const kind = stage === "awarded" ? "won" : stage === "lost" ? "lost" : "stage_change";
+  const body =
+    stage === "awarded"
+      ? "Deal won"
+      : stage === "lost"
+      ? "Deal lost"
+      : `Moved to ${DEAL_STAGE[stage].label}`;
+  await recordDealEvent(supabase, ctx.studio.id, ctx.userId, dealId, accountId, kind, body);
 
   revalidatePath("/pipeline");
   revalidatePath(`/pipeline/${dealId}`);
+  if (accountId) revalidatePath(`/clients/${accountId}`);
 }
 
 export async function markDealLost(dealId: string, reason: string) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = db();
+  const trimmed = reason.trim();
   await supabase
     .from("deals")
     .update({
       ...stagePatch("lost"),
-      lost_reason: reason.trim() || null,
+      lost_reason: trimmed || null,
     })
     .eq("id", dealId);
+
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("account_id")
+    .eq("id", dealId)
+    .maybeSingle();
+  const accountId = deal?.account_id ?? null;
+  await recordDealEvent(
+    supabase,
+    ctx.studio.id,
+    ctx.userId,
+    dealId,
+    accountId,
+    "lost",
+    trimmed ? `Deal lost: ${trimmed}` : "Deal lost"
+  );
+
   revalidatePath("/pipeline");
   revalidatePath(`/pipeline/${dealId}`);
+  if (accountId) revalidatePath(`/clients/${accountId}`);
 }
 
 // Edit a deal's core fields from the detail page.
