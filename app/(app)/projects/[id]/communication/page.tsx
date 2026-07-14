@@ -6,11 +6,8 @@ import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
-import {
-  ClientUpdate,
-  type UpdateDestination,
-} from "@/components/projects/client-update";
-import { aiConfigured } from "@/lib/ai";
+// NOTE: the AI "Client update" card is archived for now (removed from this page,
+// component + draftClientUpdate action left intact so it can be brought back).
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
 import { getAccessToken, getThreadPreview, type ThreadPreview } from "@/lib/gmail";
 
@@ -101,37 +98,6 @@ export default async function CommunicationPage({
     preview: previews.get(t.id) ?? null,
   }));
 
-  // Channels a client update can be sent through: linked to the project and the
-  // provider connected with send access.
-  const emailCanSend = Boolean(emailAccount?.scope?.includes("gmail.send"));
-  const slackCanSend = Boolean(slackAccount?.scope?.includes("chat:write"));
-  const updateDestinations: UpdateDestination[] = [
-    ...(emailCanSend
-      ? (emailThreads ?? []).map((t) => ({
-          kind: "email" as const,
-          id: `email:${t.id}`,
-          label: `Email: ${t.subject || "thread"}`,
-          gmailThreadId: t.gmail_thread_id,
-        }))
-      : []),
-    ...(slackCanSend
-      ? (slackChannels ?? []).map((c) => ({
-          kind: "slack" as const,
-          id: `slack:${c.id}`,
-          label: `Slack: #${c.channel_name || "channel"}`,
-          channelId: c.slack_channel_id,
-        }))
-      : []),
-    ...(chatCanSend(emailAccount?.scope)
-      ? (chatSpaces ?? []).map((s) => ({
-          kind: "chat" as const,
-          id: `chat:${s.id}`,
-          label: `Chat: ${s.space_display_name || "space"}`,
-          spaceName: s.space_name,
-        }))
-      : []),
-  ];
-
   return (
     <div>
       <ProjectSubhead
@@ -146,23 +112,6 @@ export default async function CommunicationPage({
           </svg>
         }
       />
-
-      <Card className="mb-6 p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <h2 className="font-display text-base font-bold">Client update</h2>
-          <span
-            className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
-            style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
-          >
-            AI
-          </span>
-        </div>
-        <ClientUpdate
-          projectId={project.id}
-          connected={aiConfigured()}
-          destinations={updateDestinations}
-        />
-      </Card>
 
       <div className="grid grid-cols-1 gap-6">
         <Card className="p-5">
