@@ -1594,31 +1594,40 @@ export type Database = {
       };
       clients: {
         Row: {
+          account_status: Database["public"]["Enums"]["account_status"];
           created_at: string;
           external_ref: Json | null;
           id: string;
           name: string;
           notes: string | null;
+          owner_id: string | null;
+          source: string | null;
           studio_id: string;
           type: Database["public"]["Enums"]["client_type"];
           updated_at: string;
         };
         Insert: {
+          account_status?: Database["public"]["Enums"]["account_status"];
           created_at?: string;
           external_ref?: Json | null;
           id?: string;
           name: string;
           notes?: string | null;
+          owner_id?: string | null;
+          source?: string | null;
           studio_id: string;
           type?: Database["public"]["Enums"]["client_type"];
           updated_at?: string;
         };
         Update: {
+          account_status?: Database["public"]["Enums"]["account_status"];
           created_at?: string;
           external_ref?: Json | null;
           id?: string;
           name?: string;
           notes?: string | null;
+          owner_id?: string | null;
+          source?: string | null;
           studio_id?: string;
           type?: Database["public"]["Enums"]["client_type"];
           updated_at?: string;
@@ -1626,6 +1635,81 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "clients_studio_id_fkey";
+            columns: ["studio_id"];
+            isOneToOne: false;
+            referencedRelation: "studios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      deals: {
+        Row: {
+          account_id: string;
+          closed_at: string | null;
+          created_at: string;
+          expected_close_date: string | null;
+          id: string;
+          lost_reason: string | null;
+          notes: string | null;
+          owner_id: string | null;
+          probability: number | null;
+          sort: number;
+          source: string | null;
+          stage: Database["public"]["Enums"]["deal_stage"];
+          studio_id: string;
+          title: string;
+          updated_at: string;
+          value: number | null;
+          won_project_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          closed_at?: string | null;
+          created_at?: string;
+          expected_close_date?: string | null;
+          id?: string;
+          lost_reason?: string | null;
+          notes?: string | null;
+          owner_id?: string | null;
+          probability?: number | null;
+          sort?: number;
+          source?: string | null;
+          stage?: Database["public"]["Enums"]["deal_stage"];
+          studio_id: string;
+          title: string;
+          updated_at?: string;
+          value?: number | null;
+          won_project_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          closed_at?: string | null;
+          created_at?: string;
+          expected_close_date?: string | null;
+          id?: string;
+          lost_reason?: string | null;
+          notes?: string | null;
+          owner_id?: string | null;
+          probability?: number | null;
+          sort?: number;
+          source?: string | null;
+          stage?: Database["public"]["Enums"]["deal_stage"];
+          studio_id?: string;
+          title?: string;
+          updated_at?: string;
+          value?: number | null;
+          won_project_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "deals_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "deals_studio_id_fkey";
             columns: ["studio_id"];
             isOneToOne: false;
             referencedRelation: "studios";
@@ -2507,7 +2591,9 @@ export type Database = {
         | "approved"
         | "delivered";
       asset_type: "image" | "video" | "storyboard" | "reference" | "cut" | "other";
+      account_status: "prospect" | "active" | "past";
       client_type: "brand" | "agency";
+      deal_stage: "inbound" | "qualifying" | "bidding" | "awarded" | "lost";
       lead_stage: "new" | "contacted" | "qualified" | "proposal" | "won" | "lost";
       membership_role: "owner" | "admin" | "member";
       project_status: "pre_pro" | "shoot" | "post" | "delivered";
@@ -2539,6 +2625,8 @@ export type Enums<
 // --- Convenience aliases used across the app ---
 export type MembershipRole = Enums<"membership_role">;
 export type ClientType = Enums<"client_type">;
+export type AccountStatus = Enums<"account_status">;
+export type DealStage = Enums<"deal_stage">;
 export type LeadStage = Enums<"lead_stage">;
 export type ProjectStatus = Enums<"project_status">;
 export type AssetType = Enums<"asset_type">;
@@ -2551,6 +2639,7 @@ export type Studio = Tables<"studios">;
 export type StudioInvite = Tables<"studio_invites">;
 export type Membership = Tables<"memberships">;
 export type Client = Tables<"clients">;
+export type Deal = Tables<"deals">;
 export type Lead = Tables<"leads">;
 export type Contact = Tables<"contacts">;
 export type Project = Tables<"projects">;

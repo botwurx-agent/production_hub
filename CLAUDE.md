@@ -253,7 +253,41 @@ implemented (out of strict order, driven by the operator's real needs).
   based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
   flags (lib/leads-followup.ts).
 - CRM depth (Phase 5): leads pipeline board, follow-up flags, AI outreach,
-  editable lead notes.
+  editable lead notes. NOTE: superseded by the CRM restructure below (leads ->
+  deals); the old leads UI is dormant (routes redirect), tables preserved.
+- CRM restructure -> Accounts + Contacts + Deals (migration 0054) — Phase 1 of a
+  full CRM. The old lead-centric model (one `leads` row = company + a single
+  stage) could not represent repeat business (one company, many jobs over time),
+  so the pipeline is now DEAL-centric:
+  - Accounts REUSE the `clients` table (no rewiring of projects/contacts FKs): a
+    company that can be a prospect before it is a client. Added `account_status`
+    (prospect | active | past, default active), `owner_id`, `source`. Prospects
+    show on the Clients page (a status-filter tab strip, components/clients/
+    clients-table.tsx); winning a deal flips its account to `active`.
+  - Deals = the pipeline object (`deals` table): title, value, probability,
+    stage, expected_close_date, owner_id, source, notes, won_project_id,
+    lost_reason, closed_at, sort. `deal_stage` enum inbound -> qualifying ->
+    bidding -> awarded(won) / lost (stage doubles as status: awarded=won,
+    lost=lost, rest open). Constants in lib/status.ts (DEAL_STAGE/_ORDER,
+    DEAL_OPEN_STAGES, ACCOUNT_STATUS); money() formatter in lib/format.ts.
+  - UI: /pipeline (deal board by stage w/ per-column count + summed value; list
+    view; Mine/Everyone owner filter; open-pipeline value) + /pipeline/[id]
+    (deal detail: editable fields, stage menu, mark lost w/ reason, delete,
+    account's contacts read-only). New deal picks an existing account or creates
+    a prospect inline. components/deals/*, app/(app)/pipeline/{page,[id],
+    actions}. Nav "Leads" -> "Pipeline"; /leads + /leads/[id] redirect to
+    /pipeline. Dashboard pipeline widget + KPI now read deals (open-deal count +
+    open pipeline value), not leads.
+  - Migration 0054 copies leads forward (converted lead -> won deal on its
+    client; un-converted -> prospect account + open/terminal deal + repoint its
+    contacts) and PRESERVES the leads table for rollback. leads-followup.ts /
+    lead-context.ts / leads/actions.ts remain but are dormant (unused by the
+    dashboard now).
+  - NEXT CRM phases (not built): activity timeline + tasks/reminders (Phase 2,
+    the daily driver), comms auto-logging from Gmail/Calendar/Slack to a
+    relationship timeline (Phase 3, the moat), reporting/forecast + AI
+    next-best-action (Phase 4), saved views/CSV import/custom fields/dedupe
+    (Phase 5). All hang off the Deal/Account objects, so each is additive.
 - Boards: freeform moodboard/storyboard canvas (studio-wide, project-linkable),
   tabs, drag/resize/z-order, notes, zoom, desktop drag-drop, dots/grid/plain
   background; import via upload/project assets/Drive/Figma.

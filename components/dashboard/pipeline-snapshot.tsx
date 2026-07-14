@@ -1,23 +1,27 @@
 import Link from "next/link";
-import { LEAD_STAGE, LEAD_STAGE_ORDER } from "@/lib/status";
+import { DEAL_STAGE, DEAL_STAGE_ORDER } from "@/lib/status";
+import { money } from "@/lib/format";
 
-// Mini funnel: lead counts per stage, plus the follow-up nudge.
+// Mini funnel: deal counts per stage, plus the open pipeline value.
 export function PipelineSnapshot({
   counts,
-  followUps,
+  openValue,
 }: {
   counts: Record<string, number>;
-  followUps: number;
+  openValue: number;
 }) {
-  const max = Math.max(1, ...LEAD_STAGE_ORDER.map((s) => counts[s] ?? 0));
-  const total = LEAD_STAGE_ORDER.reduce((sum, s) => sum + (counts[s] ?? 0), 0);
+  const max = Math.max(1, ...DEAL_STAGE_ORDER.map((s) => counts[s] ?? 0));
+  const total = DEAL_STAGE_ORDER.reduce((sum, s) => sum + (counts[s] ?? 0), 0);
 
   if (total === 0) {
     return (
       <p className="py-6 text-center text-sm text-text-faint">
-        No leads yet.{" "}
-        <Link href="/leads" className="font-semibold text-accent hover:underline">
-          Capture one
+        No deals yet.{" "}
+        <Link
+          href="/pipeline"
+          className="font-semibold text-accent hover:underline"
+        >
+          Add one
         </Link>
         .
       </p>
@@ -27,9 +31,9 @@ export function PipelineSnapshot({
   return (
     <div>
       <ul className="space-y-2">
-        {LEAD_STAGE_ORDER.map((s) => {
+        {DEAL_STAGE_ORDER.map((s) => {
           const n = counts[s] ?? 0;
-          const meta = LEAD_STAGE[s];
+          const meta = DEAL_STAGE[s];
           return (
             <li key={s} className="flex items-center gap-3">
               <span className="w-16 shrink-0 text-xs font-semibold text-text-muted">
@@ -51,20 +55,20 @@ export function PipelineSnapshot({
           );
         })}
       </ul>
-      {followUps > 0 && (
+      {openValue > 0 && (
         <Link
-          href="/leads"
+          href="/pipeline"
           className="mt-3 flex items-center justify-between rounded-[10px] px-2 py-1.5 text-sm transition hover:bg-surface-2/70"
         >
-          <span className="text-text-muted">Leads to follow up</span>
+          <span className="text-text-muted">Open pipeline</span>
           <span
             className="rounded-pill px-2 py-0.5 text-xs font-semibold"
             style={{
-              backgroundColor: "var(--h-orange-bg)",
-              color: "var(--h-orange)",
+              backgroundColor: "var(--h-green-bg)",
+              color: "var(--h-green)",
             }}
           >
-            {followUps}
+            {money(openValue)}
           </span>
         </Link>
       )}

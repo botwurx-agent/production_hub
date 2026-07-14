@@ -11,7 +11,7 @@ const nav = [
   { href: "/boards", label: "Boards" },
   { href: "/communication", label: "Comms" },
   { href: "/clients", label: "Clients" },
-  { href: "/leads", label: "Leads" },
+  { href: "/pipeline", label: "Pipeline" },
   { href: "/settings", label: "Settings" },
 ];
 

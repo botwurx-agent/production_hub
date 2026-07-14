@@ -20,7 +20,7 @@ const nav = [
   { href: "/boards", label: "Boards", Icon: BoardsIcon },
   { href: "/communication", label: "Communication", Icon: CommunicationIcon },
   { href: "/clients", label: "Clients", Icon: ClientsIcon },
-  { href: "/leads", label: "Leads", Icon: LeadsIcon },
+  { href: "/pipeline", label: "Pipeline", Icon: LeadsIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ];
 

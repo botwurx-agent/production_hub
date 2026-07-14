@@ -2,6 +2,8 @@ import type { Hue } from "@/components/status-tag";
 import type {
   AssetStatus,
   LeadStage,
+  DealStage,
+  AccountStatus,
   ProjectStatus,
   ApprovalStatus,
 } from "@/lib/database.types";
@@ -71,6 +73,39 @@ export const LEAD_STAGE_ORDER: LeadStage[] = [
   "won",
   "lost",
 ];
+
+// Deal pipeline: an opportunity moves inbound -> qualifying -> bidding, then
+// terminates as awarded (won) or lost. Production-shaped stages.
+export const DEAL_STAGE: Record<
+  DealStage,
+  { label: string; hue: Hue; order: number }
+> = {
+  inbound: { label: "Inbound", hue: "blue", order: 0 },
+  qualifying: { label: "Qualifying", hue: "cyan", order: 1 },
+  bidding: { label: "Bidding", hue: "purple", order: 2 },
+  awarded: { label: "Awarded", hue: "green", order: 3 },
+  lost: { label: "Lost", hue: "red", order: 4 },
+};
+
+export const DEAL_STAGE_ORDER: DealStage[] = [
+  "inbound",
+  "qualifying",
+  "bidding",
+  "awarded",
+  "lost",
+];
+
+// Open (still-in-play) stages, for pipeline value and forecasting.
+export const DEAL_OPEN_STAGES: DealStage[] = ["inbound", "qualifying", "bidding"];
+
+export const ACCOUNT_STATUS: Record<
+  AccountStatus,
+  { label: string; hue: Hue }
+> = {
+  prospect: { label: "Prospect", hue: "yellow" },
+  active: { label: "Client", hue: "green" },
+  past: { label: "Past", hue: "cyan" },
+};
 
 export const APPROVAL_STATUS: Record<
   ApprovalStatus,

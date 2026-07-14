@@ -1,3 +1,13 @@
+/** Whole-dollar currency like "$85,000". Returns "" for null/NaN. */
+export function money(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 /** Short date like "Jul 14". Returns "" for null. */
 export function shortDate(value: string | null | undefined): string {
   if (!value) return "";

@@ -5,7 +5,7 @@ import { DashboardIcon } from "@/components/app-shell/nav-icons";
 import { DashboardBody } from "@/components/dashboard/dashboard-body";
 import type { Stat } from "@/components/dashboard/stat-tiles";
 import { getOutstanding } from "@/lib/outstanding";
-import { getLeadFollowups } from "@/lib/leads-followup";
+import { DEAL_OPEN_STAGES } from "@/lib/status";
 import type {
   CalendarEvent,
   ActivityFeedItem,
@@ -21,17 +21,16 @@ export default async function DashboardPage() {
 
   const [
     { data: projects },
-    { data: leads },
+    { data: deals },
     { data: activityRaw },
     { data: googleAccount },
     outstanding,
-    followUps,
   ] = await Promise.all([
       supabase
         .from("projects")
         .select("id, title, status, shoot_date, due_date, client:clients(name)")
         .is("archived_at", null),
-      supabase.from("leads").select("id, stage"),
+      supabase.from("deals").select("id, stage, value"),
       supabase
         .from("activity")
         .select("id, content, type, created_at, project:projects(id, title)")
@@ -44,7 +43,6 @@ export default async function DashboardPage() {
         .limit(1)
         .maybeSingle(),
       getOutstanding(),
-      getLeadFollowups(),
     ]);
   const calendarConnected = Boolean(
     googleAccount?.scope?.includes("/auth/calendar")
@@ -87,18 +85,22 @@ export default async function DashboardPage() {
   const shootsNext30 = proj.filter(
     (p) => p.shoot_date && p.shoot_date >= todayStr && p.shoot_date <= in30Str
   ).length;
-  const followUpCount = Object.keys(followUps).length;
+
+  // Pipeline counts by deal stage + open (in-play) pipeline value.
+  const dealRows = deals ?? [];
+  const counts: Record<string, number> = {};
+  for (const d of dealRows) counts[d.stage] = (counts[d.stage] ?? 0) + 1;
+  const openDeals = dealRows.filter((d) =>
+    DEAL_OPEN_STAGES.includes(d.stage)
+  );
+  const openValue = openDeals.reduce((t, d) => t + (d.value ?? 0), 0);
 
   const stats: Stat[] = [
     { label: "Active projects", value: activeProjects, hue: "indigo" },
     { label: "Shoots (next 30d)", value: shootsNext30, hue: "orange" },
     { label: "Needs sign-off", value: outstanding.length, hue: "yellow" },
-    { label: "Leads to follow up", value: followUpCount, hue: "cyan" },
+    { label: "Open deals", value: openDeals.length, hue: "cyan" },
   ];
-
-  // Pipeline counts by stage.
-  const counts: Record<string, number> = {};
-  for (const l of leads ?? []) counts[l.stage] = (counts[l.stage] ?? 0) + 1;
 
   // Recent activity feed.
   const activity: ActivityFeedItem[] = (activityRaw ?? []).flatMap((a) => {
@@ -131,7 +133,7 @@ export default async function DashboardPage() {
         upcoming={upcoming}
         todayEvents={todayEvents}
         counts={counts}
-        followUpCount={followUpCount}
+        openValue={openValue}
         activity={activity}
         calendarConnected={calendarConnected}
         initialYear={now.getFullYear()}

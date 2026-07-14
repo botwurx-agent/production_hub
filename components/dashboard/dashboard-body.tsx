@@ -81,7 +81,7 @@ export function DashboardBody({
   upcoming,
   todayEvents,
   counts,
-  followUpCount,
+  openValue,
   activity,
   calendarConnected,
   initialYear,
@@ -94,7 +94,7 @@ export function DashboardBody({
   upcoming: CalendarEvent[];
   todayEvents: CalendarEvent[];
   counts: Record<string, number>;
-  followUpCount: number;
+  openValue: number;
   activity: ActivityFeedItem[];
   calendarConnected: boolean;
   initialYear: number;
@@ -153,7 +153,7 @@ export function DashboardBody({
     ),
     show("pipeline") && (
       <TitledCard key="pipeline" title="Pipeline" icon={SECTION_ICONS.pipeline} hue="pink">
-        <PipelineSnapshot counts={counts} followUps={followUpCount} />
+        <PipelineSnapshot counts={counts} openValue={openValue} />
       </TitledCard>
     ),
     show("activity") && (
