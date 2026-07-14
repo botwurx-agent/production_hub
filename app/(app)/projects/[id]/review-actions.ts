@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { syncAssetStatusFromApprovals } from "@/lib/review-status";
 import type { ApprovalStatus } from "@/lib/database.types";
 
 export type ReviewState = { error?: string } | null;
@@ -135,6 +136,10 @@ export async function setVersionApproval(
     });
   }
 
+  // Move the asset through the review pipeline so the (status-filtered) Review
+  // page reflects this decision, not just the hub's approval count.
+  await syncAssetStatusFromApprovals(supabase, versionId);
+
   // Timeline entry (neutral phrasing; the feed prefixes the author).
   if (status !== "pending") {
     const { data: v } = await supabase
@@ -158,4 +163,5 @@ export async function setVersionApproval(
   }
 
   revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/review`);
 }

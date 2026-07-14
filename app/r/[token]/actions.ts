@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import { getValidLink, isDocKind } from "@/lib/review-links";
 import { createNotification } from "@/lib/notifications";
+import { syncAssetStatusFromApprovals } from "@/lib/review-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ReviewLink, ApprovalStatus } from "@/lib/database.types";
 
@@ -210,6 +211,10 @@ export async function submitClientDecision(
     if (error) return { error: error.message };
   }
 
+  // Reflect the client's decision in the asset's pipeline status so it shows
+  // correctly on the internal Review page.
+  await syncAssetStatusFromApprovals(service, versionId);
+
   const label =
     status === "approved" ? "approved this asset" : "requested changes";
   await logActivity(service, link, `${reviewer} ${label} in client review`);
@@ -222,6 +227,7 @@ export async function submitClientDecision(
   });
   revalidatePath(`/r/${token}`);
   revalidatePath(`/projects/${link.project_id}`);
+  revalidatePath(`/projects/${link.project_id}/review`);
   return null;
 }
 
