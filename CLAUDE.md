@@ -304,10 +304,24 @@ implemented (out of strict order, driven by the operator's real needs).
     by due date, overdue in red, one-click complete, link to deal/account).
     Assignee defaults to the creator (no picker yet); author attribution on the
     timeline is not surfaced yet (both deferred).
-  - NEXT CRM phases (not built): comms auto-logging from Gmail/Calendar/Slack to
-    the relationship timeline (Phase 3, the moat), reporting/forecast + AI
-    next-best-action (Phase 4), saved views/CSV import/custom fields/dedupe
-    (Phase 5). All hang off the Deal/Account objects, so each is additive.
+  - CRM Phase 3 slice 1 (BUILT): comms auto-logging onto the relationship
+    timeline (the moat), starting with EMAIL. No new tables/sync infra: a
+    read-time merge (lib/crm-feed.ts loadAccountFeed) interleaves manual
+    crm_activities with the account's LINKED email threads (email_threads by
+    client_id -> subject + last_message_at, no Gmail API call) into one
+    FeedEntry[] stream, and computes lastContactAt (most recent real contact:
+    linked email or a logged call/meeting/email, ignoring system stage events).
+    components/crm/relationship-feed.tsx (composer + merged read-only feed;
+    email entries badged "auto", not deletable) replaces ActivityTimeline on the
+    account page (/clients/[id]); "Last contact <ago>" shows in the account
+    header + Activity card. The deal page keeps the manual-only ActivityTimeline
+    (email links to accounts, not deals). NEXT slices (not built): Calendar
+    meetings matched to an account by attendee email (needs a
+    listEventsWithAttendees in lib/googlecalendar.ts + per-page fetch, guarded on
+    calendar scope), then Slack/Chat message activity.
+  - NEXT CRM phases (not built): reporting/forecast + AI next-best-action
+    (Phase 4), saved views/CSV import/custom fields/dedupe (Phase 5). All hang
+    off the Deal/Account objects, so each is additive.
 - Boards: freeform moodboard/storyboard canvas (studio-wide, project-linkable),
   tabs, drag/resize/z-order, notes, zoom, desktop drag-drop, dots/grid/plain
   background; import via upload/project assets/Drive/Figma.

@@ -13,10 +13,11 @@ import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
-import { ActivityTimeline } from "@/components/crm/activity-timeline";
+import { RelationshipFeed } from "@/components/crm/relationship-feed";
 import { TaskList } from "@/components/crm/task-list";
+import { loadAccountFeed } from "@/lib/crm-feed";
 import { PROJECT_STATUS, ACCOUNT_STATUS, DEAL_STAGE } from "@/lib/status";
-import { shortDate, money } from "@/lib/format";
+import { shortDate, money, timeAgo } from "@/lib/format";
 import type { Contact } from "@/lib/database.types";
 
 export default async function ClientDetailPage({
@@ -38,7 +39,7 @@ export default async function ClientDetailPage({
     { data: contacts },
     { data: projects },
     { data: deals },
-    { data: activities },
+    feed,
     { data: tasks },
     { data: emailThreads },
     { data: emailAccount },
@@ -61,11 +62,7 @@ export default async function ClientDetailPage({
       .select("id, title, value, stage")
       .eq("account_id", params.id)
       .order("created_at", { ascending: false }),
-    supabase
-      .from("crm_activities")
-      .select("id, kind, body, occurred_at")
-      .eq("account_id", params.id)
-      .order("occurred_at", { ascending: false }),
+    loadAccountFeed(supabase, params.id),
     supabase
       .from("crm_tasks")
       .select("id, title, due_date, done")
@@ -128,6 +125,11 @@ export default async function ClientDetailPage({
           {client.notes && (
             <p className="mt-2 max-w-2xl text-sm text-text-muted">
               {client.notes}
+            </p>
+          )}
+          {feed.lastContactAt && (
+            <p className="mt-2 text-xs font-medium text-text-faint">
+              Last contact {timeAgo(feed.lastContactAt)}
             </p>
           )}
         </div>
@@ -238,8 +240,15 @@ export default async function ClientDetailPage({
 
         {/* Activity */}
         <Card className="p-5 lg:col-span-2">
-          <h2 className="mb-4 font-display text-base font-bold">Activity</h2>
-          <ActivityTimeline accountId={client.id} activities={activities ?? []} />
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="font-display text-base font-bold">Activity</h2>
+            {feed.lastContactAt && (
+              <span className="text-xs text-text-faint">
+                Last contact {timeAgo(feed.lastContactAt)}
+              </span>
+            )}
+          </div>
+          <RelationshipFeed accountId={client.id} entries={feed.entries} />
         </Card>
 
         {/* Email */}
