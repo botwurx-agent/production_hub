@@ -1816,6 +1816,94 @@ export type Database = {
           },
         ];
       };
+      project_members: {
+        Row: {
+          added_by: string | null;
+          created_at: string;
+          id: string;
+          project_id: string;
+          role: string;
+          studio_id: string;
+          user_id: string;
+        };
+        Insert: {
+          added_by?: string | null;
+          created_at?: string;
+          id?: string;
+          project_id: string;
+          role?: string;
+          studio_id: string;
+          user_id: string;
+        };
+        Update: {
+          added_by?: string | null;
+          created_at?: string;
+          id?: string;
+          project_id?: string;
+          role?: string;
+          studio_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_invites: {
+        Row: {
+          accepted_at: string | null;
+          accepted_by: string | null;
+          created_at: string;
+          email: string;
+          id: string;
+          invited_by: string | null;
+          project_id: string;
+          revoked: boolean;
+          role: string;
+          studio_id: string;
+          token: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_at?: string;
+          email: string;
+          id?: string;
+          invited_by?: string | null;
+          project_id: string;
+          revoked?: boolean;
+          role?: string;
+          studio_id: string;
+          token?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_at?: string;
+          email?: string;
+          id?: string;
+          invited_by?: string | null;
+          project_id?: string;
+          revoked?: boolean;
+          role?: string;
+          studio_id?: string;
+          token?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_invites_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       call_sheet_templates: {
         Row: {
           id: string;
@@ -2754,6 +2842,8 @@ export type CrmTask = Tables<"crm_tasks">;
 export type Lead = Tables<"leads">;
 export type Contact = Tables<"contacts">;
 export type Project = Tables<"projects">;
+export type ProjectMember = Tables<"project_members">;
+export type ProjectInvite = Tables<"project_invites">;
 export type Brief = Tables<"briefs">;
 export type BriefAttachment = Tables<"brief_attachments">;
 export type Asset = Tables<"assets">;
