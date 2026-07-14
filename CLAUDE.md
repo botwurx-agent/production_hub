@@ -554,6 +554,47 @@ implemented (out of strict order, driven by the operator's real needs).
   toggle rails the left nav to icons-only (w-[68px]) for a wider workspace; state
   persists in localStorage ("sidebar.collapsed"). Main content auto-widens (flex).
 
+### Project-level access / collaborators (migrations 0056/0057) — IN PROGRESS
+A second, narrower access tier below studio members: a "project collaborator" is
+granted access to specific project(s) only (internal crew: DP, AD, PA, etc.),
+NOT the whole studio. Collaborators are NOT in `memberships`; they live only in
+`project_members`, so every studio-wide table (clients, deals, CRM,
+communication, money, notifications, boards-general) stays invisible to them
+automatically (those tables keep is_studio_member gating; a collaborator has no
+membership). We only OPEN the project-scoped tables to them.
+- Migration 0056 (APPLIED): `project_members` (project/user/role/added_by) +
+  `project_invites` (project/email/token/role) tables; helpers
+  `can_access_project(project_id)` (studio member OR project_members),
+  `review_target_project`/`review_comment_project` (polymorphic approvals +
+  review_comments -> project). 32 project-scoped table policies changed to
+  `is_studio_member(studio_id) OR can_access_project(<project>)` (direct
+  project_id, parent-subquery for indirect tables, resolver for the 2
+  polymorphic). Storage bucket policy UNCHANGED (studio-folder scoped) -> option
+  A: collaborators reach asset files via an access-checked server route (NOT yet
+  built). Inert until project_members rows exist.
+- Migration 0057 (APPLIED): `studios_collaborator_read` (a collaborator can read
+  their project's studio row for the shell); RPCs `project_invite_preview(token)`
+  (anon, for the accept page) + `claim_pending_project_invites()` (joins caller
+  to every project that invited their email); `handle_new_user` now also skips
+  personal-studio creation for a project invitee.
+- Code (BUILT): StudioContext gained `isCollaborator` + `projectIds` (null for
+  members); getStudioContext resolves a collaborator (no membership -> via
+  project_members, studio from those projects). signIn/signUp + getStudioContext
+  claim project invites. app/(app)/projects/[id]/team-actions.ts (inviteToProject
+  /revokeProjectInvite/removeProjectMember/acceptProjectInvite). components/
+  projects/project-people.tsx = staff-only "People" button on the project hero
+  (invite by email -> copy /project-invite/<token> link, list collaborators +
+  pending, remove/revoke). Accept flow: public /project-invite/[token] page
+  (added to middleware PUBLIC_PATHS) -> AcceptProjectInvite (logged in) or an
+  invite-variant SignupForm (logged out) -> lands on the project.
+- NOT yet built (next steps): (3) collaborator app-shell gating (stripped nav =
+  only their project(s); block Clients/Pipeline/Boards/aggregate Dashboard/
+  Settings; redirect a collaborator off /dashboard to their project); (4) the
+  access-checked storage route for asset files (option A) + collaborator uploads;
+  (5) end-to-end verification with a real second (collaborator) account. Until
+  (3)/(4) land, do not invite a real collaborator (they'd see a full nav with
+  empty studio-wide pages, and asset files won't load).
+
 ### Team invites / multi-user (migration 0048) — BUILT
 Multiple people can now share one studio (the paid multi-user lever). The tenancy
 plumbing (studios/memberships/roles owner|admin|member + RLS is_studio_member)

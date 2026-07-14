@@ -28,8 +28,9 @@ export async function signIn(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
 
-  // Join any studio that invited this email (no-op if there are none).
+  // Join any studio or project that invited this email (no-op if none).
   await supabase.rpc("claim_pending_invites");
+  await supabase.rpc("claim_pending_project_invites");
 
   revalidatePath("/", "layout");
   redirect("/dashboard");
@@ -66,7 +67,10 @@ export async function signUp(
 
   // If email confirmation is disabled the user is signed in immediately.
   if (data.session) {
-    if (inviteToken) await supabase.rpc("claim_pending_invites");
+    if (inviteToken) {
+      await supabase.rpc("claim_pending_invites");
+      await supabase.rpc("claim_pending_project_invites");
+    }
     revalidatePath("/", "layout");
     redirect("/dashboard");
   }

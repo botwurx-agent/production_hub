@@ -2760,6 +2760,30 @@ export type Database = {
           valid: boolean;
         }[];
       };
+      claim_pending_project_invites: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      review_target_project: {
+        Args: { p_type: string; p_id: string };
+        Returns: string;
+      };
+      review_comment_project: {
+        Args: { p_version_id: string; p_type: string; p_id: string };
+        Returns: string;
+      };
+      can_access_project: { Args: { p_project_id: string }; Returns: boolean };
+      project_invite_preview: {
+        Args: { p_token: string };
+        Returns: {
+          valid: boolean;
+          invite_email: string;
+          invite_role: string;
+          studio_name: string;
+          project_id: string;
+          project_title: string;
+        }[];
+      };
     };
     Enums: {
       activity_type: "note" | "activity" | "status_change" | "upload" | "approval";

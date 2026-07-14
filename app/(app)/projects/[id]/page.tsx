@@ -5,6 +5,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { StatusMenu } from "@/components/projects/status-menu";
 import { ArchiveProjectButton } from "@/components/projects/archive-project-button";
+import { ProjectPeople } from "@/components/projects/project-people";
 import { ProjectClientPicker } from "@/components/projects/project-client-picker";
 import { HubCard, BandLabel } from "@/components/projects/hub-card";
 import { ProjectSummary } from "@/components/projects/project-summary";
@@ -165,6 +166,28 @@ export default async function ProjectDetailPage({
     loadProjectAssets(supabase, params.id),
   ]);
 
+  // Project collaborators + pending invites (for the staff-only People control).
+  const [{ data: pmembers }, { data: pinvites }] = await Promise.all([
+    supabase
+      .from("project_members")
+      .select("id, user_id")
+      .eq("project_id", params.id),
+    supabase
+      .from("project_invites")
+      .select("id, email, token, accepted_by, accepted_at, revoked")
+      .eq("project_id", params.id),
+  ]);
+  const inviteEmailByUser = new Map<string, string>();
+  for (const inv of pinvites ?? [])
+    if (inv.accepted_by) inviteEmailByUser.set(inv.accepted_by, inv.email);
+  const projectMembers = (pmembers ?? []).map((m) => ({
+    memberId: m.id,
+    email: inviteEmailByUser.get(m.user_id) ?? "Collaborator",
+  }));
+  const projectPending = (pinvites ?? [])
+    .filter((i) => !i.accepted_at && !i.revoked)
+    .map((i) => ({ id: i.id, email: i.email, token: i.token }));
+
   // Shot count needs group ids.
   const groupIds = (shotGroups ?? []).map((g) => g.id);
   let shotCount = 0;
@@ -320,6 +343,13 @@ export default async function ProjectDetailPage({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {!ctx.isCollaborator && (
+                <ProjectPeople
+                  projectId={project.id}
+                  members={projectMembers}
+                  pending={projectPending}
+                />
+              )}
               <ArchiveProjectButton
                 projectId={project.id}
                 archived={Boolean((project as { archived_at: string | null }).archived_at)}
