@@ -29,12 +29,18 @@ const STORAGE_KEY = "sidebar.collapsed";
 export function Sidebar({
   studioName,
   logoUrl,
+  collaborator = false,
 }: {
   studioName: string;
   logoUrl?: string | null;
+  collaborator?: boolean;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  // A project collaborator only ever sees their project(s).
+  const items = collaborator
+    ? nav.filter((n) => n.href === "/projects")
+    : nav;
 
   // Restore the last collapse state (client-only to avoid a hydration mismatch).
   useEffect(() => {
@@ -85,7 +91,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
-        {nav.map(({ href, label, Icon }) => {
+        {items.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link

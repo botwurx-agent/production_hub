@@ -344,16 +344,18 @@ export default async function ProjectDetailPage({
             </div>
             <div className="flex items-center gap-2">
               {!ctx.isCollaborator && (
-                <ProjectPeople
-                  projectId={project.id}
-                  members={projectMembers}
-                  pending={projectPending}
-                />
+                <>
+                  <ProjectPeople
+                    projectId={project.id}
+                    members={projectMembers}
+                    pending={projectPending}
+                  />
+                  <ArchiveProjectButton
+                    projectId={project.id}
+                    archived={Boolean((project as { archived_at: string | null }).archived_at)}
+                  />
+                </>
               )}
-              <ArchiveProjectButton
-                projectId={project.id}
-                archived={Boolean((project as { archived_at: string | null }).archived_at)}
-              />
               <StatusMenu projectId={project.id} status={project.status} />
             </div>
           </div>

@@ -10,8 +10,9 @@ import { ProjectsIcon } from "@/components/app-shell/nav-icons";
 import type { ProjectRow } from "@/components/projects/types";
 
 export default async function ProjectsPage() {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
+  const canCreate = !ctx.isCollaborator;
 
   const [{ data: projects }, { data: clients }, outstanding] =
     await Promise.all([
@@ -42,7 +43,7 @@ export default async function ProjectsPage() {
         subtitle="Every job, one board."
         icon={<ProjectsIcon className="h-6 w-6" />}
         hue="indigo"
-        action={<NewProjectButton clients={clientOptions} />}
+        action={canCreate ? <NewProjectButton clients={clientOptions} /> : undefined}
       />
       <NeedsYou items={outstanding} />
       {rows.length === 0 ? (

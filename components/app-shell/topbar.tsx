@@ -18,11 +18,14 @@ const nav = [
 export function Topbar({
   email,
   needsYouCount = 0,
+  collaborator = false,
 }: {
   email: string | null;
   needsYouCount?: number;
+  collaborator?: boolean;
 }) {
   const pathname = usePathname();
+  const items = collaborator ? nav.filter((n) => n.href === "/projects") : nav;
 
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur print:hidden">
@@ -36,7 +39,7 @@ export function Topbar({
 
         {/* Mobile nav */}
         <nav className="flex flex-1 items-center gap-1 overflow-x-auto md:hidden">
-          {nav.map(({ href, label }) => {
+          {items.map(({ href, label }) => {
             const active =
               pathname === href || pathname.startsWith(`${href}/`);
             return (

@@ -587,13 +587,17 @@ membership). We only OPEN the project-scoped tables to them.
   pending, remove/revoke). Accept flow: public /project-invite/[token] page
   (added to middleware PUBLIC_PATHS) -> AcceptProjectInvite (logged in) or an
   invite-variant SignupForm (logged out) -> lands on the project.
-- NOT yet built (next steps): (3) collaborator app-shell gating (stripped nav =
-  only their project(s); block Clients/Pipeline/Boards/aggregate Dashboard/
-  Settings; redirect a collaborator off /dashboard to their project); (4) the
-  access-checked storage route for asset files (option A) + collaborator uploads;
-  (5) end-to-end verification with a real second (collaborator) account. Until
-  (3)/(4) land, do not invite a real collaborator (they'd see a full nav with
-  empty studio-wide pages, and asset files won't load).
+- Collaborator app-shell gating (step 3, BUILT): middleware forwards the current
+  path as an `x-pathname` request header; app/(app)/layout.tsx reads it and, for
+  a collaborator, redirects any non-/projects path to /projects (RLS is the real
+  boundary; this is just navigation). Sidebar + Topbar take a `collaborator` prop
+  and strip the nav to only "Projects". "New project" (projects list) and the
+  ProjectPeople + Archive controls (project hero) are hidden for collaborators.
+- NOT yet built (next steps): (4) the access-checked storage route for asset
+  files (option A) + collaborator uploads; (5) end-to-end verification with a
+  real second (collaborator) account. Until (4) lands, a collaborator can log in
+  and navigate their project, but asset image/file thumbnails won't load (the
+  bucket is still studio-scoped), so hold off inviting a real one.
 
 ### Team invites / multi-user (migration 0048) — BUILT
 Multiple people can now share one studio (the paid multi-user lever). The tenancy
