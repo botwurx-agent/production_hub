@@ -2,7 +2,18 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/r", "/b", "/c", "/invite", "/project-invite"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/auth",
+  "/r",
+  "/b",
+  "/c",
+  "/invite",
+  "/project-invite",
+];
 
 /**
  * Refreshes the Supabase auth session on every request and gates the app.

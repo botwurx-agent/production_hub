@@ -88,3 +88,73 @@ export async function signOut() {
   revalidatePath("/", "layout");
   redirect("/login");
 }
+
+export async function requestPasswordReset(
+  _prev: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) return { error: "Enter your email." };
+
+  const supabase = createClient();
+  // The recovery link lands on /auth/confirm, which verifies the OTP (creating
+  // a short-lived session) and forwards to /reset-password to set a new one.
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${siteOrigin()}/auth/confirm?next=/reset-password`,
+  });
+
+  // Always report success so the form never reveals whether an account exists.
+  return {
+    message:
+      "If an account exists for that email, a reset link is on its way. Check your inbox.",
+  };
+}
+
+export async function updatePassword(
+  _prev: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (password.length < 8)
+    return { error: "Password must be at least 8 characters." };
+  if (password !== confirm) return { error: "The passwords do not match." };
+
+  const supabase = createClient();
+  // Requires the recovery session set by the email link. Without it, updateUser
+  // fails and we send the user back to request a fresh link.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return {
+      error: "This reset link has expired. Request a new one from Forgot password.",
+    };
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: error.message };
+
+  revalidatePath("/", "layout");
+  redirect("/dashboard");
+}
+
+export async function resendConfirmation(
+  _prev: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) return { error: "Enter your email." };
+
+  const supabase = createClient();
+  await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${siteOrigin()}/auth/confirm` },
+  });
+
+  // Generic success, same non-disclosure reasoning as password reset.
+  return {
+    message:
+      "If that email needs confirming, a new link is on its way. Check your inbox.",
+  };
+}

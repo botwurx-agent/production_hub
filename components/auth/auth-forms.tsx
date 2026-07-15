@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
-import { signIn, signUp, type AuthState } from "@/app/auth/actions";
+import {
+  signIn,
+  signUp,
+  requestPasswordReset,
+  updatePassword,
+  resendConfirmation,
+  type AuthState,
+} from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -35,14 +42,27 @@ function Feedback({ state }: { state: AuthState }) {
   return null;
 }
 
-export function LoginForm() {
+const LOGIN_ERRORS: Record<string, string> = {
+  confirmation_failed:
+    "That confirmation link did not work. It may have expired. Resend it below.",
+  auth_failed: "That sign-in link did not work. Try signing in again.",
+};
+
+export function LoginForm({ errorCode }: { errorCode?: string } = {}) {
   const [state, action] = useFormState(signIn, null);
+  const notice = errorCode ? LOGIN_ERRORS[errorCode] : undefined;
+  const showResend = errorCode === "confirmation_failed";
   return (
     <Card className="p-7">
       <h1 className="font-display text-xl font-extrabold">Welcome back</h1>
       <p className="mt-1 text-sm text-text-muted">
         Sign in to your studio workspace.
       </p>
+      {notice && (
+        <p className="mt-4 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
+          {notice}
+        </p>
+      )}
       <form action={action} className="mt-6 space-y-4">
         <Field label="Email" htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" required />
@@ -56,6 +76,14 @@ export function LoginForm() {
             required
           />
         </Field>
+        <div className="text-right">
+          <Link
+            href="/forgot-password"
+            className="text-sm font-medium text-text-muted hover:text-accent hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <Feedback state={state} />
         <SubmitButton label="Sign in" />
       </form>
@@ -65,6 +93,90 @@ export function LoginForm() {
           Create a studio
         </Link>
       </p>
+      {showResend && (
+        <div className="mt-5 border-t border-border pt-5">
+          <ResendConfirmationForm />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+export function ResendConfirmationForm() {
+  const [state, action] = useFormState(resendConfirmation, null);
+  return (
+    <form action={action} className="space-y-3">
+      <p className="text-sm font-medium text-text">Resend confirmation email</p>
+      <Field label="Email" htmlFor="resend-email">
+        <Input
+          id="resend-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+        />
+      </Field>
+      <Feedback state={state} />
+      <SubmitButton label="Resend confirmation" />
+    </form>
+  );
+}
+
+export function ForgotPasswordForm() {
+  const [state, action] = useFormState(requestPasswordReset, null);
+  return (
+    <Card className="p-7">
+      <h1 className="font-display text-xl font-extrabold">Reset your password</h1>
+      <p className="mt-1 text-sm text-text-muted">
+        Enter your email and we will send you a link to set a new password.
+      </p>
+      <form action={action} className="mt-6 space-y-4">
+        <Field label="Email" htmlFor="email">
+          <Input id="email" name="email" type="email" autoComplete="email" required />
+        </Field>
+        <Feedback state={state} />
+        <SubmitButton label="Send reset link" />
+      </form>
+      <p className="mt-5 text-center text-sm text-text-muted">
+        Remembered it?{" "}
+        <Link href="/login" className="font-semibold text-accent hover:underline">
+          Back to sign in
+        </Link>
+      </p>
+    </Card>
+  );
+}
+
+export function ResetPasswordForm() {
+  const [state, action] = useFormState(updatePassword, null);
+  return (
+    <Card className="p-7">
+      <h1 className="font-display text-xl font-extrabold">Set a new password</h1>
+      <p className="mt-1 text-sm text-text-muted">
+        Choose a new password for your account.
+      </p>
+      <form action={action} className="mt-6 space-y-4">
+        <Field label="New password" htmlFor="password" hint="At least 8 characters.">
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+          />
+        </Field>
+        <Field label="Confirm new password" htmlFor="confirm">
+          <Input
+            id="confirm"
+            name="confirm"
+            type="password"
+            autoComplete="new-password"
+            required
+          />
+        </Field>
+        <Feedback state={state} />
+        <SubmitButton label="Update password" />
+      </form>
     </Card>
   );
 }
