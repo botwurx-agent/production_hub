@@ -748,6 +748,39 @@ parent (it predated project-level contacts and was rejecting them).
   page. Also decide how a file enters Review: (1) a "Send to review" button on
   the asset [recommended], or (2) an "Add to review" picker on the Review page.
 
+### Pre-launch hardening pass (BUILT, branch claude/pre-launch-audit-competitive-a08026)
+Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07.md
+(audit + competitive assessment) and docs/launch/beta-launch-checklist.md
+(manual steps + follow-ups). Shipped:
+- Auth recovery: /forgot-password + /reset-password (resetPasswordForEmail ->
+  /auth/confirm recovery session -> updateUser) + resend-confirmation surfaced on
+  login when a confirm link fails. New public paths in middleware.
+- Error handling: app/global-error.tsx (self-contained), app/error.tsx,
+  app/(app)/error.tsx; branded app/not-found.tsx + projects/[id]/not-found.tsx;
+  loading.tsx skeletons (dashboard/projects/project hub) + components/ui/skeleton.
+- SSRF fix in lib/unfurl.ts: safeFetch DNS-resolves every hop and rejects
+  private/reserved IPs, follows redirects manually (both unfurl + board image DL).
+- Swallowed write errors surfaced: projects status/color/archive/update +
+  notification mark-read now return + log via lib/log.ts reportError (the seam
+  Sentry hooks into). Minimal toast at components/ui/toast.tsx (+ Toaster in the
+  app shell); status/color/archive/client-picker menus toast on failure.
+- Paused billing entry points hidden on the Delivery page (BILLING_ENABLED flag).
+- Legal: app/(legal)/{terms,privacy} (placeholders + counsel note), linked from
+  auth footer, public in middleware.
+- CI: .github/workflows/ci.yml (tsc + build; no eslint config in repo).
+- Observability: Sentry (@sentry/nextjs, instrumentation*.ts + sentry.*.config +
+  withSentryConfig) inert until NEXT_PUBLIC_SENTRY_DSN; Vercel Analytics in root
+  layout. Adds ~76kB client first-load (tunable).
+- Feedback: migration 0058 `feedback` (RLS insert-only; read via dashboard) +
+  app/(app)/feedback-actions.ts + components/feedback/feedback-modal.tsx in the
+  user menu.
+- Rate limiting: lib/rate-limit.ts (best-effort in-memory) on /r + /c public
+  actions. Completed .env.example (adds SUPABASE_SERVICE_ROLE_KEY etc).
+- Security: Next.js bumped 14.2.15 -> 14.2.35 (patches critical Server Actions
+  DoS + middleware SSRF). Remaining audit items need a Next 15/16 (React 19)
+  major upgrade, deferred. Supabase leaked-password protection = a dashboard
+  toggle (still to flip). Migrations now through 0058.
+
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
 pending the FreshBooks-vs-Melio decision; do not extend it until confirmed.
