@@ -167,7 +167,7 @@ function AddGenModal({
     <Modal open onClose={onClose} size="lg" title={stage === "image" ? "Add image candidate" : "Add video take"}>
       <div className="space-y-3">
         <div>
-          <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
             Upload {stage === "image" ? "image" : "video"} files <span className="font-normal normal-case text-text-faint">(pick one or many · recommended)</span>
           </label>
           <input type="file" multiple accept={stage === "image" ? "image/*" : "video/*,image/*"}
@@ -180,7 +180,7 @@ function AddGenModal({
           )}
         </div>
         <div>
-          <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
             …or a direct file URL <span className="font-normal normal-case text-text-faint">(must end in .png/.jpg/.mp4 — a share page won&apos;t preview)</span>
           </label>
           <input value={f.external_url} onChange={(e) => set("external_url", e.target.value)}
@@ -192,47 +192,47 @@ function AddGenModal({
           </p>
         )}
         <div>
-          <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
             Prompt used <span className="font-normal normal-case text-text-faint">(applies to {files.length > 1 ? `all ${files.length}` : "this"} — tweak it per batch)</span>
           </label>
           <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={3}
             placeholder="The exact prompt used to generate these…" className={`mt-1 ${field}`} />
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Platform</label>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Platform</label>
             <input value={f.platform} onChange={(e) => set("platform", e.target.value)} placeholder="e.g. fal, Krea" className={`mt-1 ${field}`} /></div>
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Model</label>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Model</label>
             <input list="modellist" value={f.model} onChange={(e) => set("model", e.target.value)} placeholder={models[0]} className={`mt-1 ${field}`} />
             <datalist id="modellist">{models.map((m) => <option key={m} value={m} />)}</datalist></div>
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Version</label>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Version</label>
             <input value={f.model_version} onChange={(e) => set("model_version", e.target.value)} className={`mt-1 ${field}`} /></div>
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Seed</label>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Seed</label>
             <input value={f.seed} onChange={(e) => set("seed", e.target.value)} className={`mt-1 ${field}`} /></div>
           {stage === "image" ? (
             <>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Aspect</label>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Aspect</label>
                 <input value={f.aspect} onChange={(e) => set("aspect", e.target.value)} placeholder="16:9" className={`mt-1 ${field}`} /></div>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Resolution</label>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Resolution</label>
                 <input value={f.resolution} onChange={(e) => set("resolution", e.target.value)} placeholder="2048²" className={`mt-1 ${field}`} /></div>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Guidance</label>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Guidance</label>
                 <input value={f.guidance} onChange={(e) => set("guidance", e.target.value)} className={`mt-1 ${field}`} /></div>
             </>
           ) : (
             <>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Duration (s)</label>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Duration (s)</label>
                 <input value={f.duration_sec} onChange={(e) => set("duration_sec", e.target.value)} placeholder="5" className={`mt-1 ${field}`} /></div>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">FPS</label>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">FPS</label>
                 <input value={f.fps} onChange={(e) => set("fps", e.target.value)} placeholder="24" className={`mt-1 ${field}`} /></div>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Resolution</label>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Resolution</label>
                 <input value={f.resolution} onChange={(e) => set("resolution", e.target.value)} placeholder="1080p" className={`mt-1 ${field}`} /></div>
             </>
           )}
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Cost</label>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Cost</label>
             <input value={f.cost} onChange={(e) => set("cost", e.target.value)} placeholder="credits / $" className={`mt-1 ${field}`} /></div>
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Generated by</label>
+          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Generated by</label>
             <input value={f.generated_by_name} onChange={(e) => set("generated_by_name", e.target.value)} placeholder="name (optional)" className={`mt-1 ${field}`} /></div>
         </div>
-        <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Notes / extra params</label>
+        <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Notes / extra params</label>
           <input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="negative prompt, LoRA, camera, round…" className={`mt-1 ${field}`} /></div>
         {err && <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{err}</p>}
         <div className="flex items-center justify-end gap-3 pt-1">
@@ -377,7 +377,7 @@ function GenCard({
               )}
             </div>
             <div>
-              <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-text-faint">Prompt used</div>
+              <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-text-muted">Prompt used</div>
               <textarea defaultValue={gen.prompt ?? ""} rows={3}
                 onBlur={(e) => onRun(() => updateGeneration(projectId, gen.id, { prompt: e.target.value || null }))}
                 placeholder="The exact prompt for this generation…"
@@ -470,7 +470,7 @@ function StagePanel({
       </div>
 
       <div className="mb-3 space-y-2">
-        <label className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+        <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
           Working prompt <span className="font-normal normal-case text-text-faint">· pre-fills each new batch; the exact prompt is saved on every generation</span>
         </label>
         <textarea value={pText} onChange={(e) => setPText(e.target.value)}
@@ -505,7 +505,7 @@ function StagePanel({
       {/* Then the locked selection, lifted out of the pool into its own section */}
       {stage === "image" ? (
         <div className="rounded-[12px] bg-surface-2 p-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
             Selected frames · the video animates between these
           </div>
           <div className="grid max-w-md grid-cols-2 gap-3">
@@ -515,7 +515,7 @@ function StagePanel({
         </div>
       ) : (
         <div className="rounded-[12px] bg-surface-2 p-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">Picked take</div>
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">Picked take</div>
           <div className="max-w-xs">
             <FrameSlot label="Final take" color="var(--h-green)" gen={take} src={srcOf(take)} empty="Pick a take above" video />
           </div>
@@ -571,7 +571,7 @@ function SequenceStrip({
   return (
     <div className="rounded-[14px] border border-border p-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Sequence</span>
+        <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Sequence</span>
         <span className="text-xs text-text-faint">{shots.length} shot{shots.length === 1 ? "" : "s"} · drag to reorder</span>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -687,7 +687,7 @@ function SendToReviewControl({
               share one link and the client reviews the exact same thing.
             </p>
             <div className="rounded-[12px] border border-border bg-surface-2/40 p-3">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
                 What goes into this review
               </p>
               <div className="space-y-1.5">
