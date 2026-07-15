@@ -80,6 +80,11 @@ export default async function DeliveryPage({
 
   const deliverableList = (deliverables ?? []) as Deliverable[];
 
+  // Billing/invoicing is on hold pending the FreshBooks-vs-Melio decision (see
+  // CLAUDE.md). Both entry points are hidden for beta; the DB tables and panels
+  // stay wired so this flips back on with one line once the platform is picked.
+  const BILLING_ENABLED = false;
+
   return (
     <div className="space-y-6">
       <ProjectSubhead
@@ -97,37 +102,41 @@ export default async function DeliveryPage({
         }
       />
 
-      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-sm font-bold text-text">
-            Build an invoice or estimate in the app
-          </p>
-          <p className="text-xs text-text-muted">
-            A branded, editable invoice/estimate with per-line tax, notes, and
-            terms. No FreshBooks required.
-          </p>
-        </div>
-        <a
-          href={`/projects/${project.id}/invoices`}
-          className="inline-flex items-center gap-2 rounded-[11px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
-        >
-          Open invoice generator
-        </a>
-      </Card>
+      {BILLING_ENABLED && (
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <p className="text-sm font-bold text-text">
+              Build an invoice or estimate in the app
+            </p>
+            <p className="text-xs text-text-muted">
+              A branded, editable invoice/estimate with per-line tax, notes, and
+              terms. No FreshBooks required.
+            </p>
+          </div>
+          <a
+            href={`/projects/${project.id}/invoices`}
+            className="inline-flex items-center gap-2 rounded-[11px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
+          >
+            Open invoice generator
+          </a>
+        </Card>
+      )}
 
-      <Card className="p-5">
-        <InvoicingPanel
-          projectId={project.id}
-          invoices={(invoices ?? []) as ProjectInvoice[]}
-          freshbooksConnected={Boolean(billingAccount)}
-          contacts={contacts}
-          deliverables={deliverableList.map((d) => ({
-            name: d.name,
-            rate: d.rate,
-            qty: d.qty,
-          }))}
-        />
-      </Card>
+      {BILLING_ENABLED && (
+        <Card className="p-5">
+          <InvoicingPanel
+            projectId={project.id}
+            invoices={(invoices ?? []) as ProjectInvoice[]}
+            freshbooksConnected={Boolean(billingAccount)}
+            contacts={contacts}
+            deliverables={deliverableList.map((d) => ({
+              name: d.name,
+              rate: d.rate,
+              qty: d.qty,
+            }))}
+          />
+        </Card>
+      )}
 
       <Card className="p-5">
         <DeliveryPanel
