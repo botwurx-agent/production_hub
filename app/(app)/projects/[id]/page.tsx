@@ -11,7 +11,7 @@ import { HubCard, BandLabel } from "@/components/projects/hub-card";
 import { ProjectSummary } from "@/components/projects/project-summary";
 import { ProjectAttention } from "@/components/projects/project-attention";
 import { getProjectOutstanding } from "@/lib/outstanding";
-import { projectType } from "@/lib/project-types";
+import { projectType, stageLabel, hasShootDay } from "@/lib/project-types";
 import { aiConfigured } from "@/lib/ai";
 import { loadProjectAssets } from "@/lib/project-data";
 import {
@@ -309,7 +309,11 @@ export default async function ProjectDetailPage({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                {statusInfo && <StatusTag hue={statusInfo.hue}>{statusInfo.label}</StatusTag>}
+                {statusInfo && (
+                  <StatusTag hue={statusInfo.hue}>
+                    {stageLabel(project.status, project.project_type)}
+                  </StatusTag>
+                )}
                 <span
                   className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-0.5 text-[11px] font-bold"
                   style={{ backgroundColor: `var(--h-${ptype.hue}-bg)`, color: `var(--h-${ptype.hue})` }}
@@ -332,7 +336,9 @@ export default async function ProjectDetailPage({
                 />
                 {project.shoot_date && (
                   <span className="text-text-faint">
-                    {"  ·  "}Shoot {longDate(project.shoot_date)}
+                    {"  ·  "}
+                    {hasShootDay(project.project_type) ? "Shoot" : "Target"}{" "}
+                    {longDate(project.shoot_date)}
                   </span>
                 )}
                 {project.due_date && (
@@ -356,7 +362,11 @@ export default async function ProjectDetailPage({
                   />
                 </>
               )}
-              <StatusMenu projectId={project.id} status={project.status} />
+              <StatusMenu
+                projectId={project.id}
+                status={project.status}
+                projectType={project.project_type}
+              />
             </div>
           </div>
 
@@ -400,7 +410,7 @@ export default async function ProjectDetailPage({
                   >
                     {state === "done" ? "✓" : i + 1}
                   </span>
-                  {info.label}
+                  {stageLabel(s, project.project_type)}
                 </div>
               );
             })}
@@ -418,8 +428,16 @@ export default async function ProjectDetailPage({
         />
         <Kpi label="Assets" value={String(assets.length)} unit={`· ${versionCount} versions`} />
         <Kpi
-          label="Shoot in"
-          value={shootDays === null ? "—" : shootDays < 0 ? "Shot" : String(shootDays)}
+          label={hasShootDay(project.project_type) ? "Shoot in" : "Target in"}
+          value={
+            shootDays === null
+              ? "—"
+              : shootDays < 0
+                ? hasShootDay(project.project_type)
+                  ? "Shot"
+                  : "Passed"
+                : String(shootDays)
+          }
           unit={shootDays !== null && shootDays >= 0 ? "days" : undefined}
         />
         <Kpi

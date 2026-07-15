@@ -4,18 +4,22 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProjectStatus } from "@/app/(app)/projects/actions";
 import { StatusTag } from "@/components/status-tag";
 import { PROJECT_STATUS, PROJECT_STATUS_ORDER } from "@/lib/status";
+import { stageLabel } from "@/lib/project-types";
 import type { ProjectStatus } from "@/lib/database.types";
 
 /**
  * The project's status chip doubles as its control: click to move the project
  * to another stage. Color-as-signal plus the common action in one place.
+ * Stage labels adapt to the project type (a generated project has no "Shoot").
  */
 export function StatusMenu({
   projectId,
   status,
+  projectType,
 }: {
   projectId: string;
   status: ProjectStatus;
+  projectType?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -48,7 +52,7 @@ export function StatusMenu({
         aria-label="Change stage"
       >
         <StatusTag hue={PROJECT_STATUS[status].hue}>
-          {PROJECT_STATUS[status].label}
+          {stageLabel(status, projectType)}
         </StatusTag>
       </button>
       {open && (
@@ -69,7 +73,7 @@ export function StatusMenu({
               }`}
             >
               <StatusTag hue={PROJECT_STATUS[s].hue}>
-                {PROJECT_STATUS[s].label}
+                {stageLabel(s, projectType)}
               </StatusTag>
             </button>
           ))}

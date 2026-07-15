@@ -8,7 +8,13 @@ import { Input, Select, Field } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
 import { PROJECT_STATUS, PROJECT_STATUS_ORDER } from "@/lib/status";
-import { PROJECT_TYPES, projectType, type ProjectTypeKey } from "@/lib/project-types";
+import {
+  PROJECT_TYPES,
+  projectType,
+  stageLabel,
+  hasShootDay,
+  type ProjectTypeKey,
+} from "@/lib/project-types";
 
 type ClientOption = { id: string; name: string };
 
@@ -128,13 +134,16 @@ export function NewProjectButton({
               <Select id="status" name="status" defaultValue="pre_pro">
                 {PROJECT_STATUS_ORDER.map((s) => (
                   <option key={s} value={s}>
-                    {PROJECT_STATUS[s].label}
+                    {stageLabel(s, type)}
                   </option>
                 ))}
               </Select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Shoot date" htmlFor="shoot_date">
+              <Field
+                label={hasShootDay(type) ? "Shoot date" : "Target date"}
+                htmlFor="shoot_date"
+              >
                 <Input id="shoot_date" name="shoot_date" type="date" />
               </Field>
               <Field label="Due date" htmlFor="due_date">

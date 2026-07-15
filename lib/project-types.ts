@@ -3,6 +3,8 @@
 // video), never a hard wall. Stored as free text on projects.project_type so
 // the set can grow without an enum migration.
 
+import type { ProjectStatus } from "@/lib/database.types";
+
 export type ProjectTypeKey =
   | "general"
   | "live_action"
@@ -56,6 +58,38 @@ export const PROJECT_TYPES: ProjectTypeDef[] = [
     icon: "M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
   },
 ];
+
+// Per-type lifecycle stage names. The four underlying phases stay the same
+// (pre_pro -> shoot -> post -> delivered), but generated types have no shoot
+// day, so the middle phase (and the planning phase) are renamed. Anything not
+// overridden falls back to the default label.
+const DEFAULT_STAGE_LABELS: Record<ProjectStatus, string> = {
+  pre_pro: "Pre-pro",
+  shoot: "Shoot",
+  post: "Post",
+  delivered: "Delivered",
+};
+
+const STAGE_LABELS: Partial<
+  Record<ProjectTypeKey, Partial<Record<ProjectStatus, string>>>
+> = {
+  ai_video: { pre_pro: "Concept", shoot: "Generation" },
+  cgi_vfx: { pre_pro: "Concept", shoot: "Production" },
+};
+
+export function stageLabel(
+  status: ProjectStatus,
+  type: string | null | undefined
+): string {
+  const key = type as ProjectTypeKey;
+  return STAGE_LABELS[key]?.[status] ?? DEFAULT_STAGE_LABELS[status];
+}
+
+// Generated projects (AI, CGI/VFX) have no physical shoot day, so the
+// "shoot date" surfaces are relabelled to a neutral production target.
+export function hasShootDay(type: string | null | undefined): boolean {
+  return type !== "ai_video" && type !== "cgi_vfx";
+}
 
 const BY_KEY = new Map(PROJECT_TYPES.map((t) => [t.key, t]));
 
