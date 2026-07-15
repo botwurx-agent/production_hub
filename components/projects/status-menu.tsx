@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateProjectStatus } from "@/app/(app)/projects/actions";
+import { toast } from "@/components/ui/toast";
 import { StatusTag } from "@/components/status-tag";
 import { PROJECT_STATUS, PROJECT_STATUS_ORDER } from "@/lib/status";
 import { stageLabel } from "@/lib/project-types";
@@ -37,7 +38,10 @@ export function StatusMenu({
   function move(next: ProjectStatus) {
     setOpen(false);
     if (next === status) return;
-    startTransition(() => updateProjectStatus(projectId, next));
+    startTransition(async () => {
+      const res = await updateProjectStatus(projectId, next);
+      if (res?.error) toast(res.error, "error");
+    });
   }
 
   return (

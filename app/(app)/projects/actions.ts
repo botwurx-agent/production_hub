@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { reportError } from "@/lib/log";
 import { PROJECT_STATUS, PROJECT_STATUS_ORDER, PROJECT_COLORS } from "@/lib/status";
 import { isProjectType } from "@/lib/project-types";
 import type { ProjectStatus } from "@/lib/database.types";
@@ -57,11 +58,19 @@ export async function createProject(
 export async function updateProjectStatus(
   projectId: string,
   status: ProjectStatus
-) {
+): Promise<FormState> {
   const ctx = await requireStudioContext();
-  if (!isStatus(status)) return;
+  if (!isStatus(status)) return { error: "Unknown status." };
   const supabase = createClient();
-  await supabase.from("projects").update({ status }).eq("id", projectId);
+  const { error } = await supabase
+    .from("projects")
+    .update({ status })
+    .eq("id", projectId);
+  if (error) {
+    reportError("updateProjectStatus", error);
+    return { error: "Could not update the status. Try again." };
+  }
+  // Activity is best-effort; a failure here should not fail the status change.
   await supabase.from("activity").insert({
     studio_id: ctx.studio.id,
     project_id: projectId,
@@ -71,29 +80,45 @@ export async function updateProjectStatus(
   });
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
+  return null;
 }
 
 // A per-project identity color (a hue token key, or null to clear). Used as a
 // wayfinding accent on the cards; kept separate from the status signal.
-export async function updateProjectColor(projectId: string, color: string | null) {
+export async function updateProjectColor(
+  projectId: string,
+  color: string | null
+): Promise<FormState> {
   await requireStudioContext();
   const clean =
     color && (PROJECT_COLORS as string[]).includes(color) ? color : null;
   const supabase = createClient();
-  await supabase.from("projects").update({ color: clean }).eq("id", projectId);
+  const { error } = await supabase
+    .from("projects")
+    .update({ color: clean })
+    .eq("id", projectId);
+  if (error) {
+    reportError("updateProjectColor", error);
+    return { error: "Could not update the color. Try again." };
+  }
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
+  return null;
 }
 
 // Soft-archive: tuck a delivered/wrapped project out of the active list without
 // deleting anything. Reversible via unarchiveProject.
-export async function archiveProject(projectId: string) {
+export async function archiveProject(projectId: string): Promise<FormState> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  await supabase
+  const { error } = await supabase
     .from("projects")
     .update({ archived_at: new Date().toISOString() })
     .eq("id", projectId);
+  if (error) {
+    reportError("archiveProject", error);
+    return { error: "Could not archive the project. Try again." };
+  }
   await supabase.from("activity").insert({
     studio_id: ctx.studio.id,
     project_id: projectId,
@@ -104,15 +129,20 @@ export async function archiveProject(projectId: string) {
   revalidatePath("/projects");
   revalidatePath("/dashboard");
   revalidatePath(`/projects/${projectId}`);
+  return null;
 }
 
-export async function unarchiveProject(projectId: string) {
+export async function unarchiveProject(projectId: string): Promise<FormState> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  await supabase
+  const { error } = await supabase
     .from("projects")
     .update({ archived_at: null })
     .eq("id", projectId);
+  if (error) {
+    reportError("unarchiveProject", error);
+    return { error: "Could not restore the project. Try again." };
+  }
   await supabase.from("activity").insert({
     studio_id: ctx.studio.id,
     project_id: projectId,
@@ -123,6 +153,7 @@ export async function unarchiveProject(projectId: string) {
   revalidatePath("/projects");
   revalidatePath("/dashboard");
   revalidatePath(`/projects/${projectId}`);
+  return null;
 }
 
 export async function updateProject(
@@ -135,10 +166,18 @@ export async function updateProject(
     shoot_date?: string | null;
     notes?: string | null;
   }
-) {
+): Promise<FormState> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("projects").update(patch).eq("id", projectId);
+  const { error } = await supabase
+    .from("projects")
+    .update(patch)
+    .eq("id", projectId);
+  if (error) {
+    reportError("updateProject", error);
+    return { error: "Could not save changes. Try again." };
+  }
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/projects");
+  return null;
 }

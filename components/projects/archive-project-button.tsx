@@ -6,6 +6,7 @@ import {
   archiveProject,
   unarchiveProject,
 } from "@/app/(app)/projects/actions";
+import { toast } from "@/components/ui/toast";
 
 // Archive / unarchive a project. Archiving is non-destructive (keeps all data);
 // it just hides the project from the active board + dashboard.
@@ -22,14 +23,22 @@ export function ArchiveProjectButton({
 
   function doArchive() {
     start(async () => {
-      await archiveProject(projectId);
+      const res = await archiveProject(projectId);
+      if (res?.error) {
+        toast(res.error, "error");
+        return;
+      }
       router.push("/projects");
       router.refresh();
     });
   }
   function doUnarchive() {
     start(async () => {
-      await unarchiveProject(projectId);
+      const res = await unarchiveProject(projectId);
+      if (res?.error) {
+        toast(res.error, "error");
+        return;
+      }
       router.refresh();
     });
   }

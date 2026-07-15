@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateProject } from "@/app/(app)/projects/actions";
+import { toast } from "@/components/ui/toast";
 
 // Inline editor for a project's linked Client (the brand/agency it bills to).
 // The client can only otherwise be set at project creation; this lets you set
@@ -24,7 +25,11 @@ export function ProjectClientPicker({
 
   function choose(id: string) {
     start(async () => {
-      await updateProject(projectId, { client_id: id || null });
+      const res = await updateProject(projectId, { client_id: id || null });
+      if (res?.error) {
+        toast(res.error, "error");
+        return;
+      }
       setEditing(false);
       router.refresh();
     });

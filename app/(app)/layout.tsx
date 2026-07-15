@@ -5,6 +5,7 @@ import { getOutstanding } from "@/lib/outstanding";
 import { signedLogoUrl } from "@/lib/branding";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
+import { Toaster } from "@/components/ui/toast";
 
 export default async function AppLayout({
   children,
@@ -41,6 +42,7 @@ export default async function AppLayout({
         />
         <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">{children}</main>
       </div>
+      <Toaster />
     </div>
   );
 }

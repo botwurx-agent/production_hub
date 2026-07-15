@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { updateProjectColor } from "@/app/(app)/projects/actions";
+import { toast } from "@/components/ui/toast";
 import { PROJECT_COLORS } from "@/lib/status";
 
 const POP_W = 200;
@@ -55,7 +56,10 @@ export function ColorMenu({
 
   function pick(next: string | null) {
     setOpen(false);
-    start(() => updateProjectColor(projectId, next));
+    start(async () => {
+      const res = await updateProjectColor(projectId, next);
+      if (res?.error) toast(res.error, "error");
+    });
   }
 
   const swatch =

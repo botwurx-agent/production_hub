@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { reportError } from "@/lib/log";
 import type { Notification } from "@/lib/database.types";
 
 export type NotificationsResult = {
@@ -24,18 +25,20 @@ export async function getNotifications(): Promise<NotificationsResult> {
 export async function markNotificationRead(id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
+  const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .eq("id", id)
     .is("read_at", null);
+  if (error) reportError("markNotificationRead", error);
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
+  const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .is("read_at", null);
+  if (error) reportError("markAllNotificationsRead", error);
 }
