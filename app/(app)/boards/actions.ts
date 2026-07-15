@@ -11,7 +11,7 @@ import {
   getImageUrls,
   fetchImageBytes,
 } from "@/lib/figma";
-import { unfurl, isFetchableUrl, BROWSER_UA } from "@/lib/unfurl";
+import { unfurl, isFetchableUrl, safeFetch, BROWSER_UA } from "@/lib/unfurl";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Board } from "@/lib/database.types";
 
@@ -842,9 +842,8 @@ export async function addLinkItem(
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
-        const r = await fetch(img.toString(), {
+        const r = await safeFetch(img, {
           signal: controller.signal,
-          redirect: "follow",
           headers: {
             "user-agent": BROWSER_UA,
             accept: "image/avif,image/webp,image/png,image/*,*/*;q=0.8",
@@ -853,8 +852,8 @@ export async function addLinkItem(
           },
         });
         clearTimeout(timer);
-        const type = r.headers.get("content-type") ?? "";
-        if (r.ok && type.startsWith("image/")) {
+        const type = r?.headers.get("content-type") ?? "";
+        if (r && r.ok && type.startsWith("image/")) {
           const buf = Buffer.from(await r.arrayBuffer());
           if (buf.length > 0 && buf.length <= 6_000_000) {
             const ext = (type.split("/")[1] || "jpg").split(";")[0].slice(0, 5);

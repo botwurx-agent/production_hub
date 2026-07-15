@@ -1,4 +1,5 @@
 import "server-only";
+import { lookup } from "node:dns/promises";
 
 // Minimal link "unfurl": fetch a URL's HTML and pull Open Graph / Twitter card
 // metadata (title, description, preview image) so a pasted link becomes a visual
@@ -50,6 +51,84 @@ export function isFetchableUrl(raw: string): URL | null {
   return u;
 }
 
+// Is a resolved IPv4 address in a private / reserved / loopback range?
+function ipv4IsPrivate(ip: string): boolean {
+  const p = ip.split(".").map((n) => Number(n));
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255))
+    return true; // unparseable: treat as unsafe
+  const [a, b] = p;
+  if (a === 0 || a === 10 || a === 127) return true; // this-host, private, loopback
+  if (a === 169 && b === 254) return true; // link-local (incl. 169.254.169.254 metadata)
+  if (a === 172 && b >= 16 && b <= 31) return true; // private
+  if (a === 192 && b === 168) return true; // private
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a >= 224) return true; // multicast + reserved + broadcast
+  return false;
+}
+
+// Is a resolved IP (v4 or v6) non-public?
+function ipIsPrivate(ip: string, family: number): boolean {
+  if (family === 4) return ipv4IsPrivate(ip);
+  const addr = ip.toLowerCase();
+  if (addr === "::1" || addr === "::") return true; // loopback / unspecified
+  const mapped = addr.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/); // IPv4-mapped
+  if (mapped) return ipv4IsPrivate(mapped[1]);
+  const two = addr.slice(0, 2);
+  if (two === "fc" || two === "fd") return true; // unique local fc00::/7
+  if (/^fe[89ab]/.test(addr)) return true; // link-local fe80::/10
+  return false;
+}
+
+// Resolve a hostname and confirm EVERY address it maps to is public. This is the
+// real SSRF gate: isFetchableUrl only screens the literal hostname string, but a
+// public-looking name can resolve to a private / metadata IP. Fail closed.
+async function resolvesToPublic(hostname: string): Promise<boolean> {
+  const host = hostname.replace(/^\[|\]$/g, ""); // strip IPv6 brackets
+  try {
+    const addrs = await lookup(host, { all: true, verbatim: true });
+    if (addrs.length === 0) return false;
+    return addrs.every(({ address, family }) => !ipIsPrivate(address, family));
+  } catch {
+    return false;
+  }
+}
+
+// SSRF-safe fetch: validates the host (string + DNS) before every request, and
+// follows redirects MANUALLY so each hop is re-validated. A redirect to a
+// private address (the classic guard bypass) is rejected. Returns null if any
+// hop is unsafe or the redirect budget is exceeded.
+export async function safeFetch(
+  startUrl: URL,
+  init: RequestInit = {},
+  maxRedirects = 4
+): Promise<Response | null> {
+  let current: URL = startUrl;
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    if (!isFetchableUrl(current.toString())) return null;
+    if (!(await resolvesToPublic(current.hostname))) return null;
+
+    const res = await fetch(current.toString(), {
+      ...init,
+      redirect: "manual",
+    });
+
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (!loc) return res;
+      let next: URL;
+      try {
+        next = new URL(loc, current);
+      } catch {
+        return null;
+      }
+      current = next;
+      continue;
+    }
+    return res;
+  }
+  return null; // too many redirects
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/&amp;/g, "&")
@@ -88,9 +167,8 @@ async function tryUnfurl(u: URL, ua: string): Promise<LinkMeta> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(u.toString(), {
+    const res = await safeFetch(u, {
       signal: controller.signal,
-      redirect: "follow",
       headers: {
         "user-agent": ua,
         accept:
@@ -98,6 +176,7 @@ async function tryUnfurl(u: URL, ua: string): Promise<LinkMeta> {
         "accept-language": "en-US,en;q=0.9",
       },
     });
+    if (!res) return empty;
     const ct = res.headers.get("content-type") ?? "";
     if (!res.ok) return empty;
     if (ct && !ct.includes("html") && !ct.includes("xml")) return empty;
