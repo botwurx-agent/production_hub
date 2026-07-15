@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 // Last-resort boundary: catches errors in the root layout itself. It replaces
 // the entire document, so it must render its own <html>/<body> and cannot rely
@@ -13,8 +14,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.error(error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (
