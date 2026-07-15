@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Terms of Service | The Hub" };
+export const metadata: Metadata = { title: "Terms of Service | Studio Flows" };
 
 export default function TermsPage() {
   return (
@@ -8,7 +8,7 @@ export default function TermsPage() {
       <h1>Terms of Service</h1>
       <p>Last updated: 15 July 2026</p>
       <p>
-        These terms govern your use of The Hub (&ldquo;the Service&rdquo;,
+        These terms govern your use of Studio Flows (&ldquo;the Service&rdquo;,
         operated by <strong>[Studio legal name]</strong>). By creating an account
         or using the Service you agree to them.
       </p>

@@ -33,7 +33,7 @@ export function Topbar({
         {/* Mobile brand */}
         <Link href="/projects" className="flex items-center gap-2 md:hidden">
           <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-accent text-accent-fg">
-            <span className="text-sm font-extrabold">H</span>
+            <span className="text-xs font-extrabold tracking-tight">SF</span>
           </span>
         </Link>
 

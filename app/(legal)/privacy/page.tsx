@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Privacy Policy | The Hub" };
+export const metadata: Metadata = { title: "Privacy Policy | Studio Flows" };
 
 export default function PrivacyPage() {
   return (
@@ -8,7 +8,7 @@ export default function PrivacyPage() {
       <h1>Privacy Policy</h1>
       <p>Last updated: 15 July 2026</p>
       <p>
-        This policy explains what information The Hub (&ldquo;the Service&rdquo;,
+        This policy explains what information Studio Flows (&ldquo;the Service&rdquo;,
         operated by <strong>[Studio legal name]</strong>) collects, how it is
         used, and the choices you have. It reflects how the product actually
         works today.

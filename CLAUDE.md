@@ -2,7 +2,11 @@
 
 This file is the operating context for building this product in Claude Code. Read it at the start of every session. It is the lean, build-facing reference. Deeper strategic context (the why, the market, the endgame) lives in PROJECT_BRIEF.md.
 
-Note on naming: the product name is not yet decided. This document refers to it as "the Hub" as a working placeholder. Replace once a name is chosen.
+Note on naming: the product is named **Studio Flows** (domain studio-flows.com).
+User-facing branding uses "Studio Flows" (wordmark) and an "SF" logo mark. This
+document still often calls it "the Hub" from the placeholder era; treat those as
+referring to Studio Flows (a doc cleanup, not a code one, since the code branding
+is already renamed).
 
 Note on writing style: no em dashes in any generated content (code comments, copy, docs, UI text). Use commas, colons, or parentheses instead. This is a standing preference.
 

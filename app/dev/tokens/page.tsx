@@ -41,10 +41,10 @@ export default function TokenTestPage() {
         <div>
           <div className="mb-2 flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-accent text-accent-fg shadow-md">
-              <span className="text-sm font-extrabold">H</span>
+              <span className="text-xs font-extrabold tracking-tight">SF</span>
             </span>
             <span className="font-display text-lg font-extrabold tracking-tight">
-              The Hub
+              Studio Flows
             </span>
           </div>
           <p className="text-sm text-text-muted">

@@ -77,7 +77,7 @@ export function Sidebar({
           </span>
         ) : (
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-fg shadow-sm">
-            <span className="text-sm font-extrabold">H</span>
+            <span className="text-xs font-extrabold tracking-tight">SF</span>
           </span>
         )}
         {!collapsed && (
@@ -85,7 +85,7 @@ export function Sidebar({
             <div className="truncate text-sm font-bold leading-tight text-text">
               {studioName}
             </div>
-            <div className="text-[11px] leading-tight text-text-faint">The Hub</div>
+            <div className="text-[11px] leading-tight text-text-faint">Studio Flows</div>
           </div>
         )}
       </div>
