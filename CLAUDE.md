@@ -593,11 +593,28 @@ membership). We only OPEN the project-scoped tables to them.
   boundary; this is just navigation). Sidebar + Topbar take a `collaborator` prop
   and strip the nav to only "Projects". "New project" (projects list) and the
   ProjectPeople + Archive controls (project hero) are hidden for collaborators.
-- NOT yet built (next steps): (4) the access-checked storage route for asset
-  files (option A) + collaborator uploads; (5) end-to-end verification with a
-  real second (collaborator) account. Until (4) lands, a collaborator can log in
-  and navigate their project, but asset image/file thumbnails won't load (the
-  bucket is still studio-scoped), so hold off inviting a real one.
+- Storage / asset files (step 4, BUILT via option A): lib/asset-storage.ts
+  `assetStorage()` returns the "assets" bucket via the SERVICE client (falls back
+  to the RLS client if no service key). Safe because the access gate is one layer
+  up: reads sign paths that came from already-RLS-authorized rows, and
+  server-side uploads are followed by an RLS-gated row insert; the service role
+  only bypasses the studio-folder storage policy, never a project boundary. All
+  7 read/sign sites now use it (loadProjectAssets, shot-list, storyboards +
+  present, production/board, pipeline, boards/actions), so collaborators SEE all
+  their project's images. Server-side uploads swapped too (storyboard frame,
+  production shot-board image, moodboard device-file image) so a collaborator can
+  add storyboard/moodboard images.
+- STILL a gap: the asset-version upload (Assets page) is CLIENT-side (browser
+  uploads directly to storage, then posts the storage_path), so a collaborator
+  can't add a new asset/version yet (client storage RLS is is_studio_member). Fix
+  = a server upload endpoint that takes bytes + service-uploads; deferred (their
+  main tasks -- storyboard/moodboard edits, call sheets -- work). Minor edge:
+  internal doc-review image signing (loadDocSurface RLS path) not yet service-
+  backed for collaborators.
+- NEXT: (5) end-to-end verification with a real second (collaborator) account
+  (invite -> accept -> confirm they see only their project + can edit storyboard/
+  moodboard + cannot reach studio-wide pages). Collaborator asset viewing +
+  storyboard/moodboard editing now work, so a real collaborator can be tested.
 
 ### Team invites / multi-user (migration 0048) — BUILT
 Multiple people can now share one studio (the paid multi-user lever). The tenancy

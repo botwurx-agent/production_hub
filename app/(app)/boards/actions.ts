@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
 import { getAccessToken as getGoogleToken } from "@/lib/gmail";
 import { getDriveFileBytes } from "@/lib/googledrive";
@@ -151,8 +152,7 @@ export async function getBoardItems(
     .filter((p): p is string => Boolean(p));
   const signed = new Map<string, string>();
   if (paths.length > 0) {
-    const { data: list } = await supabase.storage
-      .from("assets")
+    const { data: list } = await assetStorage()
       .createSignedUrls(paths, SIGNED_TTL);
     for (const s of list ?? []) {
       if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
@@ -282,8 +282,7 @@ export async function addUploadItems(formData: FormData): Promise<BoardState> {
   for (const f of files) {
     const bytes = Buffer.from(await f.arrayBuffer());
     const path = `${ctx.studio.id}/boards/${boardId}/${crypto.randomUUID()}-${safeName(f.name)}`;
-    const { error: upErr } = await supabase.storage
-      .from("assets")
+    const { error: upErr } = await assetStorage()
       .upload(path, bytes, { contentType: f.type || undefined, upsert: false });
     if (upErr) return { error: upErr.message };
     const { error } = await supabase.from("board_items").insert({

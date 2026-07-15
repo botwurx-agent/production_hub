@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import {
@@ -48,8 +49,7 @@ export default async function ProjectStoryboardsPage({
       .filter((p): p is string => Boolean(p));
     const signed = new Map<string, string>();
     if (paths.length > 0) {
-      const { data: list } = await supabase.storage
-        .from("assets")
+      const { data: list } = await assetStorage()
         .createSignedUrls(paths, SIGNED_TTL);
       for (const s of list ?? []) if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
     }

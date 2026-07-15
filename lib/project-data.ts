@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import { assetStorage } from "@/lib/asset-storage";
 import type {
   AssetWithVersions,
   VersionComment,
@@ -55,8 +56,10 @@ export async function loadProjectAssets(
 
   const signed = new Map<string, string>();
   if (paths.length > 0) {
-    const { data: signedList } = await supabase.storage
-      .from("assets")
+    // Sign via the storage helper so project collaborators (no studio
+    // membership) also get file URLs; the asset rows above were already
+    // RLS-authorized for this caller.
+    const { data: signedList } = await assetStorage()
       .createSignedUrls(paths, SIGNED_URL_TTL);
     for (const s of signedList ?? []) {
       if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);

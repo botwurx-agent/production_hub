@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
@@ -65,8 +66,7 @@ export default async function PipelinePage({
     generations
       .filter((g) => g.file_path)
       .map(async (g) => {
-        const { data } = await supabase.storage
-          .from("assets")
+        const { data } = await assetStorage()
           .createSignedUrl(g.file_path as string, 60 * 60);
         if (data?.signedUrl) media[g.id] = data.signedUrl;
       }),

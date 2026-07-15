@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
 import type { Board } from "@/lib/database.types";
 
@@ -149,8 +150,7 @@ export async function uploadFrameImage(
   const supabase = createClient();
   const bytes = Buffer.from(await file.arrayBuffer());
   const path = `${ctx.studio.id}/storyboard/${projectId}/${crypto.randomUUID()}-${safeName(file.name)}`;
-  const { error: upErr } = await supabase.storage
-    .from("assets")
+  const { error: upErr } = await assetStorage()
     .upload(path, bytes, { contentType: file.type || undefined, upsert: false });
   if (upErr) return { error: upErr.message };
   await supabase
