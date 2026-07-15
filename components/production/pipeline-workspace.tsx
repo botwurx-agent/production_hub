@@ -749,6 +749,21 @@ export function PipelineWorkspace({
     start(async () => { const r = await addShot(projectId, method); if (r?.id) setActiveId(r.id); router.refresh(); });
   }
 
+  // Open the pipeline with the first shot already created: a new AI project
+  // starts in shot 1 (generated) instead of an empty "add a shot" state. Only
+  // seeds once, on the client (never on link prefetch), and only when empty.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (shots.length === 0 && !seededRef.current) {
+      seededRef.current = true;
+      start(async () => {
+        const r = await addShot(projectId, "generated");
+        if (r?.id) setActiveId(r.id);
+        router.refresh();
+      });
+    }
+  }, [shots.length, projectId, router]);
+
   const shotPrompts = useMemo(() => {
     const m = new Map<string, AiPrompt>();
     for (const p of prompts) m.set(`${p.shot_id}:${p.stage}`, p);
@@ -824,7 +839,7 @@ export function PipelineWorkspace({
       {/* Active shot */}
       {shots.length === 0 ? (
         <div className="grid place-items-center rounded-[14px] border border-dashed border-border p-16 text-center text-sm text-text-faint">
-          No shots yet. Break the script into shots with <b className="mx-1 text-text">+ Generated shot</b> or <b className="mx-1 text-text">+ Live shot</b>.
+          Setting up your first shot…
         </div>
       ) : !active ? (
         <div className="grid place-items-center rounded-[14px] border border-dashed border-border p-16 text-sm text-text-faint">
