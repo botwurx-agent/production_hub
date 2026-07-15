@@ -232,6 +232,27 @@ asset versioning, and per-seat economics punish production reality
 partner ecosystem because it lacks the capability. These are the tools our
 prospects are duct-taping today; the pitch against them writes itself.
 
+### The real competitor: the DIY stack
+
+The most common alternative is not any single product; it is Notion (or
+Monday/ClickUp/Airtable) for PM + Frame.io for review + Drive/Dropbox for
+files + email/Slack for comms, glued together by hand. The evidence that
+this hurts is concrete: 2026 how-to guides exist solely to wire Notion and
+Frame.io together with Make.com webhook chains (naming the "Admin Gap":
+manually creating folders, copying links between tools, refreshing email
+for client feedback), and there is a paid template economy (Notion
+Marketplace, Etsy, Gumroad; a $44 bundle selling "automated call sheets
+and shot lists" inside Notion) proving operators pay one-time money just
+to make generic tools speak production language. That is the Hub's core
+bet, validated by what people already spend. Two supporting Frame.io
+details: Adobe routes real project management to Workfront (enterprise
+marketing-ops pricing, irrelevant to a boutique), and V4 dropped the
+DaVinci Resolve integration, actively generating switcher intent among
+Resolve-based boutiques. Frame.io also shipped C2PA Content Credentials
+(file-level AI provenance), worth tracking as adjacent to our
+provenance-as-production-record thesis, which remains deeper than
+file-level marks.
+
 ### AI video workflow organizers (LTX Studio, Flora, Freepik Spaces, Krea, Figma Weave, Promise MUSE)
 
 The most strategically important finding: **no shipped product treats
