@@ -27,7 +27,7 @@ import type { AiScript, AiShot, AiPrompt, AiGeneration } from "@/lib/database.ty
 type Stage = "image" | "video";
 
 const IMAGE_MODELS = ["Nano Banana 2 Pro", "Midjourney v7", "Flux 1.1", "Seedream 3", "Ideogram 2"];
-const VIDEO_MODELS = ["Kling 2.1", "Veo 3", "Runway Gen-4", "Sora", "Hailuo", "Pika 2"];
+const VIDEO_MODELS = ["Seedance 2.0", "Kling 2.1", "Veo 3", "Runway Gen-4", "Sora", "Hailuo", "Pika 2"];
 
 const STAGE_HUE: Record<string, Hue> = {
   script: "cyan", image: "yellow", video: "blue", post: "purple", delivered: "green",
