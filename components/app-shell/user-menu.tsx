@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "@/app/auth/actions";
+import { FeedbackModal } from "@/components/feedback/feedback-modal";
 
 export function UserMenu({ email }: { email: string | null }) {
   const [open, setOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const initial = (email?.[0] ?? "?").toUpperCase();
 
@@ -37,7 +39,16 @@ export function UserMenu({ email }: { email: string | null }) {
               {email ?? "Unknown"}
             </div>
           </div>
-          <form action={signOut}>
+          <button
+            onClick={() => {
+              setOpen(false);
+              setFeedbackOpen(true);
+            }}
+            className="w-full px-4 py-2.5 text-left text-sm font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+          >
+            Send feedback
+          </button>
+          <form action={signOut} className="border-t border-border">
             <button
               type="submit"
               className="w-full px-4 py-2.5 text-left text-sm font-semibold text-text-muted transition hover:bg-surface-2 hover:text-red"
@@ -47,6 +58,7 @@ export function UserMenu({ email }: { email: string | null }) {
           </form>
         </div>
       )}
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>
   );
 }
