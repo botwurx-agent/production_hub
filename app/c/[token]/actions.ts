@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
+import { allowPublic } from "@/lib/rate-limit";
 import { getCallSheetRecipient } from "@/lib/callsheet-links";
 import { createNotification } from "@/lib/notifications";
 
@@ -10,6 +11,9 @@ export type ConfirmState = { error?: string } | null;
 // Record that a recipient opened their call sheet (fire-and-forget from the
 // public page). Only sets viewed_at the first time.
 export async function recordCallSheetView(token: string): Promise<void> {
+  // A generous view cap: blunts refresh-driven view-count inflation without
+  // affecting a normal recipient (viewed_at is only set once anyway).
+  if (!allowPublic("c-view", 30)) return;
   if (!serviceConfigured()) return;
   const service = createServiceClient();
   const recipient = await getCallSheetRecipient(service, token);
@@ -22,6 +26,8 @@ export async function recordCallSheetView(token: string): Promise<void> {
 
 // Recipient confirms they'll be there.
 export async function confirmCallSheet(token: string): Promise<ConfirmState> {
+  if (!allowPublic("c-confirm"))
+    return { error: "Too many requests. Please wait a moment and try again." };
   if (!serviceConfigured()) return { error: "This link is not available." };
   const service = createServiceClient();
   const recipient = await getCallSheetRecipient(service, token);

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
+import { allowPublic } from "@/lib/rate-limit";
 import { getValidLink, isDocKind } from "@/lib/review-links";
 import { createNotification } from "@/lib/notifications";
 import { syncAssetStatusFromApprovals } from "@/lib/review-status";
@@ -71,6 +72,8 @@ export async function submitClientComment(
   pin?: { x: number; y: number } | null,
   timecode?: number | null
 ): Promise<PortalState> {
+  if (!allowPublic("r-comment"))
+    return { error: "Too many requests. Please wait a moment and try again." };
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const reviewer = name.trim();
   const text = body.trim();
@@ -141,6 +144,8 @@ export async function resolveClientComment(
   commentId: string,
   resolved: boolean
 ): Promise<PortalState> {
+  if (!allowPublic("r-resolve"))
+    return { error: "Too many requests. Please wait a moment and try again." };
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const service = createServiceClient();
   const link = await getValidLink(service, token);
@@ -174,6 +179,8 @@ export async function submitClientDecision(
   name: string,
   status: Extract<ApprovalStatus, "approved" | "changes_requested">
 ): Promise<PortalState> {
+  if (!allowPublic("r-decision"))
+    return { error: "Too many requests. Please wait a moment and try again." };
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const reviewer = name.trim();
   if (!reviewer) return { error: "Add your name first." };
@@ -250,6 +257,8 @@ export async function submitDocComment(
   pin?: { x: number; y: number } | null,
   timecode?: number | null
 ): Promise<PortalState> {
+  if (!allowPublic("r-doc-comment"))
+    return { error: "Too many requests. Please wait a moment and try again." };
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const reviewer = name.trim();
   const text = body.trim();
@@ -322,6 +331,8 @@ export async function resolveDocComment(
   commentId: string,
   resolved: boolean
 ): Promise<PortalState> {
+  if (!allowPublic("r-doc-resolve"))
+    return { error: "Too many requests. Please wait a moment and try again." };
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const service = createServiceClient();
   const link = await getValidLink(service, token);
@@ -356,6 +367,8 @@ export async function submitDocDecision(
   name: string,
   status: Extract<ApprovalStatus, "approved" | "changes_requested">
 ): Promise<PortalState> {
+  if (!allowPublic("r-doc-decision"))
+    return { error: "Too many requests. Please wait a moment and try again." };
   if (!serviceConfigured()) return { error: "Review portal is not configured." };
   const reviewer = name.trim();
   if (!reviewer) return { error: "Add your name first." };
