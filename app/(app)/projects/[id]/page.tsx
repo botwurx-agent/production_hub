@@ -490,8 +490,8 @@ export default async function ProjectDetailPage({
                   {recentAssets.map((a) => (
                     <div key={a.id} className="flex items-center gap-2 text-[13px]">
                       <StatusTag hue={a.hue as never}>{a.label}</StatusTag>
-                      <span className="truncate font-semibold text-text">{a.name}</span>
-                      <span className="ml-auto shrink-0 text-xs text-text-faint">{a.version}</span>
+                      <span className="min-w-0 flex-1 truncate font-semibold text-text">{a.name}</span>
+                      <span className="shrink-0 text-xs text-text-faint">{a.version}</span>
                     </div>
                   ))}
                 </div>

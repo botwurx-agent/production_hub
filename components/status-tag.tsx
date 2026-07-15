@@ -42,12 +42,12 @@ export function StatusTag({
   const { bg, fg } = hueStyles[hue];
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-semibold ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill px-2.5 py-1 text-xs font-semibold ${className}`}
       style={{ backgroundColor: bg, color: fg }}
     >
       {dot && (
         <span
-          className="h-1.5 w-1.5 rounded-full"
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
           style={{ backgroundColor: fg }}
           aria-hidden="true"
         />
