@@ -56,6 +56,8 @@ export async function acceptBillingDoc(
     .eq("share_token", token)
     .maybeSingle();
   if (!doc) return { error: "This link is no longer active." };
+  if (doc.kind !== "proposal")
+    return { error: "This document is for review only." };
   if (doc.accepted_at) return { error: "This document has already been signed." };
 
   const now = new Date().toISOString();
@@ -74,7 +76,7 @@ export async function acceptBillingDoc(
     .eq("share_token", token);
   if (error) return { error: "Could not record your signature. Try again." };
 
-  const label = doc.kind === "estimate" ? "estimate" : "document";
+  const label = "proposal";
   if (doc.project_id) {
     await service.from("activity").insert({
       studio_id: doc.studio_id,

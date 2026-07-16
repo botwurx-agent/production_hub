@@ -9,9 +9,17 @@ import type {
   BillingProfile,
   BillingDocument,
   BillingDocumentLine,
+  BillingDocumentAttachment,
   Json,
 } from "@/lib/database.types";
-import type { DocSnapshot } from "@/lib/billing-doc";
+import {
+  docLabel,
+  safeAccent,
+  type DocKind,
+  type DocSnapshot,
+  type DocFont,
+  type DocTemplate,
+} from "@/lib/billing-doc";
 
 export type DocState = { error?: string; id?: string } | null;
 
@@ -41,23 +49,44 @@ async function ensureProfile(
 
 export async function createBillingDocument(
   projectId: string,
-  kind: "invoice" | "estimate",
+  kind: DocKind,
 ): Promise<DocState> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
   const profile = await ensureProfile(supabase, ctx.studio.id);
 
-  const isEstimate = kind === "estimate";
-  const n = isEstimate ? profile.next_estimate_no : profile.next_invoice_no;
-  const prefix = isEstimate ? profile.estimate_prefix : profile.invoice_prefix;
-  const number = `${prefix}${n}`;
+  const series: Record<
+    DocKind,
+    {
+      n: number;
+      prefix: string;
+      bump: {
+        next_estimate_no?: number;
+        next_proposal_no?: number;
+        next_invoice_no?: number;
+      };
+    }
+  > = {
+    estimate: {
+      n: profile.next_estimate_no,
+      prefix: profile.estimate_prefix,
+      bump: { next_estimate_no: profile.next_estimate_no + 1 },
+    },
+    proposal: {
+      n: profile.next_proposal_no,
+      prefix: profile.proposal_prefix,
+      bump: { next_proposal_no: profile.next_proposal_no + 1 },
+    },
+    invoice: {
+      n: profile.next_invoice_no,
+      prefix: profile.invoice_prefix,
+      bump: { next_invoice_no: profile.next_invoice_no + 1 },
+    },
+  };
+  const s = series[kind];
+  const number = `${s.prefix}${s.n}`;
 
-  await supabase
-    .from("billing_profiles")
-    .update(
-      isEstimate ? { next_estimate_no: n + 1 } : { next_invoice_no: n + 1 },
-    )
-    .eq("id", profile.id);
+  await supabase.from("billing_profiles").update(s.bump).eq("id", profile.id);
 
   const { data: doc, error } = await supabase
     .from("billing_documents")
@@ -68,6 +97,9 @@ export async function createBillingDocument(
       number,
       terms: profile.default_terms,
       notes: profile.default_notes,
+      template: profile.default_doc_template,
+      accent_color: profile.default_doc_accent,
+      font: profile.default_doc_font,
       created_by: ctx.userId,
     })
     .select("id")
@@ -85,10 +117,11 @@ export async function createBillingDocument(
   return { id: doc.id };
 }
 
-// Freeze the document into a snapshot and open it for signature: generates the
-// share token (once), stores the snapshot so the signed version can't change,
-// and marks it sent. Returns the token for the /p/<token> link.
-export async function sendDocForSignature(
+// Freeze the document into a snapshot and share it: generates the share token
+// (once), stores the snapshot so the shared (and, for proposals, signed) version
+// can't change, and marks it sent. Works for all kinds; a proposal is the only
+// one that invites a signature on the public page. Returns the /p/<token> token.
+export async function sendBillingDoc(
   projectId: string,
   docId: string
 ): Promise<{ token: string } | { error: string }> {
@@ -109,9 +142,21 @@ export async function sendDocForSignature(
   const profile = await ensureProfile(supabase, ctx.studio.id);
   const lines = [...(d.lines ?? [])].sort((a, b) => a.position - b.position);
 
+  const { data: atts } = await supabase
+    .from("billing_document_attachments")
+    .select("name, storage_path")
+    .eq("document_id", docId)
+    .order("created_at", { ascending: true });
+
+  const kind = (["estimate", "proposal", "invoice"] as DocKind[]).includes(
+    d.kind as DocKind
+  )
+    ? (d.kind as DocKind)
+    : "invoice";
+
   const snapshot: DocSnapshot = {
-    kind: d.kind === "estimate" ? "estimate" : "invoice",
-    docLabel: d.kind === "estimate" ? "Estimate" : "Invoice",
+    kind,
+    docLabel: docLabel(kind),
     number: d.number,
     issueDate: d.issue_date,
     dueDate: d.due_date,
@@ -138,6 +183,15 @@ export async function sendDocForSignature(
     discount: d.discount,
     notes: d.notes,
     terms: d.terms,
+    style: {
+      template: (d.template as DocTemplate) || "classic",
+      accent: safeAccent(d.accent_color ?? profile.default_doc_accent),
+      font: (d.font as DocFont) || "modern",
+    },
+    attachments: (atts ?? []).map((a) => ({
+      name: a.name,
+      storagePath: a.storage_path,
+    })),
   };
 
   const token = d.share_token ?? generateReviewToken();
@@ -153,11 +207,112 @@ export async function sendDocForSignature(
     })
     .eq("id", docId);
   if (error) {
-    reportError("sendDocForSignature", error);
+    reportError("sendBillingDoc", error);
     return { error: "Could not prepare the document. Try again." };
   }
   rp(projectId);
   return { token };
+}
+
+// Per-document style (template + theme color + font).
+export async function updateDocStyle(
+  projectId: string,
+  id: string,
+  patch: { template?: string; accent_color?: string | null; font?: string }
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("billing_documents").update(patch).eq("id", id);
+  rp(projectId);
+}
+
+// Save the current style as the studio-wide default for new documents.
+export async function saveDefaultDocStyle(
+  projectId: string,
+  style: { template: string; accent: string; font: string }
+): Promise<void> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const profile = await ensureProfile(supabase, ctx.studio.id);
+  await supabase
+    .from("billing_profiles")
+    .update({
+      default_doc_template: style.template,
+      default_doc_accent: safeAccent(style.accent),
+      default_doc_font: style.font,
+    })
+    .eq("id", profile.id);
+  rp(projectId);
+}
+
+// Attach a file to a document (proposals carry supporting docs). Server-side
+// upload to the studio-scoped assets bucket, then record the row.
+export async function addDocAttachment(
+  projectId: string,
+  docId: string,
+  formData: FormData
+): Promise<{ error: string } | { ok: true }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "No file selected." };
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    return { error: "File is too large (25MB max)." };
+  }
+
+  const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-120) || "file";
+  const path = `${ctx.studio.id}/billing/${docId}/${generateReviewToken()}_${safeName}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const { error: upErr } = await supabase.storage
+    .from("assets")
+    .upload(path, buffer, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+  if (upErr) {
+    reportError("addDocAttachment.upload", upErr);
+    return { error: "Could not upload that file. Try again." };
+  }
+
+  const { error } = await supabase.from("billing_document_attachments").insert({
+    document_id: docId,
+    studio_id: ctx.studio.id,
+    name: file.name.slice(0, 200),
+    storage_path: path,
+    content_type: file.type || null,
+    size_bytes: file.size,
+    created_by: ctx.userId,
+  });
+  if (error) {
+    await supabase.storage.from("assets").remove([path]);
+    return { error: "Could not save the attachment." };
+  }
+  rp(projectId);
+  return { ok: true };
+}
+
+export async function deleteDocAttachment(
+  projectId: string,
+  attachmentId: string
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data: att } = await supabase
+    .from("billing_document_attachments")
+    .select("storage_path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  await supabase
+    .from("billing_document_attachments")
+    .delete()
+    .eq("id", attachmentId);
+  const p = (att as BillingDocumentAttachment | null)?.storage_path;
+  if (p) await supabase.storage.from("assets").remove([p]);
+  rp(projectId);
 }
 
 export async function updateBillingDocument(

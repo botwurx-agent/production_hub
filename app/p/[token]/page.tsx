@@ -54,10 +54,10 @@ export default async function PublicDocPage({
 
   await recordDocView(params.token);
 
-  const { doc, snapshot, logoUrl } = data;
+  const { doc, snapshot, logoUrl, attachments } = data;
   const accepted = Boolean(doc.accepted_at);
   const fromName = snapshot.from.businessName || "the studio";
-  const isEstimate = snapshot.kind === "estimate";
+  const isProposal = snapshot.kind === "proposal";
 
   const signature = accepted
     ? {
@@ -88,14 +88,19 @@ export default async function PublicDocPage({
         ) : (
           <p className="mt-1 text-sm text-text-muted">
             Please review the details below
-            {isEstimate ? " and sign to accept." : "."}
+            {isProposal ? " and sign to accept." : "."}
           </p>
         )}
       </div>
 
-      <BillingDocument doc={snapshot} logoUrl={logoUrl} signature={signature} />
+      <BillingDocument
+        doc={snapshot}
+        logoUrl={logoUrl}
+        signature={signature}
+        attachments={attachments}
+      />
 
-      {!accepted && isEstimate && (
+      {!accepted && isProposal && (
         <BillingAcceptForm
           token={params.token}
           defaultName={snapshot.billTo.name}

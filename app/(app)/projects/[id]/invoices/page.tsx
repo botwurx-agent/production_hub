@@ -8,6 +8,7 @@ import { InvoiceWorkspace } from "@/components/production/invoice-workspace";
 import type {
   BillingDocument,
   BillingDocumentLine,
+  BillingDocumentAttachment,
   BillingProfile,
 } from "@/lib/database.types";
 
@@ -37,7 +38,9 @@ export default async function InvoicesPage({
     await Promise.all([
       supabase
         .from("billing_documents")
-        .select("*, lines:billing_document_lines(*)")
+        .select(
+          "*, lines:billing_document_lines(*), attachments:billing_document_attachments(*)"
+        )
         .eq("project_id", params.id)
         .order("created_at", { ascending: false }),
       supabase
@@ -68,9 +71,13 @@ export default async function InvoicesPage({
 
   const documents = ((docs ?? []) as unknown as (BillingDocument & {
     lines: BillingDocumentLine[];
+    attachments: BillingDocumentAttachment[];
   })[]).map((d) => ({
     ...d,
     lines: [...(d.lines ?? [])].sort((a, b) => a.position - b.position),
+    attachments: [...(d.attachments ?? [])].sort(
+      (a, b) => (a.created_at < b.created_at ? -1 : 1)
+    ),
   }));
 
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);

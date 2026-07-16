@@ -7,6 +7,7 @@ export type PublicBillingDoc = {
   doc: BillingDocument;
   snapshot: DocSnapshot;
   logoUrl: string | null;
+  attachments: { name: string; url: string }[];
 };
 
 // Look up a sent billing document by its public share token (service client,
@@ -39,5 +40,14 @@ export async function loadBillingDocByToken(
     logoUrl = signed?.signedUrl ?? null;
   }
 
-  return { doc, snapshot, logoUrl };
+  const attachments: { name: string; url: string }[] = [];
+  for (const a of snapshot.attachments ?? []) {
+    if (!a.storagePath) continue;
+    const { data: signed } = await service.storage
+      .from("assets")
+      .createSignedUrl(a.storagePath, 60 * 60);
+    if (signed?.signedUrl) attachments.push({ name: a.name, url: signed.signedUrl });
+  }
+
+  return { doc, snapshot, logoUrl, attachments };
 }

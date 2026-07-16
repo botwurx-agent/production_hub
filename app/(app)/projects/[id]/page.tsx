@@ -306,9 +306,10 @@ export default async function ProjectDetailPage({
     (t) => t.due_date && t.due_date < todayKey
   ).length;
 
-  const estimates = (billingDocs ?? []).filter((d) => d.kind === "estimate");
-  const estimateCount = estimates.length;
-  const acceptedEstimates = estimates.filter((d) => d.status === "accepted").length;
+  const docCount = (billingDocs ?? []).length;
+  const proposals = (billingDocs ?? []).filter((d) => d.kind === "proposal");
+  const proposalCount = proposals.length;
+  const signedProposals = proposals.filter((d) => d.status === "accepted").length;
 
   const activity = (activityRaw ?? []) as ActivityItem[];
 
@@ -905,10 +906,8 @@ export default async function ProjectDetailPage({
               href={`/projects/${project.id}/invoices`}
               hue="cyan"
               title="Estimates & invoices"
-              sub="Proposals the client signs to accept"
-              footer={
-                estimateCount > 0 ? "Open documents" : "Create an estimate"
-              }
+              sub="Estimate, proposal, invoice"
+              footer={docCount > 0 ? "Open documents" : "Create a document"}
               icon={
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M6 2h9l5 5v15H6z" />
@@ -916,26 +915,31 @@ export default async function ProjectDetailPage({
                 </svg>
               }
             >
-              {estimateCount > 0 ? (
+              {docCount > 0 ? (
                 <p className="text-[13px] text-text-muted">
-                  {acceptedEstimates > 0 ? (
+                  {signedProposals > 0 ? (
                     <>
                       <span className="font-semibold text-green">
-                        {acceptedEstimates} signed
+                        {signedProposals} signed
                       </span>{" "}
-                      of {estimateCount} estimate{estimateCount === 1 ? "" : "s"}.
+                      of {proposalCount} proposal{proposalCount === 1 ? "" : "s"}.
+                    </>
+                  ) : proposalCount > 0 ? (
+                    <>
+                      {proposalCount} proposal{proposalCount === 1 ? "" : "s"}. Send
+                      one for signature.
                     </>
                   ) : (
                     <>
-                      {estimateCount} estimate{estimateCount === 1 ? "" : "s"}.
-                      Send one for signature.
+                      {docCount} document{docCount === 1 ? "" : "s"}. Add a proposal
+                      to get a signature.
                     </>
                   )}
                 </p>
               ) : (
                 <p className="text-[13px] text-text-muted">
-                  Build a branded estimate the client opens, reviews, and signs to
-                  accept.
+                  Branded estimates, proposals the client signs to accept, and
+                  invoices, all in one place.
                 </p>
               )}
             </HubCard>

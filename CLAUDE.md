@@ -663,21 +663,52 @@ is NOT a differentiator for the ICP (agency/brand clients pay net-30 via PO ->
 AP -> ACH; they won't click a pay button in a vendor app), so DON'T build
 payments now; let demand pull it (revisit Stripe Connect + embedded Payment
 Element + ACH only if a real user asks). What IS worth it is the DOCUMENTS +
-tracked sign-to-accept. BUILT (migration 0060): the native estimate/invoice
-generator now supports "Send for signature" — freezes a JSON snapshot into
-billing_documents.snapshot, shares a 192-bit /p/<token> link (public, no login,
-service-role gated + rate-limited, middleware public path), where the client
-reviews and signs (typed or drawn) to accept. Audit trail (signer_name/email,
-signature_kind/data, signed_ip, accepted_at) on billing_documents; a signed doc
-is immutable (re-send blocked after accept). components/production/
-billing-document.tsx (read-only renderer from snapshot) + billing-accept-form.tsx
-(signature pad) + lib/billing-doc.ts (DocSnapshot) + lib/billing-links.ts
-(loadBillingDocByToken) + app/p/[token]/{page,actions}. In-app: a Send-for-
-signature block + status (Sent/Viewed/Signed) in invoice-workspace, and an
-"Estimates & invoices" hub card. The native document generator is thus UN-paused
+tracked sign-to-accept. BUILT (migration 0060): the native document generator
+supports "Send" — freezes a JSON snapshot into billing_documents.snapshot, shares
+a 192-bit /p/<token> link (public, no login, service-role gated + rate-limited,
+middleware public path), where the client reviews and (for proposals) signs
+(typed or drawn) to accept. Audit trail (signer_name/email, signature_kind/data,
+signed_ip, accepted_at) on billing_documents; a signed doc is immutable (re-send
+blocked after accept). components/production/billing-document.tsx (read-only
+renderer from snapshot) + billing-accept-form.tsx (signature pad) +
+lib/billing-doc.ts (DocSnapshot) + lib/billing-links.ts (loadBillingDocByToken) +
+app/p/[token]/{page,actions}. The native document generator is thus UN-paused
 (documents only); the FreshBooks connector + payment collection stay OFF.
 Legally: typed/drawn name + audit trail = a valid e-signature (E-SIGN/UETA) for
 proposals; DocuSign-grade only needed for binding contracts, not built.
+
+THREE-TYPE DOC MODEL + STYLE EDITOR + ATTACHMENTS (migration 0061, per the
+operator's real flow: "Estimates get sent > if required a proposal gets sent to
+sign > once signed an official invoice gets sent"). billing_documents.kind is now
+estimate | proposal | invoice (was invoice|estimate). Separate numbering series
+on billing_profiles: estimate_prefix/next_estimate_no (EST-), proposal_prefix/
+next_proposal_no (PROP-), invoice_prefix/next_invoice_no (INV-). SIGNATURE now
+belongs to PROPOSALS ONLY: the /p/<token> page shows the signature pad only when
+snapshot.kind==='proposal' (acceptBillingDoc guards kind==='proposal'); estimates
++ invoices get a plain share link with view tracking (no signature). One send
+action serves all kinds: sendBillingDoc (renamed from sendDocForSignature) freezes
+the snapshot (now including style + attachments) + shares the token + marks sent;
+the workspace labels the button "Send for signature" for proposals, "Send" for the
+rest. STYLE EDITOR (FreshBooks-style "Customize style", per the operator's
+screenshot): per-document template + theme color + font, editable in
+invoice-workspace's StylePanel and frozen into the snapshot on send. Columns on
+billing_documents: template ('classic'|'modern'|'bold'), accent_color (hex, falls
+back to profile default), font ('modern'=sans|'classic'=serif). Studio-wide
+defaults on billing_profiles (default_doc_template/_accent/_font) seed new docs;
+"Save as default for new documents" writes them (saveDefaultDocStyle). Option sets
++ helpers (DOC_TEMPLATES/DOC_FONTS/DOC_ACCENTS/fontStack/safeAccent/DocStyle) in
+lib/billing-doc.ts; the renderer (billing-document.tsx) branches on template
+(classic=right-aligned title, modern=accent header band, bold=big accent title),
+tints headers/totals with the accent, and applies the font stack inline (works on
+the public page, no extra font loading). ATTACHMENTS (proposals): a proposal can
+carry supporting files (scope doc, contract, reference PDF). billing_document_
+attachments table (studio-scoped, is_studio_member RLS); addDocAttachment
+(server action, FormData, server-side upload to the studio-folder assets bucket),
+deleteDocAttachment. Frozen into the snapshot (name + storagePath) on send;
+loadBillingDocByToken signs them for the public page; the renderer lists them as
+openable links. Actions live in native-invoice-actions.ts; updateDocStyle +
+saveDefaultDocStyle + addDocAttachment + deleteDocAttachment. Hub card now reads
+all kinds (doc count + signed-proposal count).
 
 ### Billing / invoicing — FreshBooks/payment paths BUILT BUT ON HOLD (payments deferred, see decision above)
 Two invoicing paths were built and are deployed on `main`, but the whole area is
@@ -806,7 +837,8 @@ Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07
 - Security: Next.js bumped 14.2.15 -> 14.2.35 (patches critical Server Actions
   DoS + middleware SSRF). Remaining audit items need a Next 15/16 (React 19)
   major upgrade, deferred. Supabase leaked-password protection = a dashboard
-  toggle (still to flip). Migrations now through 0058.
+  toggle (still to flip). Migrations now through 0061 (0059 project_tasks, 0060
+  billing_document_signatures, 0061 billing_proposals_style_attachments).
 
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
