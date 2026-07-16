@@ -13,7 +13,10 @@ import {
   addDocLine,
   updateDocLine,
   deleteDocLine,
+  sendDocForSignature,
 } from "@/app/(app)/projects/[id]/native-invoice-actions";
+import { toast } from "@/components/ui/toast";
+import { shortDate } from "@/lib/format";
 import type {
   BillingDocument,
   BillingDocumentLine,
@@ -67,6 +70,11 @@ export function InvoiceWorkspace({
   const router = useRouter();
   const [busy, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(documents[0]?.id ?? null);
+  const [copied, setCopied] = useState(false);
+
+  const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
+  const origin =
+    siteOrigin || (typeof window !== "undefined" ? window.location.origin : "");
 
   const docsSig = documents
     .map((d) => `${d.id}:${d.lines.map((l) => l.id).join(",")}`)
@@ -116,6 +124,32 @@ export function InvoiceWorkspace({
     setForm((f) => (f ? { ...f, lines: f.lines.filter((l) => l.id !== id) } : f));
     start(async () => {
       await deleteDocLine(projectId, id);
+      router.refresh();
+    });
+  }
+
+  function copyLink() {
+    if (!form?.share_token) return;
+    navigator.clipboard?.writeText(`${origin}/p/${form.share_token}`).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      },
+      () => {}
+    );
+  }
+  function sendForSignature() {
+    if (!form) return;
+    start(async () => {
+      const res = await sendDocForSignature(projectId, form.id);
+      if ("error" in res) {
+        toast(res.error, "error");
+        return;
+      }
+      navigator.clipboard?.writeText(`${origin}/p/${res.token}`).catch(() => {});
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+      toast("Signature link ready and copied.", "success");
       router.refresh();
     });
   }
@@ -498,10 +532,70 @@ export function InvoiceWorkspace({
             </div>
           </div>
 
+          {/* Send for signature (estimates) */}
+          {form.kind === "estimate" && (
+            <div className="mt-6 rounded-[12px] border border-border bg-surface-2/40 p-4">
+              {form.accepted_at ? (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-green text-white">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                  </span>
+                  <span className="font-semibold text-green">
+                    Signed by {form.signer_name}
+                  </span>
+                  <span className="text-text-faint">
+                    on {shortDate(form.accepted_at)}
+                  </span>
+                  {form.share_token && (
+                    <button
+                      onClick={copyLink}
+                      className="ml-auto rounded-[8px] border border-border px-2.5 py-1 text-xs font-semibold text-text-muted transition hover:bg-surface hover:text-text"
+                    >
+                      {copied ? "Copied" : "View signed link"}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-text">
+                      Send for signature
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      {form.sent_at
+                        ? "Shared. Re-send to push edits into a fresh copy."
+                        : "Freeze this estimate and share a link the client signs to accept."}
+                    </p>
+                    {form.sent_at && (
+                      <p className="mt-1 text-xs text-text-faint">
+                        {form.viewed_at
+                          ? `Viewed ${shortDate(form.viewed_at)}`
+                          : "Sent, not viewed yet"}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {form.share_token && (
+                      <button
+                        onClick={copyLink}
+                        className="rounded-[9px] border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface hover:text-text"
+                      >
+                        {copied ? "Copied" : "Copy link"}
+                      </button>
+                    )}
+                    <Button size="sm" onClick={sendForSignature} disabled={busy}>
+                      {form.sent_at ? "Re-send" : "Send for signature"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Footer actions */}
           <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
             <span className="text-xs text-text-faint">
-              Changes save automatically. PDF export and send-link are coming next.
+              Changes save automatically.
             </span>
             <button
               onClick={() => {

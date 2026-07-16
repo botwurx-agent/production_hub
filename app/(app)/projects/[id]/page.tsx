@@ -125,6 +125,7 @@ export default async function ProjectDetailPage({
     { data: rosterContacts },
     { data: upcomingEvents },
     { data: taskRows },
+    { data: billingDocs },
   ] = await Promise.all([
     supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
     supabase
@@ -163,6 +164,10 @@ export default async function ProjectDetailPage({
     supabase
       .from("project_tasks")
       .select("done, due_date")
+      .eq("project_id", params.id),
+    supabase
+      .from("billing_documents")
+      .select("kind, status")
       .eq("project_id", params.id),
   ]);
 
@@ -300,6 +305,10 @@ export default async function ProjectDetailPage({
   const overdueTaskCount = openTasks.filter(
     (t) => t.due_date && t.due_date < todayKey
   ).length;
+
+  const estimates = (billingDocs ?? []).filter((d) => d.kind === "estimate");
+  const estimateCount = estimates.length;
+  const acceptedEstimates = estimates.filter((d) => d.status === "accepted").length;
 
   const activity = (activityRaw ?? []) as ActivityItem[];
 
@@ -890,6 +899,45 @@ export default async function ProjectDetailPage({
                   ? "Final deliverables and billing status."
                   : "List the final deliverables and invoice."}
               </p>
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/invoices`}
+              hue="cyan"
+              title="Estimates & invoices"
+              sub="Proposals the client signs to accept"
+              footer={
+                estimateCount > 0 ? "Open documents" : "Create an estimate"
+              }
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 2h9l5 5v15H6z" />
+                  <path d="M14 2v6h6M9 13h6M9 17h6M9 9h2" />
+                </svg>
+              }
+            >
+              {estimateCount > 0 ? (
+                <p className="text-[13px] text-text-muted">
+                  {acceptedEstimates > 0 ? (
+                    <>
+                      <span className="font-semibold text-green">
+                        {acceptedEstimates} signed
+                      </span>{" "}
+                      of {estimateCount} estimate{estimateCount === 1 ? "" : "s"}.
+                    </>
+                  ) : (
+                    <>
+                      {estimateCount} estimate{estimateCount === 1 ? "" : "s"}.
+                      Send one for signature.
+                    </>
+                  )}
+                </p>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  Build a branded estimate the client opens, reviews, and signs to
+                  accept.
+                </p>
+              )}
             </HubCard>
           </div>
         </div>

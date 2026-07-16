@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import type { BillingProfile } from "@/lib/database.types";
+import { generateReviewToken } from "@/lib/review-links";
+import { reportError } from "@/lib/log";
+import type {
+  BillingProfile,
+  BillingDocument,
+  BillingDocumentLine,
+  Json,
+} from "@/lib/database.types";
+import type { DocSnapshot } from "@/lib/billing-doc";
 
 export type DocState = { error?: string; id?: string } | null;
 
@@ -75,6 +83,81 @@ export async function createBillingDocument(
 
   rp(projectId);
   return { id: doc.id };
+}
+
+// Freeze the document into a snapshot and open it for signature: generates the
+// share token (once), stores the snapshot so the signed version can't change,
+// and marks it sent. Returns the token for the /p/<token> link.
+export async function sendDocForSignature(
+  projectId: string,
+  docId: string
+): Promise<{ token: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: doc } = await supabase
+    .from("billing_documents")
+    .select("*, lines:billing_document_lines(*)")
+    .eq("id", docId)
+    .maybeSingle();
+  if (!doc) return { error: "Document not found." };
+  const d = doc as unknown as BillingDocument & { lines: BillingDocumentLine[] };
+  if (d.accepted_at) {
+    return { error: "This document was already signed and can't be re-sent." };
+  }
+
+  const profile = await ensureProfile(supabase, ctx.studio.id);
+  const lines = [...(d.lines ?? [])].sort((a, b) => a.position - b.position);
+
+  const snapshot: DocSnapshot = {
+    kind: d.kind === "estimate" ? "estimate" : "invoice",
+    docLabel: d.kind === "estimate" ? "Estimate" : "Invoice",
+    number: d.number,
+    issueDate: d.issue_date,
+    dueDate: d.due_date,
+    from: {
+      businessName: profile.business_name,
+      address: profile.address,
+      phone: profile.phone,
+      email: profile.email,
+      website: profile.website,
+    },
+    billTo: {
+      name: d.bill_to_name,
+      company: d.bill_to_company,
+      email: d.bill_to_email,
+      reference: d.reference,
+    },
+    lines: lines.map((l) => ({
+      description: l.description,
+      rate: l.rate,
+      qty: l.qty,
+      tax_rate: l.tax_rate,
+    })),
+    currency: d.currency,
+    discount: d.discount,
+    notes: d.notes,
+    terms: d.terms,
+  };
+
+  const token = d.share_token ?? generateReviewToken();
+  const { error } = await supabase
+    .from("billing_documents")
+    .update({
+      share_token: token,
+      snapshot: snapshot as unknown as Json,
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      // Re-sending after a view resets the view marker for the new snapshot.
+      viewed_at: null,
+    })
+    .eq("id", docId);
+  if (error) {
+    reportError("sendDocForSignature", error);
+    return { error: "Could not prepare the document. Try again." };
+  }
+  rp(projectId);
+  return { token };
 }
 
 export async function updateBillingDocument(

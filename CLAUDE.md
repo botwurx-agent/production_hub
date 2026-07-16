@@ -656,7 +656,30 @@ already existed; what was missing was a way to add a second person. Added:
   link to copy; no transactional email yet). Internal ungated feedback in the
   working/overview view is the next pipeline step (step 2 of the plan).
 
-### Billing / invoicing — BUILT BUT ON HOLD (do not extend until platform is decided)
+### DECISION (2026-07): documents yes, in-app PAYMENTS deferred
+After research (docs/launch payment landscape: Melio now Xero-owned; Stripe is
+the pragmatic rail; Paystand the B2B-ACH purist), the call is: in-app payments
+is NOT a differentiator for the ICP (agency/brand clients pay net-30 via PO ->
+AP -> ACH; they won't click a pay button in a vendor app), so DON'T build
+payments now; let demand pull it (revisit Stripe Connect + embedded Payment
+Element + ACH only if a real user asks). What IS worth it is the DOCUMENTS +
+tracked sign-to-accept. BUILT (migration 0060): the native estimate/invoice
+generator now supports "Send for signature" — freezes a JSON snapshot into
+billing_documents.snapshot, shares a 192-bit /p/<token> link (public, no login,
+service-role gated + rate-limited, middleware public path), where the client
+reviews and signs (typed or drawn) to accept. Audit trail (signer_name/email,
+signature_kind/data, signed_ip, accepted_at) on billing_documents; a signed doc
+is immutable (re-send blocked after accept). components/production/
+billing-document.tsx (read-only renderer from snapshot) + billing-accept-form.tsx
+(signature pad) + lib/billing-doc.ts (DocSnapshot) + lib/billing-links.ts
+(loadBillingDocByToken) + app/p/[token]/{page,actions}. In-app: a Send-for-
+signature block + status (Sent/Viewed/Signed) in invoice-workspace, and an
+"Estimates & invoices" hub card. The native document generator is thus UN-paused
+(documents only); the FreshBooks connector + payment collection stay OFF.
+Legally: typed/drawn name + audit trail = a valid e-signature (E-SIGN/UETA) for
+proposals; DocuSign-grade only needed for binding contracts, not built.
+
+### Billing / invoicing — FreshBooks/payment paths BUILT BUT ON HOLD (payments deferred, see decision above)
 Two invoicing paths were built and are deployed on `main`, but the whole area is
 PAUSED pending a decision on the billing platform. Both are non-intrusive (see
 below); leave them parked. The operator wants to choose the integration before

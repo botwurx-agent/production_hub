@@ -13,6 +13,7 @@ const PUBLIC_PATHS = [
   "/r",
   "/b",
   "/c",
+  "/p",
   "/invite",
   "/project-invite",
 ];
