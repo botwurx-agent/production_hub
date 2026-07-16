@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input, Field } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -63,7 +64,10 @@ export function LoginForm({ errorCode }: { errorCode?: string } = {}) {
           {notice}
         </p>
       )}
-      <form action={action} className="mt-6 space-y-4">
+      <div className="mt-6">
+        <GoogleAuthButton />
+      </div>
+      <form action={action} className="space-y-4">
         <Field label="Email" htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" required />
         </Field>
@@ -202,7 +206,12 @@ export function SignupForm({
           ? "Set a password to accept your invite."
           : "Set up your workspace in under a minute."}
       </p>
-      <form action={action} className="mt-6 space-y-4">
+      {!invited && (
+        <div className="mt-6">
+          <GoogleAuthButton label="Sign up with Google" />
+        </div>
+      )}
+      <form action={action} className={invited ? "mt-6 space-y-4" : "space-y-4"}>
         {invited ? (
           <input type="hidden" name="invite_token" value={inviteToken} />
         ) : (
