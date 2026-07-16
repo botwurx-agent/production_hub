@@ -8,7 +8,9 @@ import {
   addCallSheetRecipient,
   addCallSheetRecipients,
   deleteCallSheetRecipient,
+  sendCallSheetEmail,
 } from "@/app/(app)/projects/[id]/callsheet-actions";
+import { toast } from "@/components/ui/toast";
 import type { CallSheetRecipient } from "@/lib/database.types";
 
 export type ContactOption = {
@@ -35,19 +37,37 @@ export function RecipientsPanel({
   callSheetId,
   recipients,
   contactOptions = [],
+  emailEnabled = false,
 }: {
   projectId: string;
   callSheetId: string;
   recipients: CallSheetRecipient[];
   contactOptions?: ContactOption[];
+  emailEnabled?: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, start] = useTransition();
+
+  function emailLink(recipientId: string) {
+    setSending(recipientId);
+    sendCallSheetEmail(projectId, recipientId).then((res) => {
+      setSending(null);
+      if ("error" in res) {
+        toast(res.error, "error");
+        return;
+      }
+      setSent(recipientId);
+      setTimeout(() => setSent((v) => (v === recipientId ? null : v)), 2500);
+      toast("Call sheet emailed.", "success");
+    });
+  }
 
   // Contacts not already added (match by email, else name).
   const addedKeys = new Set(
@@ -126,8 +146,9 @@ export function RecipientsPanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-text-muted">
-        Add each person, then copy their private link to send (email, text, Slack).
-        You&apos;ll see when they view it and when they confirm. No login needed.
+        {emailEnabled
+          ? "Add each person, then email them their private link (or copy it to send by text or Slack). You'll see when they view it and when they confirm. No login needed."
+          : "Add each person, then copy their private link to send (email, text, Slack). You'll see when they view it and when they confirm. No login needed."}
       </p>
 
       {/* Pick from project contacts */}
@@ -256,6 +277,15 @@ export function RecipientsPanel({
                 )}
               </span>
               <div className="flex items-center gap-1">
+                {emailEnabled && r.email && (
+                  <button
+                    onClick={() => emailLink(r.id)}
+                    disabled={sending === r.id}
+                    className="rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-accent transition hover:bg-accent-soft disabled:opacity-50"
+                  >
+                    {sending === r.id ? "Sending..." : sent === r.id ? "Sent" : "Email"}
+                  </button>
+                )}
                 <button
                   onClick={() => copy(r.token)}
                   className="rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"

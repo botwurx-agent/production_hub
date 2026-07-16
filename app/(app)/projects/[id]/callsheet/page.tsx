@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { signedLogoUrl } from "@/lib/branding";
+import { emailConfigured } from "@/lib/email";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { CallSheetWorkspace } from "@/components/production/callsheet-workspace";
 import type {
@@ -105,6 +106,7 @@ export default async function CallSheetPage({
         contactOptions={contactOptions}
         templates={(templates ?? []) as CallSheetTemplate[]}
         logoUrl={logoUrl}
+        emailEnabled={emailConfigured()}
       />
     </div>
   );

@@ -36,6 +36,7 @@ export function CallSheetWorkspace({
   contactOptions,
   templates,
   logoUrl,
+  emailEnabled = false,
 }: {
   projectId: string;
   projectTitle: string;
@@ -45,6 +46,7 @@ export function CallSheetWorkspace({
   contactOptions: ContactOption[];
   templates: CallSheetTemplate[];
   logoUrl: string | null;
+  emailEnabled?: boolean;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -232,6 +234,7 @@ export function CallSheetWorkspace({
                 callSheetId={active.id}
                 recipients={activeRecipients}
                 contactOptions={contactOptions}
+                emailEnabled={emailEnabled}
               />
             </Modal>
           </div>

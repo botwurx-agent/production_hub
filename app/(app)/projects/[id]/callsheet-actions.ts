@@ -1,9 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
+import { sendEmail, emailConfigured } from "@/lib/email";
+import { renderEmail } from "@/lib/email-template";
 
 export type CallSheetState = { error?: string } | null;
 
@@ -323,4 +326,80 @@ export async function deleteCallSheetRecipient(
   const supabase = createClient();
   await supabase.from("call_sheet_recipients").delete().eq("id", recipientId);
   rp(projectId);
+}
+
+// Canonical origin for links in emails: the configured site URL, else the
+// current request host.
+function emailOrigin(): string {
+  const env = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+  if (env) return env;
+  const h = headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return host ? `${proto}://${host}` : "";
+}
+
+// Email a recipient their private call-sheet link. The link opens /c/<token>,
+// which records the view and offers the confirm action, so the existing
+// view/confirm tracking keeps working.
+export async function sendCallSheetEmail(
+  projectId: string,
+  recipientId: string
+): Promise<{ ok: true } | { error: string }> {
+  await requireStudioContext();
+  if (!emailConfigured()) return { error: "Email is not set up yet." };
+
+  const supabase = createClient();
+  const { data: r } = await supabase
+    .from("call_sheet_recipients")
+    .select("id, name, email, token, call_sheet_id")
+    .eq("id", recipientId)
+    .maybeSingle();
+  if (!r) return { error: "Recipient not found." };
+  if (!r.email) return { error: "This recipient has no email address." };
+
+  const { data: sheet } = await supabase
+    .from("call_sheets")
+    .select("title, production_title, shoot_date, call_time")
+    .eq("id", r.call_sheet_id)
+    .maybeSingle();
+
+  const title = sheet?.production_title || sheet?.title || "the shoot";
+  let dateStr: string | null = null;
+  if (sheet?.shoot_date) {
+    try {
+      dateStr = new Date(`${sheet.shoot_date}T00:00:00`).toLocaleDateString(
+        undefined,
+        { weekday: "long", month: "long", day: "numeric" }
+      );
+    } catch {
+      dateStr = sheet.shoot_date;
+    }
+  }
+
+  const link = `${emailOrigin()}/c/${r.token}`;
+  const lines = [`Hi ${r.name}, here is your call sheet for ${title}.`];
+  if (dateStr) {
+    lines.push(
+      `Shoot date: ${dateStr}${sheet?.call_time ? ` at ${sheet.call_time}` : ""}`
+    );
+  }
+  lines.push("Open it below for the full details, and confirm you can make it.");
+
+  const { html, text } = renderEmail({
+    heading: `Call sheet: ${title}`,
+    lines,
+    ctaLabel: "View call sheet",
+    ctaUrl: link,
+    footnote: "You received this because you were added to this call sheet.",
+  });
+
+  const result = await sendEmail({
+    to: r.email,
+    subject: `Call sheet${dateStr ? ` (${dateStr})` : ""}: ${title}`,
+    html,
+    text,
+  });
+  if (!result.ok) return { error: result.error ?? "The email could not be sent." };
+  return { ok: true };
 }
