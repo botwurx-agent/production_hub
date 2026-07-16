@@ -4,16 +4,22 @@ import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toggleTask } from "@/app/(app)/pipeline/crm-actions";
+import { toggleProjectTask } from "@/app/(app)/projects/[id]/task-actions";
 import { shortDate } from "@/lib/format";
 
 export type DashboardTask = {
   id: string;
   title: string;
   due_date: string | null;
+  kind: "crm" | "project";
+  // CRM task context
   deal_id: string | null;
   account_id: string | null;
   deal_title: string | null;
   account_name: string | null;
+  // Project task context
+  project_id: string | null;
+  project_title: string | null;
 };
 
 const todayStr = () => {
@@ -46,21 +52,29 @@ export function TaskWidget({ tasks }: { tasks: DashboardTask[] }) {
     <ul className={`space-y-1 ${pending ? "opacity-60" : ""}`}>
       {sorted.map((t) => {
         const overdue = t.due_date && t.due_date < today;
-        const href = t.deal_id
-          ? `/pipeline/${t.deal_id}`
-          : t.account_id
-          ? `/clients/${t.account_id}`
-          : null;
-        const context = t.deal_title || t.account_name;
+        const href =
+          t.kind === "project" && t.project_id
+            ? `/projects/${t.project_id}/tasks`
+            : t.deal_id
+            ? `/pipeline/${t.deal_id}`
+            : t.account_id
+            ? `/clients/${t.account_id}`
+            : null;
+        const context =
+          t.kind === "project" ? t.project_title : t.deal_title || t.account_name;
         return (
           <li
-            key={t.id}
+            key={`${t.kind}-${t.id}`}
             className="flex items-center gap-2.5 rounded-[9px] px-2 py-1.5 transition hover:bg-surface-2/60"
           >
             <button
               onClick={() =>
                 start(async () => {
-                  await toggleTask(t.id, true, t.deal_id, t.account_id);
+                  if (t.kind === "project" && t.project_id) {
+                    await toggleProjectTask(t.project_id, t.id, true);
+                  } else {
+                    await toggleTask(t.id, true, t.deal_id, t.account_id);
+                  }
                   router.refresh();
                 })
               }

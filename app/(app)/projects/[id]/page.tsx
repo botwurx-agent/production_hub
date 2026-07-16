@@ -124,6 +124,7 @@ export default async function ProjectDetailPage({
     { data: deliverables },
     { data: rosterContacts },
     { data: upcomingEvents },
+    { data: taskRows },
   ] = await Promise.all([
     supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
     supabase
@@ -159,6 +160,10 @@ export default async function ProjectDetailPage({
       .select("title, date")
       .eq("project_id", params.id)
       .order("date", { ascending: true }),
+    supabase
+      .from("project_tasks")
+      .select("done, due_date")
+      .eq("project_id", params.id),
   ]);
 
   const [attention, { assets, reviewLinkByAsset }] = await Promise.all([
@@ -284,6 +289,17 @@ export default async function ProjectDetailPage({
   // Produce derivations.
   const deliveredCount = (deliverables ?? []).filter((d) => d.status === "delivered").length;
   const deliverTotal = (deliverables ?? []).length;
+
+  const openTasks = (taskRows ?? []).filter((t) => !t.done);
+  const openTaskCount = openTasks.length;
+  const todayKey = (() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  })();
+  const overdueTaskCount = openTasks.filter(
+    (t) => t.due_date && t.due_date < todayKey
+  ).length;
 
   const activity = (activityRaw ?? []) as ActivityItem[];
 
@@ -677,6 +693,50 @@ export default async function ProjectDetailPage({
 
           <BandLabel hue="green" label="Produce" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <HubCard
+              href={`/projects/${project.id}/tasks`}
+              hue="purple"
+              title="Tasks"
+              sub="What this project needs"
+              footer={
+                openTaskCount > 0
+                  ? `${openTaskCount} open${
+                      overdueTaskCount > 0 ? ` · ${overdueTaskCount} overdue` : ""
+                    }`
+                  : "Add a task"
+              }
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                </svg>
+              }
+            >
+              {openTaskCount > 0 ? (
+                <p className="text-[13px] text-text-muted">
+                  {overdueTaskCount > 0 ? (
+                    <>
+                      <span className="font-semibold text-red">
+                        {overdueTaskCount} overdue
+                      </span>{" "}
+                      of {openTaskCount} open.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-text">
+                        {openTaskCount}
+                      </span>{" "}
+                      {openTaskCount === 1 ? "task" : "tasks"} to do.
+                    </>
+                  )}
+                </p>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  A simple checklist of what this job needs, with due dates.
+                </p>
+              )}
+            </HubCard>
+
             <HubCard
               href={`/projects/${project.id}/contacts`}
               hue="orange"

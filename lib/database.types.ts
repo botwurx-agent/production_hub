@@ -1786,6 +1786,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      project_tasks: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          title: string;
+          notes: string | null;
+          due_date: string | null;
+          done: boolean;
+          done_at: string | null;
+          assignee_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          title: string;
+          notes?: string | null;
+          due_date?: string | null;
+          done?: boolean;
+          done_at?: string | null;
+          assignee_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          title?: string;
+          notes?: string | null;
+          due_date?: string | null;
+          done?: boolean;
+          done_at?: string | null;
+          assignee_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       crm_tasks: {
         Row: {
           account_id: string | null;
@@ -2896,6 +2941,7 @@ export type Client = Tables<"clients">;
 export type Deal = Tables<"deals">;
 export type CrmActivity = Tables<"crm_activities">;
 export type CrmTask = Tables<"crm_tasks">;
+export type ProjectTask = Tables<"project_tasks">;
 export type Lead = Tables<"leads">;
 export type Contact = Tables<"contacts">;
 export type Project = Tables<"projects">;

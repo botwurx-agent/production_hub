@@ -23,6 +23,7 @@ export default async function DashboardPage() {
     { data: projects },
     { data: deals },
     { data: taskRaw },
+    { data: projectTaskRaw },
     { data: activityRaw },
     { data: googleAccount },
     outstanding,
@@ -37,6 +38,12 @@ export default async function DashboardPage() {
         .select(
           "id, title, due_date, deal_id, account_id, deal:deals(title), account:clients(name)"
         )
+        .eq("done", false)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(12),
+      supabase
+        .from("project_tasks")
+        .select("id, title, due_date, project_id")
         .eq("done", false)
         .order("due_date", { ascending: true, nullsFirst: false })
         .limit(12),
@@ -111,16 +118,46 @@ export default async function DashboardPage() {
     { label: "Open deals", value: openDeals.length, hue: "cyan" },
   ];
 
-  // Open CRM tasks for the dashboard widget.
-  const tasks = (taskRaw ?? []).map((t) => ({
+  // Open tasks for the dashboard widget: CRM (deal/account) + project tasks,
+  // merged and sorted by due date (dated first), capped for a tidy widget.
+  const crmTasks = (taskRaw ?? []).map((t) => ({
     id: t.id,
     title: t.title,
     due_date: t.due_date,
+    kind: "crm" as const,
     deal_id: t.deal_id,
     account_id: t.account_id,
     deal_title: (t.deal as { title: string } | null)?.title ?? null,
     account_name: (t.account as { name: string } | null)?.name ?? null,
+    project_id: null,
+    project_title: null,
   }));
+  // Title lookup from the already-loaded active projects; tasks on archived or
+  // otherwise unlisted projects are dropped from the dashboard.
+  const projectTitleById = new Map(
+    (projects ?? []).map((p) => [p.id, p.title as string])
+  );
+  const projTasks = (projectTaskRaw ?? [])
+    .filter((t) => projectTitleById.has(t.project_id))
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      due_date: t.due_date,
+      kind: "project" as const,
+      deal_id: null,
+      account_id: null,
+      deal_title: null,
+      account_name: null,
+      project_id: t.project_id,
+      project_title: projectTitleById.get(t.project_id) ?? null,
+    }));
+  const tasks = [...crmTasks, ...projTasks]
+    .sort((a, b) => {
+      if (!a.due_date) return b.due_date ? 1 : 0;
+      if (!b.due_date) return -1;
+      return a.due_date.localeCompare(b.due_date);
+    })
+    .slice(0, 12);
 
   // Recent activity feed.
   const activity: ActivityFeedItem[] = (activityRaw ?? []).flatMap((a) => {
