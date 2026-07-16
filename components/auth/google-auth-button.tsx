@@ -16,7 +16,12 @@ export function GoogleAuthButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (process.env.NEXT_PUBLIC_GOOGLE_AUTH !== "true") return null;
+  // Tolerant of "true"/"True"/"TRUE"/"1"/"yes" so a capitalized env value still
+  // enables the button.
+  const enabled = ["true", "1", "yes"].includes(
+    (process.env.NEXT_PUBLIC_GOOGLE_AUTH ?? "").trim().toLowerCase()
+  );
+  if (!enabled) return null;
 
   async function signInWithGoogle() {
     setLoading(true);
