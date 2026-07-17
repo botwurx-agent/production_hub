@@ -337,58 +337,67 @@ export function InvoiceWorkspace({
           )}
 
           {/* Header: From + doc meta */}
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="min-w-0">
-              {logoUrl ? (
-                <Image
-                  src={logoUrl}
-                  alt="Logo"
-                  width={160}
-                  height={56}
-                  className="mb-3 h-12 w-auto object-contain"
-                  unoptimized
-                />
-              ) : null}
-              <div className="text-sm font-bold text-text">
-                {profile?.business_name ?? "Your business"}
+          {(() => {
+            const logoBusiness = (
+              <div className="min-w-0">
+                {logoUrl ? (
+                  <Image
+                    src={logoUrl}
+                    alt="Logo"
+                    width={160}
+                    height={56}
+                    className="mb-3 h-12 w-auto object-contain"
+                    unoptimized
+                  />
+                ) : null}
+                <div className="text-sm font-bold text-text">
+                  {profile?.business_name ?? "Your business"}
+                </div>
+                <div className="whitespace-pre-line text-xs text-text-muted">
+                  {[profile?.address, profile?.phone, profile?.email, profile?.website]
+                    .filter(Boolean)
+                    .join("\n")}
+                </div>
+                {!profile?.business_name && (
+                  <a href="/settings" className="text-xs font-semibold text-accent underline">
+                    Add your business details in Settings
+                  </a>
+                )}
               </div>
-              <div className="whitespace-pre-line text-xs text-text-muted">
-                {[profile?.address, profile?.phone, profile?.email, profile?.website]
-                  .filter(Boolean)
-                  .join("\n")}
-              </div>
-              {!profile?.business_name && (
-                <a href="/settings" className="text-xs font-semibold text-accent underline">
-                  Add your business details in Settings
-                </a>
-              )}
-            </div>
-            <div className="text-right">
-              <div
-                className="font-display text-2xl font-extrabold uppercase tracking-tight"
-                style={{ color: accent }}
-              >
-                {docLabel}
-              </div>
+            );
+
+            const numberInput = (light: boolean) => (
               <input
                 value={form.number ?? ""}
                 onChange={(e) => patchDoc({ number: e.target.value })}
                 onBlur={() => saveDoc({ number: form.number ?? "" })}
-                className={`${inputCls} mt-1 text-right font-semibold`}
+                className={
+                  light
+                    ? "mt-1 rounded-[8px] border border-white/30 bg-white/10 px-1.5 py-1 text-right text-sm font-semibold text-white outline-none transition focus:border-white/70"
+                    : `${inputCls} mt-1 text-right font-semibold`
+                }
               />
+            );
+
+            const dateFields = (light: boolean) => (
               <div className="mt-2 space-y-1 text-xs">
                 <label className="flex items-center justify-end gap-2">
-                  <span className="text-text-faint">Issued</span>
+                  <span className={light ? "text-white/75" : "text-text-faint"}>Issued</span>
                   <input
                     type="date"
                     value={form.issue_date ?? ""}
                     onChange={(e) => patchDoc({ issue_date: e.target.value })}
                     onBlur={() => saveDoc({ issue_date: form.issue_date })}
-                    className={inputCls}
+                    style={light ? { colorScheme: "dark" } : undefined}
+                    className={
+                      light
+                        ? "rounded-[8px] border border-white/30 bg-white/10 px-1.5 py-1 text-sm text-white outline-none focus:border-white/70"
+                        : inputCls
+                    }
                   />
                 </label>
                 <label className="flex items-center justify-end gap-2">
-                  <span className="text-text-faint">
+                  <span className={light ? "text-white/75" : "text-text-faint"}>
                     {kind === "invoice" ? "Due" : "Valid until"}
                   </span>
                   <input
@@ -396,29 +405,99 @@ export function InvoiceWorkspace({
                     value={form.due_date ?? ""}
                     onChange={(e) => patchDoc({ due_date: e.target.value })}
                     onBlur={() => saveDoc({ due_date: form.due_date || null })}
-                    className={inputCls}
+                    style={light ? { colorScheme: "dark" } : undefined}
+                    className={
+                      light
+                        ? "rounded-[8px] border border-white/30 bg-white/10 px-1.5 py-1 text-sm text-white outline-none focus:border-white/70"
+                        : inputCls
+                    }
                   />
                 </label>
-                <label className="flex items-center justify-end gap-2">
-                  <span className="text-text-faint">Status</span>
-                  <select
-                    value={form.status}
-                    onChange={(e) => {
-                      patchDoc({ status: e.target.value });
-                      saveDoc({ status: e.target.value });
-                    }}
-                    className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold"
-                  >
-                    {statuses.map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS[s]?.label ?? s}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               </div>
-            </div>
-          </div>
+            );
+
+            const statusControl = (
+              <label className="flex items-center justify-end gap-2 text-xs">
+                <span className="text-text-faint">Status</span>
+                <select
+                  value={form.status}
+                  onChange={(e) => {
+                    patchDoc({ status: e.target.value });
+                    saveDoc({ status: e.target.value });
+                  }}
+                  className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold"
+                >
+                  {statuses.map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS[s]?.label ?? s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+
+            if (form.template === "modern") {
+              return (
+                <div>
+                  <div
+                    className="-mx-6 -mt-2 mb-5 flex flex-wrap items-center justify-between gap-3 px-6 py-4"
+                    style={{ backgroundColor: accent }}
+                  >
+                    <div className="font-display text-2xl font-extrabold uppercase tracking-tight text-white">
+                      {docLabel}
+                    </div>
+                    <div className="text-right">
+                      {numberInput(true)}
+                      {dateFields(true)}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-start justify-between gap-6">
+                    {logoBusiness}
+                    <div className="text-right">{statusControl}</div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (form.template === "bold") {
+              return (
+                <div>
+                  <div
+                    className="font-display text-4xl font-black uppercase tracking-tight"
+                    style={{ color: accent }}
+                  >
+                    {docLabel}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-start justify-between gap-6">
+                    {logoBusiness}
+                    <div className="text-right">
+                      {numberInput(false)}
+                      {dateFields(false)}
+                      <div className="mt-1">{statusControl}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // classic
+            return (
+              <div className="flex flex-wrap items-start justify-between gap-6">
+                {logoBusiness}
+                <div className="text-right">
+                  <div
+                    className="font-display text-2xl font-extrabold uppercase tracking-tight"
+                    style={{ color: accent }}
+                  >
+                    {docLabel}
+                  </div>
+                  {numberInput(false)}
+                  {dateFields(false)}
+                  <div className="mt-1">{statusControl}</div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Bill To */}
           <div className="mt-6 max-w-sm">
