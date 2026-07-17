@@ -51,6 +51,7 @@ export function EmailDocButton({
         onClose={() => setOpen(false)}
         title={`Email ${noun}`}
         defaultSubject={`${studioName} shared a ${noun} for review`}
+        dueDateField
         onSend={(input) => emailDocReviewLink(projectId, kind, targetId, input)}
       />
     </>

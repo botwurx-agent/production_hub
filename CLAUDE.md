@@ -874,6 +874,25 @@ Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07
   toggle (still to flip). Migrations now through 0061 (0059 project_tasks, 0060
   billing_document_signatures, 0061 billing_proposals_style_attachments).
 
+### Review-round polish (Tier 1 #3) — due dates + auto-reminders BUILT
+Migration 0062 added `due_date` + `last_reminded_at` + `reminder_count` to
+review_links (the client review link, which covers both asset and doc reviews).
+When you Email a review (EmailDocButton -> SendDocEmailModal, which gained an
+optional "Respond by" date field via a `dueDateField` prop), emailDocReviewLink
+persists the recipient + due_date on the link and includes the date in the email.
+The client portal (/r) shows a DueBanner (components/review/due-banner.tsx):
+amber "Please respond by X", red "Response was due X" once passed, hidden once the
+client has decided; wired into both ClientReview and DocReview (gatherReview +
+gatherDocReview now return dueDate). AUTO-REMINDER: a daily Vercel Cron
+(vercel.json crons, 15:00 UTC) hits /api/cron/review-reminders (GET, gated on
+`Authorization: Bearer $CRON_SECRET`); lib/review-reminders.ts runReviewReminders
+finds overdue, non-revoked links with a recipient that the client hasn't responded
+to (no approval via the link), emails a nudge, and stamps last_reminded_at +
+reminder_count (cap 3, min 2 days between). Middleware PUBLIC_PATHS gained
+`/api/cron`. NEW ENV: `CRON_SECRET` (set in Vercel; documented in .env.example).
+STILL TODO for this Tier-1 item: side-by-side version compare in the review
+canvas (slice B), and surfacing due/overdue on the internal Review page.
+
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
 pending the FreshBooks-vs-Melio decision; do not extend it until confirmed.

@@ -58,6 +58,7 @@ export type PortalData = {
   comments: PortalComment[];
   // The client's own current decision on the current version, via this link.
   myDecision: ApprovalStatus | null;
+  dueDate: string | null;
 };
 
 // Assembles everything the client portal shows, strictly scoped to the link's
@@ -156,6 +157,7 @@ export async function gatherReview(
     versions,
     comments,
     myDecision,
+    dueDate: link.due_date ?? null,
   };
 }
 
@@ -248,6 +250,7 @@ export type DocReviewData = {
   surface: DocSurface;
   comments: PortalComment[];
   myDecision: ApprovalStatus | null;
+  dueDate: string | null;
 };
 
 const DOC_SIGNED_TTL = 60 * 60;
@@ -530,5 +533,6 @@ export async function gatherDocReview(
     surface,
     comments,
     myDecision,
+    dueDate: link.due_date ?? null,
   };
 }

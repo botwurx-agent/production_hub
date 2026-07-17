@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { viewerKind, officeEmbedUrl } from "@/lib/file-kind";
+import { DueBanner } from "@/components/review/due-banner";
 import { fileSize, shortDate, timeAgo } from "@/lib/format";
 import { PinReview } from "@/components/review/pin-review";
 import { VideoReview } from "@/components/review/video-review";
@@ -251,6 +252,8 @@ export function ClientReview({
           )}
         </div>
       </div>
+
+      <DueBanner dueDate={data.dueDate} resolved={Boolean(decided)} />
 
       {!current ? (
         <p className="rounded-[14px] border border-dashed border-border px-4 py-12 text-center text-sm text-text-faint">

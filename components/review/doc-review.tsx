@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PinCanvas } from "@/components/review/pin-canvas";
+import { DueBanner } from "@/components/review/due-banner";
 import { DocSurfaceView } from "@/components/review/doc-surface";
 import {
   AiShotReviewCanvas,
@@ -120,6 +121,8 @@ export function DocReview({
           </span>
         </div>
       </div>
+
+      <DueBanner dueDate={data.dueDate} resolved={Boolean(decided)} />
 
       <div className="mb-4 max-w-md">
         <label className="text-xs font-bold uppercase tracking-wide text-text-faint">

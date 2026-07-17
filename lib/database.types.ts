@@ -2745,6 +2745,9 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           expires_at: string | null;
+          due_date: string | null;
+          last_reminded_at: string | null;
+          reminder_count: number;
           id: string;
           project_id: string;
           recipient: string | null;
@@ -2759,6 +2762,9 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           expires_at?: string | null;
+          due_date?: string | null;
+          last_reminded_at?: string | null;
+          reminder_count?: number;
           id?: string;
           project_id: string;
           recipient?: string | null;
@@ -2773,6 +2779,9 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           expires_at?: string | null;
+          due_date?: string | null;
+          last_reminded_at?: string | null;
+          reminder_count?: number;
           id?: string;
           project_id?: string;
           recipient?: string | null;

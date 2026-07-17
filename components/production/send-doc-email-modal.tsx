@@ -14,6 +14,7 @@ export function SendDocEmailModal({
   defaultTo,
   defaultSubject,
   shareUrl,
+  dueDateField = false,
   onSend,
 }: {
   open: boolean;
@@ -22,15 +23,18 @@ export function SendDocEmailModal({
   defaultTo?: string | null;
   defaultSubject: string;
   shareUrl?: string | null;
+  dueDateField?: boolean;
   onSend: (input: {
     to: string;
     subject: string;
     message: string;
+    dueDate?: string;
   }) => Promise<{ ok: true } | { error: string }>;
 }) {
   const [to, setTo] = useState(defaultTo ?? "");
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -39,7 +43,7 @@ export function SendDocEmailModal({
   async function submit() {
     setError(null);
     setBusy(true);
-    const res = await onSend({ to, subject, message });
+    const res = await onSend({ to, subject, message, dueDate: dueDate || undefined });
     setBusy(false);
     if ("error" in res) {
       setError(res.error);
@@ -104,6 +108,24 @@ export function SendDocEmailModal({
               className="w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong"
             />
           </label>
+
+          {dueDateField && (
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-text-muted">
+                Respond by{" "}
+                <span className="font-normal text-text-faint">(optional)</span>
+              </span>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong"
+              />
+              <span className="mt-1 block text-[11px] text-text-faint">
+                Shown to the client, and we&apos;ll auto-remind them if it passes.
+              </span>
+            </label>
+          )}
 
           {error && <p className="text-xs font-semibold text-red">{error}</p>}
 

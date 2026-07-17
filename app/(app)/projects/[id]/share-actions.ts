@@ -7,6 +7,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
 import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
+import { longDate } from "@/lib/format";
 
 export type ShareState = { error?: string } | null;
 
@@ -140,7 +141,7 @@ export async function emailDocReviewLink(
   projectId: string,
   kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot",
   targetId: string,
-  input: { to: string; subject: string; message?: string }
+  input: { to: string; subject: string; message?: string; dueDate?: string }
 ): Promise<{ ok: true } | { error: string }> {
   const ctx = await requireStudioContext();
   if (!emailConfigured()) return { error: "Email is not set up yet." };
@@ -153,6 +154,14 @@ export async function emailDocReviewLink(
   const link = await createDocReviewLink(projectId, kind, targetId);
   if ("error" in link) return { error: link.error };
 
+  // Persist recipient + due date on the link so reminders can find it.
+  const dueDate = input.dueDate?.trim() || null;
+  const supabase = createClient();
+  await supabase
+    .from("review_links")
+    .update({ recipient: to, due_date: dueDate })
+    .eq("token", link.token);
+
   const noun = DOC_NOUN[kind] ?? "document";
   const url = `${emailOrigin()}/r/${link.token}`;
   const subject =
@@ -163,6 +172,7 @@ export async function emailDocReviewLink(
         `${ctx.studio.name} shared a ${noun} with you to review.`,
         "Open it below to view, leave pinned comments, and approve or request changes. No login needed.",
       ];
+  if (dueDate) lines.push(`Please respond by ${longDate(dueDate)}.`);
 
   const { html, text } = renderEmail({
     heading: subject,
