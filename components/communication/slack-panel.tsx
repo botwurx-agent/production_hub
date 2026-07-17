@@ -136,11 +136,13 @@ export function SlackReader({
   projectId,
   canSend = false,
   revalidate,
+  unread = 0,
 }: {
   channel: LinkedSlackChannel;
   projectId?: string;
   canSend?: boolean;
   revalidate: string;
+  unread?: number;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -203,7 +205,9 @@ export function SlackReader({
             <HashIcon />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-text">
+            <span
+              className={`block truncate text-sm text-text ${unread > 0 ? "font-bold" : "font-semibold"}`}
+            >
               #{channel.channel_name || channel.slack_channel_id}
             </span>
             <span
@@ -214,6 +218,15 @@ export function SlackReader({
             </span>
           </span>
         </button>
+        {unread > 0 && (
+          <span
+            className="inline-flex min-w-[20px] shrink-0 items-center justify-center rounded-pill bg-accent px-1.5 py-0.5 text-[11px] font-bold leading-none text-accent-fg"
+            aria-label={`${unread} new`}
+            title={`${unread} new message${unread === 1 ? "" : "s"}`}
+          >
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
         <button
           onClick={() =>
             start(() =>
