@@ -890,8 +890,14 @@ finds overdue, non-revoked links with a recipient that the client hasn't respond
 to (no approval via the link), emails a nudge, and stamps last_reminded_at +
 reminder_count (cap 3, min 2 days between). Middleware PUBLIC_PATHS gained
 `/api/cron`. NEW ENV: `CRON_SECRET` (set in Vercel; documented in .env.example).
-STILL TODO for this Tier-1 item: side-by-side version compare in the review
-canvas (slice B), and surfacing due/overdue on the internal Review page.
+SIDE-BY-SIDE VERSION COMPARE (slice B, BUILT): components/review/version-compare.tsx
+(two panes, each with its own version picker, images object-contain) is wired into
+the client portal (components/review/client-review.tsx): for IMAGE assets with 2+
+versions, a "Compare versions" toggle by the version pill swaps the PinReview canvas
+for the compare view (before/after a revision), "Back to review" returns. STILL TODO:
+the in-app review modal (review-modal.tsx) only gets one version's signed URL, so
+compare there needs the parent to sign all versions (deferred); surfacing due/overdue
+on the internal Review page is also still open.
 
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)

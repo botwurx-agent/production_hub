@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { viewerKind, officeEmbedUrl } from "@/lib/file-kind";
 import { DueBanner } from "@/components/review/due-banner";
+import { VersionCompare } from "@/components/review/version-compare";
 import { fileSize, shortDate, timeAgo } from "@/lib/format";
 import { PinReview } from "@/components/review/pin-review";
 import { VideoReview } from "@/components/review/video-review";
@@ -29,6 +30,7 @@ export function ClientReview({
   const [name, setName] = useState("");
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
   const [busy, start] = useTransition();
 
   useEffect(() => {
@@ -246,9 +248,27 @@ export function ClientReview({
             </p>
           </div>
           {current && (
-            <span className="shrink-0 rounded-pill border border-border-strong px-3 py-1 text-xs font-bold text-text-muted">
-              Version {current.version_number}
-            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              {isImage && data.versions.length >= 2 && (
+                <button
+                  onClick={() => setCompareMode((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-xs font-bold transition ${
+                    compareMode
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border-strong text-text-muted hover:text-text"
+                  }`}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="7" height="16" rx="1" />
+                    <rect x="14" y="4" width="7" height="16" rx="1" />
+                  </svg>
+                  {compareMode ? "Back to review" : "Compare versions"}
+                </button>
+              )}
+              <span className="rounded-pill border border-border-strong px-3 py-1 text-xs font-bold text-text-muted">
+                Version {current.version_number}
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -259,6 +279,16 @@ export function ClientReview({
         <p className="rounded-[14px] border border-dashed border-border px-4 py-12 text-center text-sm text-text-faint">
           There is nothing to review here yet.
         </p>
+      ) : isImage && compareMode ? (
+        <>
+          <VersionCompare
+            versions={data.versions}
+            currentId={current.id}
+            urlFor={fileUrl}
+            alt={data.asset.name}
+          />
+          {metaRow}
+        </>
       ) : isImage ? (
         <>
           <div className="mb-4 max-w-md">{nameField}</div>
