@@ -19,6 +19,7 @@ import {
 import type { PickableAsset } from "@/components/production/shot-board-editor";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
+import { EmailDocButton } from "@/components/review/email-doc-button";
 import { DocReviewButton } from "@/components/review/doc-review-button";
 
 export type StoryboardBoard = { id: string; name: string };
@@ -44,6 +45,8 @@ export function StoryboardEditor({
   assets,
   reviewedIds = [],
   commentCounts = {},
+  emailEnabled = false,
+  studioName = "",
 }: {
   projectId: string;
   boards: StoryboardBoard[];
@@ -51,6 +54,8 @@ export function StoryboardEditor({
   assets: PickableAsset[];
   reviewedIds?: string[];
   commentCounts?: Record<string, number>;
+  emailEnabled?: boolean;
+  studioName?: string;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -168,6 +173,22 @@ export function StoryboardEditor({
                 targetId={active.id}
                 label="Share"
               />
+              <EmailDocButton
+                projectId={projectId}
+                kind="storyboard"
+                targetId={active.id}
+                studioName={studioName}
+                enabled={emailEnabled}
+              />
+              <a
+                href={`/projects/${projectId}/storyboards/present?board=${active.id}&auto=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+                PDF
+              </a>
               <Link
                 href={`/projects/${projectId}/storyboards/present`}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg transition hover:bg-accent-strong"

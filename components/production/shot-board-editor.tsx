@@ -20,6 +20,7 @@ import {
 import { DocReviewButton } from "@/components/review/doc-review-button";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
+import { EmailDocButton } from "@/components/review/email-doc-button";
 import type { ShotBoard, ShotGroup } from "@/lib/database.types";
 
 export type CardView = {
@@ -101,6 +102,8 @@ export function ShotBoardEditor({
   assets,
   commentCount = 0,
   inReview = false,
+  emailEnabled = false,
+  studioName = "",
 }: {
   projectId: string;
   projectTitle: string;
@@ -110,6 +113,8 @@ export function ShotBoardEditor({
   assets: PickableAsset[];
   commentCount?: number;
   inReview?: boolean;
+  emailEnabled?: boolean;
+  studioName?: string;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -210,6 +215,22 @@ export function ShotBoardEditor({
             inReview={inReview}
           />
           <ShareDocButton projectId={projectId} kind="shot_list" targetId={projectId} label="Share" />
+          <EmailDocButton
+            projectId={projectId}
+            kind="shot_list"
+            targetId={projectId}
+            studioName={studioName}
+            enabled={emailEnabled}
+          />
+          <a
+            href={`/projects/${projectId}/production/board?auto=1`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+            PDF
+          </a>
           <Link
             href={`/projects/${projectId}/production/board`}
             className="inline-flex items-center gap-1.5 rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg transition hover:bg-accent-strong"

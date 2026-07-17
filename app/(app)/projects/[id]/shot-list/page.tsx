@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
+import { emailConfigured } from "@/lib/email";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import {
   ShotBoardEditor,
@@ -18,7 +19,7 @@ export default async function ShotListPage({
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const { data: project } = await supabase
@@ -121,6 +122,8 @@ export default async function ShotListPage({
         groups={(groups ?? []) as ShotGroup[]}
         cards={cards}
         assets={pickable}
+        emailEnabled={emailConfigured()}
+        studioName={ctx.studio.name}
       />
     </div>
   );

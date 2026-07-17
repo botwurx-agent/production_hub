@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
+import { emailConfigured } from "@/lib/email";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import {
   StoryboardEditor,
@@ -18,7 +19,7 @@ export default async function ProjectStoryboardsPage({
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const { data: project } = await supabase
@@ -116,6 +117,8 @@ export default async function ProjectStoryboardsPage({
         assets={pickable}
         reviewedIds={reviewedIds}
         commentCounts={commentCounts}
+        emailEnabled={emailConfigured()}
+        studioName={ctx.studio.name}
       />
     </div>
   );

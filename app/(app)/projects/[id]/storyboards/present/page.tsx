@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
 import { PrintButton } from "@/components/production/print-button";
+import { AutoPrint } from "@/components/production/auto-print";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { signedLogoUrl } from "@/lib/branding";
 
@@ -30,7 +31,7 @@ export default async function StoryboardPresentPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { board?: string };
+  searchParams?: { board?: string; auto?: string };
 }) {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -87,6 +88,7 @@ export default async function StoryboardPresentPage({
 
   return (
     <div className="mx-auto max-w-5xl">
+      {searchParams?.auto ? <AutoPrint /> : null}
       <div className="mb-4 flex items-center justify-between print:hidden">
         <Link
           href={`/projects/${project.id}/storyboards`}

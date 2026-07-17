@@ -725,9 +725,24 @@ print-color-adjust:exact) with PrintButton; the "Download PDF" button opens it
 with ?auto=1 and components/production/auto-print.tsx fires window.print(). One
 source of truth for the snapshot: lib/billing-doc.ts buildDocSnapshot(doc, lines,
 profile, attachments) is used by BOTH sendBillingDoc and the print route, so the
-PDF always matches what the client is sent. NEXT: extend the same email modal +
-print pattern to call sheets and other doc surfaces (the operator wants all three
-options everywhere).
+PDF always matches what the client is sent.
+
+DELIVERY ROLLED TO OTHER DOCS (call sheet + shot list + storyboard). Shared
+pieces: components/production/auto-print.tsx (fires window.print() when a print
+view is opened with ?auto=1) + the reusable SendDocEmailModal. (1) CALL SHEET:
+the builder's PDF button is now one-click ("Download PDF", opens
+/production/callsheet?cs=<id>&auto=1 in a new tab, auto-prints). Email + per-
+recipient links already existed (RecipientsPanel). (2) SHOT LIST + STORYBOARD:
+their present/export views (/production/board, /storyboards/present) gained
+?auto=1 support, and each editor's action row now has a one-click "PDF" button
+(present?...&auto=1) plus an "Email" button (components/review/email-doc-button.tsx
+-> SendDocEmailModal -> emailDocReviewLink in share-actions.ts, which creates/
+reuses the /r/<token> client review link and emails it). Both gated on
+emailConfigured() threaded page (ctx.studio.name + emailConfigured) -> editor as
+emailEnabled/studioName. The existing ShareDocButton (copy link) stays, so both
+now offer link + email + PDF. NEXT (if wanted): moodboard + asset review email,
+and a forced-light wrapper on the present views (they print from light theme
+today).
 
 ### Billing / invoicing — FreshBooks/payment paths BUILT BUT ON HOLD (payments deferred, see decision above)
 Two invoicing paths were built and are deployed on `main`, but the whole area is

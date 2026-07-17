@@ -1,11 +1,30 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
+import { sendEmail, emailConfigured } from "@/lib/email";
+import { renderEmail } from "@/lib/email-template";
 
 export type ShareState = { error?: string } | null;
+
+const DOC_NOUN: Record<string, string> = {
+  shot_list: "shot list",
+  storyboard: "storyboard",
+  moodboard: "moodboard",
+  ai_shot: "shot",
+};
+
+function emailOrigin(): string {
+  const env = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+  if (env) return env;
+  const h = headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return host ? `${proto}://${host}` : "";
+}
 
 // Creates a client review link for an asset (or returns the existing active
 // one, so a studio always shares one stable URL per asset).
@@ -113,6 +132,48 @@ export async function createDocReviewLink(
 
   revalidatePath(`/projects/${projectId}`);
   return { token };
+}
+
+// Email the client a doc review link (shot list / storyboard / moodboard):
+// creates or reuses the /r/<token> link, then sends it. Gated on emailConfigured().
+export async function emailDocReviewLink(
+  projectId: string,
+  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot",
+  targetId: string,
+  input: { to: string; subject: string; message?: string }
+): Promise<{ ok: true } | { error: string }> {
+  const ctx = await requireStudioContext();
+  if (!emailConfigured()) return { error: "Email is not set up yet." };
+
+  const to = input.to.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    return { error: "Enter a valid recipient email." };
+  }
+
+  const link = await createDocReviewLink(projectId, kind, targetId);
+  if ("error" in link) return { error: link.error };
+
+  const noun = DOC_NOUN[kind] ?? "document";
+  const url = `${emailOrigin()}/r/${link.token}`;
+  const subject =
+    input.subject.trim() || `${ctx.studio.name} shared a ${noun} for review`;
+  const lines = input.message?.trim()
+    ? [input.message.trim()]
+    : [
+        `${ctx.studio.name} shared a ${noun} with you to review.`,
+        "Open it below to view, leave pinned comments, and approve or request changes. No login needed.",
+      ];
+
+  const { html, text } = renderEmail({
+    heading: subject,
+    lines,
+    ctaLabel: `View ${noun}`,
+    ctaUrl: url,
+  });
+
+  const result = await sendEmail({ to, subject, html, text });
+  if (!result.ok) return { error: result.error ?? "The email could not be sent." };
+  return { ok: true };
 }
 
 export async function revokeReviewLink(

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { PrintButton } from "@/components/production/print-button";
+import { AutoPrint } from "@/components/production/auto-print";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { signedLogoUrl } from "@/lib/branding";
 import { CallSheetDocument } from "@/components/production/callsheet-document";
@@ -13,7 +14,7 @@ export default async function CallSheetPrintPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { cs?: string };
+  searchParams?: { cs?: string; auto?: string };
 }) {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -48,6 +49,7 @@ export default async function CallSheetPrintPage({
 
   return (
     <div className="mx-auto max-w-4xl">
+      {searchParams?.auto ? <AutoPrint /> : null}
       <div className="mb-4 flex items-center justify-between print:hidden">
         <Link
           href={`/projects/${project.id}/callsheet`}

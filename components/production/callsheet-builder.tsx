@@ -331,11 +331,13 @@ export function CallSheetBuilder({
         </div>
 
         <Link
-          href={`/projects/${projectId}/production/callsheet?cs=${callSheetId}`}
+          href={`/projects/${projectId}/production/callsheet?cs=${callSheetId}&auto=1`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="ml-auto inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z" /></svg>
-          Print / Export PDF
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+          Download PDF
         </Link>
       </div>
 
