@@ -235,7 +235,7 @@ export function ShotBoardEditor({
             href={`/projects/${projectId}/production/board`}
             className="inline-flex items-center gap-1.5 rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg transition hover:bg-accent-strong"
           >
-            Present / Export
+            Present
           </Link>
         </div>
       </div>
