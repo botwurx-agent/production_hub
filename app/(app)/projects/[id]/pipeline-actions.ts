@@ -2,10 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assetStorage } from "@/lib/asset-storage";
+import { fetchMediaFromUrl } from "@/lib/media-import";
 import { requireStudioContext } from "@/lib/studio";
 import type { Json } from "@/lib/database.types";
 
 export type PipelineState = { error?: string; id?: string } | null;
+
+function safeName(name: string): string {
+  return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "clip";
+}
 
 function rp(projectId: string) {
   revalidatePath(`/projects/${projectId}/pipeline`);
@@ -346,6 +352,92 @@ export async function deleteGeneration(projectId: string, id: string): Promise<v
   const supabase = createClient();
   await supabase.from("ai_generations").delete().eq("id", id);
   rp(projectId);
+}
+
+// ---- Import from an external tool (Higgsfield, etc.) ------------------------
+// The X-factor: pull the pool of clips a studio generated on an external tool
+// straight into a shot, so they can be viewed / reviewed / picked here without
+// the download + re-upload round trip. Paste one or many share/video links; each
+// is fetched server-side, stored, and dropped in as a video CANDIDATE with its
+// provenance auto-stamped (platform + source link). Generation stays external;
+// we organize and decide. Partial success is reported per link.
+
+export type ImportResult =
+  | { imported: number; failed: { url: string; reason: string }[] }
+  | { error: string };
+
+export async function importFromHiggsfield(
+  projectId: string,
+  input: {
+    shotId: string;
+    stage?: "image" | "video";
+    urls: string[];
+    prompt?: string | null;
+    platform?: string | null;
+    generated_by_name?: string | null;
+  },
+): Promise<ImportResult> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const stage = input.stage ?? "video";
+  const platform = input.platform?.trim() || "Higgsfield";
+  // De-dupe + cap the batch so one paste can't run unbounded.
+  const urls = Array.from(
+    new Set(input.urls.map((u) => u.trim()).filter(Boolean)),
+  ).slice(0, 40);
+  if (urls.length === 0) return { error: "Paste at least one link." };
+
+  const failed: { url: string; reason: string }[] = [];
+  const rows: {
+    studio_id: string;
+    shot_id: string;
+    stage: string;
+    kind: string;
+    status: string;
+    platform: string;
+    prompt: string | null;
+    file_path: string;
+    external_url: string;
+    generated_by: string;
+    generated_by_name: string | null;
+  }[] = [];
+
+  for (const url of urls) {
+    const media = await fetchMediaFromUrl(url);
+    if ("error" in media) {
+      failed.push({ url, reason: media.error });
+      continue;
+    }
+    const path = `${ctx.studio.id}/pipeline/${projectId}/${crypto.randomUUID()}-${safeName(media.filename)}`;
+    const { error: upErr } = await assetStorage().upload(path, media.bytes, {
+      contentType: media.contentType || undefined,
+      upsert: false,
+    });
+    if (upErr) {
+      failed.push({ url, reason: upErr.message });
+      continue;
+    }
+    rows.push({
+      studio_id: ctx.studio.id,
+      shot_id: input.shotId,
+      stage,
+      kind: media.kind,
+      status: "candidate",
+      platform,
+      prompt: input.prompt ?? null,
+      file_path: path,
+      external_url: media.sourceUrl,
+      generated_by: ctx.userId,
+      generated_by_name: input.generated_by_name ?? null,
+    });
+  }
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from("ai_generations").insert(rows);
+    if (error) return { error: error.message };
+  }
+  rp(projectId);
+  return { imported: rows.length, failed };
 }
 
 // ---- Flexible references (polymorphic image|video, roled) ------------------

@@ -996,8 +996,31 @@ Shot cockpit / Triage) was shown to the operator.
     that makes the IMAGE STAGE OPTIONAL. frames/image_to_video show the image
     candidates -> Start/End stage; video_to_video / text_to_video skip it and go
     straight to the video stage (video-first / v2v). updateShot gained input_mode.
-  - NEXT (this refinement): a "References" area in the video stage to attach a
-    driving/style/character video (v2v) via ai_generation_refs + record refs on
-    created takes; then Higgsfield import connector, then triage fast-lane, then
-    prompt/style library. Higgsfield generate-in-app = agent-mediated (MCP) or
-    their HTTP API, BYO-account; deferred (organize-first stays intact).
+  - References area in the video stage (BUILT): AddRefModal + ReferencesPanel let
+    you attach a driving/style/character video (v2v) as a status='reference'
+    generation, kept out of the candidate/take grid; the StagePanel splits
+    gens into refs (status==='reference') + pool (the rest).
+  - IMPORT FROM HIGGSFIELD (BUILT, the X-factor): pull the pool of clips a studio
+    generated on an external tool straight into a shot, eliminating the download/
+    re-upload round trip. Generation stays external; we organize + review + pick.
+    UI = "Import from Higgsfield" button in the video StagePanel -> ImportModal
+    (paste up to 40 links, one per line, share pages OR direct media URLs; +
+    platform/generated-by/prompt). Each link is fetched SERVER-SIDE, stored, and
+    inserted as a video CANDIDATE in the pool with provenance auto-stamped
+    (platform='Higgsfield', external_url=source link). Partial success is reported
+    per link with retry. lib/media-import.ts fetchMediaFromUrl (SSRF-safe via
+    lib/unfurl safeFetch/isFetchableUrl; handles a direct .mp4/image URL OR parses
+    og:video/og:image on a share page; 200MB cap). importFromHiggsfield action in
+    pipeline-actions.ts (loops, downloads, service-uploads to
+    <studio>/pipeline/<project>/, bulk-inserts). GenCard + FrameSlot now RENDER
+    VIDEO (kind==='video' -> <video> thumb + controls in the open modal) so
+    imported clips are viewable/playable in triage. Constraint that shaped this:
+    Higgsfield's public REST API/SDK is generation-only (NO list-generations/media-
+    history endpoint; that browse ability lives only in their agent-consumed MCP),
+    so a fully-automatic "sync my whole pool" button is not buildable on their API
+    today. The paste-links import gets the value now; the agent/MCP auto-pull is a
+    later build tied to the parked BYO-Claude direction.
+  - NEXT (this refinement): record refs on created takes (references live at shot
+    level today); then triage fast-lane, then prompt/style library. Higgsfield
+    generate-in-app = agent-mediated (MCP) or their HTTP API, BYO-account;
+    deferred (organize-first stays intact).

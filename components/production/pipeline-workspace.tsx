@@ -19,6 +19,7 @@ import {
   setGenerationStatus,
   setGenerationRole,
   deleteGeneration,
+  importFromHiggsfield,
 } from "@/app/(app)/projects/[id]/pipeline-actions";
 import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
@@ -281,17 +282,20 @@ function Flow({ label }: { label?: string }) {
 function FrameSlot({ label, color, gen, src, empty, video }: {
   label: string; color: string; gen: AiGeneration | null; src: string | null; empty: string; video?: boolean;
 }) {
+  const isVideo = video || gen?.kind === "video";
   return (
     <div>
       <div className="mb-1 text-[10.5px] font-extrabold uppercase tracking-wide" style={{ color }}>{label}</div>
       {gen ? (
         <div className="relative overflow-hidden rounded-[10px]" style={{ aspectRatio: "16/9", outline: `2px solid ${color}`, outlineOffset: "2px", background: gradFor(gen.id) }}>
-          {src && (
+          {src && (isVideo ? (
+            <video src={src} controls playsInline preload="metadata" className="absolute inset-0 h-full w-full object-contain bg-black" />
+          ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-          )}
-          {video && (
+          ))}
+          {isVideo && !src && (
             <span className="absolute inset-0 grid place-items-center">
               <span className="grid h-8 w-8 place-items-center rounded-full bg-white/85 text-sm text-black">▶</span>
             </span>
@@ -320,6 +324,7 @@ function GenCard({
   const [spec, setSpec] = useState(false);
   const [open, setOpen] = useState(false);
   const isImage = gen.stage === "image";
+  const isVideo = gen.kind === "video";
   const roleTag = gen.role ? ROLE_TAG[gen.role] ?? null : null;
   const rows = genSpecRows(gen).filter(([, v]) => v != null && v !== "");
   const openHref = gen.external_url ?? src;
@@ -328,10 +333,18 @@ function GenCard({
     <div className={`overflow-hidden rounded-[12px] border border-border ${gen.status === "rejected" ? "opacity-45" : ""}`}>
       <button type="button" onClick={() => setOpen(true)}
         className="group relative block w-full" style={{ aspectRatio: "16/9", background: gradFor(gen.id) }}>
-        {src && (
+        {src && (isVideo ? (
+          <video src={`${src}#t=0.1`} muted playsInline preload="metadata"
+            className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover"
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+        ))}
+        {isVideo && (
+          <span className="absolute inset-0 grid place-items-center">
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-black/55 text-sm text-white transition group-hover:bg-black/70">▶</span>
+          </span>
         )}
         {gen.model && (
           <span className="absolute right-1.5 top-1.5 rounded-[5px] bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold text-white">
@@ -357,8 +370,12 @@ function GenCard({
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-[12px] bg-black" style={{ aspectRatio: "16/9" }}>
               {src ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt="" className="absolute inset-0 h-full w-full object-contain" />
+                isVideo ? (
+                  <video src={src} controls autoPlay playsInline className="absolute inset-0 h-full w-full object-contain" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={src} alt="" className="absolute inset-0 h-full w-full object-contain" />
+                )
               ) : (
                 <div className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-white/70">
                   No previewable media. Upload the file, or paste a direct image URL (a share page can&apos;t be shown).
@@ -577,6 +594,126 @@ function ReferencesPanel({
   );
 }
 
+// ---- Import from an external tool (Higgsfield, etc.) ------------------------
+// Paste the pool of clips you generated elsewhere; each link is fetched, stored,
+// and dropped in as a candidate here so you can view + review + pick without the
+// download / re-upload round trip. Generation stays on the external tool.
+
+function ImportModal({
+  projectId, shot, stage, basePrompt, onClose, onDone,
+}: {
+  projectId: string; shot: AiShot; stage: Stage; basePrompt: string;
+  onClose: () => void; onDone: () => void;
+}) {
+  const [busy, start] = useTransition();
+  const [urlsText, setUrlsText] = useState("");
+  const [platform, setPlatform] = useState("Higgsfield");
+  const [promptText, setPromptText] = useState(basePrompt);
+  const [by, setBy] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ url: string; reason: string }[] | null>(null);
+  const [done, setDone] = useState<number | null>(null);
+
+  const links = useMemo(
+    () => Array.from(new Set(urlsText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))),
+    [urlsText],
+  );
+
+  function submit() {
+    setErr(null);
+    setFailed(null);
+    setDone(null);
+    if (links.length === 0) { setErr("Paste at least one link."); return; }
+    start(async () => {
+      const res = await importFromHiggsfield(projectId, {
+        shotId: shot.id,
+        stage,
+        urls: links,
+        prompt: promptText || null,
+        platform: platform || null,
+        generated_by_name: by || null,
+      });
+      if ("error" in res) { setErr(res.error); return; }
+      setDone(res.imported);
+      if (res.failed.length > 0) {
+        // Keep the ones that failed in the box so they can be retried.
+        setFailed(res.failed);
+        setUrlsText(res.failed.map((f) => f.url).join("\n"));
+        onDone();
+        return;
+      }
+      onDone();
+      onClose();
+    });
+  }
+
+  return (
+    <Modal open onClose={onClose} size="lg" title="Import from Higgsfield">
+      <div className="space-y-3">
+        <p className="text-sm text-text-muted">
+          Paste the links to the clips you generated (one per line — a share link or a
+          direct video URL). We pull each one in as a candidate on this shot, with its
+          source tracked, so you can review the pool and pick the winner here. No download
+          or re-upload. Generation stays on the tool.
+        </p>
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+            Links <span className="font-normal normal-case text-text-faint">(one per line · up to 40)</span>
+          </label>
+          <textarea value={urlsText} onChange={(e) => setUrlsText(e.target.value)} rows={6}
+            placeholder={"https://higgsfield.ai/…\nhttps://…/clip.mp4"} className={`mt-1 ${field} font-mono text-xs`} />
+          {links.length > 0 && (
+            <p className="mt-1 text-xs text-text-faint">{links.length} link{links.length === 1 ? "" : "s"} ready</p>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Tool / platform</label>
+            <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="Higgsfield" className={`mt-1 ${field}`} />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Generated by</label>
+            <input value={by} onChange={(e) => setBy(e.target.value)} placeholder="name (optional)" className={`mt-1 ${field}`} />
+          </div>
+        </div>
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+            Prompt used <span className="font-normal normal-case text-text-faint">(optional · applied to all imported)</span>
+          </label>
+          <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={2}
+            placeholder="The prompt behind these clips…" className={`mt-1 ${field}`} />
+        </div>
+        {done != null && (
+          <p className="rounded-[9px] bg-green-bg px-3 py-2 text-sm font-semibold text-green">
+            Imported {done} clip{done === 1 ? "" : "s"}.{failed && failed.length > 0 ? ` ${failed.length} still need attention below.` : ""}
+          </p>
+        )}
+        {failed && failed.length > 0 && (
+          <div className="rounded-[9px] border border-border bg-surface-2/40 p-2.5 text-xs">
+            <p className="mb-1 font-bold text-text-muted">Couldn&apos;t import these — check the link and retry:</p>
+            <ul className="space-y-1">
+              {failed.map((f) => (
+                <li key={f.url} className="flex flex-col">
+                  <span className="truncate font-mono text-[11px] text-text">{f.url}</span>
+                  <span className="text-red">{f.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {err && <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{err}</p>}
+        <div className="flex items-center justify-end gap-3 pt-1">
+          {busy && <span className="mr-auto text-xs font-medium text-text-muted">Pulling {links.length} clip{links.length === 1 ? "" : "s"}…</span>}
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>{done != null ? "Close" : "Cancel"}</Button>
+          <Button size="sm" onClick={submit} disabled={busy || links.length === 0}>
+            {busy ? "Importing…" : failed ? "Retry these" : `Import ${links.length || ""}`.trim()}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function StagePanel({
   projectId, studioId, shot, stage, prompt, gens, media, refStartId, refEndId, onRun,
 }: {
@@ -585,9 +722,11 @@ function StagePanel({
   refStartId: string | null; refEndId: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
 }) {
+  const router = useRouter();
   const [pText, setPText] = useState(prompt?.text ?? "");
   const [pModel, setPModel] = useState(prompt?.target_model ?? "");
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
   const label = stage === "image" ? "Image" : "Video";
   const hue = stage === "image" ? "amber" : "blue";
@@ -629,11 +768,23 @@ function StagePanel({
       </div>
 
       {/* Candidate pool first: generate & triage */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-xs text-text-muted">{stage === "image" ? "Candidates — tag a Start + End" : "Takes — pick one"}</p>
-        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
-          + {stage === "image" ? "Candidate" : "Take"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {stage === "video" && (
+            <button onClick={() => setImporting(true)}
+              className="inline-flex items-center gap-1.5 rounded-[9px] border border-border px-2.5 py-1 text-xs font-bold text-text transition hover:border-accent hover:text-accent"
+              title="Pull the clips you generated on an external tool straight in">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+              </svg>
+              Import from Higgsfield
+            </button>
+          )}
+          <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
+            + {stage === "image" ? "Candidate" : "Take"}
+          </Button>
+        </div>
       </div>
 
       {pool.length === 0 ? (
@@ -672,6 +823,10 @@ function StagePanel({
         <AddGenModal projectId={projectId} studioId={studioId} shot={shot} stage={stage}
           promptId={prompt?.id ?? null} basePrompt={pText} refStartId={refStartId} refEndId={refEndId}
           onClose={() => setAdding(false)} />
+      )}
+      {importing && (
+        <ImportModal projectId={projectId} shot={shot} stage={stage} basePrompt={pText}
+          onClose={() => setImporting(false)} onDone={() => router.refresh()} />
       )}
     </div>
   );
