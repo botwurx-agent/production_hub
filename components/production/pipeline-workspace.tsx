@@ -439,6 +439,144 @@ function GenCard({
 
 // ---- Stage panel (image or video) ------------------------------------------
 
+// ---- References (v2v inputs): driving / style / character clips -------------
+
+const REF_ROLES: { value: string; label: string }[] = [
+  { value: "motion", label: "Driving / motion video" },
+  { value: "style", label: "Style reference" },
+  { value: "character", label: "Character reference" },
+  { value: "ref", label: "Reference" },
+];
+
+function AddRefModal({
+  projectId, studioId, shot, onClose,
+}: {
+  projectId: string; studioId: string; shot: AiShot; onClose: () => void;
+}) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+  const [role, setRole] = useState("motion");
+  const [kind, setKind] = useState<"video" | "image">("video");
+  const [url, setUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [prog, setProg] = useState<string | null>(null);
+
+  function save() {
+    setErr(null);
+    if (!file && !url.trim()) { setErr("Upload a clip or paste a link."); return; }
+    start(async () => {
+      let filePath: string | null = null;
+      if (file) {
+        try {
+          setProg("Uploading…");
+          const up = await uploadAssetFile({ studioId, projectId, file });
+          filePath = up.storagePath;
+        } catch (e) {
+          setErr(`Upload failed: ${(e as Error).message}`); setProg(null); return;
+        }
+      }
+      setProg("Saving…");
+      const res = await addGeneration(projectId, {
+        shotId: shot.id, stage: "video", status: "reference", role, kind,
+        file_path: filePath, external_url: filePath ? null : (url.trim() || null),
+      });
+      setProg(null);
+      if (res && "error" in res && res.error) { setErr(res.error); return; }
+      onClose(); router.refresh();
+    });
+  }
+
+  return (
+    <Modal open onClose={onClose} size="md" title="Add a reference">
+      <div className="space-y-3">
+        <p className="text-sm text-text-muted">
+          A clip this shot generates <b className="text-text">from</b> (video-to-video): a driving/style/character
+          reference. It&apos;s tracked with its own lineage.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Role</label>
+            <select value={role} onChange={(e) => setRole(e.target.value)} className={`mt-1 ${field}`}>
+              {REF_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Type</label>
+            <select value={kind} onChange={(e) => setKind(e.target.value as "video" | "image")} className={`mt-1 ${field}`}>
+              <option value="video">Video</option>
+              <option value="image">Image</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Upload a clip</label>
+          <input type="file" accept="video/*,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className={`mt-1 ${field}`} />
+        </div>
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+            or paste a link <span className="font-normal normal-case text-text-faint">(from the tool it lives on)</span>
+          </label>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className={`mt-1 ${field}`} />
+        </div>
+        {err && <p className="text-xs font-semibold text-red">{err}</p>}
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button size="sm" onClick={save} disabled={busy}>{prog ?? "Add reference"}</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ReferencesPanel({
+  projectId, studioId, shot, refs, media, onRun,
+}: {
+  projectId: string; studioId: string; shot: AiShot;
+  refs: AiGeneration[]; media: Record<string, string>;
+  onRun: (fn: () => Promise<unknown>) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const srcOf = (g: AiGeneration) => media[g.id] ?? g.external_url ?? null;
+  return (
+    <div className="mb-3 rounded-[12px] border border-dashed border-border p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+          References <span className="font-normal normal-case text-text-faint">— what this shot generates from (v2v)</span>
+        </p>
+        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>+ Reference</Button>
+      </div>
+      {refs.length === 0 ? (
+        <p className="text-xs text-text-faint">None yet. Add a driving/style/character clip for video-to-video.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {refs.map((g) => {
+            const src = srcOf(g);
+            return (
+              <div key={g.id} className="overflow-hidden rounded-[10px] border border-border">
+                <div className="relative" style={{ aspectRatio: "16/9", background: gradFor(g.id) }}>
+                  {src && (g.kind === "video"
+                    ? <video src={src} muted className="absolute inset-0 h-full w-full object-cover" />
+                    // eslint-disable-next-line @next/next/no-img-element
+                    : <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />)}
+                  <span className="absolute left-1 top-1 rounded-[4px] bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-white">
+                    {g.role || "ref"}
+                  </span>
+                  <button onClick={() => onRun(() => deleteGeneration(projectId, g.id))}
+                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-xs text-white transition hover:bg-red"
+                    title="Remove reference" aria-label="Remove reference">×</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {adding && <AddRefModal projectId={projectId} studioId={studioId} shot={shot} onClose={() => setAdding(false)} />}
+    </div>
+  );
+}
+
 function StagePanel({
   projectId, studioId, shot, stage, prompt, gens, media, refStartId, refEndId, onRun,
 }: {
@@ -453,10 +591,14 @@ function StagePanel({
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
   const label = stage === "image" ? "Image" : "Video";
   const hue = stage === "image" ? "amber" : "blue";
-  const kept = gens.filter((g) => g.status !== "rejected").length;
-  const start = stage === "image" ? gens.find((g) => g.role === "start") ?? null : null;
-  const end = stage === "image" ? gens.find((g) => g.role === "end") ?? null : null;
-  const take = stage === "video" ? gens.find((g) => g.role === "take" || g.role === "final") ?? null : null;
+  // Reference inputs (v2v driving/style/character clips) live alongside the pool
+  // but are kept out of the candidate/take grid.
+  const refs = stage === "video" ? gens.filter((g) => g.status === "reference") : [];
+  const pool = stage === "video" ? gens.filter((g) => g.status !== "reference") : gens;
+  const kept = pool.filter((g) => g.status !== "rejected").length;
+  const start = stage === "image" ? pool.find((g) => g.role === "start") ?? null : null;
+  const end = stage === "image" ? pool.find((g) => g.role === "end") ?? null : null;
+  const take = stage === "video" ? pool.find((g) => g.role === "take" || g.role === "final") ?? null : null;
   const srcOf = (g: AiGeneration | null) => (g ? media[g.id] ?? g.external_url ?? null : null);
 
   return (
@@ -466,8 +608,12 @@ function StagePanel({
           {stage === "image" ? "◨" : "▶"}
         </span>
         <h4 className="text-sm font-bold text-text">{label} stage</h4>
-        <span className="text-xs text-text-faint">{kept} kept · {gens.length} total</span>
+        <span className="text-xs text-text-faint">{kept} kept · {pool.length} total</span>
       </div>
+
+      {stage === "video" && (
+        <ReferencesPanel projectId={projectId} studioId={studioId} shot={shot} refs={refs} media={media} onRun={onRun} />
+      )}
 
       <div className="mb-3 space-y-2">
         <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
@@ -490,13 +636,13 @@ function StagePanel({
         </Button>
       </div>
 
-      {gens.length === 0 ? (
+      {pool.length === 0 ? (
         <p className="rounded-[10px] border border-dashed border-border py-6 text-center text-xs text-text-faint">
           No {stage === "image" ? "images" : "takes"} yet. Add generations as you make them.
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {gens.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} src={srcOf(g)} onRun={onRun} />)}
+          {pool.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} src={srcOf(g)} onRun={onRun} />)}
         </div>
       )}
 

@@ -166,6 +166,11 @@ export async function addGeneration(
     parent_start_id?: string | null;
     parent_end_id?: string | null;
     generated_by_name?: string | null;
+    // A reference input (v2v driving/style/character clip) rather than a
+    // candidate/take: pass a role + status='reference' to keep it out of the pool.
+    role?: string | null;
+    status?: string | null;
+    kind?: string | null;
   },
 ): Promise<PipelineState> {
   const ctx = await requireStudioContext();
@@ -176,7 +181,9 @@ export async function addGeneration(
       studio_id: ctx.studio.id,
       shot_id: input.shotId,
       stage: input.stage,
-      kind: input.stage === "video" ? "video" : "image",
+      kind: input.kind ?? (input.stage === "video" ? "video" : "image"),
+      role: input.role ?? null,
+      status: input.status ?? undefined,
       prompt_id: input.promptId ?? null,
       prompt: input.prompt ?? null,
       file_path: input.file_path ?? null,
