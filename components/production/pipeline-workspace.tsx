@@ -784,6 +784,14 @@ export function PipelineWorkspace({
   const videoGens = active ? shotGens.get(`${active.id}:video`) ?? [] : [];
   const pickedTake = videoGens.find((g) => g.role === "take" || g.role === "final") ?? null;
 
+  // Input mode tailors the generated flow. Default 'frames' = the classic
+  // image candidates -> Start/End -> video. video_to_video / text_to_video skip
+  // the image stage and go straight to a video generation (v2v / video-first).
+  const inputMode = active?.input_mode ?? "frames";
+  const showImageStage =
+    active?.method !== "live" &&
+    (inputMode === "frames" || inputMode === "image_to_video");
+
   // Representative thumbnail per shot: final take > take > start > any image > any.
   const shotThumb = useMemo(() => {
     const byShot = new Map<string, AiGeneration[]>();
@@ -867,6 +875,17 @@ export function PipelineWorkspace({
                   className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold">
                   {["script", "image", "video", "post", "delivered"].map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
+                {active.method !== "live" && (
+                  <select value={active.input_mode ?? "frames"}
+                    onChange={(e) => run(() => updateShot(projectId, active.id, { input_mode: e.target.value }))}
+                    className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold"
+                    title="How this shot is generated">
+                    <option value="frames">Start + End frames</option>
+                    <option value="image_to_video">Image → video</option>
+                    <option value="video_to_video">Video → video</option>
+                    <option value="text_to_video">Text → video</option>
+                  </select>
+                )}
                 <SendToReviewControl
                   projectId={projectId}
                   shot={active}
@@ -890,15 +909,25 @@ export function PipelineWorkspace({
               </div>
             ) : (
               <>
-                <Flow label="prompt, generate & pick images" />
-                <StagePanel projectId={projectId} studioId={studioId} shot={active} stage="image"
-                  prompt={shotPrompts.get(`${active.id}:image`) ?? null}
-                  gens={imgGens} media={media} refStartId={null} refEndId={null} onRun={run} />
-                <Flow label="lock start + end, then generate video" />
+                {showImageStage && (
+                  <>
+                    <Flow label="prompt, generate & pick images" />
+                    <StagePanel projectId={projectId} studioId={studioId} shot={active} stage="image"
+                      prompt={shotPrompts.get(`${active.id}:image`) ?? null}
+                      gens={imgGens} media={media} refStartId={null} refEndId={null} onRun={run} />
+                  </>
+                )}
+                <Flow label={
+                  showImageStage ? "lock start + end, then generate video"
+                    : inputMode === "video_to_video" ? "add a reference video, then generate"
+                    : "prompt & generate video"
+                } />
                 <StagePanel projectId={projectId} studioId={studioId} shot={active} stage="video"
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
-                  media={media} refStartId={approvedStart?.id ?? null} refEndId={approvedEnd?.id ?? null} onRun={run} />
+                  media={media}
+                  refStartId={showImageStage ? approvedStart?.id ?? null : null}
+                  refEndId={showImageStage ? approvedEnd?.id ?? null : null} onRun={run} />
               </>
             )}
           </div>

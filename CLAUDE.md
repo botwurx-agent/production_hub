@@ -979,3 +979,25 @@ Shot cockpit / Triage) was shown to the operator.
   client DocReview portal branch on surface.kind==='ai_shot'. NEXT for pipeline
   review: site-wide guest "view-only" invites deferred (share links cover
   external review for now).
+- FLEXIBLE INPUTS refinement (migration 0063, foundation BUILT): the pipeline no
+  longer hardwires image candidates -> Start/End -> video. Rationale: broader ICP
+  (film/creative/CGI studios doing look-dev + video-to-video), and the category
+  now does v2v / motion-driven / video-first, confirmed by a Higgsfield MCP
+  capability scan (30+ models, media_import, motion_control, reference elements).
+  - ai_generation_refs (studio/generation_id/ref_generation_id/role/position;
+    is_studio_member RLS): a generation (output) references ANY number of other
+    generations (inputs), each an image OR video, with a role (start | end |
+    motion | style | character | ref). Generalizes the old
+    parent_start_id/parent_end_id (image-only, exactly two); every input stays
+    lineage-tracked (the moat). Actions in pipeline-actions.ts: addGenerationRef /
+    removeGenerationRef / setGenerationRefs.
+  - ai_shots.input_mode (frames | image_to_video | video_to_video | text_to_video,
+    default 'frames'): a per-shot selector in the cockpit header (generated shots)
+    that makes the IMAGE STAGE OPTIONAL. frames/image_to_video show the image
+    candidates -> Start/End stage; video_to_video / text_to_video skip it and go
+    straight to the video stage (video-first / v2v). updateShot gained input_mode.
+  - NEXT (this refinement): a "References" area in the video stage to attach a
+    driving/style/character video (v2v) via ai_generation_refs + record refs on
+    created takes; then Higgsfield import connector, then triage fast-lane, then
+    prompt/style library. Higgsfield generate-in-app = agent-mediated (MCP) or
+    their HTTP API, BYO-account; deferred (organize-first stays intact).

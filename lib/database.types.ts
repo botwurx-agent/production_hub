@@ -1142,6 +1142,7 @@ export type Database = {
           stage: string;
           status: string;
           duration_sec: number | null;
+          input_mode: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -1157,6 +1158,7 @@ export type Database = {
           stage?: string;
           status?: string;
           duration_sec?: number | null;
+          input_mode?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1172,9 +1174,40 @@ export type Database = {
           stage?: string;
           status?: string;
           duration_sec?: number | null;
+          input_mode?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_generation_refs: {
+        Row: {
+          id: string;
+          studio_id: string;
+          generation_id: string;
+          ref_generation_id: string;
+          role: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          generation_id: string;
+          ref_generation_id: string;
+          role?: string;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          generation_id?: string;
+          ref_generation_id?: string;
+          role?: string;
+          position?: number;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -3077,6 +3110,7 @@ export type BillingDocumentLine = Tables<"billing_document_lines">;
 export type BillingDocumentAttachment = Tables<"billing_document_attachments">;
 export type AiScript = Tables<"ai_scripts">;
 export type AiShot = Tables<"ai_shots">;
+export type AiGenerationRef = Tables<"ai_generation_refs">;
 export type AiPrompt = Tables<"ai_prompts">;
 export type AiGeneration = Tables<"ai_generations">;
 export type Notification = Tables<"notifications">;

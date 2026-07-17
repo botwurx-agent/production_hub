@@ -71,6 +71,7 @@ export async function updateShot(
     stage?: string;
     status?: string;
     duration_sec?: number | null;
+    input_mode?: string | null;
   },
 ): Promise<void> {
   await requireStudioContext();
@@ -337,5 +338,79 @@ export async function deleteGeneration(projectId: string, id: string): Promise<v
   await requireStudioContext();
   const supabase = createClient();
   await supabase.from("ai_generations").delete().eq("id", id);
+  rp(projectId);
+}
+
+// ---- Flexible references (polymorphic image|video, roled) ------------------
+// A generation (an output) references any number of other generations (inputs),
+// each an image or video, with a role: start | end | motion | style | character
+// | ref. This is what makes video-to-video / motion-driven / multi-ref flows
+// first-class, while every input stays lineage-tracked.
+
+export async function addGenerationRef(
+  projectId: string,
+  generationId: string,
+  refGenerationId: string,
+  role = "ref",
+): Promise<PipelineState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const { data: last } = await supabase
+    .from("ai_generation_refs")
+    .select("position")
+    .eq("generation_id", generationId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { data, error } = await supabase
+    .from("ai_generation_refs")
+    .insert({
+      studio_id: ctx.studio.id,
+      generation_id: generationId,
+      ref_generation_id: refGenerationId,
+      role,
+      position: (last?.position ?? -1) + 1,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: error?.message ?? "Could not add reference." };
+  rp(projectId);
+  return { id: data.id };
+}
+
+export async function removeGenerationRef(
+  projectId: string,
+  id: string,
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("ai_generation_refs").delete().eq("id", id);
+  rp(projectId);
+}
+
+// Replace a generation's whole reference set in one call (used when a take is
+// created from the shot's assembled inputs).
+export async function setGenerationRefs(
+  projectId: string,
+  generationId: string,
+  refs: { refGenerationId: string; role: string }[],
+): Promise<void> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  await supabase
+    .from("ai_generation_refs")
+    .delete()
+    .eq("generation_id", generationId);
+  if (refs.length) {
+    await supabase.from("ai_generation_refs").insert(
+      refs.map((r, i) => ({
+        studio_id: ctx.studio.id,
+        generation_id: generationId,
+        ref_generation_id: r.refGenerationId,
+        role: r.role,
+        position: i,
+      })),
+    );
+  }
   rp(projectId);
 }
