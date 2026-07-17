@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,10 @@ import {
   uploadFrameImage,
   setFrameAsset,
   clearFrameImage,
+  restoreStoryboard,
 } from "@/app/(app)/projects/[id]/storyboard-actions";
+import { useHistory } from "@/lib/use-history";
+import { toast } from "@/components/ui/toast";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -33,6 +36,9 @@ export type FrameView = {
   notes: string | null;
   signedUrl: string | null;
   image_name: string | null;
+  // Persisted fields carried so a history snapshot can rebuild the frame on undo.
+  storagePath: string | null;
+  mimeType: string | null;
 };
 
 const cell =
@@ -61,16 +67,65 @@ export function StoryboardEditor({
   const [busy, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(boards[0]?.id ?? null);
   const refresh = () => router.refresh();
-  const act = (fn: () => Promise<unknown>) =>
+  const history = useHistory<FrameView[]>();
+  const act = (fn: () => Promise<unknown>) => {
+    if (active) history.capture(snapFrames());
     start(async () => {
       await fn();
       refresh();
     });
+  };
 
   const active = boards.find((b) => b.id === activeId) ?? boards[0] ?? null;
   const activeFrames = active
     ? frames.filter((f) => f.board_id === active.id)
     : [];
+  const snapFrames = () =>
+    frames.filter((f) => active && f.board_id === active.id);
+
+  function doUndo() {
+    if (!active) return;
+    const snap = history.undo(snapFrames());
+    if (!snap) return;
+    const boardId = active.id;
+    start(async () => { await restoreStoryboard(projectId, boardId, snap); refresh(); });
+    toast("Undone");
+  }
+  function doRedo() {
+    if (!active) return;
+    const snap = history.redo(snapFrames());
+    if (!snap) return;
+    const boardId = active.id;
+    start(async () => { await restoreStoryboard(projectId, boardId, snap); refresh(); });
+    toast("Redone");
+  }
+
+  // Reset history when switching storyboards (snapshots are per-board).
+  useEffect(() => {
+    history.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        doUndo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        doRedo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, frames]);
 
   function newStoryboard() {
     start(async () => {
@@ -155,6 +210,24 @@ export function StoryboardEditor({
               <span className="shrink-0 text-xs font-semibold text-text-faint">
                 {activeFrames.length} {activeFrames.length === 1 ? "frame" : "frames"}
               </span>
+              <button
+                onClick={doUndo}
+                disabled={!history.canUndo}
+                title="Undo (Cmd/Ctrl+Z)"
+                aria-label="Undo"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border border-border bg-surface text-text-muted transition hover:text-text disabled:opacity-40"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
+              </button>
+              <button
+                onClick={doRedo}
+                disabled={!history.canRedo}
+                title="Redo (Cmd/Ctrl+Shift+Z)"
+                aria-label="Redo"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border border-border bg-surface text-text-muted transition hover:text-text disabled:opacity-40"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+              </button>
               <DocReviewButton
                 projectId={projectId}
                 kind="storyboard"
@@ -224,6 +297,7 @@ export function StoryboardEditor({
                   busy={busy}
                   onChange={refresh}
                   onStructural={act}
+                  onCapture={() => history.capture(snapFrames())}
                 />
               ))}
               <button
@@ -253,6 +327,7 @@ function FrameCard({
   busy,
   onChange,
   onStructural,
+  onCapture,
 }: {
   projectId: string;
   frame: FrameView;
@@ -265,6 +340,7 @@ function FrameCard({
   busy: boolean;
   onChange: () => void;
   onStructural: (fn: () => Promise<unknown>) => void;
+  onCapture: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, startUpload] = useTransition();
@@ -295,7 +371,7 @@ function FrameCard({
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <input
           defaultValue={frame.scene ?? ""}
-          onBlur={(e) => updateFrame(projectId, frame.id, { scene: e.target.value })}
+          onBlur={(e) => { if ((e.target.value || null) !== (frame.scene ?? null)) onCapture(); updateFrame(projectId, frame.id, { scene: e.target.value }); }}
           placeholder="Sc."
           className="w-12 rounded-[6px] border border-transparent bg-transparent px-1.5 py-0.5 text-xs font-semibold text-text-muted outline-none hover:border-border focus:border-border-strong"
         />
@@ -422,19 +498,19 @@ function FrameCard({
       <div className="flex flex-col gap-1.5 p-3">
         <textarea
           defaultValue={frame.description ?? ""}
-          onBlur={(e) => updateFrame(projectId, frame.id, { description: e.target.value })}
+          onBlur={(e) => { if ((e.target.value || null) !== (frame.description ?? null)) onCapture(); updateFrame(projectId, frame.id, { description: e.target.value }); }}
           placeholder="Description…"
           className={`${cell} min-h-[46px]`}
         />
         <input
           defaultValue={frame.sound ?? ""}
-          onBlur={(e) => updateFrame(projectId, frame.id, { sound: e.target.value })}
+          onBlur={(e) => { if ((e.target.value || null) !== (frame.sound ?? null)) onCapture(); updateFrame(projectId, frame.id, { sound: e.target.value }); }}
           placeholder="Sound / VO…"
           className={cell}
         />
         <input
           defaultValue={frame.notes ?? ""}
-          onBlur={(e) => updateFrame(projectId, frame.id, { notes: e.target.value })}
+          onBlur={(e) => { if ((e.target.value || null) !== (frame.notes ?? null)) onCapture(); updateFrame(projectId, frame.id, { notes: e.target.value }); }}
           placeholder="Video / motion…"
           className={cell}
         />

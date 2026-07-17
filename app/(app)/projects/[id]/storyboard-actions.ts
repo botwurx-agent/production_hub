@@ -137,6 +137,66 @@ export async function swapFrames(
   rp(projectId);
 }
 
+// Undo/redo: replay a snapshot of one storyboard's frames. Reconciles the DB for
+// that board_id: upsert (original ids so images/refs survive), delete extras.
+type FrameSnap = {
+  id: string;
+  board_id: string;
+  position: number;
+  scene: string | null;
+  description: string | null;
+  sound: string | null;
+  notes: string | null;
+  storagePath: string | null;
+  mimeType: string | null;
+  image_name: string | null;
+  asset_id?: string | null;
+};
+
+export async function restoreStoryboard(
+  projectId: string,
+  boardId: string,
+  frames: FrameSnap[]
+): Promise<StoryboardState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const studioId = ctx.studio.id;
+
+  const rows = frames.map((f) => ({
+    id: f.id,
+    studio_id: studioId,
+    board_id: boardId,
+    position: f.position,
+    scene: f.scene,
+    description: f.description,
+    sound: f.sound,
+    notes: f.notes,
+    storage_path: f.storagePath,
+    mime_type: f.mimeType,
+    image_name: f.image_name,
+    asset_id: f.asset_id ?? null,
+  }));
+  if (rows.length) {
+    const { error } = await supabase
+      .from("storyboard_frames")
+      .upsert(rows, { onConflict: "id" });
+    if (error) return { error: error.message };
+  }
+
+  const { data: existing } = await supabase
+    .from("storyboard_frames")
+    .select("id")
+    .eq("board_id", boardId);
+  const keep = new Set(rows.map((r) => r.id));
+  const del = (existing ?? []).map((r) => r.id).filter((id) => !keep.has(id));
+  if (del.length) {
+    await supabase.from("storyboard_frames").delete().in("id", del);
+  }
+
+  rp(projectId);
+  return null;
+}
+
 export async function uploadFrameImage(
   formData: FormData
 ): Promise<StoryboardState> {

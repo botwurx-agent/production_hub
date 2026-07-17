@@ -87,6 +87,8 @@ export default async function ShotListPage({
       tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
       signedUrl: c.storage_path ? (signed.get(c.storage_path) ?? null) : null,
       image_name: c.image_name,
+      storagePath: c.storage_path,
+      mimeType: c.mime_type,
     }));
   }
 

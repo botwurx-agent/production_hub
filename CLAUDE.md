@@ -399,7 +399,20 @@ implemented (out of strict order, driven by the operator's real needs).
     startMove/startResize/line-drag, pushed at pointer-up ONLY if the pointer
     actually moved (>0.5px, so a plain click records nothing); discrete ops
     (connect/delete/attach/detach/reorder/note+heading blur) push immediately.
-    NEXT (same engine): roll onto the shot list + storyboard editors.
+  - UNDO/REDO rolled onto the SHOT LIST + STORYBOARD editors (generic engine):
+    lib/use-history.ts (useHistory<T>, same stacks/cap as boards) + reconcile
+    actions restoreShotBoard (board-actions.ts, groups+cards) and
+    restoreStoryboard (storyboard-actions.ts, one board's frames). CardView +
+    FrameView gained storagePath/mimeType so image rows rebuild on undo. Both
+    editors are prop-based (server state) + a central act()/bulk() dispatcher:
+    capture at the top of act/bulk (bulk = ONE undo), and at each field on-blur
+    ONLY when the normalized value changed (guarded, so an untouched blur records
+    nothing) via an onCapture prop threaded into ShotRow/FrameCard. doUndo/doRedo
+    replay the snapshot through the reconcile action + router.refresh() + toast;
+    same Cmd/Ctrl+Z / Shift+Z keyboard + toolbar buttons. Shot list needs no
+    reset (one board/project); storyboard resets history on active-board switch
+    (per-board frame snapshots). Wiring done via subagents against a precise spec,
+    reviewed + build-verified.
   - Card selection is LIFTED to the workspace (selected/onSelect props on
     BoardCanvas) so it can render contextual panels over the tool rail, same as
     the line panel. NOTE cards are now rich text (contentEditable storing HTML;

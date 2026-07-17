@@ -305,6 +305,114 @@ export async function deleteCard(projectId: string, id: string): Promise<void> {
   rp(projectId);
 }
 
+// Undo/redo: replay a snapshot of the shot board (its lists + shots). Reconciles
+// the DB to match: upsert groups then cards (original ids so references survive),
+// delete extras. Column ordering by `position` is part of each row.
+type ShotGroupSnap = {
+  id: string;
+  position: number;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+};
+type ShotCardSnap = {
+  id: string;
+  group_id: string;
+  position: number;
+  code: string | null;
+  day: string | null;
+  flavor_name: string | null;
+  flavor_hue: string | null;
+  storagePath: string | null;
+  mimeType: string | null;
+  image_name: string | null;
+  description: string | null;
+  vo: string | null;
+  shot_size: string | null;
+  shot_type: string | null;
+  movement: string | null;
+  asset_id: string | null;
+  tags: string[];
+};
+
+export async function restoreShotBoard(
+  projectId: string,
+  groups: ShotGroupSnap[],
+  cards: ShotCardSnap[]
+): Promise<BoardActionState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const studioId = ctx.studio.id;
+
+  const groupRows = groups.map((g) => ({
+    id: g.id,
+    studio_id: studioId,
+    project_id: projectId,
+    position: g.position,
+    title: g.title,
+    subtitle: g.subtitle,
+    description: g.description,
+  }));
+  if (groupRows.length) {
+    const { error } = await supabase
+      .from("shot_groups")
+      .upsert(groupRows, { onConflict: "id" });
+    if (error) return { error: error.message };
+  }
+
+  const cardRows = cards.map((c) => ({
+    id: c.id,
+    studio_id: studioId,
+    group_id: c.group_id,
+    position: c.position,
+    code: c.code,
+    day: c.day,
+    flavor_name: c.flavor_name,
+    flavor_hue: c.flavor_hue,
+    storage_path: c.storagePath,
+    mime_type: c.mimeType,
+    image_name: c.image_name,
+    description: c.description,
+    vo: c.vo,
+    shot_size: c.shot_size,
+    shot_type: c.shot_type,
+    movement: c.movement,
+    asset_id: c.asset_id,
+    tags: c.tags,
+  }));
+  if (cardRows.length) {
+    const { error } = await supabase
+      .from("shot_cards")
+      .upsert(cardRows, { onConflict: "id" });
+    if (error) return { error: error.message };
+  }
+
+  const { data: existingGroups } = await supabase
+    .from("shot_groups")
+    .select("id")
+    .eq("project_id", projectId);
+  const groupIds = (existingGroups ?? []).map((g) => g.id);
+  const keepGroups = new Set(groupRows.map((g) => g.id));
+
+  const { data: existingCards } = groupIds.length
+    ? await supabase.from("shot_cards").select("id").in("group_id", groupIds)
+    : { data: [] as { id: string }[] };
+  const keepCards = new Set(cardRows.map((c) => c.id));
+  const delCards = (existingCards ?? [])
+    .map((c) => c.id)
+    .filter((id) => !keepCards.has(id));
+  if (delCards.length) {
+    await supabase.from("shot_cards").delete().in("id", delCards);
+  }
+  const delGroups = groupIds.filter((id) => !keepGroups.has(id));
+  if (delGroups.length) {
+    await supabase.from("shot_groups").delete().in("id", delGroups);
+  }
+
+  rp(projectId);
+  return null;
+}
+
 // Duplicates a shot into the same list, right after the source.
 export async function duplicateCard(
   projectId: string,

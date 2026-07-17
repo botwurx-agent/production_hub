@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,7 +16,10 @@ import {
   uploadCardImage,
   setCardAsset,
   clearCardAsset,
+  restoreShotBoard,
 } from "@/app/(app)/projects/[id]/production/board-actions";
+import { useHistory } from "@/lib/use-history";
+import { toast } from "@/components/ui/toast";
 import { DocReviewButton } from "@/components/review/doc-review-button";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -40,6 +43,9 @@ export type CardView = {
   tags: string[];
   signedUrl: string | null;
   image_name: string | null;
+  // Persisted fields carried so a history snapshot can rebuild the row on undo.
+  storagePath: string | null;
+  mimeType: string | null;
 };
 
 export type PickableAsset = { id: string; name: string; signedUrl: string | null };
@@ -119,7 +125,45 @@ export function ShotBoardEditor({
   const router = useRouter();
   const [busy, start] = useTransition();
   const refresh = () => router.refresh();
-  const act = (fn: () => Promise<unknown>) => start(async () => { await fn(); refresh(); });
+  const history = useHistory<{ groups: ShotGroup[]; cards: CardView[] }>();
+  const act = (fn: () => Promise<unknown>) => {
+    history.capture({ groups, cards });
+    start(async () => { await fn(); refresh(); });
+  };
+
+  function doUndo() {
+    const snap = history.undo({ groups, cards });
+    if (!snap) return;
+    start(async () => { await restoreShotBoard(projectId, snap.groups, snap.cards); refresh(); });
+    toast("Undone");
+  }
+  function doRedo() {
+    const snap = history.redo({ groups, cards });
+    if (!snap) return;
+    start(async () => { await restoreShotBoard(projectId, snap.groups, snap.cards); refresh(); });
+    toast("Redone");
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        doUndo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        doRedo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, cards]);
 
   const [activeId, setActiveId] = useState<string | null>(groups[0]?.id ?? null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -153,6 +197,7 @@ export function ShotBoardEditor({
   }
 
   function bulk(fn: (id: string) => Promise<unknown>) {
+    history.capture({ groups, cards });
     const ids = [...selected];
     start(async () => {
       for (const id of ids) await fn(id);
@@ -188,19 +233,41 @@ export function ShotBoardEditor({
       </datalist>
 
       <div className="flex items-center justify-between gap-3">
-        <button
-          onClick={() => setCoverOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted transition hover:text-text"
-        >
-          <svg
-            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            className={`transition-transform ${coverOpen ? "rotate-90" : ""}`}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCoverOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted transition hover:text-text"
           >
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-          Cover
-        </button>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className={`transition-transform ${coverOpen ? "rotate-90" : ""}`}
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+            Cover
+          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={doUndo}
+              disabled={!history.canUndo}
+              title="Undo (Cmd/Ctrl+Z)"
+              aria-label="Undo"
+              className="grid h-8 w-8 place-items-center rounded-[8px] border border-border bg-surface text-text-muted transition hover:text-text disabled:opacity-40"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg>
+            </button>
+            <button
+              onClick={doRedo}
+              disabled={!history.canRedo}
+              title="Redo (Cmd/Ctrl+Shift+Z)"
+              aria-label="Redo"
+              className="grid h-8 w-8 place-items-center rounded-[8px] border border-border bg-surface text-text-muted transition hover:text-text disabled:opacity-40"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
+            </button>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <DocReviewButton
             projectId={projectId}
@@ -247,7 +314,7 @@ export function ShotBoardEditor({
             <Labeled label="Title">
               <input
                 defaultValue={board?.title ?? ""}
-                onBlur={(e) => saveBoard(projectId, { title: e.target.value || null })}
+                onBlur={(e) => { if ((e.target.value || null) !== (board?.title ?? null)) history.capture({ groups, cards }); saveBoard(projectId, { title: e.target.value || null }); }}
                 placeholder={projectTitle}
                 className={field}
               />
@@ -255,7 +322,7 @@ export function ShotBoardEditor({
             <Labeled label="Subtitle">
               <input
                 defaultValue={board?.subtitle ?? ""}
-                onBlur={(e) => saveBoard(projectId, { subtitle: e.target.value || null })}
+                onBlur={(e) => { if ((e.target.value || null) !== (board?.subtitle ?? null)) history.capture({ groups, cards }); saveBoard(projectId, { subtitle: e.target.value || null }); }}
                 placeholder="Shot list & visual reference"
                 className={field}
               />
@@ -266,7 +333,7 @@ export function ShotBoardEditor({
               <Labeled key={key} label={label}>
                 <input
                   defaultValue={(board?.[key] as string) ?? ""}
-                  onBlur={(e) => saveBoard(projectId, { [key]: e.target.value || null })}
+                  onBlur={(e) => { if ((e.target.value || null) !== ((board?.[key] as string | null | undefined) ?? null)) history.capture({ groups, cards }); saveBoard(projectId, { [key]: e.target.value || null }); }}
                   className={field}
                 />
               </Labeled>
@@ -345,14 +412,14 @@ export function ShotBoardEditor({
                   <input
                     key={active.id}
                     defaultValue={active.title}
-                    onBlur={(e) => updateGroup(projectId, active.id, { title: e.target.value })}
+                    onBlur={(e) => { if ((e.target.value || null) !== (active.title ?? null)) history.capture({ groups, cards }); updateGroup(projectId, active.id, { title: e.target.value }); }}
                     placeholder="Untitled list"
                     className="w-full rounded-[8px] border border-transparent bg-transparent px-2 py-1 text-lg font-bold text-text outline-none hover:border-border focus:border-border-strong focus:bg-surface"
                   />
                   <input
                     key={`${active.id}-sub`}
                     defaultValue={active.subtitle ?? ""}
-                    onBlur={(e) => updateGroup(projectId, active.id, { subtitle: e.target.value })}
+                    onBlur={(e) => { if ((e.target.value || null) !== (active.subtitle ?? null)) history.capture({ groups, cards }); updateGroup(projectId, active.id, { subtitle: e.target.value }); }}
                     placeholder="Label (optional)"
                     className={cell}
                   />
@@ -468,6 +535,7 @@ export function ShotBoardEditor({
                     onToggleSelect={() => toggleCard(c.id)}
                     onChange={refresh}
                     onStructural={act}
+                    onCapture={() => history.capture({ groups, cards })}
                   />
                 ))}
               </div>
@@ -497,6 +565,7 @@ function ShotRow({
   onToggleSelect,
   onChange,
   onStructural,
+  onCapture,
 }: {
   projectId: string;
   card: CardView;
@@ -507,6 +576,7 @@ function ShotRow({
   onToggleSelect: () => void;
   onChange: () => void;
   onStructural: (fn: () => Promise<unknown>) => void;
+  onCapture: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, startUpload] = useTransition();
@@ -652,7 +722,7 @@ function ShotRow({
         </div>
         <textarea
           defaultValue={card.description ?? ""}
-          onBlur={(e) => updateCard(projectId, card.id, { description: e.target.value })}
+          onBlur={(e) => { if ((e.target.value || null) !== (card.description ?? null)) onCapture(); updateCard(projectId, card.id, { description: e.target.value }); }}
           placeholder="Description..."
           className={`${field} min-h-[52px]`}
         />
@@ -661,7 +731,7 @@ function ShotRow({
             list="shot-sizes"
             value={size}
             onChange={(e) => setSize(e.target.value)}
-            onBlur={(e) => updateCard(projectId, card.id, { shot_size: e.target.value })}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.shot_size ?? null)) onCapture(); updateCard(projectId, card.id, { shot_size: e.target.value }); }}
             placeholder="Shot size..."
             className={field}
             style={chipStyle(size, COL.size)}
@@ -670,7 +740,7 @@ function ShotRow({
             list="shot-types"
             value={stype}
             onChange={(e) => setSType(e.target.value)}
-            onBlur={(e) => updateCard(projectId, card.id, { shot_type: e.target.value })}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.shot_type ?? null)) onCapture(); updateCard(projectId, card.id, { shot_type: e.target.value }); }}
             placeholder="Shot type..."
             className={field}
             style={chipStyle(stype, COL.type)}
@@ -679,7 +749,7 @@ function ShotRow({
             list="shot-movements"
             value={move}
             onChange={(e) => setMove(e.target.value)}
-            onBlur={(e) => updateCard(projectId, card.id, { movement: e.target.value })}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.movement ?? null)) onCapture(); updateCard(projectId, card.id, { movement: e.target.value }); }}
             placeholder="Camera movement..."
             className={field}
             style={chipStyle(move, COL.move)}
@@ -688,13 +758,13 @@ function ShotRow({
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             defaultValue={card.code ?? ""}
-            onBlur={(e) => updateCard(projectId, card.id, { code: e.target.value })}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.code ?? null)) onCapture(); updateCard(projectId, card.id, { code: e.target.value }); }}
             placeholder="Code (1A)"
             className={`${cell} w-20 border-border`}
           />
           <input
             defaultValue={card.day ?? ""}
-            onBlur={(e) => updateCard(projectId, card.id, { day: e.target.value })}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.day ?? null)) onCapture(); updateCard(projectId, card.id, { day: e.target.value }); }}
             placeholder="Day"
             className={`${cell} w-20 border-border`}
           />

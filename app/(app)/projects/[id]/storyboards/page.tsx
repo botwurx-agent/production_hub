@@ -64,6 +64,8 @@ export default async function ProjectStoryboardsPage({
       notes: f.notes,
       signedUrl: f.storage_path ? (signed.get(f.storage_path) ?? null) : null,
       image_name: f.image_name,
+      storagePath: f.storage_path,
+      mimeType: f.mime_type,
     }));
   }
 
