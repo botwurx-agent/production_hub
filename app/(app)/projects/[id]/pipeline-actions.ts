@@ -295,6 +295,18 @@ export async function setGenerationStatus(
   rp(projectId);
 }
 
+// Shortlist star (triage): mark a finalist without committing it as the pick.
+export async function setGenerationStarred(
+  projectId: string,
+  id: string,
+  starred: boolean,
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("ai_generations").update({ starred }).eq("id", id);
+  rp(projectId);
+}
+
 // Tag start/end (image) or take/final (video). start+end are unique per shot.
 export async function setGenerationRole(
   projectId: string,

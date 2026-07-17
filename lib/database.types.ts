@@ -1281,6 +1281,7 @@ export type Database = {
           generated_by_name: string | null;
           approved_by: string | null;
           approved_at: string | null;
+          starred: boolean;
           created_at: string;
         };
         Insert: {
@@ -1293,6 +1294,7 @@ export type Database = {
           kind?: string;
           status?: string;
           role?: string | null;
+          starred?: boolean;
           file_path?: string | null;
           external_url?: string | null;
           thumb_url?: string | null;
@@ -1325,6 +1327,7 @@ export type Database = {
           kind?: string;
           status?: string;
           role?: string | null;
+          starred?: boolean;
           file_path?: string | null;
           external_url?: string | null;
           thumb_url?: string | null;

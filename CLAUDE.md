@@ -902,8 +902,9 @@ Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07
 - Security: Next.js bumped 14.2.15 -> 14.2.35 (patches critical Server Actions
   DoS + middleware SSRF). Remaining audit items need a Next 15/16 (React 19)
   major upgrade, deferred. Supabase leaked-password protection = a dashboard
-  toggle (still to flip). Migrations now through 0061 (0059 project_tasks, 0060
-  billing_document_signatures, 0061 billing_proposals_style_attachments).
+  toggle (still to flip). Migrations now through 0064 (0059 project_tasks, 0060
+  billing_document_signatures, 0061 billing_proposals_style_attachments, 0062
+  review_due_dates, 0063 ai_flexible_references, 0064 ai_generation_starred).
 
 ### Review-round polish (Tier 1 #3) — due dates + auto-reminders BUILT
 Migration 0062 added `due_date` + `last_reminded_at` + `reminder_count` to
@@ -1020,7 +1021,27 @@ Shot cockpit / Triage) was shown to the operator.
     so a fully-automatic "sync my whole pool" button is not buildable on their API
     today. The paste-links import gets the value now; the agent/MCP auto-pull is a
     later build tied to the parked BYO-Claude direction.
+  - TRIAGE FAST-LANE (BUILT, migration 0064 = ai_generations.starred): the fan-out
+    fast lane for judging a batch. A "Triage N" button on each StagePanel pool
+    (image or video, shown when >1 candidate) opens a FULL-SCREEN neutral-dark
+    overlay (components/production/triage-view.tsx, portaled to body; neutral bg
+    regardless of theme per the asset-review principle). Keyboard-first: ← →
+    (or j/k) move, x reject/restore, s star, 1/2 tag Start/End (image), Enter
+    pick take (video), c add-to-compare, esc close. Decisions are OPTIMISTIC
+    (instant local override merged over the server row, persisted in the
+    background via setGenerationStatus/setGenerationStarred/setGenerationRole,
+    reconciled when the RSC payload refreshes). STAR is a shortlist tier between
+    kept and the final pick (new `starred` column, orthogonal to status + role)
+    so you narrow 100 -> a few -> the one. Filter chips (All/Kept/Starred/
+    Rejected w/ counts) + a per-model filter; a big object-contain stage (video
+    autoplays w/ controls); a provenance sidebar (prompt + platform/model/seed/
+    etc + open-original); a bottom filmstrip (status/star/role badges, click to
+    focus, auto-scroll). COMPARE mode: pick up to 4 (c or the Compare toggle) and
+    view them side-by-side, each with its own pick/star buttons — for choosing
+    between near-identical takes. Reuses the existing role/status actions; only
+    setGenerationStarred is new. Auto-advance on reject only in the All filter
+    (in Kept the item leaves the list, so the index already lands on the next).
   - NEXT (this refinement): record refs on created takes (references live at shot
-    level today); then triage fast-lane, then prompt/style library. Higgsfield
-    generate-in-app = agent-mediated (MCP) or their HTTP API, BYO-account;
-    deferred (organize-first stays intact).
+    level today); then prompt/style library. Higgsfield generate-in-app =
+    agent-mediated (MCP) or their HTTP API, BYO-account; deferred (organize-first
+    stays intact).

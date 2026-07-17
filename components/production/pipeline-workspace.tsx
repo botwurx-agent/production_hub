@@ -23,6 +23,7 @@ import {
 } from "@/app/(app)/projects/[id]/pipeline-actions";
 import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
+import { TriageView } from "@/components/production/triage-view";
 import type { AiScript, AiShot, AiPrompt, AiGeneration } from "@/lib/database.types";
 
 type Stage = "image" | "video";
@@ -727,6 +728,7 @@ function StagePanel({
   const [pModel, setPModel] = useState(prompt?.target_model ?? "");
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [triaging, setTriaging] = useState(false);
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
   const label = stage === "image" ? "Image" : "Video";
   const hue = stage === "image" ? "amber" : "blue";
@@ -771,6 +773,17 @@ function StagePanel({
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-xs text-text-muted">{stage === "image" ? "Candidates — tag a Start + End" : "Takes — pick one"}</p>
         <div className="flex items-center gap-2">
+          {pool.length > 1 && (
+            <button onClick={() => setTriaging(true)}
+              className="inline-flex items-center gap-1.5 rounded-[9px] px-2.5 py-1 text-xs font-bold text-white transition"
+              style={{ background: `var(--h-${hue})` }}
+              title="Judge the batch fast: keyboard-driven approve / star / pick + compare">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="m14 17 2 2 4-4" />
+              </svg>
+              Triage {pool.length}
+            </button>
+          )}
           {stage === "video" && (
             <button onClick={() => setImporting(true)}
               className="inline-flex items-center gap-1.5 rounded-[9px] border border-border px-2.5 py-1 text-xs font-bold text-text transition hover:border-accent hover:text-accent"
@@ -827,6 +840,10 @@ function StagePanel({
       {importing && (
         <ImportModal projectId={projectId} shot={shot} stage={stage} basePrompt={pText}
           onClose={() => setImporting(false)} onDone={() => router.refresh()} />
+      )}
+      {triaging && (
+        <TriageView projectId={projectId} stage={stage} shotId={shot.id}
+          items={pool} media={media} onClose={() => setTriaging(false)} />
       )}
     </div>
   );
