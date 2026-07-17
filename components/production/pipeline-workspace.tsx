@@ -24,7 +24,8 @@ import {
 import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
 import { TriageView } from "@/components/production/triage-view";
-import type { AiScript, AiShot, AiPrompt, AiGeneration } from "@/lib/database.types";
+import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
+import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
 
 type Stage = "image" | "video";
 
@@ -716,10 +717,11 @@ function ImportModal({
 }
 
 function StagePanel({
-  projectId, studioId, shot, stage, prompt, gens, media, refStartId, refEndId, onRun,
+  projectId, studioId, shot, stage, prompt, gens, media, library, refStartId, refEndId, onRun,
 }: {
   projectId: string; studioId: string; shot: AiShot; stage: Stage;
   prompt: AiPrompt | null; gens: AiGeneration[]; media: Record<string, string>;
+  library: AiPromptLibraryEntry[];
   refStartId: string | null; refEndId: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
 }) {
@@ -763,6 +765,18 @@ function StagePanel({
         <textarea value={pText} onChange={(e) => setPText(e.target.value)}
           onBlur={() => savePrompt(projectId, shot.id, stage, { text: pText })}
           rows={2} placeholder={`Base ${label.toLowerCase()} prompt…`} className={field} />
+        <LibraryBar
+          projectId={projectId}
+          stage={stage}
+          entries={library}
+          currentPrompt={pText}
+          onInsert={(text) => { setPText(text); savePrompt(projectId, shot.id, stage, { text }); }}
+          onAppend={(text) => {
+            const next = pText.trim() ? `${pText.trim()}\n\n${text}` : text;
+            setPText(next);
+            savePrompt(projectId, shot.id, stage, { text: next });
+          }}
+        />
         <input list={`m-${stage}`} value={pModel} onChange={(e) => setPModel(e.target.value)}
           onBlur={() => savePrompt(projectId, shot.id, stage, { target_model: pModel || null })}
           placeholder={`Default model (${models[0]})`} className={field} />
@@ -1041,7 +1055,7 @@ function SendToReviewControl({
 // ---- Workspace --------------------------------------------------------------
 
 export function PipelineWorkspace({
-  projectId, studioId, script, shots, prompts, generations, media, reviewingShotIds = [],
+  projectId, studioId, script, shots, prompts, generations, media, library = [], reviewingShotIds = [],
 }: {
   projectId: string;
   studioId: string;
@@ -1050,6 +1064,7 @@ export function PipelineWorkspace({
   prompts: AiPrompt[];
   generations: AiGeneration[];
   media: Record<string, string>;
+  library?: AiPromptLibraryEntry[];
   reviewingShotIds?: string[];
 }) {
   const router = useRouter();
@@ -1139,6 +1154,7 @@ export function PipelineWorkspace({
           <span className="grid h-6 w-6 place-items-center rounded-[7px]" style={{ background: "var(--h-indigo-bg)", color: "var(--h-indigo)" }}>✎</span>
           Script <span className="text-xs font-normal text-text-faint">{scriptOpen ? "hide" : "edit"}</span>
         </button>
+        <LibraryButton projectId={projectId} entries={library} />
         <span className="flex-1" />
         <Button size="sm" onClick={() => newShot("generated")}>+ Generated shot</Button>
         <Button size="sm" variant="secondary" onClick={() => newShot("live")}>+ Live shot</Button>
@@ -1232,7 +1248,7 @@ export function PipelineWorkspace({
                     <Flow label="prompt, generate & pick images" />
                     <StagePanel projectId={projectId} studioId={studioId} shot={active} stage="image"
                       prompt={shotPrompts.get(`${active.id}:image`) ?? null}
-                      gens={imgGens} media={media} refStartId={null} refEndId={null} onRun={run} />
+                      gens={imgGens} media={media} library={library} refStartId={null} refEndId={null} onRun={run} />
                   </>
                 )}
                 <Flow label={
@@ -1243,7 +1259,7 @@ export function PipelineWorkspace({
                 <StagePanel projectId={projectId} studioId={studioId} shot={active} stage="video"
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
-                  media={media}
+                  media={media} library={library}
                   refStartId={showImageStage ? approvedStart?.id ?? null : null}
                   refEndId={showImageStage ? approvedEnd?.id ?? null : null} onRun={run} />
               </>

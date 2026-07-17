@@ -902,9 +902,10 @@ Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07
 - Security: Next.js bumped 14.2.15 -> 14.2.35 (patches critical Server Actions
   DoS + middleware SSRF). Remaining audit items need a Next 15/16 (React 19)
   major upgrade, deferred. Supabase leaked-password protection = a dashboard
-  toggle (still to flip). Migrations now through 0064 (0059 project_tasks, 0060
+  toggle (still to flip). Migrations now through 0065 (0059 project_tasks, 0060
   billing_document_signatures, 0061 billing_proposals_style_attachments, 0062
-  review_due_dates, 0063 ai_flexible_references, 0064 ai_generation_starred).
+  review_due_dates, 0063 ai_flexible_references, 0064 ai_generation_starred, 0065
+  ai_prompt_library).
 
 ### Review-round polish (Tier 1 #3) — due dates + auto-reminders BUILT
 Migration 0062 added `due_date` + `last_reminded_at` + `reminder_count` to
@@ -1041,7 +1042,26 @@ Shot cockpit / Triage) was shown to the operator.
     between near-identical takes. Reuses the existing role/status actions; only
     setGenerationStarred is new. Auto-advance on reject only in the All filter
     (in Kept the item leaves the list, so the index already lands on the next).
+  - PROMPT / STYLE LIBRARY (BUILT, migration 0065 = ai_prompt_library): reusable
+    prompts + STYLE TOKENS (a look fragment carried across shots for consistency),
+    so you're not retyping a 200-word prompt every batch and a whole job shares
+    one look. ai_prompt_library (studio_id/project_id nullable/kind prompt|style/
+    name/body/stage nullable/target_model; is_studio_member RLS). project_id null =
+    studio-wide (follows you across projects); set = this project's look. The page
+    loads library rows (studio-wide + this project) and passes them down.
+    components/production/prompt-library.tsx: LibraryButton (top control, opens a
+    ManagerModal = full CRUD, grouped Style looks / Prompts, scope + stage badges,
+    EntryEditor add/edit w/ kind + name + body + stage + model + scope) and
+    LibraryBar (in each StagePanel's working-prompt block: style looks as
+    click-to-append chips that show ✓ when already applied, a "Use a saved prompt"
+    dropdown that REPLACES the working prompt, and a "Save current →" that opens
+    the inline EntryEditor prefilled with the current prompt). Applying a style
+    appends its body (dedup: skipped if already present) and persists via the
+    existing savePrompt; entries filter to the stage (stage null = either).
+    Actions saveLibraryEntry/deleteLibraryEntry in pipeline-actions.ts. NOTE: no
+    version-history tree yet (editing updates in place; updated_at tracks);
+    deferred.
   - NEXT (this refinement): record refs on created takes (references live at shot
-    level today); then prompt/style library. Higgsfield generate-in-app =
-    agent-mediated (MCP) or their HTTP API, BYO-account; deferred (organize-first
-    stays intact).
+    level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
+    API, BYO-account; deferred (organize-first stays intact). The organize-the-
+    fan-out trio (flexible refs + import + triage + library) is now complete.

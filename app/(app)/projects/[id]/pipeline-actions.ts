@@ -452,6 +452,77 @@ export async function importFromHiggsfield(
   return { imported: rows.length, failed };
 }
 
+// ---- Prompt / style library ------------------------------------------------
+// Reusable prompts + style tokens (a look fragment carried across shots). An
+// entry is studio-wide (scope 'studio' -> project_id null) or specific to this
+// project's look (scope 'project'). kind 'prompt' | 'style'; stage null = any.
+
+export async function saveLibraryEntry(
+  projectId: string,
+  input: {
+    id?: string | null;
+    kind: "prompt" | "style";
+    name: string;
+    body: string;
+    stage?: "image" | "video" | null;
+    target_model?: string | null;
+    scope: "studio" | "project";
+  },
+): Promise<PipelineState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const name = input.name.trim();
+  const body = input.body.trim();
+  if (!body) return { error: "Add the prompt/style text." };
+  const project_id = input.scope === "project" ? projectId : null;
+
+  if (input.id) {
+    const { error } = await supabase
+      .from("ai_prompt_library")
+      .update({
+        kind: input.kind,
+        name,
+        body,
+        stage: input.stage ?? null,
+        target_model: input.target_model ?? null,
+        project_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.id);
+    if (error) return { error: error.message };
+    rp(projectId);
+    return { id: input.id };
+  }
+
+  const { data, error } = await supabase
+    .from("ai_prompt_library")
+    .insert({
+      studio_id: ctx.studio.id,
+      project_id,
+      kind: input.kind,
+      name: name || (input.kind === "style" ? "Untitled style" : "Untitled prompt"),
+      body,
+      stage: input.stage ?? null,
+      target_model: input.target_model ?? null,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: error?.message ?? "Could not save." };
+  rp(projectId);
+  return { id: data.id };
+}
+
+export async function deleteLibraryEntry(
+  projectId: string,
+  id: string,
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await supabase.from("ai_prompt_library").delete().eq("id", id);
+  rp(projectId);
+}
+
 // ---- Flexible references (polymorphic image|video, roled) ------------------
 // A generation (an output) references any number of other generations (inputs),
 // each an image or video, with a role: start | end | motion | style | character

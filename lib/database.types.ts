@@ -1211,6 +1211,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      ai_prompt_library: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string | null;
+          kind: string;
+          name: string;
+          body: string;
+          stage: string | null;
+          target_model: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id?: string | null;
+          kind?: string;
+          name?: string;
+          body?: string;
+          stage?: string | null;
+          target_model?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string | null;
+          kind?: string;
+          name?: string;
+          body?: string;
+          stage?: string | null;
+          target_model?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       ai_prompts: {
         Row: {
           id: string;
@@ -3115,6 +3157,7 @@ export type AiScript = Tables<"ai_scripts">;
 export type AiShot = Tables<"ai_shots">;
 export type AiGenerationRef = Tables<"ai_generation_refs">;
 export type AiPrompt = Tables<"ai_prompts">;
+export type AiPromptLibraryEntry = Tables<"ai_prompt_library">;
 export type AiGeneration = Tables<"ai_generations">;
 export type Notification = Tables<"notifications">;
 export type EmailAccount = Tables<"email_accounts">;

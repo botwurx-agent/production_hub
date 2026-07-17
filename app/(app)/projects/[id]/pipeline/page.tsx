@@ -5,7 +5,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { PipelineWorkspace } from "@/components/production/pipeline-workspace";
-import type { AiScript, AiShot, AiPrompt, AiGeneration } from "@/lib/database.types";
+import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
 
 export default async function PipelinePage({
   params,
@@ -22,15 +22,22 @@ export default async function PipelinePage({
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: script }, { data: shots }] = await Promise.all([
+  const [{ data: script }, { data: shots }, { data: lib }] = await Promise.all([
     supabase.from("ai_scripts").select("*").eq("project_id", params.id).maybeSingle(),
     supabase
       .from("ai_shots")
       .select("*")
       .eq("project_id", params.id)
       .order("position", { ascending: true }),
+    // Library: studio-wide entries + this project's own, newest first.
+    supabase
+      .from("ai_prompt_library")
+      .select("*")
+      .or(`project_id.is.null,project_id.eq.${params.id}`)
+      .order("updated_at", { ascending: false }),
   ]);
 
+  const library = (lib ?? []) as AiPromptLibraryEntry[];
   const shotList = (shots ?? []) as AiShot[];
   const shotIds = shotList.map((s) => s.id);
 
@@ -95,6 +102,7 @@ export default async function PipelinePage({
           prompts={prompts}
           generations={generations}
           media={media}
+          library={library}
           reviewingShotIds={reviewingShotIds}
         />
       </Card>
