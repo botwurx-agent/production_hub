@@ -38,6 +38,9 @@ export type BoardItemView = {
   // Signed storage image (null unless the item has a stored file); used as the
   // preview thumbnail for link cards without misreading a link's destination.
   thumbUrl: string | null;
+  // Persisted storage path (not the signed URL); carried so a history snapshot
+  // can reconstruct the row on undo/redo.
+  storagePath: string | null;
   // Column membership: parentId is the containing column (null = top-level on the
   // canvas); sort orders the item within its column.
   parentId: string | null;
@@ -176,11 +179,121 @@ export async function getBoardItems(
       signedUrl: i.storage_path ? thumbUrl : i.url,
       url: i.url,
       thumbUrl,
+      storagePath: i.storage_path,
       parentId: i.parent_id,
       sort: i.sort ?? 0,
     };
   });
   return { items };
+}
+
+// Replays a full board snapshot (items + connections) for undo/redo. Reconciles
+// the DB to match: re-create missing rows (same ids, so parent/connection
+// references survive), update changed ones, delete extras. Parents are upserted
+// before children to satisfy the parent self-FK; items before connections.
+export async function restoreBoardState(
+  boardId: string,
+  items: BoardItemView[],
+  connections: BoardConnection[]
+): Promise<BoardState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: board } = await supabase
+    .from("board_items") // cheap existence check via a board-scoped read
+    .select("board_id")
+    .eq("board_id", boardId)
+    .limit(1)
+    .maybeSingle();
+  // board may legitimately be empty; verify ownership through the boards table.
+  if (!board) {
+    const { data: b } = await supabase
+      .from("boards")
+      .select("id")
+      .eq("id", boardId)
+      .maybeSingle();
+    if (!b) return { error: "Board not found." };
+  }
+
+  const studioId = ctx.studio.id;
+  const rows = items.map((i) => ({
+    id: i.id,
+    studio_id: studioId,
+    board_id: boardId,
+    kind: i.kind,
+    name: i.name,
+    mime_type: i.mimeType,
+    storage_path: i.storagePath,
+    url: i.url,
+    text: i.text,
+    hue: i.hue,
+    x: i.x,
+    y: i.y,
+    w: i.w,
+    h: i.h,
+    z: i.z,
+    parent_id: i.parentId,
+    sort: i.sort,
+  }));
+
+  const parents = rows.filter((r) => !r.parent_id);
+  const children = rows.filter((r) => r.parent_id);
+  if (parents.length) {
+    const { error } = await supabase
+      .from("board_items")
+      .upsert(parents, { onConflict: "id" });
+    if (error) return { error: error.message };
+  }
+  if (children.length) {
+    const { error } = await supabase
+      .from("board_items")
+      .upsert(children, { onConflict: "id" });
+    if (error) return { error: error.message };
+  }
+
+  const keepIds = new Set(rows.map((r) => r.id));
+  const { data: existing } = await supabase
+    .from("board_items")
+    .select("id")
+    .eq("board_id", boardId);
+  const toDelete = (existing ?? [])
+    .map((r) => r.id)
+    .filter((id) => !keepIds.has(id));
+  if (toDelete.length) {
+    const { error } = await supabase
+      .from("board_items")
+      .delete()
+      .in("id", toDelete);
+    if (error) return { error: error.message };
+  }
+
+  const connRows = connections.map((c) => ({
+    id: c.id,
+    studio_id: studioId,
+    board_id: boardId,
+    from_item_id: c.fromItemId,
+    to_item_id: c.toItemId,
+  }));
+  if (connRows.length) {
+    const { error } = await supabase
+      .from("board_connections")
+      .upsert(connRows, { onConflict: "id" });
+    if (error) return { error: error.message };
+  }
+  const keepConn = new Set(connRows.map((c) => c.id));
+  const { data: existingConn } = await supabase
+    .from("board_connections")
+    .select("id")
+    .eq("board_id", boardId);
+  const connDelete = (existingConn ?? [])
+    .map((r) => r.id)
+    .filter((id) => !keepConn.has(id));
+  if (connDelete.length) {
+    await supabase.from("board_connections").delete().in("id", connDelete);
+  }
+
+  revalidatePath("/boards");
+  return null;
 }
 
 // ---- Public share links -----------------------------------------------------

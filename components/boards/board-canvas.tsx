@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BoardItemView } from "@/app/(app)/boards/actions";
+import type { BoardSnapshot } from "@/lib/use-board-history";
 import {
   parseLineData,
   lineColorVar,
@@ -168,6 +169,7 @@ export function BoardCanvas({
   hint,
   onDismissHint,
   placementRef,
+  onBeforeChange,
   readOnly = false,
 }: {
   boardId: string;
@@ -185,6 +187,9 @@ export function BoardCanvas({
   hint: { kind: string; itemId: string } | null;
   onDismissHint: () => void;
   placementRef?: React.MutableRefObject<(() => { x: number; y: number }) | null>;
+  // Called with the PRE-edit snapshot right before a gesture/op is persisted, so
+  // the parent can record an undo step. Absent in the read-only share view.
+  onBeforeChange?: (before: BoardSnapshot) => void;
   // Public share view: render the board but disable all editing/interaction.
   readOnly?: boolean;
 }) {
@@ -215,6 +220,22 @@ export function BoardCanvas({
   onReloadRef.current = onReload;
   scaleRef.current = scale;
 
+  // Undo support: snapshot the pre-gesture state when a drag/resize/line-drag
+  // begins, but only push it to history (via onBeforeChange) once the gesture
+  // actually persists a change on pointer-up. A plain click never pushes.
+  const beforeRef = useRef<BoardSnapshot | null>(null);
+  const captureBefore = () => {
+    beforeRef.current = {
+      items: items.map((i) => ({ ...i })),
+      connections: connections.map((c) => ({ ...c })),
+    };
+  };
+  // Snapshot the current state for a discrete (non-drag) mutation.
+  const snapshotNow = (): BoardSnapshot => ({
+    items: items.map((i) => ({ ...i })),
+    connections: connections.map((c) => ({ ...c })),
+  });
+
   useEffect(() => {
     function onMove(e: PointerEvent) {
       const d = drag.current;
@@ -240,7 +261,22 @@ export function BoardCanvas({
       const d = drag.current;
       if (!d) return;
       drag.current = null;
+      // Did the pointer actually travel? A plain click (select) must not persist
+      // a no-op or record a junk history step that undo can't visibly reverse.
+      const s = scaleRef.current;
+      const moved =
+        Math.abs((e.clientX - d.startX) / s) > 0.5 ||
+        Math.abs((e.clientY - d.startY) / s) > 0.5;
+
       if (d.mode === "resize") {
+        if (!moved) {
+          beforeRef.current = null;
+          return;
+        }
+        if (beforeRef.current) {
+          onBeforeChange?.(beforeRef.current);
+          beforeRef.current = null;
+        }
         setItems((prev) => {
           const cur = prev.find((x) => x.id === d.id);
           if (cur) void resizeItem(cur.id, cur.w, cur.h);
@@ -250,10 +286,24 @@ export function BoardCanvas({
       }
       // Move: if dropped over a column, file it into that column instead.
       const colId =
-        d.kind !== "column" ? columnAtPoint(e.clientX, e.clientY, d.id) : null;
+        moved && d.kind !== "column"
+          ? columnAtPoint(e.clientX, e.clientY, d.id)
+          : null;
       if (colId) {
+        if (beforeRef.current) {
+          onBeforeChange?.(beforeRef.current);
+          beforeRef.current = null;
+        }
         void attachToColumn(d.id, colId).then(() => onReloadRef.current());
         return;
+      }
+      if (!moved) {
+        beforeRef.current = null;
+        return;
+      }
+      if (beforeRef.current) {
+        onBeforeChange?.(beforeRef.current);
+        beforeRef.current = null;
       }
       setItems((prev) => {
         const cur = prev.find((x) => x.id === d.id);
@@ -278,10 +328,12 @@ export function BoardCanvas({
     }
     function up(e: PointerEvent) {
       const target = itemAtPoint(e.clientX, e.clientY, connectFrom as string);
-      if (target)
+      if (target) {
+        onBeforeChange?.(snapshotNow());
         void addConnection(boardId, connectFrom as string, target).then(() =>
           onReloadRef.current()
         );
+      }
       setConnectFrom(null);
       setConnCursor(null);
     }
@@ -355,6 +407,10 @@ export function BoardCanvas({
       const d = lineDrag.current;
       if (!d) return;
       lineDrag.current = null;
+      if (beforeRef.current) {
+        onBeforeChange?.(beforeRef.current);
+        beforeRef.current = null;
+      }
       setItems((prev) => {
         const cur = prev.find((x) => x.id === d.id);
         if (cur?.text) void updateItemText(cur.id, cur.text);
@@ -463,6 +519,7 @@ export function BoardCanvas({
   // Persist a caption (HTML) onto an image / video card, preserving its fit.
   function saveMediaCaption(it: BoardItemView, html: string) {
     const text = serializeMediaMeta({ ...parseMediaMeta(it.text), caption: html });
+    onBeforeChange?.(snapshotNow());
     setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, text } : p)));
     void updateItemText(it.id, text);
   }
@@ -493,6 +550,7 @@ export function BoardCanvas({
       return;
     setSelected(it.id);
     onSelectLine(null);
+    captureBefore();
     drag.current = {
       id: it.id,
       kind: it.kind,
@@ -515,6 +573,7 @@ export function BoardCanvas({
     if (readOnly) return;
     e.stopPropagation();
     setSelected(it.id);
+    captureBefore();
     drag.current = {
       id: it.id,
       kind: it.kind,
@@ -529,6 +588,7 @@ export function BoardCanvas({
   }
 
   function remove(id: string) {
+    onBeforeChange?.(snapshotNow());
     setItems((prev) => prev.filter((p) => p.id !== id));
     setSelected(null);
     void deleteItem(id);
@@ -548,6 +608,9 @@ export function BoardCanvas({
   ) {
     if (readOnly) return;
     const text = JSON.stringify(fn(parseTodo(it.text)));
+    // Only discrete ops (toggle / add / remove, persist=true) become undo steps;
+    // per-keystroke edits (persist=false) are captured on blur, not here.
+    if (persist) onBeforeChange?.(snapshotNow());
     setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, text } : p)));
     if (persist) void updateItemText(it.id, text);
   }
@@ -565,6 +628,7 @@ export function BoardCanvas({
   function reorderChild(kids: BoardItemView[], idx: number, dir: -1 | 1) {
     const j = idx + dir;
     if (j < 0 || j >= kids.length) return;
+    onBeforeChange?.(snapshotNow());
     const arr = [...kids];
     const [moved] = arr.splice(idx, 1);
     arr.splice(j, 0, moved);
@@ -580,12 +644,14 @@ export function BoardCanvas({
   function popOut(child: BoardItemView, col: BoardItemView) {
     const x = col.x + col.w + 24;
     const y = col.y;
+    onBeforeChange?.(snapshotNow());
     setItems((prev) =>
       prev.map((p) => (p.id === child.id ? { ...p, parentId: null, x, y, sort: 0 } : p))
     );
     void detachFromColumn(child.id, x, y);
   }
   function deleteColumn(id: string) {
+    onBeforeChange?.(snapshotNow());
     setSelected(null);
     setItems((prev) => prev.filter((p) => p.id !== id && p.parentId !== id));
     void deleteItem(id).then(() => onReloadRef.current());
@@ -599,6 +665,7 @@ export function BoardCanvas({
     setConnCursor({ x: it.x + it.w, y: it.y + it.h / 2 });
   }
   function deleteConn(id: string) {
+    onBeforeChange?.(snapshotNow());
     setSelectedConn(null);
     void deleteConnection(id).then(() => onReloadRef.current());
   }
@@ -613,6 +680,7 @@ export function BoardCanvas({
     setSelectedConn(null);
     onSelectLine(it.id);
     const p = canvasCoords(e.clientX, e.clientY);
+    captureBefore();
     lineDrag.current = {
       id: it.id,
       mode,
@@ -1017,6 +1085,7 @@ export function BoardCanvas({
                       editable={!readOnly}
                       onFocus={() => setSelected(it.id)}
                       onSave={(html) => {
+                        onBeforeChange?.(snapshotNow());
                         setItems((prev) =>
                           prev.map((p) => (p.id === it.id ? { ...p, text: html } : p))
                         );
@@ -1316,6 +1385,7 @@ export function BoardCanvas({
                       editable={!readOnly}
                       onFocus={() => setSelected(it.id)}
                       onSave={(html) => {
+                        onBeforeChange?.(snapshotNow());
                         setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, text: html } : p)));
                         void updateItemText(it.id, html);
                       }}

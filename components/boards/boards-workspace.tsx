@@ -33,9 +33,12 @@ import {
   getBoardShare,
   createBoardShare,
   revokeBoardShare,
+  restoreBoardState,
   type BoardItemView,
   type BoardConnection,
 } from "@/app/(app)/boards/actions";
+import { useBoardHistory } from "@/lib/use-board-history";
+import { toast } from "@/components/ui/toast";
 import {
   parseLineData,
   LINE_COLORS,
@@ -95,6 +98,7 @@ export function BoardsWorkspace({
   const [connections, setConnections] = useState<BoardConnection[]>([]);
   const [loading, startLoad] = useTransition();
   const [busy, startBusy] = useTransition();
+  const history = useBoardHistory();
 
   const [assetOpen, setAssetOpen] = useState(false);
   const [driveOpen, setDriveOpen] = useState(false);
@@ -165,14 +169,51 @@ export function BoardsWorkspace({
     });
   }, []);
 
+  // Record the pre-edit board state so it can be undone. Called at the top of
+  // every mutation entry point in this component; the canvas captures its own
+  // gesture-level snapshots via onBeforeChange.
+  const pushHistory = () => history.capture({ items, connections });
+
+  // Apply a history snapshot (undo or redo) to local state, then persist the
+  // whole board and reload to refresh signed URLs.
+  function doUndo() {
+    if (!activeId) return;
+    const snap = history.undo({ items, connections });
+    if (!snap) return;
+    setItems(snap.items);
+    setConnections(snap.connections);
+    startBusy(async () => {
+      const res = await restoreBoardState(activeId, snap.items, snap.connections);
+      if (res?.error) showNotice(res.error);
+      else reload(activeId);
+    });
+    toast("Undone");
+  }
+  function doRedo() {
+    if (!activeId) return;
+    const snap = history.redo({ items, connections });
+    if (!snap) return;
+    setItems(snap.items);
+    setConnections(snap.connections);
+    startBusy(async () => {
+      const res = await restoreBoardState(activeId, snap.items, snap.connections);
+      if (res?.error) showNotice(res.error);
+      else reload(activeId);
+    });
+    toast("Redone");
+  }
+
   useEffect(() => {
     setSelectedLineId(null);
     setSelectedId(null);
+    // Undo history is per-board; clear it so undo never crosses boards.
+    history.reset();
     if (activeId) reload(activeId);
     else {
       setItems([]);
       setConnections([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, reload]);
 
   // Paste an image straight onto the board (e.g. copied from an email or the web).
@@ -231,6 +272,7 @@ export function BoardsWorkspace({
     }
     if (ok.length === 0) return;
     const boardId = activeId;
+    pushHistory();
     startBusy(async () => {
       // Upload the bytes straight to Storage (bypasses the serverless body cap),
       // then record the board items in one small server call.
@@ -265,6 +307,7 @@ export function BoardsWorkspace({
   function addNoteToBoard() {
     if (!activeId) return;
     const at = spot();
+    pushHistory();
     startBusy(async () => {
       const res = await addNote(activeId, at.x, at.y);
       reload(activeId);
@@ -275,6 +318,7 @@ export function BoardsWorkspace({
   function addTodoToBoard() {
     if (!activeId) return;
     const at = spot();
+    pushHistory();
     startBusy(async () => {
       const res = await addTodoItem(activeId, at.x, at.y);
       reload(activeId);
@@ -285,6 +329,7 @@ export function BoardsWorkspace({
   function addColumnToBoard() {
     if (!activeId) return;
     const at = spot();
+    pushHistory();
     startBusy(async () => {
       const res = await addColumn(activeId, at.x, at.y);
       reload(activeId);
@@ -295,6 +340,7 @@ export function BoardsWorkspace({
   function addLineToBoard() {
     if (!activeId) return;
     const at = spot();
+    pushHistory();
     startBusy(async () => {
       const res = await addLine(activeId, at.x, at.y + 20, at.x + 200, at.y + 80);
       reload(activeId);
@@ -308,6 +354,7 @@ export function BoardsWorkspace({
   function addColorToBoard() {
     if (!activeId) return;
     const at = spot();
+    pushHistory();
     startBusy(async () => {
       const res = await addColorItem(activeId, at.x, at.y);
       reload(activeId);
@@ -321,6 +368,7 @@ export function BoardsWorkspace({
   function addHeadingToBoard() {
     if (!activeId) return;
     const at = spot();
+    pushHistory();
     startBusy(async () => {
       const res = await addHeadingItem(activeId, at.x, at.y);
       reload(activeId);
@@ -334,6 +382,7 @@ export function BoardsWorkspace({
   // Dropped a rail tool onto the canvas: create it at the drop point.
   function onDropTool(kind: string, x: number, y: number) {
     if (!activeId) return;
+    pushHistory();
     startBusy(async () => {
       if (kind === "note") {
         const res = await addNote(activeId, x, y);
@@ -378,6 +427,7 @@ export function BoardsWorkspace({
 
   function updateLineStyle(patch: Partial<LineData>) {
     if (!selectedLine) return;
+    pushHistory();
     const text = JSON.stringify({ ...parseLineData(selectedLine.text), ...patch });
     setItems((prev) =>
       prev.map((p) => (p.id === selectedLine.id ? { ...p, text } : p))
@@ -388,6 +438,7 @@ export function BoardsWorkspace({
   function deleteLine() {
     const id = selectedLineId;
     if (!id) return;
+    pushHistory();
     setItems((prev) => prev.filter((p) => p.id !== id));
     setSelectedLineId(null);
     void deleteItem(id);
@@ -408,6 +459,7 @@ export function BoardsWorkspace({
 
   function setSelectedName(name: string) {
     if (!selectedItem) return;
+    pushHistory();
     setItems((prev) =>
       prev.map((p) => (p.id === selectedItem.id ? { ...p, name } : p))
     );
@@ -415,6 +467,7 @@ export function BoardsWorkspace({
   }
   function setSelectedText(text: string) {
     if (!selectedItem) return;
+    pushHistory();
     setItems((prev) =>
       prev.map((p) => (p.id === selectedItem.id ? { ...p, text } : p))
     );
@@ -423,6 +476,7 @@ export function BoardsWorkspace({
 
   function setCardHue(hue: string) {
     if (!selectedItem) return;
+    pushHistory();
     setItems((prev) =>
       prev.map((p) => (p.id === selectedItem.id ? { ...p, hue } : p))
     );
@@ -431,6 +485,7 @@ export function BoardsWorkspace({
   // Rewrite the selected to-do's rows (optimistic + persisted).
   function mutateSelectedTodo(fn: (rows: TodoRow[]) => TodoRow[]) {
     if (!selectedTodo) return;
+    pushHistory();
     const text = serializeTodo(fn(parseTodo(selectedTodo.text)));
     setItems((prev) =>
       prev.map((p) => (p.id === selectedTodo.id ? { ...p, text } : p))
@@ -440,6 +495,7 @@ export function BoardsWorkspace({
   function deleteSelectedCard() {
     const id = selectedId;
     if (!id) return;
+    pushHistory();
     // A column deletes its children too (DB cascades on parent_id).
     setItems((prev) => prev.filter((p) => p.id !== id && p.parentId !== id));
     setSelectedId(null);
@@ -461,6 +517,29 @@ export function BoardsWorkspace({
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLineId]);
+
+  // Undo (Cmd/Ctrl+Z) and redo (Cmd/Ctrl+Shift+Z or Ctrl+Y). Ignored while
+  // typing in a field or a card's editor so native undo still works there.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+        return;
+      if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        doRedo();
+      } else if (key === "z") {
+        e.preventDefault();
+        doUndo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, items, connections]);
 
   function onDropFiles(files: FileList, x: number, y: number) {
     const imgs = Array.from(files).filter((f) => f.type.startsWith("image/"));
@@ -503,6 +582,7 @@ export function BoardsWorkspace({
     }
     const chosen = driveSel;
     setDriveSel([]);
+    pushHistory();
     startBusy(async () => {
       await addDriveItems(activeId, chosen);
       reload(activeId);
@@ -587,6 +667,32 @@ export function BoardsWorkspace({
         <>
           {/* Toolbar */}
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={doUndo}
+                disabled={!history.canUndo}
+                title="Undo (Cmd/Ctrl+Z)"
+                aria-label="Undo"
+                className="grid h-8 w-8 place-items-center rounded-[9px] border border-border bg-surface text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-40"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-4" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={doRedo}
+                disabled={!history.canRedo}
+                title="Redo (Cmd/Ctrl+Shift+Z)"
+                aria-label="Redo"
+                className="grid h-8 w-8 place-items-center rounded-[9px] border border-border bg-surface text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-40"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h4" />
+                </svg>
+              </button>
+            </div>
             <div className="ml-auto flex items-center gap-2">
               {loading && <span className="text-xs text-text-faint">loading...</span>}
               <button
@@ -752,6 +858,7 @@ export function BoardsWorkspace({
                 hint={hint}
                 onDismissHint={dismissHint}
                 placementRef={placeRef}
+                onBeforeChange={(before) => history.capture(before)}
               />
             </div>
           </div>
@@ -765,6 +872,8 @@ export function BoardsWorkspace({
             open={assetOpen}
             onClose={() => setAssetOpen(false)}
             onAdded={() => {
+              // Capture the pre-add state (items not yet reloaded) for undo.
+              pushHistory();
               setAssetOpen(false);
               reload(active.id);
             }}
@@ -774,6 +883,7 @@ export function BoardsWorkspace({
             open={figmaOpen}
             onClose={() => setFigmaOpen(false)}
             onAdded={() => {
+              pushHistory();
               setFigmaOpen(false);
               reload(active.id);
             }}
@@ -790,6 +900,7 @@ export function BoardsWorkspace({
             open={linkOpen}
             onClose={() => setLinkOpen(false)}
             onAdded={(id) => {
+              pushHistory();
               reload(active.id);
               if (id) maybeHint("link", id);
             }}
@@ -800,6 +911,7 @@ export function BoardsWorkspace({
             spot={spot}
             onClose={() => setVideoOpen(false)}
             onAdded={(id) => {
+              pushHistory();
               reload(active.id);
               if (id) {
                 setSelectedId(id);

@@ -81,6 +81,7 @@ export async function loadSharedBoard(
       signedUrl: i.storage_path ? thumbUrl : i.url,
       url: i.url,
       thumbUrl,
+      storagePath: i.storage_path,
       parentId: i.parent_id,
       sort: i.sort ?? 0,
     };

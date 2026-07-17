@@ -382,6 +382,24 @@ implemented (out of strict order, driven by the operator's real needs).
     creates at the drop point). Click still adds at a default spot.
   - Delete/Backspace removes the selected card/column/line/connection (guarded
     against firing while typing in an input/textarea/contentEditable).
+  - UNDO/REDO (snapshot-based, the audit's Tier-2 item, boards first): a captured
+    {items, connections} snapshot is replayed by restoreBoardState (app/(app)/
+    boards/actions.ts) which reconciles the DB (upsert parents-then-children with
+    original ids so connections/parents survive, delete extras, upsert+prune
+    connections). lib/use-board-history.ts (useBoardHistory: undo/redo stacks,
+    cap 60, capUndo/canRedo). BoardItemView gained storagePath so image cards
+    reconstruct on undo (also fixed lib/board-share.ts mapping). Workspace holds
+    the hook: pushHistory() captures pre-edit state at every mutation entry
+    (adds, panel edits, delete); doUndo/doRedo apply the snapshot to local state,
+    persist via restoreBoardState, reload for fresh signed URLs, toast Undone/
+    Redone; history.reset() on board switch (per-board). Keyboard Cmd/Ctrl+Z /
+    Cmd/Ctrl+Shift+Z (or Ctrl+Y), guarded while typing. Toolbar Undo/Redo buttons
+    (disabled on empty stacks). Canvas captures gesture-level snapshots via an
+    onBeforeChange(before) prop: captureBefore() clones pre-gesture state at
+    startMove/startResize/line-drag, pushed at pointer-up ONLY if the pointer
+    actually moved (>0.5px, so a plain click records nothing); discrete ops
+    (connect/delete/attach/detach/reorder/note+heading blur) push immediately.
+    NEXT (same engine): roll onto the shot list + storyboard editors.
   - Card selection is LIFTED to the workspace (selected/onSelect props on
     BoardCanvas) so it can render contextual panels over the tool rail, same as
     the line panel. NOTE cards are now rich text (contentEditable storing HTML;
