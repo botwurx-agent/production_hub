@@ -15,11 +15,12 @@ import type {
 import {
   docLabel,
   safeAccent,
+  buildDocSnapshot,
   type DocKind,
-  type DocSnapshot,
-  type DocFont,
-  type DocTemplate,
 } from "@/lib/billing-doc";
+import { sendEmail, emailConfigured } from "@/lib/email";
+import { renderEmail } from "@/lib/email-template";
+import { headers } from "next/headers";
 
 export type DocState = { error?: string; id?: string } | null;
 
@@ -140,7 +141,6 @@ export async function sendBillingDoc(
   }
 
   const profile = await ensureProfile(supabase, ctx.studio.id);
-  const lines = [...(d.lines ?? [])].sort((a, b) => a.position - b.position);
 
   const { data: atts } = await supabase
     .from("billing_document_attachments")
@@ -148,51 +148,15 @@ export async function sendBillingDoc(
     .eq("document_id", docId)
     .order("created_at", { ascending: true });
 
-  const kind = (["estimate", "proposal", "invoice"] as DocKind[]).includes(
-    d.kind as DocKind
-  )
-    ? (d.kind as DocKind)
-    : "invoice";
-
-  const snapshot: DocSnapshot = {
-    kind,
-    docLabel: docLabel(kind),
-    number: d.number,
-    issueDate: d.issue_date,
-    dueDate: d.due_date,
-    from: {
-      businessName: profile.business_name,
-      address: profile.address,
-      phone: profile.phone,
-      email: profile.email,
-      website: profile.website,
-    },
-    billTo: {
-      name: d.bill_to_name,
-      company: d.bill_to_company,
-      email: d.bill_to_email,
-      reference: d.reference,
-    },
-    lines: lines.map((l) => ({
-      description: l.description,
-      rate: l.rate,
-      qty: l.qty,
-      tax_rate: l.tax_rate,
-    })),
-    currency: d.currency,
-    discount: d.discount,
-    notes: d.notes,
-    terms: d.terms,
-    style: {
-      template: (d.template as DocTemplate) || "classic",
-      accent: safeAccent(d.accent_color ?? profile.default_doc_accent),
-      font: (d.font as DocFont) || "modern",
-    },
+  const snapshot = buildDocSnapshot({
+    doc: d,
+    lines: d.lines ?? [],
+    profile,
     attachments: (atts ?? []).map((a) => ({
       name: a.name,
       storagePath: a.storage_path,
     })),
-  };
+  });
 
   const token = d.share_token ?? generateReviewToken();
   const { error } = await supabase
@@ -212,6 +176,74 @@ export async function sendBillingDoc(
   }
   rp(projectId);
   return { token };
+}
+
+// Canonical origin for links in emails: the configured site URL, else the
+// current request host.
+function emailOrigin(): string {
+  const env = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+  if (env) return env;
+  const h = headers();
+  const host = h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  return host ? `${proto}://${host}` : "";
+}
+
+// Send the document by email: freezes + shares it (like sendBillingDoc) and then
+// emails the recipient the /p/<token> link. Gated on emailConfigured().
+export async function emailBillingDoc(
+  projectId: string,
+  docId: string,
+  input: { to: string; subject: string; message?: string }
+): Promise<{ ok: true } | { error: string }> {
+  await requireStudioContext();
+  if (!emailConfigured()) return { error: "Email is not set up yet." };
+
+  const to = input.to.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    return { error: "Enter a valid recipient email." };
+  }
+
+  // Freeze + share first (reuses the snapshot/token logic).
+  const shared = await sendBillingDoc(projectId, docId);
+  if ("error" in shared) return { error: shared.error };
+
+  const supabase = createClient();
+  const { data: doc } = await supabase
+    .from("billing_documents")
+    .select("kind, number")
+    .eq("id", docId)
+    .maybeSingle();
+  const kind = (doc?.kind as DocKind) ?? "invoice";
+  const label = docLabel(kind);
+  const number = doc?.number ? ` (${doc.number})` : "";
+
+  const link = `${emailOrigin()}/p/${shared.token}`;
+  const lines = input.message?.trim()
+    ? [input.message.trim()]
+    : [
+        `You have a new ${label.toLowerCase()}${number} to review.`,
+        kind === "proposal"
+          ? "Open it below to review and sign to accept."
+          : "Open it below to review the details.",
+      ];
+
+  const { html, text } = renderEmail({
+    heading: input.subject.trim() || `${label}${number}`,
+    lines,
+    ctaLabel: `View ${label.toLowerCase()}`,
+    ctaUrl: link,
+  });
+
+  const result = await sendEmail({
+    to,
+    subject: input.subject.trim() || `${label}${number}`,
+    html,
+    text,
+  });
+  if (!result.ok) return { error: result.error ?? "The email could not be sent." };
+  rp(projectId);
+  return { ok: true };
 }
 
 // Per-document style (template + theme color + font).

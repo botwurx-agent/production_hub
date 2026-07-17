@@ -5,6 +5,7 @@ import { signedLogoUrl } from "@/lib/branding";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { InvoiceWorkspace } from "@/components/production/invoice-workspace";
+import { emailConfigured } from "@/lib/email";
 import type {
   BillingDocument,
   BillingDocumentLine,
@@ -104,6 +105,7 @@ export default async function InvoicesPage({
           profile={(profile as BillingProfile | null) ?? null}
           logoUrl={logoUrl}
           contacts={contacts}
+          emailEnabled={emailConfigured()}
         />
       </Card>
     </div>

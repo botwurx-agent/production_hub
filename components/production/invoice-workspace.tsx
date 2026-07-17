@@ -14,11 +14,13 @@ import {
   updateDocLine,
   deleteDocLine,
   sendBillingDoc,
+  emailBillingDoc,
   updateDocStyle,
   saveDefaultDocStyle,
   addDocAttachment,
   deleteDocAttachment,
 } from "@/app/(app)/projects/[id]/native-invoice-actions";
+import { SendDocEmailModal } from "@/components/production/send-doc-email-modal";
 import { toast } from "@/components/ui/toast";
 import { shortDate } from "@/lib/format";
 import {
@@ -80,18 +82,21 @@ export function InvoiceWorkspace({
   profile,
   logoUrl,
   contacts,
+  emailEnabled = false,
 }: {
   projectId: string;
   documents: DocWithLines[];
   profile: BillingProfile | null;
   logoUrl: string | null;
   contacts: ContactOption[];
+  emailEnabled?: boolean;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(documents[0]?.id ?? null);
   const [copied, setCopied] = useState(false);
   const [styleOpen, setStyleOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
@@ -779,7 +784,7 @@ export function InvoiceWorkspace({
             </div>
           )}
 
-          {/* Send */}
+          {/* Deliver: email, link, or PDF */}
           <div className="mt-6 rounded-[12px] border border-border bg-surface-2/40 p-4">
             {isProposal && form.accepted_at ? (
               <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -792,53 +797,81 @@ export function InvoiceWorkspace({
                 <span className="text-text-faint">
                   on {shortDate(form.accepted_at)}
                 </span>
-                {form.share_token && (
-                  <button
-                    onClick={copyLink}
-                    className="ml-auto rounded-[8px] border border-border px-2.5 py-1 text-xs font-semibold text-text-muted transition hover:bg-surface hover:text-text"
+                <div className="ml-auto flex items-center gap-2">
+                  <a
+                    href={`/projects/${projectId}/invoices/${form.id}/print?auto=1`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-[8px] border border-border px-2.5 py-1 text-xs font-semibold text-text-muted transition hover:bg-surface hover:text-text"
                   >
-                    {copied ? "Copied" : "View signed link"}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-text">
-                    {isProposal ? "Send for signature" : `Send ${docLabel.toLowerCase()}`}
-                  </p>
-                  <p className="text-xs text-text-muted">
-                    {form.sent_at
-                      ? "Shared. Re-send to push edits into a fresh copy."
-                      : isProposal
-                        ? "Freeze this proposal and share a link the client signs to accept."
-                        : `Freeze this ${docLabel.toLowerCase()} and share a link the client can view.`}
-                  </p>
-                  {form.sent_at && (
-                    <p className="mt-1 text-xs text-text-faint">
-                      {form.viewed_at
-                        ? `Viewed ${shortDate(form.viewed_at)}`
-                        : "Sent, not viewed yet"}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
+                    Download PDF
+                  </a>
                   {form.share_token && (
                     <button
                       onClick={copyLink}
-                      className="rounded-[9px] border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface hover:text-text"
+                      className="rounded-[8px] border border-border px-2.5 py-1 text-xs font-semibold text-text-muted transition hover:bg-surface hover:text-text"
                     >
-                      {copied ? "Copied" : "Copy link"}
+                      {copied ? "Copied" : "View signed link"}
                     </button>
                   )}
-                  <Button size="sm" onClick={send} disabled={busy}>
-                    {form.sent_at
-                      ? "Re-send"
-                      : isProposal
-                        ? "Send for signature"
-                        : "Send"}
-                  </Button>
                 </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-semibold text-text">
+                  {isProposal ? "Send for signature" : `Send ${docLabel.toLowerCase()}`}
+                </p>
+                <p className="text-xs text-text-muted">
+                  Email it, copy a link, or download a PDF.
+                  {isProposal ? " The client can review and sign to accept." : ""}
+                </p>
+                {form.sent_at && (
+                  <p className="mt-1 text-xs text-text-faint">
+                    {form.viewed_at
+                      ? `Viewed ${shortDate(form.viewed_at)}`
+                      : "Sent, not viewed yet"}
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {emailEnabled && (
+                    <Button size="sm" onClick={() => setEmailOpen(true)} disabled={busy}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                        <rect x="2" y="4" width="20" height="16" rx="2" />
+                        <path d="m22 7-10 6L2 7" />
+                      </svg>
+                      Send by email
+                    </Button>
+                  )}
+                  <button
+                    onClick={send}
+                    disabled={busy}
+                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface hover:text-text"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+                      <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+                    </svg>
+                    {copied ? "Copied" : form.share_token ? "Copy link" : "Get link"}
+                  </button>
+                  <a
+                    href={`/projects/${projectId}/invoices/${form.id}/print?auto=1`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface hover:text-text"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+                      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                    </svg>
+                    Download PDF
+                  </a>
+                </div>
+                {!emailEnabled && (
+                  <p className="mt-2 text-[11px] text-text-faint">
+                    Email sending isn&apos;t configured yet. Copy the link or download a
+                    PDF to send it yourself.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -862,6 +895,28 @@ export function InvoiceWorkspace({
             </button>
           </div>
         </div>
+      )}
+
+      {form && emailEnabled && (
+        <SendDocEmailModal
+          open={emailOpen}
+          onClose={() => setEmailOpen(false)}
+          title={`Send ${docLabel} ${form.number ?? ""}`.trim()}
+          defaultTo={form.bill_to_email}
+          defaultSubject={`${profile?.business_name ?? "Studio Flows"} sent you a ${docLabel.toLowerCase()}${
+            form.number ? ` (${form.number})` : ""
+          }`}
+          shareUrl={form.share_token ? `${origin}/p/${form.share_token}` : null}
+          onSend={async ({ to, subject, message }) => {
+            const res = await emailBillingDoc(projectId, form.id, {
+              to,
+              subject,
+              message,
+            });
+            if ("ok" in res) router.refresh();
+            return res;
+          }}
+        />
       )}
     </div>
   );

@@ -710,6 +710,25 @@ openable links. Actions live in native-invoice-actions.ts; updateDocStyle +
 saveDefaultDocStyle + addDocAttachment + deleteDocAttachment. Hub card now reads
 all kinds (doc count + signed-proposal count).
 
+THREE-WAY DELIVERY (email / link / PDF), per the operator (FreshBooks parity):
+every billing doc can be delivered three ways. (1) SEND BY EMAIL: emailBillingDoc
+(native-invoice-actions) freezes+shares (reuses sendBillingDoc), then emails the
+/p/<token> link via lib/email.ts (Resend) + renderEmail; gated on
+emailConfigured() threaded page->workspace as emailEnabled. A reusable
+components/production/send-doc-email-modal.tsx (To/Subject/Message, FreshBooks-
+style "Send Proposal 101748") owns the form; the parent passes defaults + an
+onSend, so call sheets / other docs can reuse it next. (2) COPY LINK: the
+existing sendBillingDoc share link. (3) DOWNLOAD PDF (print-to-PDF, matches the
+call-sheet export): app/(app)/projects/[id]/invoices/[docId]/print renders the
+LIVE doc through BillingDocument in a data-theme="light" wrapper (forced light +
+print-color-adjust:exact) with PrintButton; the "Download PDF" button opens it
+with ?auto=1 and components/production/auto-print.tsx fires window.print(). One
+source of truth for the snapshot: lib/billing-doc.ts buildDocSnapshot(doc, lines,
+profile, attachments) is used by BOTH sendBillingDoc and the print route, so the
+PDF always matches what the client is sent. NEXT: extend the same email modal +
+print pattern to call sheets and other doc surfaces (the operator wants all three
+options everywhere).
+
 ### Billing / invoicing — FreshBooks/payment paths BUILT BUT ON HOLD (payments deferred, see decision above)
 Two invoicing paths were built and are deployed on `main`, but the whole area is
 PAUSED pending a decision on the billing platform. Both are non-intrusive (see

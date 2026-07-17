@@ -1,7 +1,13 @@
 // Shared model for a billing document (estimate/proposal/invoice) snapshot. When
 // a doc is sent we freeze this into billing_documents.snapshot so the shared (and
 // signed) version can never be silently changed; the public page renders the
-// snapshot, and the in-app preview reuses the same renderer + style.
+// snapshot, and the in-app preview / print view reuse the same renderer + style.
+
+import type {
+  BillingDocument,
+  BillingDocumentLine,
+  BillingProfile,
+} from "@/lib/database.types";
 
 export type DocKind = "invoice" | "estimate" | "proposal";
 
@@ -108,6 +114,63 @@ export function fontStack(font: string): string {
 export function safeAccent(hex: string | null | undefined): string {
   const v = (hex ?? "").trim();
   return /^#[0-9a-fA-F]{6}$/.test(v) ? v : DEFAULT_DOC_STYLE.accent;
+}
+
+// Build a snapshot from the live document rows. One source of truth for both the
+// send/freeze action and the in-app print (Save as PDF) view, so a printed PDF
+// always matches exactly what the client is sent.
+export function buildDocSnapshot(input: {
+  doc: BillingDocument;
+  lines: Pick<
+    BillingDocumentLine,
+    "description" | "rate" | "qty" | "tax_rate" | "position"
+  >[];
+  profile: BillingProfile | null;
+  attachments: { name: string; storagePath: string }[];
+}): DocSnapshot {
+  const { doc, profile } = input;
+  const lines = [...input.lines].sort((a, b) => a.position - b.position);
+  const kind: DocKind = (["estimate", "proposal", "invoice"] as DocKind[]).includes(
+    doc.kind as DocKind
+  )
+    ? (doc.kind as DocKind)
+    : "invoice";
+  return {
+    kind,
+    docLabel: docLabel(kind),
+    number: doc.number,
+    issueDate: doc.issue_date,
+    dueDate: doc.due_date,
+    from: {
+      businessName: profile?.business_name ?? null,
+      address: profile?.address ?? null,
+      phone: profile?.phone ?? null,
+      email: profile?.email ?? null,
+      website: profile?.website ?? null,
+    },
+    billTo: {
+      name: doc.bill_to_name,
+      company: doc.bill_to_company,
+      email: doc.bill_to_email,
+      reference: doc.reference,
+    },
+    lines: lines.map((l) => ({
+      description: l.description,
+      rate: l.rate,
+      qty: l.qty,
+      tax_rate: l.tax_rate,
+    })),
+    currency: doc.currency,
+    discount: doc.discount,
+    notes: doc.notes,
+    terms: doc.terms,
+    style: {
+      template: (doc.template as DocTemplate) || "classic",
+      accent: safeAccent(doc.accent_color ?? profile?.default_doc_accent),
+      font: (doc.font as DocFont) || "modern",
+    },
+    attachments: input.attachments,
+  };
 }
 
 export function computeTotals(lines: DocSnapshotLine[], discount: number) {
