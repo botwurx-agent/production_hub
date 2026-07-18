@@ -1030,6 +1030,22 @@ Shot cockpit / Triage) was shown to the operator.
     so a fully-automatic "sync my whole pool" button is not buildable on their API
     today. The paste-links import gets the value now; the agent/MCP auto-pull is a
     later build tied to the parked BYO-Claude direction.
+  - AUTO-FILL PROVENANCE FROM A LINK (BUILT): link-sourced candidates no longer
+    need manual provenance typing. lib/media-import.ts now derives, per fetched
+    file: platform (detectPlatform, from the URL host: Higgsfield/Kling/Runway/
+    Pika/Luma/Sora/Midjourney/etc.), aspect (aspectRatio, snapped to common
+    ratios) + resolution (resolutionLabel: video -> 720p/1080p/1440p/4K by short
+    side, image -> WxH) read from the REAL media (imageDimensions parses PNG/JPEG/
+    GIF/WEBP-VP8X headers; mp4Info parses the moov box = mvhd duration + the video
+    trak's tkhd WxH), and a prompt hint from the page's og:description. Wired two
+    ways: (1) importFromHiggsfield auto-stamps platform/aspect/resolution/
+    duration/prompt on every imported clip (platform detection wins, batch
+    platform is the fallback); (2) the manual AddGenModal single-URL path has an
+    "Auto-fill from link" button (inspectMediaLink action fetches + returns the
+    derived fields; fills platform/aspect/resolution/duration + prompt-if-empty).
+    DELIBERATELY NOT auto-filled: model/seed/guidance -- no platform exposes them
+    via a share link or standard file metadata (they'd need a real per-platform
+    API connector, which the operator chose to skip); they stay optional manual.
   - TRIAGE FAST-LANE (BUILT, migration 0064 = ai_generations.starred): the fan-out
     fast lane for judging a batch. A "Triage N" button on each StagePanel pool
     (image or video, shown when >1 candidate) opens a FULL-SCREEN neutral-dark

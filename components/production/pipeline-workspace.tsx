@@ -20,6 +20,7 @@ import {
   setGenerationRole,
   deleteGeneration,
   importFromHiggsfield,
+  inspectMediaLink,
 } from "@/app/(app)/projects/[id]/pipeline-actions";
 import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
@@ -81,12 +82,39 @@ function AddGenModal({
   const [promptText, setPromptText] = useState(basePrompt);
   const [err, setErr] = useState<string | null>(null);
   const [prog, setProg] = useState<string | null>(null);
+  const [inspecting, setInspecting] = useState(false);
+  const [inspectMsg, setInspectMsg] = useState<string | null>(null);
   const [f, setF] = useState({
     external_url: "", platform: "", model: "", model_version: "", seed: "",
     aspect: stage === "image" ? "16:9" : "", resolution: "", fps: "", duration_sec: "",
     guidance: "", cost: "", notes: "", generated_by_name: "",
   });
   function set(k: keyof typeof f, v: string) { setF((p) => ({ ...p, [k]: v })); }
+
+  // Auto-fill provenance we can derive from the pasted link: platform (from the
+  // host), aspect/resolution/duration (from the real media), prompt (from the
+  // page). Model/seed stay manual (no platform exposes them via a share link).
+  async function autofill() {
+    const url = f.external_url.trim();
+    if (!url) { setInspectMsg("Paste a link above first."); return; }
+    setInspecting(true); setInspectMsg(null);
+    try {
+      const res = await inspectMediaLink(url);
+      if ("error" in res) { setInspectMsg(res.error); return; }
+      setF((p) => ({
+        ...p,
+        platform: p.platform || res.platform || "",
+        aspect: res.aspect || p.aspect,
+        resolution: res.resolution || p.resolution,
+        duration_sec: res.duration_sec != null ? String(res.duration_sec) : p.duration_sec,
+      }));
+      if (res.prompt && !promptText.trim()) setPromptText(res.prompt);
+      const bits = [res.platform, res.aspect, res.resolution].filter(Boolean).length;
+      setInspectMsg(bits > 0 ? "Filled what we could from the link ✓" : "Reached the link, but nothing to auto-fill.");
+    } finally {
+      setInspecting(false);
+    }
+  }
 
   const sharedSpec = () => ({
     platform: f.platform || null,
@@ -188,6 +216,16 @@ function AddGenModal({
           </label>
           <input value={f.external_url} onChange={(e) => set("external_url", e.target.value)}
             placeholder="https://…/image.png" className={`mt-1 ${field}`} />
+          <div className="mt-1.5 flex items-center gap-2">
+            <button type="button" onClick={autofill} disabled={inspecting || !f.external_url.trim()}
+              className="inline-flex items-center gap-1.5 rounded-[8px] border border-border px-2.5 py-1 text-[11px] font-bold text-text transition hover:border-accent hover:text-accent disabled:opacity-50">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z" />
+              </svg>
+              {inspecting ? "Reading…" : "Auto-fill from link"}
+            </button>
+            {inspectMsg && <span className="text-[11px] font-medium text-text-muted">{inspectMsg}</span>}
+          </div>
         </div>
         {stage === "video" && (refStartId || refEndId) && (
           <p className="rounded-[9px] bg-cyan-bg px-3 py-1.5 text-xs font-medium" style={{ color: "var(--h-cyan)" }}>

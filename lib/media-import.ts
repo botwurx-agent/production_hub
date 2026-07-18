@@ -22,7 +22,214 @@ export type FetchedMedia = {
   kind: "video" | "image";
   sourceUrl: string; // the link the user pasted (kept as provenance)
   filename: string;
+  // Auto-derived provenance (best-effort; null when not determinable).
+  width: number | null;
+  height: number | null;
+  durationSec: number | null;
+  platform: string | null;
+  description: string | null; // a prompt hint from the page, when present
 };
+
+// ---- Auto-derived provenance -----------------------------------------------
+
+// Infer the generation platform from the link's host. Editable after; a hint,
+// never authoritative.
+const PLATFORM_HOSTS: [string, string][] = [
+  ["higgsfield", "Higgsfield"],
+  ["klingai", "Kling"],
+  ["kling", "Kling"],
+  ["runwayml", "Runway"],
+  ["runway", "Runway"],
+  ["pika", "Pika"],
+  ["lumalabs", "Luma"],
+  ["luma", "Luma"],
+  ["midjourney", "Midjourney"],
+  ["leonardo", "Leonardo"],
+  ["minimax", "Hailuo"],
+  ["hailuo", "Hailuo"],
+  ["ideogram", "Ideogram"],
+  ["krea", "Krea"],
+  ["sora", "Sora"],
+  ["fal.ai", "fal"],
+  ["fal.media", "fal"],
+  ["heygen", "HeyGen"],
+  ["veo", "Veo"],
+];
+
+export function detectPlatform(rawUrl: string): string | null {
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase();
+    for (const [needle, label] of PLATFORM_HOSTS) {
+      if (host.includes(needle)) return label;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function gcd(a: number, b: number): number {
+  return b ? gcd(b, a % b) : a;
+}
+
+export function aspectRatio(w: number | null, h: number | null): string | null {
+  if (!w || !h) return null;
+  const common: [number, number][] = [
+    [16, 9], [9, 16], [4, 3], [3, 4], [1, 1], [21, 9], [3, 2], [2, 3], [5, 4], [4, 5],
+  ];
+  for (const [cw, ch] of common) {
+    if (Math.abs(w / h - cw / ch) < 0.02) return `${cw}:${ch}`;
+  }
+  const g = gcd(w, h) || 1;
+  const rw = w / g;
+  const rh = h / g;
+  if (rw > 40 || rh > 40) return null; // avoid noisy ratios
+  return `${rw}:${rh}`;
+}
+
+export function resolutionLabel(
+  w: number | null,
+  h: number | null,
+  kind: "video" | "image",
+): string | null {
+  if (!w || !h) return null;
+  if (kind === "video") {
+    const short = Math.min(w, h);
+    if (short >= 2160) return "4K";
+    if (short >= 1440) return "1440p";
+    if (short >= 1080) return "1080p";
+    if (short >= 720) return "720p";
+    if (short >= 480) return "480p";
+    return `${w}×${h}`;
+  }
+  return `${w}×${h}`;
+}
+
+// Image dimensions from the file header (PNG / JPEG / GIF / WEBP-VP8X).
+function imageDimensions(b: Buffer): { w: number; h: number } | null {
+  try {
+    // PNG
+    if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+      return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+    }
+    // GIF
+    if (b.length > 10 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) {
+      return { w: b.readUInt16LE(6), h: b.readUInt16LE(8) };
+    }
+    // JPEG
+    if (b.length > 4 && b[0] === 0xff && b[1] === 0xd8) {
+      let pos = 2;
+      while (pos + 9 < b.length) {
+        if (b[pos] !== 0xff) break;
+        const marker = b[pos + 1];
+        const isSOF =
+          (marker >= 0xc0 && marker <= 0xc3) ||
+          (marker >= 0xc5 && marker <= 0xc7) ||
+          (marker >= 0xc9 && marker <= 0xcb) ||
+          (marker >= 0xcd && marker <= 0xcf);
+        if (isSOF) {
+          return { h: b.readUInt16BE(pos + 5), w: b.readUInt16BE(pos + 7) };
+        }
+        pos += 2 + b.readUInt16BE(pos + 2);
+      }
+    }
+    // WEBP (VP8X extended header)
+    if (
+      b.length > 30 &&
+      b.toString("ascii", 0, 4) === "RIFF" &&
+      b.toString("ascii", 8, 12) === "WEBP"
+    ) {
+      const chunk = b.toString("ascii", 12, 16);
+      if (chunk === "VP8X") {
+        const w = 1 + (b[24] | (b[25] << 8) | (b[26] << 16));
+        const h = 1 + (b[27] | (b[28] << 8) | (b[29] << 16));
+        return { w, h };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+// mp4 / mov dimensions + duration from the moov box (mvhd + the video track's
+// tkhd). Best-effort; returns null for non-mp4 (e.g. webm) or anything odd.
+function mp4Info(b: Buffer): { w: number; h: number; durationSec: number | null } | null {
+  try {
+    const findBox = (start: number, end: number, type: string): [number, number] | null => {
+      let p = start;
+      while (p + 8 <= end) {
+        const size = b.readUInt32BE(p);
+        const t = b.toString("ascii", p + 4, p + 8);
+        if (size < 8) return null; // 0 or 1 (64-bit) size: bail
+        if (t === type) return [p + 8, Math.min(p + size, end)];
+        p += size;
+      }
+      return null;
+    };
+    const moov = findBox(0, b.length, "moov");
+    if (!moov) return null;
+
+    let durationSec: number | null = null;
+    const mvhd = findBox(moov[0], moov[1], "mvhd");
+    if (mvhd) {
+      const [s] = mvhd;
+      const version = b[s];
+      if (version === 1) {
+        const timescale = b.readUInt32BE(s + 20);
+        const duration = Number(b.readBigUInt64BE(s + 24));
+        if (timescale) durationSec = Math.round((duration / timescale) * 10) / 10;
+      } else {
+        const timescale = b.readUInt32BE(s + 12);
+        const duration = b.readUInt32BE(s + 16);
+        if (timescale) durationSec = Math.round((duration / timescale) * 10) / 10;
+      }
+    }
+
+    // Find a track (trak) whose tkhd carries non-zero dimensions (the video).
+    let w = 0;
+    let h = 0;
+    let p = moov[0];
+    while (p + 8 <= moov[1]) {
+      const size = b.readUInt32BE(p);
+      const t = b.toString("ascii", p + 4, p + 8);
+      if (size < 8) break;
+      if (t === "trak") {
+        const tkhd = findBox(p + 8, p + size, "tkhd");
+        if (tkhd) {
+          const [ts, te] = tkhd;
+          const end = te;
+          const tw = b.readUInt32BE(end - 8) >> 16;
+          const th = b.readUInt32BE(end - 4) >> 16;
+          if (tw > 0 && th > 0) { w = tw; h = th; }
+          void ts;
+        }
+      }
+      p += size;
+    }
+    if (w > 0 && h > 0) return { w, h, durationSec };
+    if (durationSec != null) return { w: 0, h: 0, durationSec };
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function deriveDims(
+  bytes: Buffer,
+  kind: "video" | "image",
+): { width: number | null; height: number | null; durationSec: number | null } {
+  if (kind === "image") {
+    const d = imageDimensions(bytes);
+    return { width: d?.w ?? null, height: d?.h ?? null, durationSec: null };
+  }
+  const info = mp4Info(bytes);
+  return {
+    width: info?.w || null,
+    height: info?.h || null,
+    durationSec: info?.durationSec ?? null,
+  };
+}
 
 function decodeEntities(s: string): string {
   return s
@@ -125,6 +332,9 @@ export async function fetchMediaFromUrl(
       kind: directKind,
       sourceUrl: u.toString(),
       filename: guessFilename(u, ct),
+      ...deriveDims(buf, directKind),
+      platform: detectPlatform(u.toString()),
+      description: null,
     };
   }
 
@@ -143,6 +353,11 @@ export async function fetchMediaFromUrl(
       "og:image",
       "twitter:image",
       "twitter:image:src",
+    ]);
+    const description = metaContent(html, [
+      "og:description",
+      "twitter:description",
+      "description",
     ]);
     const pick = videoUrl ?? imageUrl;
     if (!pick) {
@@ -169,6 +384,9 @@ export async function fetchMediaFromUrl(
       kind: dlKind,
       sourceUrl: u.toString(),
       filename: guessFilename(safe, dl.contentType || ""),
+      ...deriveDims(dl.bytes, dlKind),
+      platform: detectPlatform(u.toString()),
+      description: description || null,
     };
   }
 

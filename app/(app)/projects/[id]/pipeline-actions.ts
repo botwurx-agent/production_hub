@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
-import { fetchMediaFromUrl } from "@/lib/media-import";
+import { fetchMediaFromUrl, aspectRatio, resolutionLabel } from "@/lib/media-import";
 import { requireStudioContext } from "@/lib/studio";
 import type { Json } from "@/lib/database.types";
 
@@ -408,6 +408,9 @@ export async function importFromHiggsfield(
     status: string;
     platform: string;
     prompt: string | null;
+    aspect: string | null;
+    resolution: string | null;
+    duration_sec: number | null;
     file_path: string;
     external_url: string;
     generated_by: string;
@@ -435,8 +438,14 @@ export async function importFromHiggsfield(
       stage,
       kind: media.kind,
       status: "candidate",
-      platform,
-      prompt: input.prompt ?? null,
+      // Auto-derived: platform from the link's host (falls back to the batch
+      // platform), aspect/resolution/duration from the real media. Prompt from
+      // the batch, or the page's description as a hint.
+      platform: media.platform || platform,
+      prompt: input.prompt ?? media.description ?? null,
+      aspect: aspectRatio(media.width, media.height),
+      resolution: resolutionLabel(media.width, media.height, media.kind),
+      duration_sec: media.durationSec,
       file_path: path,
       external_url: media.sourceUrl,
       generated_by: ctx.userId,
@@ -521,6 +530,34 @@ export async function deleteLibraryEntry(
   const supabase = createClient();
   await supabase.from("ai_prompt_library").delete().eq("id", id);
   rp(projectId);
+}
+
+// Inspect a single pasted link (no insert): fetch it and return the auto-derived
+// provenance so the add-candidate form can pre-fill without manual typing.
+export async function inspectMediaLink(
+  url: string,
+): Promise<
+  | {
+      platform: string | null;
+      kind: "image" | "video";
+      aspect: string | null;
+      resolution: string | null;
+      duration_sec: number | null;
+      prompt: string | null;
+    }
+  | { error: string }
+> {
+  await requireStudioContext();
+  const media = await fetchMediaFromUrl(url);
+  if ("error" in media) return { error: media.error };
+  return {
+    platform: media.platform,
+    kind: media.kind,
+    aspect: aspectRatio(media.width, media.height),
+    resolution: resolutionLabel(media.width, media.height, media.kind),
+    duration_sec: media.durationSec,
+    prompt: media.description,
+  };
 }
 
 // ---- Flexible references (polymorphic image|video, roled) ------------------
