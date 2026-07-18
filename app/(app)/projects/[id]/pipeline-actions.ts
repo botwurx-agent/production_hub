@@ -669,6 +669,87 @@ export async function addGenerationRef(
   return { id: data.id };
 }
 
+// Add MANY references at once: pre-uploaded files (client-uploaded, passed as
+// {path, kind}) and/or links (fetched + stored server-side). Each becomes a
+// status='reference' generation with the given role. Returns count + per-link
+// failures.
+export async function addReferences(
+  projectId: string,
+  input: {
+    shotId: string;
+    stage: "image" | "video";
+    role: string;
+    uploaded: { path: string; kind: string }[];
+    urls: string[];
+  },
+): Promise<{ added: number; failed: { url: string; reason: string }[] } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const failed: { url: string; reason: string }[] = [];
+  const rows: {
+    studio_id: string;
+    shot_id: string;
+    stage: string;
+    kind: string;
+    status: string;
+    role: string;
+    file_path: string;
+    generated_by: string;
+    external_url?: string;
+    platform?: string | null;
+    aspect?: string | null;
+    resolution?: string | null;
+    duration_sec?: number | null;
+  }[] = [];
+
+  for (const u of input.uploaded) {
+    rows.push({
+      studio_id: ctx.studio.id,
+      shot_id: input.shotId,
+      stage: input.stage,
+      kind: u.kind,
+      status: "reference",
+      role: input.role,
+      file_path: u.path,
+      generated_by: ctx.userId,
+    });
+  }
+
+  const urls = Array.from(new Set(input.urls.map((u) => u.trim()).filter(Boolean))).slice(0, 40);
+  for (const url of urls) {
+    const media = await fetchMediaFromUrl(url);
+    if ("error" in media) { failed.push({ url, reason: media.error }); continue; }
+    const path = `${ctx.studio.id}/pipeline/${projectId}/${crypto.randomUUID()}-${safeName(media.filename)}`;
+    const { error: upErr } = await assetStorage().upload(path, media.bytes, {
+      contentType: media.contentType || undefined,
+      upsert: false,
+    });
+    if (upErr) { failed.push({ url, reason: upErr.message }); continue; }
+    rows.push({
+      studio_id: ctx.studio.id,
+      shot_id: input.shotId,
+      stage: input.stage,
+      kind: media.kind,
+      status: "reference",
+      role: input.role,
+      file_path: path,
+      external_url: media.sourceUrl,
+      platform: media.platform,
+      aspect: aspectRatio(media.width, media.height),
+      resolution: resolutionLabel(media.width, media.height, media.kind),
+      duration_sec: media.durationSec,
+      generated_by: ctx.userId,
+    });
+  }
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from("ai_generations").insert(rows);
+    if (error) return { error: error.message };
+  }
+  rp(projectId);
+  return { added: rows.length, failed };
+}
+
 export async function removeGenerationRef(
   projectId: string,
   id: string,

@@ -13,7 +13,6 @@ import {
   deleteShot,
   reorderShots,
   savePrompt,
-  addGeneration,
   addGenerationsBulk,
   updateGeneration,
   setGenerationStatus,
@@ -22,6 +21,7 @@ import {
   importFromHiggsfield,
   inspectMediaLink,
   addGenerationFromLink,
+  addReferences,
 } from "@/app/(app)/projects/[id]/pipeline-actions";
 import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
@@ -546,75 +546,104 @@ function AddRefModal({
   const [busy, start] = useTransition();
   const roles = REF_ROLES[stage];
   const [role, setRole] = useState(roles[0].value);
-  const [kind, setKind] = useState<"video" | "image">(stage === "image" ? "image" : "video");
-  const [url, setUrl] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [urlsText, setUrlsText] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [prog, setProg] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ url: string; reason: string }[] | null>(null);
+
+  const links = useMemo(
+    () => Array.from(new Set(urlsText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))),
+    [urlsText],
+  );
 
   function save() {
     setErr(null);
-    if (!file && !url.trim()) { setErr("Upload a clip or paste a link."); return; }
+    setFailed(null);
+    if (files.length === 0 && links.length === 0) {
+      setErr("Upload one or more files, or paste one or more links.");
+      return;
+    }
     start(async () => {
-      let filePath: string | null = null;
-      if (file) {
-        try {
-          setProg("Uploading…");
-          const up = await uploadAssetFile({ studioId, projectId, file });
-          filePath = up.storagePath;
-        } catch (e) {
-          setErr(`Upload failed: ${(e as Error).message}`); setProg(null); return;
+      // Upload any files client-side (kind auto-detected from the file type).
+      const uploaded: { path: string; kind: string }[] = [];
+      try {
+        for (let i = 0; i < files.length; i++) {
+          setProg(`Uploading ${i + 1}/${files.length}…`);
+          const up = await uploadAssetFile({ studioId, projectId, file: files[i] });
+          uploaded.push({ path: up.storagePath, kind: files[i].type.startsWith("video") ? "video" : "image" });
         }
+      } catch (e) {
+        setErr(`Upload failed: ${(e as Error).message}`); setProg(null); return;
       }
-      setProg("Saving…");
-      const res = await addGeneration(projectId, {
-        shotId: shot.id, stage, status: "reference", role, kind,
-        file_path: filePath, external_url: filePath ? null : (url.trim() || null),
-      });
+      setProg(links.length ? `Pulling ${links.length} link${links.length === 1 ? "" : "s"}…` : "Saving…");
+      const res = await addReferences(projectId, { shotId: shot.id, stage, role, uploaded, urls: links });
       setProg(null);
-      if (res && "error" in res && res.error) { setErr(res.error); return; }
+      if ("error" in res) { setErr(res.error); return; }
+      if (res.failed.length > 0) {
+        setFailed(res.failed);
+        setUrlsText(res.failed.map((f) => f.url).join("\n"));
+        setFiles([]);
+        router.refresh();
+        return;
+      }
       onClose(); router.refresh();
     });
   }
 
+  const total = files.length + links.length;
+
   return (
-    <Modal open onClose={onClose} size="md" title="Add a reference">
+    <Modal open onClose={onClose} size="md" title="Add references">
       <div className="space-y-3">
         <p className="text-sm text-text-muted">
           {stage === "image"
-            ? "A character, style, or element this shot's images are generated from. Tracked with its own lineage."
-            : "A clip this shot generates from (video-to-video): a driving/style/character reference. Tracked with its own lineage."}
+            ? "Characters, styles, or elements this shot's images are generated from. Add as many as you like. Each is tracked with its own lineage."
+            : "Clips this shot generates from (video-to-video): driving/style/character references. Add as many as you like. Each is tracked with its own lineage."}
         </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Role</label>
-            <select value={role} onChange={(e) => setRole(e.target.value)} className={`mt-1 ${field}`}>
-              {roles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Type</label>
-            <select value={kind} onChange={(e) => setKind(e.target.value as "video" | "image")} className={`mt-1 ${field}`}>
-              <option value="video">Video</option>
-              <option value="image">Image</option>
-            </select>
-          </div>
-        </div>
         <div>
-          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Upload a clip</label>
-          <input type="file" accept="video/*,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className={`mt-1 ${field}`} />
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Role <span className="font-normal normal-case text-text-faint">(applies to all added now)</span></label>
+          <select value={role} onChange={(e) => setRole(e.target.value)} className={`mt-1 ${field}`}>
+            {roles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
         </div>
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            or paste a link <span className="font-normal normal-case text-text-faint">(from the tool it lives on)</span>
+            Upload files <span className="font-normal normal-case text-text-faint">(pick one or many)</span>
           </label>
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className={`mt-1 ${field}`} />
+          <input type="file" multiple accept="video/*,image/*"
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            className="mt-1 block w-full text-sm text-text-muted file:mr-3 file:rounded-[8px] file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-accent-fg" />
+          {files.length > 0 && <p className="mt-1 text-xs text-text-faint">{files.length} file{files.length === 1 ? "" : "s"} selected</p>}
         </div>
+        <div>
+          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+            …or paste links <span className="font-normal normal-case text-text-faint">(one per line — share pages or direct URLs)</span>
+          </label>
+          <textarea value={urlsText} onChange={(e) => setUrlsText(e.target.value)} rows={4}
+            placeholder={"https://…\nhttps://…"} className={`mt-1 ${field} font-mono text-xs`} />
+          {links.length > 0 && <p className="mt-1 text-xs text-text-faint">{links.length} link{links.length === 1 ? "" : "s"} ready</p>}
+        </div>
+        {failed && failed.length > 0 && (
+          <div className="rounded-[9px] border border-border bg-surface-2/40 p-2.5 text-xs">
+            <p className="mb-1 font-bold text-text-muted">Couldn&apos;t pull these — check and retry:</p>
+            <ul className="space-y-1">
+              {failed.map((f) => (
+                <li key={f.url} className="flex flex-col">
+                  <span className="truncate font-mono text-[11px] text-text">{f.url}</span>
+                  <span className="text-red">{f.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {err && <p className="text-xs font-semibold text-red">{err}</p>}
         <div className="flex items-center justify-end gap-2">
+          {busy && prog && <span className="mr-auto text-xs font-medium text-text-muted">{prog}</span>}
           <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button size="sm" onClick={save} disabled={busy}>{prog ?? "Add reference"}</Button>
+          <Button size="sm" onClick={save} disabled={busy || total === 0}>
+            {busy ? "Working…" : failed ? "Retry" : `Add ${total || ""}`.trim()}
+          </Button>
         </div>
       </div>
     </Modal>
@@ -948,7 +977,7 @@ function SequenceStrip({
   shots, thumbs, activeId, onSelect, onReorder,
 }: {
   shots: AiShot[];
-  thumbs: Map<string, string | null>;
+  thumbs: Map<string, { url: string; kind: string } | null>;
   activeId: string | null;
   onSelect: (id: string) => void;
   onReorder: (ids: string[]) => void;
@@ -990,7 +1019,7 @@ function SequenceStrip({
           const s = byId.get(id);
           if (!s) return null;
           const on = id === activeId;
-          const url = thumbs.get(id) ?? null;
+          const thumb = thumbs.get(id) ?? null;
           return (
             <div
               key={id}
@@ -1005,11 +1034,14 @@ function SequenceStrip({
               }`}
             >
               <div className="relative overflow-hidden rounded-[7px]" style={{ aspectRatio: "16/9", background: gradFor(id) }}>
-                {url && (
+                {thumb && (thumb.kind === "video" ? (
+                  <video src={`${thumb.url}#t=0.1`} muted playsInline preload="metadata"
+                    className="absolute inset-0 h-full w-full object-cover" />
+                ) : (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover"
+                  <img src={thumb.url} alt="" className="absolute inset-0 h-full w-full object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                )}
+                ))}
                 <span className="absolute left-1 top-1 rounded-[4px] bg-black/55 px-1.5 py-0.5 text-[9px] font-extrabold text-white">{i + 1}</span>
                 <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full"
                   style={{ background: s.method === "live" ? "var(--h-cyan)" : "var(--h-purple)", boxShadow: "0 0 0 2px rgba(0,0,0,.35)" }}
@@ -1206,20 +1238,38 @@ export function PipelineWorkspace({
 
   // Representative thumbnail per shot: final take > take > start > any image > any.
   const shotThumb = useMemo(() => {
+    // A generation only previews if we have renderable media for it: a signed
+    // storage URL (media map) or a direct image/video URL. A share-page URL
+    // can't render, so skip it and fall through to the next candidate.
+    const renderable = (g: AiGeneration): string | null => {
+      if (media[g.id]) return media[g.id];
+      const u = g.external_url ?? "";
+      if (/\.(png|jpe?g|gif|webp|avif|mp4|webm|mov)(\?|$)/i.test(u)) return u;
+      return null;
+    };
     const byShot = new Map<string, AiGeneration[]>();
     for (const g of generations) {
+      if (g.status === "reference") continue; // inputs aren't the shot's frame
       const a = byShot.get(g.shot_id) ?? []; a.push(g); byShot.set(g.shot_id, a);
     }
-    const m = new Map<string, string | null>();
+    const m = new Map<string, { url: string; kind: string } | null>();
     for (const s of shots) {
       const gs = byShot.get(s.id) ?? [];
-      const rep =
-        gs.find((g) => g.role === "final") ??
-        gs.find((g) => g.role === "take") ??
-        gs.find((g) => g.role === "start") ??
-        gs.find((g) => g.stage === "image") ??
-        gs[0];
-      m.set(s.id, rep ? media[rep.id] ?? rep.external_url ?? null : null);
+      // Priority: final > take > start > any image > anything, but only pick one
+      // that actually has renderable media.
+      const ordered = [
+        ...gs.filter((g) => g.role === "final"),
+        ...gs.filter((g) => g.role === "take"),
+        ...gs.filter((g) => g.role === "start"),
+        ...gs.filter((g) => g.stage === "image"),
+        ...gs,
+      ];
+      let picked: { url: string; kind: string } | null = null;
+      for (const g of ordered) {
+        const url = renderable(g);
+        if (url) { picked = { url, kind: g.kind }; break; }
+      }
+      m.set(s.id, picked);
     }
     return m;
   }, [generations, shots, media]);

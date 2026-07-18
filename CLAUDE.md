@@ -1008,8 +1008,13 @@ Shot cockpit / Triage) was shown to the operator.
     + pool). Roles are stage-specific (REF_ROLES map): image stage = character /
     style / element / ref (the characters, styles, elements the shot's images are
     generated from); video stage = motion (driving v2v clip) / style / character /
-    ref. Default kind follows the stage (image->image, video->video). Rendered for
-    every generated shot's image AND video StagePanel.
+    ref. Rendered for every generated shot's image AND video StagePanel. AddRefModal
+    accepts MULTIPLE files AND MULTIPLE links (one per line, share pages or direct
+    URLs) in one go; role applies to all; kind auto-detected per item; addReferences
+    action (client-uploads files, server-fetches+stores links, bulk-inserts, per-
+    link failure report). Sequence-strip thumbnails pick the first renderable gen
+    (signed media or a direct image/video URL, skipping share-page-only URLs and
+    reference inputs) and render video reps as <video> not <img>.
   - IMPORT FROM HIGGSFIELD (BUILT, the X-factor): pull the pool of clips a studio
     generated on an external tool straight into a shot, eliminating the download/
     re-upload round trip. Generation stays external; we organize + review + pick.
