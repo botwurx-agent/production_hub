@@ -797,33 +797,35 @@ export default async function ProjectDetailPage({
               )}
             </HubCard>
 
-            <HubCard
-              href={`/projects/${project.id}/callsheet`}
-              hue="green"
-              title="Call sheet"
-              sub={callSheet?.shoot_date ? longDate(callSheet.shoot_date) : "Not created"}
-              footer={callSheet ? "View & export PDF" : "Create call sheet"}
-              icon={
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <path d="M16 2v4M8 2v4M3 10h18" />
-                </svg>
-              }
-            >
-              {callSheet ? (
-                <div className="flex flex-col gap-1 text-[13px] text-text-muted">
-                  <span>
-                    <span className="font-bold text-text">{callSheet.crew_call || callSheet.call_time || "—"}</span>{" "}
-                    crew call
-                  </span>
-                  {callSheet.location && <span className="truncate">📍 {callSheet.location}</span>}
-                </div>
-              ) : (
-                <p className="text-[13px] text-text-muted">
-                  Industry-standard call sheet with PDF export.
-                </p>
-              )}
-            </HubCard>
+            {!isAiVideo && (
+              <HubCard
+                href={`/projects/${project.id}/callsheet`}
+                hue="green"
+                title="Call sheet"
+                sub={callSheet?.shoot_date ? longDate(callSheet.shoot_date) : "Not created"}
+                footer={callSheet ? "View & export PDF" : "Create call sheet"}
+                icon={
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                }
+              >
+                {callSheet ? (
+                  <div className="flex flex-col gap-1 text-[13px] text-text-muted">
+                    <span>
+                      <span className="font-bold text-text">{callSheet.crew_call || callSheet.call_time || "—"}</span>{" "}
+                      crew call
+                    </span>
+                    {callSheet.location && <span className="truncate">📍 {callSheet.location}</span>}
+                  </div>
+                ) : (
+                  <p className="text-[13px] text-text-muted">
+                    Industry-standard call sheet with PDF export.
+                  </p>
+                )}
+              </HubCard>
+            )}
 
             <HubCard
               href={`/projects/${project.id}/budget`}
@@ -864,22 +866,24 @@ export default async function ProjectDetailPage({
               )}
             </HubCard>
 
-            <HubCard
-              href={`/projects/${project.id}/gear`}
-              hue="amber"
-              title="Gear & crew"
-              sub="Equipment & crew needs"
-              footer="Plan gear & crew"
-              icon={
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                </svg>
-              }
-            >
-              <p className="text-[13px] text-text-muted">
-                List camera, lighting, grip, and crew needs for the shoot.
-              </p>
-            </HubCard>
+            {!isAiVideo && (
+              <HubCard
+                href={`/projects/${project.id}/gear`}
+                hue="amber"
+                title="Gear & crew"
+                sub="Equipment & crew needs"
+                footer="Plan gear & crew"
+                icon={
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                  </svg>
+                }
+              >
+                <p className="text-[13px] text-text-muted">
+                  List camera, lighting, grip, and crew needs for the shoot.
+                </p>
+              </HubCard>
+            )}
 
             <HubCard
               href={`/projects/${project.id}/delivery`}
