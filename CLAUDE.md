@@ -566,7 +566,11 @@ implemented (out of strict order, driven by the operator's real needs).
   projectType()/isProjectType()).
 - New project is now a 2-step wizard (components/projects/new-project-button.tsx):
   step 1 pick a type (icon cards), step 2 the details form (carries project_type
-  as a hidden input). createProject validates + stores it.
+  as a hidden input). createProject validates + stores it. The Client field has an
+  inline "+ Add a new client" (name + brand/agency) that calls quickCreateClient
+  (clients/actions.ts, no redirect, returns id+name), appends+selects it in the
+  controlled dropdown, and stays in the wizard (client_id submits via a hidden
+  input so it holds through the add flow).
 - Hub tailoring (app/(app)/projects/[id]/page.tsx): a colored type badge in the
   hero; the AI Pipeline card in the Visualize band shows ONLY for ai_video (other
   types keep storyboards/shot list/moodboard). Everything else is still reachable.

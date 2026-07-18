@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { createProject, type FormState } from "@/app/(app)/projects/actions";
+import { quickCreateClient } from "@/app/(app)/clients/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Field } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
+import type { ClientType } from "@/lib/database.types";
 import { PROJECT_STATUS, PROJECT_STATUS_ORDER } from "@/lib/status";
 import {
   PROJECT_TYPES,
@@ -42,10 +44,41 @@ export function NewProjectButton({
   const [type, setType] = useState<ProjectTypeKey | null>(null);
   const [state, action] = useFormState<FormState, FormData>(createProject, null);
 
+  // Client select is controlled so a client added inline can be selected without
+  // leaving the wizard.
+  const [clientOptions, setClientOptions] = useState<ClientOption[]>(clients);
+  const [clientId, setClientId] = useState(defaultClientId);
+  const [addingClient, setAddingClient] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<ClientType>("brand");
+  const [addErr, setAddErr] = useState<string | null>(null);
+  const [addingPending, startAdd] = useTransition();
+
+  function addClient() {
+    setAddErr(null);
+    const name = newName.trim();
+    if (!name) { setAddErr("Enter a client name."); return; }
+    startAdd(async () => {
+      const res = await quickCreateClient(name, newType);
+      if ("error" in res) { setAddErr(res.error); return; }
+      setClientOptions((prev) =>
+        [...prev, { id: res.id, name: res.name }].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setClientId(res.id);
+      setAddingClient(false);
+      setNewName("");
+    });
+  }
+
   function close() {
     setOpen(false);
     // Reset the wizard for next time (after the modal has faded).
-    setTimeout(() => setType(null), 150);
+    setTimeout(() => {
+      setType(null);
+      setAddingClient(false);
+      setNewName("");
+      setAddErr(null);
+    }, 150);
   }
 
   const chosen = type ? projectType(type) : null;
@@ -120,15 +153,68 @@ export function NewProjectButton({
                 required
               />
             </Field>
-            <Field label="Client" htmlFor="client_id">
-              <Select id="client_id" name="client_id" defaultValue={defaultClientId}>
-                <option value="">No client yet</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+            {/* client_id always submits, whatever the inline-add state. */}
+            <input type="hidden" name="client_id" value={clientId} />
+            <Field label="Client" htmlFor="client_select">
+              {addingClient ? (
+                <div className="space-y-2 rounded-[12px] border border-border bg-surface-2/40 p-3">
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Client or brand name"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); addClient(); }
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Select
+                      aria-label="Client type"
+                      value={newType}
+                      onChange={(e) => setNewType(e.target.value as ClientType)}
+                      className="flex-1"
+                    >
+                      <option value="brand">Brand</option>
+                      <option value="agency">Agency</option>
+                    </Select>
+                    <Button type="button" size="sm" onClick={addClient} disabled={addingPending}>
+                      {addingPending ? "Adding..." : "Add"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => { setAddingClient(false); setAddErr(null); }}
+                      disabled={addingPending}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  {addErr && <p className="text-xs font-medium text-red">{addErr}</p>}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Select
+                    id="client_select"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                  >
+                    <option value="">No client yet</option>
+                    {clientOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => setAddingClient(true)}
+                    className="text-xs font-semibold text-accent transition hover:underline"
+                  >
+                    + Add a new client
+                  </button>
+                </div>
+              )}
             </Field>
             <Field label="Stage" htmlFor="status">
               <Select id="status" name="status" defaultValue="pre_pro">

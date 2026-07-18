@@ -31,6 +31,28 @@ export async function createClient(
   redirect(`/clients/${data.id}`);
 }
 
+// Create a client without redirecting, returning its id + name. Used for inline
+// "add a client" flows (e.g. the new-project wizard) where the caller wants to
+// keep working in place and just select the new client.
+export async function quickCreateClient(
+  name: string,
+  type: ClientType = "brand",
+): Promise<{ id: string; name: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = db();
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Give the client a name." };
+  const { data, error } = await supabase
+    .from("clients")
+    .insert({ studio_id: ctx.studio.id, name: trimmed, type })
+    .select("id, name")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/clients");
+  revalidatePath("/projects");
+  return { id: data.id, name: data.name };
+}
+
 export async function updateClient(
   clientId: string,
   patch: { name?: string; type?: ClientType; notes?: string | null }
