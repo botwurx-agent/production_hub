@@ -441,6 +441,14 @@ function GenCard({
               {roleTag && (
                 <span className="rounded-[7px] px-2 py-1 text-[11px] font-extrabold text-black" style={{ background: roleTag.c }}>{roleTag.t}</span>
               )}
+              <button
+                onClick={() => { if (confirm(`Delete this ${isImage ? "candidate" : "take"}? This can't be undone.`)) { setOpen(false); onRun(() => deleteGeneration(projectId, gen.id)); } }}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-[9px] border border-border px-3 py-1.5 text-xs font-bold text-text-muted transition hover:border-red hover:text-red">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M10 11v6M14 11v6" />
+                </svg>
+                Delete {isImage ? "candidate" : "take"}
+              </button>
             </div>
             <div>
               <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-text-muted">Prompt used</div>
@@ -482,6 +490,14 @@ function GenCard({
         <button onClick={() => setSpec((s) => !s)} className="ml-auto rounded-[6px] px-2 py-1 text-[11px] font-semibold text-text-muted hover:text-text">
           Spec
         </button>
+        <button
+          onClick={() => { if (confirm(`Delete this ${isImage ? "candidate" : "take"}? This can't be undone.`)) onRun(() => deleteGeneration(projectId, gen.id)); }}
+          className="rounded-[6px] px-1.5 py-1 text-text-faint transition hover:text-red"
+          title={`Delete ${isImage ? "candidate" : "take"}`} aria-label={`Delete ${isImage ? "candidate" : "take"}`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M10 11v6M14 11v6" />
+          </svg>
+        </button>
       </div>
       {spec && (
         <div className="border-t border-border px-2.5 py-2 text-[11.5px]">
@@ -494,9 +510,6 @@ function GenCard({
               <span className="font-semibold tabular-nums">{String(v)}</span>
             </div>
           ))}
-          <button onClick={() => onRun(() => deleteGeneration(projectId, gen.id))} className="mt-1 text-[11px] font-semibold text-red hover:underline">
-            Delete
-          </button>
         </div>
       )}
     </div>
