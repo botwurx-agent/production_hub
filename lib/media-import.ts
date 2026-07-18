@@ -264,6 +264,22 @@ function metaContent(html: string, keys: string[]): string | null {
   return null;
 }
 
+// A share page's og:description is usually the SITE's marketing tagline (e.g.
+// Higgsfield's "The ultimate AI-powered camera control for creators by
+// creators"), not the generation's prompt. Only treat it as a prompt hint if it
+// doesn't look like marketing boilerplate; otherwise return null so the prompt
+// field stays empty for the user to fill (better than a wrong auto-fill).
+const PROMPT_BOILERPLATE =
+  /(ai[- ]powered|for creators|the ultimate|all[- ]in[- ]one|sign\s?up|log\s?in|create stunning|generate (videos|images|stunning)|turn (text|your photos|images) into|explore (millions|thousands)|join (millions|thousands)|best (ai|video|image) )/i;
+
+function cleanPromptHint(desc: string | null): string | null {
+  if (!desc) return null;
+  const d = desc.trim();
+  if (d.length < 12) return null;
+  if (PROMPT_BOILERPLATE.test(d)) return null;
+  return d;
+}
+
 function kindFromContentType(ct: string): "video" | "image" | null {
   const c = ct.toLowerCase();
   if (c.startsWith("video/")) return "video";
@@ -386,7 +402,7 @@ export async function fetchMediaFromUrl(
       filename: guessFilename(safe, dl.contentType || ""),
       ...deriveDims(dl.bytes, dlKind),
       platform: detectPlatform(u.toString()),
-      description: description || null,
+      description: cleanPromptHint(description),
     };
   }
 
