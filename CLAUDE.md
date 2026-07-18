@@ -1013,11 +1013,16 @@ Shot cockpit / Triage) was shown to the operator.
   - IMPORT FROM HIGGSFIELD (BUILT, the X-factor): pull the pool of clips a studio
     generated on an external tool straight into a shot, eliminating the download/
     re-upload round trip. Generation stays external; we organize + review + pick.
-    UI = "Import from Higgsfield" button in the video StagePanel -> ImportModal
-    (paste up to 40 links, one per line, share pages OR direct media URLs; +
-    platform/generated-by/prompt). Each link is fetched SERVER-SIDE, stored, and
-    inserted as a video CANDIDATE in the pool with provenance auto-stamped
-    (platform='Higgsfield', external_url=source link). Partial success is reported
+    UI = an Import button on BOTH stage panels (video: "Import from Higgsfield";
+    image: "Import from link") -> ImportModal (paste up to 40 links, one per line,
+    share pages OR direct media URLs; + platform/generated-by/prompt). Each link
+    is fetched SERVER-SIDE, stored, and inserted as a CANDIDATE in the pool with
+    provenance auto-stamped (platform auto-detected from the host, external_url=
+    source link). The single-candidate AddGenModal ALSO takes any link now (not
+    just a direct file URL): its submit calls addGenerationFromLink, which fetches
+    + stores a share page OR direct URL and merges auto-provenance with manual
+    overrides, so a share link pasted there pulls the real media in and previews
+    (the old external_url-only path that couldn't preview a share page is gone). Partial success is reported
     per link with retry. lib/media-import.ts fetchMediaFromUrl (SSRF-safe via
     lib/unfurl safeFetch/isFetchableUrl; handles a direct .mp4/image URL OR parses
     og:video/og:image on a share page; 200MB cap). importFromHiggsfield action in

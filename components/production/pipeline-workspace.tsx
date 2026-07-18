@@ -21,6 +21,7 @@ import {
   deleteGeneration,
   importFromHiggsfield,
   inspectMediaLink,
+  addGenerationFromLink,
 } from "@/app/(app)/projects/[id]/pipeline-actions";
 import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
@@ -165,13 +166,19 @@ function AddGenModal({
         router.refresh();
         return;
       }
-      // Single URL path.
-      await addGeneration(projectId, {
+      // Single link path: fetch + store the real media (share page OR direct
+      // URL), auto-provenance merged with any manual overrides typed below.
+      if (!f.external_url.trim()) {
+        setErr("Upload a file, or paste a link.");
+        return;
+      }
+      setProg("Pulling the media in…");
+      const res = await addGenerationFromLink(projectId, {
         shotId: shot.id,
         stage,
         promptId,
         prompt: promptText || null,
-        external_url: f.external_url || null,
+        url: f.external_url.trim(),
         platform: f.platform || null,
         model: f.model || null,
         model_version: f.model_version || null,
@@ -187,6 +194,8 @@ function AddGenModal({
         parent_end_id: stage === "video" ? refEndId : null,
         generated_by_name: f.generated_by_name || null,
       });
+      setProg(null);
+      if (res?.error) { setErr(res.error); return; }
       onClose();
       router.refresh();
     });
@@ -212,17 +221,17 @@ function AddGenModal({
         </div>
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            …or a direct file URL <span className="font-normal normal-case text-text-faint">(must end in .png/.jpg/.mp4 — a share page won&apos;t preview)</span>
+            …or paste a link <span className="font-normal normal-case text-text-faint">(a {stage === "image" ? "Midjourney/Higgsfield" : "Higgsfield"} share link OR a direct file URL — we pull the media in and preview it)</span>
           </label>
           <input value={f.external_url} onChange={(e) => set("external_url", e.target.value)}
-            placeholder="https://…/image.png" className={`mt-1 ${field}`} />
+            placeholder="https://higgsfield.ai/…  or  https://…/clip.mp4" className={`mt-1 ${field}`} />
           <div className="mt-1.5 flex items-center gap-2">
             <button type="button" onClick={autofill} disabled={inspecting || !f.external_url.trim()}
               className="inline-flex items-center gap-1.5 rounded-[8px] border border-border px-2.5 py-1 text-[11px] font-bold text-text transition hover:border-accent hover:text-accent disabled:opacity-50">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z" />
               </svg>
-              {inspecting ? "Reading…" : "Auto-fill from link"}
+              {inspecting ? "Reading…" : "Preview info from link"}
             </button>
             {inspectMsg && <span className="text-[11px] font-medium text-text-muted">{inspectMsg}</span>}
           </div>
@@ -668,7 +677,7 @@ function ImportModal({
 }) {
   const [busy, start] = useTransition();
   const [urlsText, setUrlsText] = useState("");
-  const [platform, setPlatform] = useState("Higgsfield");
+  const [platform, setPlatform] = useState("");
   const [promptText, setPromptText] = useState(basePrompt);
   const [by, setBy] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -709,13 +718,13 @@ function ImportModal({
   }
 
   return (
-    <Modal open onClose={onClose} size="lg" title="Import from Higgsfield">
+    <Modal open onClose={onClose} size="lg" title={stage === "video" ? "Import from Higgsfield" : "Import from a link"}>
       <div className="space-y-3">
         <p className="text-sm text-text-muted">
-          Paste the links to the clips you generated (one per line — a share link or a
-          direct video URL). We pull each one in as a candidate on this shot, with its
-          source tracked, so you can review the pool and pick the winner here. No download
-          or re-upload. Generation stays on the tool.
+          Paste the links to the {stage === "image" ? "images" : "clips"} you generated (one per line — a
+          share link or a direct file URL). We pull each one in as a candidate on this shot, with its
+          source and specs auto-detected, so you can review the pool and pick the winner here. No
+          download or re-upload. Generation stays on the tool.
         </p>
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
@@ -730,7 +739,7 @@ function ImportModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Tool / platform</label>
-            <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="Higgsfield" className={`mt-1 ${field}`} />
+            <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="Auto-detect from link" className={`mt-1 ${field}`} />
           </div>
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Generated by</label>
@@ -746,7 +755,7 @@ function ImportModal({
         </div>
         {done != null && (
           <p className="rounded-[9px] bg-green-bg px-3 py-2 text-sm font-semibold text-green">
-            Imported {done} clip{done === 1 ? "" : "s"}.{failed && failed.length > 0 ? ` ${failed.length} still need attention below.` : ""}
+            Imported {done} file{done === 1 ? "" : "s"}.{failed && failed.length > 0 ? ` ${failed.length} still need attention below.` : ""}
           </p>
         )}
         {failed && failed.length > 0 && (
@@ -764,7 +773,7 @@ function ImportModal({
         )}
         {err && <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{err}</p>}
         <div className="flex items-center justify-end gap-3 pt-1">
-          {busy && <span className="mr-auto text-xs font-medium text-text-muted">Pulling {links.length} clip{links.length === 1 ? "" : "s"}…</span>}
+          {busy && <span className="mr-auto text-xs font-medium text-text-muted">Pulling {links.length} file{links.length === 1 ? "" : "s"}…</span>}
           <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>{done != null ? "Close" : "Cancel"}</Button>
           <Button size="sm" onClick={submit} disabled={busy || links.length === 0}>
             {busy ? "Importing…" : failed ? "Retry these" : `Import ${links.length || ""}`.trim()}
@@ -857,16 +866,14 @@ function StagePanel({
               Triage {pool.length}
             </button>
           )}
-          {stage === "video" && (
-            <button onClick={() => setImporting(true)}
-              className="inline-flex items-center gap-1.5 rounded-[9px] border border-border px-2.5 py-1 text-xs font-bold text-text transition hover:border-accent hover:text-accent"
-              title="Pull the clips you generated on an external tool straight in">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
-              </svg>
-              Import from Higgsfield
-            </button>
-          )}
+          <button onClick={() => setImporting(true)}
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-border px-2.5 py-1 text-xs font-bold text-text transition hover:border-accent hover:text-accent"
+            title="Paste share links to pull the media you generated straight in">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
+            </svg>
+            {stage === "video" ? "Import from Higgsfield" : "Import from link"}
+          </button>
           <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
             + {stage === "image" ? "Candidate" : "Take"}
           </Button>

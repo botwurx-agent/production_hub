@@ -532,6 +532,78 @@ export async function deleteLibraryEntry(
   rp(projectId);
 }
 
+// Add ONE candidate/take from a pasted link (share page OR direct media URL).
+// Fetches + stores the real media (so it previews and survives the source link
+// expiring), auto-derives provenance, and applies any manual overrides on top.
+export async function addGenerationFromLink(
+  projectId: string,
+  input: {
+    shotId: string;
+    stage: "image" | "video";
+    url: string;
+    promptId?: string | null;
+    prompt?: string | null;
+    platform?: string | null;
+    model?: string | null;
+    model_version?: string | null;
+    seed?: string | null;
+    aspect?: string | null;
+    resolution?: string | null;
+    fps?: number | null;
+    duration_sec?: number | null;
+    guidance?: number | null;
+    cost?: number | null;
+    params?: Json | null;
+    parent_start_id?: string | null;
+    parent_end_id?: string | null;
+    generated_by_name?: string | null;
+  },
+): Promise<PipelineState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const media = await fetchMediaFromUrl(input.url);
+  if ("error" in media) return { error: media.error };
+  const path = `${ctx.studio.id}/pipeline/${projectId}/${crypto.randomUUID()}-${safeName(media.filename)}`;
+  const { error: upErr } = await assetStorage().upload(path, media.bytes, {
+    contentType: media.contentType || undefined,
+    upsert: false,
+  });
+  if (upErr) return { error: upErr.message };
+  const { data, error } = await supabase
+    .from("ai_generations")
+    .insert({
+      studio_id: ctx.studio.id,
+      shot_id: input.shotId,
+      stage: input.stage,
+      kind: media.kind,
+      prompt_id: input.promptId ?? null,
+      prompt: input.prompt ?? media.description ?? null,
+      file_path: path,
+      external_url: media.sourceUrl,
+      // Manual overrides win; auto-derived fills the rest.
+      platform: input.platform || media.platform || null,
+      model: input.model ?? null,
+      model_version: input.model_version ?? null,
+      seed: input.seed ?? null,
+      aspect: input.aspect || aspectRatio(media.width, media.height),
+      resolution: input.resolution || resolutionLabel(media.width, media.height, media.kind),
+      fps: input.fps ?? null,
+      duration_sec: input.duration_sec ?? media.durationSec ?? null,
+      guidance: input.guidance ?? null,
+      cost: input.cost ?? null,
+      params: input.params ?? null,
+      parent_start_id: input.parent_start_id ?? null,
+      parent_end_id: input.parent_end_id ?? null,
+      generated_by: ctx.userId,
+      generated_by_name: input.generated_by_name ?? null,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: error?.message ?? "Could not add." };
+  rp(projectId);
+  return { id: data.id };
+}
+
 // Inspect a single pasted link (no insert): fetch it and return the auto-derived
 // provenance so the add-candidate form can pre-fill without manual typing.
 export async function inspectMediaLink(
