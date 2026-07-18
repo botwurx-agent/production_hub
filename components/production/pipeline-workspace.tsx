@@ -460,22 +460,33 @@ function GenCard({
 
 // ---- References (v2v inputs): driving / style / character clips -------------
 
-const REF_ROLES: { value: string; label: string }[] = [
-  { value: "motion", label: "Driving / motion video" },
-  { value: "style", label: "Style reference" },
-  { value: "character", label: "Character reference" },
-  { value: "ref", label: "Reference" },
-];
+// Reference roles differ by stage: images generate FROM characters / styles /
+// elements; video can additionally be driven by a motion clip (v2v).
+const REF_ROLES: Record<Stage, { value: string; label: string }[]> = {
+  image: [
+    { value: "character", label: "Character reference" },
+    { value: "style", label: "Style reference" },
+    { value: "element", label: "Element / object" },
+    { value: "ref", label: "Reference" },
+  ],
+  video: [
+    { value: "motion", label: "Driving / motion video" },
+    { value: "style", label: "Style reference" },
+    { value: "character", label: "Character reference" },
+    { value: "ref", label: "Reference" },
+  ],
+};
 
 function AddRefModal({
-  projectId, studioId, shot, onClose,
+  projectId, studioId, shot, stage, onClose,
 }: {
-  projectId: string; studioId: string; shot: AiShot; onClose: () => void;
+  projectId: string; studioId: string; shot: AiShot; stage: Stage; onClose: () => void;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
-  const [role, setRole] = useState("motion");
-  const [kind, setKind] = useState<"video" | "image">("video");
+  const roles = REF_ROLES[stage];
+  const [role, setRole] = useState(roles[0].value);
+  const [kind, setKind] = useState<"video" | "image">(stage === "image" ? "image" : "video");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -497,7 +508,7 @@ function AddRefModal({
       }
       setProg("Saving…");
       const res = await addGeneration(projectId, {
-        shotId: shot.id, stage: "video", status: "reference", role, kind,
+        shotId: shot.id, stage, status: "reference", role, kind,
         file_path: filePath, external_url: filePath ? null : (url.trim() || null),
       });
       setProg(null);
@@ -510,14 +521,15 @@ function AddRefModal({
     <Modal open onClose={onClose} size="md" title="Add a reference">
       <div className="space-y-3">
         <p className="text-sm text-text-muted">
-          A clip this shot generates <b className="text-text">from</b> (video-to-video): a driving/style/character
-          reference. It&apos;s tracked with its own lineage.
+          {stage === "image"
+            ? "A character, style, or element this shot's images are generated from. Tracked with its own lineage."
+            : "A clip this shot generates from (video-to-video): a driving/style/character reference. Tracked with its own lineage."}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Role</label>
             <select value={role} onChange={(e) => setRole(e.target.value)} className={`mt-1 ${field}`}>
-              {REF_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              {roles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
           <div>
@@ -550,9 +562,9 @@ function AddRefModal({
 }
 
 function ReferencesPanel({
-  projectId, studioId, shot, refs, media, onRun,
+  projectId, studioId, shot, stage, refs, media, onRun,
 }: {
-  projectId: string; studioId: string; shot: AiShot;
+  projectId: string; studioId: string; shot: AiShot; stage: Stage;
   refs: AiGeneration[]; media: Record<string, string>;
   onRun: (fn: () => Promise<unknown>) => void;
 }) {
@@ -562,12 +574,21 @@ function ReferencesPanel({
     <div className="mb-3 rounded-[12px] border border-dashed border-border p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-          References <span className="font-normal normal-case text-text-faint">— what this shot generates from (v2v)</span>
+          References{" "}
+          <span className="font-normal normal-case text-text-faint">
+            {stage === "image"
+              ? "— characters, styles & elements used in these images"
+              : "— what this shot generates from (v2v)"}
+          </span>
         </p>
         <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>+ Reference</Button>
       </div>
       {refs.length === 0 ? (
-        <p className="text-xs text-text-faint">None yet. Add a driving/style/character clip for video-to-video.</p>
+        <p className="text-xs text-text-faint">
+          {stage === "image"
+            ? "None yet. Add a character, style, or element reference for this shot."
+            : "None yet. Add a driving/style/character clip for video-to-video."}
+        </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {refs.map((g) => {
@@ -591,7 +612,7 @@ function ReferencesPanel({
           })}
         </div>
       )}
-      {adding && <AddRefModal projectId={projectId} studioId={studioId} shot={shot} onClose={() => setAdding(false)} />}
+      {adding && <AddRefModal projectId={projectId} studioId={studioId} shot={shot} stage={stage} onClose={() => setAdding(false)} />}
     </div>
   );
 }
@@ -734,10 +755,11 @@ function StagePanel({
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
   const label = stage === "image" ? "Image" : "Video";
   const hue = stage === "image" ? "amber" : "blue";
-  // Reference inputs (v2v driving/style/character clips) live alongside the pool
-  // but are kept out of the candidate/take grid.
-  const refs = stage === "video" ? gens.filter((g) => g.status === "reference") : [];
-  const pool = stage === "video" ? gens.filter((g) => g.status !== "reference") : gens;
+  // Reference inputs (characters/styles/elements for images; driving/style/
+  // character clips for v2v) live alongside the pool but are kept out of the
+  // candidate/take grid. Both stages support them.
+  const refs = gens.filter((g) => g.status === "reference");
+  const pool = gens.filter((g) => g.status !== "reference");
   const kept = pool.filter((g) => g.status !== "rejected").length;
   const start = stage === "image" ? pool.find((g) => g.role === "start") ?? null : null;
   const end = stage === "image" ? pool.find((g) => g.role === "end") ?? null : null;
@@ -754,9 +776,8 @@ function StagePanel({
         <span className="text-xs text-text-faint">{kept} kept · {pool.length} total</span>
       </div>
 
-      {stage === "video" && (
-        <ReferencesPanel projectId={projectId} studioId={studioId} shot={shot} refs={refs} media={media} onRun={onRun} />
-      )}
+      <ReferencesPanel projectId={projectId} studioId={studioId} shot={shot} stage={stage} refs={refs} media={media} onRun={onRun} />
+
 
       <div className="mb-3 space-y-2">
         <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
