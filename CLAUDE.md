@@ -1095,6 +1095,26 @@ Shot cockpit / Triage) was shown to the operator.
     Actions saveLibraryEntry/deleteLibraryEntry in pipeline-actions.ts. NOTE: no
     version-history tree yet (editing updates in place; updated_at tracks);
     deferred.
+  - MASTER CUT (BUILT): the assembled deliverable + its revision rounds, living in
+    the SAME Assets -> Versions spine as everything else (the project's asset of
+    type 'cut'; no migration -- asset_type already had 'cut'). A "Master cut"
+    toggle button in the pipeline controls (next to Script/Library) reveals a
+    full-width band below the Sequence strip (manual open, NOT gated on shot
+    approvals; defaults open once a version exists, shows a vN count). Editing/
+    assembly stays OFF-app (organize-don't-edit): export the cut, upload it here
+    as a Version (device file OR a link we fetch+store), collect timecoded feedback
+    via the existing ReviewModal (video -> VideoReview scrubber), share with the
+    client via the existing ShareReviewButton (/r/<token>), edit externally, upload
+    the next version. Each version shows its review summary (Pending/Changes/
+    Approved from approvals) + open-note count. First version flips the cut asset
+    draft->in_review so it ALSO appears on the project Review page. components/
+    production/master-cut-band.tsx (UploadVersionModal + VersionRowView + reuse of
+    ReviewModal/ShareReviewButton); addMasterCutVersion + ensureMasterCut in
+    actions.ts (reuse insertVersion); the pipeline page loads it via
+    loadProjectAssets (find type==='cut') + its review link, passes masterCut/token/
+    linkId/currentUserId to PipelineWorkspace. NOT built: video version-compare
+    (image-only today), whole-sequence auto-assemble (deliberate -- we don't edit),
+    asset-level status menu in the band.
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-

@@ -27,6 +27,8 @@ import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
 import { TriageView } from "@/components/production/triage-view";
 import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
+import { MasterCutBand } from "@/components/production/master-cut-band";
+import type { AssetWithVersions } from "@/components/projects/asset-types";
 import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
 
 type Stage = "image" | "video";
@@ -1166,7 +1168,9 @@ function SendToReviewControl({
 // ---- Workspace --------------------------------------------------------------
 
 export function PipelineWorkspace({
-  projectId, studioId, script, shots, prompts, generations, media, library = [], reviewingShotIds = [],
+  projectId, studioId, script, shots, prompts, generations, media, library = [],
+  masterCut = null, masterCutToken = null, masterCutLinkId = null, currentUserId,
+  reviewingShotIds = [],
 }: {
   projectId: string;
   studioId: string;
@@ -1176,12 +1180,18 @@ export function PipelineWorkspace({
   generations: AiGeneration[];
   media: Record<string, string>;
   library?: AiPromptLibraryEntry[];
+  masterCut?: AssetWithVersions | null;
+  masterCutToken?: string | null;
+  masterCutLinkId?: string | null;
+  currentUserId: string;
   reviewingShotIds?: string[];
 }) {
   const router = useRouter();
   const [, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(shots[0]?.id ?? null);
   const [scriptOpen, setScriptOpen] = useState(false);
+  const cutVersions = masterCut?.versions?.length ?? 0;
+  const [cutOpen, setCutOpen] = useState<boolean>(cutVersions > 0);
 
   const reviewing = useMemo(() => new Set(reviewingShotIds), [reviewingShotIds]);
   const active = shots.find((s) => s.id === activeId) ?? null;
@@ -1284,6 +1294,15 @@ export function PipelineWorkspace({
           Script <span className="text-xs font-normal text-text-faint">{scriptOpen ? "hide" : "edit"}</span>
         </button>
         <LibraryButton projectId={projectId} entries={library} />
+        <button onClick={() => setCutOpen((v) => !v)}
+          className={`flex items-center gap-2 rounded-[11px] border px-3 py-2 text-sm font-bold transition ${
+            cutOpen ? "border-border-strong text-text" : "border-border text-text hover:border-border-strong"
+          }`}
+          title="The assembled film and its revision rounds">
+          <span className="grid h-6 w-6 place-items-center rounded-[7px]" style={{ background: "var(--h-green-bg)", color: "var(--h-green)" }}>▦</span>
+          Master cut
+          {cutVersions > 0 && <span className="rounded-[6px] bg-surface-2 px-1.5 text-xs font-bold text-text-muted">v{cutVersions}</span>}
+        </button>
         <span className="flex-1" />
         <Button size="sm" onClick={() => newShot("generated")}>+ Generated shot</Button>
         <Button size="sm" variant="secondary" onClick={() => newShot("live")}>+ Live shot</Button>
@@ -1304,6 +1323,18 @@ export function PipelineWorkspace({
           activeId={activeId}
           onSelect={setActiveId}
           onReorder={(ids) => run(() => reorderShots(projectId, ids))}
+        />
+      )}
+
+      {/* Master cut: the assembled deliverable + revision rounds (manual open) */}
+      {cutOpen && (
+        <MasterCutBand
+          projectId={projectId}
+          studioId={studioId}
+          masterCut={masterCut}
+          reviewToken={masterCutToken}
+          reviewLinkId={masterCutLinkId}
+          currentUserId={currentUserId}
         />
       )}
 

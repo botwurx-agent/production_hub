@@ -5,6 +5,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { PipelineWorkspace } from "@/components/production/pipeline-workspace";
+import { loadProjectAssets } from "@/lib/project-data";
 import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
 
 export default async function PipelinePage({
@@ -67,6 +68,15 @@ export default async function PipelinePage({
     reviewingShotIds = (docRev ?? []).map((r) => r.target_id);
   }
 
+  // The master cut (the assembled deliverable) lives in the Assets -> Versions
+  // spine as the project's asset of type 'cut'. Surface it here.
+  const { assets: projectAssets, reviewLinkByAsset } = await loadProjectAssets(
+    supabase,
+    params.id
+  );
+  const masterCut = projectAssets.find((a) => a.type === "cut") ?? null;
+  const masterCutLink = masterCut ? reviewLinkByAsset.get(masterCut.id) ?? null : null;
+
   // Sign uploaded files (private bucket) for display, keyed by generation id.
   const media: Record<string, string> = {};
   await Promise.all(
@@ -103,6 +113,10 @@ export default async function PipelinePage({
           generations={generations}
           media={media}
           library={library}
+          masterCut={masterCut}
+          masterCutToken={masterCutLink?.token ?? null}
+          masterCutLinkId={masterCutLink?.id ?? null}
+          currentUserId={ctx.userId}
           reviewingShotIds={reviewingShotIds}
         />
       </Card>

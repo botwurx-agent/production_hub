@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assetStorage } from "@/lib/asset-storage";
+import { fetchMediaFromUrl } from "@/lib/media-import";
 import { requireStudioContext } from "@/lib/studio";
 import { ASSET_STATUS } from "@/lib/status";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -216,6 +218,127 @@ export async function addVersion(
     `Added v${res.versionNumber} to "${asset.name}"`
   );
   revalidatePath(`/projects/${asset.project_id}`);
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Master cut (the assembled deliverable + its revision rounds)
+//
+// The final cut lives in the SAME Assets -> Versions spine as everything else
+// (that's the "nothing gets lost" machinery: version history, timecode review,
+// client share, approvals, delivery). It's just the project's asset of type
+// 'cut'. The AI pipeline page surfaces it, but a live/hybrid project's final
+// cut works identically. We organize the versions + comments; the editing
+// happens off-app (export -> upload here -> collect timecoded feedback -> edit
+// externally -> upload the next version).
+// ---------------------------------------------------------------------------
+
+function safeCutName(name: string): string {
+  return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "cut";
+}
+
+async function ensureMasterCut(
+  supabase: SupabaseClient<Database>,
+  studioId: string,
+  userId: string,
+  projectId: string
+): Promise<{ id: string } | { error: string }> {
+  const { data: existing } = await supabase
+    .from("assets")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("type", "cut")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (existing) return { id: existing.id };
+  const { data, error } = await supabase
+    .from("assets")
+    .insert({
+      studio_id: studioId,
+      project_id: projectId,
+      name: "Master cut",
+      type: "cut",
+      status: "draft",
+      source: "manual",
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: error?.message ?? "Could not create the master cut." };
+  return { id: data.id };
+}
+
+// Add a new version of the master cut. Accepts a client-uploaded file
+// (storagePath) OR a link (share page / direct URL) we fetch + store, OR a bare
+// external url stored as a reference. Creates the cut asset lazily on first use.
+export async function addMasterCutVersion(
+  projectId: string,
+  input: {
+    storagePath?: string | null;
+    mimeType?: string | null;
+    url?: string | null;
+    link?: string | null;
+    notes?: string | null;
+  }
+): Promise<ActionState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const cut = await ensureMasterCut(supabase, ctx.studio.id, ctx.userId, projectId);
+  if ("error" in cut) return { error: cut.error };
+
+  let storagePath = input.storagePath ?? null;
+  let mimeType = input.mimeType ?? null;
+  let url = input.url ?? null;
+
+  if (input.link && input.link.trim()) {
+    const media = await fetchMediaFromUrl(input.link.trim());
+    if ("error" in media) return { error: media.error };
+    const path = `${ctx.studio.id}/${projectId}/${crypto.randomUUID()}-${safeCutName(media.filename)}`;
+    const { error: upErr } = await assetStorage().upload(path, media.bytes, {
+      contentType: media.contentType || undefined,
+      upsert: false,
+    });
+    if (upErr) return { error: upErr.message };
+    storagePath = path;
+    mimeType = media.contentType || null;
+    url = null;
+  }
+
+  if (!storagePath && !url) return { error: "Add a file or a link for this version." };
+
+  const res = await insertVersion(supabase, {
+    studioId: ctx.studio.id,
+    userId: ctx.userId,
+    assetId: cut.id,
+    storagePath,
+    url,
+    mimeType,
+    sizeBytes: null,
+    notes: input.notes?.trim() || null,
+  });
+  if ("error" in res) return { error: res.error };
+
+  // First version moves the cut into the review cycle so it also surfaces on the
+  // project Review page. Later versions leave the status alone (a re-review of an
+  // approved cut should be a deliberate act, not automatic).
+  await supabase
+    .from("assets")
+    .update({ status: "in_review" })
+    .eq("id", cut.id)
+    .eq("status", "draft");
+
+  await logActivity(
+    supabase,
+    ctx.studio.id,
+    ctx.userId,
+    projectId,
+    "upload",
+    `Added master cut v${res.versionNumber}`
+  );
+  revalidatePath(`/projects/${projectId}/pipeline`);
+  revalidatePath(`/projects/${projectId}`);
   return null;
 }
 
