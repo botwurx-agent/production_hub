@@ -307,19 +307,35 @@ function guessFilename(u: URL, ct: string): string {
   return `${last || "clip"}.${ext}`;
 }
 
+// Every fetch here is against a user-pasted link, so it MUST be time-bounded: a
+// slow or stalled host would otherwise hang the server action (and the import
+// modal) indefinitely. The AbortController signal aborts both the connection and
+// the body stream, so it also caps a stalled download mid-read.
+const PAGE_TIMEOUT_MS = 15000;
+const DOWNLOAD_TIMEOUT_MS = 30000;
+
 async function download(
   u: URL,
 ): Promise<{ bytes: Buffer; contentType: string } | null> {
-  const res = await safeFetch(u, {
-    headers: { "user-agent": BROWSER_UA, accept: "*/*" },
-  });
-  if (!res || !res.ok) return null;
-  const ct = res.headers.get("content-type") ?? "";
-  const len = Number(res.headers.get("content-length") ?? "0");
-  if (len && len > MAX_BYTES) return null;
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.byteLength === 0 || buf.byteLength > MAX_BYTES) return null;
-  return { bytes: buf, contentType: ct };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+  try {
+    const res = await safeFetch(u, {
+      headers: { "user-agent": BROWSER_UA, accept: "*/*" },
+      signal: controller.signal,
+    });
+    if (!res || !res.ok) return null;
+    const ct = res.headers.get("content-type") ?? "";
+    const len = Number(res.headers.get("content-length") ?? "0");
+    if (len && len > MAX_BYTES) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength === 0 || buf.byteLength > MAX_BYTES) return null;
+    return { bytes: buf, contentType: ct };
+  } catch {
+    return null; // timeout / network error
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function fetchMediaFromUrl(
@@ -328,35 +344,55 @@ export async function fetchMediaFromUrl(
   const u = isFetchableUrl(raw.trim());
   if (!u) return { error: "Not a valid public link." };
 
-  const first = await safeFetch(u, {
-    headers: { "user-agent": BROWSER_UA, accept: "*/*" },
-  });
-  if (!first || !first.ok) return { error: "Could not reach that link." };
-  const ct = (first.headers.get("content-type") ?? "").toLowerCase();
-  const directKind = kindFromContentType(ct);
+  // Time-bound the page fetch + its body read (the share page could be a slow
+  // SPA). A separate timeout guards the media download below.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PAGE_TIMEOUT_MS);
+  let first: Response | null;
+  let firstText = "";
+  let firstBuf: Buffer | null = null;
+  let ct = "";
+  let directKind: "video" | "image" | null = null;
+  try {
+    first = await safeFetch(u, {
+      headers: { "user-agent": BROWSER_UA, accept: "*/*" },
+      signal: controller.signal,
+    });
+    if (!first || !first.ok) return { error: "Could not reach that link (it may be private or slow)." };
+    ct = (first.headers.get("content-type") ?? "").toLowerCase();
+    directKind = kindFromContentType(ct);
+    if (directKind) {
+      const len = Number(first.headers.get("content-length") ?? "0");
+      if (len && len > MAX_BYTES) return { error: "File is too large to import." };
+      firstBuf = Buffer.from(await first.arrayBuffer());
+    } else if (ct.includes("html") || ct.includes("xml") || ct === "") {
+      firstText = (await first.text()).slice(0, 800_000);
+    }
+  } catch {
+    return { error: "Timed out reaching that link. Try the direct file URL, or check the link." };
+  } finally {
+    clearTimeout(timer);
+  }
 
   // 1. The link is the media itself.
-  if (directKind) {
-    const len = Number(first.headers.get("content-length") ?? "0");
-    if (len && len > MAX_BYTES) return { error: "File is too large to import." };
-    const buf = Buffer.from(await first.arrayBuffer());
-    if (buf.byteLength === 0) return { error: "The file was empty." };
-    if (buf.byteLength > MAX_BYTES) return { error: "File is too large to import." };
+  if (directKind && firstBuf) {
+    if (firstBuf.byteLength === 0) return { error: "The file was empty." };
+    if (firstBuf.byteLength > MAX_BYTES) return { error: "File is too large to import." };
     return {
-      bytes: buf,
+      bytes: firstBuf,
       contentType: ct,
       kind: directKind,
       sourceUrl: u.toString(),
       filename: guessFilename(u, ct),
-      ...deriveDims(buf, directKind),
+      ...deriveDims(firstBuf, directKind),
       platform: detectPlatform(u.toString()),
       description: null,
     };
   }
 
   // 2. A share / watch page: find the underlying media in the page metadata.
-  if (ct.includes("html") || ct.includes("xml") || ct === "") {
-    const html = (await first.text()).slice(0, 800_000);
+  if (firstText) {
+    const html = firstText;
     const videoUrl = metaContent(html, [
       "og:video:secure_url",
       "og:video:url",
@@ -378,7 +414,7 @@ export async function fetchMediaFromUrl(
     const pick = videoUrl ?? imageUrl;
     if (!pick) {
       return {
-        error: "No video or image found on that page. Paste the direct media link.",
+        error: "No video or image found on that page. Paste the direct media (.mp4/.png) link instead.",
       };
     }
     let mediaUrl: URL;
@@ -390,7 +426,7 @@ export async function fetchMediaFromUrl(
     const safe = isFetchableUrl(mediaUrl.toString());
     if (!safe) return { error: "The media link on that page was not reachable." };
     const dl = await download(safe);
-    if (!dl) return { error: "Could not download the media from that page." };
+    if (!dl) return { error: "Could not download the media from that page (it may be too large or slow)." };
     const dlKind =
       kindFromContentType(dl.contentType) ?? (videoUrl ? "video" : "image");
     return {

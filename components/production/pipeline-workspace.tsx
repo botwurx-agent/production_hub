@@ -739,14 +739,20 @@ function ImportModal({
     setDone(null);
     if (links.length === 0) { setErr("Paste at least one link."); return; }
     start(async () => {
-      const res = await importFromHiggsfield(projectId, {
-        shotId: shot.id,
-        stage,
-        urls: links,
-        prompt: promptText || null,
-        platform: platform || null,
-        generated_by_name: by || null,
-      });
+      let res;
+      try {
+        res = await importFromHiggsfield(projectId, {
+          shotId: shot.id,
+          stage,
+          urls: links,
+          prompt: promptText || null,
+          platform: platform || null,
+          generated_by_name: by || null,
+        });
+      } catch {
+        setErr("Import failed — the link may be slow or unreachable. Try again, or paste the direct file (.mp4/.png) URL.");
+        return;
+      }
       if ("error" in res) { setErr(res.error); return; }
       setDone(res.imported);
       if (res.failed.length > 0) {

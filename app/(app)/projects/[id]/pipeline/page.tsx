@@ -8,6 +8,11 @@ import { PipelineWorkspace } from "@/components/production/pipeline-workspace";
 import { loadProjectAssets } from "@/lib/project-data";
 import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
 
+// Import/fetch-and-store server actions on this route pull media from external
+// links; give them headroom beyond the short default so a slow host doesn't get
+// the function killed mid-download.
+export const maxDuration = 60;
+
 export default async function PipelinePage({
   params,
 }: {
