@@ -105,7 +105,7 @@ export function CutReviewView({
   const flatComments = [...version.comments].sort((a, b) => a.created_at.localeCompare(b.created_at));
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto w-full max-w-[1600px]">
       <Link
         href={`/projects/${projectId}/pipeline`}
         className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted transition hover:text-text"
@@ -170,6 +170,7 @@ export function CutReviewView({
         <VideoReview
           videoUrl={version.signedUrl as string}
           comments={portalComments}
+          wide
           onPost={postTimed}
           onResolve={resolve}
         />

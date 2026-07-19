@@ -19,6 +19,7 @@ export function VideoReview({
   canResolve = true,
   disabled = false,
   disabledHint,
+  wide = false,
   onPost,
   onResolve,
 }: {
@@ -27,6 +28,9 @@ export function VideoReview({
   canResolve?: boolean;
   disabled?: boolean;
   disabledHint?: string;
+  // Full-page reviews (e.g. the master cut) get a taller stage + roomier
+  // comment rail; the compact default suits the in-modal review.
+  wide?: boolean;
   onPost: (text: string, timecode: number) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
@@ -76,7 +80,7 @@ export function VideoReview({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
+    <div className={`grid grid-cols-1 gap-4 ${wide ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_340px]"}`}>
       {/* Stage */}
       <div className="rounded-[16px] p-4" style={{ backgroundColor: "#141118" }}>
         <video
@@ -85,7 +89,7 @@ export function VideoReview({
           controls
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime || 0)}
-          className="mx-auto max-h-[60vh] w-full rounded-[10px] shadow-2xl"
+          className={`mx-auto w-full rounded-[10px] shadow-2xl ${wide ? "max-h-[80vh]" : "max-h-[60vh]"}`}
         />
 
         {/* Timeline with comment markers */}
