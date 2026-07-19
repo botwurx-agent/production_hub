@@ -1194,7 +1194,14 @@ export function PipelineWorkspace({
   const [cutOpen, setCutOpen] = useState<boolean>(cutVersions > 0);
 
   const reviewing = useMemo(() => new Set(reviewingShotIds), [reviewingShotIds]);
-  const active = shots.find((s) => s.id === activeId) ?? null;
+  // Optimistic title edits: a rename shows on the sequence card + header
+  // instantly, without waiting on the server refresh to propagate.
+  const [titleOverride, setTitleOverride] = useState<Record<string, string>>({});
+  const displayShots = useMemo(
+    () => shots.map((s) => (s.id in titleOverride ? { ...s, title: titleOverride[s.id] } : s)),
+    [shots, titleOverride],
+  );
+  const active = displayShots.find((s) => s.id === activeId) ?? null;
 
   function run(fn: () => Promise<unknown>) {
     start(async () => { await fn(); router.refresh(); });
@@ -1318,7 +1325,7 @@ export function PipelineWorkspace({
       {/* Sequence: all shots at once */}
       {shots.length > 0 && (
         <SequenceStrip
-          shots={shots}
+          shots={displayShots}
           thumbs={shotThumb}
           activeId={activeId}
           onSelect={setActiveId}
@@ -1355,7 +1362,8 @@ export function PipelineWorkspace({
             {/* Shot header */}
             <div className="rounded-[14px] border border-border p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <input defaultValue={active.title} onBlur={(e) => run(() => updateShot(projectId, active.id, { title: e.target.value }))}
+                <input defaultValue={active.title}
+                  onBlur={(e) => { const v = e.target.value; setTitleOverride((o) => ({ ...o, [active.id]: v })); run(() => updateShot(projectId, active.id, { title: v })); }}
                   placeholder="Shot title" className={`${cell} flex-1 text-base font-bold`} />
                 <div className="flex gap-1">
                   {(["generated", "live"] as const).map((m) => (
