@@ -875,22 +875,22 @@ function StagePanel({
           Working prompt <span className="font-normal normal-case text-text-faint">· pre-fills each new batch; the exact prompt is saved on every generation</span>
         </label>
         <textarea value={pText} onChange={(e) => setPText(e.target.value)}
-          onBlur={() => savePrompt(projectId, shot.id, stage, { text: pText })}
+          onBlur={() => { savePrompt(projectId, shot.id, stage, { text: pText }).then(() => router.refresh()); }}
           rows={2} placeholder={`Base ${label.toLowerCase()} prompt…`} className={field} />
         <LibraryBar
           projectId={projectId}
           stage={stage}
           entries={library}
           currentPrompt={pText}
-          onInsert={(text) => { setPText(text); savePrompt(projectId, shot.id, stage, { text }); }}
+          onInsert={(text) => { setPText(text); savePrompt(projectId, shot.id, stage, { text }).then(() => router.refresh()); }}
           onAppend={(text) => {
             const next = pText.trim() ? `${pText.trim()}\n\n${text}` : text;
             setPText(next);
-            savePrompt(projectId, shot.id, stage, { text: next });
+            savePrompt(projectId, shot.id, stage, { text: next }).then(() => router.refresh());
           }}
         />
         <input list={`m-${stage}`} value={pModel} onChange={(e) => setPModel(e.target.value)}
-          onBlur={() => savePrompt(projectId, shot.id, stage, { target_model: pModel || null })}
+          onBlur={() => { savePrompt(projectId, shot.id, stage, { target_model: pModel || null }).then(() => router.refresh()); }}
           placeholder={`Default model (${models[0]})`} className={field} />
         <datalist id={`m-${stage}`}>{models.map((m) => <option key={m} value={m} />)}</datalist>
       </div>
@@ -1348,7 +1348,10 @@ export function PipelineWorkspace({
           Select a shot from the sequence above.
         </div>
       ) : (
-        <div className="space-y-4">
+        // key by shot id: remount the whole shot editor when you switch shots so
+        // every field (title, beat, working prompt, model) re-seeds from THIS
+        // shot's data instead of carrying the previous shot's local state over.
+        <div key={active.id} className="space-y-4">
             {/* Shot header */}
             <div className="rounded-[14px] border border-border p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -1391,7 +1394,7 @@ export function PipelineWorkspace({
                 <button onClick={() => { if (confirm("Delete this shot?")) { setActiveId(null); run(() => deleteShot(projectId, active.id)); } }}
                   className="text-xs font-semibold text-red hover:underline">Delete</button>
               </div>
-              <textarea defaultValue={active.beat ?? ""} onBlur={(e) => updateShot(projectId, active.id, { beat: e.target.value || null })}
+              <textarea defaultValue={active.beat ?? ""} onBlur={(e) => run(() => updateShot(projectId, active.id, { beat: e.target.value || null }))}
                 rows={2} placeholder="Script beat — the action/copy this shot covers" className={`mt-2 ${field}`} />
             </div>
 
