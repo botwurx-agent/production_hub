@@ -1362,8 +1362,9 @@ export function PipelineWorkspace({
             {/* Shot header */}
             <div className="rounded-[14px] border border-border p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <input defaultValue={active.title}
-                  onBlur={(e) => { const v = e.target.value; setTitleOverride((o) => ({ ...o, [active.id]: v })); run(() => updateShot(projectId, active.id, { title: v })); }}
+                <input value={active.title}
+                  onChange={(e) => setTitleOverride((o) => ({ ...o, [active.id]: e.target.value }))}
+                  onBlur={(e) => run(() => updateShot(projectId, active.id, { title: e.target.value }))}
                   placeholder="Shot title" className={`${cell} flex-1 text-base font-bold`} />
                 <div className="flex gap-1">
                   {(["generated", "live"] as const).map((m) => (
