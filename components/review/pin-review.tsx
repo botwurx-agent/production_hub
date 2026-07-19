@@ -12,6 +12,7 @@ export function PinReview({
   canResolve = true,
   disabled = false,
   disabledHint,
+  wide = false,
   onPost,
   onResolve,
 }: {
@@ -21,6 +22,7 @@ export function PinReview({
   canResolve?: boolean;
   disabled?: boolean;
   disabledHint?: string;
+  wide?: boolean;
   onPost: (text: string, pin: { x: number; y: number } | null) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
@@ -30,6 +32,7 @@ export function PinReview({
       canResolve={canResolve}
       disabled={disabled}
       disabledHint={disabledHint}
+      wide={wide}
       emptyHint="Click anywhere on the image to drop a pin and start."
       onPost={onPost}
       onResolve={onResolve}

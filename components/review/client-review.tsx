@@ -222,7 +222,7 @@ export function ClientReview({
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+    <div className="mx-auto max-w-[1600px] px-4 py-8 sm:py-12">
       <div className="mb-6 overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
         <div
           className="h-1 w-full"
@@ -298,6 +298,7 @@ export function ClientReview({
             comments={comments}
             disabled={!name.trim()}
             disabledHint="Add your name above to comment."
+            wide
             onPost={postPinned}
             onResolve={resolve}
           />
@@ -317,6 +318,7 @@ export function ClientReview({
             comments={comments}
             disabled={!name.trim()}
             disabledHint="Add your name above to comment."
+            wide
             onPost={postTimed}
             onResolve={resolve}
           />

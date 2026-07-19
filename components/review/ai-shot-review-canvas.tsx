@@ -21,6 +21,7 @@ export function AiShotReviewCanvas({
   canResolve = true,
   disabled = false,
   disabledHint,
+  wide = false,
   onPost,
   onResolve,
 }: {
@@ -29,6 +30,7 @@ export function AiShotReviewCanvas({
   canResolve?: boolean;
   disabled?: boolean;
   disabledHint?: string;
+  wide?: boolean;
   onPost: (text: string, anchor: ShotAnchor) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
@@ -42,6 +44,7 @@ export function AiShotReviewCanvas({
           canResolve={canResolve}
           disabled={disabled}
           disabledHint={disabledHint}
+          wide={wide}
           onPost={(text, timecode) => onPost(text, { timecode })}
           onResolve={onResolve}
         />
@@ -58,6 +61,7 @@ export function AiShotReviewCanvas({
       canResolve={canResolve}
       disabled={disabled}
       disabledHint={disabledHint}
+      wide={wide}
       emptyHint="Click a frame to drop a pin and start."
       onPost={(text, pin) => onPost(text, { pin })}
       onResolve={onResolve}

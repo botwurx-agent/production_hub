@@ -93,7 +93,7 @@ export function DocReview({
   const noun = KIND_LABEL[data.kind] ?? "document";
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+    <div className="mx-auto max-w-[1600px] px-4 py-8 sm:py-12">
       <div className="mb-6 overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
         <div
           className="h-1 w-full"
@@ -142,6 +142,7 @@ export function DocReview({
           comments={data.comments}
           disabled={!name.trim()}
           disabledHint="Add your name above to comment."
+          wide
           onPost={post}
           onResolve={resolve}
         />
@@ -153,6 +154,7 @@ export function DocReview({
           comments={data.comments}
           disabled={!name.trim()}
           disabledHint="Add your name above to comment."
+          wide
           emptyHint={`Click anywhere on the ${noun} to drop a pin and start.`}
           onPost={(text, pin) => post(text, { pin })}
           onResolve={resolve}

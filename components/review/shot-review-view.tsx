@@ -81,7 +81,7 @@ export function ShotReviewView({
   const decided = detail.myDecision;
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto w-full max-w-[1600px]">
       <Link
         href={`/projects/${projectId}/review`}
         className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted transition hover:text-text"
@@ -126,6 +126,7 @@ export function ShotReviewView({
         <AiShotReviewCanvas
           surface={surface}
           comments={detail.comments}
+          wide
           onPost={post}
           onResolve={resolve}
         />

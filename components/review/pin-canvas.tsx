@@ -17,6 +17,7 @@ export function PinCanvas({
   disabled = false,
   disabledHint,
   emptyHint = "Click anywhere to drop a pin and start.",
+  wide = false,
   onPost,
   onResolve,
 }: {
@@ -29,6 +30,8 @@ export function PinCanvas({
   disabled?: boolean;
   disabledHint?: string;
   emptyHint?: string;
+  // Full-page reviews get a roomier comment rail.
+  wide?: boolean;
   onPost: (text: string, pin: { x: number; y: number } | null) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
@@ -73,7 +76,7 @@ export function PinCanvas({
     "grid h-7 w-7 place-items-center rounded-[50%_50%_50%_2px] border-2 border-white text-xs font-extrabold text-white shadow-lg";
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
+    <div className={`grid grid-cols-1 gap-4 ${wide ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_340px]"}`}>
       {/* Stage — a stable viewing environment for judging the work */}
       <div
         className="flex items-start justify-center overflow-auto rounded-[16px] p-4"
