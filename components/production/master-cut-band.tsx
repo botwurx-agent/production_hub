@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag } from "@/components/status-tag";
-import { ReviewModal } from "@/components/projects/review-modal";
 import { ShareReviewButton } from "@/components/projects/share-review-button";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import { addMasterCutVersion } from "@/app/(app)/projects/[id]/actions";
@@ -115,15 +115,14 @@ function UploadVersionModal({
 }
 
 function VersionRowView({
-  projectId, version, isLatest, onReview,
+  projectId, version, isLatest,
 }: {
-  projectId: string; version: VersionRow; isLatest: boolean; onReview: () => void;
+  projectId: string; version: VersionRow; isLatest: boolean;
 }) {
   const summary = summarizeReview(version.approvals);
   const kind = viewerKind(version.mime_type, `v${version.version_number}`);
   const isVideo = kind === "video" && Boolean(version.signedUrl);
   const openComments = version.comments.filter((c) => !c.resolved_at).length;
-  void projectId;
 
   return (
     <div className={`flex items-center gap-3 rounded-[12px] border p-2.5 ${isLatest ? "border-border-strong bg-surface-2/40" : "border-border"}`}>
@@ -153,7 +152,10 @@ function VersionRowView({
           {version.notes ? <span className="text-text-muted"> · {version.notes}</span> : null}
         </div>
       </div>
-      <Button size="sm" variant="secondary" onClick={onReview}>Review</Button>
+      <Link href={`/projects/${projectId}/review/cut/${version.id}`}
+        className="rounded-[10px] border border-border-strong px-3 py-1.5 text-sm font-semibold text-text transition hover:border-accent hover:text-accent">
+        Review
+      </Link>
     </div>
   );
 }
@@ -169,7 +171,6 @@ export function MasterCutBand({
   currentUserId: string;
 }) {
   const [uploading, setUploading] = useState(false);
-  const [reviewing, setReviewing] = useState<VersionRow | null>(null);
   const versions = masterCut?.versions ?? []; // newest first (loader orders desc)
   const nextVersion = (versions[0]?.version_number ?? 0) + 1;
 
@@ -206,7 +207,6 @@ export function MasterCutBand({
               projectId={projectId}
               version={v}
               isLatest={i === 0}
-              onReview={() => setReviewing(v)}
             />
           ))}
         </div>
@@ -214,16 +214,6 @@ export function MasterCutBand({
 
       {uploading && (
         <UploadVersionModal projectId={projectId} studioId={studioId} nextVersion={nextVersion} onClose={() => setUploading(false)} />
-      )}
-      {reviewing && masterCut && (
-        <ReviewModal
-          open
-          onClose={() => setReviewing(null)}
-          projectId={projectId}
-          assetName="Master cut"
-          version={reviewing}
-          currentUserId={currentUserId}
-        />
       )}
     </div>
   );

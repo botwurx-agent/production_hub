@@ -1112,7 +1112,13 @@ Shot cockpit / Triage) was shown to the operator.
     ReviewModal/ShareReviewButton); addMasterCutVersion + ensureMasterCut in
     actions.ts (reuse insertVersion); the pipeline page loads it via
     loadProjectAssets (find type==='cut') + its review link, passes masterCut/token/
-    linkId/currentUserId to PipelineWorkspace. NOT built: video version-compare
+    linkId/currentUserId to PipelineWorkspace. Each version's "Review" opens a
+    FULL PAGE (app/(app)/projects/[id]/review/cut/[versionId] ->
+    components/review/cut-review-view.tsx), NOT the cramped modal, matching the
+    AI-shot review treatment: big VideoReview timecode scrubber (or PinReview for a
+    still) + comment rail + version switcher chips + internal sign-off + client
+    ShareReviewButton; reuses the asset review-actions (addReviewCommentAt/
+    resolveReviewComment/setVersionApproval). NOT built: video version-compare
     (image-only today), whole-sequence auto-assemble (deliberate -- we don't edit),
     asset-level status menu in the band.
   - NEXT (this refinement): record refs on created takes (references live at shot
