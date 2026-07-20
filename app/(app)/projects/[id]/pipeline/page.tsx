@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { PipelineWorkspace } from "@/components/production/pipeline-workspace";
 import { loadProjectAssets } from "@/lib/project-data";
+import { loadBatchReviewsForProject } from "@/lib/batch-review";
 import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
 
 // Import/fetch-and-store server actions on this route pull media from external
@@ -82,6 +83,9 @@ export default async function PipelinePage({
   const masterCut = projectAssets.find((a) => a.type === "cut") ?? null;
   const masterCutLink = masterCut ? reviewLinkByAsset.get(masterCut.id) ?? null : null;
 
+  // Batch reviews ("send options for a pick"), grouped by shot.
+  const batchReviews = await loadBatchReviewsForProject(supabase, params.id);
+
   // Sign uploaded files (private bucket) for display, keyed by generation id.
   const media: Record<string, string> = {};
   await Promise.all(
@@ -121,6 +125,7 @@ export default async function PipelinePage({
           masterCut={masterCut}
           masterCutToken={masterCutLink?.token ?? null}
           masterCutLinkId={masterCutLink?.id ?? null}
+          batchReviews={batchReviews}
           currentUserId={ctx.userId}
           reviewingShotIds={reviewingShotIds}
         />

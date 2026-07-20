@@ -1394,6 +1394,138 @@ export type Database = {
         };
         Relationships: [];
       };
+      ai_batch_reviews: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          shot_id: string | null;
+          title: string;
+          token: string;
+          created_by: string | null;
+          revoked: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          shot_id?: string | null;
+          title?: string;
+          token: string;
+          created_by?: string | null;
+          revoked?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          shot_id?: string | null;
+          title?: string;
+          token?: string;
+          created_by?: string | null;
+          revoked?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_batch_review_items: {
+        Row: {
+          id: string;
+          studio_id: string;
+          batch_id: string;
+          generation_id: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          batch_id: string;
+          generation_id: string;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          batch_id?: string;
+          generation_id?: string;
+          position?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_batch_review_comments: {
+        Row: {
+          id: string;
+          studio_id: string;
+          batch_id: string;
+          generation_id: string;
+          reviewer_name: string;
+          body: string;
+          timecode: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          batch_id: string;
+          generation_id: string;
+          reviewer_name?: string;
+          body?: string;
+          timecode?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          batch_id?: string;
+          generation_id?: string;
+          reviewer_name?: string;
+          body?: string;
+          timecode?: number | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_batch_review_marks: {
+        Row: {
+          id: string;
+          studio_id: string;
+          batch_id: string;
+          generation_id: string;
+          reviewer_name: string;
+          starred: boolean;
+          is_pick: boolean;
+          updated_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          batch_id: string;
+          generation_id: string;
+          reviewer_name?: string;
+          starred?: boolean;
+          is_pick?: boolean;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          batch_id?: string;
+          generation_id?: string;
+          reviewer_name?: string;
+          starred?: boolean;
+          is_pick?: boolean;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       feedback: {
         Row: {
           id: string;
@@ -3159,6 +3291,10 @@ export type AiGenerationRef = Tables<"ai_generation_refs">;
 export type AiPrompt = Tables<"ai_prompts">;
 export type AiPromptLibraryEntry = Tables<"ai_prompt_library">;
 export type AiGeneration = Tables<"ai_generations">;
+export type AiBatchReview = Tables<"ai_batch_reviews">;
+export type AiBatchReviewItem = Tables<"ai_batch_review_items">;
+export type AiBatchReviewComment = Tables<"ai_batch_review_comments">;
+export type AiBatchReviewMark = Tables<"ai_batch_review_marks">;
 export type Notification = Tables<"notifications">;
 export type EmailAccount = Tables<"email_accounts">;
 export type EmailThread = Tables<"email_threads">;

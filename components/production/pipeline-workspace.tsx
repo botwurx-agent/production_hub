@@ -28,7 +28,9 @@ import { ScriptEditor } from "@/components/production/script-editor";
 import { TriageView } from "@/components/production/triage-view";
 import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
 import { MasterCutBand } from "@/components/production/master-cut-band";
+import { BatchReviewButton } from "@/components/production/batch-review-button";
 import type { AssetWithVersions } from "@/components/projects/asset-types";
+import type { BatchReviewSummary } from "@/lib/batch-review";
 import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
 
 type Stage = "image" | "video";
@@ -835,11 +837,12 @@ function ImportModal({
 }
 
 function StagePanel({
-  projectId, studioId, shot, stage, prompt, gens, media, library, refStartId, refEndId, onRun,
+  projectId, studioId, shot, stage, prompt, gens, media, library, reviews, refStartId, refEndId, onRun,
 }: {
   projectId: string; studioId: string; shot: AiShot; stage: Stage;
   prompt: AiPrompt | null; gens: AiGeneration[]; media: Record<string, string>;
   library: AiPromptLibraryEntry[];
+  reviews: BatchReviewSummary[];
   refStartId: string | null; refEndId: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
 }) {
@@ -915,6 +918,9 @@ function StagePanel({
               </svg>
               Triage {pool.length}
             </button>
+          )}
+          {pool.length > 0 && (
+            <BatchReviewButton projectId={projectId} shotId={shot.id} pool={pool} media={media} reviews={reviews} />
           )}
           <button onClick={() => setImporting(true)}
             className="inline-flex items-center gap-1.5 rounded-[9px] border border-border px-2.5 py-1 text-xs font-bold text-text transition hover:border-accent hover:text-accent"
@@ -1175,7 +1181,8 @@ function SendToReviewControl({
 
 export function PipelineWorkspace({
   projectId, studioId, script, shots, prompts, generations, media, library = [],
-  masterCut = null, masterCutToken = null, masterCutLinkId = null, currentUserId,
+  masterCut = null, masterCutToken = null, masterCutLinkId = null,
+  batchReviews = {}, currentUserId,
   reviewingShotIds = [],
 }: {
   projectId: string;
@@ -1189,6 +1196,7 @@ export function PipelineWorkspace({
   masterCut?: AssetWithVersions | null;
   masterCutToken?: string | null;
   masterCutLinkId?: string | null;
+  batchReviews?: Record<string, BatchReviewSummary[]>;
   currentUserId: string;
   reviewingShotIds?: string[];
 }) {
@@ -1426,7 +1434,9 @@ export function PipelineWorkspace({
                     <Flow label="prompt, generate & pick images" />
                     <StagePanel projectId={projectId} studioId={studioId} shot={active} stage="image"
                       prompt={shotPrompts.get(`${active.id}:image`) ?? null}
-                      gens={imgGens} media={media} library={library} refStartId={null} refEndId={null} onRun={run} />
+                      gens={imgGens} media={media} library={library}
+                      reviews={batchReviews[active.id] ?? []}
+                      refStartId={null} refEndId={null} onRun={run} />
                   </>
                 )}
                 <Flow label={
@@ -1438,6 +1448,7 @@ export function PipelineWorkspace({
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
                   media={media} library={library}
+                  reviews={batchReviews[active.id] ?? []}
                   refStartId={showImageStage ? approvedStart?.id ?? null : null}
                   refEndId={showImageStage ? approvedEnd?.id ?? null : null} onRun={run} />
               </>

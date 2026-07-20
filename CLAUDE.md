@@ -909,7 +909,7 @@ Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07
   toggle (still to flip). Migrations now through 0065 (0059 project_tasks, 0060
   billing_document_signatures, 0061 billing_proposals_style_attachments, 0062
   review_due_dates, 0063 ai_flexible_references, 0064 ai_generation_starred, 0065
-  ai_prompt_library).
+  ai_prompt_library, 0066 ai_batch_review).
 
 ### Review-round polish (Tier 1 #3) — due dates + auto-reminders BUILT
 Migration 0062 added `due_date` + `last_reminded_at` + `reminder_count` to
@@ -1121,6 +1121,30 @@ Shot cockpit / Triage) was shown to the operator.
     resolveReviewComment/setVersionApproval). NOT built: video version-compare
     (image-only today), whole-sequence auto-assemble (deliberate -- we don't edit),
     asset-level status menu in the band.
+  - SHAREABLE BATCH REVIEW ("send options for a pick", migration 0066): curate a
+    SUBSET of a shot's candidates and share a no-login /rb/<token> link so a
+    reviewer (creative director, client) plays each, COMMENTS (timecoded on
+    video), STARS (shortlist), and marks ONE as their PICK. NON-DESTRUCTIVE: the
+    reviewer's input lives in its own tables and never touches ai_generations
+    status/role -- the producer stays the decider and sees the feedback back on
+    the shot. It's "triage, but shareable." Tables (all is_studio_member RLS,
+    studio_id denormalized so the public /rb route reads/writes via the SERVICE
+    role, token-gated): ai_batch_reviews (the link + set), ai_batch_review_items
+    (which generations), ai_batch_review_comments (per-candidate, timecode),
+    ai_batch_review_marks (per reviewer_name per candidate: starred + is_pick,
+    one pick per reviewer enforced in the action). lib/batch-review.ts:
+    loadBatchByToken (service, signs media for the public page) +
+    loadBatchReviewsForProject/ForShot (RLS, for the internal results). Internal:
+    batch-review-actions.ts createBatchReview/revokeBatchReview; components/
+    production/batch-review-button.tsx ("Send for a pick" in each StagePanel pool
+    header -> modal to checkbox-curate candidates + title -> copy /rb link, plus a
+    per-reviewer results roll-up: who picked which Option # + stars + notes, with
+    turn-off). Public: app/rb/[token]/{page,actions} + components/review/
+    batch-review.tsx (name gate + big player + filmstrip with your ★/✓/comment-
+    count badges + star/pick/timecoded-comment, optimistic). Middleware
+    PUBLIC_PATHS gained /rb; feedback fires a notification. Star+pick only (no
+    full 1-2-3-4 ranking yet). NOTE reviewer_name keys a reviewer like the client
+    portal (no login); multiple reviewers can use one link.
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-
