@@ -53,20 +53,17 @@ export async function GET(
     return new NextResponse("File not found.", { status: 404 });
   }
 
-  const { data: blob, error } = await service.storage
+  // Redirect to a short-lived signed URL rather than streaming the bytes through
+  // this function. Supabase's storage endpoint honors HTTP Range requests, so the
+  // browser can SEEK/scrub a video accurately (the old whole-file 200 response
+  // made seeking impossible — the playhead wouldn't move). It also stops loading
+  // entire videos into server memory. Access is still gated: we only sign a path
+  // after validating the token + that the version belongs to the link's asset.
+  const { data: signed, error } = await service.storage
     .from("assets")
-    .download(version.storage_path);
-  if (error || !blob) {
+    .createSignedUrl(version.storage_path, 60 * 60);
+  if (error || !signed?.signedUrl) {
     return new NextResponse("Could not load the file.", { status: 502 });
   }
-
-  const buffer = Buffer.from(await blob.arrayBuffer());
-  return new NextResponse(buffer, {
-    status: 200,
-    headers: {
-      "Content-Type": version.mime_type || "application/octet-stream",
-      "Content-Disposition": "inline",
-      "Cache-Control": "private, max-age=300",
-    },
-  });
+  return NextResponse.redirect(signed.signedUrl, 302);
 }
