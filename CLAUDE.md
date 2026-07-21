@@ -1144,7 +1144,15 @@ Shot cockpit / Triage) was shown to the operator.
     count badges + star/pick/timecoded-comment, optimistic). Middleware
     PUBLIC_PATHS gained /rb; feedback fires a notification. Star+pick only (no
     full 1-2-3-4 ranking yet). NOTE reviewer_name keys a reviewer like the client
-    portal (no login); multiple reviewers can use one link.
+    portal (no login); multiple reviewers can use one link. EDIT + DELETE (BUILT):
+    a sent review's option set is editable in place ("Edit options" opens the same
+    candidate grid over the existing selection -> updateBatchReviewItems adds the
+    newly-checked + removes the unchecked while PRESERVING existing options'
+    positions, so a reviewer's "Option 2" stays the same clip and the SAME /rb link
+    keeps working, no resend); "Delete" hard-deletes the review + its items/comments/
+    marks (FK cascade, confirm-gated) vs "Turn off" (revoke, keeps the row).
+    Actions updateBatchReviewItems/deleteBatchReview in batch-review-actions.ts; the
+    create + edit panels share one CandidateGrid in batch-review-button.tsx.
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-

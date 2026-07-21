@@ -7,12 +7,41 @@ import { Button } from "@/components/ui/button";
 import {
   createBatchReview,
   revokeBatchReview,
+  updateBatchReviewItems,
+  deleteBatchReview,
 } from "@/app/(app)/projects/[id]/batch-review-actions";
 import type { AiGeneration } from "@/lib/database.types";
 import type { BatchReviewSummary } from "@/lib/batch-review";
 
 const field =
   "w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong";
+
+// Checkbox grid of candidates, shared by the create + edit panels.
+function CandidateGrid({
+  candidates, media, selected, onToggle,
+}: {
+  candidates: AiGeneration[]; media: Record<string, string>; selected: string[]; onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+      {candidates.map((g) => {
+        const src = media[g.id] ?? g.external_url ?? null;
+        const on = selected.includes(g.id);
+        return (
+          <button key={g.id} onClick={() => onToggle(g.id)}
+            className={`relative overflow-hidden rounded-[9px] border-2 transition ${on ? "border-accent" : "border-transparent hover:border-border-strong"}`}
+            style={{ aspectRatio: "16/9", background: "#18181b" }}>
+            {src && (g.kind === "video"
+              ? <video src={`${src}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+              // eslint-disable-next-line @next/next/no-img-element
+              : <img src={src} alt="" className="h-full w-full object-cover" />)}
+            {on && <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-[11px] font-extrabold text-accent-fg">✓</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function shareOrigin(): string {
   const site = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
@@ -21,9 +50,9 @@ function shareOrigin(): string {
 
 // Per-reviewer roll-up of one batch's feedback.
 function ResultsBlock({
-  projectId, review,
+  projectId, review, onEdit,
 }: {
-  projectId: string; review: BatchReviewSummary;
+  projectId: string; review: BatchReviewSummary; onEdit: () => void;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -55,13 +84,24 @@ function ResultsBlock({
             </button>
           )}
           {!review.revoked && (
+            <button onClick={onEdit} className="rounded-[7px] border border-border px-2 py-1 text-[11px] font-bold text-text-muted hover:text-accent">
+              Edit options
+            </button>
+          )}
+          {!review.revoked && (
             <button
               onClick={() => start(async () => { await revokeBatchReview(projectId, review.id); router.refresh(); })}
               disabled={busy}
-              className="rounded-[7px] px-2 py-1 text-[11px] font-semibold text-text-faint hover:text-red">
+              className="rounded-[7px] px-2 py-1 text-[11px] font-semibold text-text-faint hover:text-text">
               Turn off
             </button>
           )}
+          <button
+            onClick={() => { if (confirm("Delete this review and its feedback? This can't be undone.")) start(async () => { await deleteBatchReview(projectId, review.id); router.refresh(); }); }}
+            disabled={busy}
+            className="rounded-[7px] px-2 py-1 text-[11px] font-semibold text-text-faint hover:text-red">
+            Delete
+          </button>
         </span>
       </div>
 
@@ -127,11 +167,26 @@ export function BatchReviewButton({
   const [err, setErr] = useState<string | null>(null);
   const [newUrl, setNewUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; selected: string[] } | null>(null);
 
   const candidates = pool.filter((g) => g.status !== "rejected");
 
   function toggle(id: string) {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  }
+  function editToggle(id: string) {
+    setEditing((e) => (e ? { ...e, selected: e.selected.includes(id) ? e.selected.filter((x) => x !== id) : [...e.selected, id] } : e));
+  }
+  function saveEdit() {
+    if (!editing) return;
+    setErr(null);
+    if (editing.selected.length === 0) { setErr("Keep at least one option."); return; }
+    start(async () => {
+      const res = await updateBatchReviewItems(projectId, editing.id, editing.selected);
+      if (res?.error) { setErr(res.error); return; }
+      setEditing(null);
+      router.refresh();
+    });
   }
   function create() {
     setErr(null);
@@ -192,22 +247,8 @@ export function BatchReviewButton({
                   <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
                     Choose options <span className="font-normal normal-case text-text-faint">({selected.length} selected)</span>
                   </label>
-                  <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {candidates.map((g) => {
-                      const src = media[g.id] ?? g.external_url ?? null;
-                      const on = selected.includes(g.id);
-                      return (
-                        <button key={g.id} onClick={() => toggle(g.id)}
-                          className={`relative overflow-hidden rounded-[9px] border-2 transition ${on ? "border-accent" : "border-transparent hover:border-border-strong"}`}
-                          style={{ aspectRatio: "16/9", background: "#18181b" }}>
-                          {src && (g.kind === "video"
-                            ? <video src={`${src}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                            // eslint-disable-next-line @next/next/no-img-element
-                            : <img src={src} alt="" className="h-full w-full object-cover" />)}
-                          {on && <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-accent text-[11px] font-extrabold text-accent-fg">✓</span>}
-                        </button>
-                      );
-                    })}
+                  <div className="mt-1">
+                    <CandidateGrid candidates={candidates} media={media} selected={selected} onToggle={toggle} />
                   </div>
                 </div>
                 {err && <p className="text-xs font-semibold text-red">{err}</p>}
@@ -215,6 +256,20 @@ export function BatchReviewButton({
                   <Button size="sm" variant="secondary" onClick={() => { setCreating(false); setErr(null); }} disabled={busy}>Cancel</Button>
                   <Button size="sm" onClick={create} disabled={busy || selected.length === 0}>
                     {busy ? "Creating…" : `Create link (${selected.length})`}
+                  </Button>
+                </div>
+              </div>
+            ) : editing ? (
+              <div className="space-y-3 rounded-[12px] border border-accent bg-surface-2/40 p-3">
+                <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                  Edit options <span className="font-normal normal-case text-text-faint">({editing.selected.length} selected — same link, no need to resend)</span>
+                </label>
+                <CandidateGrid candidates={candidates} media={media} selected={editing.selected} onToggle={editToggle} />
+                {err && <p className="text-xs font-semibold text-red">{err}</p>}
+                <div className="flex items-center justify-end gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => { setEditing(null); setErr(null); }} disabled={busy}>Cancel</Button>
+                  <Button size="sm" onClick={saveEdit} disabled={busy || editing.selected.length === 0}>
+                    {busy ? "Saving…" : "Save options"}
                   </Button>
                 </div>
               </div>
@@ -227,7 +282,14 @@ export function BatchReviewButton({
             {reviews.length > 0 && (
               <div className="space-y-2">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Sent reviews &amp; feedback</p>
-                {reviews.map((r) => <ResultsBlock key={r.id} projectId={projectId} review={r} />)}
+                {reviews.map((r) => (
+                  <ResultsBlock
+                    key={r.id}
+                    projectId={projectId}
+                    review={r}
+                    onEdit={() => { setEditing({ id: r.id, selected: r.generationIds }); setCreating(false); setNewUrl(null); setErr(null); }}
+                  />
+                ))}
               </div>
             )}
           </div>
