@@ -128,7 +128,7 @@ export function VideoReview({
               <div
                 key={c.id}
                 onClick={() => seekTo(c.timecode, c.id)}
-                className={`flex cursor-pointer gap-2.5 border-l-[3px] px-4 py-3 transition ${
+                className={`flex cursor-pointer items-start gap-2.5 border-l-[3px] px-4 py-3 transition ${
                   activeId === c.id
                     ? "border-accent bg-accent-soft/50"
                     : "border-transparent hover:bg-surface-2/60"
