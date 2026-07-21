@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { fileSize, shortDate } from "@/lib/format";
 import { viewerKind, officeEmbedUrl, officeViewUrl } from "@/lib/file-kind";
+import { ScrubVideo } from "@/components/review/video-player";
 import type { VersionRow } from "@/components/projects/asset-types";
 
 export { viewerKind };
@@ -119,12 +120,9 @@ export function AssetViewer({
               className="max-h-[78vh] max-w-full rounded-[10px] object-contain"
             />
           ) : kind === "video" ? (
-            <video
-              src={link}
-              controls
-              autoPlay
-              className="max-h-[78vh] max-w-full rounded-[10px]"
-            />
+            <div className="w-full max-w-3xl">
+              <ScrubVideo src={link} maxHeightClass="max-h-[72vh]" />
+            </div>
           ) : kind === "audio" ? (
             <audio src={link} controls className="w-full max-w-lg" />
           ) : kind === "pdf" ? (

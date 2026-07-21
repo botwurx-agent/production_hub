@@ -2,13 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { submitBatchComment, setBatchMark } from "@/app/rb/[token]/actions";
+import { ScrubVideo, fmtTime, type ScrubVideoHandle } from "@/components/review/video-player";
 import type { BatchReviewData, BatchComment, BatchMark } from "@/lib/batch-review";
 
-function fmt(t: number): string {
-  const m = Math.floor(t / 60);
-  const s = Math.floor(t % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
+const fmt = fmtTime;
 
 function upsertMark(
   list: BatchMark[],
@@ -46,7 +43,7 @@ export function BatchReview({ token, data }: { token: string; data: BatchReviewD
   const [, start] = useTransition();
   const [text, setText] = useState("");
   const [err, setErr] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<ScrubVideoHandle>(null);
   const [currentTime, setCurrentTime] = useState(0);
 
   const reviewer = name.trim();
@@ -92,7 +89,7 @@ export function BatchReview({ token, data }: { token: string; data: BatchReviewD
     if (!requireName() || !cur) return;
     const body = text.trim();
     if (!body) return;
-    const tc = isVideo ? Math.round(currentTime * 10) / 10 : null;
+    const tc = isVideo ? Math.round(currentTime * 100) / 100 : null;
     const optimistic: BatchComment = {
       id: `tmp-${comments.length}-${body.length}`,
       generationId: cur.generationId,
@@ -144,33 +141,39 @@ export function BatchReview({ token, data }: { token: string; data: BatchReviewD
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
         {/* Stage */}
         <div>
-          <div
-            className="relative flex items-center justify-center overflow-hidden rounded-[16px] p-3"
-            style={{ backgroundColor: "#0b0b0d", minHeight: 360 }}
-          >
+          <div className="relative">
             {cur?.mediaUrl ? (
               isVideo ? (
-                <video
-                  ref={videoRef}
+                <ScrubVideo
+                  ref={playerRef}
                   key={cur.generationId}
                   src={cur.mediaUrl}
-                  controls
-                  playsInline
-                  onTimeUpdate={(e) => setCurrentTime((e.target as HTMLVideoElement).currentTime)}
-                  className="max-h-[70vh] w-full rounded-[10px] object-contain"
+                  markers={curComments
+                    .filter((c) => c.timecode != null)
+                    .map((c) => ({ id: c.id, timecode: c.timecode as number, number: "•" }))}
+                  onMarkerClick={(id) => {
+                    const c = comments.find((x) => x.id === id);
+                    if (c?.timecode != null) { playerRef.current?.seek(c.timecode); playerRef.current?.pause(); }
+                  }}
+                  onTime={setCurrentTime}
+                  maxHeightClass="max-h-[70vh]"
                 />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={cur.mediaUrl} alt="" className="max-h-[70vh] w-full rounded-[10px] object-contain" />
+                <div className="flex items-center justify-center overflow-hidden rounded-[16px] p-3" style={{ backgroundColor: "#0b0b0d", minHeight: 360 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={cur.mediaUrl} alt="" className="max-h-[70vh] w-full rounded-[10px] object-contain" />
+                </div>
               )
             ) : (
-              <span className="px-6 text-center text-sm text-white/50">No preview for this option.</span>
+              <div className="grid place-items-center overflow-hidden rounded-[16px] p-3" style={{ backgroundColor: "#0b0b0d", minHeight: 360 }}>
+                <span className="px-6 text-center text-sm text-white/50">No preview for this option.</span>
+              </div>
             )}
-            <span className="absolute left-3 top-3 rounded-[6px] bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white">
+            <span className="absolute left-3 top-3 z-10 rounded-[6px] bg-black/60 px-2 py-0.5 text-[11px] font-bold text-white">
               Option {index + 1} / {items.length}
             </span>
             {cur && myPickId === cur.generationId && (
-              <span className="absolute right-3 top-3 rounded-[6px] bg-green px-2 py-0.5 text-[11px] font-extrabold text-white">
+              <span className="absolute right-3 top-3 z-10 rounded-[6px] bg-green px-2 py-0.5 text-[11px] font-extrabold text-white">
                 Your pick
               </span>
             )}
