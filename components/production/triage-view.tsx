@@ -7,6 +7,7 @@ import {
   setGenerationStarred,
   setGenerationRole,
 } from "@/app/(app)/projects/[id]/pipeline-actions";
+import { ScrubVideo } from "@/components/review/video-player";
 import type { AiGeneration } from "@/lib/database.types";
 
 // The fan-out fast lane. A batch of candidates for ONE shot + stage, judged big
@@ -319,35 +320,43 @@ export function TriageView({
               ))}
             </div>
           ) : focused ? (
-            <>
-              {/* nav zones */}
-              <button aria-label="Previous" onClick={() => setIndex((i) => Math.max(i - 1, 0))}
-                className="group absolute left-0 top-0 z-10 flex h-full w-16 items-center justify-start pl-3 text-white/30 hover:text-white/80" disabled={index === 0}>
-                <span className="text-3xl">‹</span>
-              </button>
-              <button aria-label="Next" onClick={() => setIndex((i) => Math.min(i + 1, filtered.length - 1))}
-                className="group absolute right-0 top-0 z-10 flex h-full w-16 items-center justify-end pr-3 text-white/30 hover:text-white/80" disabled={index >= filtered.length - 1}>
-                <span className="text-3xl">›</span>
-              </button>
-              <div className="relative flex h-full w-full items-center justify-center">
-                <div className={`relative flex max-h-full max-w-full items-center justify-center ${focused.status === "rejected" ? "opacity-40" : ""}`}
-                  style={{ aspectRatio: "16/9", width: "min(100%, 1400px)" }}>
-                  <Media g={focused} big />
-                  <div className="absolute left-2 top-2 flex items-center gap-1.5">
-                    {focused.model && <span className="rounded-[5px] bg-black/70 px-2 py-0.5 text-[11px] font-bold">{focused.model}</span>}
-                    {roleLabel(focused.role) && (
-                      <span className="rounded-[5px] px-2 py-0.5 text-[11px] font-extrabold text-black" style={{ background: roleColor(focused.role)! }}>{roleLabel(focused.role)}</span>
-                    )}
-                    {focused.starred && <span className="text-lg text-amber-300">★</span>}
-                    {focused.status === "rejected" && <span className="rounded-[5px] bg-red px-2 py-0.5 text-[11px] font-bold">Rejected</span>}
-                  </div>
-                  <span className="absolute right-2 top-2 rounded-[5px] bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white/70">
-                    {index + 1} / {filtered.length}
-                  </span>
-                </div>
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-4">
+              {/* nav + info */}
+              <div className="flex w-full max-w-[1100px] items-center gap-2">
+                <button aria-label="Previous" onClick={() => setIndex((i) => Math.max(i - 1, 0))} disabled={index === 0}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-lg text-white/70 transition hover:bg-white/20 disabled:opacity-25">‹</button>
+                <span className="rounded-[5px] bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/70">{index + 1} / {filtered.length}</span>
+                {focused.model && <span className="rounded-[5px] bg-white/10 px-2 py-0.5 text-[11px] font-bold text-white">{focused.model}</span>}
+                {roleLabel(focused.role) && (
+                  <span className="rounded-[5px] px-2 py-0.5 text-[11px] font-extrabold text-black" style={{ background: roleColor(focused.role)! }}>{roleLabel(focused.role)}</span>
+                )}
+                {focused.starred && <span className="text-lg text-amber-300">★</span>}
+                {focused.status === "rejected" && <span className="rounded-[5px] bg-red px-2 py-0.5 text-[11px] font-bold text-white">Rejected</span>}
+                <span className="flex-1" />
+                <button aria-label="Next" onClick={() => setIndex((i) => Math.min(i + 1, filtered.length - 1))} disabled={index >= filtered.length - 1}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-lg text-white/70 transition hover:bg-white/20 disabled:opacity-25">›</button>
               </div>
+
+              {/* media */}
+              <div className={`w-full max-w-[1100px] ${focused.status === "rejected" ? "opacity-40" : ""}`}>
+                {srcOf(focused) ? (
+                  focused.kind === "video" ? (
+                    <ScrubVideo key={focused.id} src={srcOf(focused) as string} keyboard={false} maxHeightClass="max-h-[56vh]" />
+                  ) : (
+                    <div className="grid place-items-center overflow-hidden rounded-[12px] bg-black" style={{ aspectRatio: "16/9" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={srcOf(focused) as string} alt="" className="max-h-[56vh] w-full object-contain" />
+                    </div>
+                  )
+                ) : (
+                  <div className="grid place-items-center rounded-[12px] bg-black" style={{ aspectRatio: "16/9" }}>
+                    <span className="text-sm text-white/40">No previewable media.</span>
+                  </div>
+                )}
+              </div>
+
               {/* decision bar */}
-              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-[12px] border border-white/10 bg-black/60 p-1.5 backdrop-blur">
+              <div className="flex flex-wrap items-center justify-center gap-1.5 rounded-[12px] border border-white/10 bg-black/40 p-1.5">
                 {stage === "image" ? (
                   <>
                     <DecBtn onClick={() => tagRole(focused, "start")} active={focused.role === "start"} color="var(--h-cyan)" k="1">Start</DecBtn>
@@ -362,7 +371,7 @@ export function TriageView({
                 </DecBtn>
                 <DecBtn onClick={() => toggleCompare(focused.id)} active={compareIds.includes(focused.id)} color="var(--accent)" k="c">Compare</DecBtn>
               </div>
-            </>
+            </div>
           ) : null}
 
           {/* Spec sidebar */}
