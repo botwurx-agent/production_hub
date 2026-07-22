@@ -84,24 +84,36 @@ function AddGenModal({
   const router = useRouter();
   const [busy, start] = useTransition();
   const [files, setFiles] = useState<File[]>([]);
+  const [urlsText, setUrlsText] = useState("");
   const [promptText, setPromptText] = useState(basePrompt);
   const [err, setErr] = useState<string | null>(null);
   const [prog, setProg] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const [inspectMsg, setInspectMsg] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [failed, setFailed] = useState<{ url: string; reason: string }[] | null>(null);
+  const [done, setDone] = useState<number | null>(null);
   const [f, setF] = useState({
-    external_url: "", platform: "", model: "", model_version: "", seed: "",
+    platform: "", model: "", model_version: "", seed: "",
     aspect: stage === "image" ? "16:9" : "", resolution: "", fps: "", duration_sec: "",
     guidance: "", cost: "", notes: "", generated_by_name: "",
   });
   function set(k: keyof typeof f, v: string) { setF((p) => ({ ...p, [k]: v })); }
 
+  const links = useMemo(
+    () => Array.from(new Set(urlsText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))),
+    [urlsText],
+  );
+  const noun = stage === "image" ? "candidate" : "take";
+  const total = files.length + links.length;
+
   // Auto-fill provenance we can derive from the pasted link: platform (from the
   // host), aspect/resolution/duration (from the real media), prompt (from the
   // page). Model/seed stay manual (no platform exposes them via a share link).
+  // Only meaningful for a single link; many links auto-detect per file on import.
   async function autofill() {
-    const url = f.external_url.trim();
-    if (!url) { setInspectMsg("Paste a link above first."); return; }
+    const url = links[0];
+    if (!url) { setInspectMsg("Paste one link above first."); return; }
     setInspecting(true); setInspectMsg(null);
     try {
       const res = await inspectMediaLink(url);
@@ -116,6 +128,7 @@ function AddGenModal({
       if (res.prompt && !promptText.trim()) setPromptText(res.prompt);
       const bits = [res.platform, res.aspect, res.resolution].filter(Boolean).length;
       setInspectMsg(bits > 0 ? "Filled what we could from the link ✓" : "Reached the link, but nothing to auto-fill.");
+      setShowDetails(true);
     } finally {
       setInspecting(false);
     }
@@ -137,9 +150,15 @@ function AddGenModal({
   });
 
   function submit() {
-    setErr(null);
+    setErr(null); setFailed(null); setDone(null);
+    if (files.length === 0 && links.length === 0) {
+      setErr("Upload a file, or paste at least one link.");
+      return;
+    }
     start(async () => {
-      // Bulk path: many files, each becomes a candidate sharing the spec.
+      let added = 0;
+
+      // 1) Uploaded files: each becomes a candidate sharing the spec.
       if (files.length > 0) {
         const paths: string[] = [];
         try {
@@ -164,79 +183,114 @@ function AddGenModal({
           parent_end_id: stage === "video" ? refEndId : null,
           ...sharedSpec(),
         });
-        setProg(null);
-        if (res?.error) { setErr(res.error); return; }
-        onClose();
-        router.refresh();
-        return;
+        if (res?.error) { setErr(res.error); setProg(null); return; }
+        added += files.length;
       }
-      // Single link path: fetch + store the real media (share page OR direct
-      // URL), auto-provenance merged with any manual overrides typed below.
-      if (!f.external_url.trim()) {
-        setErr("Upload a file, or paste a link.");
-        return;
+
+      // 2a) Exactly one link, no files: rich single add (auto-provenance merged
+      // with any manual overrides in the details section).
+      if (links.length === 1 && files.length === 0) {
+        setProg("Pulling the media in…");
+        const res = await addGenerationFromLink(projectId, {
+          shotId: shot.id,
+          stage,
+          promptId,
+          prompt: promptText || null,
+          url: links[0],
+          ...sharedSpec(),
+          parent_start_id: stage === "video" ? refStartId : null,
+          parent_end_id: stage === "video" ? refEndId : null,
+        });
+        if (res?.error) { setErr(res.error); setProg(null); return; }
+        added += 1;
+      } else if (links.length >= 1) {
+        // 2b) Multiple links (or links alongside files): bulk import, source +
+        // specs auto-detected per file, with per-link failure/retry.
+        setProg(`Pulling ${links.length} link${links.length === 1 ? "" : "s"} in…`);
+        let res;
+        try {
+          res = await importFromHiggsfield(projectId, {
+            shotId: shot.id,
+            stage,
+            urls: links,
+            prompt: promptText || null,
+            platform: f.platform || null,
+            generated_by_name: f.generated_by_name || null,
+          });
+        } catch {
+          setProg(null);
+          setErr("Import failed — a link may be slow or unreachable. Try again, or paste the direct file (.mp4/.png) URL.");
+          return;
+        }
+        if ("error" in res) { setErr(res.error); setProg(null); return; }
+        added += res.imported;
+        if (res.failed.length > 0) {
+          // Keep the failed ones in the box so they can be retried.
+          setFailed(res.failed);
+          setUrlsText(res.failed.map((x) => x.url).join("\n"));
+          setDone(added);
+          setProg(null);
+          router.refresh();
+          return; // stay open for the retry
+        }
       }
-      setProg("Pulling the media in…");
-      const res = await addGenerationFromLink(projectId, {
-        shotId: shot.id,
-        stage,
-        promptId,
-        prompt: promptText || null,
-        url: f.external_url.trim(),
-        platform: f.platform || null,
-        model: f.model || null,
-        model_version: f.model_version || null,
-        seed: f.seed || null,
-        aspect: f.aspect || null,
-        resolution: f.resolution || null,
-        fps: f.fps ? Number(f.fps) : null,
-        duration_sec: f.duration_sec ? Number(f.duration_sec) : null,
-        guidance: f.guidance ? Number(f.guidance) : null,
-        cost: f.cost ? Number(f.cost) : null,
-        params: f.notes ? { notes: f.notes } : null,
-        parent_start_id: stage === "video" ? refStartId : null,
-        parent_end_id: stage === "video" ? refEndId : null,
-        generated_by_name: f.generated_by_name || null,
-      });
+
       setProg(null);
-      if (res?.error) { setErr(res.error); return; }
       onClose();
       router.refresh();
     });
   }
 
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
+  const primaryLabel = busy
+    ? "Working…"
+    : failed
+      ? "Retry these"
+      : total > 1
+        ? `Add ${total}`
+        : "Add";
 
   return (
-    <Modal open onClose={onClose} size="lg" title={stage === "image" ? "Add image candidate" : "Add video take"}>
+    <Modal open onClose={onClose} size="lg" title={stage === "image" ? "Add image candidates" : "Add video takes"}>
       <div className="space-y-3">
+        <p className="text-sm text-text-muted">
+          Upload files from your device, or paste the {stage === "image" ? "image" : "clip"} links you
+          generated on {stage === "image" ? "Midjourney / Higgsfield / etc." : "Higgsfield / etc."} (one per
+          line). Either way each becomes a candidate on this shot, source and specs auto-detected. Generation
+          stays on the tool.
+        </p>
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            Upload {stage === "image" ? "image" : "video"} files <span className="font-normal normal-case text-text-faint">(pick one or many · recommended)</span>
+            Upload {stage === "image" ? "image" : "video"} files <span className="font-normal normal-case text-text-faint">(pick one or many)</span>
           </label>
           <input type="file" multiple accept={stage === "image" ? "image/*" : "video/*,image/*"}
             onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             className="mt-1 block w-full text-sm text-text-muted file:mr-3 file:rounded-[8px] file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-accent-fg" />
           {files.length > 0 && (
             <p className="mt-1 text-xs text-text-faint">
-              {files.length} file{files.length === 1 ? "" : "s"} selected · the spec below applies to all of them
+              {files.length} file{files.length === 1 ? "" : "s"} selected
             </p>
           )}
         </div>
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            …or paste a link <span className="font-normal normal-case text-text-faint">(a {stage === "image" ? "Midjourney/Higgsfield" : "Higgsfield"} share link OR a direct file URL — we pull the media in and preview it)</span>
+            …or paste link{stage === "image" ? "" : "s"} <span className="font-normal normal-case text-text-faint">(one per line · up to 40 · share links or direct file URLs — we pull the media in)</span>
           </label>
-          <input value={f.external_url} onChange={(e) => set("external_url", e.target.value)}
-            placeholder="https://higgsfield.ai/…  or  https://…/clip.mp4" className={`mt-1 ${field}`} />
-          <div className="mt-1.5 flex items-center gap-2">
-            <button type="button" onClick={autofill} disabled={inspecting || !f.external_url.trim()}
-              className="inline-flex items-center gap-1.5 rounded-[8px] border border-border px-2.5 py-1 text-[11px] font-bold text-text transition hover:border-accent hover:text-accent disabled:opacity-50">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z" />
-              </svg>
-              {inspecting ? "Reading…" : "Preview info from link"}
-            </button>
+          <textarea value={urlsText} onChange={(e) => setUrlsText(e.target.value)} rows={4}
+            placeholder={"https://higgsfield.ai/…\nhttps://…/clip.mp4"} className={`mt-1 ${field} font-mono text-xs`} />
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {links.length > 0 && (
+              <span className="text-[11px] text-text-faint">{links.length} link{links.length === 1 ? "" : "s"} ready</span>
+            )}
+            {links.length === 1 && (
+              <button type="button" onClick={autofill} disabled={inspecting}
+                className="inline-flex items-center gap-1.5 rounded-[8px] border border-border px-2.5 py-1 text-[11px] font-bold text-text transition hover:border-accent hover:text-accent disabled:opacity-50">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z" />
+                </svg>
+                {inspecting ? "Reading…" : "Preview info from link"}
+              </button>
+            )}
             {inspectMsg && <span className="text-[11px] font-medium text-text-muted">{inspectMsg}</span>}
           </div>
         </div>
@@ -247,54 +301,89 @@ function AddGenModal({
         )}
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            Prompt used <span className="font-normal normal-case text-text-faint">(applies to {files.length > 1 ? `all ${files.length}` : "this"} — tweak it per batch)</span>
+            Prompt used <span className="font-normal normal-case text-text-faint">(optional · applies to all {total > 1 ? total : ""} added)</span>
           </label>
-          <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={3}
+          <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={2}
             placeholder="The exact prompt used to generate these…" className={`mt-1 ${field}`} />
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Platform</label>
-            <input value={f.platform} onChange={(e) => set("platform", e.target.value)} placeholder="e.g. fal, Krea" className={`mt-1 ${field}`} /></div>
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Model</label>
-            <input list="modellist" value={f.model} onChange={(e) => set("model", e.target.value)} placeholder={models[0]} className={`mt-1 ${field}`} />
-            <datalist id="modellist">{models.map((m) => <option key={m} value={m} />)}</datalist></div>
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Version</label>
-            <input value={f.model_version} onChange={(e) => set("model_version", e.target.value)} className={`mt-1 ${field}`} /></div>
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Seed</label>
-            <input value={f.seed} onChange={(e) => set("seed", e.target.value)} className={`mt-1 ${field}`} /></div>
-          {stage === "image" ? (
-            <>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Aspect</label>
-                <input value={f.aspect} onChange={(e) => set("aspect", e.target.value)} placeholder="16:9" className={`mt-1 ${field}`} /></div>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Resolution</label>
-                <input value={f.resolution} onChange={(e) => set("resolution", e.target.value)} placeholder="2048²" className={`mt-1 ${field}`} /></div>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Guidance</label>
-                <input value={f.guidance} onChange={(e) => set("guidance", e.target.value)} className={`mt-1 ${field}`} /></div>
-            </>
-          ) : (
-            <>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Duration (s)</label>
-                <input value={f.duration_sec} onChange={(e) => set("duration_sec", e.target.value)} placeholder="5" className={`mt-1 ${field}`} /></div>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">FPS</label>
-                <input value={f.fps} onChange={(e) => set("fps", e.target.value)} placeholder="24" className={`mt-1 ${field}`} /></div>
-              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Resolution</label>
-                <input value={f.resolution} onChange={(e) => set("resolution", e.target.value)} placeholder="1080p" className={`mt-1 ${field}`} /></div>
-            </>
+
+        <div className="rounded-[10px] border border-border">
+          <button type="button" onClick={() => setShowDetails((v) => !v)}
+            className="flex w-full items-center justify-between px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+            <span>Provenance &amp; specs <span className="font-normal normal-case text-text-faint">(optional)</span></span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className={`transition ${showDetails ? "rotate-180" : ""}`}>
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          {showDetails && (
+            <div className="space-y-3 border-t border-border p-3">
+              <p className="text-[11px] text-text-faint">
+                Applies to uploads and a single link. With multiple links, source and specs are auto-detected per file.
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Platform</label>
+                  <input value={f.platform} onChange={(e) => set("platform", e.target.value)} placeholder="e.g. fal, Krea" className={`mt-1 ${field}`} /></div>
+                <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Model</label>
+                  <input list="modellist" value={f.model} onChange={(e) => set("model", e.target.value)} placeholder={models[0]} className={`mt-1 ${field}`} />
+                  <datalist id="modellist">{models.map((m) => <option key={m} value={m} />)}</datalist></div>
+                <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Version</label>
+                  <input value={f.model_version} onChange={(e) => set("model_version", e.target.value)} className={`mt-1 ${field}`} /></div>
+                <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Seed</label>
+                  <input value={f.seed} onChange={(e) => set("seed", e.target.value)} className={`mt-1 ${field}`} /></div>
+                {stage === "image" ? (
+                  <>
+                    <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Aspect</label>
+                      <input value={f.aspect} onChange={(e) => set("aspect", e.target.value)} placeholder="16:9" className={`mt-1 ${field}`} /></div>
+                    <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Resolution</label>
+                      <input value={f.resolution} onChange={(e) => set("resolution", e.target.value)} placeholder="2048²" className={`mt-1 ${field}`} /></div>
+                    <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Guidance</label>
+                      <input value={f.guidance} onChange={(e) => set("guidance", e.target.value)} className={`mt-1 ${field}`} /></div>
+                  </>
+                ) : (
+                  <>
+                    <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Duration (s)</label>
+                      <input value={f.duration_sec} onChange={(e) => set("duration_sec", e.target.value)} placeholder="5" className={`mt-1 ${field}`} /></div>
+                    <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">FPS</label>
+                      <input value={f.fps} onChange={(e) => set("fps", e.target.value)} placeholder="24" className={`mt-1 ${field}`} /></div>
+                    <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Resolution</label>
+                      <input value={f.resolution} onChange={(e) => set("resolution", e.target.value)} placeholder="1080p" className={`mt-1 ${field}`} /></div>
+                  </>
+                )}
+                <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Cost</label>
+                  <input value={f.cost} onChange={(e) => set("cost", e.target.value)} placeholder="credits / $" className={`mt-1 ${field}`} /></div>
+                <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Generated by</label>
+                  <input value={f.generated_by_name} onChange={(e) => set("generated_by_name", e.target.value)} placeholder="name (optional)" className={`mt-1 ${field}`} /></div>
+              </div>
+              <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Notes / extra params</label>
+                <input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="negative prompt, LoRA, camera, round…" className={`mt-1 ${field}`} /></div>
+            </div>
           )}
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Cost</label>
-            <input value={f.cost} onChange={(e) => set("cost", e.target.value)} placeholder="credits / $" className={`mt-1 ${field}`} /></div>
-          <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Generated by</label>
-            <input value={f.generated_by_name} onChange={(e) => set("generated_by_name", e.target.value)} placeholder="name (optional)" className={`mt-1 ${field}`} /></div>
         </div>
-        <div><label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Notes / extra params</label>
-          <input value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="negative prompt, LoRA, camera, round…" className={`mt-1 ${field}`} /></div>
+
+        {done != null && (
+          <p className="rounded-[9px] bg-green-bg px-3 py-2 text-sm font-semibold text-green">
+            Added {done} {done === 1 ? noun : `${noun}s`}.{failed && failed.length > 0 ? ` ${failed.length} still need attention below.` : ""}
+          </p>
+        )}
+        {failed && failed.length > 0 && (
+          <div className="rounded-[9px] border border-border bg-surface-2/40 p-2.5 text-xs">
+            <p className="mb-1 font-bold text-text-muted">Couldn&apos;t import these — check the link and retry:</p>
+            <ul className="space-y-1">
+              {failed.map((x) => (
+                <li key={x.url} className="flex flex-col">
+                  <span className="truncate font-mono text-[11px] text-text">{x.url}</span>
+                  <span className="text-red">{x.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {err && <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{err}</p>}
         <div className="flex items-center justify-end gap-3 pt-1">
           {busy && prog && <span className="mr-auto text-xs font-medium text-text-muted">{prog}</span>}
-          <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button size="sm" onClick={submit} disabled={busy}>
-            {busy ? "Working…" : files.length > 1 ? `Add ${files.length} candidates` : "Add"}
-          </Button>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>{done != null ? "Close" : "Cancel"}</Button>
+          <Button size="sm" onClick={submit} disabled={busy || total === 0}>{primaryLabel}</Button>
         </div>
       </div>
     </Modal>
@@ -710,132 +799,6 @@ function ReferencesPanel({
   );
 }
 
-// ---- Import from an external tool (Higgsfield, etc.) ------------------------
-// Paste the pool of clips you generated elsewhere; each link is fetched, stored,
-// and dropped in as a candidate here so you can view + review + pick without the
-// download / re-upload round trip. Generation stays on the external tool.
-
-function ImportModal({
-  projectId, shot, stage, basePrompt, onClose, onDone,
-}: {
-  projectId: string; shot: AiShot; stage: Stage; basePrompt: string;
-  onClose: () => void; onDone: () => void;
-}) {
-  const [busy, start] = useTransition();
-  const [urlsText, setUrlsText] = useState("");
-  const [platform, setPlatform] = useState("");
-  const [promptText, setPromptText] = useState(basePrompt);
-  const [by, setBy] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const [failed, setFailed] = useState<{ url: string; reason: string }[] | null>(null);
-  const [done, setDone] = useState<number | null>(null);
-
-  const links = useMemo(
-    () => Array.from(new Set(urlsText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))),
-    [urlsText],
-  );
-
-  function submit() {
-    setErr(null);
-    setFailed(null);
-    setDone(null);
-    if (links.length === 0) { setErr("Paste at least one link."); return; }
-    start(async () => {
-      let res;
-      try {
-        res = await importFromHiggsfield(projectId, {
-          shotId: shot.id,
-          stage,
-          urls: links,
-          prompt: promptText || null,
-          platform: platform || null,
-          generated_by_name: by || null,
-        });
-      } catch {
-        setErr("Import failed — the link may be slow or unreachable. Try again, or paste the direct file (.mp4/.png) URL.");
-        return;
-      }
-      if ("error" in res) { setErr(res.error); return; }
-      setDone(res.imported);
-      if (res.failed.length > 0) {
-        // Keep the ones that failed in the box so they can be retried.
-        setFailed(res.failed);
-        setUrlsText(res.failed.map((f) => f.url).join("\n"));
-        onDone();
-        return;
-      }
-      onDone();
-      onClose();
-    });
-  }
-
-  return (
-    <Modal open onClose={onClose} size="lg" title={stage === "video" ? "Import from Higgsfield" : "Import from a link"}>
-      <div className="space-y-3">
-        <p className="text-sm text-text-muted">
-          Paste the links to the {stage === "image" ? "images" : "clips"} you generated (one per line — a
-          share link or a direct file URL). We pull each one in as a candidate on this shot, with its
-          source and specs auto-detected, so you can review the pool and pick the winner here. No
-          download or re-upload. Generation stays on the tool.
-        </p>
-        <div>
-          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            Links <span className="font-normal normal-case text-text-faint">(one per line · up to 40)</span>
-          </label>
-          <textarea value={urlsText} onChange={(e) => setUrlsText(e.target.value)} rows={6}
-            placeholder={"https://higgsfield.ai/…\nhttps://…/clip.mp4"} className={`mt-1 ${field} font-mono text-xs`} />
-          {links.length > 0 && (
-            <p className="mt-1 text-xs text-text-faint">{links.length} link{links.length === 1 ? "" : "s"} ready</p>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Tool / platform</label>
-            <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="Auto-detect from link" className={`mt-1 ${field}`} />
-          </div>
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Generated by</label>
-            <input value={by} onChange={(e) => setBy(e.target.value)} placeholder="name (optional)" className={`mt-1 ${field}`} />
-          </div>
-        </div>
-        <div>
-          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-            Prompt used <span className="font-normal normal-case text-text-faint">(optional · applied to all imported)</span>
-          </label>
-          <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={2}
-            placeholder="The prompt behind these clips…" className={`mt-1 ${field}`} />
-        </div>
-        {done != null && (
-          <p className="rounded-[9px] bg-green-bg px-3 py-2 text-sm font-semibold text-green">
-            Imported {done} file{done === 1 ? "" : "s"}.{failed && failed.length > 0 ? ` ${failed.length} still need attention below.` : ""}
-          </p>
-        )}
-        {failed && failed.length > 0 && (
-          <div className="rounded-[9px] border border-border bg-surface-2/40 p-2.5 text-xs">
-            <p className="mb-1 font-bold text-text-muted">Couldn&apos;t import these — check the link and retry:</p>
-            <ul className="space-y-1">
-              {failed.map((f) => (
-                <li key={f.url} className="flex flex-col">
-                  <span className="truncate font-mono text-[11px] text-text">{f.url}</span>
-                  <span className="text-red">{f.reason}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {err && <p className="rounded-[9px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{err}</p>}
-        <div className="flex items-center justify-end gap-3 pt-1">
-          {busy && <span className="mr-auto text-xs font-medium text-text-muted">Pulling {links.length} file{links.length === 1 ? "" : "s"}…</span>}
-          <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>{done != null ? "Close" : "Cancel"}</Button>
-          <Button size="sm" onClick={submit} disabled={busy || links.length === 0}>
-            {busy ? "Importing…" : failed ? "Retry these" : `Import ${links.length || ""}`.trim()}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
 function StagePanel({
   projectId, studioId, shot, stage, prompt, gens, media, library, reviews, refStartId, refEndId, onRun,
 }: {
@@ -850,7 +813,6 @@ function StagePanel({
   const [pText, setPText] = useState(prompt?.text ?? "");
   const [pModel, setPModel] = useState(prompt?.target_model ?? "");
   const [adding, setAdding] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [triaging, setTriaging] = useState(false);
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
   const label = stage === "image" ? "Image" : "Video";
@@ -922,15 +884,8 @@ function StagePanel({
           {pool.length > 0 && (
             <BatchReviewButton projectId={projectId} shotId={shot.id} pool={pool} media={media} reviews={reviews} />
           )}
-          <button onClick={() => setImporting(true)}
-            className="inline-flex items-center gap-1.5 rounded-[9px] border border-border px-2.5 py-1 text-xs font-bold text-text transition hover:border-accent hover:text-accent"
-            title="Paste share links to pull the media you generated straight in">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />
-            </svg>
-            {stage === "video" ? "Import from Higgsfield" : "Import from link"}
-          </button>
-          <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
+          <Button size="sm" variant="secondary" onClick={() => setAdding(true)}
+            title="Upload files, or paste the links you generated on Higgsfield / etc. to pull them straight in">
             + {stage === "image" ? "Candidate" : "Take"}
           </Button>
         </div>
@@ -972,10 +927,6 @@ function StagePanel({
         <AddGenModal projectId={projectId} studioId={studioId} shot={shot} stage={stage}
           promptId={prompt?.id ?? null} basePrompt={pText} refStartId={refStartId} refEndId={refEndId}
           onClose={() => setAdding(false)} />
-      )}
-      {importing && (
-        <ImportModal projectId={projectId} shot={shot} stage={stage} basePrompt={pText}
-          onClose={() => setImporting(false)} onDone={() => router.refresh()} />
       )}
       {triaging && (
         <TriageView projectId={projectId} stage={stage} shotId={shot.id}
