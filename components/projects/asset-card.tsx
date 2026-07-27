@@ -6,6 +6,7 @@ import {
   renameAsset,
   deleteAsset,
   deleteVersion,
+  setVersionNumber,
 } from "@/app/(app)/projects/[id]/actions";
 import { toast } from "@/components/ui/toast";
 import { AssetStatusMenu } from "@/components/projects/asset-status-menu";
@@ -139,6 +140,7 @@ export function AssetCard({
   const [reviewVersion, setReviewVersion] = useState<VersionRow | null>(null);
   const [viewVersion, setViewVersion] = useState<VersionRow | null>(null);
   const [confirmVersion, setConfirmVersion] = useState<string | null>(null);
+  const [editVersion, setEditVersion] = useState<string | null>(null);
   const [, startVersionDelete] = useTransition();
   const router = useRouter();
   const hue = ASSET_TYPE_HUE[asset.type] ?? "cyan";
@@ -214,12 +216,47 @@ export function AssetCard({
             const s = summarizeReview(v.approvals);
             return (
               <li key={v.id} className="flex items-start gap-2 text-sm">
-                <StatusTag
-                  hue={v.id === asset.current_version_id ? "green" : "indigo"}
-                  dot={false}
-                >
-                  v{v.version_number}
-                </StatusTag>
+                {editVersion === v.id ? (
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className="text-xs font-bold text-text-muted">v</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={9999}
+                      autoFocus
+                      defaultValue={v.version_number}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") setEditVersion(null);
+                      }}
+                      onBlur={(e) => {
+                        const next = Number(e.target.value);
+                        setEditVersion(null);
+                        if (!next || next === v.version_number) return;
+                        startVersionDelete(async () => {
+                          const res = await setVersionNumber(v.id, next);
+                          if (res?.error) toast(res.error, "error");
+                          router.refresh();
+                        });
+                      }}
+                      aria-label="Version number"
+                      className="w-14 rounded-[7px] border border-accent bg-bg px-1.5 py-0.5 text-xs font-bold text-text outline-none"
+                    />
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setEditVersion(v.id)}
+                    title="Change the version number"
+                    className="shrink-0"
+                  >
+                    <StatusTag
+                      hue={v.id === asset.current_version_id ? "green" : "indigo"}
+                      dot={false}
+                    >
+                      v{v.version_number}
+                    </StatusTag>
+                  </button>
+                )}
                 <div className="min-w-0 flex-1">
                   {v.notes && (
                     <p className="text-sm text-text-muted">{v.notes}</p>
@@ -307,6 +344,9 @@ export function AssetCard({
           assetId={asset.id}
           projectId={projectId}
           studioId={studioId}
+          nextVersion={
+            asset.versions.reduce((m, v) => Math.max(m, v.version_number), 0) + 1
+          }
           onDone={() => setAddOpen(false)}
         />
       </Modal>

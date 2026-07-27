@@ -82,7 +82,13 @@ function readVersionMeta(formData: FormData) {
   const sizeRaw = String(formData.get("size_bytes") ?? "").trim();
   const sizeBytes = sizeRaw ? Number(sizeRaw) : null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  return { storagePath, url, mimeType, sizeBytes, notes };
+  // Optional: the uploader can state which version this really is (a file
+  // brought in mid-job is often v2 or v3, not v1).
+  const vRaw = String(formData.get("version_number") ?? "").trim();
+  const parsed = vRaw ? Number(vRaw) : NaN;
+  const versionNumber =
+    Number.isInteger(parsed) && parsed > 0 && parsed <= 9999 ? parsed : null;
+  return { storagePath, url, mimeType, sizeBytes, notes, versionNumber };
 }
 
 async function insertVersion(
@@ -96,6 +102,7 @@ async function insertVersion(
     mimeType: string | null;
     sizeBytes: number | null;
     notes: string | null;
+    versionNumber?: number | null;
   }
 ): Promise<{ versionNumber: number } | { error: string }> {
   const { data: last } = await supabase
@@ -105,7 +112,16 @@ async function insertVersion(
     .order("version_number", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const versionNumber = (last?.version_number ?? 0) + 1;
+  // Explicit number wins when given; otherwise continue the sequence.
+  const versionNumber = opts.versionNumber ?? (last?.version_number ?? 0) + 1;
+
+  const { data: clash } = await supabase
+    .from("versions")
+    .select("id")
+    .eq("asset_id", opts.assetId)
+    .eq("version_number", versionNumber)
+    .maybeSingle();
+  if (clash) return { error: `This file already has a v${versionNumber}.` };
 
   const { data: version, error } = await supabase
     .from("versions")
@@ -381,6 +397,65 @@ export async function renameAsset(
   );
   revalidatePath(`/projects/${asset.project_id}`);
   revalidatePath(`/projects/${asset.project_id}/assets`);
+  return null;
+}
+
+// Correct a version's number. Uploads auto-number from 1, but a file brought
+// in mid-job is often really v2 or v3.
+export async function setVersionNumber(
+  versionId: string,
+  next: number
+): Promise<ActionState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  if (!Number.isInteger(next) || next < 1 || next > 9999) {
+    return { error: "Use a whole number between 1 and 9999." };
+  }
+
+  const { data: version } = await supabase
+    .from("versions")
+    .select("id, asset_id, version_number")
+    .eq("id", versionId)
+    .single();
+  if (!version) return { error: "Version not found." };
+  if (version.version_number === next) return null;
+
+  const { data: clash } = await supabase
+    .from("versions")
+    .select("id")
+    .eq("asset_id", version.asset_id)
+    .eq("version_number", next)
+    .maybeSingle();
+  if (clash) return { error: `This file already has a v${next}.` };
+
+  const { data: asset } = await supabase
+    .from("assets")
+    .select("name, project_id")
+    .eq("id", version.asset_id)
+    .single();
+
+  const { error } = await supabase
+    .from("versions")
+    .update({ version_number: next })
+    .eq("id", versionId);
+  if (error) {
+    reportError("setVersionNumber", error);
+    return { error: error.message };
+  }
+
+  if (asset) {
+    await logActivity(
+      supabase,
+      ctx.studio.id,
+      ctx.userId,
+      asset.project_id,
+      "activity",
+      `Renumbered "${asset.name}" v${version.version_number} to v${next}`
+    );
+    revalidatePath(`/projects/${asset.project_id}`);
+    revalidatePath(`/projects/${asset.project_id}/assets`);
+    revalidatePath(`/projects/${asset.project_id}/review`);
+  }
   return null;
 }
 

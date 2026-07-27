@@ -4,16 +4,31 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAsset } from "@/app/(app)/projects/[id]/actions";
 import { uploadAssetFile } from "@/components/projects/upload-file";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+import { ASSET_TYPE_LABEL } from "@/lib/status";
+import { fileSize } from "@/lib/format";
 
 // Assets can be large (video cuts), so allow more than the board's image cap.
 const MAX_MB = 200;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+const TYPES = ["image", "video", "storyboard", "reference", "cut", "other"];
 
 function assetType(f: File): string {
   if (f.type.startsWith("image/")) return "image";
   if (f.type.startsWith("video/")) return "video";
   return "other";
 }
+
+// A dropped file staged for confirmation: name / type / version are editable
+// before anything is uploaded.
+type Staged = {
+  file: File;
+  name: string;
+  type: string;
+  versionNumber: string;
+};
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "").trim() || name || "Untitled";
 }
@@ -36,6 +51,7 @@ export function AssetsDropzone({
   const [active, setActive] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [staged, setStaged] = useState<Staged[]>([]);
   const depth = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -46,7 +62,8 @@ export function AssetsDropzone({
     timer.current = setTimeout(() => setNotice(null), 6000);
   }
 
-  async function handleFiles(files: File[]) {
+  // Dropping stages the files; nothing uploads until the details are confirmed.
+  function stageFiles(files: File[]) {
     if (files.length === 0) return;
     const over = files.filter((f) => f.size > MAX_BYTES);
     const ok = files.filter((f) => f.size <= MAX_BYTES);
@@ -58,23 +75,53 @@ export function AssetsDropzone({
       );
     }
     if (ok.length === 0) return;
+    setStaged(
+      ok.map((file) => ({
+        file,
+        name: baseName(file.name),
+        type: assetType(file),
+        versionNumber: "1",
+      }))
+    );
+  }
+
+  function patch(i: number, next: Partial<Staged>) {
+    setStaged((prev) =>
+      prev.map((s, idx) => (idx === i ? { ...s, ...next } : s))
+    );
+  }
+
+  async function confirmUpload() {
+    const items = staged.filter((s) => s.name.trim());
+    if (items.length === 0) {
+      flash("Give each file a name first.");
+      return;
+    }
+    setStaged([]);
     let done = 0;
-    for (let i = 0; i < ok.length; i++) {
-      const f = ok[i];
-      setStatus(`Uploading ${i + 1} of ${ok.length}…`);
+    for (let i = 0; i < items.length; i++) {
+      const s = items[i];
+      setStatus(`Uploading ${i + 1} of ${items.length}…`);
       try {
-        const meta = await uploadAssetFile({ studioId, projectId, file: f });
+        const meta = await uploadAssetFile({
+          studioId,
+          projectId,
+          file: s.file,
+        });
         const fd = new FormData();
-        fd.set("name", baseName(f.name));
-        fd.set("type", assetType(f));
+        fd.set("name", s.name.trim());
+        fd.set("type", s.type);
+        fd.set("version_number", s.versionNumber);
         fd.set("storage_path", meta.storagePath);
         fd.set("mime_type", meta.mimeType);
         fd.set("size_bytes", String(meta.sizeBytes));
         const res = await createAsset(projectId, null, fd);
-        if (res?.error) flash(`Couldn't add "${f.name}": ${res.error}`);
+        if (res?.error) flash(`Couldn't add "${s.name}": ${res.error}`);
         else done++;
       } catch (e) {
-        flash(`Couldn't upload "${f.name}": ${e instanceof Error ? e.message : "failed"}`);
+        flash(
+          `Couldn't upload "${s.name}": ${e instanceof Error ? e.message : "failed"}`
+        );
       }
     }
     setStatus(null);
@@ -105,7 +152,7 @@ export function AssetsDropzone({
         e.preventDefault();
         depth.current = 0;
         setActive(false);
-        void handleFiles(Array.from(e.dataTransfer.files));
+        stageFiles(Array.from(e.dataTransfer.files));
       }}
     >
       <input
@@ -114,7 +161,7 @@ export function AssetsDropzone({
         multiple
         className="hidden"
         onChange={(e) => {
-          void handleFiles(Array.from(e.target.files ?? []));
+          stageFiles(Array.from(e.target.files ?? []));
           if (fileRef.current) fileRef.current.value = "";
         }}
       />
@@ -150,6 +197,99 @@ export function AssetsDropzone({
             )}
           </div>
         </div>
+      )}
+
+      {staged.length > 0 && (
+        <Modal
+          open
+          onClose={() => setStaged([])}
+          size="lg"
+          title={
+            staged.length === 1
+              ? "Confirm file details"
+              : `Confirm ${staged.length} files`
+          }
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-text-muted">
+              Check the name, type, and version before these upload. Nothing is
+              stored until you confirm.
+            </p>
+            <div className="space-y-2">
+              {staged.map((s, i) => (
+                <div
+                  key={`${s.file.name}-${i}`}
+                  className="rounded-[12px] border border-border bg-surface-2/40 p-3"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="truncate font-mono text-[11px] text-text-faint">
+                      {s.file.name} · {fileSize(s.file.size)}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setStaged((prev) => prev.filter((_, idx) => idx !== i))
+                      }
+                      className="shrink-0 text-[11px] font-semibold text-text-faint transition hover:text-red"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_140px_100px]">
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                        Name
+                      </label>
+                      <input
+                        value={s.name}
+                        onChange={(e) => patch(i, { name: e.target.value })}
+                        className="mt-1 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                        Type
+                      </label>
+                      <select
+                        value={s.type}
+                        onChange={(e) => patch(i, { type: e.target.value })}
+                        className="mt-1 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                      >
+                        {TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {ASSET_TYPE_LABEL[t]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                        Version
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={9999}
+                        value={s.versionNumber}
+                        onChange={(e) =>
+                          patch(i, { versionNumber: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button size="sm" variant="secondary" onClick={() => setStaged([])}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={confirmUpload}>
+                Upload {staged.length > 1 ? staged.length : ""}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {notice && (

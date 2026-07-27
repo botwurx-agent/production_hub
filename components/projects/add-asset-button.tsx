@@ -110,6 +110,22 @@ export function AddAssetButton({
           <Field label="Or paste a link" htmlFor="url">
             <Input id="url" name="url" type="url" placeholder="https://..." />
           </Field>
+          <Field
+            label="Version number"
+            htmlFor="version_number"
+            hint="Change it if this file is really a later version."
+          >
+            <Input
+              id="version_number"
+              name="version_number"
+              type="number"
+              min={1}
+              max={9999}
+              step={1}
+              defaultValue={1}
+              className="max-w-[120px]"
+            />
+          </Field>
           <Field label="Notes" htmlFor="notes">
             <Textarea
               id="notes"

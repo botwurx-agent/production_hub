@@ -20,11 +20,15 @@ export function AddVersionForm({
   assetId,
   projectId,
   studioId,
+  nextVersion,
   onDone,
 }: {
   assetId: string;
   projectId: string;
   studioId: string;
+  // What the next number would be if left alone; shown so the uploader can
+  // correct it (a file brought in mid-job is often really v2 or v3).
+  nextVersion?: number;
   onDone: () => void;
 }) {
   const bound = addVersion.bind(null, assetId);
@@ -70,6 +74,22 @@ export function AddVersionForm({
       </Field>
       <Field label="Or paste a link" htmlFor="url">
         <Input id="url" name="url" type="url" placeholder="https://..." />
+      </Field>
+      <Field
+        label="Version number"
+        htmlFor="version_number"
+        hint="Change it if this file is really a later version."
+      >
+        <Input
+          id="version_number"
+          name="version_number"
+          type="number"
+          min={1}
+          max={9999}
+          step={1}
+          defaultValue={nextVersion ?? 1}
+          className="max-w-[120px]"
+        />
       </Field>
       <Field label="Version notes" htmlFor="notes">
         <Textarea id="notes" name="notes" placeholder="What changed in this version?" className="min-h-[72px]" />
