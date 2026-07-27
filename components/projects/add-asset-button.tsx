@@ -30,16 +30,21 @@ function Submit({ busy }: { busy: boolean }) {
   );
 }
 
-export function AddAssetButton({
+// The form itself, as a controlled modal, so the consolidated "Add asset" menu
+// can open it alongside the Drive and Figma importers.
+export function AddAssetModal({
+  open,
+  onClose,
   projectId,
   studioId,
   existingAssets = [],
 }: {
+  open: boolean;
+  onClose: () => void;
   projectId: string;
   studioId: string;
   existingAssets?: ExistingAsset[];
 }) {
-  const [open, setOpen] = useState(false);
   const bound = createAsset.bind(null, projectId);
   const [state, action] = useFormState<ActionState, FormData>(bound, null);
   const [submitted, setSubmitted] = useState(false);
@@ -66,17 +71,14 @@ export function AddAssetButton({
   useEffect(() => {
     if (submitted && state === null) {
       setSubmitted(false);
-      setOpen(false);
+      onClose();
       reset();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submitted, state]);
 
   return (
-    <>
-      <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
-        <PlusIcon /> Add asset
-      </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Add asset">
+      <Modal open={open} onClose={onClose} title="Add asset">
         <form
           ref={formRef}
           action={async (fd) => {
@@ -112,7 +114,7 @@ export function AddAssetButton({
                 setUploadError(res.error);
                 return;
               }
-              setOpen(false);
+              onClose();
               reset();
               router.refresh();
               return;
@@ -205,17 +207,29 @@ export function AddAssetButton({
             </p>
           )}
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
             </Button>
             <Submit busy={uploading} />
           </div>
         </form>
       </Modal>
+  );
+}
+
+// Plain button + modal, for places with no menu (the empty state).
+export function AddAssetButton(props: {
+  projectId: string;
+  studioId: string;
+  existingAssets?: ExistingAsset[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
+        <PlusIcon /> Add asset
+      </Button>
+      <AddAssetModal open={open} onClose={() => setOpen(false)} {...props} />
     </>
   );
 }

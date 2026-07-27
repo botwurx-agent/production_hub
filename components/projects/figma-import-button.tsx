@@ -81,9 +81,17 @@ function FrameCard({
   );
 }
 
-export function FigmaImportButton({ projectId }: { projectId: string }) {
+// Controlled modal, so the consolidated "Add asset" menu can open it.
+export function FigmaImportModal({
+  open,
+  onClose,
+  projectId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  projectId: string;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
   const [fileKey, setFileKey] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
@@ -109,7 +117,7 @@ export function FigmaImportButton({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -121,15 +129,11 @@ export function FigmaImportButton({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
-        <FigmaGlyph /> Import from Figma
-      </Button>
-
       {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:items-center">
           <div
             className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
+            onClick={() => onClose()}
             aria-hidden="true"
           />
           <div className="relative z-10 flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[18px] border border-border bg-surface shadow-lg">
@@ -138,7 +142,7 @@ export function FigmaImportButton({ projectId }: { projectId: string }) {
                 Import from Figma
               </h2>
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => onClose()}
                 aria-label="Close"
                 className="grid h-8 w-8 place-items-center rounded-[9px] text-text-muted transition hover:bg-surface-2 hover:text-text"
               >
@@ -207,7 +211,7 @@ export function FigmaImportButton({ projectId }: { projectId: string }) {
             </div>
 
             <div className="flex justify-end border-t border-border px-5 py-3">
-              <Button variant="secondary" onClick={() => setOpen(false)}>
+              <Button variant="secondary" onClick={() => onClose()}>
                 Done
               </Button>
             </div>

@@ -11,7 +11,10 @@ const SIGNED_URL_TTL = 60 * 60; // 1 hour
 
 export type ProjectAssets = {
   assets: AssetWithVersions[];
-  reviewLinkByAsset: Map<string, { id: string; token: string }>;
+  reviewLinkByAsset: Map<
+    string,
+    { id: string; token: string; recipient: string | null }
+  >;
 };
 
 // Loads a project's assets with versions, signed file URLs, review comments,
@@ -26,7 +29,7 @@ export async function loadProjectAssets(
     supabase
       .from("assets")
       .select(
-        "id, name, type, status, current_version_id, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
+        "id, name, type, status, current_version_id, created_at, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
       )
       .eq("project_id", projectId)
       .order("created_at", { ascending: true })
@@ -113,6 +116,7 @@ export async function loadProjectAssets(
     type: a.type,
     status: a.status,
     current_version_id: a.current_version_id,
+    created_at: a.created_at,
     versions: (a.versions ?? []).map((v) => ({
       ...v,
       signedUrl: v.storage_path ? (signed.get(v.storage_path) ?? null) : null,

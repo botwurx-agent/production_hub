@@ -41,6 +41,7 @@ export type AssetWithVersions = {
   type: AssetType;
   status: AssetStatus;
   current_version_id: string | null;
+  created_at: string;
   versions: VersionRow[];
 };
 

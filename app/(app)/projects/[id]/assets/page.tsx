@@ -2,11 +2,10 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { Card, EmptyState } from "@/components/ui/card";
-import { AssetCard } from "@/components/projects/asset-card";
 import { AddAssetButton } from "@/components/projects/add-asset-button";
+import { AddAssetMenu } from "@/components/projects/add-asset-menu";
+import { AssetsView } from "@/components/projects/assets-view";
 import { AssetsDropzone } from "@/components/projects/assets-dropzone";
-import { DriveImportButton } from "@/components/projects/drive-import-button";
-import { FigmaImportButton } from "@/components/projects/figma-import-button";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { driveConnected } from "@/lib/googledrive";
 import { loadProjectAssets } from "@/lib/project-data";
@@ -73,17 +72,13 @@ export default async function AssetsPage({
           <h2 className="font-display text-base font-bold">
             {assets.length} {assets.length === 1 ? "deliverable" : "deliverables"}
           </h2>
-          <div className="flex items-center gap-2">
-            {figmaAccount && <FigmaImportButton projectId={project.id} />}
-            {driveConnected(emailAccount?.scope) && (
-              <DriveImportButton projectId={project.id} />
-            )}
-            <AddAssetButton
-              projectId={project.id}
-              studioId={ctx.studio.id}
-              existingAssets={existingAssets}
-            />
-          </div>
+          <AddAssetMenu
+            projectId={project.id}
+            studioId={ctx.studio.id}
+            existingAssets={existingAssets}
+            driveEnabled={driveConnected(emailAccount?.scope)}
+            figmaEnabled={Boolean(figmaAccount)}
+          />
         </div>
         <AssetsDropzone
           projectId={project.id}
@@ -125,19 +120,14 @@ export default async function AssetsPage({
             ]}
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {assets.map((a) => (
-              <AssetCard
-                key={a.id}
-                asset={a}
-                projectId={project.id}
-                studioId={ctx.studio.id}
-                currentUserId={ctx.userId}
-                reviewLink={reviewLinkByAsset.get(a.id) ?? null}
-                emailEnabled={emailConfigured()}
-              />
-            ))}
-          </div>
+          <AssetsView
+            assets={assets}
+            projectId={project.id}
+            studioId={ctx.studio.id}
+            currentUserId={ctx.userId}
+            reviewLinkByAsset={Object.fromEntries(reviewLinkByAsset)}
+            emailEnabled={emailConfigured()}
+          />
         )}
         </AssetsDropzone>
       </Card>
