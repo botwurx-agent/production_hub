@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { AnchoredPopover } from "@/components/review/anchored-popover";
 import { REACTIONS, type CommentReaction } from "@/lib/review-reactions";
 
 // Reaction chips under a comment, plus the "add a reaction" picker. A chip
@@ -17,15 +18,7 @@ export function CommentReactions({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -49,44 +42,49 @@ export function CommentReactions({
         </button>
       ))}
 
-      <div className="relative" ref={ref}>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!disabled) setOpen((v) => !v);
-          }}
-          disabled={disabled}
-          title="Add a reaction"
-          aria-label="Add a reaction"
-          className="grid h-[22px] w-[22px] place-items-center rounded-pill border border-border text-text-faint transition hover:border-border-strong hover:text-text disabled:opacity-50"
+      <button
+        ref={btnRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled) setOpen((v) => !v);
+        }}
+        disabled={disabled}
+        title="Add a reaction"
+        aria-label="Add a reaction"
+        className="grid h-[22px] w-[22px] place-items-center rounded-pill border border-border text-text-faint transition hover:border-border-strong hover:text-text disabled:opacity-50"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" />
+          <path d="M9 9h.01M15 9h.01" />
+        </svg>
+      </button>
+
+      <AnchoredPopover
+        anchorRef={btnRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        width={REACTIONS.length * 28 + 16}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="flex gap-0.5"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" />
-            <path d="M9 9h.01M15 9h.01" />
-          </svg>
-        </button>
-        {open && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="absolute left-0 top-7 z-40 flex gap-0.5 rounded-[10px] border border-border bg-surface p-1 shadow-lg"
-          >
-            {REACTIONS.map((e) => (
-              <button
-                key={e}
-                onClick={(ev) => {
-                  ev.stopPropagation();
-                  onToggle(e);
-                  setOpen(false);
-                }}
-                className="grid h-[24px] w-[24px] place-items-center rounded-[6px] text-[14px] leading-none transition hover:bg-surface-2"
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+          {REACTIONS.map((e) => (
+            <button
+              key={e}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onToggle(e);
+                setOpen(false);
+              }}
+              className="grid h-[24px] w-[24px] place-items-center rounded-[6px] text-[14px] leading-none transition hover:bg-surface-2"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      </AnchoredPopover>
     </div>
   );
 }
