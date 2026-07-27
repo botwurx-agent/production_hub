@@ -1,6 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  renameAsset,
+  deleteAsset,
+  deleteVersion,
+} from "@/app/(app)/projects/[id]/actions";
+import { toast } from "@/components/ui/toast";
 import { AssetStatusMenu } from "@/components/projects/asset-status-menu";
 import { AddVersionForm } from "@/components/projects/add-version-form";
 import { ReviewModal } from "@/components/projects/review-modal";
@@ -131,6 +138,9 @@ export function AssetCard({
   const [showHistory, setShowHistory] = useState(false);
   const [reviewVersion, setReviewVersion] = useState<VersionRow | null>(null);
   const [viewVersion, setViewVersion] = useState<VersionRow | null>(null);
+  const [confirmVersion, setConfirmVersion] = useState<string | null>(null);
+  const [, startVersionDelete] = useTransition();
+  const router = useRouter();
   const hue = ASSET_TYPE_HUE[asset.type] ?? "cyan";
   const current =
     asset.versions.find((v) => v.id === asset.current_version_id) ??
@@ -250,6 +260,36 @@ export function AssetCard({
                         {s.label}
                       </StatusTag>
                     )}
+                    {confirmVersion === v.id ? (
+                      <span className="ml-auto flex items-center gap-1.5">
+                        <button
+                          onClick={() =>
+                            startVersionDelete(async () => {
+                              const res = await deleteVersion(v.id);
+                              if (res?.error) toast(res.error, "error");
+                              setConfirmVersion(null);
+                              router.refresh();
+                            })
+                          }
+                          className="rounded-[7px] bg-red px-2 py-0.5 text-[11px] font-bold text-white transition hover:opacity-90"
+                        >
+                          Delete v{v.version_number}
+                        </button>
+                        <button
+                          onClick={() => setConfirmVersion(null)}
+                          className="text-[11px] font-semibold text-text-faint hover:text-text"
+                        >
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmVersion(v.id)}
+                        className="ml-auto text-xs font-semibold text-text-faint transition hover:text-red"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               </li>
@@ -288,6 +328,18 @@ export function AssetCard({
           onClose={() => setViewVersion(null)}
           name={asset.name}
           version={viewVersion}
+          onRename={async (next) => {
+            const res = await renameAsset(asset.id, next);
+            if (res?.error) return res.error;
+            router.refresh();
+            return null;
+          }}
+          onDelete={async () => {
+            const res = await deleteAsset(asset.id);
+            if (res?.error) return res.error;
+            router.refresh();
+            return null;
+          }}
         />
       )}
     </div>

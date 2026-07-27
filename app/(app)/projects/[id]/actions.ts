@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { fetchMediaFromUrl } from "@/lib/media-import";
 import { requireStudioContext } from "@/lib/studio";
+import { reportError } from "@/lib/log";
 import { ASSET_STATUS } from "@/lib/status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AssetStatus, AssetType, Database } from "@/lib/database.types";
@@ -339,6 +340,171 @@ export async function addMasterCutVersion(
   );
   revalidatePath(`/projects/${projectId}/pipeline`);
   revalidatePath(`/projects/${projectId}`);
+  return null;
+}
+
+// Rename an asset. Uploads land named after the file, so this is the fix-up
+// path from the preview / library.
+export async function renameAsset(
+  assetId: string,
+  name: string
+): Promise<ActionState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const clean = name.trim();
+  if (!clean) return { error: "Give the file a name." };
+
+  const { data: asset } = await supabase
+    .from("assets")
+    .select("name, project_id")
+    .eq("id", assetId)
+    .single();
+  if (!asset) return { error: "File not found." };
+  if (asset.name === clean) return null;
+
+  const { error } = await supabase
+    .from("assets")
+    .update({ name: clean })
+    .eq("id", assetId);
+  if (error) {
+    reportError("renameAsset", error);
+    return { error: error.message };
+  }
+
+  await logActivity(
+    supabase,
+    ctx.studio.id,
+    ctx.userId,
+    asset.project_id,
+    "activity",
+    `Renamed "${asset.name}" to "${clean}"`
+  );
+  revalidatePath(`/projects/${asset.project_id}`);
+  revalidatePath(`/projects/${asset.project_id}/assets`);
+  return null;
+}
+
+// Hard delete of one version: its stored blob, its approvals (polymorphic, so
+// no FK cascade), then the row. review_comments cascade. If it was the current
+// version the asset falls back to the newest remaining one.
+export async function deleteVersion(versionId: string): Promise<ActionState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: version } = await supabase
+    .from("versions")
+    .select("id, asset_id, version_number, storage_path")
+    .eq("id", versionId)
+    .single();
+  if (!version) return { error: "Version not found." };
+
+  const { data: asset } = await supabase
+    .from("assets")
+    .select("id, name, project_id, current_version_id")
+    .eq("id", version.asset_id)
+    .single();
+  if (!asset) return { error: "File not found." };
+
+  if (version.storage_path) {
+    await assetStorage().remove([version.storage_path]);
+  }
+  await supabase
+    .from("approvals")
+    .delete()
+    .eq("target_type", "version")
+    .eq("target_id", versionId);
+
+  const { error } = await supabase.from("versions").delete().eq("id", versionId);
+  if (error) {
+    reportError("deleteVersion", error);
+    return { error: error.message };
+  }
+
+  // current_version_id is SET NULL on delete, so re-point at what's left.
+  if (asset.current_version_id === versionId) {
+    const { data: next } = await supabase
+      .from("versions")
+      .select("id")
+      .eq("asset_id", asset.id)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    await supabase
+      .from("assets")
+      .update({ current_version_id: next?.id ?? null })
+      .eq("id", asset.id);
+  }
+
+  await logActivity(
+    supabase,
+    ctx.studio.id,
+    ctx.userId,
+    asset.project_id,
+    "activity",
+    `Deleted v${version.version_number} of "${asset.name}"`
+  );
+  revalidatePath(`/projects/${asset.project_id}`);
+  revalidatePath(`/projects/${asset.project_id}/assets`);
+  revalidatePath(`/projects/${asset.project_id}/review`);
+  return null;
+}
+
+// Hard delete of a whole asset: every version's blob, the polymorphic approvals
+// for the asset and its versions, then the row. versions / review_links /
+// review_comments cascade; shot cards + storyboard frames null out their link.
+export async function deleteAsset(assetId: string): Promise<ActionState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: asset } = await supabase
+    .from("assets")
+    .select("id, name, project_id")
+    .eq("id", assetId)
+    .single();
+  if (!asset) return { error: "File not found." };
+
+  const { data: versions } = await supabase
+    .from("versions")
+    .select("id, storage_path")
+    .eq("asset_id", assetId);
+  const rows = versions ?? [];
+
+  const paths = rows
+    .map((v) => v.storage_path)
+    .filter((p): p is string => Boolean(p));
+  if (paths.length) await assetStorage().remove(paths);
+
+  const versionIds = rows.map((v) => v.id);
+  if (versionIds.length) {
+    await supabase
+      .from("approvals")
+      .delete()
+      .eq("target_type", "version")
+      .in("target_id", versionIds);
+  }
+  await supabase
+    .from("approvals")
+    .delete()
+    .eq("target_type", "asset")
+    .eq("target_id", assetId);
+
+  const { error } = await supabase.from("assets").delete().eq("id", assetId);
+  if (error) {
+    reportError("deleteAsset", error);
+    return { error: error.message };
+  }
+
+  await logActivity(
+    supabase,
+    ctx.studio.id,
+    ctx.userId,
+    asset.project_id,
+    "activity",
+    `Deleted "${asset.name}"`
+  );
+  revalidatePath(`/projects/${asset.project_id}`);
+  revalidatePath(`/projects/${asset.project_id}/assets`);
+  revalidatePath(`/projects/${asset.project_id}/review`);
   return null;
 }
 

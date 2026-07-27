@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { fileSize, shortDate } from "@/lib/format";
 import { viewerKind, officeEmbedUrl, officeViewUrl } from "@/lib/file-kind";
 import { ScrubVideo } from "@/components/review/video-player";
+import { toast } from "@/components/ui/toast";
 import type { VersionRow } from "@/components/projects/asset-types";
 
 export { viewerKind };
@@ -25,16 +26,46 @@ export function AssetViewer({
   onClose,
   name,
   version,
+  onRename,
+  onDelete,
 }: {
   open: boolean;
   onClose: () => void;
   name: string;
   version: VersionRow;
+  // Both optional: the viewer stays presentational where management is not
+  // offered. Each returns an error message, or null on success.
+  onRename?: (name: string) => Promise<string | null>;
+  onDelete?: () => Promise<string | null>;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, start] = useTransition();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Reset the local edit state whenever a different file is opened.
+    setDraft(name);
+    setEditing(false);
+    setConfirming(false);
+  }, [name, version.id]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      // While renaming, Escape cancels the edit rather than closing the viewer.
+      if (e.key !== "Escape") return;
+      if (editing) {
+        setEditing(false);
+        setDraft(name);
+        return;
+      }
+      onClose();
     }
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -42,7 +73,36 @@ export function AssetViewer({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open, onClose, editing, name]);
+
+  function saveName() {
+    const next = draft.trim();
+    if (!next || next === name) {
+      setEditing(false);
+      setDraft(name);
+      return;
+    }
+    start(async () => {
+      const err = await onRename?.(next);
+      if (err) {
+        toast(err, "error");
+        setDraft(name);
+      }
+      setEditing(false);
+    });
+  }
+
+  function doDelete() {
+    start(async () => {
+      const err = await onDelete?.();
+      if (err) {
+        toast(err, "error");
+        setConfirming(false);
+        return;
+      }
+      onClose();
+    });
+  }
 
   if (!open) return null;
 
@@ -66,9 +126,43 @@ export function AssetViewer({
       <div className="relative z-10 flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[18px] border border-border bg-surface shadow-lg">
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
           <div className="min-w-0">
-            <h2 className="truncate font-display text-base font-bold text-text">
-              {name}
-            </h2>
+            {editing ? (
+              <input
+                ref={inputRef}
+                value={draft}
+                autoFocus
+                disabled={busy}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    saveName();
+                  }
+                }}
+                aria-label="File name"
+                className="w-full rounded-[8px] border border-accent bg-bg px-2 py-1 font-display text-base font-bold text-text outline-none"
+              />
+            ) : (
+              <div className="flex min-w-0 items-center gap-1.5">
+                <h2 className="truncate font-display text-base font-bold text-text">
+                  {name}
+                </h2>
+                {onRename && (
+                  <button
+                    onClick={() => setEditing(true)}
+                    aria-label="Rename file"
+                    title="Rename"
+                    className="shrink-0 rounded-[7px] p-1 text-text-faint transition hover:bg-surface-2 hover:text-text"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )}
             <p className="text-xs text-text-faint">
               v{version.version_number}
               {version.size_bytes ? `  ·  ${fileSize(version.size_bytes)}` : ""}
@@ -95,6 +189,34 @@ export function AssetViewer({
                 </a>
               </>
             )}
+            {onDelete &&
+              (confirming ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-text-muted">Delete file?</span>
+                  <button
+                    onClick={doDelete}
+                    disabled={busy}
+                    className="rounded-[9px] bg-red px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+                  >
+                    {busy ? "Deleting…" : "Delete"}
+                  </button>
+                  <button
+                    onClick={() => setConfirming(false)}
+                    disabled={busy}
+                    className="rounded-[9px] px-2 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setConfirming(true)}
+                  title="Delete this file and all its versions"
+                  className="rounded-[9px] px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-red-bg hover:text-red"
+                >
+                  Delete
+                </button>
+              ))}
             <button
               onClick={onClose}
               aria-label="Close"
