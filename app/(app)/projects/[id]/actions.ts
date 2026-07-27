@@ -6,7 +6,7 @@ import { assetStorage } from "@/lib/asset-storage";
 import { fetchMediaFromUrl } from "@/lib/media-import";
 import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
-import { ASSET_STATUS } from "@/lib/status";
+import { ASSET_STATUS, REVIEW_CYCLE } from "@/lib/status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AssetStatus, AssetType, Database } from "@/lib/database.types";
 
@@ -208,7 +208,7 @@ export async function addVersion(
 
   const { data: asset } = await supabase
     .from("assets")
-    .select("id, name, project_id")
+    .select("id, name, project_id, status")
     .eq("id", assetId)
     .single();
   if (!asset) return { error: "Asset not found." };
@@ -226,15 +226,40 @@ export async function addVersion(
   });
   if ("error" in res) return { error: res.error };
 
+  // A new version on an asset already in the review cycle starts a NEW round:
+  // the old verdict belongs to the old version, so the status goes back to
+  // "In review" and the share link's reminder budget resets. Draft/delivered
+  // assets are left alone (they are not in a round).
+  const reopened = REVIEW_CYCLE.includes(asset.status);
+  if (reopened) {
+    if (asset.status !== "in_review") {
+      await supabase
+        .from("assets")
+        .update({ status: "in_review" })
+        .eq("id", assetId);
+    }
+    // Stale due date from the previous round would fire an instant reminder,
+    // so clear it; sending the new round sets a fresh one.
+    await supabase
+      .from("review_links")
+      .update({ due_date: null, last_reminded_at: null, reminder_count: 0 })
+      .eq("asset_id", assetId)
+      .eq("revoked", false);
+  }
+
   await logActivity(
     supabase,
     ctx.studio.id,
     ctx.userId,
     asset.project_id,
     "upload",
-    `Added v${res.versionNumber} to "${asset.name}"`
+    `Added v${res.versionNumber} to "${asset.name}"${
+      reopened ? " and reopened it for review" : ""
+    }`
   );
   revalidatePath(`/projects/${asset.project_id}`);
+  revalidatePath(`/projects/${asset.project_id}/assets`);
+  revalidatePath(`/projects/${asset.project_id}/review`);
   return null;
 }
 
@@ -397,6 +422,123 @@ export async function renameAsset(
   );
   revalidatePath(`/projects/${asset.project_id}`);
   revalidatePath(`/projects/${asset.project_id}/assets`);
+  return null;
+}
+
+// Candidate files this one could be folded into (same project, not itself).
+export async function listMergeTargets(
+  projectId: string,
+  assetId: string
+): Promise<{ id: string; name: string }[]> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("assets")
+    .select("id, name")
+    .eq("project_id", projectId)
+    .neq("id", assetId)
+    .order("name");
+  return data ?? [];
+}
+
+// Fold one file's versions into another file, for when a new cut was uploaded
+// as a SEPARATE asset ("Spot v2") instead of a version of the original. The
+// versions carry their comments and approvals with them (both key off
+// version_id), so the whole history lands in one place and one review thread.
+export async function mergeAssetVersions(
+  sourceAssetId: string,
+  targetAssetId: string
+): Promise<ActionState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  if (sourceAssetId === targetAssetId) return { error: "Pick a different file." };
+
+  const { data: assets } = await supabase
+    .from("assets")
+    .select("id, name, project_id, status")
+    .in("id", [sourceAssetId, targetAssetId]);
+  const source = assets?.find((a) => a.id === sourceAssetId);
+  const target = assets?.find((a) => a.id === targetAssetId);
+  if (!source || !target) return { error: "File not found." };
+  if (source.project_id !== target.project_id) {
+    return { error: "Both files have to be in the same project." };
+  }
+
+  const { data: sourceVersions } = await supabase
+    .from("versions")
+    .select("id, version_number")
+    .eq("asset_id", sourceAssetId)
+    .order("version_number", { ascending: true });
+  const moving = sourceVersions ?? [];
+  if (moving.length === 0) return { error: "That file has no versions to move." };
+
+  const { data: top } = await supabase
+    .from("versions")
+    .select("version_number")
+    .eq("asset_id", targetAssetId)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Renumber onto the end of the target's sequence so nothing collides with
+  // the unique (asset_id, version_number) index.
+  let next = (top?.version_number ?? 0) + 1;
+  let lastId = "";
+  for (const v of moving) {
+    const { error } = await supabase
+      .from("versions")
+      .update({ asset_id: targetAssetId, version_number: next })
+      .eq("id", v.id);
+    if (error) {
+      reportError("mergeAssetVersions", error);
+      return { error: error.message };
+    }
+    lastId = v.id;
+    next++;
+  }
+
+  await supabase
+    .from("assets")
+    .update({ current_version_id: lastId })
+    .eq("id", targetAssetId);
+
+  // Keep any link already sent for the source working by repointing it at the
+  // target, rather than letting the delete cascade break that URL.
+  await supabase
+    .from("review_links")
+    .update({ asset_id: targetAssetId })
+    .eq("asset_id", sourceAssetId);
+
+  // New versions on a file in the review cycle open a new round.
+  if (REVIEW_CYCLE.includes(target.status) && target.status !== "in_review") {
+    await supabase
+      .from("assets")
+      .update({ status: "in_review" })
+      .eq("id", targetAssetId);
+  }
+
+  const { error: delError } = await supabase
+    .from("assets")
+    .delete()
+    .eq("id", sourceAssetId);
+  if (delError) {
+    reportError("mergeAssetVersions/delete", delError);
+    return { error: delError.message };
+  }
+
+  await logActivity(
+    supabase,
+    ctx.studio.id,
+    ctx.userId,
+    target.project_id,
+    "activity",
+    `Merged "${source.name}" into "${target.name}" as ${
+      moving.length === 1 ? "a version" : `${moving.length} versions`
+    }`
+  );
+  revalidatePath(`/projects/${target.project_id}`);
+  revalidatePath(`/projects/${target.project_id}/assets`);
+  revalidatePath(`/projects/${target.project_id}/review`);
   return null;
 }
 

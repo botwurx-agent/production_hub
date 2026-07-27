@@ -8,6 +8,9 @@ import {
   deleteVersion,
   setVersionNumber,
 } from "@/app/(app)/projects/[id]/actions";
+import { emailAssetReviewLink } from "@/app/(app)/projects/[id]/share-actions";
+import { SendDocEmailModal } from "@/components/production/send-doc-email-modal";
+import { MergeAssetModal } from "@/components/projects/merge-asset-modal";
 import { toast } from "@/components/ui/toast";
 import { AssetStatusMenu } from "@/components/projects/asset-status-menu";
 import { AddVersionForm } from "@/components/projects/add-version-form";
@@ -17,7 +20,7 @@ import { ShareReviewButton } from "@/components/projects/share-review-button";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag } from "@/components/status-tag";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
-import { ASSET_TYPE_HUE, ASSET_TYPE_LABEL } from "@/lib/status";
+import { ASSET_TYPE_HUE, ASSET_TYPE_LABEL, REVIEW_CYCLE } from "@/lib/status";
 import { fileSize, shortDate } from "@/lib/format";
 import {
   summarizeReview,
@@ -128,12 +131,14 @@ export function AssetCard({
   studioId,
   currentUserId,
   reviewLink,
+  emailEnabled = false,
 }: {
   asset: AssetWithVersions;
   projectId: string;
   studioId: string;
   currentUserId: string;
-  reviewLink?: { id: string; token: string } | null;
+  reviewLink?: { id: string; token: string; recipient?: string | null } | null;
+  emailEnabled?: boolean;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -142,9 +147,14 @@ export function AssetCard({
   const [confirmVersion, setConfirmVersion] = useState<string | null>(null);
   const [editVersion, setEditVersion] = useState<string | null>(null);
   const [confirmAsset, setConfirmAsset] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [, startVersionDelete] = useTransition();
   const router = useRouter();
   const hue = ASSET_TYPE_HUE[asset.type] ?? "cyan";
+  // A new version on an asset already in the review cycle reopens the round
+  // server-side, so offer to hand it to the client right there.
+  const inReviewCycle = REVIEW_CYCLE.includes(asset.status);
   const current =
     asset.versions.find((v) => v.id === asset.current_version_id) ??
     asset.versions[0];
@@ -206,6 +216,30 @@ export function AssetCard({
               initialToken={reviewLink?.token ?? null}
               linkId={reviewLink?.id ?? null}
             />
+          )}
+          {asset.versions.length > 0 && (
+            <button
+              onClick={() => setMergeOpen(true)}
+              title="Fold this file into another file as a version"
+              aria-label="Make this a version of another file"
+              className="rounded-[9px] px-2 py-1 text-text-faint transition hover:bg-surface-2 hover:text-text"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M7 3v8a4 4 0 0 0 4 4h6" />
+                <path d="M17 3v18" />
+                <path d="m14 12 3 3-3 3" />
+              </svg>
+            </button>
           )}
           {/* Deleting the whole file has to live here, not only inside the
               viewer: a file with no versions left can't open the viewer. */}
@@ -400,9 +434,44 @@ export function AssetCard({
           nextVersion={
             asset.versions.reduce((m, v) => Math.max(m, v.version_number), 0) + 1
           }
-          onDone={() => setAddOpen(false)}
+          onDone={() => {
+            setAddOpen(false);
+            if (inReviewCycle && emailEnabled) setNotifyOpen(true);
+          }}
         />
       </Modal>
+
+      {mergeOpen && (
+        <MergeAssetModal
+          open
+          onClose={() => setMergeOpen(false)}
+          projectId={projectId}
+          assetId={asset.id}
+          assetName={asset.name}
+          versionCount={asset.versions.length}
+        />
+      )}
+
+      {notifyOpen && (
+        <SendDocEmailModal
+          open
+          onClose={() => setNotifyOpen(false)}
+          title={`Send the new version of ${asset.name}`}
+          defaultTo={reviewLink?.recipient ?? null}
+          defaultSubject={`A new version of ${asset.name} is ready for review`}
+          shareUrl={
+            reviewLink?.token
+              ? `${window.location.origin}/r/${reviewLink.token}`
+              : null
+          }
+          dueDateField
+          onSend={async (input) => {
+            const res = await emailAssetReviewLink(projectId, asset.id, input);
+            if ("ok" in res) router.refresh();
+            return res;
+          }}
+        />
+      )}
 
       {reviewVersion && (
         <ReviewModal

@@ -7,18 +7,22 @@ import { AssetCard } from "@/components/projects/asset-card";
 import { DocReviewCard } from "@/components/review/doc-review-card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { StatusTag } from "@/components/status-tag";
-import { ASSET_STATUS } from "@/lib/status";
+import { ASSET_STATUS, REVIEW_CYCLE } from "@/lib/status";
 import { loadProjectAssets } from "@/lib/project-data";
+import { emailConfigured } from "@/lib/email";
 import { loadDocReviewsForProject } from "@/lib/doc-review-data";
 import type { AssetStatus } from "@/lib/database.types";
 
 // The review pipeline: assets that are in the review cycle, grouped by state.
 // (The Assets page is the full library; this is the subset that needs review.)
-const SECTIONS: { status: AssetStatus; label: string }[] = [
-  { status: "in_review", label: "Awaiting review" },
-  { status: "needs_changes", label: "Changes requested" },
-  { status: "approved", label: "Approved" },
-];
+const SECTION_LABEL: Record<string, string> = {
+  in_review: "Awaiting review",
+  needs_changes: "Changes requested",
+  approved: "Approved",
+};
+const SECTIONS: { status: AssetStatus; label: string }[] = REVIEW_CYCLE.map(
+  (status) => ({ status, label: SECTION_LABEL[status] })
+);
 
 export default async function ReviewPage({
   params,
@@ -119,6 +123,7 @@ export default async function ReviewPage({
                       studioId={ctx.studio.id}
                       currentUserId={ctx.userId}
                       reviewLink={reviewLinkByAsset.get(a.id) ?? null}
+                emailEnabled={emailConfigured()}
                     />
                   ))}
                   {docs.map((d) => (

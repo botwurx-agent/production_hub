@@ -10,6 +10,7 @@ import { FigmaImportButton } from "@/components/projects/figma-import-button";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { driveConnected } from "@/lib/googledrive";
 import { loadProjectAssets } from "@/lib/project-data";
+import { emailConfigured } from "@/lib/email";
 
 export default async function AssetsPage({
   params,
@@ -113,6 +114,7 @@ export default async function AssetsPage({
                 studioId={ctx.studio.id}
                 currentUserId={ctx.userId}
                 reviewLink={reviewLinkByAsset.get(a.id) ?? null}
+                emailEnabled={emailConfigured()}
               />
             ))}
           </div>

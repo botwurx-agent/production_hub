@@ -186,6 +186,69 @@ export async function emailDocReviewLink(
   return { ok: true };
 }
 
+// Emails an asset's client review link. Used to hand a fresh cut to the client
+// ("v2 is up"), and it sets the round's due date so the reminder cron can nudge.
+export async function emailAssetReviewLink(
+  projectId: string,
+  assetId: string,
+  input: { to: string; subject: string; message?: string; dueDate?: string }
+): Promise<{ ok: true } | { error: string }> {
+  const ctx = await requireStudioContext();
+  if (!emailConfigured()) return { error: "Email is not set up yet." };
+
+  const to = input.to.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    return { error: "Enter a valid recipient email." };
+  }
+
+  const supabase = createClient();
+  const { data: asset } = await supabase
+    .from("assets")
+    .select("id, name, project_id")
+    .eq("id", assetId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!asset) return { error: "File not found." };
+
+  const link = await createReviewLink(projectId, assetId);
+  if ("error" in link) return { error: link.error };
+
+  // A send opens the round: fresh recipient + due date, reminder budget reset.
+  const dueDate = input.dueDate?.trim() || null;
+  await supabase
+    .from("review_links")
+    .update({
+      recipient: to,
+      due_date: dueDate,
+      last_reminded_at: null,
+      reminder_count: 0,
+    })
+    .eq("token", link.token);
+
+  const url = `${emailOrigin()}/r/${link.token}`;
+  const subject =
+    input.subject.trim() || `${ctx.studio.name} shared ${asset.name} for review`;
+  const lines = input.message?.trim()
+    ? [input.message.trim()]
+    : [
+        `${ctx.studio.name} shared ${asset.name} with you to review.`,
+        "Open it below to watch, leave comments on the exact moment, and approve or request changes. No login needed.",
+      ];
+  if (dueDate) lines.push(`Please respond by ${longDate(dueDate)}.`);
+
+  const { html, text } = renderEmail({
+    heading: subject,
+    lines,
+    ctaLabel: "View for review",
+    ctaUrl: url,
+  });
+
+  const result = await sendEmail({ to, subject, html, text });
+  if (!result.ok) return { error: result.error ?? "The email could not be sent." };
+  revalidatePath(`/projects/${projectId}/review`);
+  return { ok: true };
+}
+
 export async function revokeReviewLink(
   projectId: string,
   linkId: string

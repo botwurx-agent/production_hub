@@ -160,6 +160,14 @@ export const ASSET_TYPE_HUE: Record<string, Hue> = {
   other: "cyan",
 };
 
+// The statuses that put an asset in the review cycle (and so on the project
+// Review page). Draft is before it; delivered is after it.
+export const REVIEW_CYCLE: AssetStatus[] = [
+  "in_review",
+  "needs_changes",
+  "approved",
+];
+
 export const ASSET_STATUS_ORDER: (keyof typeof ASSET_STATUS)[] = [
   "draft",
   "in_review",

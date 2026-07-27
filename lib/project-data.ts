@@ -36,16 +36,23 @@ export async function loadProjectAssets(
       }),
     supabase
       .from("review_links")
-      .select("id, asset_id, token")
+      .select("id, asset_id, token, recipient")
       .eq("project_id", projectId)
       .eq("revoked", false)
       .order("created_at", { ascending: false }),
   ]);
 
-  const reviewLinkByAsset = new Map<string, { id: string; token: string }>();
+  const reviewLinkByAsset = new Map<
+    string,
+    { id: string; token: string; recipient: string | null }
+  >();
   for (const l of reviewLinks ?? []) {
     if (l.asset_id && !reviewLinkByAsset.has(l.asset_id)) {
-      reviewLinkByAsset.set(l.asset_id, { id: l.id, token: l.token });
+      reviewLinkByAsset.set(l.asset_id, {
+        id: l.id,
+        token: l.token,
+        recipient: l.recipient ?? null,
+      });
     }
   }
 

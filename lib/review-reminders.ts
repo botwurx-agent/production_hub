@@ -20,6 +20,47 @@ const DOC_NOUN: Record<string, string> = {
   ai_shot: "shot",
 };
 
+// Has the client closed out the round this link is currently pointing at?
+// For an asset link that means a decision on the asset's CURRENT version, so a
+// new version reopens the round (the client portal scopes its own "you already
+// decided" state the same way). Doc links have no versions, so any decision
+// through the link ends it.
+async function respondedThisRound(
+  service: SupabaseClient<Database>,
+  link: {
+    id: string;
+    asset_id: string | null;
+    target_type: string | null;
+  }
+): Promise<boolean> {
+  if (!link.target_type && link.asset_id) {
+    const { data: asset } = await service
+      .from("assets")
+      .select("current_version_id")
+      .eq("id", link.asset_id)
+      .maybeSingle();
+    // No version to look at yet: nothing to nudge about.
+    if (!asset?.current_version_id) return true;
+    const { data } = await service
+      .from("approvals")
+      .select("id")
+      .eq("review_link_id", link.id)
+      .eq("target_type", "version")
+      .eq("target_id", asset.current_version_id)
+      .limit(1)
+      .maybeSingle();
+    return Boolean(data);
+  }
+
+  const { data } = await service
+    .from("approvals")
+    .select("id")
+    .eq("review_link_id", link.id)
+    .limit(1)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 export async function runReviewReminders(
   service: SupabaseClient<Database>
 ): Promise<{ sent: number; skipped: number }> {
@@ -32,7 +73,7 @@ export async function runReviewReminders(
   const { data: links } = await service
     .from("review_links")
     .select(
-      "id, token, recipient, due_date, last_reminded_at, reminder_count, target_type, project_id, studio_id"
+      "id, token, recipient, due_date, last_reminded_at, reminder_count, target_type, target_id, asset_id, project_id, studio_id"
     )
     .eq("revoked", false)
     .not("recipient", "is", null)
@@ -56,12 +97,9 @@ export async function runReviewReminders(
     }
 
     // Client already responded through this link? Then the round is done.
-    const { data: responded } = await service
-      .from("approvals")
-      .select("id")
-      .eq("review_link_id", link.id)
-      .limit(1)
-      .maybeSingle();
+    // An asset link is scoped to the CURRENT version, matching the portal: a
+    // decision on v1 must not silence the reminders for v2.
+    const responded = await respondedThisRound(service, link);
     if (responded) {
       skipped++;
       continue;
