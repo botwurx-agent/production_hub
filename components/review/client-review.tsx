@@ -36,6 +36,9 @@ export function ClientReview({
   // Identifies this browser so the reviewer can edit/delete their own comments
   // and see which reactions are theirs, with no login.
   const [myKey, setMyKey] = useState("");
+  // Which version the canvas and comment thread are showing. Defaults to the
+  // current one; picking an older version is a read-only look back.
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
@@ -65,11 +68,18 @@ export function ClientReview({
       null,
     [data]
   );
-  const previous = data.versions.filter((v) => v.id !== current?.id);
-  const comments = current
-    ? data.comments.filter((c) => c.version_id === current.id)
+  const latest = current;
+  // The version actually on screen. Older versions are viewable with their own
+  // comments, so feedback from an earlier round is never stranded.
+  const viewing = useMemo(
+    () => data.versions.find((v) => v.id === viewingId) ?? latest,
+    [data.versions, viewingId, latest]
+  );
+  const isOlder = Boolean(viewing && latest && viewing.id !== latest.id);
+  const comments = viewing
+    ? data.comments.filter((c) => c.version_id === viewing.id)
     : [];
-  const kind = current ? viewerKind(current.mime_type, data.asset.name) : null;
+  const kind = viewing ? viewerKind(viewing.mime_type, data.asset.name) : null;
   const isImage = kind === "image";
   const isVideo = kind === "video";
 
@@ -82,13 +92,13 @@ export function ClientReview({
     text: string,
     pin: { x: number; y: number } | null
   ): Promise<boolean> {
-    if (!current) return false;
+    if (!viewing) return false;
     if (!name.trim()) {
       setError("Add your name first.");
       return false;
     }
     setError(null);
-    const res = await submitClientComment(token, current.id, name, text, pin);
+    const res = await submitClientComment(token, viewing.id, name, text, pin);
     if (res?.error) {
       setError(res.error);
       return false;
@@ -133,7 +143,7 @@ export function ClientReview({
       timecodeEnd?: number | null;
     }
   ): Promise<boolean> {
-    if (!current) return false;
+    if (!viewing) return false;
     if (!name.trim()) {
       setError("Add your name first.");
       return false;
@@ -141,7 +151,7 @@ export function ClientReview({
     setError(null);
     const res = await submitClientComment(
       token,
-      current.id,
+      viewing.id,
       name,
       text,
       null,
@@ -172,7 +182,7 @@ export function ClientReview({
     if (!comment.trim()) return setError("Write a comment first.");
     setError(null);
     start(async () => {
-      const res = await submitClientComment(token, current.id, name, comment);
+      const res = await submitClientComment(token, viewing.id, name, comment);
       if (res?.error) setError(res.error);
       else {
         setComment("");
@@ -186,7 +196,7 @@ export function ClientReview({
     if (!name.trim()) return setError("Add your name first.");
     setError(null);
     start(async () => {
-      const res = await submitClientDecision(token, current.id, name, status);
+      const res = await submitClientDecision(token, latest.id, name, status);
       if (res?.error) setError(res.error);
       else router.refresh();
     });
@@ -208,33 +218,65 @@ export function ClientReview({
     </div>
   );
 
-  const metaRow = current && (
+  // Switching version swaps the review canvas AND the comment thread, so
+  // feedback from an earlier round stays reachable instead of being a bare
+  // download link. Older versions are read-only: the open round is the latest.
+  const versionSwitcher = data.versions.length > 1 && viewing && (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <span className="text-xs font-semibold text-text-faint">Version</span>
+      {data.versions.map((v) => {
+        const on = v.id === viewing.id;
+        return (
+          <button
+            key={v.id}
+            onClick={() => setViewingId(v.id)}
+            title={`${shortDate(v.created_at)}${
+              v.id === latest?.id ? " (latest)" : ""
+            }`}
+            className={`rounded-pill px-2.5 py-1 text-xs font-bold transition ${
+              on
+                ? "bg-accent text-accent-fg"
+                : "border border-border text-text-muted hover:border-border-strong hover:text-text"
+            }`}
+          >
+            v{v.version_number}
+            {v.id === latest?.id ? " · latest" : ""}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const olderBanner = isOlder && viewing && (
+    <div
+      className="mt-3 flex flex-wrap items-center gap-2 rounded-[11px] px-3 py-2 text-xs font-semibold"
+      style={{
+        backgroundColor: "var(--h-amber-bg)",
+        color: "var(--h-amber)",
+      }}
+    >
+      <span>
+        You are looking back at v{viewing.version_number} and its comments. It
+        is read-only.
+      </span>
+      <button
+        onClick={() => setViewingId(null)}
+        className="rounded-[8px] bg-white/25 px-2 py-0.5 font-bold underline-offset-2 hover:underline"
+      >
+        Back to v{latest?.version_number}
+      </button>
+    </div>
+  );
+
+  const metaRow = viewing && (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-text-faint">
       <span>
-        Version {current.version_number}
-        {current.size_bytes ? ` · ${fileSize(current.size_bytes)}` : ""}
-        {current.created_at ? ` · ${shortDate(current.created_at)}` : ""}
-        {previous.length > 0 && (
-          <>
-            {"  ·  Previous: "}
-            {previous.map((v, i) => (
-              <span key={v.id}>
-                {i > 0 ? ", " : ""}
-                <a
-                  href={fileUrl(v.id)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-accent hover:underline"
-                >
-                  v{v.version_number}
-                </a>
-              </span>
-            ))}
-          </>
-        )}
+        Version {viewing.version_number}
+        {viewing.size_bytes ? ` · ${fileSize(viewing.size_bytes)}` : ""}
+        {viewing.created_at ? ` · ${shortDate(viewing.created_at)}` : ""}
       </span>
       <a
-        href={fileUrl(current.id)}
+        href={fileUrl(viewing.id)}
         download={data.asset.name}
         className="font-semibold text-accent hover:underline"
       >
@@ -315,7 +357,7 @@ export function ClientReview({
                 </button>
               )}
               <span className="rounded-pill border border-border-strong px-3 py-1 text-xs font-bold text-text-muted">
-                Version {current.version_number}
+                Version {viewing.version_number}
               </span>
             </div>
           )}
@@ -332,7 +374,7 @@ export function ClientReview({
         <>
           <VersionCompare
             versions={data.versions}
-            currentId={current.id}
+            currentId={viewing.id}
             urlFor={fileUrl}
             alt={data.asset.name}
           />
@@ -341,18 +383,24 @@ export function ClientReview({
       ) : isImage ? (
         <>
           <div className="mb-4 max-w-md">{nameField}</div>
+          {versionSwitcher}
+          {olderBanner}
           <PinReview
-            imageUrl={fileUrl(current.id)}
+            imageUrl={fileUrl(viewing.id)}
             alt={data.asset.name}
             comments={comments}
-            disabled={!name.trim()}
-            disabledHint="Add your name above to comment."
+            disabled={isOlder || !name.trim()}
+            disabledHint={
+              isOlder
+                ? `v${viewing.version_number} is an earlier version, so it is read-only.`
+                : "Add your name above to comment."
+            }
             wide
             onPost={postPinned}
             onResolve={resolve}
           />
           {metaRow}
-          {decision}
+          {!isOlder && decision}
           {error && (
             <p className="mt-4 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
               {error}
@@ -362,11 +410,17 @@ export function ClientReview({
       ) : isVideo ? (
         <>
           <div className="mb-4 max-w-md">{nameField}</div>
+          {versionSwitcher}
+          {olderBanner}
           <VideoReview
-            videoUrl={fileUrl(current.id)}
+            videoUrl={fileUrl(viewing.id)}
             comments={comments}
-            disabled={!name.trim()}
-            disabledHint="Add your name above to comment."
+            disabled={isOlder || !name.trim()}
+            disabledHint={
+              isOlder
+                ? `v${viewing.version_number} is an earlier version, so it is read-only.`
+                : "Add your name above to comment."
+            }
             wide
             meName={name.trim() || null}
             meKey={myKey || null}
@@ -377,7 +431,7 @@ export function ClientReview({
             onReact={react}
           />
           {metaRow}
-          {decision}
+          {!isOlder && decision}
           {error && (
             <p className="mt-4 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
               {error}
@@ -388,9 +442,9 @@ export function ClientReview({
         <>
           <ReviewPreview
             name={data.asset.name}
-            versionNumber={current.version_number}
-            url={fileUrl(current.id)}
-            mime={current.mime_type}
+            versionNumber={viewing.version_number}
+            url={fileUrl(viewing.id)}
+            mime={viewing.mime_type}
           />
           {metaRow}
 

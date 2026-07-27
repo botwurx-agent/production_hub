@@ -352,7 +352,7 @@ export function AssetCard({
                         rel="noreferrer"
                         className="font-semibold text-accent hover:underline"
                       >
-                        Open
+                        Download
                       </a>
                     )}
                   </p>

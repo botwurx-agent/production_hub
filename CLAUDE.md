@@ -1036,6 +1036,21 @@ shot review, and the master-cut review all gained it at once.
   composer was `replyTo?.id === c.id && !disabled`, so clicking Reply before
   typing a name silently did nothing. It now renders inert with the gate
   message as its placeholder.
+- VERSION SWITCHING IN THE PORTAL (was a real gap): the client portal rendered
+  only the CURRENT version, and previous versions were bare download links, so
+  a client could never see the comments left on v1 once v2 landed (the IQ Bar
+  link had both its comments on v1 and none on v2 -- they were unreachable).
+  client-review.tsx now holds a `viewingId`: version pills (`v1`, `v2 · latest`)
+  swap the review canvas AND the comment thread, and the media/compare/download
+  URLs all follow the viewed version. An older version is READ-ONLY -- an amber
+  banner says so with a "Back to vN" button, the composer is disabled with that
+  reason as its hint, and the approve / request-changes block is hidden, because
+  the open round is always the latest version (submitClientDecision is pinned to
+  latest.id, never the viewed one).
+- Internally the capability already existed but was mislabelled: each row in the
+  version history has View (in-app viewer) and Review (the comment canvas for
+  THAT version); the third link was called "Open" while actually being a raw
+  file download, so it read as the only action. Renamed to "Download".
 - NOT built: comment attachments (a paid-tier question, per the operator), CC
   captions, per-comment @mentions.
 
