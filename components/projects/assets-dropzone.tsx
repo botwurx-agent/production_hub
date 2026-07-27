@@ -2,8 +2,13 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createAsset } from "@/app/(app)/projects/[id]/actions";
+import { createAsset, addVersion } from "@/app/(app)/projects/[id]/actions";
 import { uploadAssetFile } from "@/components/projects/upload-file";
+import { findVersionParent } from "@/lib/asset-name";
+import {
+  VersionSuggestion,
+} from "@/components/projects/version-suggestion";
+import type { ExistingAsset } from "@/components/projects/add-asset-button";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { ASSET_TYPE_LABEL } from "@/lib/status";
@@ -28,6 +33,10 @@ type Staged = {
   name: string;
   type: string;
   versionNumber: string;
+  // Set when the dropped name looks like a new version of an existing file and
+  // the suggestion was accepted; cleared plus ignored when dismissed.
+  versionOf: ExistingAsset | null;
+  ignored: boolean;
 };
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "").trim() || name || "Untitled";
@@ -41,10 +50,12 @@ function hasFiles(e: React.DragEvent): boolean {
 export function AssetsDropzone({
   projectId,
   studioId,
+  existingAssets = [],
   children,
 }: {
   projectId: string;
   studioId: string;
+  existingAssets?: ExistingAsset[];
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -81,6 +92,8 @@ export function AssetsDropzone({
         name: baseName(file.name),
         type: assetType(file),
         versionNumber: "1",
+        versionOf: null,
+        ignored: false,
       }))
     );
   }
@@ -115,7 +128,9 @@ export function AssetsDropzone({
         fd.set("storage_path", meta.storagePath);
         fd.set("mime_type", meta.mimeType);
         fd.set("size_bytes", String(meta.sizeBytes));
-        const res = await createAsset(projectId, null, fd);
+        const res = s.versionOf
+          ? await addVersion(s.versionOf.id, null, fd)
+          : await createAsset(projectId, null, fd);
         if (res?.error) flash(`Couldn't add "${s.name}": ${res.error}`);
         else done++;
       } catch (e) {
@@ -234,33 +249,72 @@ export function AssetsDropzone({
                       Remove
                     </button>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-[1fr_140px_100px]">
-                    <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-                        Name
-                      </label>
-                      <input
-                        value={s.name}
-                        onChange={(e) => patch(i, { name: e.target.value })}
-                        className="mt-1 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-accent"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-                        Type
-                      </label>
-                      <select
-                        value={s.type}
-                        onChange={(e) => patch(i, { type: e.target.value })}
-                        className="mt-1 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-accent"
-                      >
-                        {TYPES.map((t) => (
-                          <option key={t} value={t}>
-                            {ASSET_TYPE_LABEL[t]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  {(() => {
+                    const match =
+                      s.versionOf ?? findVersionParent(s.name, existingAssets);
+                    if (!match || (!s.versionOf && s.ignored)) return null;
+                    return (
+                      <div className="mb-2">
+                        <VersionSuggestion
+                          parentName={match.name}
+                          nextVersion={match.nextVersion}
+                          accepted={Boolean(s.versionOf)}
+                          onAccept={() =>
+                            patch(i, {
+                              versionOf: match,
+                              versionNumber: String(match.nextVersion),
+                            })
+                          }
+                          onUndo={() =>
+                            patch(i, {
+                              versionOf: null,
+                              ignored: true,
+                              versionNumber: "1",
+                            })
+                          }
+                        />
+                      </div>
+                    );
+                  })()}
+                  <div
+                    className={`grid gap-2 ${
+                      s.versionOf
+                        ? "sm:grid-cols-[100px]"
+                        : "sm:grid-cols-[1fr_140px_100px]"
+                    }`}
+                  >
+                    {/* Name and type belong to the parent file when this is
+                        going in as a version, so only the number is editable. */}
+                    {!s.versionOf && (
+                      <>
+                        <div>
+                          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                            Name
+                          </label>
+                          <input
+                            value={s.name}
+                            onChange={(e) => patch(i, { name: e.target.value })}
+                            className="mt-1 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                            Type
+                          </label>
+                          <select
+                            value={s.type}
+                            onChange={(e) => patch(i, { type: e.target.value })}
+                            className="mt-1 w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-accent"
+                          >
+                            {TYPES.map((t) => (
+                              <option key={t} value={t}>
+                                {ASSET_TYPE_LABEL[t]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
                         Version

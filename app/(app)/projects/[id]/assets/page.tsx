@@ -43,6 +43,14 @@ export default async function AssetsPage({
     project.id
   );
 
+  // Feeds the "looks like a new version of X" nudge on upload.
+  const existingAssets = assets.map((a) => ({
+    id: a.id,
+    name: a.name,
+    nextVersion:
+      a.versions.reduce((m, v) => Math.max(m, v.version_number), 0) + 1,
+  }));
+
   return (
     <div>
       <ProjectSubhead
@@ -70,10 +78,18 @@ export default async function AssetsPage({
             {driveConnected(emailAccount?.scope) && (
               <DriveImportButton projectId={project.id} />
             )}
-            <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
+            <AddAssetButton
+              projectId={project.id}
+              studioId={ctx.studio.id}
+              existingAssets={existingAssets}
+            />
           </div>
         </div>
-        <AssetsDropzone projectId={project.id} studioId={ctx.studio.id}>
+        <AssetsDropzone
+          projectId={project.id}
+          studioId={ctx.studio.id}
+          existingAssets={existingAssets}
+        >
         {assets.length === 0 ? (
           <EmptyState
             hue="purple"
@@ -87,7 +103,11 @@ export default async function AssetsPage({
             title="No files yet"
             description="This is the project library: cuts, boards, stills, references, docs. Upload anything the job touches; each file keeps its full version history. Send one to the client from Review."
             action={
-              <AddAssetButton projectId={project.id} studioId={ctx.studio.id} />
+              <AddAssetButton
+              projectId={project.id}
+              studioId={ctx.studio.id}
+              existingAssets={existingAssets}
+            />
             }
             steps={[
               {
