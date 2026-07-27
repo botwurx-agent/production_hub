@@ -112,7 +112,9 @@ export function DocReviewModal({
               fit="full"
               comments={detail.comments}
               emptyHint="Click anywhere on the document to drop a pin and start."
-              onPost={(text, pin) => post(text, { pin })}
+              onPost={(text, pin, extra) =>
+            post(text, { pin, drawing: extra?.drawing ?? null })
+          }
               onResolve={resolve}
             />
           )}

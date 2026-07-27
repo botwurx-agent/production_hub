@@ -90,7 +90,8 @@ export function ClientReview({
   // Pin-review post handler: returns whether it succeeded (so the pin clears).
   async function postPinned(
     text: string,
-    pin: { x: number; y: number } | null
+    pin: { x: number; y: number } | null,
+    extra?: { drawing?: Drawing | null }
   ): Promise<boolean> {
     if (!viewing) return false;
     if (!name.trim()) {
@@ -98,7 +99,18 @@ export function ClientReview({
       return false;
     }
     setError(null);
-    const res = await submitClientComment(token, viewing.id, name, text, pin);
+    const res = await submitClientComment(
+      token,
+      viewing.id,
+      name,
+      text,
+      pin,
+      null,
+      null,
+      extra?.drawing ?? null,
+      null,
+      myKey
+    );
     if (res?.error) {
       setError(res.error);
       return false;

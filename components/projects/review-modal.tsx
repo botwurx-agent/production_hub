@@ -113,9 +113,18 @@ export function ReviewModal({
 
   async function postPinned(
     text: string,
-    pin: { x: number; y: number } | null
+    pin: { x: number; y: number } | null,
+    extra?: { drawing?: Drawing | null }
   ): Promise<boolean> {
-    const res = await addReviewCommentAt(projectId, version.id, text, pin, null);
+    const res = await addReviewCommentAt(
+      projectId,
+      version.id,
+      text,
+      pin,
+      null,
+      null,
+      extra?.drawing ?? null
+    );
     if (res?.error) return false;
     router.refresh();
     return true;

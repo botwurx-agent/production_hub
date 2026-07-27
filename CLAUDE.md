@@ -954,7 +954,16 @@ shot review, and the master-cut review all gained it at once.
   are computed from the segment angle and scale with the stroke width.
   A shape with no drag is discarded as a stray click rather than saved as a
   dot. normalizeDrawing whitelists the tool name (unknown -> pen), caps a
-  shape to 2 points, and drops a shape that has fewer. components/review/draw-canvas.tsx is the
+  shape to 2 points, and drops a shape that has fewer.
+  The palette lives in components/review/draw-toolbar.tsx and is SHARED by the
+  video canvas and the PIN canvas, so markup works on images, shot lists,
+  storyboards, moodboards and AI shots as well as video (pin-canvas.tsx gained
+  the DrawCanvas overlay inside the same box the pins are positioned in, so a
+  drawing and its pins stay aligned; placePin is skipped while drawing so a
+  stroke never also drops a pin). The pin composer gained the same always-
+  visible Draw + Emoji controls as the video one. Every pin caller forwards the
+  drawing: client-review, review-modal, cut-review-view, doc-review,
+  doc-review-modal, doc-review-view and ai-shot-review-canvas. components/review/draw-canvas.tsx is the
   draw/replay layer (pointer capture, DPR-aware, ResizeObserver); lib/review-
   drawing.ts is the model. Strokes are stored NORMALIZED (0..1 of the media box)
   so a drawing made on a laptop replays correctly on a phone or in fullscreen,

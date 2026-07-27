@@ -75,7 +75,9 @@ export function AiShotReviewCanvas({
       disabledHint={disabledHint}
       wide={wide}
       emptyHint="Click a frame to drop a pin and start."
-      onPost={(text, pin) => onPost(text, { pin })}
+      onPost={(text, pin, extra) =>
+          onPost(text, { pin, drawing: extra?.drawing ?? null })
+        }
       onResolve={onResolve}
     />
   );

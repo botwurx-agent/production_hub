@@ -4,6 +4,7 @@ import { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PinCanvas } from "@/components/review/pin-canvas";
+import type { Drawing } from "@/lib/review-drawing";
 import { DocSurfaceView } from "@/components/review/doc-surface";
 import { ShareDocButton } from "@/components/review/share-doc-button";
 import {
@@ -57,8 +58,21 @@ export function DocReviewView({
     if (d) setDetail(d);
   }, [kind, targetId]);
 
-  async function post(text: string, pin: { x: number; y: number } | null): Promise<boolean> {
-    const res = await addDocReviewCommentAt(projectId, kind, targetId, text, pin, null);
+  async function post(
+    text: string,
+    pin: { x: number; y: number } | null,
+    extra?: { drawing?: Drawing | null }
+  ): Promise<boolean> {
+    const res = await addDocReviewCommentAt(
+      projectId,
+      kind,
+      targetId,
+      text,
+      pin,
+      null,
+      null,
+      extra?.drawing ?? null
+    );
     if (res?.error) return false;
     await reload();
     router.refresh();
@@ -128,7 +142,7 @@ export function DocReviewView({
         fit="full"
         comments={detail.comments}
         emptyHint="Click anywhere on the document to drop a pin and start."
-        onPost={(text, pin) => post(text, pin)}
+        onPost={post}
         onResolve={resolve}
       />
 

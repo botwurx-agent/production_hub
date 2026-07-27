@@ -159,7 +159,9 @@ export function DocReview({
           disabledHint="Add your name above to comment."
           wide
           emptyHint={`Click anywhere on the ${noun} to drop a pin and start.`}
-          onPost={(text, pin) => post(text, { pin })}
+          onPost={(text, pin, extra) =>
+            post(text, { pin, drawing: extra?.drawing ?? null })
+          }
           onResolve={resolve}
         />
       )}

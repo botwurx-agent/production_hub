@@ -2,6 +2,10 @@
 
 import { useRef, useState } from "react";
 import { timeAgo } from "@/lib/format";
+import { DrawCanvas } from "@/components/review/draw-canvas";
+import { DrawToolbar } from "@/components/review/draw-toolbar";
+import { EmojiPicker } from "@/components/review/emoji-picker";
+import { DRAW_COLORS, type Drawing, type DrawTool } from "@/lib/review-drawing";
 import type { PortalComment } from "@/lib/review-links";
 
 // Frame.io-style pinned review over an arbitrary surface: click the surface to
@@ -32,15 +36,26 @@ export function PinCanvas({
   emptyHint?: string;
   // Full-page reviews get a roomier comment rail.
   wide?: boolean;
-  onPost: (text: string, pin: { x: number; y: number } | null) => Promise<boolean>;
+  onPost: (
+    text: string,
+    pin: { x: number; y: number } | null,
+    extra?: { drawing?: Drawing | null }
+  ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const [pending, setPending] = useState<{ x: number; y: number } | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
+  // Markup on the surface itself, for when a pin plus words is not enough.
+  const [drawMode, setDrawMode] = useState(false);
+  const [draft, setDraft] = useState<Drawing | null>(null);
+  const [tool, setTool] = useState<DrawTool>("arrow");
+  const [color, setColor] = useState(DRAW_COLORS[0]);
+  const [redo, setRedo] = useState<Drawing["strokes"]>([]);
 
   const pins = comments.filter(
     (c) => !c.resolved && c.x != null && c.y != null && c.pinNumber != null
@@ -51,6 +66,8 @@ export function PinCanvas({
     comments.reduce((m, c) => (c.pinNumber && c.pinNumber > m ? c.pinNumber : m), 0) + 1;
 
   function placePin(e: React.MouseEvent) {
+    // While drawing, a click on the surface is a stroke, not a pin.
+    if (drawMode) return;
     const el = wrapRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -64,13 +81,49 @@ export function PinCanvas({
     const t = text.trim();
     if (!t || sending || disabled) return;
     setSending(true);
-    const ok = await onPost(t, pending);
+    const ok = await onPost(t, pending, { drawing: draft });
     setSending(false);
     if (ok) {
       setText("");
       setPending(null);
+      setDraft(null);
+      setRedo([]);
+      setDrawMode(false);
     }
   }
+
+  function undoStroke() {
+    if (!draft?.strokes.length) return;
+    const popped = draft.strokes[draft.strokes.length - 1];
+    const strokes = draft.strokes.slice(0, -1);
+    setRedo((r) => [...r, popped]);
+    setDraft(strokes.length ? { ...draft, strokes } : null);
+  }
+  function redoStroke() {
+    if (redo.length === 0) return;
+    const next = redo[redo.length - 1];
+    setRedo((r) => r.slice(0, -1));
+    setDraft((d) =>
+      d ? { ...d, strokes: [...d.strokes, next] } : { w: 16, h: 9, strokes: [next] }
+    );
+  }
+  function insertEmoji(e: string) {
+    const el = textRef.current;
+    if (!el) {
+      setText((t) => t + e);
+      return;
+    }
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+    setText(text.slice(0, start) + e + text.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + e.length, start + e.length);
+    });
+  }
+
+  const activeComment = comments.find((c) => c.id === activeId) ?? null;
+  const shownDrawing = drawMode ? draft : (activeComment?.drawing ?? null);
 
   const teardrop =
     "grid h-7 w-7 place-items-center rounded-[50%_50%_50%_2px] border-2 border-white text-xs font-extrabold text-white shadow-lg";
@@ -90,6 +143,18 @@ export function PinCanvas({
           }`}
         >
           {stage}
+
+          <DrawCanvas
+            drawing={shownDrawing}
+            active={drawMode}
+            tool={tool}
+            color={color}
+            size={4}
+            onChange={(d) => {
+              setDraft(d);
+              setRedo([]);
+            }}
+          />
 
           {pins.map((c) => (
             <button
@@ -131,6 +196,31 @@ export function PinCanvas({
           )}
         </div>
       </div>
+
+      {drawMode && (
+        <div className="lg:col-start-1">
+          <DrawToolbar
+            tool={tool}
+            onTool={setTool}
+            color={color}
+            onColor={setColor}
+            draft={draft}
+            canRedo={redo.length > 0}
+            onUndo={undoStroke}
+            onRedo={redoStroke}
+            onClear={() => {
+              setDraft(null);
+              setRedo([]);
+            }}
+            onCancel={() => {
+              setDrawMode(false);
+              setDraft(null);
+              setRedo([]);
+            }}
+            hint="Mark up the frame, then write your note."
+          />
+        </div>
+      )}
 
       {/* Comments */}
       <div className="flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
@@ -244,28 +334,51 @@ export function PinCanvas({
             </p>
           ) : null}
           <textarea
+            ref={textRef}
             value={text}
+            disabled={disabled}
             onChange={(e) => setText(e.target.value)}
             placeholder={pending ? "Comment on this spot…" : "Add a comment, or click to pin one…"}
-            className="min-h-[64px] w-full rounded-[11px] border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
+            className="min-h-[64px] w-full rounded-[11px] border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
           />
-          <div className="mt-2 flex items-center justify-between gap-2">
-            {pending ? (
+          {/* Always rendered, inert when gated, so the tools stay discoverable. */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                setDrawMode((v) => !v);
+                if (drawMode) {
+                  setDraft(null);
+                  setRedo([]);
+                }
+              }}
+              disabled={disabled}
+              title="Draw on the frame"
+              className={`inline-flex h-7 items-center gap-1 rounded-[8px] px-1.5 text-[11px] font-bold transition hover:bg-surface-2 disabled:opacity-40 ${
+                drawMode || draft ? "text-accent" : "text-text-muted hover:text-text"
+              }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+              </svg>
+              {draft ? "Drawing" : "Draw"}
+            </button>
+            <EmojiPicker onPick={insertEmoji} />
+            {pending && (
               <button
                 onClick={() => setPending(null)}
                 className="text-xs font-semibold text-text-faint hover:text-text"
               >
                 Clear pin
               </button>
-            ) : (
-              <span />
             )}
+            <span className="flex-1" />
             <button
               onClick={post}
               disabled={disabled || sending || !text.trim()}
               className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
             >
-              {sending ? "Posting…" : "Post comment"}
+              {sending ? "Posting…" : "Post"}
             </button>
           </div>
         </div>
