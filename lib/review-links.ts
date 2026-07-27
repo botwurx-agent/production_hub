@@ -37,8 +37,10 @@ export type PortalComment = {
   pinNumber: number | null;
   x: number | null;
   y: number | null;
-  // Video review: seconds into the timeline this comment is tied to.
+  // Video review: seconds into the timeline this comment is tied to. When
+  // timecodeEnd is set the comment covers the range timecode -> timecodeEnd.
   timecode: number | null;
+  timecodeEnd: number | null;
   resolved: boolean;
   // Threading: a reply hangs off its parent and inherits the parent's moment.
   parentId: string | null;
@@ -114,7 +116,7 @@ export async function gatherReview(
       service
         .from("review_comments")
         .select(
-          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing"
+          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end"
         )
         .in("version_id", versionIds)
         .order("created_at", { ascending: true }),
@@ -143,6 +145,7 @@ export async function gatherReview(
         x: c.pos_x ?? null,
         y: c.pos_y ?? null,
         timecode: c.timecode ?? null,
+        timecodeEnd: c.timecode_end ?? null,
         resolved: Boolean(c.resolved_at),
         parentId: c.parent_id ?? null,
         drawing: normalizeDrawing(c.drawing),
@@ -498,7 +501,7 @@ export async function gatherDocReview(
     service
       .from("review_comments")
       .select(
-        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing"
+        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end"
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
@@ -525,6 +528,7 @@ export async function gatherDocReview(
       x: c.pos_x ?? null,
       y: c.pos_y ?? null,
       timecode: c.timecode ?? null,
+      timecodeEnd: c.timecode_end ?? null,
       resolved: Boolean(c.resolved_at),
       parentId: c.parent_id ?? null,
       drawing: normalizeDrawing(c.drawing),

@@ -2897,6 +2897,7 @@ export type Database = {
           resolved_at: string | null;
           parent_id: string | null;
           drawing: Json | null;
+          timecode_end: number | null;
         };
         Insert: {
           author_id?: string | null;
@@ -2916,6 +2917,7 @@ export type Database = {
           resolved_at?: string | null;
           parent_id?: string | null;
           drawing?: Json | null;
+          timecode_end?: number | null;
         };
         Update: {
           author_id?: string | null;
@@ -2935,6 +2937,7 @@ export type Database = {
           resolved_at?: string | null;
           parent_id?: string | null;
           drawing?: Json | null;
+          timecode_end?: number | null;
         };
         Relationships: [
           {

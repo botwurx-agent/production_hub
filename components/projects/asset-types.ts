@@ -13,6 +13,7 @@ export type VersionComment = {
   resolved_at: string | null;
   parent_id: string | null;
   drawing: unknown;
+  timecode_end: number | null;
 };
 
 export type VersionApproval = {

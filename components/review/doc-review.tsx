@@ -64,7 +64,8 @@ export function DocReview({
       anchor.pin ?? null,
       anchor.timecode ?? null,
       anchor.parentId ?? null,
-      anchor.drawing ?? null
+      anchor.drawing ?? null,
+      anchor.timecodeEnd ?? null
     );
     if (res?.error) {
       setError(res.error);

@@ -8,6 +8,7 @@ import {
   type ScrubVideoHandle,
 } from "@/components/review/video-player";
 import { DRAW_COLORS, type Drawing } from "@/lib/review-drawing";
+import { EmojiPicker } from "@/components/review/emoji-picker";
 import type { PortalComment } from "@/lib/review-links";
 
 // Frame.io-grade video review: the shared ScrubVideo player (accurate scrubbing,
@@ -52,13 +53,20 @@ export function VideoReview({
   onPost: (
     text: string,
     timecode: number,
-    extra?: { parentId?: string | null; drawing?: Drawing | null }
+    extra?: {
+      parentId?: string | null;
+      drawing?: Drawing | null;
+      timecodeEnd?: number | null;
+    }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
   const playerRef = useRef<ScrubVideoHandle>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [pending, setPending] = useState<number | null>(null);
+  // Out-point of a range comment being composed (in-point is `pending`).
+  const [pendingEnd, setPendingEnd] = useState<number | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -123,6 +131,7 @@ export function VideoReview({
     .map((c) => ({
       id: c.id,
       timecode: c.timecode as number,
+      end: c.timecodeEnd,
       number: c.pinNumber ?? "•",
       active: activeId === c.id,
     }));
@@ -132,8 +141,14 @@ export function VideoReview({
   const shownDrawing = drawMode ? draft : (activeComment?.drawing ?? null);
 
   function seekTo(t: number | null, id: string) {
-    if (t != null) playerRef.current?.seek(t);
-    playerRef.current?.pause();
+    const c = comments.find((x) => x.id === id);
+    // A range comment plays its stretch so you see exactly what is meant.
+    if (t != null && c?.timecodeEnd != null && c.timecodeEnd > t) {
+      playerRef.current?.playRange(t, c.timecodeEnd);
+    } else {
+      if (t != null) playerRef.current?.seek(t);
+      playerRef.current?.pause();
+    }
     setActiveId(id);
     setDrawMode(false);
   }
@@ -143,6 +158,21 @@ export function VideoReview({
     setPending(round2(t));
     return round2(t);
   }
+  // Marks the out-point at the playhead. The in-point is whatever the comment
+  // is already pinned to (defaulting to where you started typing).
+  function setOutPoint() {
+    const now = playerRef.current?.getTime() ?? currentTime;
+    const start = pending ?? round2(currentTime);
+    if (now <= start) {
+      // Out must come after in; nudge the in-point back instead of failing.
+      setPending(round2(Math.max(0, now - 1)));
+      setPendingEnd(round2(now));
+      return;
+    }
+    if (pending == null) setPending(start);
+    setPendingEnd(round2(now));
+  }
+
   function startDrawing() {
     captureHere();
     setActiveId(null);
@@ -155,14 +185,35 @@ export function VideoReview({
     if (!t || sending || disabled) return;
     const at = pending ?? round2(currentTime);
     setSending(true);
-    const ok = await onPost(t, at, { drawing: draft });
+    const ok = await onPost(t, at, {
+      drawing: draft,
+      timecodeEnd: pendingEnd != null && pendingEnd > at ? pendingEnd : null,
+    });
     setSending(false);
     if (ok) {
       setText("");
       setPending(null);
+      setPendingEnd(null);
       setDraft(null);
       setDrawMode(false);
     }
+  }
+
+  // Inserts at the caret rather than appending, so an emoji can go mid-sentence.
+  function insertEmoji(e: string) {
+    const el = textRef.current;
+    if (!el) {
+      setText((t) => t + e);
+      return;
+    }
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + e + text.slice(end);
+    setText(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + e.length, start + e.length);
+    });
   }
 
   async function postReply() {
@@ -370,15 +421,22 @@ export function VideoReview({
                     className="flex cursor-pointer items-start gap-2.5 px-3 py-3 hover:bg-surface-2/60"
                   >
                     {c.timecode != null ? (
-                      <span
-                        className="mt-0.5 shrink-0 rounded-pill px-1.5 py-0.5 text-[10px] font-extrabold tabular-nums text-white"
-                        style={{
-                          backgroundColor: c.resolved
-                            ? "var(--border-strong)"
-                            : "var(--accent)",
-                        }}
-                      >
-                        {fmtTimecode(c.timecode)}
+                      <span className="mt-0.5 flex shrink-0 flex-col items-start gap-0.5">
+                        <span
+                          className="rounded-pill px-1.5 py-0.5 text-[10px] font-extrabold tabular-nums text-white"
+                          style={{
+                            backgroundColor: c.resolved
+                              ? "var(--border-strong)"
+                              : "var(--accent)",
+                          }}
+                        >
+                          {fmtTimecode(c.timecode)}
+                        </span>
+                        {c.timecodeEnd != null && (
+                          <span className="pl-0.5 text-[9px] font-bold tabular-nums text-text-faint">
+                            to {fmtTimecode(c.timecodeEnd)}
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <span className="mt-0.5 h-5 w-12 shrink-0" />
@@ -528,8 +586,30 @@ export function VideoReview({
                   <path d="M12 7v5l3 2" />
                 </svg>
                 {fmtTimecode(pending ?? currentTime)}
+                {pendingEnd != null && (
+                  <>
+                    <span className="opacity-60">to</span>
+                    {fmtTimecode(pendingEnd)}
+                    <button
+                      onClick={() => setPendingEnd(null)}
+                      aria-label="Clear the out point"
+                      className="ml-0.5 opacity-60 transition hover:opacity-100"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </>
+                )}
               </span>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={setOutPoint}
+                  title="Mark the end of a stretch, so the note covers a range"
+                  className="text-[11px] font-bold text-text-muted transition hover:text-text"
+                >
+                  {pendingEnd == null ? "Set out" : "Move out"}
+                </button>
                 <button
                   onClick={() => (drawMode ? setDrawMode(false) : startDrawing())}
                   className={`inline-flex items-center gap-1 text-[11px] font-bold transition ${
@@ -553,6 +633,7 @@ export function VideoReview({
             </div>
           )}
           <textarea
+            ref={textRef}
             value={text}
             onFocus={() => {
               if (pending == null) captureHere();
@@ -561,7 +642,8 @@ export function VideoReview({
             placeholder="Comment at this moment…"
             className="min-h-[64px] w-full rounded-[11px] border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
           />
-          <div className="mt-2 flex items-center justify-end">
+          <div className="mt-2 flex items-center justify-end gap-3">
+            {!disabled && <EmojiPicker onPick={insertEmoji} />}
             <button
               onClick={post}
               disabled={disabled || sending || !text.trim()}

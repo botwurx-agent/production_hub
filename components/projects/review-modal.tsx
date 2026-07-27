@@ -96,6 +96,7 @@ export function ReviewModal({
       y: c.pos_y,
       timecode: c.timecode,
       resolved: Boolean(c.resolved_at),
+      timecodeEnd: c.timecode_end ?? null,
       parentId: c.parent_id ?? null,
       drawing: normalizeDrawing(c.drawing),
     };
@@ -114,7 +115,11 @@ export function ReviewModal({
   async function postTimed(
     text: string,
     timecode: number,
-    extra?: { parentId?: string | null; drawing?: Drawing | null }
+    extra?: {
+      parentId?: string | null;
+      drawing?: Drawing | null;
+      timecodeEnd?: number | null;
+    }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
       projectId,
@@ -123,7 +128,8 @@ export function ReviewModal({
       null,
       timecode,
       extra?.parentId ?? null,
-      extra?.drawing ?? null
+      extra?.drawing ?? null,
+      extra?.timecodeEnd ?? null
     );
     if (res?.error) return false;
     router.refresh();

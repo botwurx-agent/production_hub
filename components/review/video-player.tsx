@@ -10,6 +10,11 @@ import {
 } from "react";
 import { DrawCanvas } from "@/components/review/draw-canvas";
 import type { Drawing } from "@/lib/review-drawing";
+import {
+  GuideOverlay,
+  GUIDE_OPTIONS,
+  type GuideMode,
+} from "@/components/review/video-guides";
 
 // Assumed frame rate. An <video> does not expose true fps, so stepping nudges by
 // this; combined with the frame-accurate readout it lands on a specific moment.
@@ -42,6 +47,8 @@ export function fmtTime(s: number | null): string {
 export type VideoMarker = {
   id: string;
   timecode: number;
+  // Set for a range comment: the marker draws as a bar from timecode to end.
+  end?: number | null;
   number?: string | number;
   active?: boolean;
 };
@@ -50,6 +57,8 @@ export type ScrubVideoHandle = {
   seek: (t: number) => void;
   pause: () => void;
   play: () => void;
+  // Play just the in..out stretch of a range comment, then stop.
+  playRange: (start: number, end: number) => void;
   getTime: () => number;
 };
 
@@ -111,6 +120,14 @@ export const ScrubVideo = forwardRef<
   const [helpOpen, setHelpOpen] = useState(false);
   const [asTimecode, setAsTimecode] = useState(true);
   const [hover, setHover] = useState<number | null>(null);
+  // When set, playback halts here (range preview) and the value clears.
+  const stopAt = useRef<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [guides, setGuides] = useState<GuideMode>("off");
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
+  const [stillError, setStillError] = useState<string | null>(null);
 
   const round2 = (t: number) => Math.round(t * 100) / 100;
   const pct = duration
@@ -142,6 +159,11 @@ export const ScrubVideo = forwardRef<
       seek: (t: number) => seekAbsolute(t),
       pause: () => videoRef.current?.pause(),
       play: () => videoRef.current?.play().catch(() => {}),
+      playRange: (start: number, end: number) => {
+        stopAt.current = end;
+        seekAbsolute(start);
+        videoRef.current?.play().catch(() => {});
+      },
       getTime: () => round2(videoRef.current?.currentTime ?? currentTime),
     }),
     [seekAbsolute, currentTime]
@@ -157,6 +179,7 @@ export const ScrubVideo = forwardRef<
   function togglePlay() {
     const v = videoRef.current;
     if (!v) return;
+    stopAt.current = null;
     if (v.paused) v.play().catch(() => {});
     else v.pause();
   }
@@ -200,6 +223,68 @@ export const ScrubVideo = forwardRef<
       setMuted(next === 0);
     }
   }
+  // Drag to pan while zoomed in. Percentages so it survives a resize.
+  function startPan(e: React.PointerEvent) {
+    e.preventDefault();
+    const from = { x: e.clientX, y: e.clientY };
+    const base = { ...pan };
+    const limit = 50 - 50 / zoom;
+    function move(ev: PointerEvent) {
+      const dx = ((ev.clientX - from.x) / window.innerWidth) * 100;
+      const dy = ((ev.clientY - from.y) / window.innerHeight) * 100;
+      setPan({
+        x: Math.max(-limit, Math.min(limit, base.x + dx)),
+        y: Math.max(-limit, Math.min(limit, base.y + dy)),
+      });
+    }
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  function applyZoom(next: number) {
+    setZoom(next);
+    if (next === 1) setPan({ x: 0, y: 0 });
+  }
+
+  // Grabs the current frame as a PNG. Uses a SEPARATE crossOrigin element so a
+  // storage bucket without CORS headers fails here with a message instead of
+  // breaking playback for everyone.
+  async function downloadStill() {
+    setStillError(null);
+    const at = videoRef.current?.currentTime ?? 0;
+    try {
+      const shot = document.createElement("video");
+      shot.crossOrigin = "anonymous";
+      shot.muted = true;
+      shot.src = src;
+      await new Promise<void>((resolve, reject) => {
+        shot.onloadedmetadata = () => resolve();
+        shot.onerror = () => reject(new Error("load"));
+      });
+      shot.currentTime = at;
+      await new Promise<void>((resolve, reject) => {
+        shot.onseeked = () => resolve();
+        shot.onerror = () => reject(new Error("seek"));
+      });
+      const cv = document.createElement("canvas");
+      cv.width = shot.videoWidth;
+      cv.height = shot.videoHeight;
+      cv.getContext("2d")?.drawImage(shot, 0, 0);
+      const url = cv.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `still_${fmtTimecode(at).replace(/:/g, "-")}.png`;
+      a.click();
+      setSettingsOpen(false);
+    } catch {
+      setStillError("Could not grab this frame from the video source.");
+    }
+  }
+
   function toggleFullscreen() {
     const el = containerRef.current;
     if (!el) return;
@@ -226,6 +311,7 @@ export const ScrubVideo = forwardRef<
 
   function onScrubDown(e: React.PointerEvent) {
     if (!duration) return;
+    stopAt.current = null;
     setScrubbing(true);
     seekAbsolute(timeFromClientX(e.clientX));
   }
@@ -282,14 +368,39 @@ export const ScrubVideo = forwardRef<
           playsInline
           autoPlay={autoPlay}
           loop={loop}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+          onLoadedMetadata={(e) => {
+            setDuration(e.currentTarget.duration || 0);
+            setNatural({
+              w: e.currentTarget.videoWidth,
+              h: e.currentTarget.videoHeight,
+            });
+          }}
           onTimeUpdate={(e) => {
-            if (!scrubbing) report(round2(e.currentTarget.currentTime || 0));
+            const t = round2(e.currentTarget.currentTime || 0);
+            if (stopAt.current != null && t >= stopAt.current) {
+              stopAt.current = null;
+              e.currentTarget.pause();
+            }
+            if (!scrubbing) report(t);
           }}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onClick={drawActive ? undefined : togglePlay}
+          style={
+            zoom > 1
+              ? {
+                  transform: `scale(${zoom}) translate(${pan.x}%, ${pan.y}%)`,
+                  cursor: drawActive ? undefined : "grab",
+                }
+              : undefined
+          }
+          onPointerDown={zoom > 1 && !drawActive ? startPan : undefined}
           className={`mx-auto block w-full object-contain ${maxHeightClass}`}
+        />
+        <GuideOverlay
+          mode={guides}
+          mediaWidth={natural.w}
+          mediaHeight={natural.h}
         />
         <DrawCanvas
           drawing={drawing}
@@ -339,6 +450,23 @@ export const ScrubVideo = forwardRef<
               {fmtTimecode(hover)}
             </span>
           )}
+          {duration > 0 &&
+            markers
+              .filter((mk) => mk.end != null && mk.end > mk.timecode)
+              .map((mk) => (
+                <span
+                  key={`r-${mk.id}`}
+                  className="pointer-events-none absolute inset-y-0 rounded-pill"
+                  style={{
+                    left: `${(mk.timecode / duration) * 100}%`,
+                    width: `${(((mk.end as number) - mk.timecode) / duration) * 100}%`,
+                    backgroundColor: mk.active
+                      ? "var(--h-amber)"
+                      : "var(--accent)",
+                    opacity: mk.active ? 0.55 : 0.35,
+                  }}
+                />
+              ))}
           {duration > 0 &&
             markers.map((mk) => (
               <button
@@ -496,6 +624,103 @@ export const ScrubVideo = forwardRef<
               aria-label="Volume"
               className="h-1 w-0 cursor-pointer appearance-none rounded-pill bg-white/25 opacity-0 transition-all duration-150 accent-white group-hover:mr-1 group-hover:w-16 group-hover:opacity-100 focus:mr-1 focus:w-16 focus:opacity-100"
             />
+          </div>
+
+          {/* Settings: guides, zoom, quality, still */}
+          <div className="relative">
+            <button
+              onClick={() => setSettingsOpen((v) => !v)}
+              className={ctrlBtn}
+              title="Display settings"
+              aria-label="Display settings"
+              style={
+                guides !== "off" || zoom > 1
+                  ? { color: "var(--accent)" }
+                  : undefined
+              }
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6 1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.35.42.63.77.77H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+            {settingsOpen && (
+              <div className="absolute bottom-9 right-0 z-40 w-60 rounded-[11px] border border-white/10 bg-[#1c1922] p-1.5 shadow-lg">
+                <p className="px-1.5 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-white/40">
+                  Guides
+                </p>
+                {GUIDE_OPTIONS.map((g) => (
+                  <button
+                    key={g.key}
+                    onClick={() => setGuides(g.key)}
+                    className={`flex w-full items-center justify-between rounded-[7px] px-1.5 py-1 text-[11px] transition hover:bg-white/10 ${
+                      guides === g.key
+                        ? "font-extrabold text-white"
+                        : "text-white/70"
+                    }`}
+                  >
+                    {g.label}
+                    {guides === g.key && (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+
+                <p className="px-1.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-white/40">
+                  Zoom
+                </p>
+                <div className="flex gap-1 px-1.5 pb-0.5">
+                  {[1, 2, 4].map((z) => (
+                    <button
+                      key={z}
+                      onClick={() => applyZoom(z)}
+                      className={`flex-1 rounded-[7px] py-1 text-[11px] transition hover:bg-white/10 ${
+                        zoom === z
+                          ? "bg-white/10 font-extrabold text-white"
+                          : "text-white/70"
+                      }`}
+                    >
+                      {z === 1 ? "Fit" : `${z}x`}
+                    </button>
+                  ))}
+                </div>
+                {zoom > 1 && (
+                  <p className="px-1.5 pt-1 text-[10px] text-white/40">
+                    Drag the picture to pan.
+                  </p>
+                )}
+
+                <div className="my-1.5 border-t border-white/10" />
+                <button
+                  onClick={downloadStill}
+                  className="flex w-full items-center gap-2 rounded-[7px] px-1.5 py-1.5 text-[11px] text-white/80 transition hover:bg-white/10"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="9" cy="9" r="1.5" />
+                    <path d="m21 15-4.5-4.5L7 20" />
+                  </svg>
+                  Download this frame
+                </button>
+                {stillError && (
+                  <p className="px-1.5 pt-1 text-[10px] text-red">{stillError}</p>
+                )}
+
+                <div className="my-1.5 border-t border-white/10" />
+                <div className="flex items-center justify-between px-1.5 py-1">
+                  <span className="text-[11px] text-white/70">Quality</span>
+                  <span className="text-[11px] font-bold text-white">
+                    {natural.h ? `Source · ${natural.h}p` : "Source"}
+                  </span>
+                </div>
+                <p className="px-1.5 pb-0.5 text-[10px] leading-snug text-white/40">
+                  One rendition per version today, so playback is always the
+                  original file.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Shortcuts */}

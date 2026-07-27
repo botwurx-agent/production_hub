@@ -44,7 +44,9 @@ export async function addReviewCommentAt(
   // A reply hangs off a parent comment (inheriting its moment); drawing is a
   // freehand annotation over the frame.
   parentId?: string | null,
-  drawing?: unknown
+  drawing?: unknown,
+  // Out-point for a range comment; timecode is the in-point.
+  timecodeEnd?: number | null
 ): Promise<ReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -71,12 +73,21 @@ export async function addReviewCommentAt(
   let posX: number | null = null;
   let posY: number | null = null;
   let time: number | null = null;
+  let endTime: number | null = null;
   if (hasPin || hasTime) {
     if (hasPin) {
       posX = Math.max(0, Math.min(100, pin!.x));
       posY = Math.max(0, Math.min(100, pin!.y));
     }
     if (hasTime) time = Math.max(0, timecode as number);
+    if (
+      time != null &&
+      timecodeEnd != null &&
+      Number.isFinite(timecodeEnd) &&
+      timecodeEnd > time
+    ) {
+      endTime = timecodeEnd;
+    }
     const { data: lastPin } = await supabase
       .from("review_comments")
       .select("pin_number")
@@ -97,6 +108,7 @@ export async function addReviewCommentAt(
     pos_x: posX,
     pos_y: posY,
     timecode: time,
+    timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
   });

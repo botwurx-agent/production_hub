@@ -967,9 +967,39 @@ shot review, and the master-cut review all gained it at once.
   (public, service-role) and addReviewCommentAt + addDocReviewCommentAt
   (internal, RLS). PortalComment gained parentId + drawing, so every loader
   (review-links, project-data, doc-review-data) selects the two new columns.
-- NOT built: comment attachments, emoji reactions, range (in/out) comments, CC
-  captions, quality switching, per-comment @mentions. Range comments are the
-  most likely next one.
+- RANGE COMMENTS (migration 0068 = review_comments.timecode_end): a note about a
+  STRETCH ("this whole section drags"), not one frame. timecode stays the
+  in-point so every existing point comment and marker is untouched; timecode_end
+  is the out-point, null for a point comment. Composer: "Set out" marks the
+  out-point at the playhead (if it lands before the in-point, the in-point is
+  nudged back rather than erroring), chip reads "in to out" with a clear button.
+  On the scrub bar a range draws as a translucent BAR behind the numbered dot;
+  clicking a range comment PLAYS just that stretch and stops (ScrubVideoHandle
+  gained playRange; a stopAt ref halts playback and is cleared by any manual
+  play/scrub). Server side, all four comment actions validate out > in and
+  Number.isFinite before storing.
+- EMOJI (components/review/emoji-picker.tsx): a curated 30-emoji palette
+  (Reactions / Tone / Notes) in the composer, inserted AT THE CARET not
+  appended. Deliberately no picker dependency shipped to the public portal.
+- DISPLAY SETTINGS menu (the gear, matching Frame.io's): GUIDES
+  (components/review/video-guides.tsx) = rule of thirds, title/action safe
+  (90%/80% broadcast convention), and CROP MASKS 1:1 / 4:5 / 9:16 that dim
+  outside the target aspect, computed from the video's NATURAL size so it flips
+  between pillarbox and letterbox correctly (this one beats Frame.io for the
+  ICP: every commercial job ships social cutdowns and "does the product survive
+  the crop" comes up on every review). ZOOM Fit/2x/4x with drag-to-pan (clamped,
+  disabled while drawing). DOWNLOAD THIS FRAME grabs a PNG via a SEPARATE
+  crossOrigin video element, so a bucket without CORS headers fails with a
+  message instead of breaking playback for everyone.
+- QUALITY SWITCHING is NOT built and cannot be without a transcoding pipeline:
+  `versions` stores ONE file (storage_path), so there are no alternate
+  renditions to switch between. The settings menu reports the true source
+  height (from videoHeight) and says so. Real switching = a worker that
+  ffmpeg-encodes 1080/720/540 on upload + a renditions table + HLS or a source
+  picker. Scoped, not started, pending the operator's call.
+- NOT built: comment attachments (a paid-tier question, per the operator),
+  emoji REACTIONS on a comment (needs its own table; the composer palette is
+  built), CC captions, per-comment @mentions, emoji in the reply composer.
 
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)

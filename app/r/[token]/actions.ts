@@ -75,7 +75,9 @@ export async function submitClientComment(
   // A reply hangs off a parent comment and inherits its moment (no anchor of
   // its own); drawing is freehand annotation over the frame.
   parentId?: string | null,
-  drawing?: unknown
+  drawing?: unknown,
+  // Out-point for a range comment; timecode is the in-point.
+  timecodeEnd?: number | null
 ): Promise<PortalState> {
   if (!allowPublic("r-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -112,12 +114,21 @@ export async function submitClientComment(
   let posX: number | null = null;
   let posY: number | null = null;
   let time: number | null = null;
+  let endTime: number | null = null;
   if (hasPin || hasTime) {
     if (hasPin) {
       posX = Math.max(0, Math.min(100, pin!.x));
       posY = Math.max(0, Math.min(100, pin!.y));
     }
     if (hasTime) time = Math.max(0, timecode as number);
+    if (
+      time != null &&
+      timecodeEnd != null &&
+      Number.isFinite(timecodeEnd) &&
+      timecodeEnd > time
+    ) {
+      endTime = timecodeEnd;
+    }
     // Assign the next marker number for this version (shared by pins + times).
     const { data: lastPin } = await service
       .from("review_comments")
@@ -140,6 +151,7 @@ export async function submitClientComment(
     pos_x: posX,
     pos_y: posY,
     timecode: time,
+    timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
   });
@@ -282,7 +294,9 @@ export async function submitDocComment(
   pin?: { x: number; y: number } | null,
   timecode?: number | null,
   parentId?: string | null,
-  drawing?: unknown
+  drawing?: unknown,
+  // Out-point for a range comment; timecode is the in-point.
+  timecodeEnd?: number | null
 ): Promise<PortalState> {
   if (!allowPublic("r-doc-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -322,12 +336,21 @@ export async function submitDocComment(
   let posX: number | null = null;
   let posY: number | null = null;
   let time: number | null = null;
+  let endTime: number | null = null;
   if (hasPin || hasTime) {
     if (hasPin) {
       posX = Math.max(0, Math.min(100, pin!.x));
       posY = Math.max(0, Math.min(100, pin!.y));
     }
     if (hasTime) time = Math.max(0, timecode as number);
+    if (
+      time != null &&
+      timecodeEnd != null &&
+      Number.isFinite(timecodeEnd) &&
+      timecodeEnd > time
+    ) {
+      endTime = timecodeEnd;
+    }
     // Next marker number for this doc target (shared by pins + timecodes).
     const { data: lastPin } = await service
       .from("review_comments")
@@ -352,6 +375,7 @@ export async function submitDocComment(
     pos_x: posX,
     pos_y: posY,
     timecode: time,
+    timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
   });

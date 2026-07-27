@@ -91,7 +91,11 @@ export function ClientReview({
   async function postTimed(
     text: string,
     timecode: number,
-    extra?: { parentId?: string | null; drawing?: Drawing | null }
+    extra?: {
+      parentId?: string | null;
+      drawing?: Drawing | null;
+      timecodeEnd?: number | null;
+    }
   ): Promise<boolean> {
     if (!current) return false;
     if (!name.trim()) {
@@ -107,7 +111,8 @@ export function ClientReview({
       null,
       timecode,
       extra?.parentId ?? null,
-      extra?.drawing ?? null
+      extra?.drawing ?? null,
+      extra?.timecodeEnd ?? null
     );
     if (res?.error) {
       setError(res.error);

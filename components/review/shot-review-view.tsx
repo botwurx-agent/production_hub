@@ -53,7 +53,8 @@ export function ShotReviewView({
       anchor.pin ?? null,
       anchor.timecode ?? null,
       anchor.parentId ?? null,
-      anchor.drawing ?? null
+      anchor.drawing ?? null,
+      anchor.timecodeEnd ?? null
     );
     if (res?.error) return false;
     await reload();

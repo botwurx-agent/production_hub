@@ -13,6 +13,7 @@ export type ShotAnchor = {
   // Threaded reply target, and a drawing over the frame.
   parentId?: string | null;
   drawing?: Drawing | null;
+  timecodeEnd?: number | null;
 };
 
 // Review canvas for an AI pipeline shot. If the shot has a playable take video,
@@ -54,6 +55,7 @@ export function AiShotReviewCanvas({
               timecode,
               parentId: extra?.parentId ?? null,
               drawing: extra?.drawing ?? null,
+              timecodeEnd: extra?.timecodeEnd ?? null,
             })
           }
           onResolve={onResolve}
