@@ -141,6 +141,7 @@ export function AssetCard({
   const [viewVersion, setViewVersion] = useState<VersionRow | null>(null);
   const [confirmVersion, setConfirmVersion] = useState<string | null>(null);
   const [editVersion, setEditVersion] = useState<string | null>(null);
+  const [confirmAsset, setConfirmAsset] = useState(false);
   const [, startVersionDelete] = useTransition();
   const router = useRouter();
   const hue = ASSET_TYPE_HUE[asset.type] ?? "cyan";
@@ -197,16 +198,61 @@ export function AssetCard({
             {asset.versions.length === 1 ? "" : "s"}
           </button>
         )}
-        {current && (
-          <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-1.5">
+          {current && (
             <ShareReviewButton
               projectId={projectId}
               assetId={asset.id}
               initialToken={reviewLink?.token ?? null}
               linkId={reviewLink?.id ?? null}
             />
-          </span>
-        )}
+          )}
+          {/* Deleting the whole file has to live here, not only inside the
+              viewer: a file with no versions left can't open the viewer. */}
+          {confirmAsset ? (
+            <>
+              <button
+                onClick={() =>
+                  startVersionDelete(async () => {
+                    const res = await deleteAsset(asset.id);
+                    if (res?.error) toast(res.error, "error");
+                    setConfirmAsset(false);
+                    router.refresh();
+                  })
+                }
+                className="rounded-[9px] bg-red px-2 py-1 text-xs font-bold text-white transition hover:opacity-90"
+              >
+                Delete file
+              </button>
+              <button
+                onClick={() => setConfirmAsset(false)}
+                className="rounded-[9px] px-1.5 py-1 text-xs font-semibold text-text-faint transition hover:text-text"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setConfirmAsset(true)}
+              title="Delete this file and all its versions"
+              aria-label="Delete file"
+              className="rounded-[9px] px-2 py-1 text-text-faint transition hover:bg-red-bg hover:text-red"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden
+              >
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+              </svg>
+            </button>
+          )}
+        </span>
       </div>
 
       {showHistory && asset.versions.length > 0 && (
@@ -299,10 +345,15 @@ export function AssetCard({
                     )}
                     {confirmVersion === v.id ? (
                       <span className="ml-auto flex items-center gap-1.5">
+                        {/* Removing the only version would leave an empty file
+                            shell, so delete the whole file instead. */}
                         <button
                           onClick={() =>
                             startVersionDelete(async () => {
-                              const res = await deleteVersion(v.id);
+                              const last = asset.versions.length === 1;
+                              const res = last
+                                ? await deleteAsset(asset.id)
+                                : await deleteVersion(v.id);
                               if (res?.error) toast(res.error, "error");
                               setConfirmVersion(null);
                               router.refresh();
@@ -310,7 +361,9 @@ export function AssetCard({
                           }
                           className="rounded-[7px] bg-red px-2 py-0.5 text-[11px] font-bold text-white transition hover:opacity-90"
                         >
-                          Delete v{v.version_number}
+                          {asset.versions.length === 1
+                            ? "Delete file"
+                            : `Delete v${v.version_number}`}
                         </button>
                         <button
                           onClick={() => setConfirmVersion(null)}
