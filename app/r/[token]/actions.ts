@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import { allowPublic } from "@/lib/rate-limit";
 import { getValidLink, isDocKind } from "@/lib/review-links";
+import { normalizeDrawing } from "@/lib/review-drawing";
 import { createNotification } from "@/lib/notifications";
 import { syncAssetStatusFromApprovals } from "@/lib/review-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -70,7 +71,11 @@ export async function submitClientComment(
   // Optional Frame.io-style anchor: an image pin (percent coords) or, for
   // video, a timecode in seconds. Both get a sequential marker number.
   pin?: { x: number; y: number } | null,
-  timecode?: number | null
+  timecode?: number | null,
+  // A reply hangs off a parent comment and inherits its moment (no anchor of
+  // its own); drawing is freehand annotation over the frame.
+  parentId?: string | null,
+  drawing?: unknown
 ): Promise<PortalState> {
   if (!allowPublic("r-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -86,8 +91,22 @@ export async function submitClientComment(
   if (!(await versionInLink(service, link, versionId)))
     return { error: "That version is not part of this review." };
 
-  const hasPin = pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
-  const hasTime = timecode != null && Number.isFinite(timecode);
+  // A reply must belong to this same version, and never nests further.
+  let parent: string | null = null;
+  if (parentId) {
+    const { data: p } = await service
+      .from("review_comments")
+      .select("id, version_id, parent_id")
+      .eq("id", parentId)
+      .maybeSingle();
+    if (!p || p.version_id !== versionId) {
+      return { error: "That comment is not part of this review." };
+    }
+    parent = p.parent_id ?? p.id;
+  }
+
+  const hasPin = !parent && pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
+  const hasTime = !parent && timecode != null && Number.isFinite(timecode);
 
   let pinNumber: number | null = null;
   let posX: number | null = null;
@@ -121,15 +140,21 @@ export async function submitClientComment(
     pos_x: posX,
     pos_y: posY,
     timecode: time,
+    parent_id: parent,
+    drawing: parent ? null : normalizeDrawing(drawing),
   });
   if (error) return { error: error.message };
 
-  await logActivity(service, link, `${reviewer} commented in client review`);
+  await logActivity(
+    service,
+    link,
+    `${reviewer} ${parent ? "replied in" : "commented in"} client review`
+  );
   await createNotification(service, {
     studio_id: link.studio_id,
     project_id: link.project_id,
     type: "client_comment",
-    title: `${reviewer} commented in client review`,
+    title: `${reviewer} ${parent ? "replied in" : "commented in"} client review`,
     body: text.slice(0, 140),
     href: `/projects/${link.project_id}`,
   });
@@ -255,7 +280,9 @@ export async function submitDocComment(
   name: string,
   body: string,
   pin?: { x: number; y: number } | null,
-  timecode?: number | null
+  timecode?: number | null,
+  parentId?: string | null,
+  drawing?: unknown
 ): Promise<PortalState> {
   if (!allowPublic("r-doc-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -271,8 +298,26 @@ export async function submitDocComment(
   if (!isDocKind(link.target_type) || !link.target_id)
     return { error: "This is not a document review." };
 
-  const hasPin = pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
-  const hasTime = timecode != null && Number.isFinite(timecode);
+  // A reply hangs off its parent (same doc target) and never nests further.
+  let parent: string | null = null;
+  if (parentId) {
+    const { data: p } = await service
+      .from("review_comments")
+      .select("id, target_type, target_id, parent_id")
+      .eq("id", parentId)
+      .maybeSingle();
+    if (
+      !p ||
+      p.target_type !== link.target_type ||
+      p.target_id !== link.target_id
+    ) {
+      return { error: "That comment is not part of this review." };
+    }
+    parent = p.parent_id ?? p.id;
+  }
+
+  const hasPin = !parent && pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
+  const hasTime = !parent && timecode != null && Number.isFinite(timecode);
   let pinNumber: number | null = null;
   let posX: number | null = null;
   let posY: number | null = null;
@@ -307,6 +352,8 @@ export async function submitDocComment(
     pos_x: posX,
     pos_y: posY,
     timecode: time,
+    parent_id: parent,
+    drawing: parent ? null : normalizeDrawing(drawing),
   });
   if (error) return { error: error.message };
 

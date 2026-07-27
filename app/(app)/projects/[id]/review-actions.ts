@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeDrawing } from "@/lib/review-drawing";
 import { requireStudioContext } from "@/lib/studio";
 import { syncAssetStatusFromApprovals } from "@/lib/review-status";
 import type { ApprovalStatus } from "@/lib/database.types";
@@ -39,7 +40,11 @@ export async function addReviewCommentAt(
   versionId: string,
   body: string,
   pin?: { x: number; y: number } | null,
-  timecode?: number | null
+  timecode?: number | null,
+  // A reply hangs off a parent comment (inheriting its moment); drawing is a
+  // freehand annotation over the frame.
+  parentId?: string | null,
+  drawing?: unknown
 ): Promise<ReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -47,8 +52,21 @@ export async function addReviewCommentAt(
 
   const supabase = createClient();
 
-  const hasPin = pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
-  const hasTime = timecode != null && Number.isFinite(timecode);
+  let parent: string | null = null;
+  if (parentId) {
+    const { data: p } = await supabase
+      .from("review_comments")
+      .select("id, version_id, parent_id")
+      .eq("id", parentId)
+      .maybeSingle();
+    if (!p || p.version_id !== versionId) {
+      return { error: "That comment is not part of this review." };
+    }
+    parent = p.parent_id ?? p.id;
+  }
+
+  const hasPin = !parent && pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
+  const hasTime = !parent && timecode != null && Number.isFinite(timecode);
   let pinNumber: number | null = null;
   let posX: number | null = null;
   let posY: number | null = null;
@@ -79,6 +97,8 @@ export async function addReviewCommentAt(
     pos_x: posX,
     pos_y: posY,
     timecode: time,
+    parent_id: parent,
+    drawing: parent ? null : normalizeDrawing(drawing),
   });
   if (error) return { error: error.message };
 

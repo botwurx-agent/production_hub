@@ -1,13 +1,35 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { timeAgo } from "@/lib/format";
-import { ScrubVideo, fmtTime as fmt, type ScrubVideoHandle } from "@/components/review/video-player";
+import {
+  ScrubVideo,
+  fmtTimecode,
+  type ScrubVideoHandle,
+} from "@/components/review/video-player";
+import { DRAW_COLORS, type Drawing } from "@/lib/review-drawing";
 import type { PortalComment } from "@/lib/review-links";
 
-// Frame.io-style video review: the shared ScrubVideo player (accurate scrubbing,
-// decimal timecodes, frame stepping) + a comment rail. Comments pin to a precise
-// timecode; clicking one jumps the player there.
+// Frame.io-grade video review: the shared ScrubVideo player (accurate scrubbing,
+// frame stepping, speed, loop, shuttle keys) + a comment rail with threaded
+// replies, filter / sort / search, and freehand annotation drawn on the frame.
+
+type Filter = "all" | "open" | "resolved" | "mine";
+type Sort = "time" | "newest" | "oldest";
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "open", label: "Open" },
+  { key: "resolved", label: "Resolved" },
+  { key: "mine", label: "Mine" },
+];
+
+const SORTS: { key: Sort; label: string }[] = [
+  { key: "time", label: "Timecode" },
+  { key: "newest", label: "Newest" },
+  { key: "oldest", label: "Oldest" },
+];
+
 export function VideoReview({
   videoUrl,
   comments,
@@ -15,6 +37,7 @@ export function VideoReview({
   disabled = false,
   disabledHint,
   wide = false,
+  meName,
   onPost,
   onResolve,
 }: {
@@ -24,7 +47,13 @@ export function VideoReview({
   disabled?: boolean;
   disabledHint?: string;
   wide?: boolean;
-  onPost: (text: string, timecode: number) => Promise<boolean>;
+  // Who "Mine" means; the client portal passes the reviewer's typed name.
+  meName?: string | null;
+  onPost: (
+    text: string,
+    timecode: number,
+    extra?: { parentId?: string | null; drawing?: Drawing | null }
+  ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
   const playerRef = useRef<ScrubVideoHandle>(null);
@@ -33,28 +62,92 @@ export function VideoReview({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [showResolved, setShowResolved] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [sort, setSort] = useState<Sort>("time");
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<PortalComment | null>(null);
+  const [replyText, setReplyText] = useState("");
+
+  // Drawing state: the annotation being composed, and the saved one shown when
+  // a comment is selected.
+  const [drawMode, setDrawMode] = useState(false);
+  const [draft, setDraft] = useState<Drawing | null>(null);
+  const [color, setColor] = useState(DRAW_COLORS[0]);
 
   const round2 = (t: number) => Math.round(t * 100) / 100;
-  const resolvedCount = comments.filter((c) => c.resolved).length;
-  const visible = comments
-    .filter((c) => showResolved || !c.resolved)
-    .slice()
-    .sort((a, b) => (a.timecode ?? 1e9) - (b.timecode ?? 1e9));
 
-  const markers = comments
+  const roots = useMemo(() => comments.filter((c) => !c.parentId), [comments]);
+  const repliesOf = useMemo(() => {
+    const map = new Map<string, PortalComment[]>();
+    for (const c of comments) {
+      if (!c.parentId) continue;
+      const list = map.get(c.parentId) ?? [];
+      list.push(c);
+      map.set(c.parentId, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    }
+    return map;
+  }, [comments]);
+
+  const openCount = roots.filter((c) => !c.resolved).length;
+  const resolvedCount = roots.filter((c) => c.resolved).length;
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = roots.filter((c) => {
+      if (filter === "open" && c.resolved) return false;
+      if (filter === "resolved" && !c.resolved) return false;
+      if (filter === "mine" && (!meName || c.author !== meName)) return false;
+      if (q) {
+        const inSelf = c.body.toLowerCase().includes(q);
+        const inReplies = (repliesOf.get(c.id) ?? []).some((r) =>
+          r.body.toLowerCase().includes(q)
+        );
+        if (!inSelf && !inReplies) return false;
+      }
+      return true;
+    });
+    return list.sort((a, b) => {
+      if (sort === "time") return (a.timecode ?? 1e9) - (b.timecode ?? 1e9);
+      const d = Date.parse(a.created_at) - Date.parse(b.created_at);
+      return sort === "newest" ? -d : d;
+    });
+  }, [roots, repliesOf, filter, sort, query, meName]);
+
+  // Markers only for unresolved, anchored roots.
+  const markers = roots
     .filter((c) => !c.resolved && c.timecode != null)
-    .map((c) => ({ id: c.id, timecode: c.timecode as number, number: c.pinNumber ?? "•", active: activeId === c.id }));
+    .map((c) => ({
+      id: c.id,
+      timecode: c.timecode as number,
+      number: c.pinNumber ?? "•",
+      active: activeId === c.id,
+    }));
+
+  const activeComment = comments.find((c) => c.id === activeId) ?? null;
+  // Show the draft while drawing, otherwise the selected comment's annotation.
+  const shownDrawing = drawMode ? draft : (activeComment?.drawing ?? null);
 
   function seekTo(t: number | null, id: string) {
     if (t != null) playerRef.current?.seek(t);
     playerRef.current?.pause();
     setActiveId(id);
+    setDrawMode(false);
   }
   function captureHere() {
     const t = playerRef.current?.getTime() ?? currentTime;
     playerRef.current?.pause();
     setPending(round2(t));
+    return round2(t);
+  }
+  function startDrawing() {
+    captureHere();
+    setActiveId(null);
+    setDraft(null);
+    setDrawMode(true);
   }
 
   async function post() {
@@ -62,48 +155,176 @@ export function VideoReview({
     if (!t || sending || disabled) return;
     const at = pending ?? round2(currentTime);
     setSending(true);
-    const ok = await onPost(t, at);
+    const ok = await onPost(t, at, { drawing: draft });
     setSending(false);
     if (ok) {
       setText("");
       setPending(null);
+      setDraft(null);
+      setDrawMode(false);
     }
   }
 
+  async function postReply() {
+    const t = replyText.trim();
+    if (!t || sending || disabled || !replyTo) return;
+    setSending(true);
+    const ok = await onPost(t, replyTo.timecode ?? 0, { parentId: replyTo.id });
+    setSending(false);
+    if (ok) {
+      setReplyText("");
+      setReplyTo(null);
+    }
+  }
+
+  const railBtn =
+    "grid h-7 w-7 place-items-center rounded-[7px] text-text-faint transition hover:bg-surface-2 hover:text-text";
+
   return (
-    <div className={`grid grid-cols-1 gap-4 ${wide ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_340px]"}`}>
-      <ScrubVideo
-        ref={playerRef}
-        src={videoUrl}
-        markers={markers}
-        onMarkerClick={(id) => {
-          const c = comments.find((x) => x.id === id);
-          seekTo(c?.timecode ?? null, id);
-        }}
-        onTime={setCurrentTime}
-        maxHeightClass={wide ? "max-h-[78vh]" : "max-h-[58vh]"}
-      />
+    <div
+      className={`grid grid-cols-1 gap-4 ${
+        wide ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_360px]"
+      }`}
+    >
+      <div>
+        <ScrubVideo
+          ref={playerRef}
+          src={videoUrl}
+          markers={markers}
+          onMarkerClick={(id) => {
+            const c = comments.find((x) => x.id === id);
+            seekTo(c?.timecode ?? null, id);
+          }}
+          onTime={setCurrentTime}
+          maxHeightClass={wide ? "max-h-[78vh]" : "max-h-[58vh]"}
+          drawing={shownDrawing}
+          drawActive={drawMode}
+          drawColor={color}
+          drawSize={4}
+          onDrawChange={setDraft}
+        />
+
+        {drawMode && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[12px] border border-border bg-surface px-3 py-2">
+            <span className="text-xs font-bold text-text">Pen</span>
+            <div className="flex items-center gap-1.5">
+              {DRAW_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  aria-label={`Pen colour ${c}`}
+                  className={`h-5 w-5 rounded-full border-2 transition ${
+                    color === c
+                      ? "scale-110 border-text"
+                      : "border-border hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+            <span className="flex-1" />
+            <button
+              onClick={() => setDraft(null)}
+              disabled={!draft}
+              className="text-xs font-semibold text-text-faint transition hover:text-text disabled:opacity-40"
+            >
+              Clear
+            </button>
+            <button
+              onClick={() => {
+                setDrawMode(false);
+                setDraft(null);
+              }}
+              className="text-xs font-semibold text-text-faint transition hover:text-text"
+            >
+              Cancel
+            </button>
+            <span className="w-full text-xs text-text-muted sm:w-auto">
+              Draw on the frame, then write your comment.
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Comments */}
       <div className="flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="font-display text-sm font-bold text-text">Comments</span>
+        <div className="border-b border-border px-3 py-2.5">
+          <div className="flex items-center gap-1">
+            <span className="font-display text-sm font-bold text-text">
+              Comments
+            </span>
             <span
               className="rounded-pill px-2 py-0.5 text-xs font-bold"
-              style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+              style={{
+                backgroundColor: "var(--accent-soft)",
+                color: "var(--accent)",
+              }}
             >
-              {comments.length}
+              {roots.length}
             </span>
-          </div>
-          {resolvedCount > 0 && (
+            <span className="flex-1" />
             <button
-              onClick={() => setShowResolved((v) => !v)}
-              className="text-xs font-semibold text-accent hover:underline"
+              onClick={() => setSearchOpen((v) => !v)}
+              className={railBtn}
+              title="Search comments"
+              aria-label="Search comments"
             >
-              {showResolved ? "Hide resolved" : `Show resolved (${resolvedCount})`}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
             </button>
+          </div>
+
+          {searchOpen && (
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search comments…"
+              autoFocus
+              className="mt-2 w-full rounded-[9px] border border-border bg-bg px-2.5 py-1.5 text-xs text-text outline-none focus:border-accent"
+            />
           )}
+
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {FILTERS.map((f) => {
+              const n =
+                f.key === "open"
+                  ? openCount
+                  : f.key === "resolved"
+                    ? resolvedCount
+                    : null;
+              if (f.key === "resolved" && resolvedCount === 0) return null;
+              if (f.key === "mine" && !meName) return null;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={`rounded-pill px-2 py-0.5 text-[11px] font-bold transition ${
+                    filter === f.key
+                      ? "bg-accent text-accent-fg"
+                      : "text-text-faint hover:bg-surface-2 hover:text-text"
+                  }`}
+                >
+                  {f.label}
+                  {n != null ? ` ${n}` : ""}
+                </button>
+              );
+            })}
+            <span className="flex-1" />
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              aria-label="Sort comments"
+              className="rounded-[7px] border border-border bg-surface px-1.5 py-0.5 text-[11px] font-semibold text-text-muted outline-none focus:border-accent"
+            >
+              {SORTS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -111,76 +332,173 @@ export function VideoReview({
             <div className="px-4 py-10 text-center">
               <div
                 className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-[13px]"
-                style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+                style={{
+                  backgroundColor: "var(--accent-soft)",
+                  color: "var(--accent)",
+                }}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m10 8 6 4-6 4V8z" />
                   <rect x="2" y="4" width="20" height="16" rx="3" />
                 </svg>
               </div>
-              <p className="text-sm font-semibold text-text">No comments yet</p>
+              <p className="text-sm font-semibold text-text">
+                {roots.length === 0
+                  ? "No comments yet"
+                  : "Nothing matches this filter"}
+              </p>
               <p className="mt-1 text-xs text-text-muted">
-                Pause where you want feedback and add a comment at that moment.
+                {roots.length === 0
+                  ? "Pause where you want feedback and add a comment at that moment."
+                  : "Try a different filter or clear the search."}
               </p>
             </div>
           ) : (
-            visible.map((c) => (
-              <div
-                key={c.id}
-                onClick={() => seekTo(c.timecode, c.id)}
-                className={`flex cursor-pointer items-start gap-2.5 border-l-[3px] px-4 py-3 transition ${
-                  activeId === c.id
-                    ? "border-accent bg-accent-soft/50"
-                    : "border-transparent hover:bg-surface-2/60"
-                } ${c.resolved ? "opacity-55" : ""}`}
-              >
-                {c.timecode != null ? (
-                  <span
-                    className="mt-0.5 shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-extrabold tabular-nums text-white"
-                    style={{ backgroundColor: c.resolved ? "var(--border-strong)" : "var(--accent)" }}
+            visible.map((c) => {
+              const replies = repliesOf.get(c.id) ?? [];
+              return (
+                <div
+                  key={c.id}
+                  className={`border-l-[3px] transition ${
+                    activeId === c.id
+                      ? "border-accent bg-accent-soft/40"
+                      : "border-transparent"
+                  } ${c.resolved ? "opacity-55" : ""}`}
+                >
+                  <div
+                    onClick={() => seekTo(c.timecode, c.id)}
+                    className="flex cursor-pointer items-start gap-2.5 px-3 py-3 hover:bg-surface-2/60"
                   >
-                    {fmt(c.timecode)}
-                  </span>
-                ) : (
-                  <span className="mt-0.5 h-5 w-12 shrink-0" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-bold text-text">{c.author}</span>
-                    <span
-                      className="rounded-pill px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                      style={
-                        c.isClient
-                          ? { backgroundColor: "var(--h-cyan)", color: "#fff" }
-                          : { backgroundColor: "var(--surface-2)", color: "var(--text-muted)" }
-                      }
-                    >
-                      {c.isClient ? "Client" : "Studio"}
-                    </span>
-                    <span className="ml-auto text-[11px] font-semibold text-text-faint">
-                      {timeAgo(c.created_at)}
-                    </span>
+                    {c.timecode != null ? (
+                      <span
+                        className="mt-0.5 shrink-0 rounded-pill px-1.5 py-0.5 text-[10px] font-extrabold tabular-nums text-white"
+                        style={{
+                          backgroundColor: c.resolved
+                            ? "var(--border-strong)"
+                            : "var(--accent)",
+                        }}
+                      >
+                        {fmtTimecode(c.timecode)}
+                      </span>
+                    ) : (
+                      <span className="mt-0.5 h-5 w-12 shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[13px] font-bold text-text">
+                          {c.author}
+                        </span>
+                        <span
+                          className="rounded-pill px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                          style={
+                            c.isClient
+                              ? { backgroundColor: "var(--h-cyan)", color: "#fff" }
+                              : {
+                                  backgroundColor: "var(--surface-2)",
+                                  color: "var(--text-muted)",
+                                }
+                          }
+                        >
+                          {c.isClient ? "Client" : "Studio"}
+                        </span>
+                        {c.drawing && (
+                          <span
+                            title="Has a drawing on the frame"
+                            className="text-text-faint"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                              <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                            </svg>
+                          </span>
+                        )}
+                        <span className="ml-auto shrink-0 text-[11px] font-semibold text-text-faint">
+                          {c.pinNumber ? `#${c.pinNumber} · ` : ""}
+                          {timeAgo(c.created_at)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
+                        {c.body}
+                      </p>
+                      <div className="mt-1.5 flex items-center gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReplyTo(replyTo?.id === c.id ? null : c);
+                            setReplyText("");
+                          }}
+                          className="text-[11px] font-bold text-text-faint transition hover:text-accent"
+                        >
+                          Reply
+                          {replies.length > 0 ? ` (${replies.length})` : ""}
+                        </button>
+                        {canResolve && onResolve && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onResolve(c.id, !c.resolved);
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-text-faint transition hover:text-green"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                            {c.resolved ? "Resolved · undo" : "Resolve"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
-                    {c.body}
-                  </p>
-                  {canResolve && onResolve && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onResolve(c.id, !c.resolved);
-                      }}
-                      className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-text-faint transition hover:text-green"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
-                      {c.resolved ? "Resolved · undo" : "Resolve"}
-                    </button>
+
+                  {replies.length > 0 && (
+                    <div className="ml-[52px] border-l border-border pl-3">
+                      {replies.map((r) => (
+                        <div key={r.id} className="py-2 pr-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[12px] font-bold text-text">
+                              {r.author}
+                            </span>
+                            <span className="ml-auto text-[10px] font-semibold text-text-faint">
+                              {timeAgo(r.created_at)}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-text-muted">
+                            {r.body}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {replyTo?.id === c.id && !disabled && (
+                    <div className="ml-[52px] pb-3 pr-3">
+                      <textarea
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        placeholder={`Reply to ${c.author}…`}
+                        autoFocus
+                        className="min-h-[52px] w-full rounded-[10px] border border-border bg-bg px-2.5 py-1.5 text-[13px] text-text outline-none focus:border-accent"
+                      />
+                      <div className="mt-1.5 flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setReplyTo(null)}
+                          className="text-[11px] font-semibold text-text-faint hover:text-text"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={postReply}
+                          disabled={sending || !replyText.trim()}
+                          className="rounded-[8px] bg-accent px-2.5 py-1 text-[11px] font-bold text-accent-fg transition hover:bg-accent-strong disabled:opacity-50"
+                        >
+                          {sending ? "Posting…" : "Reply"}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -189,28 +507,49 @@ export function VideoReview({
           {disabled && disabledHint ? (
             <p
               className="mb-2 rounded-[8px] px-2.5 py-1.5 text-[12px] font-semibold"
-              style={{ backgroundColor: "var(--h-amber-bg)", color: "var(--h-amber)" }}
+              style={{
+                backgroundColor: "var(--h-amber-bg)",
+                color: "var(--h-amber)",
+              }}
             >
               {disabledHint}
             </p>
           ) : (
             <div className="mb-2 flex items-center justify-between gap-2">
               <span
-                className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[12px] font-bold tabular-nums"
-                style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+                className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[11px] font-bold tabular-nums"
+                style={{
+                  backgroundColor: "var(--accent-soft)",
+                  color: "var(--accent)",
+                }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 7v5l3 2" />
                 </svg>
-                at {fmt(pending ?? currentTime)}
+                {fmtTimecode(pending ?? currentTime)}
               </span>
-              <button
-                onClick={captureHere}
-                className="text-[11px] font-semibold text-text-muted transition hover:text-text"
-              >
-                Pin to current frame
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => (drawMode ? setDrawMode(false) : startDrawing())}
+                  className={`inline-flex items-center gap-1 text-[11px] font-bold transition ${
+                    drawMode ? "text-accent" : "text-text-muted hover:text-text"
+                  }`}
+                  title="Draw on this frame"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                  </svg>
+                  {draft ? "Drawing added" : "Draw"}
+                </button>
+                <button
+                  onClick={() => captureHere()}
+                  className="text-[11px] font-semibold text-text-muted transition hover:text-text"
+                >
+                  Pin here
+                </button>
+              </div>
             </div>
           )}
           <textarea

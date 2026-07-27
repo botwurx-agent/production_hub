@@ -4,11 +4,15 @@ import { PinCanvas } from "@/components/review/pin-canvas";
 import { VideoReview } from "@/components/review/video-review";
 import { DocSurfaceView } from "@/components/review/doc-surface";
 import type { DocSurface, DocShotMedia, PortalComment } from "@/lib/review-links";
+import type { Drawing } from "@/lib/review-drawing";
 
 // A comment anchor: an image pin (percent coords) OR a video timecode (seconds).
 export type ShotAnchor = {
   pin?: { x: number; y: number } | null;
   timecode?: number | null;
+  // Threaded reply target, and a drawing over the frame.
+  parentId?: string | null;
+  drawing?: Drawing | null;
 };
 
 // Review canvas for an AI pipeline shot. If the shot has a playable take video,
@@ -45,7 +49,13 @@ export function AiShotReviewCanvas({
           disabled={disabled}
           disabledHint={disabledHint}
           wide={wide}
-          onPost={(text, timecode) => onPost(text, { timecode })}
+          onPost={(text, timecode, extra) =>
+            onPost(text, {
+              timecode,
+              parentId: extra?.parentId ?? null,
+              drawing: extra?.drawing ?? null,
+            })
+          }
           onResolve={onResolve}
         />
       </div>

@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ReviewLink } from "@/lib/database.types";
 import type { ApprovalStatus } from "@/lib/database.types";
+import { normalizeDrawing, type Drawing } from "@/lib/review-drawing";
 
 export function generateReviewToken(): string {
   return randomBytes(24).toString("base64url");
@@ -39,6 +40,10 @@ export type PortalComment = {
   // Video review: seconds into the timeline this comment is tied to.
   timecode: number | null;
   resolved: boolean;
+  // Threading: a reply hangs off its parent and inherits the parent's moment.
+  parentId: string | null;
+  // Freehand annotation drawn over the frame this comment is pinned to.
+  drawing: Drawing | null;
 };
 
 export type PortalVersion = {
@@ -109,7 +114,7 @@ export async function gatherReview(
       service
         .from("review_comments")
         .select(
-          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at"
+          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing"
         )
         .in("version_id", versionIds)
         .order("created_at", { ascending: true }),
@@ -139,6 +144,8 @@ export async function gatherReview(
         y: c.pos_y ?? null,
         timecode: c.timecode ?? null,
         resolved: Boolean(c.resolved_at),
+        parentId: c.parent_id ?? null,
+        drawing: normalizeDrawing(c.drawing),
       };
     });
 
@@ -491,7 +498,7 @@ export async function gatherDocReview(
     service
       .from("review_comments")
       .select(
-        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at"
+        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing"
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
@@ -519,6 +526,8 @@ export async function gatherDocReview(
       y: c.pos_y ?? null,
       timecode: c.timecode ?? null,
       resolved: Boolean(c.resolved_at),
+      parentId: c.parent_id ?? null,
+      drawing: normalizeDrawing(c.drawing),
     };
   });
 

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeDrawing } from "@/lib/review-drawing";
 import { requireStudioContext } from "@/lib/studio";
 import { isDocKind, type DocKind } from "@/lib/review-links";
 import {
@@ -124,7 +125,9 @@ export async function addDocReviewCommentAt(
   targetId: string,
   body: string,
   pin?: { x: number; y: number } | null,
-  timecode?: number | null
+  timecode?: number | null,
+  parentId?: string | null,
+  drawing?: unknown
 ): Promise<DocReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -132,8 +135,22 @@ export async function addDocReviewCommentAt(
   if (!isDocKind(kind)) return { error: "Unknown document type." };
   const supabase = createClient();
 
-  const hasPin = pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
-  const hasTime = timecode != null && Number.isFinite(timecode);
+  // A reply hangs off its parent (same doc target) and never nests further.
+  let parent: string | null = null;
+  if (parentId) {
+    const { data: p } = await supabase
+      .from("review_comments")
+      .select("id, target_type, target_id, parent_id")
+      .eq("id", parentId)
+      .maybeSingle();
+    if (!p || p.target_type !== kind || p.target_id !== targetId) {
+      return { error: "That comment is not part of this review." };
+    }
+    parent = p.parent_id ?? p.id;
+  }
+
+  const hasPin = !parent && pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
+  const hasTime = !parent && timecode != null && Number.isFinite(timecode);
   let pinNumber: number | null = null;
   let posX: number | null = null;
   let posY: number | null = null;
@@ -166,6 +183,8 @@ export async function addDocReviewCommentAt(
     pos_x: posX,
     pos_y: posY,
     timecode: time,
+    parent_id: parent,
+    drawing: parent ? null : normalizeDrawing(drawing),
   });
   if (error) return { error: error.message };
   revalidatePath(`/projects/${projectId}/review`);

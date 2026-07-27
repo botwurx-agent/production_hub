@@ -936,6 +936,41 @@ the in-app review modal (review-modal.tsx) only gets one version's signed URL, s
 compare there needs the parent to sign all versions (deferred); surfacing due/overdue
 on the internal Review page is also still open.
 
+### Frame.io-grade video review (migration 0067) — BUILT
+The /r client portal (and every internal surface that reuses the same canvas)
+now matches or beats Frame.io on the video review experience. All of it lives in
+the SHARED player + rail, so the client portal, the in-app ReviewModal, the AI
+shot review, and the master-cut review all gained it at once.
+- Player (components/review/video-player.tsx): playback speed (0.25-2x), loop,
+  volume slider, real broadcast timecode HH:MM:SS:FF (click to toggle to
+  seconds), scrub-bar hover preview timecode, J/K/L shuttle + arrows + , / .
+  frame step + M mute + F fullscreen, and a keyboard-shortcut popover. fmtTimecode
+  is the new export; fmtTime (decimal seconds) stays for tight chips.
+- DRAWN ANNOTATIONS (the Frame.io signature): pause, hit Draw, scribble on the
+  frame, then write the comment. components/review/draw-canvas.tsx is the
+  draw/replay layer (pointer capture, DPR-aware, ResizeObserver); lib/review-
+  drawing.ts is the model. Strokes are stored NORMALIZED (0..1 of the media box)
+  so a drawing made on a laptop replays correctly on a phone or in fullscreen,
+  and line weight scales with the box. normalizeDrawing() is the trust boundary
+  for the PUBLIC portal: whitelists the pen colour (no arbitrary string into
+  canvas strokeStyle), clamps size 1-24 and every coord to 0..1, caps 60 strokes
+  x 400 points, rejects junk. Selecting a comment replays its drawing.
+- THREADED REPLIES: review_comments.parent_id (self-FK, cascade). One level
+  only: a reply inherits the parent's moment and carries no anchor/drawing of
+  its own, enforced server-side (`!parent &&` on the pin/time branches). Every
+  comment action validates the parent belongs to the same version/doc target
+  before accepting, so a token can't graft a reply onto another review.
+- Rail: filter (All / Open / Resolved / Mine), sort (Timecode / Newest /
+  Oldest), search across a thread and its replies, comment numbers (#N), and a
+  drawing badge. "Mine" keys off the reviewer's typed name in the portal.
+- Actions all gained (parentId, drawing): submitClientComment + submitDocComment
+  (public, service-role) and addReviewCommentAt + addDocReviewCommentAt
+  (internal, RLS). PortalComment gained parentId + drawing, so every loader
+  (review-links, project-data, doc-review-data) selects the two new columns.
+- NOT built: comment attachments, emoji reactions, range (in/out) comments, CC
+  captions, quality switching, per-comment @mentions. Range comments are the
+  most likely next one.
+
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
 pending the FreshBooks-vs-Melio decision; do not extend it until confirmed.

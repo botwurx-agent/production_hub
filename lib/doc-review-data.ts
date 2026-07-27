@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ApprovalStatus } from "@/lib/database.types";
+import { normalizeDrawing } from "@/lib/review-drawing";
 import {
   loadDocSurface,
   isDocKind,
@@ -154,7 +155,7 @@ export async function loadDocReviewDetail(
     supabase
       .from("review_comments")
       .select(
-        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at"
+        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing"
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
@@ -182,6 +183,8 @@ export async function loadDocReviewDetail(
       y: c.pos_y ?? null,
       timecode: c.timecode ?? null,
       resolved: Boolean(c.resolved_at),
+      parentId: c.parent_id ?? null,
+      drawing: normalizeDrawing(c.drawing),
     };
   });
 

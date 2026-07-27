@@ -1,5 +1,7 @@
 "use client";
 
+import { normalizeDrawing, type Drawing } from "@/lib/review-drawing";
+
 import Link from "next/link";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -72,6 +74,8 @@ export function CutReviewView({
       y: c.pos_y,
       timecode: c.timecode,
       resolved: Boolean(c.resolved_at),
+      parentId: c.parent_id ?? null,
+      drawing: normalizeDrawing(c.drawing),
     };
   }
   const portalComments = version.comments.map(toPortal);
@@ -82,8 +86,20 @@ export function CutReviewView({
     router.refresh();
     return true;
   }
-  async function postTimed(text: string, timecode: number): Promise<boolean> {
-    const res = await addReviewCommentAt(projectId, version.id, text, null, timecode);
+  async function postTimed(
+    text: string,
+    timecode: number,
+    extra?: { parentId?: string | null; drawing?: Drawing | null }
+  ): Promise<boolean> {
+    const res = await addReviewCommentAt(
+      projectId,
+      version.id,
+      text,
+      null,
+      timecode,
+      extra?.parentId ?? null,
+      extra?.drawing ?? null
+    );
     if (res?.error) return false;
     router.refresh();
     return true;

@@ -86,7 +86,7 @@ export async function loadProjectAssets(
       supabase
         .from("review_comments")
         .select(
-          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pos_x, pos_y, timecode, resolved_at"
+          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing"
         )
         .in("version_id", versionIds),
       supabase

@@ -11,6 +11,8 @@ export type VersionComment = {
   pos_y: number | null;
   timecode: number | null;
   resolved_at: string | null;
+  parent_id: string | null;
+  drawing: unknown;
 };
 
 export type VersionApproval = {

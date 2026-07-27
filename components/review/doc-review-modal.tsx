@@ -63,7 +63,9 @@ export function DocReviewModal({
       targetId,
       text,
       anchor.pin ?? null,
-      anchor.timecode ?? null
+      anchor.timecode ?? null,
+      anchor.parentId ?? null,
+      anchor.drawing ?? null
     );
     if (res?.error) return false;
     await reload();

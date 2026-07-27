@@ -7,6 +7,7 @@ import { DueBanner } from "@/components/review/due-banner";
 import { VersionCompare } from "@/components/review/version-compare";
 import { fileSize, shortDate, timeAgo } from "@/lib/format";
 import { PinReview } from "@/components/review/pin-review";
+import type { Drawing } from "@/lib/review-drawing";
 import { VideoReview } from "@/components/review/video-review";
 import {
   submitClientComment,
@@ -87,7 +88,11 @@ export function ClientReview({
   }
 
   // Video post handler: attaches a timecode instead of an (x,y) pin.
-  async function postTimed(text: string, timecode: number): Promise<boolean> {
+  async function postTimed(
+    text: string,
+    timecode: number,
+    extra?: { parentId?: string | null; drawing?: Drawing | null }
+  ): Promise<boolean> {
     if (!current) return false;
     if (!name.trim()) {
       setError("Add your name first.");
@@ -100,7 +105,9 @@ export function ClientReview({
       name,
       text,
       null,
-      timecode
+      timecode,
+      extra?.parentId ?? null,
+      extra?.drawing ?? null
     );
     if (res?.error) {
       setError(res.error);
@@ -319,6 +326,7 @@ export function ClientReview({
             disabled={!name.trim()}
             disabledHint="Add your name above to comment."
             wide
+            meName={name.trim() || null}
             onPost={postTimed}
             onResolve={resolve}
           />
