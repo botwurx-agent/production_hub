@@ -75,6 +75,7 @@ export function VideoReview({
 }) {
   const playerRef = useRef<ScrubVideoHandle>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [pending, setPending] = useState<number | null>(null);
   // Out-point of a range comment being composed (in-point is `pending`).
@@ -215,20 +216,30 @@ export function VideoReview({
   }
 
   // Inserts at the caret rather than appending, so an emoji can go mid-sentence.
-  function insertEmoji(e: string) {
-    const el = textRef.current;
+  // Shared by the main composer and the reply composer.
+  function insertAtCaret(
+    el: HTMLTextAreaElement | null,
+    value: string,
+    emoji: string,
+    set: (next: string) => void
+  ) {
     if (!el) {
-      setText((t) => t + e);
+      set(value + emoji);
       return;
     }
-    const start = el.selectionStart ?? text.length;
-    const end = el.selectionEnd ?? text.length;
-    const next = text.slice(0, start) + e + text.slice(end);
-    setText(next);
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    set(value.slice(0, start) + emoji + value.slice(end));
     requestAnimationFrame(() => {
       el.focus();
-      el.setSelectionRange(start + e.length, start + e.length);
+      el.setSelectionRange(start + emoji.length, start + emoji.length);
     });
+  }
+  function insertEmoji(e: string) {
+    insertAtCaret(textRef.current, text, e, setText);
+  }
+  function insertReplyEmoji(e: string) {
+    insertAtCaret(replyRef.current, replyText, e, setReplyText);
   }
 
   async function postReply() {
@@ -628,33 +639,141 @@ export function VideoReview({
                   {replies.length > 0 && (
                     <div className="ml-[52px] border-l border-border pl-3">
                       {replies.map((r) => (
-                        <div key={r.id} className="py-2 pr-3">
+                        <div
+                          key={r.id}
+                          onClick={(e) => e.stopPropagation()}
+                          className="py-2 pr-3"
+                        >
                           <div className="flex items-center gap-1.5">
                             <span className="text-[12px] font-bold text-text">
                               {r.author}
+                            </span>
+                            <span
+                              className="rounded-pill px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                              style={
+                                r.isClient
+                                  ? { backgroundColor: "var(--h-cyan)", color: "#fff" }
+                                  : {
+                                      backgroundColor: "var(--surface-2)",
+                                      color: "var(--text-muted)",
+                                    }
+                              }
+                            >
+                              {r.isClient ? "Client" : "Studio"}
                             </span>
                             <span className="ml-auto text-[10px] font-semibold text-text-faint">
                               {timeAgo(r.created_at)}
                             </span>
                           </div>
-                          <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-text-muted">
-                            {r.body}
-                          </p>
+
+                          {editingId === r.id ? (
+                            <div>
+                              <textarea
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                autoFocus
+                                className="mt-1 min-h-[48px] w-full rounded-[10px] border border-border bg-bg px-2.5 py-1.5 text-[12px] text-text outline-none focus:border-accent"
+                              />
+                              <div className="mt-1.5 flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => setEditingId(null)}
+                                  className="text-[11px] font-semibold text-text-faint hover:text-text"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => saveEdit(r.id)}
+                                  disabled={sending || !editText.trim()}
+                                  className="rounded-[8px] bg-accent px-2.5 py-1 text-[11px] font-bold text-accent-fg transition hover:bg-accent-strong disabled:opacity-50"
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-text-muted">
+                              {r.body}
+                              {r.editedAt && (
+                                <span className="ml-1 text-[10px] font-semibold text-text-faint">
+                                  (edited)
+                                </span>
+                              )}
+                            </p>
+                          )}
+
+                          {onReact && (
+                            <CommentReactions
+                              reactions={r.reactions}
+                              disabled={disabled}
+                              onToggle={(emoji) => onReact(r.id, emoji)}
+                            />
+                          )}
+
+                          {isMine(r) && (onEdit || onDelete) && (
+                            <div className="mt-1 flex items-center gap-3">
+                              {onEdit && editingId !== r.id && (
+                                <button
+                                  onClick={() => {
+                                    setEditingId(r.id);
+                                    setEditText(r.body);
+                                  }}
+                                  className="text-[10px] font-bold text-text-faint transition hover:text-accent"
+                                >
+                                  Edit
+                                </button>
+                              )}
+                              {onDelete &&
+                                (confirmDelete === r.id ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={async () => {
+                                        await onDelete(r.id);
+                                        setConfirmDelete(null);
+                                      }}
+                                      className="rounded-[6px] bg-red px-1.5 py-0.5 text-[10px] font-bold text-white"
+                                    >
+                                      Delete
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmDelete(null)}
+                                      className="text-[10px] font-semibold text-text-faint hover:text-text"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmDelete(r.id)}
+                                    className="text-[10px] font-bold text-text-faint transition hover:text-red"
+                                  >
+                                    Delete
+                                  </button>
+                                ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {replyTo?.id === c.id && !disabled && (
+                  {replyTo?.id === c.id && (
                     <div className="ml-[52px] pb-3 pr-3">
                       <textarea
+                        ref={replyRef}
                         value={replyText}
+                        disabled={disabled}
                         onChange={(e) => setReplyText(e.target.value)}
-                        placeholder={`Reply to ${c.author}…`}
+                        placeholder={
+                          disabled
+                            ? (disabledHint ?? "Add your name to reply.")
+                            : `Reply to ${c.author}…`
+                        }
                         autoFocus
-                        className="min-h-[52px] w-full rounded-[10px] border border-border bg-bg px-2.5 py-1.5 text-[13px] text-text outline-none focus:border-accent"
+                        className="min-h-[52px] w-full rounded-[10px] border border-border bg-bg px-2.5 py-1.5 text-[13px] text-text outline-none focus:border-accent disabled:opacity-60"
                       />
-                      <div className="mt-1.5 flex items-center justify-end gap-2">
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <EmojiPicker onPick={insertReplyEmoji} />
+                        <span className="flex-1" />
                         <button
                           onClick={() => setReplyTo(null)}
                           className="text-[11px] font-semibold text-text-faint hover:text-text"
@@ -663,7 +782,7 @@ export function VideoReview({
                         </button>
                         <button
                           onClick={postReply}
-                          disabled={sending || !replyText.trim()}
+                          disabled={disabled || sending || !replyText.trim()}
                           className="rounded-[8px] bg-accent px-2.5 py-1 text-[11px] font-bold text-accent-fg transition hover:bg-accent-strong disabled:opacity-50"
                         >
                           {sending ? "Posting…" : "Reply"}

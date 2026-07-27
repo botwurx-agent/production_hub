@@ -1026,9 +1026,18 @@ shot review, and the master-cut review all gained it at once.
     action validates against. lib/review-reactions-load.ts rolls rows up per
     comment; loadProjectAssets/gatherReview/gatherDocReview take the viewer id
     (user id internally, cookie key publicly) to compute `mine`.
+- REPLIES ARE FIRST-CLASS: the reply composer has its own EmojiPicker (the
+  caret-insert helper was generalised to insertAtCaret and is shared by both
+  composers), and a reply carries reactions + edit/delete + an "(edited)"
+  marker + a Client/Studio badge, same as a root comment. The server needed no
+  change: a reply always carries the parent's version_id (or doc target), so
+  the reaction and edit ownership checks already covered it.
+- Second instance of the same "hidden when gated" bug, also fixed: the REPLY
+  composer was `replyTo?.id === c.id && !disabled`, so clicking Reply before
+  typing a name silently did nothing. It now renders inert with the gate
+  message as its placeholder.
 - NOT built: comment attachments (a paid-tier question, per the operator), CC
-  captions, per-comment @mentions, emoji in the REPLY composer (main composer
-  only), reactions on replies.
+  captions, per-comment @mentions.
 
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
