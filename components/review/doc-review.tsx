@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PinCanvas } from "@/components/review/pin-canvas";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { DueBanner } from "@/components/review/due-banner";
 import { DocSurfaceView } from "@/components/review/doc-surface";
 import {
@@ -119,9 +120,12 @@ export function DocReview({
                 : `Click anywhere on the ${noun} to leave a pinned comment, then approve or request changes.`}
             </p>
           </div>
-          <span className="shrink-0 rounded-pill border border-border-strong px-3 py-1 text-xs font-bold uppercase tracking-wide text-text-muted">
-            {noun}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="rounded-pill border border-border-strong px-3 py-1 text-xs font-bold uppercase tracking-wide text-text-muted">
+              {noun}
+            </span>
+            <ThemeToggle />
+          </div>
         </div>
       </div>
 

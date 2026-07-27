@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { submitBatchComment, setBatchMark } from "@/app/rb/[token]/actions";
 import { ScrubVideo, fmtTime, type ScrubVideoHandle } from "@/components/review/video-player";
 import type { BatchReviewData, BatchComment, BatchMark } from "@/lib/batch-review";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const fmt = fmtTime;
 
@@ -119,9 +120,12 @@ export function BatchReview({ token, data }: { token: string; data: BatchReviewD
     <div className="mx-auto max-w-[1500px] px-4 py-6 sm:py-10">
       {/* Header + name */}
       <div className="mb-5 rounded-[16px] border border-border bg-surface p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-text-faint">
-          {data.shotTitle ? `${data.shotTitle} · ` : ""}Which one?
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-faint">
+            {data.shotTitle ? `${data.shotTitle} · ` : ""}Which one?
+          </p>
+          <ThemeToggle />
+        </div>
         <h1 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-text">{data.title}</h1>
         <p className="mt-1 text-sm text-text-muted">
           {items.length} option{items.length === 1 ? "" : "s"}. Play each, star the ones you like, mark your

@@ -7,6 +7,7 @@ import { DueBanner } from "@/components/review/due-banner";
 import { VersionCompare } from "@/components/review/version-compare";
 import { fileSize, shortDate, timeAgo } from "@/lib/format";
 import { PinReview } from "@/components/review/pin-review";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Drawing } from "@/lib/review-drawing";
 import { VideoReview } from "@/components/review/video-review";
 import { reviewerKey } from "@/lib/reviewer-key";
@@ -371,6 +372,7 @@ export function ClientReview({
               <span className="rounded-pill border border-border-strong px-3 py-1 text-xs font-bold text-text-muted">
                 Version {viewing.version_number}
               </span>
+              <ThemeToggle />
             </div>
           )}
         </div>
