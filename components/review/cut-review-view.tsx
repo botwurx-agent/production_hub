@@ -14,6 +14,9 @@ import { timeAgo } from "@/lib/format";
 import {
   addReviewCommentAt,
   resolveReviewComment,
+  editReviewComment,
+  deleteReviewComment,
+  toggleReviewReaction,
   setVersionApproval,
 } from "@/app/(app)/projects/[id]/review-actions";
 import {
@@ -76,6 +79,11 @@ export function CutReviewView({
       resolved: Boolean(c.resolved_at),
       timecodeEnd: c.timecode_end ?? null,
       parentId: c.parent_id ?? null,
+      editedAt: c.edited_at ?? null,
+      // Internally, ownership is the author id: meKey below is the user id, so
+      // a team member can edit or delete the comments they wrote.
+      authorKey: c.author_id ?? null,
+      reactions: c.reactions ?? [],
       drawing: normalizeDrawing(c.drawing),
     };
   }
@@ -110,6 +118,25 @@ export function CutReviewView({
     router.refresh();
     return true;
   }
+  async function editComment(id: string, body: string): Promise<boolean> {
+    const res = await editReviewComment(projectId, id, body);
+    if (res?.error) return false;
+    router.refresh();
+    return true;
+  }
+  async function deleteComment(id: string): Promise<boolean> {
+    const res = await deleteReviewComment(projectId, id);
+    if (res?.error) return false;
+    router.refresh();
+    return true;
+  }
+  function react(id: string, emoji: string) {
+    start(async () => {
+      await toggleReviewReaction(projectId, id, emoji);
+      router.refresh();
+    });
+  }
+
   function resolve(id: string, resolved: boolean) {
     start(async () => {
       await resolveReviewComment(projectId, id, resolved);
@@ -193,8 +220,12 @@ export function CutReviewView({
           videoUrl={version.signedUrl as string}
           comments={portalComments}
           wide
+          meKey={currentUserId}
           onPost={postTimed}
           onResolve={resolve}
+          onEdit={editComment}
+          onDelete={deleteComment}
+          onReact={react}
         />
       ) : (
         <div className="rounded-[14px] border border-border bg-surface p-5">

@@ -2878,6 +2878,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      review_comment_reactions: {
+        Row: {
+          id: string;
+          studio_id: string;
+          comment_id: string;
+          emoji: string;
+          author_id: string | null;
+          reviewer_key: string | null;
+          reviewer_name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          comment_id: string;
+          emoji: string;
+          author_id?: string | null;
+          reviewer_key?: string | null;
+          reviewer_name?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          comment_id?: string;
+          emoji?: string;
+          author_id?: string | null;
+          reviewer_key?: string | null;
+          reviewer_name?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       review_comments: {
         Row: {
           author_id: string | null;
@@ -2898,6 +2931,8 @@ export type Database = {
           parent_id: string | null;
           drawing: Json | null;
           timecode_end: number | null;
+          author_key: string | null;
+          edited_at: string | null;
         };
         Insert: {
           author_id?: string | null;
@@ -2918,6 +2953,8 @@ export type Database = {
           parent_id?: string | null;
           drawing?: Json | null;
           timecode_end?: number | null;
+          author_key?: string | null;
+          edited_at?: string | null;
         };
         Update: {
           author_id?: string | null;
@@ -2938,6 +2975,8 @@ export type Database = {
           parent_id?: string | null;
           drawing?: Json | null;
           timecode_end?: number | null;
+          author_key?: string | null;
+          edited_at?: string | null;
         };
         Relationships: [
           {

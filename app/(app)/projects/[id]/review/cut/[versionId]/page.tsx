@@ -20,7 +20,11 @@ export default async function CutReviewPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const { assets, reviewLinkByAsset } = await loadProjectAssets(supabase, params.id);
+  const { assets, reviewLinkByAsset } = await loadProjectAssets(
+    supabase,
+    params.id,
+    ctx.userId
+  );
   const cut = assets.find((a) => a.type === "cut");
   if (!cut) notFound();
   const version = cut.versions.find((v) => v.id === params.versionId);

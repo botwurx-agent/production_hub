@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ReviewLink } from "@/lib/database.types";
 import type { ApprovalStatus } from "@/lib/database.types";
 import { normalizeDrawing, type Drawing } from "@/lib/review-drawing";
+import type { CommentReaction } from "@/lib/review-reactions";
+import { loadReactions } from "@/lib/review-reactions-load";
 
 export function generateReviewToken(): string {
   return randomBytes(24).toString("base64url");
@@ -44,6 +46,12 @@ export type PortalComment = {
   resolved: boolean;
   // Threading: a reply hangs off its parent and inherits the parent's moment.
   parentId: string | null;
+  // Set when the comment has been edited since posting.
+  editedAt: string | null;
+  // The browser key that posted it (public portal only), so a reviewer can
+  // edit or delete their own without a login.
+  authorKey: string | null;
+  reactions: CommentReaction[];
   // Freehand annotation drawn over the frame this comment is pinned to.
   drawing: Drawing | null;
 };
@@ -73,7 +81,9 @@ export type PortalData = {
 // rows tied to link.asset_id / link.studio_id.
 export async function gatherReview(
   service: SupabaseClient<Database>,
-  link: ReviewLink
+  link: ReviewLink,
+  // The visitor's browser key, so their own reactions come back marked.
+  viewerKey?: string | null
 ): Promise<PortalData | null> {
   if (!link.asset_id) return null;
   const [{ data: asset }, { data: studio }, { data: project }] =
@@ -116,7 +126,7 @@ export async function gatherReview(
       service
         .from("review_comments")
         .select(
-          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end"
+          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
         )
         .in("version_id", versionIds)
         .order("created_at", { ascending: true }),
@@ -148,9 +158,22 @@ export async function gatherReview(
         timecodeEnd: c.timecode_end ?? null,
         resolved: Boolean(c.resolved_at),
         parentId: c.parent_id ?? null,
+        editedAt: c.edited_at ?? null,
+        authorKey: c.author_key ?? null,
+        reactions: [],
         drawing: normalizeDrawing(c.drawing),
       };
     });
+
+    const reactions = await loadReactions(
+      service,
+      comments.map((c) => c.id),
+      viewerKey ?? null
+    );
+    comments = comments.map((c) => ({
+      ...c,
+      reactions: reactions.get(c.id) ?? [],
+    }));
 
     myDecision =
       (myApproval as { status?: ApprovalStatus } | null)?.status ?? null;
@@ -480,7 +503,8 @@ export async function loadDocSurface(
 
 export async function gatherDocReview(
   service: SupabaseClient<Database>,
-  link: ReviewLink
+  link: ReviewLink,
+  viewerKey?: string | null
 ): Promise<DocReviewData | null> {
   const kind = link.target_type;
   const targetId = link.target_id;
@@ -501,7 +525,7 @@ export async function gatherDocReview(
     service
       .from("review_comments")
       .select(
-        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end"
+        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
@@ -531,9 +555,19 @@ export async function gatherDocReview(
       timecodeEnd: c.timecode_end ?? null,
       resolved: Boolean(c.resolved_at),
       parentId: c.parent_id ?? null,
+      editedAt: c.edited_at ?? null,
+      authorKey: c.author_key ?? null,
+      reactions: [],
       drawing: normalizeDrawing(c.drawing),
     };
   });
+
+  const reactionMap = await loadReactions(
+    service,
+    comments.map((c) => c.id),
+    viewerKey ?? null
+  );
+  for (const c of comments) c.reactions = reactionMap.get(c.id) ?? [];
 
   const myDecision =
     (myApproval as { status?: ApprovalStatus } | null)?.status ?? null;

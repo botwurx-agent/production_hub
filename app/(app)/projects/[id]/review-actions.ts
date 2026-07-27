@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeDrawing } from "@/lib/review-drawing";
+import { REACTIONS } from "@/lib/review-reactions";
+import { reportError } from "@/lib/log";
 import { requireStudioContext } from "@/lib/studio";
 import { syncAssetStatusFromApprovals } from "@/lib/review-status";
 import type { ApprovalStatus } from "@/lib/database.types";
@@ -196,4 +198,112 @@ export async function setVersionApproval(
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/review`);
+}
+
+// Edit / delete a comment the signed-in team member wrote. RLS scopes rows to
+// the studio; the author check makes it "your own comment" rather than
+// "anyone's". Studio admins are not special-cased here on purpose: silently
+// rewriting someone else's review note is worse than asking them to.
+export async function editReviewComment(
+  projectId: string,
+  commentId: string,
+  body: string
+): Promise<ReviewState> {
+  const ctx = await requireStudioContext();
+  const text = body.trim();
+  if (!text) return { error: "Write a comment first." };
+  const supabase = createClient();
+
+  const { data: comment } = await supabase
+    .from("review_comments")
+    .select("id, author_id")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!comment) return { error: "That comment is no longer available." };
+  if (comment.author_id !== ctx.userId)
+    return { error: "You can only edit your own comment." };
+
+  const { error } = await supabase
+    .from("review_comments")
+    .update({ body: text, edited_at: new Date().toISOString() })
+    .eq("id", commentId);
+  if (error) {
+    reportError("editReviewComment", error);
+    return { error: error.message };
+  }
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/review`);
+  return null;
+}
+
+export async function deleteReviewComment(
+  projectId: string,
+  commentId: string
+): Promise<ReviewState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: comment } = await supabase
+    .from("review_comments")
+    .select("id, author_id")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!comment) return { error: "That comment is no longer available." };
+  if (comment.author_id !== ctx.userId)
+    return { error: "You can only delete your own comment." };
+
+  // Replies cascade with the parent.
+  const { error } = await supabase
+    .from("review_comments")
+    .delete()
+    .eq("id", commentId);
+  if (error) {
+    reportError("deleteReviewComment", error);
+    return { error: error.message };
+  }
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/review`);
+  return null;
+}
+
+// Toggle one emoji reaction as the signed-in team member.
+export async function toggleReviewReaction(
+  projectId: string,
+  commentId: string,
+  emoji: string
+): Promise<ReviewState> {
+  const ctx = await requireStudioContext();
+  if (!REACTIONS.includes(emoji)) return { error: "Unknown reaction." };
+  const supabase = createClient();
+
+  const { data: existing } = await supabase
+    .from("review_comment_reactions")
+    .select("id")
+    .eq("comment_id", commentId)
+    .eq("emoji", emoji)
+    .eq("author_id", ctx.userId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("review_comment_reactions")
+      .delete()
+      .eq("id", existing.id);
+  } else {
+    const { error } = await supabase
+      .from("review_comment_reactions")
+      .insert({
+        studio_id: ctx.studio.id,
+        comment_id: commentId,
+        emoji,
+        author_id: ctx.userId,
+      });
+    if (error) {
+      reportError("toggleReviewReaction", error);
+      return { error: error.message };
+    }
+  }
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/review`);
+  return null;
 }

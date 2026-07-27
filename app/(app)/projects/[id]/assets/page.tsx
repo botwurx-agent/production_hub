@@ -39,7 +39,8 @@ export default async function AssetsPage({
 
   const { assets, reviewLinkByAsset } = await loadProjectAssets(
     supabase,
-    project.id
+    project.id,
+    ctx.userId
   );
 
   // Feeds the "looks like a new version of X" nudge on upload.

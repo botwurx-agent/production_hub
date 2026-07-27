@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { assetStorage } from "@/lib/asset-storage";
+import { loadReactions } from "@/lib/review-reactions-load";
 import type {
   AssetWithVersions,
   VersionComment,
@@ -23,7 +24,9 @@ export type ProjectAssets = {
 // drift apart.
 export async function loadProjectAssets(
   supabase: SupabaseClient<Database>,
-  projectId: string
+  projectId: string,
+  // Current user, so their own reactions come back marked.
+  userId?: string | null
 ): Promise<ProjectAssets> {
   const [{ data: assetsRaw }, { data: reviewLinks }] = await Promise.all([
     supabase
@@ -86,7 +89,7 @@ export async function loadProjectAssets(
       supabase
         .from("review_comments")
         .select(
-          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end"
+          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
         )
         .in("version_id", versionIds),
       supabase
@@ -97,10 +100,15 @@ export async function loadProjectAssets(
         .eq("target_type", "version")
         .in("target_id", versionIds),
     ]);
+    const reactions = await loadReactions(
+      supabase,
+      (comments ?? []).map((c) => c.id),
+      userId ?? null
+    );
     for (const c of comments ?? []) {
       if (!c.version_id) continue;
       const list = commentsByVersion.get(c.version_id) ?? [];
-      list.push(c);
+      list.push({ ...c, reactions: reactions.get(c.id) ?? [] });
       commentsByVersion.set(c.version_id, list);
     }
     for (const a of approvals ?? []) {

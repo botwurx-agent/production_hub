@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { Metadata } from "next";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import {
@@ -45,6 +45,9 @@ export default async function ReviewPortalPage({
   }
 
   const service = createServiceClient();
+  // The visitor's browser key (set client-side on first visit), so their own
+  // reactions come back marked without any login.
+  const viewerKey = cookies().get("sf_rk")?.value ?? null;
   const link = await getValidLink(service, params.token);
   if (!link) {
     return (
@@ -62,7 +65,7 @@ export default async function ReviewPortalPage({
 
   // Doc surfaces (shot list / storyboard / moodboard) render live with pins.
   if (isDocKind(link.target_type)) {
-    const doc = await gatherDocReview(service, link);
+    const doc = await gatherDocReview(service, link, viewerKey);
     if (!doc) {
       return (
         <Centered>
@@ -78,7 +81,7 @@ export default async function ReviewPortalPage({
     return <DocReview token={params.token} data={doc} />;
   }
 
-  const data = await gatherReview(service, link);
+  const data = await gatherReview(service, link, viewerKey);
   if (!data) {
     return (
       <Centered>

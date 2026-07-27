@@ -41,7 +41,8 @@ export default async function ReviewPage({
 
   const { assets, reviewLinkByAsset } = await loadProjectAssets(
     supabase,
-    project.id
+    project.id,
+    ctx.userId
   );
   const docReviews = await loadDocReviewsForProject(supabase, project.id);
 

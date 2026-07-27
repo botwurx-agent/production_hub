@@ -997,9 +997,38 @@ shot review, and the master-cut review all gained it at once.
   height (from videoHeight) and says so. Real switching = a worker that
   ffmpeg-encodes 1080/720/540 on upload + a renditions table + HLS or a source
   picker. Scoped, not started, pending the operator's call.
-- NOT built: comment attachments (a paid-tier question, per the operator),
-  emoji REACTIONS on a comment (needs its own table; the composer palette is
-  built), CC captions, per-comment @mentions, emoji in the reply composer.
+- COMPOSER TOOLBAR FIX (was a real bug): the portal passes
+  `disabled={!name.trim()}`, and the old composer HID the Draw / Range controls
+  and the emoji picker while disabled, so on first load (before typing a name)
+  neither existed on the page. The toolbar is now always rendered below the
+  textarea, Frame.io style (timecode chip, Pin, Range, Draw, Emoji, then Post),
+  and merely inert when gated. Never hide a capability behind a gate; disable it.
+- EDIT / DELETE / REACTIONS (migration 0069). review_comments gained
+  `author_key` + `edited_at`; new table `review_comment_reactions`
+  (studio/comment/emoji/author_id|reviewer_key/reviewer_name, is_studio_member
+  RLS, UNIQUE on (comment_id, emoji, coalesce(author_id, reviewer_key)) so a
+  toggle is idempotent).
+  - AUTHORSHIP WITHOUT LOGIN: the portal has no accounts, so the typed name
+    cannot authorise an edit (anyone with the link can type any name). Instead
+    lib/reviewer-key.ts mints a random per-browser id kept in the `sf_rk`
+    COOKIE (a cookie, not localStorage, so the SERVER render can read it and
+    mark which reactions are yours on first paint). editClientComment /
+    deleteClientComment require review_link_id match + author_key match + a
+    null author_id, so a client can only touch what their own browser wrote and
+    can never edit a studio comment.
+  - Internally (RLS) editReviewComment / deleteReviewComment require
+    author_id === ctx.userId. Admins are deliberately NOT special-cased:
+    silently rewriting a colleague's review note is worse than asking them to.
+  - Deleting a comment cascades its replies (FK), and the confirm says so.
+  - Reactions render as chips under a comment (count, highlighted when yours,
+    hover shows reactor names) + an add-reaction picker;
+    lib/review-reactions.ts REACTIONS is the 7-emoji whitelist the public
+    action validates against. lib/review-reactions-load.ts rolls rows up per
+    comment; loadProjectAssets/gatherReview/gatherDocReview take the viewer id
+    (user id internally, cookie key publicly) to compute `mine`.
+- NOT built: comment attachments (a paid-tier question, per the operator), CC
+  captions, per-comment @mentions, emoji in the REPLY composer (main composer
+  only), reactions on replies.
 
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)

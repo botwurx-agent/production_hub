@@ -1,4 +1,5 @@
 import type { AssetStatus, AssetType, ApprovalStatus } from "@/lib/database.types";
+import type { CommentReaction } from "@/lib/review-reactions";
 
 export type VersionComment = {
   id: string;
@@ -14,6 +15,9 @@ export type VersionComment = {
   parent_id: string | null;
   drawing: unknown;
   timecode_end: number | null;
+  author_key: string | null;
+  edited_at: string | null;
+  reactions?: CommentReaction[];
 };
 
 export type VersionApproval = {

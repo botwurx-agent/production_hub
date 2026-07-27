@@ -9,6 +9,7 @@ import {
 } from "@/components/review/video-player";
 import { DRAW_COLORS, type Drawing } from "@/lib/review-drawing";
 import { EmojiPicker } from "@/components/review/emoji-picker";
+import { CommentReactions } from "@/components/review/comment-reactions";
 import type { PortalComment } from "@/lib/review-links";
 
 // Frame.io-grade video review: the shared ScrubVideo player (accurate scrubbing,
@@ -39,8 +40,12 @@ export function VideoReview({
   disabledHint,
   wide = false,
   meName,
+  meKey,
   onPost,
   onResolve,
+  onEdit,
+  onDelete,
+  onReact,
 }: {
   videoUrl: string;
   comments: PortalComment[];
@@ -60,6 +65,13 @@ export function VideoReview({
     }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
+  // Identity of the current viewer for edit/delete rights: the browser key in
+  // the public portal, the user id internally. A comment is editable when this
+  // matches the one that wrote it.
+  meKey?: string | null;
+  onEdit?: (id: string, body: string) => Promise<boolean>;
+  onDelete?: (id: string) => Promise<boolean>;
+  onReact?: (id: string, emoji: string) => void;
 }) {
   const playerRef = useRef<ScrubVideoHandle>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -76,6 +88,9 @@ export function VideoReview({
   const [searchOpen, setSearchOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<PortalComment | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   // Drawing state: the annotation being composed, and the saved one shown when
   // a comment is selected.
@@ -226,6 +241,21 @@ export function VideoReview({
       setReplyText("");
       setReplyTo(null);
     }
+  }
+
+  // Own comment: the portal matches the browser key, the internal surfaces
+  // pass the user id as both meKey and the comment's authorKey.
+  function isMine(c: PortalComment): boolean {
+    return Boolean(meKey && c.authorKey && c.authorKey === meKey);
+  }
+
+  async function saveEdit(id: string) {
+    const t = editText.trim();
+    if (!t || !onEdit) return;
+    setSending(true);
+    const ok = await onEdit(id, t);
+    setSending(false);
+    if (ok) setEditingId(null);
   }
 
   const railBtn =
@@ -475,9 +505,49 @@ export function VideoReview({
                           {timeAgo(c.created_at)}
                         </span>
                       </div>
-                      <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
-                        {c.body}
-                      </p>
+                      {editingId === c.id ? (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <textarea
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            autoFocus
+                            className="mt-1 min-h-[56px] w-full rounded-[10px] border border-border bg-bg px-2.5 py-1.5 text-[13px] text-text outline-none focus:border-accent"
+                          />
+                          <div className="mt-1.5 flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="text-[11px] font-semibold text-text-faint hover:text-text"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => saveEdit(c.id)}
+                              disabled={sending || !editText.trim()}
+                              className="rounded-[8px] bg-accent px-2.5 py-1 text-[11px] font-bold text-accent-fg transition hover:bg-accent-strong disabled:opacity-50"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
+                          {c.body}
+                          {c.editedAt && (
+                            <span className="ml-1 text-[10px] font-semibold text-text-faint">
+                              (edited)
+                            </span>
+                          )}
+                        </p>
+                      )}
+
+                      {onReact && (
+                        <CommentReactions
+                          reactions={c.reactions}
+                          disabled={disabled}
+                          onToggle={(emoji) => onReact(c.id, emoji)}
+                        />
+                      )}
+
                       <div className="mt-1.5 flex items-center gap-3">
                         <button
                           onClick={(e) => {
@@ -490,6 +560,53 @@ export function VideoReview({
                           Reply
                           {replies.length > 0 ? ` (${replies.length})` : ""}
                         </button>
+                        {isMine(c) && onEdit && editingId !== c.id && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingId(c.id);
+                              setEditText(c.body);
+                            }}
+                            className="text-[11px] font-bold text-text-faint transition hover:text-accent"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {isMine(c) && onDelete && (
+                          confirmDelete === c.id ? (
+                            <span
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1.5"
+                            >
+                              <button
+                                onClick={async () => {
+                                  await onDelete(c.id);
+                                  setConfirmDelete(null);
+                                }}
+                                className="rounded-[6px] bg-red px-1.5 py-0.5 text-[10px] font-bold text-white"
+                              >
+                                Delete
+                                {replies.length > 0 ? " with replies" : ""}
+                              </button>
+                              <button
+                                onClick={() => setConfirmDelete(null)}
+                                className="text-[10px] font-semibold text-text-faint hover:text-text"
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmDelete(c.id);
+                              }}
+                              className="text-[11px] font-bold text-text-faint transition hover:text-red"
+                            >
+                              Delete
+                            </button>
+                          )
+                        )}
                         {canResolve && onResolve && (
                           <button
                             onClick={(e) => {
@@ -562,7 +679,7 @@ export function VideoReview({
 
         {/* Composer */}
         <div className="border-t border-border p-3">
-          {disabled && disabledHint ? (
+          {disabled && disabledHint && (
             <p
               className="mb-2 rounded-[8px] px-2.5 py-1.5 text-[12px] font-semibold"
               style={{
@@ -572,84 +689,102 @@ export function VideoReview({
             >
               {disabledHint}
             </p>
-          ) : (
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span
-                className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[11px] font-bold tabular-nums"
-                style={{
-                  backgroundColor: "var(--accent-soft)",
-                  color: "var(--accent)",
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 2" />
-                </svg>
-                {fmtTimecode(pending ?? currentTime)}
-                {pendingEnd != null && (
-                  <>
-                    <span className="opacity-60">to</span>
-                    {fmtTimecode(pendingEnd)}
-                    <button
-                      onClick={() => setPendingEnd(null)}
-                      aria-label="Clear the out point"
-                      className="ml-0.5 opacity-60 transition hover:opacity-100"
-                    >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </>
-                )}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={setOutPoint}
-                  title="Mark the end of a stretch, so the note covers a range"
-                  className="text-[11px] font-bold text-text-muted transition hover:text-text"
-                >
-                  {pendingEnd == null ? "Set out" : "Move out"}
-                </button>
-                <button
-                  onClick={() => (drawMode ? setDrawMode(false) : startDrawing())}
-                  className={`inline-flex items-center gap-1 text-[11px] font-bold transition ${
-                    drawMode ? "text-accent" : "text-text-muted hover:text-text"
-                  }`}
-                  title="Draw on this frame"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 19l7-7 3 3-7 7-3-3z" />
-                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-                  </svg>
-                  {draft ? "Drawing added" : "Draw"}
-                </button>
-                <button
-                  onClick={() => captureHere()}
-                  className="text-[11px] font-semibold text-text-muted transition hover:text-text"
-                >
-                  Pin here
-                </button>
-              </div>
-            </div>
           )}
+
           <textarea
             ref={textRef}
             value={text}
+            disabled={disabled}
             onFocus={() => {
               if (pending == null) captureHere();
             }}
             onChange={(e) => setText(e.target.value)}
             placeholder="Comment at this moment…"
-            className="min-h-[64px] w-full rounded-[11px] border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent"
+            className="min-h-[64px] w-full rounded-[11px] border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
           />
-          <div className="mt-2 flex items-center justify-end gap-3">
-            {!disabled && <EmojiPicker onPick={insertEmoji} />}
+
+          {/* Toolbar. Always rendered, only inert when gated: hiding the tools
+              until a name is typed made drawing and emoji undiscoverable. */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className="inline-flex items-center gap-1 rounded-pill px-2 py-1 text-[11px] font-bold tabular-nums"
+              style={{
+                backgroundColor: "var(--accent-soft)",
+                color: "var(--accent)",
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+              {fmtTimecode(pending ?? currentTime)}
+              {pendingEnd != null && (
+                <>
+                  <span className="opacity-60">to</span>
+                  {fmtTimecode(pendingEnd)}
+                  <button
+                    onClick={() => setPendingEnd(null)}
+                    aria-label="Clear the out point"
+                    className="ml-0.5 opacity-60 transition hover:opacity-100"
+                  >
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </span>
+
+            <button
+              onClick={() => captureHere()}
+              disabled={disabled}
+              title="Pin the comment to the current frame"
+              aria-label="Pin to current frame"
+              className="grid h-7 w-7 place-items-center rounded-[8px] text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-40"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 17v5" />
+                <path d="M9 10.8V4h6v6.8a2 2 0 0 0 .6 1.4l1.4 1.4V17H7v-3.4l1.4-1.4a2 2 0 0 0 .6-1.4z" />
+              </svg>
+            </button>
+
+            <button
+              onClick={setOutPoint}
+              disabled={disabled}
+              title="Mark the end of a stretch, so the note covers a range"
+              className="inline-flex h-7 items-center gap-1 rounded-[8px] px-1.5 text-[11px] font-bold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-40"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 4v16M19 4v16M5 12h14" />
+              </svg>
+              {pendingEnd == null ? "Range" : "Move out"}
+            </button>
+
+            <button
+              onClick={() => (drawMode ? setDrawMode(false) : startDrawing())}
+              disabled={disabled}
+              title="Draw on this frame"
+              className={`inline-flex h-7 items-center gap-1 rounded-[8px] px-1.5 text-[11px] font-bold transition hover:bg-surface-2 disabled:opacity-40 ${
+                drawMode || draft ? "text-accent" : "text-text-muted hover:text-text"
+              }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+              </svg>
+              {draft ? "Drawing" : "Draw"}
+            </button>
+
+            <EmojiPicker onPick={insertEmoji} />
+
+            <span className="flex-1" />
+
             <button
               onClick={post}
               disabled={disabled || sending || !text.trim()}
               className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
             >
-              {sending ? "Posting…" : "Post comment"}
+              {sending ? "Posting…" : "Post"}
             </button>
           </div>
         </div>

@@ -16,6 +16,9 @@ import {
   addReviewComment,
   addReviewCommentAt,
   resolveReviewComment,
+  editReviewComment,
+  deleteReviewComment,
+  toggleReviewReaction,
   setVersionApproval,
   type ReviewState,
 } from "@/app/(app)/projects/[id]/review-actions";
@@ -98,6 +101,11 @@ export function ReviewModal({
       resolved: Boolean(c.resolved_at),
       timecodeEnd: c.timecode_end ?? null,
       parentId: c.parent_id ?? null,
+      editedAt: c.edited_at ?? null,
+      // Internally, ownership is the author id: meKey below is the user id, so
+      // a team member can edit or delete the comments they wrote.
+      authorKey: c.author_id ?? null,
+      reactions: c.reactions ?? [],
       drawing: normalizeDrawing(c.drawing),
     };
   }
@@ -135,6 +143,25 @@ export function ReviewModal({
     router.refresh();
     return true;
   }
+  async function editComment(id: string, body: string): Promise<boolean> {
+    const res = await editReviewComment(projectId, id, body);
+    if (res?.error) return false;
+    router.refresh();
+    return true;
+  }
+  async function deleteComment(id: string): Promise<boolean> {
+    const res = await deleteReviewComment(projectId, id);
+    if (res?.error) return false;
+    router.refresh();
+    return true;
+  }
+  function react(id: string, emoji: string) {
+    start(async () => {
+      await toggleReviewReaction(projectId, id, emoji);
+      router.refresh();
+    });
+  }
+
   function resolve(id: string, resolved: boolean) {
     start(async () => {
       await resolveReviewComment(projectId, id, resolved);
@@ -203,8 +230,12 @@ export function ReviewModal({
           <VideoReview
             videoUrl={version.signedUrl as string}
             comments={portalComments}
+            meKey={currentUserId}
             onPost={postTimed}
             onResolve={resolve}
+            onEdit={editComment}
+            onDelete={deleteComment}
+            onReact={react}
           />
         ) : (
           <div className="border-t border-border pt-4">

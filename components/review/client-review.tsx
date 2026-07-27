@@ -9,8 +9,12 @@ import { fileSize, shortDate, timeAgo } from "@/lib/format";
 import { PinReview } from "@/components/review/pin-review";
 import type { Drawing } from "@/lib/review-drawing";
 import { VideoReview } from "@/components/review/video-review";
+import { reviewerKey } from "@/lib/reviewer-key";
 import {
   submitClientComment,
+  editClientComment,
+  deleteClientComment,
+  toggleClientReaction,
   submitClientDecision,
   resolveClientComment,
 } from "@/app/r/[token]/actions";
@@ -29,6 +33,9 @@ export function ClientReview({
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
+  // Identifies this browser so the reviewer can edit/delete their own comments
+  // and see which reactions are theirs, with no login.
+  const [myKey, setMyKey] = useState("");
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
@@ -39,6 +46,9 @@ export function ClientReview({
       const saved = localStorage.getItem(NAME_KEY);
       if (saved) setName(saved);
     } catch {}
+    // Creates the cookie on first visit; the server reads it on later renders
+    // to mark which reactions are this visitor's.
+    setMyKey(reviewerKey());
   }, []);
 
   function rememberName(v: string) {
@@ -88,6 +98,32 @@ export function ClientReview({
   }
 
   // Video post handler: attaches a timecode instead of an (x,y) pin.
+  async function editComment(id: string, body: string): Promise<boolean> {
+    const res = await editClientComment(token, id, myKey, body);
+    if (res?.error) {
+      setError(res.error);
+      return false;
+    }
+    router.refresh();
+    return true;
+  }
+  async function deleteComment(id: string): Promise<boolean> {
+    const res = await deleteClientComment(token, id, myKey);
+    if (res?.error) {
+      setError(res.error);
+      return false;
+    }
+    router.refresh();
+    return true;
+  }
+  function react(id: string, emoji: string) {
+    start(async () => {
+      const res = await toggleClientReaction(token, id, emoji, myKey, name);
+      if (res?.error) setError(res.error);
+      router.refresh();
+    });
+  }
+
   async function postTimed(
     text: string,
     timecode: number,
@@ -112,7 +148,8 @@ export function ClientReview({
       timecode,
       extra?.parentId ?? null,
       extra?.drawing ?? null,
-      extra?.timecodeEnd ?? null
+      extra?.timecodeEnd ?? null,
+      myKey
     );
     if (res?.error) {
       setError(res.error);
@@ -332,8 +369,12 @@ export function ClientReview({
             disabledHint="Add your name above to comment."
             wide
             meName={name.trim() || null}
+            meKey={myKey || null}
             onPost={postTimed}
             onResolve={resolve}
+            onEdit={editComment}
+            onDelete={deleteComment}
+            onReact={react}
           />
           {metaRow}
           {decision}

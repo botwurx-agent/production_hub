@@ -5,6 +5,7 @@ import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import { allowPublic } from "@/lib/rate-limit";
 import { getValidLink, isDocKind } from "@/lib/review-links";
 import { normalizeDrawing } from "@/lib/review-drawing";
+import { REACTIONS } from "@/lib/review-reactions";
 import { createNotification } from "@/lib/notifications";
 import { syncAssetStatusFromApprovals } from "@/lib/review-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -77,7 +78,9 @@ export async function submitClientComment(
   parentId?: string | null,
   drawing?: unknown,
   // Out-point for a range comment; timecode is the in-point.
-  timecodeEnd?: number | null
+  timecodeEnd?: number | null,
+  // Random per-browser id, required later to edit or delete this comment.
+  authorKey?: string | null
 ): Promise<PortalState> {
   if (!allowPublic("r-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -154,6 +157,7 @@ export async function submitClientComment(
     timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
+    author_key: authorKey?.trim() || null,
   });
   if (error) return { error: error.message };
 
@@ -296,7 +300,8 @@ export async function submitDocComment(
   parentId?: string | null,
   drawing?: unknown,
   // Out-point for a range comment; timecode is the in-point.
-  timecodeEnd?: number | null
+  timecodeEnd?: number | null,
+  authorKey?: string | null
 ): Promise<PortalState> {
   if (!allowPublic("r-doc-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -378,6 +383,7 @@ export async function submitDocComment(
     timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
+    author_key: authorKey?.trim() || null,
   });
   if (error) return { error: error.message };
 
@@ -488,6 +494,153 @@ export async function submitDocDecision(
     title: `${reviewer} ${label}`,
     href: `/projects/${link.project_id}`,
   });
+  revalidatePath(`/r/${token}`);
+  revalidatePath(`/projects/${link.project_id}`);
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Edit / delete / react, for comments made through this link.
+//
+// The portal has no login, so authorship is proved by `author_key`: a random id
+// the visitor's browser generated and stored locally. Requiring it means a
+// reviewer can only touch comments their own browser posted, which is strictly
+// stronger than trusting the typed name (anyone with the link can type any
+// name). Comments from the studio side (author_id set) are never editable here.
+async function ownedComment(
+  service: ReturnType<typeof createServiceClient>,
+  link: { id: string },
+  commentId: string,
+  authorKey: string
+) {
+  const { data } = await service
+    .from("review_comments")
+    .select("id, review_link_id, author_key, author_id")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!data) return null;
+  if (data.review_link_id !== link.id) return null;
+  if (data.author_id) return null;
+  if (!data.author_key || data.author_key !== authorKey) return null;
+  return data;
+}
+
+export async function editClientComment(
+  token: string,
+  commentId: string,
+  authorKey: string,
+  body: string
+): Promise<PortalState> {
+  if (!allowPublic("r-edit"))
+    return { error: "Too many requests. Please wait a moment and try again." };
+  if (!serviceConfigured()) return { error: "Review portal is not configured." };
+  const text = body.trim();
+  if (!text) return { error: "Write a comment first." };
+  if (!authorKey?.trim()) return { error: "You can only edit your own comment." };
+
+  const service = createServiceClient();
+  const link = await getValidLink(service, token);
+  if (!link) return { error: "This review link is no longer active." };
+  const owned = await ownedComment(service, link, commentId, authorKey.trim());
+  if (!owned) return { error: "You can only edit your own comment." };
+
+  const { error } = await service
+    .from("review_comments")
+    .update({ body: text, edited_at: new Date().toISOString() })
+    .eq("id", commentId);
+  if (error) return { error: error.message };
+  revalidatePath(`/r/${token}`);
+  revalidatePath(`/projects/${link.project_id}`);
+  return null;
+}
+
+export async function deleteClientComment(
+  token: string,
+  commentId: string,
+  authorKey: string
+): Promise<PortalState> {
+  if (!allowPublic("r-delete"))
+    return { error: "Too many requests. Please wait a moment and try again." };
+  if (!serviceConfigured()) return { error: "Review portal is not configured." };
+  if (!authorKey?.trim())
+    return { error: "You can only delete your own comment." };
+
+  const service = createServiceClient();
+  const link = await getValidLink(service, token);
+  if (!link) return { error: "This review link is no longer active." };
+  const owned = await ownedComment(service, link, commentId, authorKey.trim());
+  if (!owned) return { error: "You can only delete your own comment." };
+
+  // Replies cascade with the parent (FK on delete cascade).
+  const { error } = await service
+    .from("review_comments")
+    .delete()
+    .eq("id", commentId);
+  if (error) return { error: error.message };
+  revalidatePath(`/r/${token}`);
+  revalidatePath(`/projects/${link.project_id}`);
+  return null;
+}
+
+// Toggles one emoji reaction on a comment. Reacting is open to anyone holding
+// the link (same trust level as commenting); the key just scopes "mine".
+export async function toggleClientReaction(
+  token: string,
+  commentId: string,
+  emoji: string,
+  reviewerKey: string,
+  reviewerName?: string | null
+): Promise<PortalState> {
+  if (!allowPublic("r-react"))
+    return { error: "Too many requests. Please wait a moment and try again." };
+  if (!serviceConfigured()) return { error: "Review portal is not configured." };
+  if (!REACTIONS.includes(emoji)) return { error: "Unknown reaction." };
+  const key = reviewerKey?.trim();
+  if (!key) return { error: "Could not identify this browser." };
+
+  const service = createServiceClient();
+  const link = await getValidLink(service, token);
+  if (!link) return { error: "This review link is no longer active." };
+
+  // The comment has to belong to this review, not just exist.
+  const { data: comment } = await service
+    .from("review_comments")
+    .select("id, version_id, target_type, target_id")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!comment) return { error: "That comment is no longer available." };
+  const inThisReview = link.target_type
+    ? comment.target_type === link.target_type &&
+      comment.target_id === link.target_id
+    : Boolean(
+        comment.version_id &&
+          (await versionInLink(service, link, comment.version_id))
+      );
+  if (!inThisReview) return { error: "That comment is not part of this review." };
+
+  const { data: existing } = await service
+    .from("review_comment_reactions")
+    .select("id")
+    .eq("comment_id", commentId)
+    .eq("emoji", emoji)
+    .eq("reviewer_key", key)
+    .maybeSingle();
+
+  if (existing) {
+    await service
+      .from("review_comment_reactions")
+      .delete()
+      .eq("id", existing.id);
+  } else {
+    const { error } = await service.from("review_comment_reactions").insert({
+      studio_id: link.studio_id,
+      comment_id: commentId,
+      emoji,
+      reviewer_key: key,
+      reviewer_name: reviewerName?.trim() || null,
+    });
+    if (error) return { error: error.message };
+  }
   revalidatePath(`/r/${token}`);
   revalidatePath(`/projects/${link.project_id}`);
   return null;
