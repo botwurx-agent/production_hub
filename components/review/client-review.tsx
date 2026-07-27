@@ -222,7 +222,7 @@ export function ClientReview({
   // feedback from an earlier round stays reachable instead of being a bare
   // download link. Older versions are read-only: the open round is the latest.
   const versionSwitcher = data.versions.length > 1 && viewing && (
-    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+    <div className="mb-3 flex flex-wrap items-center gap-1.5">
       <span className="text-xs font-semibold text-text-faint">Version</span>
       {data.versions.map((v) => {
         const on = v.id === viewing.id;
@@ -249,7 +249,7 @@ export function ClientReview({
 
   const olderBanner = isOlder && viewing && (
     <div
-      className="mt-3 flex flex-wrap items-center gap-2 rounded-[11px] px-3 py-2 text-xs font-semibold"
+      className="mb-3 flex flex-wrap items-center gap-2 rounded-[11px] px-3 py-2 text-xs font-semibold"
       style={{
         backgroundColor: "var(--h-amber-bg)",
         color: "var(--h-amber)",
