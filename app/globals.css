@@ -46,6 +46,47 @@
   --h-red-bg: oklch(0.95 0.06 22);
 }
 
+/* Paper: a warm neutral between light and dark, for long review sessions.
+   Same token structure as light, hue rotated from cool violet (282) to warm
+   (around 80) and dropped slightly in lightness. The status-chip backgrounds
+   are darkened just enough to keep the same separation from the surface that
+   they have on light, since paper's surface is 0.985 rather than pure white. */
+[data-theme="paper"] {
+  --bg: oklch(0.962 0.014 84);
+  --surface: oklch(0.985 0.008 86);
+  --surface-2: oklch(0.938 0.018 84);
+  --text: oklch(0.28 0.021 62);
+  --text-muted: oklch(0.505 0.019 62);
+  --text-faint: oklch(0.645 0.017 64);
+  --border: oklch(0.902 0.016 80);
+  --border-strong: oklch(0.835 0.021 80);
+
+  --shadow-sm: 0 1px 2px rgba(72, 56, 32, 0.07), 0 1px 1px rgba(72, 56, 32, 0.05);
+  --shadow-md: 0 4px 10px -3px rgba(72, 56, 32, 0.13), 0 2px 4px -2px rgba(72, 56, 32, 0.09);
+  --shadow-lg: 0 2px 4px rgba(72, 56, 32, 0.05), 0 30px 60px -18px rgba(86, 66, 38, 0.28);
+
+  --h-purple: oklch(0.55 0.23 305);
+  --h-purple-bg: oklch(0.937 0.067 305);
+  --h-indigo: oklch(0.565 0.205 274);
+  --h-indigo-bg: oklch(0.937 0.062 274);
+  --h-blue: oklch(0.605 0.17 245);
+  --h-blue-bg: oklch(0.931 0.067 245);
+  --h-cyan: oklch(0.68 0.13 210);
+  --h-cyan-bg: oklch(0.934 0.072 210);
+  --h-green: oklch(0.665 0.165 158);
+  --h-green-bg: oklch(0.924 0.097 158);
+  --h-yellow: oklch(0.81 0.15 88);
+  --h-yellow-bg: oklch(0.939 0.092 88);
+  --h-amber: oklch(0.755 0.16 72);
+  --h-amber-bg: oklch(0.937 0.087 72);
+  --h-orange: oklch(0.705 0.18 50);
+  --h-orange-bg: oklch(0.939 0.082 50);
+  --h-pink: oklch(0.655 0.225 352);
+  --h-pink-bg: oklch(0.94 0.072 352);
+  --h-red: oklch(0.625 0.225 22);
+  --h-red-bg: oklch(0.941 0.072 22);
+}
+
 [data-theme="dark"] {
   --bg: oklch(0.185 0.022 282);
   --surface: oklch(0.225 0.022 282);

@@ -37,7 +37,9 @@ function systemTheme(): ResolvedTheme {
 function readStoredPreference(): ThemePreference {
   if (typeof window === "undefined") return "system";
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === "light" || stored === "dark" ? stored : "system";
+  return stored === "light" || stored === "paper" || stored === "dark"
+    ? stored
+    : "system";
 }
 
 function readStoredAccent(): Accent {
@@ -80,8 +82,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     [applyResolved]
   );
 
+  // Cycles light -> paper -> dark. Kept so any existing caller still works,
+  // though the picker sets a theme directly.
   const toggle = useCallback(() => {
-    setPreference(resolved === "dark" ? "light" : "dark");
+    const order: ResolvedTheme[] = ["light", "paper", "dark"];
+    const next = order[(order.indexOf(resolved) + 1) % order.length];
+    setPreference(next);
   }, [resolved, setPreference]);
 
   const setAccent = useCallback((next: Accent) => {

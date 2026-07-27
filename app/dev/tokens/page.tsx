@@ -60,7 +60,7 @@ export default function TokenTestPage() {
       {/* Controls */}
       <section className="mb-10 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-pill border border-border bg-surface p-1 shadow-sm">
-          {(["system", "light", "dark"] as const).map((p) => (
+          {(["system", "light", "paper", "dark"] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPreference(p)}

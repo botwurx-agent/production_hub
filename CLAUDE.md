@@ -148,6 +148,19 @@ implemented (out of strict order, driven by the operator's real needs).
 - Next.js (App Router, TS) + Tailwind token-first OKLCH CSS vars; dual theme
   (data-theme system/toggle/localStorage) + data-accent (indigo). Fonts Plus
   Jakarta Sans + Hanken Grotesk. Token reference at /dev/tokens.
+  THIRD THEME "paper" (BUILT): a warm neutral between light and dark, for long
+  review sessions. Same token structure as light with the hue rotated from cool
+  violet (282) to warm (around 80) and lightness dropped slightly: bg #f7f2e8,
+  surface #fcfaf4, text #31271e. Contrast measured, not eyeballed (text/surface
+  14.0:1, muted/surface 5.7:1, both clear AA). The status-chip backgrounds are
+  darkened ~0.013 L and given +0.012 chroma because paper's surface is 0.985
+  rather than pure white; without that the tinted chips separate LESS than they
+  do on light. ThemePreference is now system|light|paper|dark and ResolvedTheme
+  light|paper|dark ("system" only ever resolves to light or dark, since the OS
+  reports nothing else). The two-state sun/moon flip became a small menu
+  (components/theme-toggle.tsx) listing all four with a hint each; toggle() is
+  kept as a light->paper->dark cycle for any existing caller. Print and export
+  views still hardcode data-theme="light" on purpose.
 - Supabase: full data-model spine, multi-tenancy (studios/memberships/roles),
   RLS scoped by `is_studio_member`, private `assets` storage bucket, signup
   studio-bootstrap trigger. Types in lib/database.types.ts (hand-maintained

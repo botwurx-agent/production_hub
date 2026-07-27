@@ -1,5 +1,7 @@
-export type ThemePreference = "system" | "light" | "dark";
-export type ResolvedTheme = "light" | "dark";
+export type ThemePreference = "system" | "light" | "paper" | "dark";
+// Paper is an explicit choice: the OS only reports light or dark, so
+// "system" never resolves to it.
+export type ResolvedTheme = "light" | "paper" | "dark";
 export type Accent = "indigo" | "purple" | "blue" | "pink" | "orange";
 
 export const THEME_STORAGE_KEY = "mk_theme";
@@ -17,7 +19,7 @@ export const themeInitScript = `
     var root = document.documentElement;
     var stored = localStorage.getItem('${THEME_STORAGE_KEY}');
     var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var theme = stored === 'light' || stored === 'dark'
+    var theme = stored === 'light' || stored === 'paper' || stored === 'dark'
       ? stored
       : (systemDark ? 'dark' : 'light');
     root.setAttribute('data-theme', theme);
