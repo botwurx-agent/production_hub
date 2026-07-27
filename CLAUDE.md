@@ -946,8 +946,15 @@ shot review, and the master-cut review all gained it at once.
   seconds), scrub-bar hover preview timecode, J/K/L shuttle + arrows + , / .
   frame step + M mute + F fullscreen, and a keyboard-shortcut popover. fmtTimecode
   is the new export; fmtTime (decimal seconds) stays for tight chips.
-- DRAWN ANNOTATIONS (the Frame.io signature): pause, hit Draw, scribble on the
-  frame, then write the comment. components/review/draw-canvas.tsx is the
+- DRAWN ANNOTATIONS (the Frame.io signature): pause, hit Draw, mark up the
+  frame, then write the comment. TOOLS (matching Frame.io's set): arrow, line,
+  rectangle, ellipse, freehand pen, 5 colours, plus UNDO / REDO over the
+  in-progress drawing (Clear wipes it). A shape stores exactly two points
+  (start + end) and is drag-to-draw; the pen stores the whole path. Arrowheads
+  are computed from the segment angle and scale with the stroke width.
+  A shape with no drag is discarded as a stray click rather than saved as a
+  dot. normalizeDrawing whitelists the tool name (unknown -> pen), caps a
+  shape to 2 points, and drops a shape that has fewer. components/review/draw-canvas.tsx is the
   draw/replay layer (pointer capture, DPR-aware, ResizeObserver); lib/review-
   drawing.ts is the model. Strokes are stored NORMALIZED (0..1 of the media box)
   so a drawing made on a laptop replays correctly on a phone or in fullscreen,

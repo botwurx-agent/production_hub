@@ -7,7 +7,11 @@ import {
   fmtTimecode,
   type ScrubVideoHandle,
 } from "@/components/review/video-player";
-import { DRAW_COLORS, type Drawing } from "@/lib/review-drawing";
+import {
+  DRAW_COLORS,
+  type Drawing,
+  type DrawTool,
+} from "@/lib/review-drawing";
 import { EmojiPicker } from "@/components/review/emoji-picker";
 import { CommentReactions } from "@/components/review/comment-reactions";
 import type { PortalComment } from "@/lib/review-links";
@@ -30,6 +34,59 @@ const SORTS: { key: Sort; label: string }[] = [
   { key: "time", label: "Timecode" },
   { key: "newest", label: "Newest" },
   { key: "oldest", label: "Oldest" },
+];
+
+
+// The markup tools, in the order a reviewer reaches for them: point at it,
+// connect it, box it, circle it, scribble on it.
+const DRAW_TOOL_UI: { key: DrawTool; label: string; icon: JSX.Element }[] = [
+  {
+    key: "arrow",
+    label: "Arrow",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 17 17 7" />
+        <path d="M9 7h8v8" />
+      </svg>
+    ),
+  },
+  {
+    key: "line",
+    label: "Line",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M5 19 19 5" />
+      </svg>
+    ),
+  },
+  {
+    key: "rect",
+    label: "Rectangle",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+        <rect x="4" y="6" width="16" height="12" rx="1.5" />
+      </svg>
+    ),
+  },
+  {
+    key: "ellipse",
+    label: "Ellipse",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <ellipse cx="12" cy="12" rx="8" ry="6.5" />
+      </svg>
+    ),
+  },
+  {
+    key: "pen",
+    label: "Freehand",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 19l7-7 3 3-7 7-3-3z" />
+        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+      </svg>
+    ),
+  },
 ];
 
 export function VideoReview({
@@ -98,6 +155,9 @@ export function VideoReview({
   const [drawMode, setDrawMode] = useState(false);
   const [draft, setDraft] = useState<Drawing | null>(null);
   const [color, setColor] = useState(DRAW_COLORS[0]);
+  const [tool, setTool] = useState<DrawTool>("pen");
+  // Strokes popped by Undo, so Redo can put them back.
+  const [redo, setRedo] = useState<Drawing["strokes"]>([]);
 
   const round2 = (t: number) => Math.round(t * 100) / 100;
 
@@ -189,10 +249,29 @@ export function VideoReview({
     setPendingEnd(round2(now));
   }
 
+  function undoStroke() {
+    if (!draft?.strokes.length) return;
+    const strokes = draft.strokes.slice(0, -1);
+    const popped = draft.strokes[draft.strokes.length - 1];
+    setRedo((r) => [...r, popped]);
+    setDraft(strokes.length ? { ...draft, strokes } : null);
+  }
+  function redoStroke() {
+    if (redo.length === 0) return;
+    const next = redo[redo.length - 1];
+    setRedo((r) => r.slice(0, -1));
+    setDraft((d) =>
+      d
+        ? { ...d, strokes: [...d.strokes, next] }
+        : { w: 16, h: 9, strokes: [next] }
+    );
+  }
+
   function startDrawing() {
     captureHere();
     setActiveId(null);
     setDraft(null);
+    setRedo([]);
     setDrawMode(true);
   }
 
@@ -291,14 +370,35 @@ export function VideoReview({
           maxHeightClass={wide ? "max-h-[78vh]" : "max-h-[58vh]"}
           drawing={shownDrawing}
           drawActive={drawMode}
+          drawTool={tool}
           drawColor={color}
           drawSize={4}
-          onDrawChange={setDraft}
+          onDrawChange={(d) => {
+            setDraft(d);
+            setRedo([]);
+          }}
         />
 
         {drawMode && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[12px] border border-border bg-surface px-3 py-2">
-            <span className="text-xs font-bold text-text">Pen</span>
+            <div className="flex items-center gap-0.5">
+              {DRAW_TOOL_UI.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setTool(t.key)}
+                  title={t.label}
+                  aria-label={t.label}
+                  className={`grid h-7 w-7 place-items-center rounded-[7px] transition ${
+                    tool === t.key
+                      ? "bg-accent-soft text-accent"
+                      : "text-text-muted hover:bg-surface-2 hover:text-text"
+                  }`}
+                >
+                  {t.icon}
+                </button>
+              ))}
+            </div>
+            <span className="h-5 w-px bg-border" />
             <div className="flex items-center gap-1.5">
               {DRAW_COLORS.map((c) => (
                 <button
@@ -314,9 +414,37 @@ export function VideoReview({
                 />
               ))}
             </div>
+            <span className="h-5 w-px bg-border" />
+            <button
+              onClick={undoStroke}
+              disabled={!draft?.strokes.length}
+              title="Undo"
+              aria-label="Undo"
+              className="grid h-7 w-7 place-items-center rounded-[7px] text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-30"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 14 4 9l5-5" />
+                <path d="M4 9h11a5 5 0 0 1 0 10H9" />
+              </svg>
+            </button>
+            <button
+              onClick={redoStroke}
+              disabled={redo.length === 0}
+              title="Redo"
+              aria-label="Redo"
+              className="grid h-7 w-7 place-items-center rounded-[7px] text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-30"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m15 14 5-5-5-5" />
+                <path d="M20 9H9a5 5 0 0 0 0 10h6" />
+              </svg>
+            </button>
             <span className="flex-1" />
             <button
-              onClick={() => setDraft(null)}
+              onClick={() => {
+                setDraft(null);
+                setRedo([]);
+              }}
               disabled={!draft}
               className="text-xs font-semibold text-text-faint transition hover:text-text disabled:opacity-40"
             >

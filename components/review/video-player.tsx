@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { DrawCanvas } from "@/components/review/draw-canvas";
-import type { Drawing } from "@/lib/review-drawing";
+import type { Drawing, DrawTool } from "@/lib/review-drawing";
 import {
   GuideOverlay,
   GUIDE_OPTIONS,
@@ -84,6 +84,7 @@ export const ScrubVideo = forwardRef<
     // Drawn annotation shown over the frame (a saved one, or the in-progress).
     drawing?: Drawing | null;
     drawActive?: boolean;
+    drawTool?: DrawTool;
     drawColor?: string;
     drawSize?: number;
     onDrawChange?: (d: Drawing | null) => void;
@@ -99,6 +100,7 @@ export const ScrubVideo = forwardRef<
     autoPlay = false,
     drawing = null,
     drawActive = false,
+    drawTool = "pen",
     drawColor,
     drawSize,
     onDrawChange,
@@ -405,6 +407,7 @@ export const ScrubVideo = forwardRef<
         <DrawCanvas
           drawing={drawing}
           active={drawActive}
+          tool={drawTool}
           color={drawColor}
           size={drawSize}
           onChange={onDrawChange}
