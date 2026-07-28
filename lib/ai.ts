@@ -64,7 +64,9 @@ function summaryUserMessage(context: string): string {
 }
 
 // Per-call overrides. `fast` swaps in the small model for short tasks that do
-// not need reasoning depth (a rewrite of text the user already wrote).
+// not need reasoning depth (a rewrite of text the user already wrote). It only
+// applies to the Anthropic path: OPENAI_MODEL already defaults to a small model
+// (gpt-5-mini), so there is nothing to swap down to there.
 type CompleteOpts = { fast?: boolean; maxTokens?: number };
 
 // --- Anthropic (Claude) path -------------------------------------------------
@@ -134,9 +136,17 @@ async function openaiComplete(
     throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
   }
   const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
   };
-  return (data.choices?.[0]?.message?.content ?? "").trim();
+  const choice = data.choices?.[0];
+  const content = (choice?.message?.content ?? "").trim();
+  // A reasoning model can burn the whole budget thinking and return nothing at
+  // all. Say that plainly rather than letting it surface as "returned nothing",
+  // which reads like a fault the user cannot act on.
+  if (!content && choice?.finish_reason === "length") {
+    throw new Error("That was too long to finish. Try it in smaller pieces.");
+  }
+  return content;
 }
 
 const CLIENT_UPDATE_SYSTEM = `You are drafting a short progress update that a producer at a boutique commercial production studio will send to their client. It goes out under the producer's name, so write it as the producer.
@@ -261,8 +271,12 @@ export async function polishMessage(opts: {
   channel: PolishChannel;
 }): Promise<string> {
   const user = `Rewrite the message between the markers.\n\n---BEGIN MESSAGE---\n${opts.text}\n---END MESSAGE---`;
+  // Generous cap on purpose. The rewrite is about as long as the original (up to
+  // the action's 8000-character limit, roughly 2000 tokens), and on a reasoning
+  // model this budget also covers the internal reasoning tokens spent before the
+  // answer. Too low and a long email comes back truncated mid-sentence.
   return complete(polishSystem(opts.intent, opts.channel), user, {
     fast: true,
-    maxTokens: 2000,
+    maxTokens: 4000,
   });
 }

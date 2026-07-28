@@ -280,7 +280,12 @@ implemented (out of strict order, driven by the operator's real needs).
   reappear over a fresh message after a send). lib/ai.ts gained polishMessage +
   POLISH_INTENTS/isPolishIntent and a per-call CompleteOpts ({fast, maxTokens}):
   `fast` swaps in ANTHROPIC_FAST_MODEL (haiku) and sends a plain request, since
-  adaptive thinking + output_config are main-model only. Server action
+  adaptive thinking + output_config are main-model only. It is a NO-OP on the
+  OpenAI path (the deployment's actual provider: OPENAI_API_KEY is set in
+  Vercel, so polish runs on gpt-5-mini, already the small model). maxTokens is
+  4000 there because on a reasoning model that budget also covers reasoning
+  tokens; openaiComplete now throws a plain "too long to finish" when a call
+  comes back empty with finish_reason 'length'. Server action
   app/(app)/polish-actions.ts polishDraft (auth + aiConfigured + 8000-char cap;
   never given project data, so it cannot invent facts). The button hides itself
   when no provider key is set, via components/ai/ai-availability.tsx (a context
