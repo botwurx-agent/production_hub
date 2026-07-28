@@ -581,7 +581,7 @@ export function VideoReview({
                             setReplyTo(replyTo?.id === c.id ? null : c);
                             setReplyText("");
                           }}
-                          className="text-[11px] font-bold text-text-faint transition hover:text-accent"
+                          className="-my-1 py-1 text-[11px] font-bold text-text-faint transition hover:text-accent"
                         >
                           Reply
                           {replies.length > 0 ? ` (${replies.length})` : ""}
@@ -593,7 +593,7 @@ export function VideoReview({
                               setEditingId(c.id);
                               setEditText(c.body);
                             }}
-                            className="text-[11px] font-bold text-text-faint transition hover:text-accent"
+                            className="-my-1 py-1 text-[11px] font-bold text-text-faint transition hover:text-accent"
                           >
                             Edit
                           </button>
@@ -627,7 +627,7 @@ export function VideoReview({
                                 e.stopPropagation();
                                 setConfirmDelete(c.id);
                               }}
-                              className="text-[11px] font-bold text-text-faint transition hover:text-red"
+                              className="-my-1 py-1 text-[11px] font-bold text-text-faint transition hover:text-red"
                             >
                               Delete
                             </button>
@@ -639,7 +639,7 @@ export function VideoReview({
                               e.stopPropagation();
                               onResolve(c.id, !c.resolved);
                             }}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-text-faint transition hover:text-green"
+                            className="-my-1 inline-flex items-center gap-1 py-1 text-[11px] font-bold text-text-faint transition hover:text-green"
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M20 6 9 17l-5-5" />
@@ -652,7 +652,7 @@ export function VideoReview({
                   </div>
 
                   {replies.length > 0 && (
-                    <div className="ml-[52px] border-l border-border pl-3">
+                    <div className="ml-4 border-l border-border pl-3 sm:ml-[52px]">
                       {replies.map((r) => (
                         <div
                           key={r.id}
@@ -772,7 +772,7 @@ export function VideoReview({
                   )}
 
                   {replyTo?.id === c.id && (
-                    <div className="ml-[52px] pb-3 pr-3">
+                    <div className="ml-4 pb-3 pr-3 sm:ml-[52px]">
                       <textarea
                         ref={replyRef}
                         value={replyText}

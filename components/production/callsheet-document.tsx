@@ -26,7 +26,19 @@ function ContactRow({ role, name, phone }: { role: string; name?: string | null;
     <tr>
       <td className="border border-border px-2 py-1 text-xs font-semibold text-text-muted">{role}</td>
       <td className="border border-border px-2 py-1 text-sm text-text">{name?.trim() || "—"}</td>
-      <td className="border border-border px-2 py-1 text-sm text-text-muted">{phone?.trim() || ""}</td>
+      <td className="border border-border px-2 py-1 text-sm text-text-muted">
+        {/* Tappable on a phone, which is where a call sheet gets used. */}
+        {phone?.trim() ? (
+          <a
+            href={`tel:${phone.replace(/[^0-9+]/g, "")}`}
+            className="text-accent underline-offset-2 hover:underline print:text-text-muted print:no-underline"
+          >
+            {phone.trim()}
+          </a>
+        ) : (
+          ""
+        )}
+      </td>
     </tr>
   );
 }
@@ -48,7 +60,10 @@ function People({
       >
         {title}
       </div>
-      <table className="w-full border-collapse text-sm">
+      {/* Wide table for desktop and print. A crew member on set opens this on
+          a phone, where five columns are unreadable, so small screens get the
+          same rows stacked instead of a sideways scroll. */}
+      <table className="hidden w-full border-collapse text-sm sm:table print:table">
         <thead>
           <tr className="text-left text-[10px] font-bold uppercase tracking-wide text-text-faint">
             <th className="w-8 border border-border px-2 py-1">#</th>
@@ -77,6 +92,44 @@ function People({
           )}
         </tbody>
       </table>
+
+      <div className="sm:hidden print:hidden">
+        {people.map((p, i) => (
+          <div
+            key={p.id}
+            className="border border-t-0 border-border px-2.5 py-2 first:border-t"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm font-semibold text-text">
+                <span className="mr-1.5 text-text-faint">{i + 1}</span>
+                {p.name || "—"}
+              </span>
+              {/* Call time is what someone opens this to find, so it leads. */}
+              {p.call_time && (
+                <span className="shrink-0 text-sm font-bold tabular-nums text-text">
+                  {p.call_time}
+                </span>
+              )}
+            </div>
+            {p.role && (
+              <p className="mt-0.5 text-xs text-text-muted">{p.role}</p>
+            )}
+            {p.contact && (
+              <a
+                href={`tel:${p.contact.replace(/[^0-9+]/g, "")}`}
+                className="mt-1 inline-block text-xs font-semibold text-accent underline-offset-2 hover:underline"
+              >
+                {p.contact}
+              </a>
+            )}
+          </div>
+        ))}
+        {people.length === 0 && (
+          <p className="border border-border px-2 py-3 text-center text-xs text-text-faint">
+            None added
+          </p>
+        )}
+      </div>
     </div>
   );
 }
