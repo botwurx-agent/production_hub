@@ -13,12 +13,20 @@ export function AnchoredPopover({
   open,
   onClose,
   width,
+  prefer = "above",
   children,
 }: {
   anchorRef: React.RefObject<HTMLElement>;
   open: boolean;
   onClose: () => void;
   width: number;
+  /**
+   * Which side to try first. "above" suits a control sitting at the bottom of
+   * a panel (a composer); "below" suits one at the top of a card (a status
+   * chip), where opening upward would cover the thing you just clicked.
+   * Either way the panel flips when the preferred side has no room.
+   */
+  prefer?: "above" | "below";
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -35,10 +43,14 @@ export function AnchoredPopover({
       const r = a.getBoundingClientRect();
       const h = panelRef.current?.offsetHeight ?? 240;
       const gap = 6;
-      // Prefer opening upward (the composer sits at the bottom of the rail);
-      // drop below when there is not enough headroom.
       const above = r.top - h - gap;
-      const top = above >= 8 ? above : Math.min(r.bottom + gap, window.innerHeight - h - 8);
+      const below = r.bottom + gap;
+      const fitsAbove = above >= 8;
+      const fitsBelow = below + h <= window.innerHeight - 8;
+      const useAbove = prefer === "above" ? fitsAbove : !fitsBelow && fitsAbove;
+      const top = useAbove
+        ? above
+        : Math.min(below, Math.max(8, window.innerHeight - h - 8));
       const left = Math.max(
         8,
         Math.min(r.left, window.innerWidth - width - 8)
@@ -53,7 +65,7 @@ export function AnchoredPopover({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open, anchorRef, width]);
+  }, [open, anchorRef, width, prefer]);
 
   useEffect(() => {
     if (!open) return;

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
-import { StatusMenu } from "@/components/projects/status-menu";
+import { LifecycleStepper } from "@/components/projects/lifecycle-stepper";
 import { ArchiveProjectButton } from "@/components/projects/archive-project-button";
 import { ProjectPeople } from "@/components/projects/project-people";
 import { ProjectClientPicker } from "@/components/projects/project-client-picker";
@@ -23,7 +23,6 @@ import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { longDate, htmlToText } from "@/lib/format";
 import {
   PROJECT_STATUS,
-  PROJECT_STATUS_ORDER,
   ASSET_STATUS,
 } from "@/lib/status";
 import type { ProjectStatus } from "@/lib/database.types";
@@ -216,8 +215,6 @@ export default async function ProjectDetailPage({
 
   const clientName = (project.client as { name: string } | null)?.name ?? null;
   const status = project.status as ProjectStatus;
-  const statusInfo = PROJECT_STATUS[status];
-  const currentOrder = statusInfo?.order ?? 0;
 
   // KPI derivations.
   const versionCount = assets.reduce((n, a) => n + a.versions.length, 0);
@@ -335,11 +332,6 @@ export default async function ProjectDetailPage({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                {statusInfo && (
-                  <StatusTag hue={statusInfo.hue}>
-                    {stageLabel(project.status, project.project_type)}
-                  </StatusTag>
-                )}
                 <span
                   className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-0.5 text-[11px] font-bold"
                   style={{ backgroundColor: `var(--h-${ptype.hue}-bg)`, color: `var(--h-${ptype.hue})` }}
@@ -388,59 +380,15 @@ export default async function ProjectDetailPage({
                   />
                 </>
               )}
-              <StatusMenu
-                projectId={project.id}
-                status={project.status}
-                projectType={project.project_type}
-              />
             </div>
           </div>
 
-          {/* Lifecycle stepper */}
-          <div className="mt-5 flex flex-wrap gap-2">
-            {PROJECT_STATUS_ORDER.map((s, i) => {
-              const info = PROJECT_STATUS[s];
-              const state =
-                info.order < currentOrder
-                  ? "done"
-                  : info.order === currentOrder
-                    ? "current"
-                    : "todo";
-              return (
-                <div
-                  key={s}
-                  className="inline-flex items-center gap-2 rounded-pill px-3 py-1.5 text-xs font-bold"
-                  style={{
-                    backgroundColor:
-                      state === "current"
-                        ? "var(--accent-soft)"
-                        : "var(--surface-2)",
-                    color:
-                      state === "current"
-                        ? "var(--accent)"
-                        : state === "done"
-                          ? "var(--text-muted)"
-                          : "var(--text-faint)",
-                  }}
-                >
-                  <span
-                    className="grid h-4 w-4 place-items-center rounded-full text-[10px] text-white"
-                    style={{
-                      backgroundColor:
-                        state === "done"
-                          ? "var(--h-green)"
-                          : state === "current"
-                            ? "var(--accent)"
-                            : "var(--border-strong)",
-                    }}
-                  >
-                    {state === "done" ? "✓" : i + 1}
-                  </span>
-                  {stageLabel(s, project.project_type)}
-                </div>
-              );
-            })}
-          </div>
+          <LifecycleStepper
+            projectId={project.id}
+            status={project.status}
+            projectType={project.project_type}
+            canEdit={!ctx.isCollaborator}
+          />
         </div>
       </div>
 

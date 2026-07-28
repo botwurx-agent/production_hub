@@ -345,7 +345,7 @@ export function ProjectSlate({
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border px-4 py-3 text-[11px] text-text-muted">
         <Key bg="var(--h-blue-bg)" ring="var(--h-blue)" label="Pre-pro" />
-        <Key bg="var(--h-orange)" label="Shoot" />
+        <Key bg="var(--h-orange)" label="Shoot or production day" />
         <Key bg="var(--h-purple-bg)" ring="var(--h-purple)" label="Post and review" />
         <Key bg="var(--h-red-bg)" ring="var(--h-red)" label="Past due" />
         <Key bg="var(--h-green-bg)" ring="var(--h-green)" label="Delivered" />
@@ -353,8 +353,8 @@ export function ProjectSlate({
         {collisions.length > 0 && (
           <span className="font-semibold text-red">
             {collisions.length === 1
-              ? "1 day with two shoots booked"
-              : `${collisions.length} days with more than one shoot booked`}
+              ? "1 day with more than one project in production"
+              : `${collisions.length} days with more than one project in production`}
           </span>
         )}
         {hidden > 0 && (

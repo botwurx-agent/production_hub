@@ -12,4 +12,7 @@ export type ProjectRow = {
   // When the job was created. Only the slate uses it, to anchor the pre-pro
   // run when a project has a shoot date but no explicit pre-pro event.
   created_at: string | null;
+  // Drives the stage vocabulary: an AI job's middle phase is "Generation",
+  // a live-action job's is "Shoot".
+  project_type: string | null;
 };

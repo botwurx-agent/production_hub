@@ -1,4 +1,5 @@
 import type { ProjectStatus } from "@/lib/database.types";
+import { hasShootDay } from "@/lib/project-types";
 
 // The studio slate: every project as one horizontal lane across a date window,
 // so a producer can see the whole slate at once instead of one job at a time.
@@ -33,6 +34,7 @@ export type SlateInput = {
   created_at: string | null;
   archived: boolean;
   color: string | null;
+  project_type: string | null;
 };
 
 export type SlateEvent = {
@@ -192,7 +194,10 @@ export function buildLanes(
         push(segments, "prepro", created, shoot - 1, "Pre-pro", days);
       }
       if (shoot !== null) {
-        push(segments, "shoot", shoot, shoot, "Shoot", days);
+        // A generated or CG job has no shoot day; the same date is its
+        // production target, so the bar should not claim otherwise.
+        const shootLabel = hasShootDay(p.project_type) ? "Shoot" : "Production";
+        push(segments, "shoot", shoot, shoot, shootLabel, days);
       }
 
       const postFrom = shoot !== null ? shoot + 1 : created;

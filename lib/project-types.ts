@@ -59,13 +59,19 @@ export const PROJECT_TYPES: ProjectTypeDef[] = [
   },
 ];
 
-// Per-type lifecycle stage names. The four underlying phases stay the same
-// (pre_pro -> shoot -> post -> delivered), but generated types have no shoot
-// day, so the middle phase (and the planning phase) are renamed. Anything not
-// overridden falls back to the default label.
+// Per-type lifecycle stage names. The four underlying phases never change
+// (pre_pro -> shoot -> post -> delivered); only what we call them does.
+//
+// The default for the middle phase is "Production", not "Shoot". That is the
+// industry's own generic term (pre-production, production, post-production),
+// and it is the only one that stays true across a live-action shoot, a CG
+// build, and a generated sequence. "Shoot" is the live-action specialization
+// of it, not the parent. Studio-wide surfaces that mix project types (the
+// board columns, the slate) use these defaults; a single project shows the
+// name that fits its own type.
 const DEFAULT_STAGE_LABELS: Record<ProjectStatus, string> = {
   pre_pro: "Pre-pro",
-  shoot: "Shoot",
+  shoot: "Production",
   post: "Post",
   delivered: "Delivered",
 };
@@ -73,6 +79,8 @@ const DEFAULT_STAGE_LABELS: Record<ProjectStatus, string> = {
 const STAGE_LABELS: Partial<
   Record<ProjectTypeKey, Partial<Record<ProjectStatus, string>>>
 > = {
+  live_action: { shoot: "Shoot" },
+  commercial: { shoot: "Shoot" },
   ai_video: { pre_pro: "Concept", shoot: "Generation" },
   cgi_vfx: { pre_pro: "Concept", shoot: "Production" },
 };

@@ -2,12 +2,15 @@ import Link from "next/link";
 import { StatusMenu } from "@/components/projects/status-menu";
 import { ColorMenu } from "@/components/projects/color-menu";
 import { shortDate } from "@/lib/format";
+import { hasShootDay } from "@/lib/project-types";
 import type { ProjectRow } from "@/components/projects/types";
 
 export function ProjectCard({ project }: { project: ProjectRow }) {
   const date = project.shoot_date ?? project.due_date;
+  // A generated or CG job has no shoot day; the same field is its production
+  // target, so calling it "Shoot" on the card would be wrong.
   const dateLabel = project.shoot_date
-    ? `Shoot ${shortDate(project.shoot_date)}`
+    ? `${hasShootDay(project.project_type) ? "Shoot" : "Production"} ${shortDate(project.shoot_date)}`
     : project.due_date
       ? `Due ${shortDate(project.due_date)}`
       : null;
@@ -25,7 +28,11 @@ export function ProjectCard({ project }: { project: ProjectRow }) {
         />
       )}
       <div className="mb-3 flex items-center justify-between gap-2">
-        <StatusMenu projectId={project.id} status={project.status} />
+        <StatusMenu
+          projectId={project.id}
+          status={project.status}
+          projectType={project.project_type}
+        />
         <div className="flex items-center gap-2">
           {dateLabel && date && (
             <span className="text-xs text-text-faint">{dateLabel}</span>

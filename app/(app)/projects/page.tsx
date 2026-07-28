@@ -27,7 +27,7 @@ export default async function ProjectsPage() {
       supabase
         .from("projects")
         .select(
-          "id, title, status, due_date, shoot_date, archived_at, color, created_at, client:clients(name)"
+          "id, title, status, due_date, shoot_date, archived_at, color, created_at, project_type, client:clients(name)"
         )
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name").order("name"),
@@ -49,6 +49,7 @@ export default async function ProjectsPage() {
     archived: Boolean((p as { archived_at: string | null }).archived_at),
     color: (p as { color: string | null }).color ?? null,
     created_at: (p as { created_at: string | null }).created_at ?? null,
+    project_type: (p as { project_type: string | null }).project_type ?? null,
   }));
   const clientOptions = clients ?? [];
   const todayIso = todayInIso();

@@ -637,6 +637,38 @@ implemented (out of strict order, driven by the operator's real needs).
   colored top border. Status stays as chips (StatusTag); module/section/nav color
   is identity, kept separate so the two never compete.
 
+### Stage vocabulary + stage controls (BUILT, no migration)
+The four DB phases never change (`pre_pro -> shoot -> post -> delivered`); only
+their labels do. The default label for the middle phase is now **"Production"**,
+not "Shoot": that is the industry's own generic term (pre-production /
+production / post-production) and the only one true across a live-action shoot,
+a CG build, and a generated sequence. "Shoot" is the live-action SPECIALIZATION,
+so it is now an override rather than the default. STAGE_LABELS in
+lib/project-types.ts: live_action + commercial -> {shoot: "Shoot"}, ai_video ->
+{pre_pro: "Concept", shoot: "Generation"}, cgi_vfx -> {pre_pro: "Concept",
+shoot: "Production"}. Studio-wide surfaces that MIX types (board columns, list,
+slate, activity log, AI context) use the neutral defaults via
+PROJECT_STATUS[..].label; a single project shows its own type's name via
+stageLabel(status, project_type).
+Three fixes shipped with it, all found in operator testing:
+- The board card's stage menu was CLIPPED: components/projects/project-card.tsx
+  is an `overflow-hidden` Link and status-menu.tsx positioned the menu
+  absolutely inside it, so you saw the "Move to stage" heading and none of the
+  options under it (it looked broken rather than cut off; ColorMenu had already
+  been hand-portaled for the same reason). StatusMenu now uses the shared
+  AnchoredPopover, which gained a `prefer` prop ("above" default for composers,
+  "below" for a chip at the top of a card).
+- The board card never passed `projectType`, so it showed generic labels while
+  the hub showed type-aware ones for the same project. ProjectRow gained
+  project_type (+ the projects page selects it); the card's date label also
+  reads "Production" instead of "Shoot" for generated/CG jobs.
+- The hub's lifecycle stepper was a row of plain divs: the biggest, most
+  obvious "this is your stage" element did nothing when clicked, and the only
+  real control was a small chip in the corner. It is now
+  components/projects/lifecycle-stepper.tsx (clickable, toasts, `canEdit=false`
+  for collaborators), and the hero's DUPLICATE StatusTag + StatusMenu were
+  removed so stage is stated and changed in exactly one place.
+
 ### Project type + creation wizard + vendor contacts (migration 0049) — BUILT
 - projects.project_type (0049, free text default 'general'): general | live_action
   | commercial | ai_video | cgi_vfx. Light label that tailors which hub cards

@@ -34,7 +34,10 @@ export const PROJECT_STATUS: Record<
   { label: string; hue: Hue; order: number }
 > = {
   pre_pro: { label: "Pre-pro", hue: "blue", order: 0 },
-  shoot: { label: "Shoot", hue: "orange", order: 1 },
+  // "Production" rather than "Shoot": the neutral name for the middle phase,
+  // true whether the job is shot, built in CG, or generated. Per-type names
+  // (Shoot, Generation) come from stageLabel() in lib/project-types.ts.
+  shoot: { label: "Production", hue: "orange", order: 1 },
   post: { label: "Post", hue: "purple", order: 2 },
   delivered: { label: "Delivered", hue: "green", order: 3 },
 };
