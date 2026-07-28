@@ -18,6 +18,7 @@ import { getDriveFileBytes } from "@/lib/googledrive";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
+import { MAX_ATTACHMENT_BYTES } from "@/lib/attachment-limits";
 
 export type EmailState = { error?: string } | null;
 export type OwnerType = "project" | "lead" | "client";
@@ -157,10 +158,13 @@ async function deliverReply(
   opts: { projectId?: string; revalidate?: string }
 ): Promise<EmailState> {
   const total = attachments.reduce((n, a) => n + a.bytes.length, 0);
-  if (total > 5_000_000) {
+  // Below the ~4.5MB serverless request-body cap, not at Gmail's own limit:
+  // anything larger never reaches this function to be rejected politely, it
+  // fails at the platform edge and looks like the send silently did nothing.
+  if (total > MAX_ATTACHMENT_BYTES) {
     return {
       error:
-        "Those attachments are over the 5MB email limit. Send fewer or smaller files.",
+        "Those attachments are over the 4MB limit for a single send. Send fewer or smaller files, or share a link instead.",
     };
   }
   try {

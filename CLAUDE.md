@@ -637,6 +637,31 @@ implemented (out of strict order, driven by the operator's real needs).
   colored top border. Status stays as chips (StatusTag); module/section/nav color
   is identity, kept separate so the two never compete.
 
+### Email reply attachments: MIME bug (FIXED)
+Attaching a file to a Gmail reply sent the email but silently dropped the
+attachment. The cause was in lib/gmail.ts sendGmailReply: the multipart branch
+built the whole message as an array and ended it with `.filter(Boolean)`. That
+was meant to drop the optional In-Reply-To / References headers when empty, but
+it also deleted the intentional `""` entries that are the MANDATORY blank lines
+separating MIME headers from bodies. Gmail then never saw a multipart body,
+accepted the send (HTTP 200), and rendered a plain message with no attachment.
+Now only the optional headers are filtered; the structural blank lines are
+built separately and carry comments saying what they are. Verified by decoding
+the base64 `raw` the builder produces (harness kept in the session scratchpad).
+Two related things hardened at the same time:
+- The size cap moved from 5MB to `MAX_ATTACHMENT_BYTES` (4MB) in the new
+  lib/attachment-limits.ts. The real constraint is the ~4.5MB SERVERLESS
+  REQUEST-BODY cap, not Gmail: a bigger request is rejected at the platform
+  edge before the Server Action runs, so it cannot return a useful error and
+  looks exactly like "the button did nothing". next.config.mjs already raises
+  Next's own `serverActions.bodySizeLimit` to 12mb, which does NOT lift the
+  platform cap.
+- The constant lives in lib/attachment-limits.ts, not the actions file, because
+  a "use server" module can only export async functions and the composer needs
+  it client-side. components/projects/project-email.tsx now shows a running
+  byte total next to the chosen files and disables Send when over, so the
+  failure is caught before the upload instead of after it.
+
 ### Stage vocabulary + stage controls (BUILT, no migration)
 The four DB phases never change (`pre_pro -> shoot -> post -> delivered`); only
 their labels do. The default label for the middle phase is now **"Production"**,

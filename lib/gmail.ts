@@ -331,34 +331,38 @@ export async function sendGmailReply(
   bodyText: string,
   attachments: OutgoingAttachment[] = []
 ): Promise<void> {
+  // Only the optional headers may be dropped when empty. The blank lines that
+  // separate headers from bodies are structural: filtering the whole message
+  // for truthiness deletes them too, and the result is a message Gmail accepts
+  // and then renders with no attachments at all, because it never sees a
+  // multipart body. Build the headers separately so that cannot happen again.
+  const headerLines = [
+    `To: ${ctx.to}`,
+    `Subject: ${ctx.subject}`,
+    ctx.inReplyTo ? `In-Reply-To: ${ctx.inReplyTo}` : "",
+    ctx.references ? `References: ${ctx.references}` : "",
+    "MIME-Version: 1.0",
+  ].filter(Boolean);
+
   let mime: string;
   if (attachments.length === 0) {
     const headers = [
-      `To: ${ctx.to}`,
-      `Subject: ${ctx.subject}`,
-      ctx.inReplyTo ? `In-Reply-To: ${ctx.inReplyTo}` : "",
-      ctx.references ? `References: ${ctx.references}` : "",
-      "MIME-Version: 1.0",
+      ...headerLines,
       'Content-Type: text/plain; charset="UTF-8"',
-    ]
-      .filter(Boolean)
-      .join("\r\n");
+    ].join("\r\n");
     mime = `${headers}\r\n\r\n${bodyText}`;
   } else {
     const boundary = `mixed_${Math.random().toString(36).slice(2)}`;
     const parts: string[] = [
-      `To: ${ctx.to}`,
-      `Subject: ${ctx.subject}`,
-      ctx.inReplyTo ? `In-Reply-To: ${ctx.inReplyTo}` : "",
-      ctx.references ? `References: ${ctx.references}` : "",
-      "MIME-Version: 1.0",
+      ...headerLines,
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
-      "",
+      "", // end of the top-level headers
       `--${boundary}`,
       'Content-Type: text/plain; charset="UTF-8"',
-      "",
+      "Content-Transfer-Encoding: 8bit",
+      "", // end of the text part's headers
       bodyText,
-    ].filter(Boolean) as string[];
+    ];
     for (const a of attachments) {
       const b64 = a.bytes.toString("base64").replace(/(.{76})/g, "$1\r\n");
       const name = headerSafe(a.filename);
@@ -367,7 +371,7 @@ export async function sendGmailReply(
         `Content-Type: ${headerSafe(a.mimeType)}; name="${name}"`,
         `Content-Disposition: attachment; filename="${name}"`,
         "Content-Transfer-Encoding: base64",
-        "",
+        "", // end of this attachment's headers
         b64
       );
     }

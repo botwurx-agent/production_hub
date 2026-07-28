@@ -15,6 +15,7 @@ import {
 } from "@/components/projects/drive-browser";
 import { PlusIcon, EnvelopeIcon } from "@/components/app-shell/nav-icons";
 import { longDate, shortDate } from "@/lib/format";
+import { MAX_ATTACHMENT_BYTES, formatBytes } from "@/lib/attachment-limits";
 import {
   getThreadMessages,
   unlinkThread,
@@ -234,8 +235,22 @@ export function ThreadReader({
     }
   }
 
+  // Device files are the only attachments whose size we know before sending
+  // (project assets and Drive files are fetched server-side), so this is a
+  // best-effort early warning rather than the authoritative check.
+  const attachedBytes = files.reduce((n, f) => n + f.size, 0);
+  const tooBig = attachedBytes > MAX_ATTACHMENT_BYTES;
+
   function send() {
     if (!reply.trim()) return;
+    if (tooBig) {
+      setReplyError(
+        `Those files come to ${formatBytes(attachedBytes)}, over the ${formatBytes(
+          MAX_ATTACHMENT_BYTES
+        )} limit for one send. Remove one, or share a link instead.`
+      );
+      return;
+    }
     setSending(true);
     setReplyError(null);
     const fd = new FormData();
@@ -495,7 +510,12 @@ export function ThreadReader({
                   </div>
                 )}
                 {files.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                    <span
+                      className={`text-[11px] font-semibold ${tooBig ? "text-red" : "text-text-faint"}`}
+                    >
+                      {formatBytes(attachedBytes)}
+                    </span>
                     {files.map((f, i) => (
                       <span
                         key={`${f.name}-${i}`}
@@ -575,7 +595,7 @@ export function ThreadReader({
                   <Button
                     size="sm"
                     onClick={send}
-                    disabled={sending || !reply.trim()}
+                    disabled={sending || !reply.trim() || tooBig}
                   >
                     {sending ? "Sending..." : "Send reply"}
                   </Button>
