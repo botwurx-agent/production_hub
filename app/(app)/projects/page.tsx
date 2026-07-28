@@ -9,19 +9,34 @@ import { NeedsYou } from "@/components/projects/needs-you";
 import { ProjectsIcon } from "@/components/app-shell/nav-icons";
 import type { ProjectRow } from "@/components/projects/types";
 
+// Resolved on the server so the slate's "today" is stable between the server
+// render and hydration.
+function todayInIso(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export default async function ProjectsPage() {
   const ctx = await requireStudioContext();
   const supabase = createClient();
   const canCreate = !ctx.isCollaborator;
 
-  const [{ data: projects }, { data: clients }, outstanding] =
+  const [{ data: projects }, { data: clients }, outstanding, { data: events }] =
     await Promise.all([
       supabase
         .from("projects")
-        .select("id, title, status, due_date, shoot_date, archived_at, color, client:clients(name)")
+        .select(
+          "id, title, status, due_date, shoot_date, archived_at, color, created_at, client:clients(name)"
+        )
         .order("created_at", { ascending: false }),
       supabase.from("clients").select("id, name").order("name"),
       getOutstanding(),
+      // Producer-entered dates for the slate. They win over dates derived from
+      // the project row, because they are explicit rather than inferred.
+      supabase
+        .from("project_events")
+        .select("project_id, title, date, end_date, kind"),
     ]);
 
   const rows: ProjectRow[] = (projects ?? []).map((p) => ({
@@ -33,8 +48,10 @@ export default async function ProjectsPage() {
     client: (p.client as { name: string } | null) ?? null,
     archived: Boolean((p as { archived_at: string | null }).archived_at),
     color: (p as { color: string | null }).color ?? null,
+    created_at: (p as { created_at: string | null }).created_at ?? null,
   }));
   const clientOptions = clients ?? [];
+  const todayIso = todayInIso();
 
   return (
     <div>
@@ -69,7 +86,11 @@ export default async function ProjectsPage() {
           ]}
         />
       ) : (
-        <ProjectsView projects={rows} />
+        <ProjectsView
+          projects={rows}
+          events={events ?? []}
+          todayIso={todayIso}
+        />
       )}
     </div>
   );

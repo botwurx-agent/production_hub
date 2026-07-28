@@ -241,7 +241,10 @@ Ordered by impact on a real commercial job vs effort. Phase references map to ou
 6. **Contacts/People by production role** filter (Crew / Talent / Client / Agency). Low.
 7. **Sendable call sheet** (block toggles + send via Gmail connector + opened tracking).
    Medium; leans on connectors we already have.
-8. **Production calendar grouped by phase** (Pre-Pro / Shoot / Post) as a timeline. Medium.
+8. ~~**Production calendar grouped by phase** (Pre-Pro / Shoot / Post) as a timeline.~~ DONE,
+   but studio-wide rather than per-project: the Slate view on /projects draws one lane per
+   job, phase-segmented, with shoot-collision and past-due signals. A per-project phased
+   Gantt stays deliberately unbuilt (it rots on short boutique jobs).
 9. **Light onboarding personalization wizard** (2 to 3 steps) to set defaults. Optional; do
    after the above.
 

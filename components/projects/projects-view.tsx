@@ -3,11 +3,21 @@
 import { useState } from "react";
 import { ProjectBoard } from "@/components/projects/project-board";
 import { ProjectList } from "@/components/projects/project-list";
+import { ProjectSlate } from "@/components/projects/project-slate";
 import type { ProjectRow } from "@/components/projects/types";
+import type { SlateEvent } from "@/lib/slate";
 
-type View = "board" | "list";
+type View = "board" | "list" | "slate";
 
-export function ProjectsView({ projects }: { projects: ProjectRow[] }) {
+export function ProjectsView({
+  projects,
+  events = [],
+  todayIso,
+}: {
+  projects: ProjectRow[];
+  events?: SlateEvent[];
+  todayIso: string;
+}) {
   const [view, setView] = useState<View>("board");
   const [showArchived, setShowArchived] = useState(false);
 
@@ -20,7 +30,7 @@ export function ProjectsView({ projects }: { projects: ProjectRow[] }) {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex items-center gap-1 rounded-pill border border-border bg-surface p-1 shadow-sm">
-          {(["board", "list"] as View[]).map((v) => (
+          {(["board", "list", "slate"] as View[]).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -61,8 +71,14 @@ export function ProjectsView({ projects }: { projects: ProjectRow[] }) {
 
       {view === "board" ? (
         <ProjectBoard projects={visible} />
-      ) : (
+      ) : view === "list" ? (
         <ProjectList projects={visible} />
+      ) : (
+        <ProjectSlate
+          projects={visible}
+          events={events}
+          todayIso={todayIso}
+        />
       )}
     </div>
   );

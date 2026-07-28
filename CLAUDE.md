@@ -256,8 +256,8 @@ implemented (out of strict order, driven by the operator's real needs).
     roster count. (Multi-role per contact is a possible later add.)
   - Project calendar (/projects/[id]/calendar): month + agenda, NO Gantt
     (deliberate: a task-level Gantt is overkill/rots for short boutique jobs;
-    the useful timeline is a future STUDIO-wide slate view, one lane per
-    project). Shows the project's shoot_date/due_date as read-only milestones
+    the useful timeline is the STUDIO-wide slate view, one lane per project,
+    now BUILT as a third view on /projects -- see "Studio slate" below). Shows the project's shoot_date/due_date as read-only milestones
     plus project_events (migration 0034: title/date/end_date/kind/notes; kinds
     prepro/shoot/review/delivery/other, colored) which the producer adds/edits/
     deletes. components/projects/project-calendar.tsx + calendar-actions.ts
@@ -591,6 +591,33 @@ implemented (out of strict order, driven by the operator's real needs).
   showed a bare "none yet, create one" line. Per the competitor assessment these
   are the surfaces where a blank screen was costing us the "usable without a
   tutorial" bar.
+- STUDIO SLATE (BUILT): the studio-wide timeline that the per-project calendar
+  note kept pointing at. It is a THIRD VIEW on /projects (Board | List | Slate),
+  not a new page and not on the dashboard calendar widget: it is the same
+  project collection the page already loads, so it inherits the Archived toggle
+  and any future filters, and costs no nav weight. (If a top-level Calendar page
+  ever holds month + agenda + slate together, revisit.) lib/slate.ts is pure
+  date logic (parses YYYY-MM-DD as UTC midnight so no timezone can shift a day):
+  buildLanes() turns projects + project_events into per-lane SEGMENTS
+  (prepro | shoot | post | delivered | overdue | undated), shootCollisions()
+  finds days carrying more than one shoot. Producer-entered project_events win
+  when a project has them; otherwise a lane is derived from created_at ->
+  shoot_date -> due_date. Two rules worth keeping: a project past its due_date
+  and not `delivered` draws an OVERDUE bar that runs to today (the overrun is
+  the point), and `undated` is judged on the project having no dates AT ALL,
+  never on whether anything drew in the current window (an early version
+  labelled out-of-window projects "No dates set", which is a lie). Lanes with
+  nothing in the window are omitted and counted in the legend.
+  components/projects/project-slate.tsx renders it as ONE horizontal scroller
+  containing a single CSS grid whose rail column is position:sticky left:0, so
+  labels and lanes cannot drift apart; 4/6/12-week ranges persist in
+  localStorage ("projects.slate.weeks"), paging moves whole weeks so columns
+  never shift. `todayIso` is computed on the SERVER and passed down, matching
+  the dashboard calendar, so the today line cannot differ between the server
+  render and hydration. NOTE: Tailwind's /opacity modifier compiles to NOTHING
+  on a var()-valued color in this setup (verified against the built CSS), so
+  weekend tinting uses an inline color-mix; existing `bg-surface-2/50`-style
+  classes elsewhere in the codebase are silently no-ops.
 - FIRST-RUN SETUP CHECKLIST (BUILT, dashboard): lib/setup-steps.ts loadSetupSteps
   derives five steps (add a client / start a project / add your logo / connect a
   tool / invite your team) from REAL DATA (count queries + ctx.studio.logo_path),
