@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import { requireStudioContext } from "@/lib/studio";
 import { getOutstanding } from "@/lib/outstanding";
 import { signedLogoUrl } from "@/lib/branding";
+import { aiConfigured } from "@/lib/ai";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { Toaster } from "@/components/ui/toast";
+import { AiAvailabilityProvider } from "@/components/ai/ai-availability";
 
 export default async function AppLayout({
   children,
@@ -28,21 +30,25 @@ export default async function AppLayout({
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
 
   return (
-    <div className="flex min-h-screen bg-bg">
-      <Sidebar
-        studioName={ctx.studio.name}
-        logoUrl={logoUrl}
-        collaborator={ctx.isCollaborator}
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
-          email={ctx.email}
-          needsYouCount={outstanding.length}
+    <AiAvailabilityProvider enabled={aiConfigured()}>
+      <div className="flex min-h-screen bg-bg">
+        <Sidebar
+          studioName={ctx.studio.name}
+          logoUrl={logoUrl}
           collaborator={ctx.isCollaborator}
         />
-        <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">{children}</main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar
+            email={ctx.email}
+            needsYouCount={outstanding.length}
+            collaborator={ctx.isCollaborator}
+          />
+          <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">
+            {children}
+          </main>
+        </div>
+        <Toaster />
       </div>
-      <Toaster />
-    </div>
+    </AiAvailabilityProvider>
   );
 }

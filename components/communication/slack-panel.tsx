@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
+import { PolishButton } from "@/components/communication/polish-button";
 import { AttachmentCard } from "@/components/attachments/attachment-card";
 import { PlusIcon, HashIcon } from "@/components/app-shell/nav-icons";
 import { longDate } from "@/lib/format";
@@ -297,7 +298,13 @@ export function SlackReader({
                     {sendError}
                   </p>
                 )}
-                <div className="mt-2 flex justify-end">
+                <div className="mt-2 flex items-center justify-end gap-3">
+                  <PolishButton
+                    value={draft}
+                    onChange={setDraft}
+                    channel="chat"
+                    className="mr-auto"
+                  />
                   <Button
                     size="sm"
                     onClick={send}

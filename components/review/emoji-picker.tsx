@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AnchoredPopover } from "@/components/review/anchored-popover";
+import { AnchoredPopover } from "@/components/ui/anchored-popover";
 
 // Small emoji palette for review comments. Deliberately a curated set rather
 // than a full picker library: feedback on a cut needs reaction and tone, not

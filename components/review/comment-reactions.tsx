@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AnchoredPopover } from "@/components/review/anchored-popover";
+import { AnchoredPopover } from "@/components/ui/anchored-popover";
 import { REACTIONS, type CommentReaction } from "@/lib/review-reactions";
 
 // Reaction chips under a comment, plus the "add a reaction" picker. A chip

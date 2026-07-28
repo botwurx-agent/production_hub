@@ -4,10 +4,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 // A popover that renders into document.body and positions itself against an
-// anchor element. Two reasons it has to work this way inside the review rail:
-// the comment list scrolls (overflow-y-auto clips absolutely positioned
-// children), and a picker opened from a button near an edge has to flip rather
-// than run off the panel. Positioning is clamped to the viewport either way.
+// anchor element. Two reasons it has to work this way: the panels it opens in
+// scroll (overflow-y-auto clips absolutely positioned children), and a menu
+// opened from a button near an edge has to flip rather than run off the panel.
+// Positioning is clamped to the viewport either way.
 export function AnchoredPopover({
   anchorRef,
   open,

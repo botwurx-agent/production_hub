@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/input";
 import { LinkEmailModal } from "@/components/projects/link-email-modal";
 import { ImportAttachment } from "@/components/projects/import-attachment";
 import { AttachmentCard } from "@/components/attachments/attachment-card";
+import { PolishButton } from "@/components/communication/polish-button";
 import {
   DrivePickerModal,
   type PickedDriveFile,
@@ -544,7 +545,12 @@ export function ThreadReader({
                   onChange={(e) => addFiles(e.target.files)}
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <PolishButton
+                      value={reply}
+                      onChange={setReply}
+                      channel="email"
+                    />
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}

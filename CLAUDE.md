@@ -269,6 +269,24 @@ implemented (out of strict order, driven by the operator's real needs).
   Project summary, AI-drafted client update, AI-drafted lead outreach. Rules-
   based (no-LLM) stalled-work flags (lib/outstanding.ts) and lead follow-up
   flags (lib/leads-followup.ts).
+  POLISH BUTTON (composer rewrite, BUILT): a Gmail-style "polish this before I
+  send it" in every Communication composer (Gmail reply in components/projects/
+  project-email.tsx, plus the Slack and Google Chat panels). Entirely manual:
+  nothing runs until pressed, nothing is sent, the producer reads/edits the
+  result and presses Send themselves. Menu of four intents (Polish / Shorten /
+  Warm up / Firm up); the rewrite replaces the composer text in place and an
+  Undo restores the original verbatim (shown only while the box still holds
+  exactly what the rewrite produced, so it cannot clobber later edits or
+  reappear over a fresh message after a send). lib/ai.ts gained polishMessage +
+  POLISH_INTENTS/isPolishIntent and a per-call CompleteOpts ({fast, maxTokens}):
+  `fast` swaps in ANTHROPIC_FAST_MODEL (haiku) and sends a plain request, since
+  adaptive thinking + output_config are main-model only. Server action
+  app/(app)/polish-actions.ts polishDraft (auth + aiConfigured + 8000-char cap;
+  never given project data, so it cannot invent facts). The button hides itself
+  when no provider key is set, via components/ai/ai-availability.tsx (a context
+  set once from aiConfigured() in the app layout) rather than threading a prop
+  through every page with a composer. AnchoredPopover moved components/review ->
+  components/ui since it is now shared.
 - CRM depth (Phase 5): leads pipeline board, follow-up flags, AI outreach,
   editable lead notes. NOTE: superseded by the CRM restructure below (leads ->
   deals); the old leads UI is dormant (routes redirect), tables preserved.
