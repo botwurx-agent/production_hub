@@ -3,8 +3,10 @@ import { requireStudioContext } from "@/lib/studio";
 import { PageHeader } from "@/components/page-header";
 import { DashboardIcon } from "@/components/app-shell/nav-icons";
 import { DashboardBody } from "@/components/dashboard/dashboard-body";
+import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import type { Stat } from "@/components/dashboard/stat-tiles";
 import { getOutstanding } from "@/lib/outstanding";
+import { loadSetupSteps } from "@/lib/setup-steps";
 import { DEAL_OPEN_STAGES } from "@/lib/status";
 import type {
   CalendarEvent,
@@ -27,6 +29,7 @@ export default async function DashboardPage() {
     { data: activityRaw },
     { data: googleAccount },
     outstanding,
+    setupSteps,
   ] = await Promise.all([
       supabase
         .from("projects")
@@ -59,6 +62,7 @@ export default async function DashboardPage() {
         .limit(1)
         .maybeSingle(),
       getOutstanding(),
+      loadSetupSteps(supabase, ctx),
     ]);
   const calendarConnected = Boolean(
     googleAccount?.scope?.includes("/auth/calendar")
@@ -183,6 +187,7 @@ export default async function DashboardPage() {
         icon={<DashboardIcon className="h-6 w-6" />}
         hue="indigo"
       />
+      <SetupChecklist steps={setupSteps} />
       <DashboardBody
         stats={stats}
         outstanding={outstanding}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/card";
 import {
   createStoryboard,
   renameStoryboard,
@@ -185,18 +186,34 @@ export function StoryboardEditor({
       {/* Active storyboard */}
       <div className="min-w-0">
         {!active ? (
-          <div className="rounded-[14px] border border-dashed border-border py-16 text-center">
-            <p className="text-sm text-text-faint">
-              No storyboards yet. Create your first one.
-            </p>
-            <button
-              onClick={newStoryboard}
-              disabled={busy}
-              className="mt-4 rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:bg-accent-strong"
-            >
-              + New storyboard
-            </button>
-          </div>
+          <EmptyState
+            hue="purple"
+            title="No storyboards yet"
+            description="An ordered grid of frames: what happens, in what order, with the sound and notes that go with each beat."
+            action={
+              <button
+                onClick={newStoryboard}
+                disabled={busy}
+                className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:bg-accent-strong"
+              >
+                + New storyboard
+              </button>
+            }
+            steps={[
+              {
+                title: "Add frames",
+                text: "Upload an image per frame or pick one from the project's assets.",
+              },
+              {
+                title: "Describe the beat",
+                text: "Scene, description, sound, and notes sit under each frame.",
+              },
+              {
+                title: "Get it approved",
+                text: "Send it to the client for pinned comments and a sign-off before you shoot.",
+              },
+            ]}
+          />
         ) : (
           <div>
             <div className="mb-4 flex items-center gap-2">

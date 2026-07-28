@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/ui/card";
 import {
   saveBoard,
   addGroup,
@@ -392,18 +393,34 @@ export function ShotBoardEditor({
         {/* Active list */}
         <div className="min-w-0">
           {!active ? (
-            <div className="rounded-[14px] border border-dashed border-border py-16 text-center">
-              <p className="text-sm text-text-faint">
-                No shot lists yet. Create your first one.
-              </p>
-              <button
-                onClick={() => act(() => addGroup(projectId))}
-                disabled={busy}
-                className="mt-4 rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:bg-accent-strong"
-              >
-                + New shot list
-              </button>
-            </div>
+            <EmptyState
+              hue="blue"
+              title="No shot lists yet"
+              description="Plan the day shot by shot: what you are covering, how it is framed, and how the camera moves."
+              action={
+                <button
+                  onClick={() => act(() => addGroup(projectId))}
+                  disabled={busy}
+                  className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:bg-accent-strong"
+                >
+                  + New shot list
+                </button>
+              }
+              steps={[
+                {
+                  title: "List the shots",
+                  text: "One row per shot: description, size, type, and camera movement. New lists start with three empty rows.",
+                },
+                {
+                  title: "Attach the reference",
+                  text: "Pick a frame from the project's assets, or upload one, so everyone sees what you mean.",
+                },
+                {
+                  title: "Take it to set",
+                  text: "Export a PDF, email it, or send it to the client for review.",
+                },
+              ]}
+            />
           ) : (
             <div className="rounded-[14px] border border-border p-4">
               {/* List header */}

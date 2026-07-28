@@ -585,7 +585,22 @@ implemented (out of strict order, driven by the operator's real needs).
   client's archived projects (history). NO hard delete yet (deferred; would also
   need to purge storage blobs).
 - EmptyState (components/ui/card.tsx) supports rich empty states with an optional
-  "here's how it works" 3-step row + hue; used on Projects/Leads/project Assets.
+  "here's how it works" 3-step row + hue; used on Projects/Leads/Clients/
+  Communication/project Assets/project Review, and (added later) on the BOARDS
+  workspace, the SHOT LIST editor, and the STORYBOARD editor, which previously
+  showed a bare "none yet, create one" line. Per the competitor assessment these
+  are the surfaces where a blank screen was costing us the "usable without a
+  tutorial" bar.
+- FIRST-RUN SETUP CHECKLIST (BUILT, dashboard): lib/setup-steps.ts loadSetupSteps
+  derives five steps (add a client / start a project / add your logo / connect a
+  tool / invite your team) from REAL DATA (count queries + ctx.studio.logo_path),
+  not from a "seen it" flag, so a step that gets undone correctly comes back and
+  there is no stored state to drift. components/dashboard/setup-checklist.tsx
+  renders them above the dashboard body with a quiet per-step left accent
+  (wayfinding, deliberately lighter than a status chip); the whole block hides
+  itself once every step is done, and a manual "Hide" persists in localStorage
+  ("dashboard.setupDismissed") since it is a per-person preference about a hint,
+  not studio state worth a migration.
 - Bolder visual language rolled app-wide (operator wanted it less dialed down):
   shared IconTile (components/ui/icon-tile.tsx) = colored per-hue rounded icon
   chip for identity/wayfinding. PageHeader takes icon+hue and draws a quiet

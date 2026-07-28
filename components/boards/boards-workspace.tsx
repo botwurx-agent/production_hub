@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/card";
+import { BoardsIcon } from "@/components/app-shell/nav-icons";
 import { BoardCanvas } from "@/components/boards/board-canvas";
 import { BoardAssetPicker } from "@/components/boards/board-asset-picker";
 import { BoardFigmaModal } from "@/components/boards/board-figma-modal";
@@ -653,15 +655,32 @@ export function BoardsWorkspace({
       </div>
 
       {!active ? (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-center">
-            <p className="mb-3 text-sm text-text-muted">
-              No {noun}s yet. Create one to start collecting visuals.
-            </p>
-            <Button onClick={newBoard} disabled={busy}>
-              Create your first {noun}
-            </Button>
-          </div>
+        <div className="flex flex-1 items-center justify-center [&>div]:w-full">
+          <EmptyState
+            hue="purple"
+            icon={<BoardsIcon className="h-7 w-7" />}
+            title={`No ${noun}s yet`}
+            description={`A ${noun} is a freeform canvas: drop in references, arrange them, connect them, and write on top.`}
+            action={
+              <Button onClick={newBoard} disabled={busy}>
+                Create your first {noun}
+              </Button>
+            }
+            steps={[
+              {
+                title: "Collect",
+                text: "Upload images, paste a link, or pull straight from Drive, Figma, or the project's assets.",
+              },
+              {
+                title: "Arrange",
+                text: "Drag, resize, and group into columns. Draw arrows between anything to show the thinking.",
+              },
+              {
+                title: "Share",
+                text: "Send it for review and collect pinned comments on the exact frame.",
+              },
+            ]}
+          />
         </div>
       ) : (
         <>

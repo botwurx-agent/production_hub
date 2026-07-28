@@ -224,13 +224,16 @@ Naming is a placeholder; the point is phase-first organization in our quiet visu
 
 Ordered by impact on a real commercial job vs effort. Phase references map to our roadmap.
 
-1. **Reorganize the project workspace around production phases** (section 5), rendered in our
-   quiet per-phase accent. Highest impact on our core usability bet. Medium effort; mostly a
-   layout/IA change over existing features.
-2. **Add rich empty states + "here's how it works"** to Projects, Boards, Production, Review,
-   Communication. Low effort, high perceived-quality and self-teaching payoff.
-3. **Guided first-run setup cards on the dashboard** (create project, add logo, connect a
-   tool), auto-dismiss on completion. Low effort.
+1. ~~**Reorganize the project workspace around production phases**~~ DONE. The project
+   detail is now a phase-banded hub (Plan / Visualize / Review / Produce) with per-module
+   identity color kept separate from status color.
+2. ~~**Add rich empty states + "here's how it works"**~~ DONE for Projects, Clients,
+   Pipeline, Communication, project Assets, project Review, Boards, Shot list, and
+   Storyboards. Remaining blank surfaces are small in-card lists (project tasks, contacts)
+   where a three-step explainer would be heavier than the thing it explains.
+3. ~~**Guided first-run setup cards on the dashboard**~~ DONE. Five steps derived from real
+   data (client, project, logo, connector, team), auto-hiding as each completes and gone
+   entirely once finished.
 4. **Short creation wizards with defaults** for new project (type-driven) and new shot board /
    call sheet ("you can always change this later"). Low/medium effort.
 5. **Two-path creation everywhere** ("Start blank" OR "Start from assets/Drive/Figma").
