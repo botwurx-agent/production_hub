@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ReviewLink } from "@/lib/database.types";
 import type { ApprovalStatus } from "@/lib/database.types";
+import { assetStorage } from "@/lib/asset-storage";
 import { normalizeDrawing, type Drawing } from "@/lib/review-drawing";
 import type { CommentReaction } from "@/lib/review-reactions";
 import { loadReactions } from "@/lib/review-reactions-load";
@@ -289,14 +290,19 @@ export type DocReviewData = {
 const DOC_SIGNED_TTL = 60 * 60;
 
 async function signPaths(
-  service: SupabaseClient<Database>,
+  _client: SupabaseClient<Database>,
   paths: string[]
 ): Promise<Map<string, string>> {
   const signed = new Map<string, string>();
   const clean = paths.filter(Boolean);
   if (clean.length === 0) return signed;
-  const { data } = await service.storage
-    .from("assets")
+  // Signed via assetStorage(), not the passed client. loadDocSurface serves
+  // both the public portal (service client) and the internal RLS path, and on
+  // the latter a project collaborator has no studio membership, so the
+  // member-gated bucket policy would refuse to sign and every image would come
+  // back blank. The rows themselves were already authorized by whichever client
+  // read them, so this only bypasses the storage folder policy.
+  const { data } = await assetStorage()
     .createSignedUrls(clean, DOC_SIGNED_TTL);
   for (const s of data ?? []) if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
   return signed;

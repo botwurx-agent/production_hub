@@ -27,12 +27,12 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
 
 ## Deliberate follow-ups (not beta blockers)
 
-- **Collaborator asset-version upload + internal doc-review image signing.** The
-  two known gaps from CLAUDE.md: a project collaborator still cannot upload a new
-  asset version (client-side storage is member-gated) and internal doc-review
-  images are not service-signed for them. Their main tasks (storyboard/moodboard
-  edits, call sheets) work. Fix = a server upload endpoint that service-uploads
-  bytes, mirroring the storyboard path.
+- ~~Collaborator asset-version upload + internal doc-review image signing.~~
+  DONE. Uploads stay direct-to-storage (a server relay would hit the ~4.5MB
+  request-body cap and break video) but are now authorized by a server-minted
+  one-shot signed upload URL, gated on project access rather than studio
+  membership. Doc-review images sign through assetStorage(). Still worth an
+  end-to-end run with a real second account.
 - **Next.js 15/16 (React 19) upgrade.** We patched to 14.2.35 (clearing the
   critical Server Actions DoS + middleware SSRF). The remaining audit advisories
   are fixed only in Next 15/16, which is a major React 19 migration and should be

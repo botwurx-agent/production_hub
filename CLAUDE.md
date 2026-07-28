@@ -656,13 +656,23 @@ membership). We only OPEN the project-scoped tables to them.
   their project's images. Server-side uploads swapped too (storyboard frame,
   production shot-board image, moodboard device-file image) so a collaborator can
   add storyboard/moodboard images.
-- STILL a gap: the asset-version upload (Assets page) is CLIENT-side (browser
-  uploads directly to storage, then posts the storage_path), so a collaborator
-  can't add a new asset/version yet (client storage RLS is is_studio_member). Fix
-  = a server upload endpoint that takes bytes + service-uploads; deferred (their
-  main tasks -- storyboard/moodboard edits, call sheets -- work). Minor edge:
-  internal doc-review image signing (loadDocSurface RLS path) not yet service-
-  backed for collaborators.
+- Asset-version upload (step 5, BUILT): the browser still uploads DIRECTLY to
+  storage, because routing bytes through a server action would hit the ~4.5MB
+  serverless request-body cap and break video entirely. What changed is what
+  authorizes the upload. app/(app)/projects/[id]/upload-actions.ts
+  createAssetUploadUrl(projectId, fileName) reads the project through the RLS
+  client (whose policy is exactly `is_studio_member OR can_access_project`, so
+  the read IS the access check for members and collaborators alike), then mints
+  a one-shot signed upload URL with the service role and returns {path, token}.
+  components/projects/upload-file.ts uploadAssetFile calls that, then
+  uploadToSignedUrl. The server picks the path, so the browser cannot choose
+  which studio folder it writes into. The `versions` insert that follows was
+  already collaborator-open, so the whole chain works.
+- Doc-review image signing (BUILT): signPaths in lib/review-links.ts now signs
+  via assetStorage() rather than the passed client. loadDocSurface serves both
+  the public portal (service client) and the internal RLS path, and on the
+  latter a collaborator has no membership, so the member-gated bucket policy
+  refused to sign and every image came back blank.
 - NEXT: (5) end-to-end verification with a real second (collaborator) account
   (invite -> accept -> confirm they see only their project + can edit storyboard/
   moodboard + cannot reach studio-wide pages). Collaborator asset viewing +
