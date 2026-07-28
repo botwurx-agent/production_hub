@@ -31,6 +31,8 @@ const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 type TypeFilter = "all" | "shoot" | "due";
 type ViewMode = "month" | "agenda";
 
+const CAL_VIEW_KEY = "dashboard.calendar.view";
+
 // A Google event mapped to a local day + label for display.
 type GDisplay = GCalEvent & { dateKey: string; timeLabel: string };
 
@@ -59,7 +61,33 @@ export function Calendar({
   initialMonth: number;
   todayStr: string;
 }) {
+  // Month view needs seven columns, which on a phone leaves each day about
+  // 48px wide and truncates every event title to nothing. Agenda is the usable
+  // shape there, so small screens open on it unless the reader picks otherwise.
   const [view, setView] = useState<ViewMode>("month");
+
+  useEffect(() => {
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(CAL_VIEW_KEY);
+    } catch {
+      // ignore unreadable preferences
+    }
+    if (saved === "month" || saved === "agenda") {
+      setView(saved);
+      return;
+    }
+    if (window.matchMedia("(max-width: 639px)").matches) setView("agenda");
+  }, []);
+
+  function chooseView(next: ViewMode) {
+    setView(next);
+    try {
+      localStorage.setItem(CAL_VIEW_KEY, next);
+    } catch {
+      // ignore quota / private mode
+    }
+  }
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth); // 0-11
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -215,10 +243,10 @@ export function Calendar({
             </>
           )}
           <div className="inline-flex items-center gap-1 rounded-pill border border-border bg-surface p-1">
-            <button onClick={() => setView("month")} className={segBtn(view === "month")}>
+            <button onClick={() => chooseView("month")} className={segBtn(view === "month")}>
               Month
             </button>
-            <button onClick={() => setView("agenda")} className={segBtn(view === "agenda")}>
+            <button onClick={() => chooseView("agenda")} className={segBtn(view === "agenda")}>
               Agenda
             </button>
           </div>
@@ -292,7 +320,7 @@ export function Calendar({
           ))}
           {cells.map((d, i) => {
             if (d === null)
-              return <div key={i} className="min-h-[76px] rounded-[10px]" />;
+              return <div key={i} className="min-h-[52px] rounded-[10px] sm:min-h-[76px]" />;
             const ds = `${year}-${pad(month + 1)}-${pad(d)}`;
             const evs = byDate.get(ds) ?? [];
             const gEvs = gByDate.get(ds) ?? [];
@@ -301,7 +329,7 @@ export function Calendar({
             return (
               <div
                 key={i}
-                className={`group min-h-[76px] rounded-[10px] border p-1.5 ${
+                className={`group min-h-[52px] rounded-[10px] border p-1.5 sm:min-h-[76px] ${
                   isToday ? "border-accent bg-accent-soft/50" : "border-border bg-surface"
                 }`}
               >
@@ -327,7 +355,22 @@ export function Calendar({
                     {d}
                   </span>
                 </div>
-                <div className="space-y-1">
+                {/* Under sm a 48px column cannot show a title, so the day
+                    carries a count and the agenda view does the detail. */}
+                {total > 0 && (
+                  <div className="sm:hidden">
+                    <span
+                      className="block rounded-[5px] px-1 py-0.5 text-center text-[10px] font-bold"
+                      style={{
+                        backgroundColor: "var(--accent-soft)",
+                        color: "var(--accent)",
+                      }}
+                    >
+                      {total}
+                    </span>
+                  </div>
+                )}
+                <div className="hidden space-y-1 sm:block">
                   {evs.slice(0, 2).map((e, j) => (
                     <Link
                       key={`p${j}`}
