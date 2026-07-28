@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { logWrite } from "@/lib/log";
 
 export type EventState = { error?: string } | null;
 
@@ -93,7 +94,10 @@ export async function deleteProjectEvent(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("project_events").delete().eq("id", eventId);
+  await logWrite(
+    "deleteProjectEvent/project_events",
+    supabase.from("project_events").delete().eq("id", eventId)
+  );
   revalidatePath(`/projects/${projectId}/calendar`);
   revalidatePath(`/projects/${projectId}`);
 }

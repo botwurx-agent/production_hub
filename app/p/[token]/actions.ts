@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import { createNotification } from "@/lib/notifications";
 import { allowPublic } from "@/lib/rate-limit";
+import { logWrite } from "@/lib/log";
 
 export type AcceptState = { error?: string; ok?: boolean } | null;
 
@@ -24,10 +25,13 @@ export async function recordDocView(token: string): Promise<void> {
     .eq("share_token", token)
     .maybeSingle();
   if (!doc || doc.viewed_at || doc.accepted_at) return;
-  await service
-    .from("billing_documents")
-    .update({ viewed_at: new Date().toISOString() })
-    .eq("share_token", token);
+  await logWrite(
+    "recordDocView/billing_documents",
+    service
+      .from("billing_documents")
+      .update({ viewed_at: new Date().toISOString() })
+      .eq("share_token", token)
+  );
 }
 
 export async function acceptBillingDoc(
@@ -78,12 +82,15 @@ export async function acceptBillingDoc(
 
   const label = "proposal";
   if (doc.project_id) {
-    await service.from("activity").insert({
-      studio_id: doc.studio_id,
-      project_id: doc.project_id,
-      type: "activity",
-      content: `${name} signed and accepted the ${label}`,
-    });
+    await logWrite(
+      "acceptBillingDoc/activity",
+      service.from("activity").insert({
+        studio_id: doc.studio_id,
+        project_id: doc.project_id,
+        type: "activity",
+        content: `${name} signed and accepted the ${label}`,
+      })
+    );
     await createNotification(service, {
       studio_id: doc.studio_id,
       project_id: doc.project_id,

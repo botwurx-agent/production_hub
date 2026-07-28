@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeDrawing } from "@/lib/review-drawing";
 import { REACTIONS } from "@/lib/review-reactions";
-import { reportError } from "@/lib/log";
+import { reportError, logWrite } from "@/lib/log";
 import { requireStudioContext } from "@/lib/studio";
 import { syncAssetStatusFromApprovals } from "@/lib/review-status";
 import type { ApprovalStatus } from "@/lib/database.types";
@@ -129,10 +129,13 @@ export async function resolveReviewComment(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("review_comments")
-    .update({ resolved_at: resolved ? new Date().toISOString() : null })
-    .eq("id", commentId);
+  await logWrite(
+    "resolveReviewComment/review_comments",
+    supabase
+      .from("review_comments")
+      .update({ resolved_at: resolved ? new Date().toISOString() : null })
+      .eq("id", commentId)
+  );
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/assets`);
 }
@@ -158,16 +161,22 @@ export async function setVersionApproval(
   if (status === "pending") {
     if (existing) await supabase.from("approvals").delete().eq("id", existing.id);
   } else if (existing) {
-    await supabase.from("approvals").update({ status }).eq("id", existing.id);
+    await logWrite(
+      "setVersionApproval/approvals",
+      supabase.from("approvals").update({ status }).eq("id", existing.id)
+    );
   } else {
-    await supabase.from("approvals").insert({
-      studio_id: ctx.studio.id,
-      target_type: "version",
-      target_id: versionId,
-      reviewer_user_id: ctx.userId,
-      status,
-      created_by: ctx.userId,
-    });
+    await logWrite(
+      "setVersionApproval/approvals",
+      supabase.from("approvals").insert({
+        studio_id: ctx.studio.id,
+        target_type: "version",
+        target_id: versionId,
+        reviewer_user_id: ctx.userId,
+        status,
+        created_by: ctx.userId,
+      })
+    );
   }
 
   // Move the asset through the review pipeline so the (status-filtered) Review
@@ -186,13 +195,16 @@ export async function setVersionApproval(
         (v.asset as { name: string } | null)?.name ?? "an asset";
       const label =
         status === "approved" ? "Approved" : "Requested changes on";
-      await supabase.from("activity").insert({
-        studio_id: ctx.studio.id,
-        project_id: projectId,
-        author_id: ctx.userId,
-        type: "approval",
-        content: `${label} v${v.version_number} of "${assetName}"`,
-      });
+      await logWrite(
+        "setVersionApproval/activity",
+        supabase.from("activity").insert({
+          studio_id: ctx.studio.id,
+          project_id: projectId,
+          author_id: ctx.userId,
+          type: "approval",
+          content: `${label} v${v.version_number} of "${assetName}"`,
+        })
+      );
     }
   }
 
@@ -285,10 +297,13 @@ export async function toggleReviewReaction(
     .maybeSingle();
 
   if (existing) {
-    await supabase
-      .from("review_comment_reactions")
-      .delete()
-      .eq("id", existing.id);
+    await logWrite(
+      "toggleReviewReaction/review_comment_reactions",
+      supabase
+        .from("review_comment_reactions")
+        .delete()
+        .eq("id", existing.id)
+    );
   } else {
     const { error } = await supabase
       .from("review_comment_reactions")

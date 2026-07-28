@@ -7,6 +7,7 @@ import { CRM_MANUAL_ACTIVITY } from "@/lib/status";
 import type { CrmActivityKind } from "@/lib/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 // An activity/task always carries account_id so an account rolls up its deals'
 // entries. When logged on a deal, derive the account from the deal.
@@ -51,14 +52,17 @@ export async function logActivity(input: {
     input.accountId ?? null
   );
 
-  await supabase.from("crm_activities").insert({
-    studio_id: ctx.studio.id,
-    account_id: accountId,
-    deal_id: input.dealId ?? null,
-    kind,
-    body,
-    author_id: ctx.userId,
-  });
+  await logWrite(
+    "logActivity/crm_activities",
+    supabase.from("crm_activities").insert({
+      studio_id: ctx.studio.id,
+      account_id: accountId,
+      deal_id: input.dealId ?? null,
+      kind,
+      body,
+      author_id: ctx.userId,
+    })
+  );
   refresh(input.dealId ?? null, accountId);
 }
 
@@ -69,7 +73,10 @@ export async function deleteActivity(
 ) {
   await requireStudioContext();
   const supabase = db();
-  await supabase.from("crm_activities").delete().eq("id", id);
+  await logWrite(
+    "deleteActivity/crm_activities",
+    supabase.from("crm_activities").delete().eq("id", id)
+  );
   refresh(dealId, accountId);
 }
 
@@ -84,14 +91,17 @@ export async function recordDealEvent(
   kind: CrmActivityKind,
   body: string
 ) {
-  await supabase.from("crm_activities").insert({
-    studio_id: studioId,
-    account_id: accountId,
-    deal_id: dealId,
-    kind,
-    body,
-    author_id: userId,
-  });
+  await logWrite(
+    "recordDealEvent/crm_activities",
+    supabase.from("crm_activities").insert({
+      studio_id: studioId,
+      account_id: accountId,
+      deal_id: dealId,
+      kind,
+      body,
+      author_id: userId,
+    })
+  );
 }
 
 // --- Tasks / reminders -------------------------------------------------------
@@ -113,15 +123,18 @@ export async function addTask(input: {
     input.accountId ?? null
   );
 
-  await supabase.from("crm_tasks").insert({
-    studio_id: ctx.studio.id,
-    account_id: accountId,
-    deal_id: input.dealId ?? null,
-    title,
-    due_date: input.dueDate?.trim() || null,
-    assignee_id: ctx.userId,
-    created_by: ctx.userId,
-  });
+  await logWrite(
+    "addTask/crm_tasks",
+    supabase.from("crm_tasks").insert({
+      studio_id: ctx.studio.id,
+      account_id: accountId,
+      deal_id: input.dealId ?? null,
+      title,
+      due_date: input.dueDate?.trim() || null,
+      assignee_id: ctx.userId,
+      created_by: ctx.userId,
+    })
+  );
   refresh(input.dealId ?? null, accountId);
 }
 
@@ -133,10 +146,13 @@ export async function toggleTask(
 ) {
   await requireStudioContext();
   const supabase = db();
-  await supabase
-    .from("crm_tasks")
-    .update({ done, done_at: done ? new Date().toISOString() : null })
-    .eq("id", id);
+  await logWrite(
+    "toggleTask/crm_tasks",
+    supabase
+      .from("crm_tasks")
+      .update({ done, done_at: done ? new Date().toISOString() : null })
+      .eq("id", id)
+  );
   refresh(dealId, accountId);
 }
 
@@ -147,6 +163,9 @@ export async function deleteTask(
 ) {
   await requireStudioContext();
   const supabase = db();
-  await supabase.from("crm_tasks").delete().eq("id", id);
+  await logWrite(
+    "deleteTask/crm_tasks",
+    supabase.from("crm_tasks").delete().eq("id", id)
+  );
   refresh(dealId, accountId);
 }

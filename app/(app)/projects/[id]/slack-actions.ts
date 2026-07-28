@@ -14,6 +14,7 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import type { OwnerType } from "@/app/(app)/projects/[id]/email-actions";
+import { logWrite } from "@/lib/log";
 
 export type SlackState = { error?: string } | null;
 
@@ -127,16 +128,22 @@ export async function linkSlackChannel(
 export async function markChannelRead(rowId: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("slack_channels")
-    .update({ last_read_at: new Date().toISOString() })
-    .eq("id", rowId);
+  await logWrite(
+    "markChannelRead/slack_channels",
+    supabase
+      .from("slack_channels")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("id", rowId)
+  );
 }
 
 export async function unlinkSlackChannel(id: string, revalidate?: string) {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("slack_channels").delete().eq("id", id);
+  await logWrite(
+    "unlinkSlackChannel/slack_channels",
+    supabase.from("slack_channels").delete().eq("id", id)
+  );
   if (revalidate) revalidatePath(revalidate);
   revalidatePath("/communication");
 }
@@ -205,18 +212,24 @@ export async function importSlackFile(
       .single();
     if (vErr) return { error: vErr.message };
 
-    await supabase
-      .from("assets")
-      .update({ current_version_id: version.id })
-      .eq("id", asset.id);
+    await logWrite(
+      "importSlackFile/assets",
+      supabase
+        .from("assets")
+        .update({ current_version_id: version.id })
+        .eq("id", asset.id)
+    );
 
-    await supabase.from("activity").insert({
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      author_id: ctx.userId,
-      type: "upload",
-      content: `Imported "${filename}" from Slack`,
-    });
+    await logWrite(
+      "importSlackFile/activity",
+      supabase.from("activity").insert({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        author_id: ctx.userId,
+        type: "upload",
+        content: `Imported "${filename}" from Slack`,
+      })
+    );
 
     revalidatePath(`/projects/${projectId}`);
     return null;

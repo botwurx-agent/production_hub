@@ -17,6 +17,7 @@ import {
 import { getDriveFileBytes } from "@/lib/googledrive";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type EmailState = { error?: string } | null;
 export type OwnerType = "project" | "lead" | "client";
@@ -172,13 +173,16 @@ async function deliverReply(
         attachments.length > 0
           ? ` with ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}`
           : "";
-      await supabase.from("activity").insert({
-        studio_id: ctx.studio.id,
-        project_id: opts.projectId,
-        author_id: ctx.userId,
-        type: "activity",
-        content: `Replied via email: "${rc.subject}"${suffix}`,
-      });
+      await logWrite(
+        "deliverReply/activity",
+        supabase.from("activity").insert({
+          studio_id: ctx.studio.id,
+          project_id: opts.projectId,
+          author_id: ctx.userId,
+          type: "activity",
+          content: `Replied via email: "${rc.subject}"${suffix}`,
+        })
+      );
     }
     if (opts.revalidate) revalidatePath(opts.revalidate);
     revalidatePath("/communication");
@@ -290,16 +294,22 @@ export async function sendReplyWithFiles(
 export async function markThreadRead(threadRowId: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("email_threads")
-    .update({ last_read_at: new Date().toISOString() })
-    .eq("id", threadRowId);
+  await logWrite(
+    "markThreadRead/email_threads",
+    supabase
+      .from("email_threads")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("id", threadRowId)
+  );
 }
 
 export async function unlinkThread(threadRowId: string, revalidate?: string) {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("email_threads").delete().eq("id", threadRowId);
+  await logWrite(
+    "unlinkThread/email_threads",
+    supabase.from("email_threads").delete().eq("id", threadRowId)
+  );
   if (revalidate) revalidatePath(revalidate);
   revalidatePath("/communication");
 }
@@ -425,18 +435,24 @@ export async function importAttachment(
       .single();
     if (vErr) return { error: vErr.message };
 
-    await supabase
-      .from("assets")
-      .update({ current_version_id: version.id })
-      .eq("id", asset.id);
+    await logWrite(
+      "importAttachment/assets",
+      supabase
+        .from("assets")
+        .update({ current_version_id: version.id })
+        .eq("id", asset.id)
+    );
 
-    await supabase.from("activity").insert({
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      author_id: ctx.userId,
-      type: "upload",
-      content: `Imported "${filename}" from email`,
-    });
+    await logWrite(
+      "importAttachment/activity",
+      supabase.from("activity").insert({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        author_id: ctx.userId,
+        type: "upload",
+        content: `Imported "${filename}" from email`,
+      })
+    );
 
     revalidatePath(`/projects/${projectId}`);
     return null;
@@ -501,18 +517,24 @@ export async function importAttachmentAsVersion(
       .single();
     if (vErr) return { error: vErr.message };
 
-    await supabase
-      .from("assets")
-      .update({ current_version_id: version.id })
-      .eq("id", assetId);
+    await logWrite(
+      "importAttachmentAsVersion/assets",
+      supabase
+        .from("assets")
+        .update({ current_version_id: version.id })
+        .eq("id", assetId)
+    );
 
-    await supabase.from("activity").insert({
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      author_id: ctx.userId,
-      type: "upload",
-      content: `Added v${versionNumber} to "${asset.name}" from email`,
-    });
+    await logWrite(
+      "importAttachmentAsVersion/activity",
+      supabase.from("activity").insert({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        author_id: ctx.userId,
+        type: "upload",
+        content: `Added v${versionNumber} to "${asset.name}" from email`,
+      })
+    );
 
     revalidatePath(`/projects/${projectId}`);
     return null;

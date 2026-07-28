@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
 import type { Board } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type StoryboardState = { error?: string } | null;
 
@@ -44,13 +45,16 @@ export async function createStoryboard(
     .single();
   if (error) return { error: error.message };
 
-  await supabase.from("storyboard_frames").insert(
-    [0, 1, 2].map((position) => ({
-      studio_id: ctx.studio.id,
-      board_id: board.id,
-      position,
-      created_by: ctx.userId,
-    }))
+  await logWrite(
+    "createStoryboard/storyboard_frames",
+    supabase.from("storyboard_frames").insert(
+      [0, 1, 2].map((position) => ({
+        studio_id: ctx.studio.id,
+        board_id: board.id,
+        position,
+        created_by: ctx.userId,
+      }))
+    )
   );
   rp(projectId);
   return { board: board as Board };
@@ -63,10 +67,13 @@ export async function renameStoryboard(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("boards")
-    .update({ name: name.trim() || "Storyboard", updated_at: new Date().toISOString() })
-    .eq("id", boardId);
+  await logWrite(
+    "renameStoryboard/boards",
+    supabase
+      .from("boards")
+      .update({ name: name.trim() || "Storyboard", updated_at: new Date().toISOString() })
+      .eq("id", boardId)
+  );
   rp(projectId);
 }
 
@@ -76,7 +83,10 @@ export async function deleteStoryboard(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("boards").delete().eq("id", boardId);
+  await logWrite(
+    "deleteStoryboard/boards",
+    supabase.from("boards").delete().eq("id", boardId)
+  );
   rp(projectId);
 }
 
@@ -111,7 +121,10 @@ export async function updateFrame(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("storyboard_frames").update(patch).eq("id", frameId);
+  await logWrite(
+    "updateFrame/storyboard_frames",
+    supabase.from("storyboard_frames").update(patch).eq("id", frameId)
+  );
   rp(projectId);
 }
 
@@ -121,7 +134,10 @@ export async function deleteFrame(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("storyboard_frames").delete().eq("id", frameId);
+  await logWrite(
+    "deleteFrame/storyboard_frames",
+    supabase.from("storyboard_frames").delete().eq("id", frameId)
+  );
   rp(projectId);
 }
 
@@ -132,8 +148,14 @@ export async function swapFrames(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("storyboard_frames").update({ position: b.position }).eq("id", a.id);
-  await supabase.from("storyboard_frames").update({ position: a.position }).eq("id", b.id);
+  await logWrite(
+    "swapFrames/storyboard_frames",
+    supabase.from("storyboard_frames").update({ position: b.position }).eq("id", a.id)
+  );
+  await logWrite(
+    "swapFrames/storyboard_frames",
+    supabase.from("storyboard_frames").update({ position: a.position }).eq("id", b.id)
+  );
   rp(projectId);
 }
 
@@ -190,7 +212,10 @@ export async function restoreStoryboard(
   const keep = new Set(rows.map((r) => r.id));
   const del = (existing ?? []).map((r) => r.id).filter((id) => !keep.has(id));
   if (del.length) {
-    await supabase.from("storyboard_frames").delete().in("id", del);
+    await logWrite(
+      "restoreStoryboard/storyboard_frames",
+      supabase.from("storyboard_frames").delete().in("id", del)
+    );
   }
 
   rp(projectId);
@@ -213,15 +238,18 @@ export async function uploadFrameImage(
   const { error: upErr } = await assetStorage()
     .upload(path, bytes, { contentType: file.type || undefined, upsert: false });
   if (upErr) return { error: upErr.message };
-  await supabase
-    .from("storyboard_frames")
-    .update({
-      asset_id: null,
-      storage_path: path,
-      mime_type: file.type || null,
-      image_name: file.name,
-    })
-    .eq("id", frameId);
+  await logWrite(
+    "uploadFrameImage/storyboard_frames",
+    supabase
+      .from("storyboard_frames")
+      .update({
+        asset_id: null,
+        storage_path: path,
+        mime_type: file.type || null,
+        image_name: file.name,
+      })
+      .eq("id", frameId)
+  );
   rp(projectId);
   return null;
 }
@@ -261,15 +289,18 @@ export async function setFrameAsset(
     version = data;
   }
 
-  await supabase
-    .from("storyboard_frames")
-    .update({
-      asset_id: assetId,
-      storage_path: version?.storage_path ?? null,
-      mime_type: version?.mime_type ?? null,
-      image_name: asset.name,
-    })
-    .eq("id", frameId);
+  await logWrite(
+    "setFrameAsset/storyboard_frames",
+    supabase
+      .from("storyboard_frames")
+      .update({
+        asset_id: assetId,
+        storage_path: version?.storage_path ?? null,
+        mime_type: version?.mime_type ?? null,
+        image_name: asset.name,
+      })
+      .eq("id", frameId)
+  );
   rp(projectId);
   return null;
 }
@@ -280,9 +311,12 @@ export async function clearFrameImage(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("storyboard_frames")
-    .update({ asset_id: null, storage_path: null, mime_type: null, image_name: null })
-    .eq("id", frameId);
+  await logWrite(
+    "clearFrameImage/storyboard_frames",
+    supabase
+      .from("storyboard_frames")
+      .update({ asset_id: null, storage_path: null, mime_type: null, image_name: null })
+      .eq("id", frameId)
+  );
   rp(projectId);
 }

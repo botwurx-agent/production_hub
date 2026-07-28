@@ -10,6 +10,7 @@ import { createNotification } from "@/lib/notifications";
 import { syncAssetStatusFromApprovals } from "@/lib/review-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ReviewLink, ApprovalStatus } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type PortalState = { error?: string } | null;
 
@@ -35,12 +36,15 @@ async function logActivity(
   link: ReviewLink,
   content: string
 ) {
-  await service.from("activity").insert({
-    studio_id: link.studio_id,
-    project_id: link.project_id,
-    type: "activity",
-    content,
-  });
+  await logWrite(
+    "logActivity/activity",
+    service.from("activity").insert({
+      studio_id: link.studio_id,
+      project_id: link.project_id,
+      type: "activity",
+      content,
+    })
+  );
 }
 
 // When a client leaves feedback on a shared doc that isn't formally in the review
@@ -54,14 +58,17 @@ async function ensureDocReview(service: SupabaseClient<Database>, link: ReviewLi
     .eq("target_id", link.target_id)
     .maybeSingle();
   if (existing) return;
-  await service.from("doc_reviews").insert({
-    studio_id: link.studio_id,
-    project_id: link.project_id,
-    target_type: link.target_type,
-    target_id: link.target_id,
-    status: "in_review",
-    created_by: null,
-  });
+  await logWrite(
+    "ensureDocReview/doc_reviews",
+    service.from("doc_reviews").insert({
+      studio_id: link.studio_id,
+      project_id: link.project_id,
+      target_type: link.target_type,
+      target_id: link.target_id,
+      status: "in_review",
+      created_by: null,
+    })
+  );
 }
 
 export async function submitClientComment(
@@ -627,10 +634,13 @@ export async function toggleClientReaction(
     .maybeSingle();
 
   if (existing) {
-    await service
-      .from("review_comment_reactions")
-      .delete()
-      .eq("id", existing.id);
+    await logWrite(
+      "toggleClientReaction/review_comment_reactions",
+      service
+        .from("review_comment_reactions")
+        .delete()
+        .eq("id", existing.id)
+    );
   } else {
     const { error } = await service.from("review_comment_reactions").insert({
       studio_id: link.studio_id,

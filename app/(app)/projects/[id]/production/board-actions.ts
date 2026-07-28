@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
+import { logWrite } from "@/lib/log";
 
 export type BoardActionState = { error?: string } | null;
 
@@ -99,14 +100,20 @@ export async function updateFlavor(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shot_board_flavors").update(patch).eq("id", id);
+  await logWrite(
+    "updateFlavor/shot_board_flavors",
+    supabase.from("shot_board_flavors").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
 export async function deleteFlavor(projectId: string, id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shot_board_flavors").delete().eq("id", id);
+  await logWrite(
+    "deleteFlavor/shot_board_flavors",
+    supabase.from("shot_board_flavors").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -138,14 +145,17 @@ export async function addGroup(projectId: string): Promise<BoardActionState> {
 
   // A shot list starts with a minimum of 3 empty shots to fill in.
   if (group) {
-    await supabase.from("shot_cards").insert(
-      [0, 1, 2].map((position) => ({
-        studio_id: ctx.studio.id,
-        group_id: group.id,
-        position,
-        tags: [],
-        created_by: ctx.userId,
-      }))
+    await logWrite(
+      "addGroup/shot_cards",
+      supabase.from("shot_cards").insert(
+        [0, 1, 2].map((position) => ({
+          studio_id: ctx.studio.id,
+          group_id: group.id,
+          position,
+          tags: [],
+          created_by: ctx.userId,
+        }))
+      )
     );
   }
 
@@ -160,14 +170,20 @@ export async function updateGroup(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shot_groups").update(patch).eq("id", id);
+  await logWrite(
+    "updateGroup/shot_groups",
+    supabase.from("shot_groups").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
 export async function deleteGroup(projectId: string, id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shot_groups").delete().eq("id", id);
+  await logWrite(
+    "deleteGroup/shot_groups",
+    supabase.from("shot_groups").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -178,8 +194,14 @@ export async function swapGroups(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shot_groups").update({ position: b.position }).eq("id", a.id);
-  await supabase.from("shot_groups").update({ position: a.position }).eq("id", b.id);
+  await logWrite(
+    "swapGroups/shot_groups",
+    supabase.from("shot_groups").update({ position: b.position }).eq("id", a.id)
+  );
+  await logWrite(
+    "swapGroups/shot_groups",
+    supabase.from("shot_groups").update({ position: a.position }).eq("id", b.id)
+  );
   rp(projectId);
 }
 
@@ -228,7 +250,10 @@ export async function updateCard(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shot_cards").update(patch).eq("id", id);
+  await logWrite(
+    "updateCard/shot_cards",
+    supabase.from("shot_cards").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -271,15 +296,18 @@ export async function setCardAsset(
     version = data;
   }
 
-  await supabase
-    .from("shot_cards")
-    .update({
-      asset_id: assetId,
-      storage_path: version?.storage_path ?? null,
-      mime_type: version?.mime_type ?? null,
-      image_name: asset.name,
-    })
-    .eq("id", cardId);
+  await logWrite(
+    "setCardAsset/shot_cards",
+    supabase
+      .from("shot_cards")
+      .update({
+        asset_id: assetId,
+        storage_path: version?.storage_path ?? null,
+        mime_type: version?.mime_type ?? null,
+        image_name: asset.name,
+      })
+      .eq("id", cardId)
+  );
   rp(projectId);
   return null;
 }
@@ -291,17 +319,23 @@ export async function clearCardAsset(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("shot_cards")
-    .update({ asset_id: null, storage_path: null, mime_type: null, image_name: null })
-    .eq("id", cardId);
+  await logWrite(
+    "clearCardAsset/shot_cards",
+    supabase
+      .from("shot_cards")
+      .update({ asset_id: null, storage_path: null, mime_type: null, image_name: null })
+      .eq("id", cardId)
+  );
   rp(projectId);
 }
 
 export async function deleteCard(projectId: string, id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shot_cards").delete().eq("id", id);
+  await logWrite(
+    "deleteCard/shot_cards",
+    supabase.from("shot_cards").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -402,11 +436,17 @@ export async function restoreShotBoard(
     .map((c) => c.id)
     .filter((id) => !keepCards.has(id));
   if (delCards.length) {
-    await supabase.from("shot_cards").delete().in("id", delCards);
+    await logWrite(
+      "restoreShotBoard/shot_cards",
+      supabase.from("shot_cards").delete().in("id", delCards)
+    );
   }
   const delGroups = groupIds.filter((id) => !keepGroups.has(id));
   if (delGroups.length) {
-    await supabase.from("shot_groups").delete().in("id", delGroups);
+    await logWrite(
+      "restoreShotBoard/shot_groups",
+      supabase.from("shot_groups").delete().in("id", delGroups)
+    );
   }
 
   rp(projectId);
@@ -473,10 +513,13 @@ export async function moveCard(
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
-  await supabase
-    .from("shot_cards")
-    .update({ group_id: targetGroupId, position: (last?.position ?? -1) + 1 })
-    .eq("id", cardId);
+  await logWrite(
+    "moveCard/shot_cards",
+    supabase
+      .from("shot_cards")
+      .update({ group_id: targetGroupId, position: (last?.position ?? -1) + 1 })
+      .eq("id", cardId)
+  );
   rp(projectId);
 }
 
@@ -487,8 +530,14 @@ export async function swapCards(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shot_cards").update({ position: b.position }).eq("id", a.id);
-  await supabase.from("shot_cards").update({ position: a.position }).eq("id", b.id);
+  await logWrite(
+    "swapCards/shot_cards",
+    supabase.from("shot_cards").update({ position: b.position }).eq("id", a.id)
+  );
+  await logWrite(
+    "swapCards/shot_cards",
+    supabase.from("shot_cards").update({ position: a.position }).eq("id", b.id)
+  );
   rp(projectId);
 }
 

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { logWrite } from "@/lib/log";
 
 export type OpsState = { error?: string } | null;
 
@@ -46,14 +47,20 @@ export async function updateGearItem(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("gear_items").update(patch).eq("id", id);
+  await logWrite(
+    "updateGearItem/gear_items",
+    supabase.from("gear_items").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
 export async function deleteGearItem(projectId: string, id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("gear_items").delete().eq("id", id);
+  await logWrite(
+    "deleteGearItem/gear_items",
+    supabase.from("gear_items").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -64,11 +71,14 @@ export async function renameGearCategory(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("gear_items")
-    .update({ category: to || "Other" })
-    .eq("project_id", projectId)
-    .eq("category", from);
+  await logWrite(
+    "renameGearCategory/gear_items",
+    supabase
+      .from("gear_items")
+      .update({ category: to || "Other" })
+      .eq("project_id", projectId)
+      .eq("category", from)
+  );
   rp(projectId);
 }
 
@@ -111,14 +121,20 @@ export async function updateDeliverable(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("deliverables").update(patch).eq("id", id);
+  await logWrite(
+    "updateDeliverable/deliverables",
+    supabase.from("deliverables").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
 export async function deleteDeliverable(projectId: string, id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("deliverables").delete().eq("id", id);
+  await logWrite(
+    "deleteDeliverable/deliverables",
+    supabase.from("deliverables").delete().eq("id", id)
+  );
   rp(projectId);
 }
 

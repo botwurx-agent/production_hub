@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient as db } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import type { ClientType } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type FormState = { error?: string } | null;
 
@@ -59,7 +60,10 @@ export async function updateClient(
 ) {
   await requireStudioContext();
   const supabase = db();
-  await supabase.from("clients").update(patch).eq("id", clientId);
+  await logWrite(
+    "updateClient/clients",
+    supabase.from("clients").update(patch).eq("id", clientId)
+  );
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/clients");
 }
@@ -92,6 +96,9 @@ export async function addClientContact(
 export async function deleteContact(contactId: string, revalidate: string) {
   await requireStudioContext();
   const supabase = db();
-  await supabase.from("contacts").delete().eq("id", contactId);
+  await logWrite(
+    "deleteContact/contacts",
+    supabase.from("contacts").delete().eq("id", contactId)
+  );
   revalidatePath(revalidate);
 }

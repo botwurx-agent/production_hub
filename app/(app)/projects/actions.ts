@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { reportError } from "@/lib/log";
+import { reportError, logWrite } from "@/lib/log";
 import { PROJECT_STATUS, PROJECT_STATUS_ORDER, PROJECT_COLORS } from "@/lib/status";
 import { isProjectType } from "@/lib/project-types";
 import type { ProjectStatus } from "@/lib/database.types";
@@ -71,13 +71,16 @@ export async function updateProjectStatus(
     return { error: "Could not update the status. Try again." };
   }
   // Activity is best-effort; a failure here should not fail the status change.
-  await supabase.from("activity").insert({
-    studio_id: ctx.studio.id,
-    project_id: projectId,
-    author_id: ctx.userId,
-    type: "status_change",
-    content: `Moved to ${PROJECT_STATUS[status].label}`,
-  });
+  await logWrite(
+    "updateProjectStatus/activity",
+    supabase.from("activity").insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      author_id: ctx.userId,
+      type: "status_change",
+      content: `Moved to ${PROJECT_STATUS[status].label}`,
+    })
+  );
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   return null;
@@ -119,13 +122,16 @@ export async function archiveProject(projectId: string): Promise<FormState> {
     reportError("archiveProject", error);
     return { error: "Could not archive the project. Try again." };
   }
-  await supabase.from("activity").insert({
-    studio_id: ctx.studio.id,
-    project_id: projectId,
-    author_id: ctx.userId,
-    type: "activity",
-    content: "Archived the project",
-  });
+  await logWrite(
+    "archiveProject/activity",
+    supabase.from("activity").insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      author_id: ctx.userId,
+      type: "activity",
+      content: "Archived the project",
+    })
+  );
   revalidatePath("/projects");
   revalidatePath("/dashboard");
   revalidatePath(`/projects/${projectId}`);
@@ -143,13 +149,16 @@ export async function unarchiveProject(projectId: string): Promise<FormState> {
     reportError("unarchiveProject", error);
     return { error: "Could not restore the project. Try again." };
   }
-  await supabase.from("activity").insert({
-    studio_id: ctx.studio.id,
-    project_id: projectId,
-    author_id: ctx.userId,
-    type: "activity",
-    content: "Restored the project from the archive",
-  });
+  await logWrite(
+    "unarchiveProject/activity",
+    supabase.from("activity").insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      author_id: ctx.userId,
+      type: "activity",
+      content: "Restored the project from the archive",
+    })
+  );
   revalidatePath("/projects");
   revalidatePath("/dashboard");
   revalidatePath(`/projects/${projectId}`);

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { logWrite } from "@/lib/log";
 
 export type ProdState = { error?: string } | null;
 
@@ -58,7 +59,10 @@ export async function updateShot(
 export async function deleteShot(projectId: string, id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shots").delete().eq("id", id);
+  await logWrite(
+    "deleteShot/shots",
+    supabase.from("shots").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -70,8 +74,14 @@ export async function swapShots(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("shots").update({ position: b.position }).eq("id", a.id);
-  await supabase.from("shots").update({ position: a.position }).eq("id", b.id);
+  await logWrite(
+    "swapShots/shots",
+    supabase.from("shots").update({ position: b.position }).eq("id", a.id)
+  );
+  await logWrite(
+    "swapShots/shots",
+    supabase.from("shots").update({ position: a.position }).eq("id", b.id)
+  );
   rp(projectId);
 }
 
@@ -200,6 +210,9 @@ export async function deleteCallSheetEntry(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("call_sheet_entries").delete().eq("id", id);
+  await logWrite(
+    "deleteCallSheetEntry/call_sheet_entries",
+    supabase.from("call_sheet_entries").delete().eq("id", id)
+  );
   rp(projectId);
 }

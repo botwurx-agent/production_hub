@@ -12,6 +12,7 @@ import {
 } from "@/lib/figma";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type FigmaState = { error?: string } | null;
 
@@ -130,18 +131,24 @@ export async function importFigmaFrame(
       .single();
     if (vErr) return { error: vErr.message };
 
-    await supabase
-      .from("assets")
-      .update({ current_version_id: version.id })
-      .eq("id", asset.id);
+    await logWrite(
+      "importFigmaFrame/assets",
+      supabase
+        .from("assets")
+        .update({ current_version_id: version.id })
+        .eq("id", asset.id)
+    );
 
-    await supabase.from("activity").insert({
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      author_id: ctx.userId,
-      type: "upload",
-      content: `Imported "${name}" from Figma`,
-    });
+    await logWrite(
+      "importFigmaFrame/activity",
+      supabase.from("activity").insert({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        author_id: ctx.userId,
+        type: "upload",
+        content: `Imported "${name}" from Figma`,
+      })
+    );
 
     revalidatePath(`/projects/${projectId}`);
     return null;

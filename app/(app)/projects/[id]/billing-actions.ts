@@ -12,6 +12,7 @@ import {
   documentViewUrl,
   type DocKind,
 } from "@/lib/freshbooks";
+import { logWrite } from "@/lib/log";
 
 export type BillingActionState = { error?: string; ok?: boolean } | null;
 
@@ -173,17 +174,20 @@ export async function createProjectDocument(
 
   // Reflect a created invoice on the manual billing card.
   if (input.kind === "invoice") {
-    await supabase.from("project_billing").upsert(
-      {
-        studio_id: ctx.studio.id,
-        project_id: projectId,
-        status: "invoiced",
-        amount: doc.amount,
-        invoice_no: doc.number,
-        updated_at: new Date().toISOString(),
-        created_by: ctx.userId,
-      },
-      { onConflict: "project_id" },
+    await logWrite(
+      "createProjectDocument/project_billing",
+      supabase.from("project_billing").upsert(
+        {
+          studio_id: ctx.studio.id,
+          project_id: projectId,
+          status: "invoiced",
+          amount: doc.amount,
+          invoice_no: doc.number,
+          updated_at: new Date().toISOString(),
+          created_by: ctx.userId,
+        },
+        { onConflict: "project_id" },
+      )
     );
   }
 
@@ -230,10 +234,13 @@ export async function sendProjectDocument(
     return { error: `FreshBooks send failed: ${(e as Error).message}` };
   }
 
-  await supabase
-    .from("project_invoices")
-    .update({ status: mapInvoiceStatus(doc.status ?? "sent") })
-    .eq("id", rowId);
+  await logWrite(
+    "sendProjectDocument/project_invoices",
+    supabase
+      .from("project_invoices")
+      .update({ status: mapInvoiceStatus(doc.status ?? "sent") })
+      .eq("id", rowId)
+  );
 
   rp(projectId);
   return { ok: true };
@@ -281,20 +288,26 @@ export async function syncProjectDocument(
       ? Math.max(0, doc.amount - doc.outstanding)
       : undefined;
 
-  await supabase
-    .from("project_invoices")
-    .update({
-      status,
-      amount: doc.amount ?? undefined,
-      ...(amountPaid != null ? { amount_paid: amountPaid } : {}),
-    })
-    .eq("id", rowId);
+  await logWrite(
+    "syncProjectDocument/project_invoices",
+    supabase
+      .from("project_invoices")
+      .update({
+        status,
+        amount: doc.amount ?? undefined,
+        ...(amountPaid != null ? { amount_paid: amountPaid } : {}),
+      })
+      .eq("id", rowId)
+  );
 
   if (row.kind === "invoice" && status === "paid") {
-    await supabase
-      .from("project_billing")
-      .update({ status: "paid", updated_at: new Date().toISOString() })
-      .eq("project_id", projectId);
+    await logWrite(
+      "syncProjectDocument/project_billing",
+      supabase
+        .from("project_billing")
+        .update({ status: "paid", updated_at: new Date().toISOString() })
+        .eq("project_id", projectId)
+    );
   }
 
   rp(projectId);

@@ -7,6 +7,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
 import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
+import { logWrite } from "@/lib/log";
 
 export type CallSheetState = { error?: string } | null;
 
@@ -175,7 +176,10 @@ export async function deleteCallSheet(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("call_sheets").delete().eq("id", callSheetId);
+  await logWrite(
+    "deleteCallSheet/call_sheets",
+    supabase.from("call_sheets").delete().eq("id", callSheetId)
+  );
   rp(projectId);
 }
 
@@ -229,7 +233,10 @@ export async function deleteCallSheetEntry(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("call_sheet_entries").delete().eq("id", id);
+  await logWrite(
+    "deleteCallSheetEntry/call_sheet_entries",
+    supabase.from("call_sheet_entries").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -263,7 +270,10 @@ export async function deleteCallSheetTemplate(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("call_sheet_templates").delete().eq("id", templateId);
+  await logWrite(
+    "deleteCallSheetTemplate/call_sheet_templates",
+    supabase.from("call_sheet_templates").delete().eq("id", templateId)
+  );
   rp(projectId);
 }
 
@@ -324,7 +334,10 @@ export async function deleteCallSheetRecipient(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("call_sheet_recipients").delete().eq("id", recipientId);
+  await logWrite(
+    "deleteCallSheetRecipient/call_sheet_recipients",
+    supabase.from("call_sheet_recipients").delete().eq("id", recipientId)
+  );
   rp(projectId);
 }
 

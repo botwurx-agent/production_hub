@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { fetchMediaFromUrl } from "@/lib/media-import";
 import { requireStudioContext } from "@/lib/studio";
-import { reportError } from "@/lib/log";
+import { reportError, logWrite } from "@/lib/log";
 import { ASSET_STATUS, REVIEW_CYCLE } from "@/lib/status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AssetStatus, AssetType, Database } from "@/lib/database.types";
@@ -18,12 +18,15 @@ export type ActionState = { error?: string } | null;
 export async function saveBrief(projectId: string, content: string) {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("briefs")
-    .upsert(
-      { studio_id: ctx.studio.id, project_id: projectId, content },
-      { onConflict: "project_id" }
-    );
+  await logWrite(
+    "saveBrief/briefs",
+    supabase
+      .from("briefs")
+      .upsert(
+        { studio_id: ctx.studio.id, project_id: projectId, content },
+        { onConflict: "project_id" }
+      )
+  );
   revalidatePath(`/projects/${projectId}`);
 }
 
@@ -39,13 +42,16 @@ export async function addActivity(
   const content = String(formData.get("content") ?? "").trim();
   if (!content) return { error: "Write something first." };
   const supabase = createClient();
-  await supabase.from("activity").insert({
-    studio_id: ctx.studio.id,
-    project_id: projectId,
-    author_id: ctx.userId,
-    type: "note",
-    content,
-  });
+  await logWrite(
+    "addActivity/activity",
+    supabase.from("activity").insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      author_id: ctx.userId,
+      type: "note",
+      content,
+    })
+  );
   revalidatePath(`/projects/${projectId}`);
   return null;
 }
@@ -58,13 +64,16 @@ async function logActivity(
   type: Database["public"]["Enums"]["activity_type"],
   content: string
 ) {
-  await supabase.from("activity").insert({
-    studio_id: studioId,
-    project_id: projectId,
-    author_id: userId,
-    type,
-    content,
-  });
+  await logWrite(
+    "logActivity/activity",
+    supabase.from("activity").insert({
+      studio_id: studioId,
+      project_id: projectId,
+      author_id: userId,
+      type,
+      content,
+    })
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -140,10 +149,13 @@ async function insertVersion(
     .single();
   if (error) return { error: error.message };
 
-  await supabase
-    .from("assets")
-    .update({ current_version_id: version.id })
-    .eq("id", opts.assetId);
+  await logWrite(
+    "insertVersion/assets",
+    supabase
+      .from("assets")
+      .update({ current_version_id: version.id })
+      .eq("id", opts.assetId)
+  );
 
   return { versionNumber };
 }
@@ -233,18 +245,24 @@ export async function addVersion(
   const reopened = REVIEW_CYCLE.includes(asset.status);
   if (reopened) {
     if (asset.status !== "in_review") {
-      await supabase
-        .from("assets")
-        .update({ status: "in_review" })
-        .eq("id", assetId);
+      await logWrite(
+        "addVersion/assets",
+        supabase
+          .from("assets")
+          .update({ status: "in_review" })
+          .eq("id", assetId)
+      );
     }
     // Stale due date from the previous round would fire an instant reminder,
     // so clear it; sending the new round sets a fresh one.
-    await supabase
-      .from("review_links")
-      .update({ due_date: null, last_reminded_at: null, reminder_count: 0 })
-      .eq("asset_id", assetId)
-      .eq("revoked", false);
+    await logWrite(
+      "addVersion/review_links",
+      supabase
+        .from("review_links")
+        .update({ due_date: null, last_reminded_at: null, reminder_count: 0 })
+        .eq("asset_id", assetId)
+        .eq("revoked", false)
+    );
   }
 
   await logActivity(
@@ -365,11 +383,14 @@ export async function addMasterCutVersion(
   // First version moves the cut into the review cycle so it also surfaces on the
   // project Review page. Later versions leave the status alone (a re-review of an
   // approved cut should be a deliberate act, not automatic).
-  await supabase
-    .from("assets")
-    .update({ status: "in_review" })
-    .eq("id", cut.id)
-    .eq("status", "draft");
+  await logWrite(
+    "addMasterCutVersion/assets",
+    supabase
+      .from("assets")
+      .update({ status: "in_review" })
+      .eq("id", cut.id)
+      .eq("status", "draft")
+  );
 
   await logActivity(
     supabase,
@@ -497,24 +518,33 @@ export async function mergeAssetVersions(
     next++;
   }
 
-  await supabase
-    .from("assets")
-    .update({ current_version_id: lastId })
-    .eq("id", targetAssetId);
+  await logWrite(
+    "mergeAssetVersions/assets",
+    supabase
+      .from("assets")
+      .update({ current_version_id: lastId })
+      .eq("id", targetAssetId)
+  );
 
   // Keep any link already sent for the source working by repointing it at the
   // target, rather than letting the delete cascade break that URL.
-  await supabase
-    .from("review_links")
-    .update({ asset_id: targetAssetId })
-    .eq("asset_id", sourceAssetId);
+  await logWrite(
+    "mergeAssetVersions/review_links",
+    supabase
+      .from("review_links")
+      .update({ asset_id: targetAssetId })
+      .eq("asset_id", sourceAssetId)
+  );
 
   // New versions on a file in the review cycle open a new round.
   if (REVIEW_CYCLE.includes(target.status) && target.status !== "in_review") {
-    await supabase
-      .from("assets")
-      .update({ status: "in_review" })
-      .eq("id", targetAssetId);
+    await logWrite(
+      "mergeAssetVersions/assets",
+      supabase
+        .from("assets")
+        .update({ status: "in_review" })
+        .eq("id", targetAssetId)
+    );
   }
 
   const { error: delError } = await supabase
@@ -625,11 +655,14 @@ export async function deleteVersion(versionId: string): Promise<ActionState> {
   if (version.storage_path) {
     await assetStorage().remove([version.storage_path]);
   }
-  await supabase
-    .from("approvals")
-    .delete()
-    .eq("target_type", "version")
-    .eq("target_id", versionId);
+  await logWrite(
+    "deleteVersion/approvals",
+    supabase
+      .from("approvals")
+      .delete()
+      .eq("target_type", "version")
+      .eq("target_id", versionId)
+  );
 
   const { error } = await supabase.from("versions").delete().eq("id", versionId);
   if (error) {
@@ -646,10 +679,13 @@ export async function deleteVersion(versionId: string): Promise<ActionState> {
       .order("version_number", { ascending: false })
       .limit(1)
       .maybeSingle();
-    await supabase
-      .from("assets")
-      .update({ current_version_id: next?.id ?? null })
-      .eq("id", asset.id);
+    await logWrite(
+      "deleteVersion/assets",
+      supabase
+        .from("assets")
+        .update({ current_version_id: next?.id ?? null })
+        .eq("id", asset.id)
+    );
   }
 
   await logActivity(
@@ -693,17 +729,23 @@ export async function deleteAsset(assetId: string): Promise<ActionState> {
 
   const versionIds = rows.map((v) => v.id);
   if (versionIds.length) {
-    await supabase
+    await logWrite(
+      "deleteAsset/approvals",
+      supabase
+        .from("approvals")
+        .delete()
+        .eq("target_type", "version")
+        .in("target_id", versionIds)
+    );
+  }
+  await logWrite(
+    "deleteAsset/approvals",
+    supabase
       .from("approvals")
       .delete()
-      .eq("target_type", "version")
-      .in("target_id", versionIds);
-  }
-  await supabase
-    .from("approvals")
-    .delete()
-    .eq("target_type", "asset")
-    .eq("target_id", assetId);
+      .eq("target_type", "asset")
+      .eq("target_id", assetId)
+  );
 
   const { error } = await supabase.from("assets").delete().eq("id", assetId);
   if (error) {
@@ -733,7 +775,10 @@ export async function updateAssetStatus(assetId: string, status: AssetStatus) {
     .select("name, project_id")
     .eq("id", assetId)
     .single();
-  await supabase.from("assets").update({ status }).eq("id", assetId);
+  await logWrite(
+    "updateAssetStatus/assets",
+    supabase.from("assets").update({ status }).eq("id", assetId)
+  );
   if (asset) {
     await logActivity(
       supabase,

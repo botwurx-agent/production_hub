@@ -6,6 +6,7 @@ import { createClient as db } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { LEAD_STAGE_ORDER } from "@/lib/status";
 import type { LeadStage } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type FormState = { error?: string } | null;
 
@@ -42,13 +43,16 @@ export async function createLead(
   // Capture the primary contact (name/title/email) as a lead contact.
   const contactName = String(formData.get("contact_name") ?? "").trim();
   if (contactName) {
-    await supabase.from("contacts").insert({
-      studio_id: ctx.studio.id,
-      lead_id: lead.id,
-      name: contactName,
-      role: String(formData.get("contact_title") ?? "").trim() || null,
-      email: String(formData.get("contact_email") ?? "").trim() || null,
-    });
+    await logWrite(
+      "createLead/contacts",
+      supabase.from("contacts").insert({
+        studio_id: ctx.studio.id,
+        lead_id: lead.id,
+        name: contactName,
+        role: String(formData.get("contact_title") ?? "").trim() || null,
+        email: String(formData.get("contact_email") ?? "").trim() || null,
+      })
+    );
   }
 
   revalidatePath("/leads");
@@ -58,10 +62,13 @@ export async function createLead(
 export async function updateLeadNotes(leadId: string, notes: string) {
   await requireStudioContext();
   const supabase = db();
-  await supabase
-    .from("leads")
-    .update({ notes: notes.trim() || null })
-    .eq("id", leadId);
+  await logWrite(
+    "updateLeadNotes/leads",
+    supabase
+      .from("leads")
+      .update({ notes: notes.trim() || null })
+      .eq("id", leadId)
+  );
   revalidatePath(`/leads/${leadId}`);
 }
 
@@ -69,7 +76,10 @@ export async function updateLeadStage(leadId: string, stage: LeadStage) {
   await requireStudioContext();
   if (!isStage(stage)) return;
   const supabase = db();
-  await supabase.from("leads").update({ stage }).eq("id", leadId);
+  await logWrite(
+    "updateLeadStage/leads",
+    supabase.from("leads").update({ stage }).eq("id", leadId)
+  );
   revalidatePath("/leads");
 }
 
@@ -128,25 +138,34 @@ export async function convertLead(leadId: string) {
     .single();
   if (error || !client) return;
 
-  await supabase
-    .from("contacts")
-    .update({ client_id: client.id, lead_id: null })
-    .eq("lead_id", leadId);
+  await logWrite(
+    "convertLead/contacts",
+    supabase
+      .from("contacts")
+      .update({ client_id: client.id, lead_id: null })
+      .eq("lead_id", leadId)
+  );
 
   // Carry the lead's email threads forward onto the new client.
-  await supabase
-    .from("email_threads")
-    .update({ client_id: client.id, lead_id: null })
-    .eq("lead_id", leadId);
+  await logWrite(
+    "convertLead/email_threads",
+    supabase
+      .from("email_threads")
+      .update({ client_id: client.id, lead_id: null })
+      .eq("lead_id", leadId)
+  );
 
-  await supabase
-    .from("leads")
-    .update({
-      stage: "won",
-      converted_client_id: client.id,
-      converted_at: new Date().toISOString(),
-    })
-    .eq("id", leadId);
+  await logWrite(
+    "convertLead/leads",
+    supabase
+      .from("leads")
+      .update({
+        stage: "won",
+        converted_client_id: client.id,
+        converted_at: new Date().toISOString(),
+      })
+      .eq("id", leadId)
+  );
 
   revalidatePath("/leads");
   revalidatePath("/clients");

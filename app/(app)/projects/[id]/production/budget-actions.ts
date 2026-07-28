@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { logWrite } from "@/lib/log";
 
 export type BudgetState = { error?: string } | null;
 
@@ -50,7 +51,10 @@ export async function updateBudgetLine(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("budget_lines").update(patch).eq("id", id);
+  await logWrite(
+    "updateBudgetLine/budget_lines",
+    supabase.from("budget_lines").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -61,11 +65,14 @@ export async function renameBudgetCategory(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("budget_lines")
-    .update({ category: to || "General" })
-    .eq("project_id", projectId)
-    .eq("category", from);
+  await logWrite(
+    "renameBudgetCategory/budget_lines",
+    supabase
+      .from("budget_lines")
+      .update({ category: to || "General" })
+      .eq("project_id", projectId)
+      .eq("category", from)
+  );
   rp(projectId);
 }
 
@@ -75,6 +82,9 @@ export async function deleteBudgetLine(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("budget_lines").delete().eq("id", id);
+  await logWrite(
+    "deleteBudgetLine/budget_lines",
+    supabase.from("budget_lines").delete().eq("id", id)
+  );
   rp(projectId);
 }

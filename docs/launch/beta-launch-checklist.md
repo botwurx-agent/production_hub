@@ -40,9 +40,14 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
 - **Hard rate limiting.** The public token routes (`/r`, `/c`) now have a
   best-effort in-memory limiter. For a shared, durable limit across serverless
   instances, back it with Upstash / Vercel KV.
-- **Broader swallowed-error sweep.** The projects + notifications actions now
-  surface failures via toast + `reportError`. The same pattern should be applied
-  to the other action files over time (the reportError seam is ready).
+- ~~Broader swallowed-error sweep.~~ DONE. `logWrite` (lib/log.ts) wraps a
+  Supabase write, reports a failure through `reportError`, and returns the
+  result untouched. Applied to 166 discarded writes across 33 action files, so
+  a row that fails to save now shows up in the logs and in Sentry instead of
+  looking exactly like success. Control flow is unchanged by design: this makes
+  failures observable, it does not invent recovery behaviour. Actions that can
+  meaningfully recover still check the error themselves and tell the user
+  (projects, notifications, review, tasks, upload).
 - **Sentry client bundle.** The browser SDK adds ~76 kB to first-load JS. If that
   matters for the marketing-critical pages, scope Sentry to server-only or lazy
   it.

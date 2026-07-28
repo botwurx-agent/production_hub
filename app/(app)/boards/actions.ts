@@ -14,6 +14,7 @@ import {
 import { unfurl, isFetchableUrl, safeFetch, BROWSER_UA } from "@/lib/unfurl";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Board } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type BoardState = { error?: string } | null;
 const SIGNED_TTL = 60 * 60;
@@ -289,7 +290,10 @@ export async function restoreBoardState(
     .map((r) => r.id)
     .filter((id) => !keepConn.has(id));
   if (connDelete.length) {
-    await supabase.from("board_connections").delete().in("id", connDelete);
+    await logWrite(
+      "restoreBoardState/board_connections",
+      supabase.from("board_connections").delete().in("id", connDelete)
+    );
   }
 
   revalidatePath("/boards");
@@ -324,7 +328,10 @@ export async function createBoardShare(
     .maybeSingle();
   if (existing) {
     if (existing.revoked) {
-      await supabase.from("board_shares").update({ revoked: false }).eq("board_id", boardId);
+      await logWrite(
+        "createBoardShare/board_shares",
+        supabase.from("board_shares").update({ revoked: false }).eq("board_id", boardId)
+      );
     }
     return { token: existing.token };
   }
@@ -341,7 +348,10 @@ export async function createBoardShare(
 export async function revokeBoardShare(boardId: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_shares").update({ revoked: true }).eq("board_id", boardId);
+  await logWrite(
+    "revokeBoardShare/board_shares",
+    supabase.from("board_shares").update({ revoked: true }).eq("board_id", boardId)
+  );
 }
 
 async function nextZ(
@@ -823,10 +833,13 @@ export async function attachToColumn(
   await requireStudioContext();
   const supabase = createClient();
   const sort = await nextSort(supabase, columnId);
-  await supabase
-    .from("board_items")
-    .update({ parent_id: columnId, sort })
-    .eq("id", itemId);
+  await logWrite(
+    "attachToColumn/board_items",
+    supabase
+      .from("board_items")
+      .update({ parent_id: columnId, sort })
+      .eq("id", itemId)
+  );
   revalidatePath("/boards");
 }
 
@@ -838,10 +851,13 @@ export async function detachFromColumn(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("board_items")
-    .update({ parent_id: null, sort: 0, x: Math.max(0, x), y: Math.max(0, y) })
-    .eq("id", itemId);
+  await logWrite(
+    "detachFromColumn/board_items",
+    supabase
+      .from("board_items")
+      .update({ parent_id: null, sort: 0, x: Math.max(0, x), y: Math.max(0, y) })
+      .eq("id", itemId)
+  );
   revalidatePath("/boards");
 }
 
@@ -859,7 +875,10 @@ export async function setColumnOrder(ids: string[]): Promise<void> {
 export async function updateItemName(id: string, name: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_items").update({ name }).eq("id", id);
+  await logWrite(
+    "updateItemName/board_items",
+    supabase.from("board_items").update({ name }).eq("id", id)
+  );
 }
 
 // ---- Connections (arrows between items) ------------------------------------
@@ -926,7 +945,10 @@ export async function addConnection(
 export async function deleteConnection(id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_connections").delete().eq("id", id);
+  await logWrite(
+    "deleteConnection/board_connections",
+    supabase.from("board_connections").delete().eq("id", id)
+  );
 }
 
 // Paste a URL: unfurl it (title/description/preview image) and drop a link card.
@@ -1052,33 +1074,48 @@ export async function addTodoItem(
 export async function updateItemText(id: string, text: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_items").update({ text }).eq("id", id);
+  await logWrite(
+    "updateItemText/board_items",
+    supabase.from("board_items").update({ text }).eq("id", id)
+  );
 }
 
 // Update only an item's color (hue), without touching its text.
 export async function updateItemHue(id: string, hue: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_items").update({ hue }).eq("id", id);
+  await logWrite(
+    "updateItemHue/board_items",
+    supabase.from("board_items").update({ hue }).eq("id", id)
+  );
 }
 
 export async function moveItem(id: string, x: number, y: number): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_items").update({ x, y }).eq("id", id);
+  await logWrite(
+    "moveItem/board_items",
+    supabase.from("board_items").update({ x, y }).eq("id", id)
+  );
 }
 
 export async function resizeItem(id: string, w: number, h: number): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_items").update({ w, h }).eq("id", id);
+  await logWrite(
+    "resizeItem/board_items",
+    supabase.from("board_items").update({ w, h }).eq("id", id)
+  );
 }
 
 export async function bringToFront(id: string, boardId: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
   const z = await nextZ(supabase, boardId);
-  await supabase.from("board_items").update({ z }).eq("id", id);
+  await logWrite(
+    "bringToFront/board_items",
+    supabase.from("board_items").update({ z }).eq("id", id)
+  );
 }
 
 export async function updateNote(
@@ -1088,13 +1125,19 @@ export async function updateNote(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_items").update({ text, hue }).eq("id", id);
+  await logWrite(
+    "updateNote/board_items",
+    supabase.from("board_items").update({ text, hue }).eq("id", id)
+  );
 }
 
 export async function deleteItem(id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("board_items").delete().eq("id", id);
+  await logWrite(
+    "deleteItem/board_items",
+    supabase.from("board_items").delete().eq("id", id)
+  );
 }
 
 // Projects + their assets, for the "add from project assets" picker.

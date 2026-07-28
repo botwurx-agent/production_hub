@@ -5,6 +5,7 @@ import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import { allowPublic } from "@/lib/rate-limit";
 import { getCallSheetRecipient } from "@/lib/callsheet-links";
 import { createNotification } from "@/lib/notifications";
+import { logWrite } from "@/lib/log";
 
 export type ConfirmState = { error?: string } | null;
 
@@ -18,10 +19,13 @@ export async function recordCallSheetView(token: string): Promise<void> {
   const service = createServiceClient();
   const recipient = await getCallSheetRecipient(service, token);
   if (!recipient || recipient.viewed_at) return;
-  await service
-    .from("call_sheet_recipients")
-    .update({ viewed_at: new Date().toISOString() })
-    .eq("id", recipient.id);
+  await logWrite(
+    "recordCallSheetView/call_sheet_recipients",
+    service
+      .from("call_sheet_recipients")
+      .update({ viewed_at: new Date().toISOString() })
+      .eq("id", recipient.id)
+  );
 }
 
 // Recipient confirms they'll be there.
@@ -47,12 +51,15 @@ export async function confirmCallSheet(token: string): Promise<ConfirmState> {
     .eq("id", recipient.call_sheet_id)
     .maybeSingle();
   if (sheet) {
-    await service.from("activity").insert({
-      studio_id: recipient.studio_id,
-      project_id: sheet.project_id,
-      type: "activity",
-      content: `${recipient.name} confirmed the call sheet`,
-    });
+    await logWrite(
+      "confirmCallSheet/activity",
+      service.from("activity").insert({
+        studio_id: recipient.studio_id,
+        project_id: sheet.project_id,
+        type: "activity",
+        content: `${recipient.name} confirmed the call sheet`,
+      })
+    );
     await createNotification(service, {
       studio_id: recipient.studio_id,
       project_id: sheet.project_id,

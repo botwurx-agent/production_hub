@@ -8,6 +8,7 @@ import { generateReviewToken } from "@/lib/review-links";
 import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
 import { longDate } from "@/lib/format";
+import { logWrite } from "@/lib/log";
 
 export type ShareState = { error?: string } | null;
 
@@ -157,10 +158,13 @@ export async function emailDocReviewLink(
   // Persist recipient + due date on the link so reminders can find it.
   const dueDate = input.dueDate?.trim() || null;
   const supabase = createClient();
-  await supabase
-    .from("review_links")
-    .update({ recipient: to, due_date: dueDate })
-    .eq("token", link.token);
+  await logWrite(
+    "emailDocReviewLink/review_links",
+    supabase
+      .from("review_links")
+      .update({ recipient: to, due_date: dueDate })
+      .eq("token", link.token)
+  );
 
   const noun = DOC_NOUN[kind] ?? "document";
   const url = `${emailOrigin()}/r/${link.token}`;
@@ -215,15 +219,18 @@ export async function emailAssetReviewLink(
 
   // A send opens the round: fresh recipient + due date, reminder budget reset.
   const dueDate = input.dueDate?.trim() || null;
-  await supabase
-    .from("review_links")
-    .update({
-      recipient: to,
-      due_date: dueDate,
-      last_reminded_at: null,
-      reminder_count: 0,
-    })
-    .eq("token", link.token);
+  await logWrite(
+    "emailAssetReviewLink/review_links",
+    supabase
+      .from("review_links")
+      .update({
+        recipient: to,
+        due_date: dueDate,
+        last_reminded_at: null,
+        reminder_count: 0,
+      })
+      .eq("token", link.token)
+  );
 
   const url = `${emailOrigin()}/r/${link.token}`;
   const subject =

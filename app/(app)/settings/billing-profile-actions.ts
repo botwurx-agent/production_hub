@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { logWrite } from "@/lib/log";
 
 export async function saveBillingProfile(patch: {
   business_name?: string | null;
@@ -17,11 +18,14 @@ export async function saveBillingProfile(patch: {
 }): Promise<void> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("billing_profiles")
-    .upsert(
-      { studio_id: ctx.studio.id, ...patch, updated_at: new Date().toISOString() },
-      { onConflict: "studio_id" },
-    );
+  await logWrite(
+    "saveBillingProfile/billing_profiles",
+    supabase
+      .from("billing_profiles")
+      .upsert(
+        { studio_id: ctx.studio.id, ...patch, updated_at: new Date().toISOString() },
+        { onConflict: "studio_id" },
+      )
+  );
   revalidatePath("/settings");
 }

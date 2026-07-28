@@ -11,6 +11,7 @@ import {
 } from "@/lib/doc-review-data";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ApprovalStatus } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type DocReviewState = { error?: string } | null;
 
@@ -85,13 +86,16 @@ export async function sendDocToReview(
       created_by: ctx.userId,
     });
     if (error) return { error: error.message };
-    await supabase.from("activity").insert({
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      author_id: ctx.userId,
-      type: "activity",
-      content: `Sent the ${NOUN[kind]} to review`,
-    });
+    await logWrite(
+      "sendDocToReview/activity",
+      supabase.from("activity").insert({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        author_id: ctx.userId,
+        type: "activity",
+        content: `Sent the ${NOUN[kind]} to review`,
+      })
+    );
   }
   revalidatePath(`/projects/${projectId}/review`);
   revalidatePath(`/projects/${projectId}`);
@@ -210,10 +214,13 @@ export async function resolveDocReviewComment(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("review_comments")
-    .update({ resolved_at: resolved ? new Date().toISOString() : null })
-    .eq("id", commentId);
+  await logWrite(
+    "resolveDocReviewComment/review_comments",
+    supabase
+      .from("review_comments")
+      .update({ resolved_at: resolved ? new Date().toISOString() : null })
+      .eq("id", commentId)
+  );
   revalidatePath(`/projects/${projectId}/review`);
 }
 
@@ -240,7 +247,10 @@ export async function setDocApproval(
   if (status === "pending") {
     if (existing) await supabase.from("approvals").delete().eq("id", existing.id);
   } else if (existing) {
-    await supabase.from("approvals").update({ status }).eq("id", existing.id);
+    await logWrite(
+      "setDocApproval/approvals",
+      supabase.from("approvals").update({ status }).eq("id", existing.id)
+    );
   } else {
     const { error } = await supabase.from("approvals").insert({
       studio_id: ctx.studio.id,
@@ -260,22 +270,28 @@ export async function setDocApproval(
       : status === "changes_requested"
         ? "needs_changes"
         : "in_review";
-  await supabase
-    .from("doc_reviews")
-    .update({ status: docStatus, updated_at: new Date().toISOString() })
-    .eq("target_type", kind)
-    .eq("target_id", targetId);
+  await logWrite(
+    "setDocApproval/doc_reviews",
+    supabase
+      .from("doc_reviews")
+      .update({ status: docStatus, updated_at: new Date().toISOString() })
+      .eq("target_type", kind)
+      .eq("target_id", targetId)
+  );
 
   if (status !== "pending") {
     const label =
       status === "approved" ? "Approved" : "Requested changes on";
-    await supabase.from("activity").insert({
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      author_id: ctx.userId,
-      type: "approval",
-      content: `${label} the ${NOUN[kind]}`,
-    });
+    await logWrite(
+      "setDocApproval/activity",
+      supabase.from("activity").insert({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        author_id: ctx.userId,
+        type: "approval",
+        content: `${label} the ${NOUN[kind]}`,
+      })
+    );
   }
 
   revalidatePath(`/projects/${projectId}/review`);

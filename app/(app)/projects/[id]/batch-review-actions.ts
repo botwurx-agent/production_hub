@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
+import { logWrite } from "@/lib/log";
 
 export type BatchState = { error?: string; token?: string; id?: string } | null;
 
@@ -71,7 +72,10 @@ export async function updateBatchReviewItems(
   const toAdd = ids.filter((id) => !existingIds.has(id));
 
   if (toRemove.length) {
-    await supabase.from("ai_batch_review_items").delete().in("id", toRemove);
+    await logWrite(
+      "updateBatchReviewItems/ai_batch_review_items",
+      supabase.from("ai_batch_review_items").delete().in("id", toRemove)
+    );
   }
   if (toAdd.length) {
     const maxPos = rows.reduce((m, r) => Math.max(m, r.position), -1);
@@ -93,7 +97,10 @@ export async function updateBatchReviewItems(
 export async function revokeBatchReview(projectId: string, batchId: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_batch_reviews").update({ revoked: true }).eq("id", batchId);
+  await logWrite(
+    "revokeBatchReview/ai_batch_reviews",
+    supabase.from("ai_batch_reviews").update({ revoked: true }).eq("id", batchId)
+  );
   revalidatePath(`/projects/${projectId}/pipeline`);
 }
 
@@ -101,6 +108,9 @@ export async function revokeBatchReview(projectId: string, batchId: string): Pro
 export async function deleteBatchReview(projectId: string, batchId: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_batch_reviews").delete().eq("id", batchId);
+  await logWrite(
+    "deleteBatchReview/ai_batch_reviews",
+    supabase.from("ai_batch_reviews").delete().eq("id", batchId)
+  );
   revalidatePath(`/projects/${projectId}/pipeline`);
 }

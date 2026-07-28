@@ -14,6 +14,7 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import type { OwnerType } from "@/app/(app)/projects/[id]/email-actions";
+import { logWrite } from "@/lib/log";
 
 export type ChatState = { error?: string } | null;
 
@@ -131,7 +132,10 @@ export async function linkChatSpace(
 export async function unlinkChatSpace(id: string, revalidate?: string) {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("chat_spaces").delete().eq("id", id);
+  await logWrite(
+    "unlinkChatSpace/chat_spaces",
+    supabase.from("chat_spaces").delete().eq("id", id)
+  );
   if (revalidate) revalidatePath(revalidate);
   revalidatePath("/communication");
 }
@@ -141,8 +145,11 @@ export async function unlinkChatSpace(id: string, revalidate?: string) {
 export async function markSpaceRead(rowId: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("chat_spaces")
-    .update({ last_read_at: new Date().toISOString() })
-    .eq("id", rowId);
+  await logWrite(
+    "markSpaceRead/chat_spaces",
+    supabase
+      .from("chat_spaces")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("id", rowId)
+  );
 }

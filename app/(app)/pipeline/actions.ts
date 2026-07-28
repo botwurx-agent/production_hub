@@ -6,6 +6,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { DEAL_STAGE, DEAL_STAGE_ORDER } from "@/lib/status";
 import { recordDealEvent } from "@/app/(app)/pipeline/crm-actions";
 import type { DealStage } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type FormState = { error?: string } | null;
 
@@ -103,7 +104,10 @@ export async function updateDealStage(dealId: string, stage: DealStage) {
   const supabase = db();
 
   const patch = stagePatch(stage);
-  await supabase.from("deals").update(patch).eq("id", dealId);
+  await logWrite(
+    "updateDealStage/deals",
+    supabase.from("deals").update(patch).eq("id", dealId)
+  );
 
   const { data: deal } = await supabase
     .from("deals")
@@ -114,11 +118,14 @@ export async function updateDealStage(dealId: string, stage: DealStage) {
 
   // Winning a deal activates its account (a prospect becomes a client).
   if (stage === "awarded" && accountId) {
-    await supabase
-      .from("clients")
-      .update({ account_status: "active" })
-      .eq("id", accountId)
-      .eq("account_status", "prospect");
+    await logWrite(
+      "updateDealStage/clients",
+      supabase
+        .from("clients")
+        .update({ account_status: "active" })
+        .eq("id", accountId)
+        .eq("account_status", "prospect")
+    );
   }
 
   // Log the transition on the relationship timeline.
@@ -140,13 +147,16 @@ export async function markDealLost(dealId: string, reason: string) {
   const ctx = await requireStudioContext();
   const supabase = db();
   const trimmed = reason.trim();
-  await supabase
-    .from("deals")
-    .update({
-      ...stagePatch("lost"),
-      lost_reason: trimmed || null,
-    })
-    .eq("id", dealId);
+  await logWrite(
+    "markDealLost/deals",
+    supabase
+      .from("deals")
+      .update({
+        ...stagePatch("lost"),
+        lost_reason: trimmed || null,
+      })
+      .eq("id", dealId)
+  );
 
   const { data: deal } = await supabase
     .from("deals")
@@ -202,6 +212,9 @@ export async function updateDeal(
 export async function deleteDeal(dealId: string) {
   await requireStudioContext();
   const supabase = db();
-  await supabase.from("deals").delete().eq("id", dealId);
+  await logWrite(
+    "deleteDeal/deals",
+    supabase.from("deals").delete().eq("id", dealId)
+  );
   revalidatePath("/pipeline");
 }

@@ -6,6 +6,7 @@ import { assetStorage } from "@/lib/asset-storage";
 import { fetchMediaFromUrl, aspectRatio, resolutionLabel } from "@/lib/media-import";
 import { requireStudioContext } from "@/lib/studio";
 import type { Json } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type PipelineState = { error?: string; id?: string } | null;
 
@@ -23,15 +24,18 @@ function rp(projectId: string) {
 export async function saveScript(projectId: string, content: string): Promise<void> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_scripts").upsert(
-    {
-      studio_id: ctx.studio.id,
-      project_id: projectId,
-      content,
-      created_by: ctx.userId,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "project_id" },
+  await logWrite(
+    "saveScript/ai_scripts",
+    supabase.from("ai_scripts").upsert(
+      {
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        content,
+        created_by: ctx.userId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "project_id" },
+    )
   );
   rp(projectId);
 }
@@ -82,14 +86,20 @@ export async function updateShot(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_shots").update(patch).eq("id", id);
+  await logWrite(
+    "updateShot/ai_shots",
+    supabase.from("ai_shots").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
 export async function deleteShot(projectId: string, id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_shots").delete().eq("id", id);
+  await logWrite(
+    "deleteShot/ai_shots",
+    supabase.from("ai_shots").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -123,7 +133,10 @@ export async function savePrompt(
     .limit(1)
     .maybeSingle();
   if (existing) {
-    await supabase.from("ai_prompts").update(patch).eq("id", existing.id);
+    await logWrite(
+      "savePrompt/ai_prompts",
+      supabase.from("ai_prompts").update(patch).eq("id", existing.id)
+    );
     rp(projectId);
     return { id: existing.id };
   }
@@ -284,14 +297,17 @@ export async function setGenerationStatus(
 ): Promise<void> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("ai_generations")
-    .update({
-      status,
-      approved_by: status === "approved" ? ctx.userId : null,
-      approved_at: status === "approved" ? new Date().toISOString() : null,
-    })
-    .eq("id", id);
+  await logWrite(
+    "setGenerationStatus/ai_generations",
+    supabase
+      .from("ai_generations")
+      .update({
+        status,
+        approved_by: status === "approved" ? ctx.userId : null,
+        approved_at: status === "approved" ? new Date().toISOString() : null,
+      })
+      .eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -303,7 +319,10 @@ export async function setGenerationStarred(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_generations").update({ starred }).eq("id", id);
+  await logWrite(
+    "setGenerationStarred/ai_generations",
+    supabase.from("ai_generations").update({ starred }).eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -318,19 +337,25 @@ export async function setGenerationRole(
   const supabase = createClient();
   if (role === "start" || role === "end" || role === "final") {
     // Only one of this role per shot; clear any other holder first.
-    await supabase
-      .from("ai_generations")
-      .update({ role: null })
-      .eq("shot_id", shotId)
-      .eq("role", role);
+    await logWrite(
+      "setGenerationRole/ai_generations",
+      supabase
+        .from("ai_generations")
+        .update({ role: null })
+        .eq("shot_id", shotId)
+        .eq("role", role)
+    );
   }
-  await supabase
-    .from("ai_generations")
-    .update({
-      role,
-      ...(role ? { status: "approved" } : {}),
-    })
-    .eq("id", id);
+  await logWrite(
+    "setGenerationRole/ai_generations",
+    supabase
+      .from("ai_generations")
+      .update({
+        role,
+        ...(role ? { status: "approved" } : {}),
+      })
+      .eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -355,14 +380,20 @@ export async function updateGeneration(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_generations").update(patch).eq("id", id);
+  await logWrite(
+    "updateGeneration/ai_generations",
+    supabase.from("ai_generations").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
 export async function deleteGeneration(projectId: string, id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_generations").delete().eq("id", id);
+  await logWrite(
+    "deleteGeneration/ai_generations",
+    supabase.from("ai_generations").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -528,7 +559,10 @@ export async function deleteLibraryEntry(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_prompt_library").delete().eq("id", id);
+  await logWrite(
+    "deleteLibraryEntry/ai_prompt_library",
+    supabase.from("ai_prompt_library").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -756,7 +790,10 @@ export async function removeGenerationRef(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("ai_generation_refs").delete().eq("id", id);
+  await logWrite(
+    "removeGenerationRef/ai_generation_refs",
+    supabase.from("ai_generation_refs").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -769,19 +806,25 @@ export async function setGenerationRefs(
 ): Promise<void> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  await supabase
-    .from("ai_generation_refs")
-    .delete()
-    .eq("generation_id", generationId);
+  await logWrite(
+    "setGenerationRefs/ai_generation_refs",
+    supabase
+      .from("ai_generation_refs")
+      .delete()
+      .eq("generation_id", generationId)
+  );
   if (refs.length) {
-    await supabase.from("ai_generation_refs").insert(
-      refs.map((r, i) => ({
-        studio_id: ctx.studio.id,
-        generation_id: generationId,
-        ref_generation_id: r.refGenerationId,
-        role: r.role,
-        position: i,
-      })),
+    await logWrite(
+      "setGenerationRefs/ai_generation_refs",
+      supabase.from("ai_generation_refs").insert(
+        refs.map((r, i) => ({
+          studio_id: ctx.studio.id,
+          generation_id: generationId,
+          ref_generation_id: r.refGenerationId,
+          role: r.role,
+          position: i,
+        })),
+      )
     );
   }
   rp(projectId);

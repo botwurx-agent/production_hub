@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { logWrite } from "@/lib/log";
 
 export type ContactState = { error?: string } | null;
 
@@ -105,6 +106,9 @@ export async function deleteProjectContact(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("contacts").delete().eq("id", contactId);
+  await logWrite(
+    "deleteProjectContact/contacts",
+    supabase.from("contacts").delete().eq("id", contactId)
+  );
   revalidatePath(`/projects/${projectId}/contacts`);
 }

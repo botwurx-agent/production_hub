@@ -5,6 +5,7 @@ import { allowPublic } from "@/lib/rate-limit";
 import { createNotification } from "@/lib/notifications";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import { logWrite } from "@/lib/log";
 
 export type BatchPortalState = { error?: string } | null;
 
@@ -87,11 +88,14 @@ export async function setBatchMark(
 
   // A pick is exclusive per reviewer: clear their pick on the other options first.
   if (patch.isPick === true) {
-    await service
-      .from("ai_batch_review_marks")
-      .update({ is_pick: false, updated_at: new Date().toISOString() })
-      .eq("batch_id", batch.id)
-      .eq("reviewer_name", reviewer);
+    await logWrite(
+      "setBatchMark/ai_batch_review_marks",
+      service
+        .from("ai_batch_review_marks")
+        .update({ is_pick: false, updated_at: new Date().toISOString() })
+        .eq("batch_id", batch.id)
+        .eq("reviewer_name", reviewer)
+    );
   }
 
   const { data: existing } = await service

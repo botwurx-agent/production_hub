@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
-import { reportError } from "@/lib/log";
+import { reportError, logWrite } from "@/lib/log";
 import type {
   BillingProfile,
   BillingDocument,
@@ -87,7 +87,10 @@ export async function createBillingDocument(
   const s = series[kind];
   const number = `${s.prefix}${s.n}`;
 
-  await supabase.from("billing_profiles").update(s.bump).eq("id", profile.id);
+  await logWrite(
+    "createBillingDocument/billing_profiles",
+    supabase.from("billing_profiles").update(s.bump).eq("id", profile.id)
+  );
 
   const { data: doc, error } = await supabase
     .from("billing_documents")
@@ -108,11 +111,14 @@ export async function createBillingDocument(
   if (error || !doc) return { error: error?.message ?? "Could not create document." };
 
   // Seed one empty line so the editor isn't blank.
-  await supabase.from("billing_document_lines").insert({
-    document_id: doc.id,
-    studio_id: ctx.studio.id,
-    position: 0,
-  });
+  await logWrite(
+    "createBillingDocument/billing_document_lines",
+    supabase.from("billing_document_lines").insert({
+      document_id: doc.id,
+      studio_id: ctx.studio.id,
+      position: 0,
+    })
+  );
 
   rp(projectId);
   return { id: doc.id };
@@ -254,7 +260,10 @@ export async function updateDocStyle(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("billing_documents").update(patch).eq("id", id);
+  await logWrite(
+    "updateDocStyle/billing_documents",
+    supabase.from("billing_documents").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -266,14 +275,17 @@ export async function saveDefaultDocStyle(
   const ctx = await requireStudioContext();
   const supabase = createClient();
   const profile = await ensureProfile(supabase, ctx.studio.id);
-  await supabase
-    .from("billing_profiles")
-    .update({
-      default_doc_template: style.template,
-      default_doc_accent: safeAccent(style.accent),
-      default_doc_font: style.font,
-    })
-    .eq("id", profile.id);
+  await logWrite(
+    "saveDefaultDocStyle/billing_profiles",
+    supabase
+      .from("billing_profiles")
+      .update({
+        default_doc_template: style.template,
+        default_doc_accent: safeAccent(style.accent),
+        default_doc_font: style.font,
+      })
+      .eq("id", profile.id)
+  );
   rp(projectId);
 }
 
@@ -338,10 +350,13 @@ export async function deleteDocAttachment(
     .select("storage_path")
     .eq("id", attachmentId)
     .maybeSingle();
-  await supabase
-    .from("billing_document_attachments")
-    .delete()
-    .eq("id", attachmentId);
+  await logWrite(
+    "deleteDocAttachment/billing_document_attachments",
+    supabase
+      .from("billing_document_attachments")
+      .delete()
+      .eq("id", attachmentId)
+  );
   const p = (att as BillingDocumentAttachment | null)?.storage_path;
   if (p) await supabase.storage.from("assets").remove([p]);
   rp(projectId);
@@ -367,7 +382,10 @@ export async function updateBillingDocument(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("billing_documents").update(patch).eq("id", id);
+  await logWrite(
+    "updateBillingDocument/billing_documents",
+    supabase.from("billing_documents").update(patch).eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -384,14 +402,17 @@ export async function setDocumentRecipient(
     .eq("id", contactId)
     .maybeSingle();
   if (c) {
-    await supabase
-      .from("billing_documents")
-      .update({
-        bill_to_name: c.name,
-        bill_to_email: c.email,
-        bill_to_company: c.company,
-      })
-      .eq("id", id);
+    await logWrite(
+      "setDocumentRecipient/billing_documents",
+      supabase
+        .from("billing_documents")
+        .update({
+          bill_to_name: c.name,
+          bill_to_email: c.email,
+          bill_to_company: c.company,
+        })
+        .eq("id", id)
+    );
   }
   rp(projectId);
 }
@@ -402,7 +423,10 @@ export async function deleteBillingDocument(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("billing_documents").delete().eq("id", id);
+  await logWrite(
+    "deleteBillingDocument/billing_documents",
+    supabase.from("billing_documents").delete().eq("id", id)
+  );
   rp(projectId);
 }
 
@@ -440,7 +464,10 @@ export async function updateDocLine(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("billing_document_lines").update(patch).eq("id", lineId);
+  await logWrite(
+    "updateDocLine/billing_document_lines",
+    supabase.from("billing_document_lines").update(patch).eq("id", lineId)
+  );
   rp(projectId);
 }
 
@@ -450,6 +477,9 @@ export async function deleteDocLine(
 ): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
-  await supabase.from("billing_document_lines").delete().eq("id", lineId);
+  await logWrite(
+    "deleteDocLine/billing_document_lines",
+    supabase.from("billing_document_lines").delete().eq("id", lineId)
+  );
   rp(projectId);
 }
