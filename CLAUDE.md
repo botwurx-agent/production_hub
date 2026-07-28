@@ -730,12 +730,40 @@ already existed; what was missing was a way to add a second person. Added:
   AcceptInvite button (components/auth/accept-invite.tsx -> acceptInvite ->
   claim); if logged out -> an invite-variant SignupForm (hidden invite_token,
   prefilled read-only email, no studio-name field) or "sign in to auto-join".
+- INVITE EMAILS (BUILT): both invite paths now email the link instead of only
+  handing you one to copy. inviteMember (studio) and inviteToProject
+  (collaborator) call a local sendInviteEmail helper built on lib/email.ts
+  (Resend) + renderEmail; re-inviting an address that already has a pending
+  invite RE-SENDS the mail, which is the "they never got it" affordance. Sending
+  is BEST EFFORT by design: the invite row is already written and the token link
+  still works, so a mail failure never fails the invite. Both actions now return
+  `emailed: boolean` and the two panels (components/settings/team-panel.tsx,
+  components/projects/project-people.tsx) show "Invite sent to x" on success or
+  an amber "email is not set up here, send them the copied link" fallback; the
+  clipboard is only hijacked when the link IS the delivery mechanism. The
+  collaborator email states the access boundary out loud ("this project only,
+  not the rest of the studio"). New lib/site-url.ts siteOrigin() replaces three
+  identical copies of emailOrigin() (share-actions, native-invoice-actions,
+  callsheet-actions).
+- MULTI-STUDIO SWITCHER (BUILT): getStudioContext used to always pick the
+  earliest membership, so a user invited to a second studio silently never saw
+  it. The active studio is now the one named by the `sf_studio` COOKIE when the
+  user still belongs to it, else the oldest membership (lib/active-studio.ts
+  readActiveStudioId + ACTIVE_STUDIO_COOKIE). A cookie, not a column, because
+  it is a per-browser view preference; it is only ever a hint, since the id is
+  matched against the caller's own membership rows before use and RLS is the
+  real boundary either way. switchStudio (app/(app)/studio-actions.ts) verifies
+  membership, sets the cookie, revalidates the layout; the caller then navigates
+  to /dashboard because the current URL may carry an id from the studio just
+  left. UI: components/app-shell/studio-switcher.tsx replaces the sidebar header
+  block (a plain label for a single-studio user, a menu when there are 2+), and
+  the UserMenu carries a md:hidden studio list since the sidebar is hidden on
+  phones. Collaborators are passed an empty list (their studio entry is
+  synthesised, so a switcher would be meaningless).
 - NOT yet: a locked read-only "viewer" role (would need an RLS write/read split
-  across all tables via an is_studio_editor() helper; deferred). A multi-studio
-  switcher (a user can now belong to 2+ studios but getStudioContext still picks
-  the earliest; switcher deferred). Email delivery of invites (we hand back a
-  link to copy; no transactional email yet). Internal ungated feedback in the
-  working/overview view is the next pipeline step (step 2 of the plan).
+  across all tables via an is_studio_editor() helper; deferred). Internal ungated
+  feedback in the working/overview view is the next pipeline step (step 2 of the
+  plan).
 
 ### DECISION (2026-07): documents yes, in-app PAYMENTS deferred
 After research (docs/launch payment landscape: Melio now Xero-owned; Stripe is

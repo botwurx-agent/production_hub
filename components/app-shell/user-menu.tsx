@@ -1,14 +1,44 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { signOut } from "@/app/auth/actions";
+import { switchStudio } from "@/app/(app)/studio-actions";
 import { FeedbackModal } from "@/components/feedback/feedback-modal";
+import type { StudioOption } from "@/components/app-shell/studio-switcher";
 
-export function UserMenu({ email }: { email: string | null }) {
+export function UserMenu({
+  email,
+  studios = [],
+  activeStudioId = "",
+}: {
+  email: string | null;
+  studios?: StudioOption[];
+  activeStudioId?: string;
+}) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [busy, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
   const initial = (email?.[0] ?? "?").toUpperCase();
+  // The sidebar switcher is hidden below md, so on a phone this menu is the
+  // only way to change studio.
+  const multiple = studios.length > 1;
+
+  function choose(id: string) {
+    if (id === activeStudioId) {
+      setOpen(false);
+      return;
+    }
+    start(async () => {
+      const res = await switchStudio(id);
+      if (res?.error) return;
+      setOpen(false);
+      router.push("/dashboard");
+      router.refresh();
+    });
+  }
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -39,6 +69,28 @@ export function UserMenu({ email }: { email: string | null }) {
               {email ?? "Unknown"}
             </div>
           </div>
+          {multiple && (
+            <div className="border-b border-border py-1 md:hidden">
+              <div className="px-4 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-faint">
+                Studio
+              </div>
+              {studios.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => choose(s.id)}
+                  disabled={busy}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-medium text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-60"
+                >
+                  <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                  {s.id === activeStudioId && (
+                    <span className="shrink-0 text-accent" aria-label="Current">
+                      &#10003;
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={() => {
               setOpen(false);

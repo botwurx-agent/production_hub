@@ -29,6 +29,16 @@ export default async function AppLayout({
   const outstanding = await getOutstanding();
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
 
+  // A collaborator has no memberships, so their single "studio" entry is
+  // synthesised from the project they were invited to; never offer a switcher.
+  const studios = ctx.isCollaborator
+    ? []
+    : ctx.studios.map((s) => ({
+        id: s.studio.id,
+        name: s.studio.name,
+        role: s.role,
+      }));
+
   return (
     <AiAvailabilityProvider enabled={aiConfigured()}>
       <div className="flex min-h-screen bg-bg">
@@ -36,12 +46,16 @@ export default async function AppLayout({
           studioName={ctx.studio.name}
           logoUrl={logoUrl}
           collaborator={ctx.isCollaborator}
+          studios={studios}
+          activeStudioId={ctx.studio.id}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar
             email={ctx.email}
             needsYouCount={outstanding.length}
             collaborator={ctx.isCollaborator}
+            studios={studios}
+            activeStudioId={ctx.studio.id}
           />
           <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">
             {children}

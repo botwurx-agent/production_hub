@@ -51,6 +51,13 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
 - **Sentry client bundle.** The browser SDK adds ~76 kB to first-load JS. If that
   matters for the marketing-critical pages, scope Sentry to server-only or lazy
   it.
+- ~~Email delivery of invites.~~ DONE. Studio and project-collaborator invites
+  are emailed via Resend; the copy-link path remains as a fallback and is the
+  only path when `RESEND_API_KEY` / `EMAIL_FROM` are unset. Re-inviting a
+  pending address re-sends.
+- ~~Multi-studio switcher.~~ DONE. Active studio comes from the `sf_studio`
+  cookie (validated against the caller's memberships), with a picker in the
+  sidebar header and in the user menu on mobile.
 
 ## What shipped in the hardening pass (branch `claude/pre-launch-audit-competitive-a08026`)
 

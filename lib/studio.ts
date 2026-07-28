@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { readActiveStudioId } from "@/lib/active-studio";
 import type { MembershipRole, Studio } from "@/lib/database.types";
 
 export type StudioContext = {
@@ -12,14 +13,16 @@ export type StudioContext = {
   isCollaborator: boolean;
   // Projects a collaborator may access; null for full studio members (all).
   projectIds: string[] | null;
-  // All studios the user belongs to (for a future studio switcher).
+  // Every studio the user belongs to, oldest membership first. Drives the
+  // studio switcher; a single-studio user has exactly one entry.
   studios: { studio: Studio; role: MembershipRole }[];
 };
 
 /**
- * Resolves the signed-in user and their active studio. For v1 the active
- * studio is the first one the user belongs to; a switcher comes later.
- * Cached per request so multiple server components share one lookup.
+ * Resolves the signed-in user and their active studio. The active studio is the
+ * one named by the sf_studio cookie when the user still belongs to it, else the
+ * oldest membership. Cached per request so multiple server components share one
+ * lookup.
  */
 export const getStudioContext = cache(
   async (): Promise<StudioContext | null> => {
@@ -52,11 +55,18 @@ export const getStudioContext = cache(
 
     // Full studio member: access to everything in the studio.
     if (rows.length > 0) {
+      // The cookie is a preference, not a permission: we only honour it when
+      // it names a studio present in the user's own membership rows, so a
+      // stale or forged value falls back rather than leaking anything.
+      const preferredId = readActiveStudioId();
+      const active =
+        rows.find((r) => r.studio.id === preferredId) ?? rows[0];
+
       return {
         userId: user.id,
         email: user.email ?? null,
-        studio: rows[0].studio,
-        role: rows[0].role,
+        studio: active.studio,
+        role: active.role,
         isCollaborator: false,
         projectIds: null,
         studios: rows.map((r) => ({ studio: r.studio, role: r.role })),

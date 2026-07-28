@@ -13,6 +13,10 @@ import {
   CommunicationIcon,
 } from "@/components/app-shell/nav-icons";
 import { CommunicationBadge } from "@/components/app-shell/communication-badge";
+import {
+  StudioSwitcher,
+  type StudioOption,
+} from "@/components/app-shell/studio-switcher";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
@@ -30,10 +34,14 @@ export function Sidebar({
   studioName,
   logoUrl,
   collaborator = false,
+  studios = [],
+  activeStudioId = "",
 }: {
   studioName: string;
   logoUrl?: string | null;
   collaborator?: boolean;
+  studios?: StudioOption[];
+  activeStudioId?: string;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -70,24 +78,13 @@ export function Sidebar({
           collapsed ? "justify-center px-2" : "gap-2 px-4"
         }`}
       >
-        {logoUrl ? (
-          <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[10px] border border-border bg-surface">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={logoUrl} alt={studioName} className="h-full w-full object-contain p-0.5" />
-          </span>
-        ) : (
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-fg shadow-sm">
-            <span className="text-xs font-extrabold tracking-tight">SF</span>
-          </span>
-        )}
-        {!collapsed && (
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold leading-tight text-text">
-              {studioName}
-            </div>
-            <div className="text-[11px] leading-tight text-text-faint">Studio Flows</div>
-          </div>
-        )}
+        <StudioSwitcher
+          studios={studios}
+          activeId={activeStudioId}
+          name={studioName}
+          logoUrl={logoUrl}
+          collapsed={collapsed}
+        />
       </div>
 
       <nav className="flex-1 space-y-1 p-3">

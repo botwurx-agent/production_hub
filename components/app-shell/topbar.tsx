@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/app-shell/user-menu";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
+import type { StudioOption } from "@/components/app-shell/studio-switcher";
 
 const nav = [
   { href: "/projects", label: "Projects" },
@@ -19,10 +20,14 @@ export function Topbar({
   email,
   needsYouCount = 0,
   collaborator = false,
+  studios = [],
+  activeStudioId = "",
 }: {
   email: string | null;
   needsYouCount?: number;
   collaborator?: boolean;
+  studios?: StudioOption[];
+  activeStudioId?: string;
 }) {
   const pathname = usePathname();
   const items = collaborator ? nav.filter((n) => n.href === "/projects") : nav;
@@ -63,7 +68,11 @@ export function Topbar({
         <div className="flex items-center gap-2">
           <NotificationBell needsYouCount={needsYouCount} />
           <ThemeToggle />
-          <UserMenu email={email} />
+          <UserMenu
+            email={email}
+            studios={studios}
+            activeStudioId={activeStudioId}
+          />
         </div>
       </div>
     </header>
