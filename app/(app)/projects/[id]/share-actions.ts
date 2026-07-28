@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
@@ -9,6 +8,7 @@ import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
 import { longDate } from "@/lib/format";
 import { logWrite } from "@/lib/log";
+import { siteOrigin } from "@/lib/site-url";
 
 export type ShareState = { error?: string } | null;
 
@@ -19,14 +19,6 @@ const DOC_NOUN: Record<string, string> = {
   ai_shot: "shot",
 };
 
-function emailOrigin(): string {
-  const env = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
-  if (env) return env;
-  const h = headers();
-  const host = h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  return host ? `${proto}://${host}` : "";
-}
 
 // Creates a client review link for an asset (or returns the existing active
 // one, so a studio always shares one stable URL per asset).
@@ -167,7 +159,7 @@ export async function emailDocReviewLink(
   );
 
   const noun = DOC_NOUN[kind] ?? "document";
-  const url = `${emailOrigin()}/r/${link.token}`;
+  const url = `${siteOrigin()}/r/${link.token}`;
   const subject =
     input.subject.trim() || `${ctx.studio.name} shared a ${noun} for review`;
   const lines = input.message?.trim()
@@ -232,7 +224,7 @@ export async function emailAssetReviewLink(
       .eq("token", link.token)
   );
 
-  const url = `${emailOrigin()}/r/${link.token}`;
+  const url = `${siteOrigin()}/r/${link.token}`;
   const subject =
     input.subject.trim() || `${ctx.studio.name} shared ${asset.name} for review`;
   const lines = input.message?.trim()

@@ -1,13 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
 import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
 import { logWrite } from "@/lib/log";
+import { siteOrigin } from "@/lib/site-url";
 
 export type CallSheetState = { error?: string } | null;
 
@@ -341,16 +341,6 @@ export async function deleteCallSheetRecipient(
   rp(projectId);
 }
 
-// Canonical origin for links in emails: the configured site URL, else the
-// current request host.
-function emailOrigin(): string {
-  const env = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
-  if (env) return env;
-  const h = headers();
-  const host = h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  return host ? `${proto}://${host}` : "";
-}
 
 // Email a recipient their private call-sheet link. The link opens /c/<token>,
 // which records the view and offers the confirm action, so the existing
@@ -390,7 +380,7 @@ export async function sendCallSheetEmail(
     }
   }
 
-  const link = `${emailOrigin()}/c/${r.token}`;
+  const link = `${siteOrigin()}/c/${r.token}`;
   const lines = [`Hi ${r.name}, here is your call sheet for ${title}.`];
   if (dateStr) {
     lines.push(

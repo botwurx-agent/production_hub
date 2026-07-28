@@ -35,6 +35,12 @@ export function TeamPanel({
   const [role, setRole] = useState<MembershipRole>("member");
   const [err, setErr] = useState<string | null>(null);
   const [lastToken, setLastToken] = useState<string | null>(null);
+  // What happened to the invite we just created: who it went to, and whether
+  // the email actually sent (it does not when the deployment has no mail set
+  // up, in which case copying the link is the whole flow).
+  const [sentTo, setSentTo] = useState<{ email: string; emailed: boolean } | null>(
+    null
+  );
   const [copied, setCopied] = useState<string | null>(null);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -53,6 +59,8 @@ export function TeamPanel({
   function invite() {
     setErr(null);
     setLastToken(null);
+    setSentTo(null);
+    const to = email.trim();
     start(async () => {
       const res = await inviteMember(email, role);
       if (res?.error) {
@@ -61,7 +69,9 @@ export function TeamPanel({
       }
       if (res?.token) {
         setLastToken(res.token);
-        copy(res.token);
+        setSentTo({ email: to, emailed: Boolean(res.emailed) });
+        // Only hijack the clipboard when the link is the delivery mechanism.
+        if (!res.emailed) copy(res.token);
       }
       setEmail("");
       router.refresh();
@@ -207,9 +217,21 @@ export function TeamPanel({
           </div>
           <p className="mt-2 text-xs text-text-muted">
             Members can view and work on every project. Admins can also manage the
-            team. We generate a private invite link you send them; it&apos;s copied to
-            your clipboard automatically.
+            team. We email them a private invite link.
           </p>
+          {sentTo && (
+            <p
+              className={`mt-2 rounded-[9px] px-3 py-2 text-sm font-medium ${
+                sentTo.emailed
+                  ? "bg-green-bg text-green"
+                  : "bg-amber-bg text-amber"
+              }`}
+            >
+              {sentTo.emailed
+                ? `Invite sent to ${sentTo.email}.`
+                : `Invite created for ${sentTo.email}, but email is not set up on this deployment. Send them the link below (it's on your clipboard).`}
+            </p>
+          )}
           {lastToken && (
             <div className="mt-2 flex flex-col gap-2 rounded-[10px] border border-border bg-surface p-2 sm:flex-row sm:items-center">
               <input

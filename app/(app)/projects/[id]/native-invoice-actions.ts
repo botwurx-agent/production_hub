@@ -20,7 +20,7 @@ import {
 } from "@/lib/billing-doc";
 import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
-import { headers } from "next/headers";
+import { siteOrigin } from "@/lib/site-url";
 
 export type DocState = { error?: string; id?: string } | null;
 
@@ -184,16 +184,6 @@ export async function sendBillingDoc(
   return { token };
 }
 
-// Canonical origin for links in emails: the configured site URL, else the
-// current request host.
-function emailOrigin(): string {
-  const env = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
-  if (env) return env;
-  const h = headers();
-  const host = h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  return host ? `${proto}://${host}` : "";
-}
 
 // Send the document by email: freezes + shares it (like sendBillingDoc) and then
 // emails the recipient the /p/<token> link. Gated on emailConfigured().
@@ -224,7 +214,7 @@ export async function emailBillingDoc(
   const label = docLabel(kind);
   const number = doc?.number ? ` (${doc.number})` : "";
 
-  const link = `${emailOrigin()}/p/${shared.token}`;
+  const link = `${siteOrigin()}/p/${shared.token}`;
   const lines = input.message?.trim()
     ? [input.message.trim()]
     : [

@@ -33,6 +33,12 @@ export function ProjectPeople({
   const [email, setEmail] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  // Outcome of the invite we just created: who, and whether the email sent.
+  // It does not send when the deployment has no mail configured, in which case
+  // copying the link is the whole flow.
+  const [sentTo, setSentTo] = useState<{ email: string; emailed: boolean } | null>(
+    null
+  );
   const [pendingT, start] = useTransition();
 
   const count = members.length;
@@ -48,6 +54,7 @@ export function ProjectPeople({
     const clean = email.trim();
     if (!clean) return;
     setErr(null);
+    setSentTo(null);
     start(async () => {
       const res = await inviteToProject(projectId, clean);
       if (res?.error) {
@@ -55,7 +62,9 @@ export function ProjectPeople({
         return;
       }
       setEmail("");
-      if (res?.token) copy(res.token);
+      setSentTo({ email: clean, emailed: Boolean(res?.emailed) });
+      // Only take over the clipboard when the link is how they get in.
+      if (res?.token && !res.emailed) copy(res.token);
       router.refresh();
     });
   }
@@ -81,6 +90,7 @@ export function ProjectPeople({
             <p className="mb-2 text-sm text-text-muted">
               Invite crew (DP, AD, PA, etc.) to collaborate on this project only.
               They can contribute here and will not see the rest of the studio.
+              We email them the invite link.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Input
@@ -97,6 +107,17 @@ export function ProjectPeople({
                 {pendingT ? "Inviting…" : "Invite"}
               </Button>
             </div>
+            {sentTo && !err && (
+              <p
+                className={`mt-2 rounded-[10px] px-3 py-2 text-sm font-medium ${
+                  sentTo.emailed ? "bg-green-bg text-green" : "bg-amber-bg text-amber"
+                }`}
+              >
+                {sentTo.emailed
+                  ? `Invite sent to ${sentTo.email}.`
+                  : `Invite created for ${sentTo.email}. Email is not set up here, so send them the copied link.`}
+              </p>
+            )}
             {err && (
               <p className="mt-2 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
                 {err}
