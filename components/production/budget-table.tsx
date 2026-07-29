@@ -11,12 +11,12 @@ import {
 } from "@/app/(app)/projects/[id]/production/budget-actions";
 import { CostLedger, type RosterOption } from "@/components/production/cost-ledger";
 import {
-  costStatus,
   lineActual as lineActualOf,
   marginOf,
   rollUpActual,
+  summarizePayments,
 } from "@/lib/costs";
-import type { BudgetLine, ProjectCost } from "@/lib/database.types";
+import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -35,6 +35,8 @@ export function BudgetTable({
   roster,
   billed,
   billedFromInvoices,
+  payments,
+  todayIso,
 }: {
   projectId: string;
   lines: BudgetLine[];
@@ -44,6 +46,8 @@ export function BudgetTable({
   billed: number;
   /** True when that came from real invoices rather than the manual field. */
   billedFromInvoices: boolean;
+  payments: CostPayment[];
+  todayIso: string;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<BudgetLine[]>(lines);
@@ -92,9 +96,18 @@ export function BudgetTable({
   const totalEst = rows.reduce((n, r) => n + (r.estimated || 0), 0);
   const totalAct = rollUpActual(rows, costs);
   const variance = totalAct - totalEst;
-  const unpaid = costs
-    .filter((c) => costStatus(c.status) !== "paid")
-    .reduce((n, c) => n + (Number(c.amount) || 0), 0);
+  // Still owed is the remainder after any payments already sent, not the whole
+  // commitment: a part-paid deposit arrangement is not fully outstanding.
+  const unpaid = costs.reduce(
+    (n, c) =>
+      n +
+      summarizePayments(
+        c.amount,
+        payments.filter((p) => p.cost_id === c.id),
+        c.status
+      ).owed,
+    0
+  );
   // What the job made, as opposed to whether it stayed on budget. Those are
   // different questions, so this sits apart from the four tiles above.
   const margin = marginOf(billed, totalAct);
@@ -300,6 +313,8 @@ export function BudgetTable({
           costs={costs}
           lines={rows}
           roster={roster}
+          payments={payments}
+          todayIso={todayIso}
         />
       </div>
     </div>

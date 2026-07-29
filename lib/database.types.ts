@@ -1595,6 +1595,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      cost_payments: {
+        Row: {
+          id: string;
+          studio_id: string;
+          cost_id: string;
+          label: string;
+          amount: number;
+          due_date: string | null;
+          paid_at: string | null;
+          method: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          cost_id: string;
+          label?: string;
+          amount?: number;
+          due_date?: string | null;
+          paid_at?: string | null;
+          method?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          cost_id?: string;
+          label?: string;
+          amount?: number;
+          due_date?: string | null;
+          paid_at?: string | null;
+          method?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       project_costs: {
         Row: {
           id: string;
@@ -3391,6 +3433,7 @@ export type CallSheet = Tables<"call_sheets">;
 export type CallSheetEntry = Tables<"call_sheet_entries">;
 export type BudgetLine = Tables<"budget_lines">;
 export type ProjectCost = Tables<"project_costs">;
+export type CostPayment = Tables<"cost_payments">;
 export type GearItem = Tables<"gear_items">;
 export type Deliverable = Tables<"deliverables">;
 export type ProjectBilling = Tables<"project_billing">;

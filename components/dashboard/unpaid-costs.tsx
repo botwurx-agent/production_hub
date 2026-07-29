@@ -8,9 +8,12 @@ export type UnpaidCost = {
   projectId: string;
   projectTitle: string;
   vendor: string;
+  /** What is still owed, which is the remainder when a deposit has been sent. */
   amount: number;
+  /** The next payment's date when there is a schedule, else the cost's own. */
   dueDate: string | null;
   status: string;
+  partPaid: boolean;
 };
 
 const money = new Intl.NumberFormat("en-US", {
@@ -97,10 +100,11 @@ export function UnpaidCosts({
                   </span>
                   <span className="block truncate text-[11px] text-text-faint">
                     {c.projectTitle}
+                    {c.partPaid && " · balance"}
                     {c.dueDate && (
                       <span className={isOverdue ? "font-semibold text-red" : ""}>
                         {" · "}
-                        {isOverdue ? "due " : "due "}
+                        {isOverdue ? "overdue " : "due "}
                         {fmtDue(c.dueDate)}
                       </span>
                     )}

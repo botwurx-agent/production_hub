@@ -6,7 +6,7 @@ import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { BudgetTable } from "@/components/production/budget-table";
 import type { RosterOption } from "@/components/production/cost-ledger";
 import { computeTotals, type DocSnapshotLine } from "@/lib/billing-doc";
-import type { BudgetLine, ProjectCost } from "@/lib/database.types";
+import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
 export default async function BudgetPage({
   params,
@@ -65,6 +65,20 @@ export default async function BudgetPage({
         .maybeSingle(),
     ]);
 
+  // Payments hang off the project's costs, so they are fetched by cost id
+  // rather than by project.
+  const costIds = (costs ?? []).map((c) => c.id);
+  const { data: payments } = costIds.length
+    ? await supabase
+        .from("cost_payments")
+        .select("*")
+        .in("cost_id", costIds)
+    : { data: [] as CostPayment[] };
+
+  // Today is resolved on the SERVER and passed down, matching the dashboard
+  // calendar, so an overdue payment cannot render differently after hydration.
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   // Totals live on the lines, not the document, so they are summed here the
   // same way the document renderer does it.
   const invoiceIds = (invoices ?? []).map((d) => d.id);
@@ -113,6 +127,8 @@ export default async function BudgetPage({
           roster={(roster ?? []) as RosterOption[]}
           billed={billed}
           billedFromInvoices={invoiceIds.length > 0}
+          payments={(payments ?? []) as CostPayment[]}
+          todayIso={todayIso}
         />
       </Card>
     </div>

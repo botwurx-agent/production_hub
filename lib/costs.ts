@@ -45,6 +45,113 @@ export function isCostDocType(mime: string): boolean {
 }
 
 /**
+ * A scheduled or made payment against a cost. `paid_at` null means it is owed
+ * but not yet sent.
+ */
+export type PaymentLike = {
+  amount: number | string;
+  due_date: string | null;
+  paid_at: string | null;
+};
+
+export type PaymentSummary = {
+  /** The full amount committed to the vendor. */
+  committed: number;
+  paid: number;
+  owed: number;
+  /** True when this cost has an explicit payment schedule. */
+  hasSchedule: boolean;
+  state: "unpaid" | "part" | "paid";
+  /** The next payment still owed, earliest due date first. */
+  nextDue: { amount: number; dueDate: string | null } | null;
+  /** Committed minus everything the schedule accounts for, so a schedule that
+   * does not add up to the commitment is visible rather than silently short. */
+  unscheduled: number;
+};
+
+/**
+ * Rolls a cost's payments into what is actually still owed.
+ *
+ * With NO payments recorded this falls back to the manual status chip, exactly
+ * as a budget line falls back to its typed actual: a cost logged before
+ * schedules existed, or one paid in a single go, keeps working untouched.
+ *
+ * With payments, the schedule is authoritative and the chip becomes derived,
+ * so the two can never disagree about the same cost.
+ */
+export function summarizePayments(
+  committed: number | string,
+  payments: PaymentLike[],
+  manualStatus: string | null | undefined
+): PaymentSummary {
+  const total = Number(committed) || 0;
+
+  if (payments.length === 0) {
+    const isPaid = costStatus(manualStatus) === "paid";
+    return {
+      committed: total,
+      paid: isPaid ? total : 0,
+      owed: isPaid ? 0 : total,
+      hasSchedule: false,
+      state: isPaid ? "paid" : "unpaid",
+      nextDue: null,
+      unscheduled: 0,
+    };
+  }
+
+  let paid = 0;
+  let scheduled = 0;
+  const outstanding: { amount: number; dueDate: string | null }[] = [];
+  for (const p of payments) {
+    const amt = Number(p.amount) || 0;
+    scheduled += amt;
+    if (p.paid_at) paid += amt;
+    else outstanding.push({ amount: amt, dueDate: p.due_date });
+  }
+  paid = Math.round(paid * 100) / 100;
+
+  // Sort undated last: a payment with no date cannot be the next thing due.
+  outstanding.sort((a, b) => {
+    if (a.dueDate === b.dueDate) return 0;
+    if (a.dueDate === null) return 1;
+    if (b.dueDate === null) return -1;
+    return a.dueDate < b.dueDate ? -1 : 1;
+  });
+
+  // Half a cent of tolerance, so a schedule built from percentages counts as
+  // settled rather than leaving a rounding crumb owed forever.
+  const state = paid >= total - 0.005 ? "paid" : paid > 0 ? "part" : "unpaid";
+
+  return {
+    committed: total,
+    paid,
+    owed: Math.max(0, Math.round((total - paid) * 100) / 100),
+    hasSchedule: true,
+    state,
+    nextDue: outstanding[0] ?? null,
+    unscheduled: Math.round((total - scheduled) * 100) / 100,
+  };
+}
+
+/**
+ * Splits a commitment into a deposit and a balance, the way vendors actually
+ * ask for it. The balance is the REMAINDER rather than a second percentage
+ * calculation, so the two always add back to the total exactly and no cent is
+ * lost to rounding.
+ */
+export function depositSplit(
+  committed: number,
+  percent: number
+): { deposit: number; balance: number } | null {
+  const total = Number(committed);
+  const pct = Number(percent);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  if (!Number.isFinite(pct) || pct <= 0 || pct >= 100) return null;
+  const deposit = Math.round(total * (pct / 100) * 100) / 100;
+  return { deposit, balance: Math.round((total - deposit) * 100) / 100 };
+}
+
+/**
  * What the job made: billed to the client, minus what it cost to make.
  *
  * The percentage is margin ON REVENUE (profit / billed), which is what a studio

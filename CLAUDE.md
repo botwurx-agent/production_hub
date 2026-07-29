@@ -1356,8 +1356,57 @@ is now a LEDGER, the same move that makes an Asset a file plus Versions.
 - SCOPE LINE TO HOLD: this answers "what did this job cost and who is owed". It
   does not become POs, payroll, approval chains, or AICP bid ledgers (that is
   Saturation.io's ground, and the audit already said no to it).
-- Slice 4 (margin + unpaid rollup) is BUILT, see below. The "dynamic budget"
-  arc is complete; nothing further is planned for it without real-use friction.
+- Slice 4 (margin + unpaid rollup) and slice 5 (payment schedule) are BUILT,
+  see below.
+
+### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
+Came straight out of real use: a CGI vendor wanted 25% up front and the balance
+later, and the ledger could only express "one cost, paid once". A cost is now a
+COMMITMENT and `cost_payments` are the events against it, the third instance of
+the parent-holds-the-figure / children-hold-what-happened shape (assets ->
+versions, budget_lines -> project_costs).
+- `cost_payments` (0072): studio/cost_id/label/amount/due_date/paid_at/method/
+  notes. `paid_at` NULL means scheduled (owed, not yet sent); set means the money
+  is gone. One nullable timestamp rather than a status enum, because a payment
+  has exactly two honest states and the date is the thing worth recording.
+  RLS is_studio_member ONLY, matching project_costs (a collaborator must not see
+  what the studio owes its vendors).
+- `summarizePayments(committed, payments, manualStatus)` in lib/costs.ts is the
+  whole roll-up. With NO payments it falls back to the manual status chip, so
+  every pre-existing cost keeps working untouched; with payments the schedule is
+  authoritative and the chip becomes a READ-ONLY derived chip (Scheduled / Part
+  paid / Paid), the same rule that makes a budget line's actual read-only once
+  costs back it. Returns owed, state, nextDue (undated payments sort last, since
+  a payment with no date cannot be "next"), and `unscheduled` so a schedule that
+  does not add up to the commitment is surfaced in an amber line rather than
+  silently short. Half a cent of tolerance on "settled" so a percentage split
+  does not leave a rounding crumb owed forever.
+- `depositSplit(committed, percent)` computes the balance as the REMAINDER, not
+  a second percentage, so the two halves always add back to the total exactly.
+  Surfaced as a "Deposit + balance" quick action (percent + two due dates +
+  "already sent"), which REPLACES any existing schedule rather than appending,
+  since it builds a whole schedule.
+- STILL OWED IS NOW PRECISE everywhere: the budget tile, the ledger header, and
+  the dashboard widget all sum `summarizePayments().owed`, so a part-paid
+  commitment reports only its remainder. The dashboard widget also shows the
+  NEXT PAYMENT's date rather than the cost's own, re-sorts on that effective
+  date (the query's ordering no longer holds), tags the row "balance" when part
+  paid, and drops a cost whose schedule fully settles it even though its manual
+  chip never moved.
+- UI: components/production/payment-schedule.tsx, expanded per row from a
+  button in the cost's action group that reads "Split" (no schedule) or "1/2"
+  (paid/total). `todayIso` is computed on the SERVER and threaded down, matching
+  the slate and the dashboard, so an overdue payment cannot render differently
+  after hydration.
+- summarizePayments and depositSplit are unit-tested in the scratchpad,
+  including the exact deposit-then-balance sequence, the numeric-as-string case,
+  overpayment (never negative owed), and a 33.33% split summing back to the
+  whole.
+- STILL OPEN: the extractor is told to read the amount due AFTER any deposit
+  already paid, so a closing invoice that instead states the FULL total would
+  double count against a deposit logged separately. Nothing detects that yet;
+  the schedule is the structural answer (one commitment, two payments) but
+  nothing forces its use.
 
 ### Budget slice 3: cost from an emailed invoice + rate flagging (migration 0071)
 Two halves, both about connecting the ledger to what already exists.

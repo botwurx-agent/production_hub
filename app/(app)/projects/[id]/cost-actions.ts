@@ -5,7 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite, reportError } from "@/lib/log";
 import { generateReviewToken } from "@/lib/review-links";
-import { costStatus, isCostDocType, MAX_COST_DOC_BYTES } from "@/lib/costs";
+import {
+  costStatus,
+  depositSplit,
+  isCostDocType,
+  MAX_COST_DOC_BYTES,
+} from "@/lib/costs";
 import { aiConfigured, extractInvoice, type InvoiceDraft } from "@/lib/ai";
 import { getAttachmentBytes, getAccessToken } from "@/lib/gmail";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -530,4 +535,154 @@ async function getAttachmentForCost(
   if (!account) throw new Error("Gmail is not connected.");
   const token = await getAccessToken(supabase, account);
   return getAttachmentBytes(token, gmailMessageId, attachmentId);
+}
+
+// --- Payment schedule --------------------------------------------------------
+// A cost is the commitment; these are the payments against it. Everything here
+// inherits project_costs' is_studio_member gating via cost_payments' own
+// policy, so a collaborator cannot read or write a payment.
+
+export type PaymentInput = {
+  label: string;
+  amount: number;
+  dueDate: string | null;
+  paid: boolean;
+  method: string | null;
+  notes: string | null;
+};
+
+function cleanPayment(input: PaymentInput) {
+  return {
+    label: input.label.trim().slice(0, 120),
+    amount: Number.isFinite(input.amount) ? Math.round(input.amount * 100) / 100 : 0,
+    due_date: input.dueDate || null,
+    method: input.method?.trim().slice(0, 60) || null,
+    notes: input.notes?.trim().slice(0, 500) || null,
+  };
+}
+
+export async function addPayment(
+  projectId: string,
+  costId: string,
+  input: PaymentInput
+): Promise<{ error: string } | { ok: true }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { error } = await supabase.from("cost_payments").insert({
+    studio_id: ctx.studio.id,
+    cost_id: costId,
+    created_by: ctx.userId,
+    ...cleanPayment(input),
+    paid_at: input.paid ? new Date().toISOString() : null,
+  });
+  if (error) {
+    reportError("addPayment/cost_payments", error);
+    return { error: "Could not add that payment." };
+  }
+  rp(projectId);
+  return { ok: true };
+}
+
+/**
+ * Builds the whole schedule in one go from a deposit percentage, which is how
+ * a vendor states it ("25% up front, balance on delivery"). The balance is the
+ * remainder rather than a second percentage, so the two always add back to the
+ * commitment exactly.
+ */
+export async function scheduleDeposit(
+  projectId: string,
+  costId: string,
+  opts: {
+    percent: number;
+    depositDue: string | null;
+    balanceDue: string | null;
+    depositPaid: boolean;
+  }
+): Promise<{ error: string } | { ok: true }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: cost } = await supabase
+    .from("project_costs")
+    .select("amount")
+    .eq("id", costId)
+    .maybeSingle();
+  if (!cost) return { error: "That cost no longer exists." };
+
+  const split = depositSplit(Number(cost.amount), opts.percent);
+  if (!split) {
+    return { error: "Set the cost's total amount first, and a deposit between 1 and 99 percent." };
+  }
+
+  // Replacing rather than appending: this action builds a whole schedule, and
+  // running it twice should not leave the old halves behind alongside the new.
+  const { error: delErr } = await supabase
+    .from("cost_payments")
+    .delete()
+    .eq("cost_id", costId);
+  if (delErr) {
+    reportError("scheduleDeposit.clear", delErr);
+    return { error: "Could not replace the existing schedule." };
+  }
+
+  const { error } = await supabase.from("cost_payments").insert([
+    {
+      studio_id: ctx.studio.id,
+      cost_id: costId,
+      created_by: ctx.userId,
+      label: `Deposit ${opts.percent}%`,
+      amount: split.deposit,
+      due_date: opts.depositDue || null,
+      paid_at: opts.depositPaid ? new Date().toISOString() : null,
+    },
+    {
+      studio_id: ctx.studio.id,
+      cost_id: costId,
+      created_by: ctx.userId,
+      label: "Balance",
+      amount: split.balance,
+      due_date: opts.balanceDue || null,
+      paid_at: null,
+    },
+  ]);
+  if (error) {
+    reportError("scheduleDeposit/cost_payments", error);
+    return { error: "Could not build that schedule." };
+  }
+  rp(projectId);
+  return { ok: true };
+}
+
+/** Toggles a payment between scheduled and sent. */
+export async function setPaymentPaid(
+  projectId: string,
+  paymentId: string,
+  paid: boolean
+): Promise<{ error: string } | { ok: true }> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("cost_payments")
+    .update({ paid_at: paid ? new Date().toISOString() : null })
+    .eq("id", paymentId);
+  if (error) {
+    reportError("setPaymentPaid/cost_payments", error);
+    return { error: "Could not update that payment." };
+  }
+  rp(projectId);
+  return { ok: true };
+}
+
+export async function deletePayment(
+  projectId: string,
+  paymentId: string
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  await logWrite(
+    "deletePayment/cost_payments",
+    supabase.from("cost_payments").delete().eq("id", paymentId)
+  );
+  rp(projectId);
 }

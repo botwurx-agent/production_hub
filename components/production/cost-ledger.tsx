@@ -21,10 +21,12 @@ import {
   COST_STATUS_ORDER,
   costStatus,
   rateCheck,
+  summarizePayments,
   MAX_COST_DOC_BYTES,
   type CostStatus,
 } from "@/lib/costs";
-import type { BudgetLine, ProjectCost } from "@/lib/database.types";
+import { PaymentSchedule } from "@/components/production/payment-schedule";
+import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
 export type RosterOption = {
   id: string;
@@ -114,15 +116,41 @@ export function CostLedger({
   costs,
   lines,
   roster,
+  payments,
+  todayIso,
 }: {
   projectId: string;
   costs: ProjectCost[];
   lines: BudgetLine[];
   roster: RosterOption[];
+  payments: CostPayment[];
+  /** Computed on the server, so overdue cannot differ after hydration. */
+  todayIso: string;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
   const [editing, setEditing] = useState<ProjectCost | "new" | null>(null);
+  const [openSchedule, setOpenSchedule] = useState<string | null>(null);
+
+  const paymentsByCost = useMemo(() => {
+    const m = new Map<string, CostPayment[]>();
+    for (const p of payments) {
+      const list = m.get(p.cost_id) ?? [];
+      list.push(p);
+      m.set(p.cost_id, list);
+    }
+    // Soonest first, undated last: the schedule should read in the order it
+    // will actually happen.
+    for (const list of m.values()) {
+      list.sort((a, b) => {
+        if (a.due_date === b.due_date) return 0;
+        if (a.due_date === null) return 1;
+        if (b.due_date === null) return -1;
+        return a.due_date < b.due_date ? -1 : 1;
+      });
+    }
+    return m;
+  }, [payments]);
 
   const lineName = useMemo(() => {
     const m = new Map<string, string>();
@@ -136,12 +164,17 @@ export function CostLedger({
     let all = 0;
     let outstanding = 0;
     for (const c of costs) {
-      const amt = Number(c.amount) || 0;
-      all += amt;
-      if (costStatus(c.status) !== "paid") outstanding += amt;
+      all += Number(c.amount) || 0;
+      // A part-paid commitment owes only its remainder, which the old binary
+      // status could not express.
+      outstanding += summarizePayments(
+        c.amount,
+        paymentsByCost.get(c.id) ?? [],
+        c.status
+      ).owed;
     }
     return { all, outstanding };
-  }, [costs]);
+  }, [costs, paymentsByCost]);
 
   function remove(cost: ProjectCost) {
     if (
@@ -201,11 +234,13 @@ export function CostLedger({
             <span>Status</span>
             <span />
           </div>
-          {costs.map((c) => (
-            <div
-              key={c.id}
-              className="grid grid-cols-1 items-center gap-2 border-b border-border px-3 py-2 last:border-0 md:grid-cols-[1fr_1fr_7rem_6rem_auto]"
-            >
+          {costs.map((c) => {
+            const costPayments = paymentsByCost.get(c.id) ?? [];
+            const summary = summarizePayments(c.amount, costPayments, c.status);
+            const scheduleOpen = openSchedule === c.id;
+            return (
+            <div key={c.id} className="border-b border-border px-3 py-2 last:border-0">
+            <div className="grid grid-cols-1 items-center gap-2 md:grid-cols-[1fr_1fr_7rem_6rem_auto]">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-text">
                   {c.vendor || "Unnamed vendor"}
@@ -225,6 +260,11 @@ export function CostLedger({
               </div>
               <div className="text-sm font-bold tabular-nums text-text md:text-right">
                 {moneyExact.format(Number(c.amount) || 0)}
+                {summary.state === "part" && (
+                  <span className="ml-1 block text-[10px] font-semibold text-text-faint">
+                    {moneyExact.format(summary.owed)} left
+                  </span>
+                )}
                 {overRate(c, roster) && (
                   <span
                     title="This invoice is over the day rate agreed with this contact."
@@ -235,13 +275,28 @@ export function CostLedger({
                 )}
               </div>
               <div>
-                <StatusChip
-                  status={costStatus(c.status)}
-                  onClick={() => cycleStatus(c)}
-                  disabled={busy}
-                />
+                {summary.hasSchedule ? (
+                  <DerivedChip state={summary.state} />
+                ) : (
+                  <StatusChip
+                    status={costStatus(c.status)}
+                    onClick={() => cycleStatus(c)}
+                    disabled={busy}
+                  />
+                )}
               </div>
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setOpenSchedule(scheduleOpen ? null : c.id)}
+                  title="Payment schedule"
+                  className={`rounded-[7px] px-2 py-1 text-xs font-semibold transition hover:bg-surface-2 ${
+                    summary.hasSchedule ? "text-accent" : "text-text-faint"
+                  }`}
+                >
+                  {summary.hasSchedule
+                    ? `${costPayments.filter((p) => p.paid_at).length}/${costPayments.length}`
+                    : "Split"}
+                </button>
                 {c.storage_path && <DocButton costId={c.id} name={c.file_name} />}
                 <button
                   onClick={() => setEditing(c)}
@@ -260,7 +315,19 @@ export function CostLedger({
                 </button>
               </div>
             </div>
-          ))}
+            {scheduleOpen && (
+              <PaymentSchedule
+                projectId={projectId}
+                costId={c.id}
+                committed={Number(c.amount) || 0}
+                payments={costPayments}
+                summary={summary}
+                todayIso={todayIso}
+              />
+            )}
+            </div>
+            );
+          })}
         </div>
       )}
 
@@ -304,6 +371,33 @@ function StatusChip({
       />
       {s.label}
     </button>
+  );
+}
+
+/**
+ * Status when a payment schedule exists: read from the payments rather than
+ * clickable, so the chip and the schedule can never disagree. Same rule as a
+ * budget line's actual going read-only once costs back it.
+ */
+function DerivedChip({ state }: { state: "unpaid" | "part" | "paid" }) {
+  const map = {
+    unpaid: { label: "Scheduled", hue: "amber" },
+    part: { label: "Part paid", hue: "blue" },
+    paid: { label: "Paid", hue: "green" },
+  } as const;
+  const s = map[state];
+  return (
+    <span
+      title="Set by the payment schedule."
+      className="inline-flex items-center gap-1.5 rounded-pill px-2 py-0.5 text-[11px] font-bold"
+      style={{ background: `var(--h-${s.hue}-bg)`, color: `var(--h-${s.hue})` }}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: `var(--h-${s.hue})` }}
+      />
+      {s.label}
+    </span>
   );
 }
 

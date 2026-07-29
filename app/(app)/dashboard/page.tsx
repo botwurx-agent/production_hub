@@ -9,6 +9,7 @@ import { getOutstanding } from "@/lib/outstanding";
 import { loadSetupSteps } from "@/lib/setup-steps";
 import { DEAL_OPEN_STAGES } from "@/lib/status";
 import type { UnpaidCost } from "@/components/dashboard/unpaid-costs";
+import { summarizePayments } from "@/lib/costs";
 import type {
   CalendarEvent,
   ActivityFeedItem,
@@ -75,6 +76,16 @@ export default async function DashboardPage() {
       getOutstanding(),
       loadSetupSteps(supabase, ctx),
     ]);
+  // A cost with a payment schedule owes only its remainder, and what is due
+  // next is a payment date, not the cost's own. Both come from the schedule.
+  const openCostIds = (unpaidRaw ?? []).map((c) => c.id);
+  const { data: openPayments } = openCostIds.length
+    ? await supabase
+        .from("cost_payments")
+        .select("cost_id, amount, due_date, paid_at")
+        .in("cost_id", openCostIds)
+    : { data: [] as { cost_id: string; amount: number; due_date: string | null; paid_at: string | null }[] };
+
   // An archived project's bills are still owed, but they are not what a
   // producer is being chased about this week, so they stay off the widget for
   // the same reason archived projects stay off the board.
@@ -85,19 +96,35 @@ export default async function DashboardPage() {
         title: string;
         archived_at: string | null;
       } | null;
-      return project && !project.archived_at
-        ? {
-            id: c.id,
-            projectId: project.id,
-            projectTitle: project.title,
-            vendor: c.vendor,
-            amount: Number(c.amount) || 0,
-            dueDate: c.due_date,
-            status: c.status,
-          }
-        : null;
+      if (!project || project.archived_at) return null;
+      const summary = summarizePayments(
+        c.amount,
+        (openPayments ?? []).filter((p) => p.cost_id === c.id),
+        c.status
+      );
+      // Fully settled through its schedule, even though the manual chip never
+      // moved: nothing is owed, so it does not belong on the list.
+      if (summary.owed <= 0) return null;
+      return {
+        id: c.id,
+        projectId: project.id,
+        projectTitle: project.title,
+        vendor: c.vendor,
+        amount: summary.owed,
+        dueDate: summary.nextDue?.dueDate ?? c.due_date,
+        status: c.status,
+        partPaid: summary.state === "part",
+      };
     })
-    .filter((c): c is UnpaidCost => c !== null);
+    .filter((c): c is UnpaidCost => c !== null)
+    // Re-sorted because the effective due date may now come from a payment
+    // rather than the cost, so the query's ordering no longer holds.
+    .sort((a, b) => {
+      if (a.dueDate === b.dueDate) return 0;
+      if (a.dueDate === null) return 1;
+      if (b.dueDate === null) return -1;
+      return a.dueDate < b.dueDate ? -1 : 1;
+    });
 
   const calendarConnected = Boolean(
     googleAccount?.scope?.includes("/auth/calendar")
