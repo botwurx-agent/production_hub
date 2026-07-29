@@ -280,3 +280,272 @@ export async function polishMessage(opts: {
     maxTokens: 4000,
   });
 }
+
+// --- Document reading (invoice extraction) -----------------------------------
+// The only multimodal path in the app. Both providers take the bytes inline as
+// base64 rather than an uploaded file id, so nothing has to be cleaned up
+// afterwards and the document never lands anywhere but the request.
+//
+// VERIFIED: the Anthropic shape is checked against the installed SDK's own
+// types (@anthropic-ai/sdk 0.110.0 DocumentBlockParam / Base64PDFSource /
+// Base64ImageSource). The OpenAI shape comes from their file-input docs and has
+// NOT been exercised against the live API from this repo, since no key is
+// present outside Vercel. If a real invoice ever fails on the OpenAI path,
+// suspect this shape first.
+
+export type AiDocument = {
+  /** Raw file bytes, base64 encoded (no data: prefix). */
+  base64: string;
+  /** "application/pdf" or an image/* type. */
+  mediaType: string;
+  fileName: string;
+};
+
+function anthropicDocBlock(doc: AiDocument): Anthropic.ContentBlockParam {
+  if (doc.mediaType === "application/pdf") {
+    return {
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: doc.base64 },
+    };
+  }
+  return {
+    type: "image",
+    source: {
+      type: "base64",
+      // The SDK's union is narrower than "any image/*", so anything unexpected
+      // is sent as png rather than failing the type check with a cast.
+      media_type: (["image/jpeg", "image/png", "image/gif", "image/webp"].includes(
+        doc.mediaType
+      )
+        ? doc.mediaType
+        : "image/png") as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+      data: doc.base64,
+    },
+  };
+}
+
+async function anthropicReadDocument(
+  system: string,
+  user: string,
+  doc: AiDocument,
+  maxTokens: number
+): Promise<string> {
+  const client = new Anthropic();
+  const message = await client.messages.create({
+    model: ANTHROPIC_MODEL,
+    max_tokens: maxTokens,
+    system,
+    messages: [
+      { role: "user", content: [anthropicDocBlock(doc), { type: "text", text: user }] },
+    ],
+  });
+  return message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+}
+
+async function openaiReadDocument(
+  system: string,
+  user: string,
+  doc: AiDocument,
+  maxTokens: number
+): Promise<string> {
+  const dataUrl = `data:${doc.mediaType};base64,${doc.base64}`;
+  // Chat Completions takes a PDF as a "file" part and an image as an
+  // "image_url" part. It does not accept a remote file URL (that is Responses
+  // API only), which is why the bytes are inlined.
+  const filePart =
+    doc.mediaType === "application/pdf"
+      ? { type: "file", file: { filename: doc.fileName, file_data: dataUrl } }
+      : { type: "image_url", image_url: { url: dataUrl } };
+
+  const body: Record<string, unknown> = {
+    model: OPENAI_MODEL,
+    max_completion_tokens: maxTokens,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: [filePart, { type: "text", text: user }] },
+    ],
+  };
+  if (isReasoningModel(OPENAI_MODEL)) body.reasoning_effort = "low";
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
+  }
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
+  };
+  const choice = data.choices?.[0];
+  const content = (choice?.message?.content ?? "").trim();
+  if (!content && choice?.finish_reason === "length") {
+    throw new Error("That document was too long to finish reading.");
+  }
+  return content;
+}
+
+const INVOICE_SYSTEM = `You read a vendor invoice for a commercial production studio and return only the facts printed on it.
+
+You are filling in a form that a producer will check before saving, so accuracy matters far more than completeness. A field you are unsure about must be null. A guess that looks plausible is worse than nothing, because the producer may not catch it.
+
+Return ONLY a JSON object, no prose, no code fences, with exactly these keys:
+{
+  "vendor": string or null,          // who is BILLING (the sender / "from" party), never the studio being billed
+  "description": string or null,     // one short line for what the invoice covers, under 80 characters
+  "amount": number or null,          // the TOTAL AMOUNT DUE, as a plain number: no currency symbol, no thousands separators
+  "currency": string or null,        // 3-letter code if one is shown
+  "invoiceNumber": string or null,
+  "invoiceDate": string or null,     // YYYY-MM-DD
+  "dueDate": string or null,         // YYYY-MM-DD
+  "budgetLineId": string or null,    // the id of the best-matching budget line from the list given, or null if none clearly fits
+  "notes": string or null,           // anything a producer would want flagged (payment terms, deposit, partial billing), else null
+  "unreadable": boolean              // true if this is not a readable invoice at all
+}
+
+Rules:
+- The amount is the final total due, after tax and after any deposit already paid. If the invoice shows both a subtotal and a total, take the total.
+- If several dates appear, invoiceDate is the issue date, not the service date or the period covered.
+- An ambiguous date format (03/04/2026) should be read using other clues on the document; if it stays ambiguous, return null rather than picking one.
+- Only return a budgetLineId that appears verbatim in the list provided. If nothing clearly fits, null.
+- If the document is not an invoice (a contract, a photo of something else, a blank page), set unreadable to true and every other field to null.
+- Do not use em dashes in any text you return.`;
+
+export type InvoiceDraft = {
+  vendor: string | null;
+  description: string | null;
+  amount: number | null;
+  currency: string | null;
+  invoiceNumber: string | null;
+  invoiceDate: string | null;
+  dueDate: string | null;
+  budgetLineId: string | null;
+  notes: string | null;
+  unreadable: boolean;
+};
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+function str(v: unknown, max: number): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t ? t.slice(0, max) : null;
+}
+
+function day(v: unknown): string | null {
+  const s = str(v, 10);
+  if (!s || !ISO_DAY.test(s)) return null;
+  // A syntactically valid string can still be an impossible date (2026-02-31),
+  // and Date would silently roll it forward into March.
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const ok =
+    dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+  return ok ? s : null;
+}
+
+/**
+ * The model's JSON is untrusted input: it can be malformed, wrapped in a code
+ * fence, or carry a hallucinated budget line id. Everything is validated here,
+ * and anything that fails becomes null rather than reaching a money field.
+ */
+export function parseInvoiceDraft(raw: string, validLineIds: string[]): InvoiceDraft {
+  const empty: InvoiceDraft = {
+    vendor: null,
+    description: null,
+    amount: null,
+    currency: null,
+    invoiceNumber: null,
+    invoiceDate: null,
+    dueDate: null,
+    budgetLineId: null,
+    notes: null,
+    unreadable: true,
+  };
+
+  // Models sometimes wrap JSON in a fence despite being told not to.
+  const cleaned = raw.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end <= start) return empty;
+
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+  } catch {
+    return empty;
+  }
+
+  // Accept a number, or a string the model formatted anyway ("1,250.00", "$900").
+  let amount: number | null = null;
+  const rawAmount = obj.amount;
+  if (typeof rawAmount === "number") {
+    amount = rawAmount;
+  } else if (typeof rawAmount === "string") {
+    const digits = rawAmount.replace(/[^0-9.\-]/g, "");
+    // Number("") is 0, so a string with no digits at all ("n/a", "see below")
+    // would otherwise land in a money field as $0.00 and read as a real zero
+    // cost rather than as nothing extracted.
+    const n = digits === "" ? NaN : Number(digits);
+    amount = Number.isFinite(n) ? n : null;
+  }
+  // A negative or absurd total is a misread, not a cost.
+  if (amount !== null && (!Number.isFinite(amount) || amount < 0 || amount > 1e9)) {
+    amount = null;
+  }
+  if (amount !== null) amount = Math.round(amount * 100) / 100;
+
+  const lineId = str(obj.budgetLineId, 64);
+
+  return {
+    vendor: str(obj.vendor, 200),
+    description: str(obj.description, 200),
+    amount,
+    currency: str(obj.currency, 8),
+    invoiceNumber: str(obj.invoiceNumber, 100),
+    invoiceDate: day(obj.invoiceDate),
+    dueDate: day(obj.dueDate),
+    // A hallucinated id would silently file the cost against the wrong line.
+    budgetLineId: lineId && validLineIds.includes(lineId) ? lineId : null,
+    notes: str(obj.notes, 500),
+    unreadable: obj.unreadable === true,
+  };
+}
+
+/**
+ * Reads an invoice document into a DRAFT. Nothing here writes anything: the
+ * producer confirms every field before it becomes a financial record.
+ */
+export async function extractInvoice(
+  doc: AiDocument,
+  budgetLines: { id: string; label: string }[]
+): Promise<InvoiceDraft> {
+  const lineList = budgetLines.length
+    ? `Budget lines available on this project (use the exact id, or null):\n${budgetLines
+        .map((l) => `- id ${l.id}: ${l.label}`)
+        .join("\n")}`
+    : "This project has no budget lines yet, so budgetLineId must be null.";
+
+  const user = `Read this invoice and return the JSON object.\n\n${lineList}`;
+  const provider = aiProvider();
+  const maxTokens = 4000;
+
+  const raw =
+    provider === "openai"
+      ? await openaiReadDocument(INVOICE_SYSTEM, user, doc, maxTokens)
+      : provider === "anthropic"
+        ? await anthropicReadDocument(INVOICE_SYSTEM, user, doc, maxTokens)
+        : (() => {
+            throw new Error("No AI provider configured.");
+          })();
+
+  return parseInvoiceDraft(raw, budgetLines.map((l) => l.id));
+}

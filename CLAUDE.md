@@ -1353,15 +1353,62 @@ is now a LEDGER, the same move that makes an Asset a file plus Versions.
   app/(app)/projects/[id]/cost-actions.ts (addCost/updateCost/setCostStatus/
   deleteCost/uploadCostDoc/getCostDocUrl); the invoice document is signed on
   CLICK, not on page load, since most rows are never opened.
-- NEXT SLICES (not built): (2) AI extraction from an uploaded invoice, draft-
-  and-confirm only, never posting straight into a financial record (lib/ai.ts is
-  text-only today, so this needs a multimodal path; verify current PDF/image
-  input support on the live provider first). (3) Log a cost straight from a
-  Gmail attachment; rate-vs-invoiced flagging. (4) Margin (billed vs cost) and a
-  studio-wide unpaid-vendor rollup. SCOPE LINE TO HOLD: this answers "what did
-  this job cost and who is owed". It does not become POs, payroll, approval
-  chains, or AICP bid ledgers (that is Saturation.io's ground, and the audit
-  already said no to it).
+- SCOPE LINE TO HOLD: this answers "what did this job cost and who is owed". It
+  does not become POs, payroll, approval chains, or AICP bid ledgers (that is
+  Saturation.io's ground, and the audit already said no to it).
+- NEXT SLICES (not built): (3) Log a cost straight from a Gmail attachment;
+  rate-vs-invoiced flagging. (4) Margin (billed vs cost) and a studio-wide
+  unpaid-vendor rollup.
+
+### Budget slice 2: invoice extraction (AI, draft-and-confirm) — BUILT
+Attach an invoice to the add-cost modal and the form fills itself. The contract
+is the same as the composer's Polish button: the model ASSISTS, the human
+COMMITS. `extractInvoiceDraft` never writes; it returns a draft, the producer
+checks it, and the existing addCost does the saving. A financial record is never
+created from a model reading a document unattended.
+- MULTIMODAL PATH (lib/ai.ts, the app's first): `AiDocument` (base64 + mediaType
+  + fileName) -> anthropicReadDocument / openaiReadDocument. Bytes go inline as
+  base64 on both providers, so nothing has to be cleaned up afterwards.
+  Anthropic: `document` block w/ Base64PDFSource for PDFs, `image` block
+  otherwise (the SDK's media_type union is narrower than image/*, so anything
+  unexpected is sent as png rather than cast). OpenAI Chat Completions: a
+  `{type:"file", file:{filename, file_data:"data:...;base64,..."}}` part for a
+  PDF, `image_url` w/ a data URL for an image (Chat Completions does NOT take a
+  remote file URL, that is Responses-API only, which is why bytes are inlined).
+  VERIFICATION STATUS: the Anthropic shape is checked against the installed
+  @anthropic-ai/sdk 0.110.0 types (DocumentBlockParam / Base64PDFSource). The
+  OpenAI shape is from their file-input docs and has NOT been exercised against
+  the live API (no key outside Vercel). If a real invoice fails on the OpenAI
+  path, suspect that shape first.
+- `parseInvoiceDraft` is the TRUST BOUNDARY between model output and a money
+  field, and is unit-tested in the scratchpad. It strips code fences, finds the
+  JSON inside surrounding prose, rejects a hallucinated budget_line_id by
+  whitelisting against the project's real line ids, rejects negative/absurd
+  totals, rounds to cents, and validates dates as REAL days (2026-02-31 becomes
+  null instead of rolling into March). Bug caught by those tests: an amount of
+  "n/a" strips to "" and `Number("")` is 0, so an unreadable total would have
+  landed as $0.00 and read as a real zero cost; empty digit strings now become
+  null.
+- VENDOR MATCHING IS DETERMINISTIC, not a second model call: `matchVendor`
+  normalizes and compares against the project roster (exact first, then
+  containment either way so "Jane Doe" matches "Jane Doe Lighting LLC"), with a
+  4-character floor so a two-letter company name cannot match half the roster.
+  Also unit-tested. No match leaves the cost unassigned rather than guessing,
+  since filing a cost against the wrong crew member is worse than leaving it
+  blank.
+- UI: attaching a file auto-runs the read (that IS the feature), showing
+  "Reading the invoice...", then an amber banner naming exactly which fields
+  were filled plus "check the amount against the document before saving", and an
+  Undo that restores the pre-extraction values verbatim. A non-USD currency
+  raises a toast rather than being silently treated as dollars (we store one
+  currency). The whole thing hides itself when no AI key is set, via the
+  existing useAiEnabled context.
+- CAP FIX from slice 1: MAX_COST_DOC_BYTES was 8MB, but the file crosses a
+  Server Action, so the ~4.5MB serverless request body applies and an 8MB file
+  would die at the platform edge with no error we could show. Now 4MB, matching
+  MAX_UPLOAD_BYTES on the email path. NOTE: `addDocAttachment`
+  (native-invoice-actions.ts) still checks 25MB on the same kind of path and has
+  the same latent problem; not touched here.
 
 ### Collaborators could see rates (FIXED, no migration)
 Found while confirming the cost ledger's RLS. Budget and billing tables were

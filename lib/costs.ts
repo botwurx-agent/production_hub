@@ -28,11 +28,21 @@ export function costStatus(v: string | null | undefined): CostStatus {
 }
 
 /**
- * A cost document is a PDF or a photo of an invoice, so this is far below the
- * serverless request-body cap it travels through. Kept well under it so the
- * failure is ours to explain rather than a dead request at the platform edge.
+ * A cost document travels browser -> Server Action -> storage, so its bytes
+ * cross the ~4.5MB serverless request body. Over that the request is killed at
+ * the platform edge before our code runs, so the click just appears to do
+ * nothing. Staying under it lets us fail with a message instead. Matches
+ * MAX_UPLOAD_BYTES in lib/attachment-limits.ts, which exists for the same
+ * reason on the email path. An invoice PDF or a phone photo is well inside it.
  */
-export const MAX_COST_DOC_BYTES = 8_000_000;
+export const MAX_COST_DOC_BYTES = 4_000_000;
+
+/** What we can actually read: a PDF, or a photo of a paper invoice. */
+export const COST_DOC_TYPES = ["application/pdf", "image/"] as const;
+
+export function isCostDocType(mime: string): boolean {
+  return mime === "application/pdf" || mime.startsWith("image/");
+}
 
 /**
  * Structural minimums, so both the budget page (full rows) and the project hub

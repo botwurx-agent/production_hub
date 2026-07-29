@@ -12,8 +12,10 @@ import {
   setCostStatus,
   uploadCostDoc,
   getCostDocUrl,
+  extractInvoiceDraft,
   type CostInput,
 } from "@/app/(app)/projects/[id]/cost-actions";
+import { useAiEnabled } from "@/components/ai/ai-availability";
 import {
   COST_STATUS,
   COST_STATUS_ORDER,
@@ -322,6 +324,81 @@ function CostModal({
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const aiEnabled = useAiEnabled();
+
+  // Extraction is a DRAFT: it fills the form and says so, and never saves.
+  // `before` holds the pre-extraction values so a bad read is one click to
+  // undo, the same contract as the composer's Polish button.
+  const [reading, setReading] = useState(false);
+  const [filled, setFilled] = useState<string[] | null>(null);
+  const [before, setBefore] = useState<CostInput | null>(null);
+
+  async function readInvoice(f: File) {
+    setReading(true);
+    setFilled(null);
+    const fd = new FormData();
+    fd.set("file", f);
+    const res = await extractInvoiceDraft(projectId, fd);
+    setReading(false);
+    if ("error" in res) {
+      toast(res.error, "error");
+      return;
+    }
+    const { draft, contactId, vendorMatch } = res;
+    setBefore(form);
+
+    const got: string[] = [];
+    setForm((prev) => {
+      const next = { ...prev };
+      if (draft.vendor) {
+        next.vendor = draft.vendor;
+        got.push("vendor");
+      }
+      if (draft.description) {
+        next.description = draft.description;
+        got.push("description");
+      }
+      if (draft.amount !== null) {
+        next.amount = draft.amount;
+        got.push("amount");
+      }
+      if (draft.invoiceNumber) {
+        next.invoiceNumber = draft.invoiceNumber;
+        got.push("invoice number");
+      }
+      if (draft.invoiceDate) {
+        next.invoiceDate = draft.invoiceDate;
+        got.push("invoice date");
+      }
+      if (draft.dueDate) {
+        next.dueDate = draft.dueDate;
+        got.push("due date");
+      }
+      if (draft.budgetLineId) {
+        next.budgetLineId = draft.budgetLineId;
+        got.push("budget line");
+      }
+      if (draft.notes) next.notes = draft.notes;
+      if (contactId) {
+        next.contactId = contactId;
+        got.push(`roster match (${vendorMatch})`);
+      }
+      return next;
+    });
+    setFilled(got);
+    // A currency we do not store is worth saying out loud rather than
+    // silently treating a EUR invoice as dollars.
+    if (draft.currency && draft.currency.toUpperCase() !== "USD") {
+      toast(`That invoice is in ${draft.currency.toUpperCase()}. Amounts here are USD.`, "error");
+    }
+  }
+
+  function undoRead() {
+    if (!before) return;
+    setForm(before);
+    setBefore(null);
+    setFilled(null);
+  }
 
   // The roster carries an agreed day rate, so an invoice can be read against
   // what was actually agreed instead of just landing as a number.
@@ -518,13 +595,19 @@ function CostModal({
             accept=".pdf,image/*"
             className="hidden"
             onChange={(e) => {
+              // Read the FileList before clearing the input: it is a live view
+              // of the selection, so clearing first empties it.
               const picked = e.target.files?.[0] ?? null;
               e.target.value = "";
-              if (picked && picked.size > MAX_COST_DOC_BYTES) {
-                toast("That file is too large (8MB max for an invoice).", "error");
+              if (!picked) return;
+              if (picked.size > MAX_COST_DOC_BYTES) {
+                toast("That file is too large (4MB max for an invoice).", "error");
                 return;
               }
               setFile(picked);
+              // The point of the feature: attach the invoice and the form
+              // fills itself. Still a draft, still confirmed before saving.
+              if (aiEnabled) void readInvoice(picked);
             }}
           />
           <div className="flex flex-wrap items-center gap-2">
@@ -536,7 +619,55 @@ function CostModal({
             ) : cost?.file_name ? (
               <span className="text-xs text-text-muted">{cost.file_name} attached</span>
             ) : null}
+            {aiEnabled && file && !reading && (
+              <button
+                type="button"
+                onClick={() => void readInvoice(file)}
+                className="text-xs font-semibold text-accent hover:underline"
+              >
+                Read it again
+              </button>
+            )}
           </div>
+          {aiEnabled && !file && !cost?.storage_path && (
+            <p className="mt-1 text-[11px] text-text-faint">
+              Attach the invoice and the fields below fill themselves. You check
+              them before saving.
+            </p>
+          )}
+
+          {reading && (
+            <div className="mt-2 flex items-center gap-2 rounded-[10px] border border-border bg-surface-2 px-2.5 py-2 text-xs text-text-muted">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+              Reading the invoice...
+            </div>
+          )}
+
+          {!reading && filled && (
+            <div className="mt-2 rounded-[10px] border border-amber bg-amber-bg px-2.5 py-2 text-[11px] leading-relaxed text-amber">
+              {filled.length === 0 ? (
+                <span className="font-semibold">
+                  Nothing could be read off that invoice. Fill the fields in by hand.
+                </span>
+              ) : (
+                <>
+                  <span className="font-semibold">
+                    Filled from the invoice: {filled.join(", ")}.
+                  </span>{" "}
+                  Check the amount against the document before saving.
+                </>
+              )}
+              {before && (
+                <button
+                  type="button"
+                  onClick={undoRead}
+                  className="ml-1 font-semibold underline"
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div>

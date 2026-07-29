@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite, reportError } from "@/lib/log";
 import { generateReviewToken } from "@/lib/review-links";
-import { costStatus, MAX_COST_DOC_BYTES } from "@/lib/costs";
+import { costStatus, isCostDocType, MAX_COST_DOC_BYTES } from "@/lib/costs";
+import { aiConfigured, extractInvoice, type InvoiceDraft } from "@/lib/ai";
 
 function rp(projectId: string) {
   revalidatePath(`/projects/${projectId}/budget`);
@@ -158,7 +159,7 @@ export async function uploadCostDoc(
     return { error: "No file selected." };
   }
   if (file.size > MAX_COST_DOC_BYTES) {
-    return { error: "That file is too large (8MB max for an invoice)." };
+    return { error: "That file is too large (4MB max for an invoice)." };
   }
 
   const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-120) || "invoice";
@@ -230,4 +231,119 @@ export async function getCostDocUrl(
     return { error: "Could not open that document." };
   }
   return { url: data.signedUrl };
+}
+
+/**
+ * Reads an uploaded invoice into a DRAFT for the add-cost form.
+ *
+ * This never writes anything. Extraction fills a form the producer then checks
+ * and submits, the same contract as the composer's Polish button: the model
+ * assists, the human commits. A financial record is never created from a model
+ * reading a document unattended.
+ */
+export async function extractInvoiceDraft(
+  projectId: string,
+  formData: FormData
+): Promise<
+  | { error: string }
+  | { ok: true; draft: InvoiceDraft; contactId: string | null; vendorMatch: string | null }
+> {
+  await requireStudioContext();
+  if (!aiConfigured()) {
+    return { error: "No AI provider is set up, so invoices cannot be read here." };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "No file selected." };
+  }
+  if (!isCostDocType(file.type)) {
+    return { error: "Only a PDF or a photo of an invoice can be read." };
+  }
+  if (file.size > MAX_COST_DOC_BYTES) {
+    return { error: "That file is too large to read (4MB max)." };
+  }
+
+  const supabase = createClient();
+  // The line list is passed to the model so it can suggest a home for the cost,
+  // and is also the whitelist the returned id is checked against.
+  const { data: lines } = await supabase
+    .from("budget_lines")
+    .select("id, category, description")
+    .eq("project_id", projectId);
+
+  const budgetLines = (lines ?? []).map((l) => ({
+    id: l.id,
+    label: `${l.category || "General"}: ${l.description || "Untitled"}`,
+  }));
+
+  let draft: InvoiceDraft;
+  try {
+    draft = await extractInvoice(
+      {
+        base64: Buffer.from(await file.arrayBuffer()).toString("base64"),
+        mediaType: file.type,
+        fileName: file.name,
+      },
+      budgetLines
+    );
+  } catch (e) {
+    reportError("extractInvoiceDraft/ai", e);
+    return { error: "Could not read that invoice. Fill the form in by hand." };
+  }
+
+  if (draft.unreadable) {
+    return { error: "That did not look like an invoice. Fill the form in by hand." };
+  }
+
+  // Vendor matching is deliberately deterministic rather than another model
+  // call: it is a string comparison against a list we already hold, so it
+  // should be exact, repeatable, and free.
+  const { data: roster } = await supabase
+    .from("contacts")
+    .select("id, name, company")
+    .eq("project_id", projectId);
+
+  const match = draft.vendor ? matchVendor(draft.vendor, roster ?? []) : null;
+
+  return {
+    ok: true,
+    draft,
+    contactId: match?.id ?? null,
+    vendorMatch: match?.name ?? null,
+  };
+}
+
+/**
+ * Finds the roster contact an invoice came from. Exact match first, then a
+ * containment check either way, so "Jane Doe" matches "Jane Doe Lighting LLC"
+ * and vice versa. Anything looser would start guessing, and filing a cost
+ * against the wrong crew member is worse than leaving it unassigned.
+ */
+function matchVendor(
+  vendor: string,
+  roster: { id: string; name: string | null; company: string | null }[]
+): { id: string; name: string } | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const target = norm(vendor);
+  if (!target) return null;
+
+  const candidates = roster.flatMap((r) =>
+    [r.name, r.company]
+      .filter((v): v is string => Boolean(v?.trim()))
+      .map((v) => ({ id: r.id, display: r.name ?? v, key: norm(v) }))
+  );
+
+  const exact = candidates.find((c) => c.key === target);
+  if (exact) return { id: exact.id, name: exact.display };
+
+  // Require a few characters before allowing containment, or a two-letter
+  // company name would match half the roster.
+  const partial = candidates.find(
+    (c) =>
+      c.key.length >= 4 &&
+      target.length >= 4 &&
+      (c.key.includes(target) || target.includes(c.key))
+  );
+  return partial ? { id: partial.id, name: partial.display } : null;
 }
