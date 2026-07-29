@@ -1619,13 +1619,35 @@ returns no rows, so the value is null with no application check at all.
   site that touched it fails to build.
 
 ### Next step
+NOTHING IS QUEUED. As of 2026-07-29 the operator has deliberately parked the
+whole proposed backlog: run real jobs, and only build when something actually
+gets in the way. That IS the project rule (section 4.5 / section 8), so do not
+open a session by proposing features off the list below. Ask what got in the
+way, or work on what is asked.
+
+The parked items, so they are findable WHEN friction hits (not before):
+- Review-round edges, all half-built already: due/overdue never surfaces on the
+  INTERNAL review page (the client portal shows it, the studio cannot see which
+  reviews are late); version compare is image-only; the in-app ReviewModal is
+  handed one version's signed URL so compare does not work there at all.
+- Weekly studio digest (lib/outstanding.ts + Resend already exist). Low value
+  for a solo operator who is in the app daily; revisit when a second person
+  joins or during a long shoot.
+- AI feedback summarizer: turn a noisy review round into a revision brief.
+  Revisit when a round actually gets noisy.
+- CSV/PDF export for budget + contacts: DECLINED 2026-07-29, not how the
+  operator works. Only revisit if a beta user asks.
+- Collaborator money/comms pages render EMPTY rather than closed (see the
+  collaborator section). Deliberate; fix only if it reads as broken.
+- `ai_generations.cost` strip is unverified by a real collaborator login, since
+  the test project was not an AI project. Same pattern as the two that were
+  verified.
+
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
 pending the FreshBooks-vs-Melio decision; do not extend it until confirmed.
-Otherwise: run a real job through Production and the connectors; let friction
-drive the backlog. Remaining roadmap: Phase 7 (AI-video pipeline), a
-notifications/inbox layer, and deepening (e.g. PDF export for budget/gear/
-delivery, per-card Drive/Figma import on the shot board, public share link for
-the shot board/call sheet). See docs/DEVELOPMENT.md for setup.
+Remaining roadmap if the operator asks for direction: Phase 7 (AI-video
+pipeline) is the flagship differentiator and is the one thing worth proposing
+unprompted. See docs/DEVELOPMENT.md for setup.
 
 AI PIPELINE (Phase 7, the flagship differentiator): architecture is DECIDED and
 specced in docs/ai-pipeline.md. Key decision: one Project, same spine, with
