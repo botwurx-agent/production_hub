@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { LinkEmailModal } from "@/components/projects/link-email-modal";
 import { ImportAttachment } from "@/components/projects/import-attachment";
+import { LogCostAttachment } from "@/components/projects/log-cost-attachment";
+import { isCostDocType } from "@/lib/costs";
 import { AttachmentCard } from "@/components/attachments/attachment-card";
 import { PolishButton } from "@/components/communication/polish-button";
 import {
@@ -442,6 +444,15 @@ export function ThreadReader({
                               filename={att.filename}
                               mimeType={att.mimeType}
                             />
+                            {projectId && isCostDocType(att.mimeType) && (
+                              <LogCostAttachment
+                                projectId={projectId}
+                                messageId={m.id}
+                                attachmentId={att.attachmentId}
+                                filename={att.filename}
+                                mimeType={att.mimeType}
+                              />
+                            )}
                           </AttachmentCard>
                         );
                       })}

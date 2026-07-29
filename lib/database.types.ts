@@ -1605,6 +1605,7 @@ export type Database = {
           contact_id: string | null;
           description: string;
           amount: number;
+          days: number | null;
           invoice_number: string | null;
           invoice_date: string | null;
           due_date: string | null;
@@ -1625,6 +1626,7 @@ export type Database = {
           contact_id?: string | null;
           description?: string;
           amount?: number;
+          days?: number | null;
           invoice_number?: string | null;
           invoice_date?: string | null;
           due_date?: string | null;
@@ -1645,6 +1647,7 @@ export type Database = {
           contact_id?: string | null;
           description?: string;
           amount?: number;
+          days?: number | null;
           invoice_number?: string | null;
           invoice_date?: string | null;
           due_date?: string | null;

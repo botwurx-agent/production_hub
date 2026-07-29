@@ -402,6 +402,7 @@ Return ONLY a JSON object, no prose, no code fences, with exactly these keys:
   "vendor": string or null,          // who is BILLING (the sender / "from" party), never the studio being billed
   "description": string or null,     // one short line for what the invoice covers, under 80 characters
   "amount": number or null,          // the TOTAL AMOUNT DUE, as a plain number: no currency symbol, no thousands separators
+  "days": number or null,            // days billed, ONLY if the invoice bills by the day and states a quantity of days
   "currency": string or null,        // 3-letter code if one is shown
   "invoiceNumber": string or null,
   "invoiceDate": string or null,     // YYYY-MM-DD
@@ -413,6 +414,7 @@ Return ONLY a JSON object, no prose, no code fences, with exactly these keys:
 
 Rules:
 - The amount is the final total due, after tax and after any deposit already paid. If the invoice shows both a subtotal and a total, take the total.
+- days is only for day-rate work with a stated quantity ("3 days @ $800", "2 x shoot day"). A flat fee, a kit rental, or a licence has no day count, so return null. Never divide the total by a rate to invent one.
 - If several dates appear, invoiceDate is the issue date, not the service date or the period covered.
 - An ambiguous date format (03/04/2026) should be read using other clues on the document; if it stays ambiguous, return null rather than picking one.
 - Only return a budgetLineId that appears verbatim in the list provided. If nothing clearly fits, null.
@@ -423,6 +425,7 @@ export type InvoiceDraft = {
   vendor: string | null;
   description: string | null;
   amount: number | null;
+  days: number | null;
   currency: string | null;
   invoiceNumber: string | null;
   invoiceDate: string | null;
@@ -462,6 +465,7 @@ export function parseInvoiceDraft(raw: string, validLineIds: string[]): InvoiceD
     vendor: null,
     description: null,
     amount: null,
+    days: null,
     currency: null,
     invoiceNumber: null,
     invoiceDate: null,
@@ -503,12 +507,21 @@ export function parseInvoiceDraft(raw: string, validLineIds: string[]): InvoiceD
   }
   if (amount !== null) amount = Math.round(amount * 100) / 100;
 
+  // A day count is only useful when it is a plausible number of days; anything
+  // else means the model inferred rather than read it.
+  const rawDays = typeof obj.days === "number" ? obj.days : Number(obj.days);
+  const days =
+    Number.isFinite(rawDays) && rawDays > 0 && rawDays <= 500
+      ? Math.round(rawDays * 100) / 100
+      : null;
+
   const lineId = str(obj.budgetLineId, 64);
 
   return {
     vendor: str(obj.vendor, 200),
     description: str(obj.description, 200),
     amount,
+    days,
     currency: str(obj.currency, 8),
     invoiceNumber: str(obj.invoiceNumber, 100),
     invoiceDate: day(obj.invoiceDate),

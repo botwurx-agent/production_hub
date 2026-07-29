@@ -45,6 +45,42 @@ export function isCostDocType(mime: string): boolean {
 }
 
 /**
+ * Compares what a rostered crew member invoiced against the day rate that was
+ * agreed with them.
+ *
+ * Returns null unless BOTH a rate and a day count are known, because an amount
+ * on its own says nothing: $2,400 is either three fair days or one very
+ * expensive one. Guessing a day count from the total would produce a flag that
+ * fires on every kit fee and overtime line, which is worse than no flag.
+ *
+ * The tolerance is one dollar, so ordinary rounding on a real invoice does not
+ * read as a discrepancy.
+ */
+export type RateCheck = {
+  expected: number;
+  delta: number;
+  status: "match" | "over" | "under";
+};
+
+export function rateCheck(opts: {
+  rate: number | null | undefined;
+  days: number | null | undefined;
+  amount: number | null | undefined;
+}): RateCheck | null {
+  const rate = Number(opts.rate);
+  const days = Number(opts.days);
+  const amount = Number(opts.amount);
+  if (!Number.isFinite(rate) || rate <= 0) return null;
+  if (!Number.isFinite(days) || days <= 0) return null;
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const expected = Math.round(rate * days * 100) / 100;
+  const delta = Math.round((amount - expected) * 100) / 100;
+  const status = Math.abs(delta) <= 1 ? "match" : delta > 0 ? "over" : "under";
+  return { expected, delta, status };
+}
+
+/**
  * Structural minimums, so both the budget page (full rows) and the project hub
  * (a two-column select) can share the roll-up without loading columns they do
  * not need.

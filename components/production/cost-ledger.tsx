@@ -20,6 +20,7 @@ import {
   COST_STATUS,
   COST_STATUS_ORDER,
   costStatus,
+  rateCheck,
   MAX_COST_DOC_BYTES,
   type CostStatus,
 } from "@/lib/costs";
@@ -66,6 +67,7 @@ function emptyCost(): CostInput {
     vendor: "",
     description: "",
     amount: 0,
+    days: null,
     budgetLineId: null,
     contactId: null,
     invoiceNumber: null,
@@ -81,6 +83,7 @@ function toInput(c: ProjectCost): CostInput {
     vendor: c.vendor,
     description: c.description,
     amount: Number(c.amount) || 0,
+    days: c.days === null ? null : Number(c.days),
     budgetLineId: c.budget_line_id,
     contactId: c.contact_id,
     invoiceNumber: c.invoice_number,
@@ -89,6 +92,21 @@ function toInput(c: ProjectCost): CostInput {
     status: c.status,
     notes: c.notes,
   };
+}
+
+/**
+ * Only fires for a cost linked to a roster contact that has an agreed rate AND
+ * a day count on the invoice. Anything looser would flag every kit fee.
+ */
+function overRate(c: ProjectCost, roster: RosterOption[]): boolean {
+  if (!c.contact_id) return false;
+  const contact = roster.find((r) => r.id === c.contact_id);
+  const check = rateCheck({
+    rate: contact?.rate,
+    days: c.days,
+    amount: Number(c.amount),
+  });
+  return check?.status === "over";
 }
 
 export function CostLedger({
@@ -207,6 +225,14 @@ export function CostLedger({
               </div>
               <div className="text-sm font-bold tabular-nums text-text md:text-right">
                 {moneyExact.format(Number(c.amount) || 0)}
+                {overRate(c, roster) && (
+                  <span
+                    title="This invoice is over the day rate agreed with this contact."
+                    className="ml-1.5 rounded-pill bg-amber-bg px-1.5 py-0.5 text-[10px] font-bold text-amber"
+                  >
+                    over rate
+                  </span>
+                )}
               </div>
               <div>
                 <StatusChip
@@ -281,6 +307,47 @@ function StatusChip({
   );
 }
 
+/**
+ * States the agreed rate, and flags a gap when the invoice does not match it.
+ * Says nothing until both a rate and a day count are known, because an amount
+ * alone cannot be judged: $2,400 is either three fair days or one dear one.
+ */
+function RateNote({
+  rate,
+  days,
+  amount,
+}: {
+  rate: number | null;
+  days: number | null;
+  amount: number;
+}) {
+  if (!rate) return null;
+  const check = rateCheck({ rate, days, amount });
+  if (!check) {
+    return (
+      <p className="text-[11px] text-text-muted">
+        Agreed rate {moneyExact.format(rate)}/day. Add the days billed to check
+        it against this invoice.
+      </p>
+    );
+  }
+  if (check.status === "match") {
+    return (
+      <p className="text-[11px] font-semibold text-green">
+        Matches the agreed rate ({days} x {moneyExact.format(rate)}).
+      </p>
+    );
+  }
+  const over = check.status === "over";
+  return (
+    <p className={`text-[11px] font-semibold ${over ? "text-amber" : "text-text-muted"}`}>
+      {over ? "Over" : "Under"} the agreed rate by{" "}
+      {moneyExact.format(Math.abs(check.delta))}: {days} days at{" "}
+      {moneyExact.format(rate)} is {moneyExact.format(check.expected)}.
+    </p>
+  );
+}
+
 /** Signs on click rather than on page load: most invoices are never opened. */
 function DocButton({ costId, name }: { costId: string; name: string | null }) {
   const [loading, setLoading] = useState(false);
@@ -306,21 +373,39 @@ function DocButton({ costId, name }: { costId: string; name: string | null }) {
   );
 }
 
-function CostModal({
+export function CostModal({
   projectId,
   cost,
   lines,
   roster,
+  initial,
+  initialFilled,
+  attachment,
   onClose,
 }: {
   projectId: string;
   cost: ProjectCost | null;
   lines: BudgetLine[];
   roster: RosterOption[];
+  /** Prefilled draft (an invoice already read elsewhere, e.g. from email). */
+  initial?: CostInput | null;
+  /** Which fields that draft filled, for the same banner as an in-modal read. */
+  initialFilled?: string[] | null;
+  /**
+   * An invoice that already exists somewhere else (a Gmail attachment), filed
+   * against the cost once it saves. Replaces the file picker: there is nothing
+   * for the producer to choose.
+   */
+  attachment?: {
+    label: string;
+    attach: (costId: string) => Promise<{ error: string } | { ok: true }>;
+  };
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<CostInput>(cost ? toInput(cost) : emptyCost());
+  const [form, setForm] = useState<CostInput>(
+    cost ? toInput(cost) : (initial ?? emptyCost())
+  );
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -330,7 +415,7 @@ function CostModal({
   // `before` holds the pre-extraction values so a bad read is one click to
   // undo, the same contract as the composer's Polish button.
   const [reading, setReading] = useState(false);
-  const [filled, setFilled] = useState<string[] | null>(null);
+  const [filled, setFilled] = useState<string[] | null>(initialFilled ?? null);
   const [before, setBefore] = useState<CostInput | null>(null);
 
   async function readInvoice(f: File) {
@@ -361,6 +446,10 @@ function CostModal({
       if (draft.amount !== null) {
         next.amount = draft.amount;
         got.push("amount");
+      }
+      if (draft.days !== null) {
+        next.days = draft.days;
+        got.push("days billed");
       }
       if (draft.invoiceNumber) {
         next.invoiceNumber = draft.invoiceNumber;
@@ -440,6 +529,16 @@ function CostModal({
     }
 
     const id = cost ? cost.id : (res as { ok: true; id: string }).id;
+    if (attachment && !cost) {
+      const up = await attachment.attach(id);
+      if ("error" in up) {
+        setSaving(false);
+        toast(`Cost saved, but the invoice did not attach: ${up.error}`, "error");
+        router.refresh();
+        onClose();
+        return;
+      }
+    }
     if (file) {
       const fd = new FormData();
       fd.set("file", file);
@@ -501,17 +600,26 @@ function CostModal({
               placeholder="0.00"
               className={`${field} text-right tabular-nums`}
             />
-            {matched?.rate ? (
-              <p className="mt-1 text-[11px] text-text-muted">
-                Agreed rate {moneyExact.format(matched.rate)}/day
-                {form.amount > 0 && (
-                  <>
-                    {" · "}
-                    {(form.amount / matched.rate).toFixed(1)} days at that rate
-                  </>
-                )}
-              </p>
-            ) : null}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <span className={label}>Days billed (optional)</span>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={form.days ?? ""}
+              onChange={(e) =>
+                set("days", e.target.value === "" ? null : Number(e.target.value))
+              }
+              placeholder="Leave blank for a flat fee"
+              className={`${field} text-right tabular-nums`}
+            />
+          </div>
+          <div className="flex items-end">
+            <RateNote rate={matched?.rate ?? null} days={form.days} amount={form.amount} />
           </div>
         </div>
 
@@ -589,6 +697,13 @@ function CostModal({
 
         <div>
           <span className={label}>Invoice document</span>
+          {attachment ? (
+            <p className="rounded-[10px] border border-border bg-surface-2 px-2.5 py-2 text-xs text-text-muted">
+              <span className="font-semibold text-text">{attachment.label}</span>{" "}
+              will be filed against this cost when you save.
+            </p>
+          ) : (
+          <>
           <input
             ref={fileRef}
             type="file"
@@ -667,6 +782,8 @@ function CostModal({
                 </button>
               )}
             </div>
+          )}
+          </>
           )}
         </div>
 

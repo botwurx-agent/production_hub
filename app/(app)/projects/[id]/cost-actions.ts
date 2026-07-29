@@ -7,6 +7,9 @@ import { logWrite, reportError } from "@/lib/log";
 import { generateReviewToken } from "@/lib/review-links";
 import { costStatus, isCostDocType, MAX_COST_DOC_BYTES } from "@/lib/costs";
 import { aiConfigured, extractInvoice, type InvoiceDraft } from "@/lib/ai";
+import { getAttachmentBytes, getAccessToken } from "@/lib/gmail";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
 
 function rp(projectId: string) {
   revalidatePath(`/projects/${projectId}/budget`);
@@ -17,6 +20,7 @@ export type CostInput = {
   vendor: string;
   description: string;
   amount: number;
+  days: number | null;
   budgetLineId: string | null;
   contactId: string | null;
   invoiceNumber: string | null;
@@ -38,6 +42,10 @@ function clean(input: CostInput) {
     // Money is never trusted from the client: a NaN or an Infinity would
     // otherwise poison every total on the page.
     amount: Number.isFinite(input.amount) ? Math.round(input.amount * 100) / 100 : 0,
+    days:
+      input.days !== null && Number.isFinite(input.days) && input.days > 0
+        ? Math.round(input.days * 100) / 100
+        : null,
     budget_line_id: input.budgetLineId || null,
     contact_id: input.contactId || null,
     invoice_number: input.invoiceNumber?.trim().slice(0, 100) || null,
@@ -346,4 +354,180 @@ function matchVendor(
       (c.key.includes(target) || target.includes(c.key))
   );
   return partial ? { id: partial.id, name: partial.display } : null;
+}
+
+/**
+ * Drafts a cost from an invoice that arrived as a Gmail attachment, which is
+ * how freelancers actually send them. Nothing is written and nothing is stored:
+ * the bytes are fetched, read, and discarded, and the producer confirms the
+ * result in the same modal as a hand-entered cost.
+ *
+ * The budget lines and roster come back with the draft because this is called
+ * from the Communication module, which has no reason to have loaded either.
+ */
+export async function draftCostFromAttachment(
+  projectId: string,
+  gmailMessageId: string,
+  attachmentId: string,
+  filename: string,
+  mimeType: string
+): Promise<
+  | { error: string }
+  | {
+      ok: true;
+      draft: InvoiceDraft | null;
+      contactId: string | null;
+      vendorMatch: string | null;
+      lines: { id: string; category: string; description: string }[];
+      roster: {
+        id: string;
+        name: string;
+        company: string | null;
+        role: string | null;
+        rate: number | null;
+      }[];
+    }
+> {
+  await requireStudioContext();
+  const supabase = createClient();
+
+  const [{ data: lines }, { data: roster }] = await Promise.all([
+    supabase
+      .from("budget_lines")
+      .select("id, category, description")
+      .eq("project_id", projectId)
+      .order("position", { ascending: true }),
+    supabase
+      .from("contacts")
+      .select("id, name, company, role, rate")
+      .eq("project_id", projectId)
+      .order("name", { ascending: true }),
+  ]);
+
+  const context = {
+    lines: lines ?? [],
+    roster: (roster ?? []) as {
+      id: string;
+      name: string;
+      company: string | null;
+      role: string | null;
+      rate: number | null;
+    }[],
+  };
+
+  // Without a provider the form still opens, just empty. The producer types the
+  // cost in and the invoice is still filed against it, which is most of the
+  // value; extraction only removes the typing.
+  if (!aiConfigured() || !isCostDocType(mimeType)) {
+    return { ok: true, draft: null, contactId: null, vendorMatch: null, ...context };
+  }
+
+  let bytes: Buffer;
+  try {
+    bytes = await getAttachmentForCost(supabase, gmailMessageId, attachmentId);
+  } catch (e) {
+    reportError("draftCostFromAttachment/gmail", e);
+    return { error: "Could not open that attachment from Gmail." };
+  }
+  if (bytes.length > MAX_COST_DOC_BYTES) {
+    return { ok: true, draft: null, contactId: null, vendorMatch: null, ...context };
+  }
+
+  let draft: InvoiceDraft;
+  try {
+    draft = await extractInvoice(
+      { base64: bytes.toString("base64"), mediaType: mimeType, fileName: filename },
+      context.lines.map((l) => ({
+        id: l.id,
+        label: `${l.category || "General"}: ${l.description || "Untitled"}`,
+      }))
+    );
+  } catch (e) {
+    reportError("draftCostFromAttachment/ai", e);
+    return { ok: true, draft: null, contactId: null, vendorMatch: null, ...context };
+  }
+
+  if (draft.unreadable) {
+    return { ok: true, draft: null, contactId: null, vendorMatch: null, ...context };
+  }
+
+  const match = draft.vendor ? matchVendor(draft.vendor, context.roster) : null;
+  return {
+    ok: true,
+    draft,
+    contactId: match?.id ?? null,
+    vendorMatch: match?.name ?? null,
+    ...context,
+  };
+}
+
+/**
+ * Files the Gmail attachment against a cost that was just saved. The bytes are
+ * fetched a second time rather than being parked in storage during the draft
+ * step, so abandoning the form leaves no orphaned invoice behind.
+ */
+export async function attachEmailInvoice(
+  projectId: string,
+  costId: string,
+  gmailMessageId: string,
+  attachmentId: string,
+  filename: string,
+  mimeType: string
+): Promise<{ error: string } | { ok: true }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  let bytes: Buffer;
+  try {
+    bytes = await getAttachmentForCost(supabase, gmailMessageId, attachmentId);
+  } catch (e) {
+    reportError("attachEmailInvoice/gmail", e);
+    return { error: "Could not fetch that attachment from Gmail." };
+  }
+
+  const safeName = filename.replace(/[^\w.\-]+/g, "_").slice(-120) || "invoice";
+  const path = `${ctx.studio.id}/costs/${projectId}/${generateReviewToken()}_${safeName}`;
+  const { error: upErr } = await supabase.storage
+    .from("assets")
+    .upload(path, bytes, {
+      contentType: mimeType || "application/octet-stream",
+      upsert: false,
+    });
+  if (upErr) {
+    reportError("attachEmailInvoice.upload", upErr);
+    return { error: "Could not store that attachment." };
+  }
+
+  const { error } = await supabase
+    .from("project_costs")
+    .update({
+      storage_path: path,
+      file_name: filename.slice(0, 200),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", costId);
+  if (error) {
+    await supabase.storage.from("assets").remove([path]);
+    reportError("attachEmailInvoice/project_costs", error);
+    return { error: "Could not attach that file to the cost." };
+  }
+  rp(projectId);
+  return { ok: true };
+}
+
+async function getAttachmentForCost(
+  supabase: SupabaseClient<Database>,
+  gmailMessageId: string,
+  attachmentId: string
+): Promise<Buffer> {
+  const { data: account } = await supabase
+    .from("email_accounts")
+    .select("id, access_token, refresh_token, token_expiry, email, scope")
+    .eq("provider", "google")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!account) throw new Error("Gmail is not connected.");
+  const token = await getAccessToken(supabase, account);
+  return getAttachmentBytes(token, gmailMessageId, attachmentId);
 }

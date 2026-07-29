@@ -1356,9 +1356,40 @@ is now a LEDGER, the same move that makes an Asset a file plus Versions.
 - SCOPE LINE TO HOLD: this answers "what did this job cost and who is owed". It
   does not become POs, payroll, approval chains, or AICP bid ledgers (that is
   Saturation.io's ground, and the audit already said no to it).
-- NEXT SLICES (not built): (3) Log a cost straight from a Gmail attachment;
-  rate-vs-invoiced flagging. (4) Margin (billed vs cost) and a studio-wide
+- NEXT SLICE (not built): (4) Margin (billed vs cost) and a studio-wide
   unpaid-vendor rollup.
+
+### Budget slice 3: cost from an emailed invoice + rate flagging (migration 0071)
+Two halves, both about connecting the ledger to what already exists.
+- COST FROM A GMAIL ATTACHMENT: freelancers email invoices, so the invoice
+  should never have to touch a desktop. An attachment whose mime is a PDF or an
+  image gets a "Log as a cost" button next to "Add to assets" (components/
+  projects/log-cost-attachment.tsx), shown only when the thread is tied to a
+  PROJECT, since a cost has to land somewhere. draftCostFromAttachment fetches
+  the bytes, extracts, and returns the draft PLUS the project's budget lines and
+  roster (the Communication module has no reason to have loaded either), then
+  the SAME CostModal opens prefilled. On save, attachEmailInvoice re-fetches the
+  bytes from Gmail and stores them. Deliberately fetched TWICE rather than
+  parked in storage during the draft step: abandoning the form then leaves no
+  orphaned invoice behind. CostModal is now exported and takes optional
+  `initial` / `initialFilled` / `attachment` props; when `attachment` is set the
+  file picker is replaced by a line naming the file that will be filed.
+  DEGRADES GRACEFULLY: with no AI key, an unreadable document, or a file over
+  the cap, the modal still opens empty rather than erroring, because filing the
+  invoice against a typed-in cost is most of the value.
+- RATE VS INVOICED (migration 0071 = project_costs.days): a true check needs a
+  DAY COUNT, which was the missing piece. An amount alone says nothing ($2,400
+  is either three fair days or one dear one), and dividing the total by the rate
+  to guess days would fire on every kit fee and overtime line, which is worse
+  than no flag. So `days numeric(6,2)` is nullable (a flat fee, a rental, and a
+  licence have no day count), the extractor reads it ONLY when the invoice
+  states a quantity, and lib/costs.ts `rateCheck` compares days x agreed rate
+  against the invoiced amount with a $1 tolerance so ordinary rounding is not a
+  discrepancy. It returns null unless BOTH a rate and a day count are known.
+  Surfaced as a RateNote line in the modal (matches / over / under, or a prompt
+  to add the days) and an amber "over rate" chip on the ledger row. rateCheck
+  and the days parsing are unit-tested in the scratchpad, including the
+  numeric-arrives-as-a-string case.
 
 ### Budget slice 2: invoice extraction (AI, draft-and-confirm) — BUILT
 Attach an invoice to the add-cost modal and the form fills itself. The contract
