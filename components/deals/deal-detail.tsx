@@ -161,7 +161,24 @@ export function DealDetail({
 
         {/* Activity timeline */}
         <div className="rounded-[16px] border border-border bg-surface p-5 shadow-sm">
-          <h3 className="mb-3 font-display text-sm font-bold">Activity</h3>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h3 className="font-display text-sm font-bold">Activity</h3>
+            {/* Email threads attach to the ACCOUNT, not the deal: one company
+                emails you across several jobs over years, so a thread hung off
+                a single deal would fragment the history every time a job
+                closed. Rather than pretend the deal holds them, say where they
+                are, since looking here for email and finding nothing is the
+                obvious first confusion. */}
+            <span className="text-[11px] text-text-faint">
+              Emails live on the account.{" "}
+              <Link
+                href={`/clients/${account.id}`}
+                className="font-semibold text-accent hover:underline"
+              >
+                Open {account.name}
+              </Link>
+            </span>
+          </div>
           <ActivityTimeline dealId={deal.id} activities={activities} />
         </div>
       </div>
