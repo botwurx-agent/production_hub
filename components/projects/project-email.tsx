@@ -478,45 +478,13 @@ export function ThreadReader({
                     {replyError}
                   </p>
                 )}
+                {/* Polish sits with the text it rewrites; the three attach
+                    actions are grouped together in the toolbar below. */}
+                <div className="mt-2">
+                  <PolishButton value={reply} onChange={setReply} channel="email" />
+                </div>
                 {projectId && (
                   <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAttachOpen((o) => !o);
-                        if (assetOpts === null) loadAssetOpts();
-                      }}
-                      className="text-xs font-semibold text-accent hover:underline"
-                    >
-                      {attachOpen ? "Hide assets" : "Attach asset"}
-                    </button>
-                    {attachOpen && (
-                      <div className="mt-1 max-h-32 overflow-y-auto rounded-[10px] border border-border p-1">
-                        {assetOpts === null ? (
-                          <p className="px-2 py-1 text-xs text-text-faint">
-                            Loading assets...
-                          </p>
-                        ) : assetOpts.length === 0 ? (
-                          <p className="px-2 py-1 text-xs text-text-faint">
-                            No assets in this project.
-                          </p>
-                        ) : (
-                          assetOpts.map((a) => (
-                            <button
-                              key={a.id}
-                              type="button"
-                              onClick={() => toggleAttach(a.id)}
-                              className="flex w-full items-center justify-between gap-2 rounded-[8px] px-2 py-1 text-left text-xs transition hover:bg-surface-2"
-                            >
-                              <span className="truncate text-text">{a.name}</span>
-                              {attachIds.includes(a.id) && (
-                                <span className="text-accent">&#10003;</span>
-                              )}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    )}
                     {attachIds.length > 0 && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {attachIds.map((id) => {
@@ -631,11 +599,25 @@ export function ThreadReader({
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-3">
-                    <PolishButton
-                      value={reply}
-                      onChange={setReply}
-                      channel="email"
-                    />
+                    {projectId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachOpen((o) => !o);
+                          if (assetOpts === null) loadAssetOpts();
+                        }}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
+                      >
+                        {/* Image/stack mark, distinct from the paperclip used
+                            for a device file and the triangle used for Drive. */}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <path d="m21 15-5-5L5 21" />
+                        </svg>
+                        {attachOpen ? "Hide assets" : "Attach asset"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -665,6 +647,34 @@ export function ThreadReader({
                     {sending ? "Sending..." : "Send reply"}
                   </Button>
                 </div>
+                {/* Opens directly under the button that toggles it. */}
+                {projectId && attachOpen && (
+                  <div className="mt-2 max-h-32 overflow-y-auto rounded-[10px] border border-border p-1">
+                    {assetOpts === null ? (
+                      <p className="px-2 py-1 text-xs text-text-faint">
+                        Loading assets...
+                      </p>
+                    ) : assetOpts.length === 0 ? (
+                      <p className="px-2 py-1 text-xs text-text-faint">
+                        No assets in this project.
+                      </p>
+                    ) : (
+                      assetOpts.map((a) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => toggleAttach(a.id)}
+                          className="flex w-full items-center justify-between gap-2 rounded-[8px] px-2 py-1 text-left text-xs transition hover:bg-surface-2"
+                        >
+                          <span className="truncate text-text">{a.name}</span>
+                          {attachIds.includes(a.id) && (
+                            <span className="text-accent">&#10003;</span>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
                 <DrivePickerModal
                   open={driveOpen}
                   onClose={() => setDriveOpen(false)}
