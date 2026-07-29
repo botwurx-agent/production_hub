@@ -11,6 +11,7 @@ import { TaskWidget, type DashboardTask } from "@/components/dashboard/task-widg
 import { MyDay } from "@/components/dashboard/my-day";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { UnreadWidget } from "@/components/dashboard/unread-widget";
+import { UnpaidCosts, type UnpaidCost } from "@/components/dashboard/unpaid-costs";
 import { NeedsYou } from "@/components/projects/needs-you";
 import type { OutstandingItem } from "@/lib/outstanding";
 import type { CalendarEvent, ActivityFeedItem } from "@/components/dashboard/types";
@@ -23,6 +24,7 @@ const TOGGLEABLE: { id: string; label: string }[] = [
   { id: "tasks", label: "Tasks" },
   { id: "upcoming", label: "Upcoming" },
   { id: "pipeline", label: "Pipeline" },
+  { id: "unpaid", label: "Unpaid invoices" },
   { id: "activity", label: "Recent activity" },
   { id: "messages", label: "Messages" },
 ];
@@ -47,6 +49,7 @@ const SECTION_ICONS = {
   upcoming: S(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>),
   messages: S(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />),
   pipeline: S(<><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></>),
+  unpaid: S(<><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></>),
   activity: S(<path d="M22 12h-4l-3 9L9 3l-3 9H2" />),
   tasks: S(<><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>),
 } as const;
@@ -86,6 +89,7 @@ export function DashboardBody({
   counts,
   openValue,
   tasks,
+  unpaidCosts,
   activity,
   calendarConnected,
   initialYear,
@@ -100,6 +104,7 @@ export function DashboardBody({
   counts: Record<string, number>;
   openValue: number;
   tasks: DashboardTask[];
+  unpaidCosts: UnpaidCost[];
   activity: ActivityFeedItem[];
   calendarConnected: boolean;
   initialYear: number;
@@ -159,6 +164,11 @@ export function DashboardBody({
     show("messages") && (
       <TitledCard key="messages" title="Messages" icon={SECTION_ICONS.messages} hue="blue">
         <UnreadWidget />
+      </TitledCard>
+    ),
+    show("unpaid") && (
+      <TitledCard key="unpaid" title="Unpaid invoices" icon={SECTION_ICONS.unpaid} hue="amber">
+        <UnpaidCosts costs={unpaidCosts} todayIso={todayStr} />
       </TitledCard>
     ),
     show("pipeline") && (

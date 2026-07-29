@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { BudgetTable } from "@/components/production/budget-table";
 import type { RosterOption } from "@/components/production/cost-ledger";
+import { computeTotals, type DocSnapshotLine } from "@/lib/billing-doc";
 import type { BudgetLine, ProjectCost } from "@/lib/database.types";
 
 export default async function BudgetPage({
@@ -22,7 +23,13 @@ export default async function BudgetPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: budgetLines }, { data: costs }, { data: roster }] =
+  const [
+    { data: budgetLines },
+    { data: costs },
+    { data: roster },
+    { data: invoices },
+    { data: billing },
+  ] =
     await Promise.all([
       supabase
         .from("budget_lines")
@@ -42,7 +49,47 @@ export default async function BudgetPage({
         .select("id, name, company, role, rate")
         .eq("project_id", params.id)
         .order("name", { ascending: true }),
+      // The billed side of margin. Only invoices count: an estimate or a
+      // proposal is what you hoped to charge, not what you charged.
+      supabase
+        .from("billing_documents")
+        .select("id, discount")
+        .eq("project_id", params.id)
+        .eq("kind", "invoice"),
+      // Fallback when no invoice has been generated in-app yet, mirroring how a
+      // budget line falls back to its typed actual.
+      supabase
+        .from("project_billing")
+        .select("amount")
+        .eq("project_id", params.id)
+        .maybeSingle(),
     ]);
+
+  // Totals live on the lines, not the document, so they are summed here the
+  // same way the document renderer does it.
+  const invoiceIds = (invoices ?? []).map((d) => d.id);
+  const { data: invoiceLines } = invoiceIds.length
+    ? await supabase
+        .from("billing_document_lines")
+        .select("document_id, description, rate, qty, tax_rate")
+        .in("document_id", invoiceIds)
+    : {
+        data: [] as {
+          document_id: string;
+          description: string;
+          rate: number;
+          qty: number;
+          tax_rate: number;
+        }[],
+      };
+
+  const billedFromInvoices = (invoices ?? []).reduce((sum, doc) => {
+    const lines = (invoiceLines ?? []).filter((l) => l.document_id === doc.id);
+    return sum + computeTotals(lines as DocSnapshotLine[], Number(doc.discount) || 0).total;
+  }, 0);
+
+  const billed =
+    invoiceIds.length > 0 ? billedFromInvoices : Number(billing?.amount) || 0;
 
   return (
     <div>
@@ -64,6 +111,8 @@ export default async function BudgetPage({
           lines={(budgetLines ?? []) as BudgetLine[]}
           costs={(costs ?? []) as ProjectCost[]}
           roster={(roster ?? []) as RosterOption[]}
+          billed={billed}
+          billedFromInvoices={invoiceIds.length > 0}
         />
       </Card>
     </div>

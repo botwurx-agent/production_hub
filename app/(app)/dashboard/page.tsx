@@ -8,6 +8,7 @@ import type { Stat } from "@/components/dashboard/stat-tiles";
 import { getOutstanding } from "@/lib/outstanding";
 import { loadSetupSteps } from "@/lib/setup-steps";
 import { DEAL_OPEN_STAGES } from "@/lib/status";
+import type { UnpaidCost } from "@/components/dashboard/unpaid-costs";
 import type {
   CalendarEvent,
   ActivityFeedItem,
@@ -28,6 +29,7 @@ export default async function DashboardPage() {
     { data: projectTaskRaw },
     { data: activityRaw },
     { data: googleAccount },
+    { data: unpaidRaw },
     outstanding,
     setupSteps,
   ] = await Promise.all([
@@ -61,9 +63,42 @@ export default async function DashboardPage() {
         .eq("provider", "google")
         .limit(1)
         .maybeSingle(),
+      // What the studio owes vendors, across every active project. RLS on
+      // project_costs is is_studio_member, so this is staff-only by
+      // construction; the dashboard is already staff-only too.
+      supabase
+        .from("project_costs")
+        .select("id, vendor, amount, due_date, status, project:projects(id, title, archived_at)")
+        .neq("status", "paid")
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(40),
       getOutstanding(),
       loadSetupSteps(supabase, ctx),
     ]);
+  // An archived project's bills are still owed, but they are not what a
+  // producer is being chased about this week, so they stay off the widget for
+  // the same reason archived projects stay off the board.
+  const unpaidCosts: UnpaidCost[] = (unpaidRaw ?? [])
+    .map((c) => {
+      const project = c.project as unknown as {
+        id: string;
+        title: string;
+        archived_at: string | null;
+      } | null;
+      return project && !project.archived_at
+        ? {
+            id: c.id,
+            projectId: project.id,
+            projectTitle: project.title,
+            vendor: c.vendor,
+            amount: Number(c.amount) || 0,
+            dueDate: c.due_date,
+            status: c.status,
+          }
+        : null;
+    })
+    .filter((c): c is UnpaidCost => c !== null);
+
   const calendarConnected = Boolean(
     googleAccount?.scope?.includes("/auth/calendar")
   );
@@ -202,6 +237,7 @@ export default async function DashboardPage() {
         initialYear={now.getFullYear()}
         initialMonth={now.getMonth()}
         todayStr={todayStr}
+        unpaidCosts={unpaidCosts}
       />
     </div>
   );

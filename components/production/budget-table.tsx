@@ -10,7 +10,12 @@ import {
   renameBudgetCategory,
 } from "@/app/(app)/projects/[id]/production/budget-actions";
 import { CostLedger, type RosterOption } from "@/components/production/cost-ledger";
-import { costStatus, lineActual as lineActualOf, rollUpActual } from "@/lib/costs";
+import {
+  costStatus,
+  lineActual as lineActualOf,
+  marginOf,
+  rollUpActual,
+} from "@/lib/costs";
 import type { BudgetLine, ProjectCost } from "@/lib/database.types";
 
 const money = new Intl.NumberFormat("en-US", {
@@ -28,11 +33,17 @@ export function BudgetTable({
   lines,
   costs,
   roster,
+  billed,
+  billedFromInvoices,
 }: {
   projectId: string;
   lines: BudgetLine[];
   costs: ProjectCost[];
   roster: RosterOption[];
+  /** What the client has been charged, for the margin band. */
+  billed: number;
+  /** True when that came from real invoices rather than the manual field. */
+  billedFromInvoices: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<BudgetLine[]>(lines);
@@ -84,6 +95,9 @@ export function BudgetTable({
   const unpaid = costs
     .filter((c) => costStatus(c.status) !== "paid")
     .reduce((n, c) => n + (Number(c.amount) || 0), 0);
+  // What the job made, as opposed to whether it stayed on budget. Those are
+  // different questions, so this sits apart from the four tiles above.
+  const margin = marginOf(billed, totalAct);
 
   function addLine(category: string) {
     start(async () => {
@@ -117,6 +131,49 @@ export function BudgetTable({
           hue={variance > 0 ? "red" : "green"}
         />
         <Tile label="Still owed" value={money.format(unpaid)} hue="amber" />
+      </div>
+
+      <div className="mb-5 rounded-[12px] border border-border p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-sm font-bold text-text">Margin</h3>
+          <span className="text-[11px] text-text-faint">
+            {billedFromInvoices
+              ? "Billed from this project's invoices."
+              : margin.billed > 0
+                ? "Billed from the amount on the delivery page."
+                : "Nothing billed to the client yet."}
+          </span>
+        </div>
+        {margin.billed > 0 ? (
+          <>
+            <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-2">
+              <Figure label="Billed" value={money.format(margin.billed)} />
+              <Figure label="Job cost" value={money.format(margin.cost)} />
+              <Figure
+                label={margin.profit < 0 ? "Loss" : "Margin"}
+                value={`${money.format(margin.profit)}${margin.pct === null ? "" : ` (${margin.pct}%)`}`}
+                hue={margin.profit < 0 ? "red" : "green"}
+              />
+            </div>
+            {/* Cost as a share of what was billed: the bar fills toward the
+                point where the job stops making money. */}
+            <div className="mt-3 h-2 overflow-hidden rounded-pill bg-surface-2">
+              <div
+                className="h-full rounded-pill transition-all"
+                style={{
+                  width: `${Math.min(100, Math.round((margin.cost / margin.billed) * 100))}%`,
+                  backgroundColor:
+                    margin.profit < 0 ? "var(--h-red)" : "var(--h-green)",
+                }}
+              />
+            </div>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-text-muted">
+            Once you invoice the client, this shows what the job actually made
+            against {money.format(totalAct)} of cost.
+          </p>
+        )}
       </div>
 
       <div className="mb-3 flex items-center justify-between">
@@ -244,6 +301,30 @@ export function BudgetTable({
           lines={rows}
           roster={roster}
         />
+      </div>
+    </div>
+  );
+}
+
+function Figure({
+  label,
+  value,
+  hue,
+}: {
+  label: string;
+  value: string;
+  hue?: string;
+}) {
+  return (
+    <div>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+        {label}
+      </div>
+      <div
+        className="text-lg font-extrabold tabular-nums"
+        style={hue ? { color: `var(--h-${hue})` } : { color: "var(--text)" }}
+      >
+        {value}
       </div>
     </div>
   );

@@ -1356,8 +1356,8 @@ is now a LEDGER, the same move that makes an Asset a file plus Versions.
 - SCOPE LINE TO HOLD: this answers "what did this job cost and who is owed". It
   does not become POs, payroll, approval chains, or AICP bid ledgers (that is
   Saturation.io's ground, and the audit already said no to it).
-- NEXT SLICE (not built): (4) Margin (billed vs cost) and a studio-wide
-  unpaid-vendor rollup.
+- Slice 4 (margin + unpaid rollup) is BUILT, see below. The "dynamic budget"
+  arc is complete; nothing further is planned for it without real-use friction.
 
 ### Budget slice 3: cost from an emailed invoice + rate flagging (migration 0071)
 Two halves, both about connecting the ledger to what already exists.
@@ -1442,6 +1442,38 @@ created from a model reading a document unattended.
   MAX_UPLOAD_BYTES on the email path. NOTE: `addDocAttachment`
   (native-invoice-actions.ts) still checks 25MB on the same kind of path and has
   the same latent problem; not touched here.
+
+### Budget slice 4: margin + studio-wide unpaid rollup (no migration) — BUILT
+Closes the loop: the ledger already knew what a job COST, and billing_documents
+already knew what was BILLED. Slice 4 just puts them on one page.
+- MARGIN BAND on the budget page (its own bordered block, deliberately NOT a
+  fifth tile: "did we stay on budget" and "did we make money" are different
+  questions and should not read as one row of numbers). Billed / Job cost /
+  Margin $ and %, plus a bar showing cost as a share of billed, which turns red
+  on a loss.
+- BILLED comes from the project's `kind='invoice'` billing_documents ONLY. An
+  estimate or a proposal is what you hoped to charge, not what you charged.
+  Totals live on billing_document_lines, so they are summed with the SAME
+  `computeTotals` the document renderer uses (one source of truth). When no
+  in-app invoice exists it falls back to `project_billing.amount`, the manual
+  figure on the delivery page, mirroring how a budget line falls back to its
+  typed actual. The band states which source it used, so the number is never
+  unexplained.
+- `marginOf` (lib/costs.ts) is unit-tested. Percentage is margin ON REVENUE
+  (profit / billed), what a studio quotes, not markup on cost, and is NULL when
+  nothing has been billed: dividing by zero would otherwise print Infinity next
+  to a dollar figure and look authoritative.
+- UNPAID ROLLUP: a customizable dashboard widget ("Unpaid invoices",
+  components/dashboard/unpaid-costs.tsx, added to TOGGLEABLE in dashboard-body).
+  Total owed + an overdue count + the six nearest by due date, each linking to
+  that project's budget. Overdue is computed against the SERVER's todayStr
+  (already passed for the calendar) so it cannot differ between the server
+  render and hydration, and dates parse as UTC so no timezone shifts a day.
+  ARCHIVED projects are excluded: their bills are still owed, but they are not
+  what a producer is being chased about this week, same reasoning that keeps
+  archived projects off the board. Staff-only by construction, since
+  project_costs is is_studio_member and the dashboard already redirects
+  collaborators.
 
 ### Collaborators could see rates (FIXED, no migration)
 Found while confirming the cost ledger's RLS. Budget and billing tables were

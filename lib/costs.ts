@@ -45,6 +45,28 @@ export function isCostDocType(mime: string): boolean {
 }
 
 /**
+ * What the job made: billed to the client, minus what it cost to make.
+ *
+ * The percentage is margin ON REVENUE (profit / billed), which is what a studio
+ * quotes, not markup on cost. Returns a null percentage when nothing has been
+ * billed yet, since dividing by zero would either crash or print Infinity next
+ * to a dollar figure and look authoritative.
+ */
+export type Margin = { billed: number; cost: number; profit: number; pct: number | null };
+
+export function marginOf(billed: number, cost: number): Margin {
+  const b = Number.isFinite(billed) ? billed : 0;
+  const c = Number.isFinite(cost) ? cost : 0;
+  const profit = Math.round((b - c) * 100) / 100;
+  return {
+    billed: b,
+    cost: c,
+    profit,
+    pct: b > 0 ? Math.round((profit / b) * 1000) / 10 : null,
+  };
+}
+
+/**
  * Compares what a rostered crew member invoiced against the day rate that was
  * agreed with them.
  *
