@@ -15,7 +15,7 @@ import {
 } from "@/components/projects/drive-browser";
 import { PlusIcon, EnvelopeIcon } from "@/components/app-shell/nav-icons";
 import { longDate, shortDate } from "@/lib/format";
-import { MAX_ATTACHMENT_BYTES, formatBytes } from "@/lib/attachment-limits";
+import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import {
   getThreadMessages,
   unlinkThread,
@@ -248,14 +248,14 @@ export function ThreadReader({
   // (project assets and Drive files are fetched server-side), so this is a
   // best-effort early warning rather than the authoritative check.
   const attachedBytes = files.reduce((n, f) => n + f.size, 0);
-  const tooBig = attachedBytes > MAX_ATTACHMENT_BYTES;
+  const tooBig = attachedBytes > MAX_UPLOAD_BYTES;
 
   function send() {
     if (!reply.trim()) return;
     if (tooBig) {
       setReplyError(
         `Those files come to ${formatBytes(attachedBytes)}, over the ${formatBytes(
-          MAX_ATTACHMENT_BYTES
+          MAX_UPLOAD_BYTES
         )} limit for one send. Remove one, or share a link instead.`
       );
       return;

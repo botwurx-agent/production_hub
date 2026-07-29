@@ -673,19 +673,37 @@ accepted the send (HTTP 200), and rendered a plain message with no attachment.
 Now only the optional headers are filtered; the structural blank lines are
 built separately and carry comments saying what they are. Verified by decoding
 the base64 `raw` the builder produces (harness kept in the session scratchpad).
-Two related things hardened at the same time:
-- The size cap moved from 5MB to `MAX_ATTACHMENT_BYTES` (4MB) in the new
-  lib/attachment-limits.ts. The real constraint is the ~4.5MB SERVERLESS
-  REQUEST-BODY cap, not Gmail: a bigger request is rejected at the platform
-  edge before the Server Action runs, so it cannot return a useful error and
-  looks exactly like "the button did nothing". next.config.mjs already raises
-  Next's own `serverActions.bodySizeLimit` to 12mb, which does NOT lift the
-  platform cap.
-- The constant lives in lib/attachment-limits.ts, not the actions file, because
-  a "use server" module can only export async functions and the composer needs
-  it client-side. components/projects/project-email.tsx now shows a running
-  byte total next to the chosen files and disables Send when over, so the
-  failure is caught before the upload instead of after it.
+
+### Attachment size limits: TWO ceilings, not one (lib/attachment-limits.ts)
+The first fix applied ONE cap to the total, which wrongly blocked a Drive file
+("over the 4MB limit") even though a Drive file never crosses the constrained
+boundary. Attachments arrive by two routes and only one is ours to limit:
+- `MAX_UPLOAD_BYTES` (4MB): a DEVICE file goes browser -> Server Action ->
+  Gmail, so its bytes cross the ~4.5MB serverless request body. Over that, the
+  request dies at the platform edge before our code runs, so it cannot be
+  explained: the click just appears to do nothing. Checked in
+  sendReplyWithFiles against the device files ONLY, and mirrored client-side in
+  the composer (running byte total, Send disabled) so it is caught pre-upload.
+  next.config.mjs raises Next's own `serverActions.bodySizeLimit` to 12mb,
+  which does NOT lift the platform cap.
+- `MAX_EMAIL_BYTES` (25MB): PROJECT ASSETS and DRIVE FILES are fetched
+  server-side (collectAssetAttachments / getDriveFileBytes), so the only thing
+  bounding them is Gmail's own limit. Checked in deliverReply on the assembled
+  total.
+The constants live in lib/attachment-limits.ts rather than the actions file
+because a "use server" module can only export async functions and the composer
+needs them client-side.
+GMAIL UPLOAD URI: the plain `messages/send` endpoint takes the message
+base64url-encoded inside JSON (a third bigger) and has its own request limit,
+so it could not carry 25MB. sendGmailReply now switches to
+`/upload/gmail/v1/users/me/messages/send?uploadType=multipart` (35MB ceiling)
+when the raw MIME exceeds PLAIN_SEND_LIMIT (4MB): a multipart/related body with
+a JSON part carrying `threadId` (so the reply stays threaded) and a
+`message/rfc822` part carrying the raw bytes, no base64 inflation. Small sends
+keep the original proven path. The outer boundary is generated separately so it
+cannot collide with the message's own. Request SHAPE verified locally (routing,
+both blank-line separators, threadId part, closing delimiter, byte fidelity);
+the large path has NOT yet been exercised against the live Gmail API.
 
 ### Stage vocabulary + stage controls (BUILT, no migration)
 The four DB phases never change (`pre_pro -> shoot -> post -> delivered`); only
@@ -1072,40 +1090,22 @@ parent (it predated project-level contacts and was rejecting them).
   Assets page (add a `review` prop, default off) but keep them on the Review
   page. Also decide how a file enters Review: (1) a "Send to review" button on
   the asset [recommended], or (2) an "Add to review" picker on the Review page.
-- **Sending email attachments larger than the current cap. OPEN, operator still
-  deciding (raised 2026-07-29). Nothing built.**
-  The constraint is NOT Gmail (its own send limit is ~25MB). It is the ~4.5MB
-  SERVERLESS REQUEST-BODY cap, and it only applies to one of the three paths:
-  - Device file picked in the composer: browser -> Server Action -> Gmail, so
-    the bytes cross the capped request body. Genuinely limited to ~4MB.
-  - Project asset: `collectAssetAttachments` downloads from Supabase Storage
-    SERVER-SIDE; the form carries only asset ids. Never touches the cap.
-  - Drive file: fetched server-side from Drive. Never touches the cap.
-  FIRST, A CORRECTION TO MAKE: the MAX_ATTACHMENT_BYTES check in deliverReply
-  applies to the TOTAL of all three, so it currently limits server-fetched
-  attachments for a reason that does not apply to them. Split it: keep ~4MB for
-  device files (checked client-side too, which it already is), and allow the
-  grand total up to Gmail's ~25MB. That alone raises the ceiling to 25MB for
-  anything already in the project or in Drive, with no new infrastructure. This
-  part is a straight bug fix with no design content; do it whenever picked up.
-  THEN pick an approach for genuinely large files:
+- **Sending email attachments larger than the cap. PARTLY RESOLVED 2026-07-29.**
+  The cap split is DONE (see "Attachment size limits" below): device files are
+  capped at 4MB by the request body, everything else at Gmail's 25MB. What is
+  still OPEN is the >25MB story, and whether "share as a link" should be an
+  explicit button in the composer or kick in automatically over the limit:
   1. LINK INSTEAD OF BYTES [recommended]. Nearly built: createReviewLink()
      already mints a /r/<token> per asset and app/r/[token]/file is a
      token-guarded proxy. For a project asset this is a one-call reuse that
      inserts the URL into the reply body; for a device file, upload it into the
-     project first (that path already bypasses the cap: createAssetUploadUrl +
-     uploadToSignedUrl) and then link it. Better than an attachment for
-     creative work regardless of size, because the feedback lands on the asset
-     (pinned comments, approve / request changes) instead of dying in an email
-     thread, and v3 does not need re-sending. Small effort.
-  2. TRUE ATTACHMENTS TO 25MB. Route device files through storage as well, so
-     every path is server-fetched. Medium effort. Only worth it if the operator
-     actually wants big binaries in email rather than links.
-  3. ABOVE 25MB, INSERT A DRIVE LINK. What Gmail itself does over its limit.
+     project first (createAssetUploadUrl + uploadToSignedUrl already bypass the
+     request cap) and then link it. Better than an attachment for creative work
+     regardless of size, because feedback lands on the asset (pinned comments,
+     approve / request changes) instead of dying in an email thread.
+  2. ABOVE 25MB, INSERT A DRIVE LINK. What Gmail itself does over its limit.
      The Drive connector and token already exist. The only real answer for a
      multi-GB master.
-  STILL TO DECIDE: whether "share as a link" is an explicit button in the
-  composer or kicks in automatically once a file is over the limit.
 
 ### Pre-launch hardening pass (BUILT, branch claude/pre-launch-audit-competitive-a08026)
 Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07.md

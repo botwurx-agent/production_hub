@@ -18,7 +18,11 @@ import { getDriveFileBytes } from "@/lib/googledrive";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
-import { MAX_ATTACHMENT_BYTES } from "@/lib/attachment-limits";
+import {
+  MAX_EMAIL_BYTES,
+  MAX_UPLOAD_BYTES,
+  formatBytes,
+} from "@/lib/attachment-limits";
 
 export type EmailState = { error?: string } | null;
 export type OwnerType = "project" | "lead" | "client";
@@ -157,14 +161,15 @@ async function deliverReply(
   attachments: OutgoingAttachment[],
   opts: { projectId?: string; revalidate?: string }
 ): Promise<EmailState> {
+  // Gmail's own attachment limit. Everything that reaches this point has
+  // already cleared whatever constraint its own route imposes, so this is the
+  // only ceiling left.
   const total = attachments.reduce((n, a) => n + a.bytes.length, 0);
-  // Below the ~4.5MB serverless request-body cap, not at Gmail's own limit:
-  // anything larger never reaches this function to be rejected politely, it
-  // fails at the platform edge and looks like the send silently did nothing.
-  if (total > MAX_ATTACHMENT_BYTES) {
+  if (total > MAX_EMAIL_BYTES) {
     return {
-      error:
-        "Those attachments are over the 4MB limit for a single send. Send fewer or smaller files, or share a link instead.",
+      error: `Those attachments come to ${formatBytes(total)}, over Gmail's ${formatBytes(
+        MAX_EMAIL_BYTES
+      )} limit for one message. Send fewer, or share a link instead.`,
     };
   }
   try {
@@ -256,10 +261,21 @@ export async function sendReplyWithFiles(
 
   const attachments = await collectAssetAttachments(supabase, assetIds);
 
-  // Device files chosen in the reply box.
+  // Device files chosen in the reply box. These are the only attachments that
+  // travelled through the request body, so the upload cap applies to them and
+  // to nothing else: a project asset or Drive file was fetched server-side and
+  // never went near it.
   const files = formData
     .getAll("files")
     .filter((f): f is File => f instanceof File && f.size > 0);
+  const uploaded = files.reduce((n, f) => n + f.size, 0);
+  if (uploaded > MAX_UPLOAD_BYTES) {
+    return {
+      error: `Files from your device are limited to ${formatBytes(
+        MAX_UPLOAD_BYTES
+      )} per send. Add the file to the project first, then attach it from there.`,
+    };
+  }
   for (const f of files) {
     attachments.push({
       filename: f.name,

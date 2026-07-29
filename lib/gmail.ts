@@ -378,18 +378,66 @@ export async function sendGmailReply(
     parts.push(`--${boundary}--`);
     mime = parts.join("\r\n");
   }
-  const raw = encodeB64Url(mime);
-  const res = await fetch(`${API}/messages/send`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ raw, threadId: gmailThreadId }),
-  });
+  const res =
+    Buffer.byteLength(mime) > PLAIN_SEND_LIMIT
+      ? await sendViaUpload(accessToken, gmailThreadId, mime)
+      : await fetch(`${API}/messages/send`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          // The plain endpoint takes the message base64url-encoded inside
+          // JSON, which inflates it by a third.
+          body: JSON.stringify({ raw: encodeB64Url(mime), threadId: gmailThreadId }),
+        });
   if (!res.ok) {
     throw new Error(`Gmail send ${res.status}: ${await res.text()}`);
   }
+}
+
+// Above this the JSON endpoint's request limit becomes the binding constraint,
+// well before Gmail's own attachment limit does. Kept low enough that the
+// base64 inflation still leaves headroom, and small sends keep using the
+// simpler path they have always used.
+const PLAIN_SEND_LIMIT = 4_000_000;
+
+/**
+ * Sends a large message through Gmail's upload URI, which accepts up to 35MB.
+ * The message rides as a `message/rfc822` part rather than base64url inside
+ * JSON, so it avoids the third-again inflation as well as the request limit.
+ * The JSON part carries the metadata (threadId) that keeps the reply threaded.
+ */
+async function sendViaUpload(
+  accessToken: string,
+  gmailThreadId: string,
+  mime: string
+): Promise<Response> {
+  // Must not collide with the boundary inside the message itself.
+  const outer = `upload_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  const body = Buffer.concat([
+    Buffer.from(
+      `--${outer}\r\n` +
+        "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+        `${JSON.stringify({ threadId: gmailThreadId })}\r\n\r\n` +
+        `--${outer}\r\n` +
+        "Content-Type: message/rfc822\r\n\r\n"
+    ),
+    Buffer.from(mime),
+    Buffer.from(`\r\n--${outer}--`),
+  ]);
+
+  return fetch(
+    "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${outer}`,
+      },
+      body,
+    }
+  );
 }
 
 // Returns the raw bytes of an attachment.
