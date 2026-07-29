@@ -406,8 +406,9 @@ crash screen or locks themselves out.
 - **Weekly studio digest + AI feedback summarizer** (the two cheapest
   high-trust AI adds per the earlier assessment; both build on existing
   lib/outstanding.ts and review comments).
-- **CSV/PDF exports** for budget and contacts (producers hand these to
-  accountants constantly).
+- ~~**CSV/PDF exports** for budget and contacts.~~ DECLINED by the operator
+  (2026-07-29): not needed for how they actually work. Revisit only if a beta
+  user asks.
 - **Multi-studio switcher + per-user notification read-state** before any
   multi-seat sales push.
 
