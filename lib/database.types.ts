@@ -1559,6 +1559,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      notification_reads: {
+        Row: {
+          id: string;
+          studio_id: string;
+          notification_id: string;
+          user_id: string;
+          read_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          notification_id: string;
+          user_id: string;
+          read_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          notification_id?: string;
+          user_id?: string;
+          read_at?: string;
+        };
+        Relationships: [];
+      };
       notifications: {
         Row: {
           id: string;

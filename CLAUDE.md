@@ -541,6 +541,24 @@ implemented (out of strict order, driven by the operator's real needs).
 - Notifications layer: studio-scoped `notifications` table (0024), bell dropdown
   in the topbar (unread badge, poll, mark read/all, needs-you row); client
   review actions generate notifications (lib/notifications.ts).
+  PER-USER READ STATE (migration 0073): `notifications.read_at` was ONE SHARED
+  FLAG, so in a multi-person studio whoever opened the bell first cleared it for
+  everyone and a notification meant for the producer could be marked read by a
+  colleague who only glanced at it. A notification is still a studio-wide
+  BROADCAST; only "have I seen this" moved to `notification_reads`
+  (studio/notification/user/read_at, UNIQUE on (notification_id, user_id) so a
+  second mark is a no-op). Its RLS is deliberately NOT is_studio_member but
+  `user_id = auth.uid()`, since a read mark is personal; the WITH CHECK also
+  requires is_studio_member, so you cannot mark in a studio you have left.
+  getNotifications reads the rows, then this viewer's read rows, and writes the
+  per-user value INTO each item's `read_at`, which is the field the bell already
+  rendered, so components/app-shell/notification-bell.tsx needed no change at
+  all. markAllNotificationsRead only marks the same LIMIT the bell shows, not
+  the studio's whole history, so clearing a badge cannot silently bury things
+  nobody saw. The migration backfills a read row for every current member of any
+  notification already marked read, otherwise the bell would look alarming on
+  first load after deploy. `notifications.read_at` is RETIRED (commented as
+  such in the DB, never read or written) and kept only for rollback.
 - Project workspace is a colorful, everything-upfront HUB (StudioBinder-inspired
   launcher; the operator asked for bolder + more visible, NOT dialed down):
   /projects/[id]/page.tsx = hub (hero w/ gradient bar + status + lifecycle
