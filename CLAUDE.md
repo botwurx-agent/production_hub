@@ -1532,16 +1532,28 @@ opened to collaborators:
 - `contacts.rate`: a collaborator on a project could open the contacts roster
   and read every crew member's day rate.
 - `deliverables.rate` / `qty`: what the CLIENT is charged per deliverable.
+- `ai_generations.cost`: what each AI generation cost in credits/dollars, shown
+  in the pipeline provenance panel and in triage. Found by a LATER full sweep
+  (the first two were spot-checks), which is the lesson: query pg_policies for
+  every can_access_project table and grep its columns for money, do not reason
+  from memory about which tables carry spend.
 RLS is ROW-level and cannot mask a single column of a row the viewer is allowed
 to read, and the rows themselves are legitimately needed (the roster, the
 deliverable list). Supabase's typed client also parses the select string at
 compile time, so a runtime-conditional select breaks inference. So both are
 stripped server-side in the page component before anything reaches the browser
-(`stripRates` in contacts/page.tsx; a map in delivery/page.tsx), the inputs are
-hidden via `canSeeRates` / `canSeePricing` props, AND the write paths
-(updateProjectContact, updateDeliverable) DROP those keys for a collaborator, so
-a form that was never shown the real figure cannot overwrite it with a
-placeholder. DURABLE FIX (not done): move `rate` into its own is_studio_member
+(`stripRates` in contacts/page.tsx; a map in delivery/page.tsx; a map in
+pipeline/page.tsx), the inputs are hidden via `canSeeRates` / `canSeePricing` /
+`canSeeCost` props, AND the write paths (updateProjectContact,
+updateDeliverable, updateGeneration) DROP those keys for a collaborator, so a
+form that was never shown the real figure cannot overwrite it with a
+placeholder. `genSpecRows` already filters null rows, so a nulled cost simply
+vanishes from the provenance panel.
+VERIFIED AGAINST THE LIVE DB (not the migration files): 33 tables carry a
+can_access_project policy, 33 are studio-only, and all nine money tables
+(project_costs, cost_payments, budget_lines, project_billing,
+billing_documents, billing_document_lines, billing_profiles, project_invoices,
+billing_accounts) are in the studio-only set. DURABLE FIX (not done): move `rate` into its own is_studio_member
 table, where RLS enforces it instead of this code.
 
 ### Next step

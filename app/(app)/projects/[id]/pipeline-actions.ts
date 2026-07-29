@@ -378,11 +378,16 @@ export async function updateGeneration(
     external_url?: string | null;
   },
 ): Promise<void> {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
+  // A collaborator is never shown what a generation cost, so a patch from them
+  // would carry a blank that overwrites the real figure. Drop the key rather
+  // than trusting a value they were not given.
+  const safe = { ...patch };
+  if (ctx.isCollaborator) delete safe.cost;
   await logWrite(
     "updateGeneration/ai_generations",
-    supabase.from("ai_generations").update(patch).eq("id", id)
+    supabase.from("ai_generations").update(safe).eq("id", id)
   );
   rp(projectId);
 }

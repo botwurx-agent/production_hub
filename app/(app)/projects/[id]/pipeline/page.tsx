@@ -60,7 +60,13 @@ export default async function PipelinePage({
         .order("created_at", { ascending: true }),
     ]);
     prompts = (p ?? []) as AiPrompt[];
-    generations = (g ?? []) as AiGeneration[];
+    // What a generation cost is studio spend, same category as a crew rate.
+    // ai_generations is one of the tables migration 0056 opened to project
+    // collaborators, and RLS is row-level, so the column is dropped here
+    // before it reaches the browser.
+    generations = ((g ?? []) as AiGeneration[]).map((gen) =>
+      ctx.isCollaborator ? { ...gen, cost: null } : gen
+    );
   }
 
   // Which shots are already in the review cycle (so the header can show status).
@@ -114,6 +120,7 @@ export default async function PipelinePage({
       />
       <Card className="p-5">
         <PipelineWorkspace
+        canSeeCost={!ctx.isCollaborator}
           projectId={project.id}
           studioId={ctx.studio.id}
           script={(script as AiScript | null) ?? null}
