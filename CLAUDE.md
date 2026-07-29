@@ -705,6 +705,27 @@ cannot collide with the message's own. Request SHAPE verified locally (routing,
 both blank-line separators, threadId part, closing delimiter, byte fidelity);
 the large path has NOT yet been exercised against the live Gmail API.
 
+OVER GMAIL'S LIMIT: A DRIVE LINK INSTEAD OF BYTES (BUILT), mirroring what Gmail
+itself does. A picked Drive file that would push the message past
+MAX_EMAIL_BYTES is not attached; its `webViewLink` is appended to the reply body
+under a "Shared file(s):" heading. splitDriveByLimit (lib/attachment-limits.ts)
+does the split on a RUNNING TOTAL, not per file, so three 10MB files do not all
+attach and then dead-end on the message-level check: the ones that no longer fit
+simply become links. Google-native docs (Docs/Sheets/Slides) report size 0 and
+always attach, since they export small. The server does the authoritative split
+because it is the only side that knows how big the project assets are; the
+composer mirrors the unambiguous per-file case (a `link` badge on the chip) so
+the substitution is visible before sending.
+SHARING IS WARN-AND-ALLOW, NOT AUTO-FIXED. lib/googledrive.ts now selects
+`webViewLink` + `shared` in its fields param, so we can SEE whether a file is
+link-shared. We cannot change it: writing a permission needs the full `drive`
+scope, which is a Google RESTRICTED scope (verification + an annual third-party
+security assessment), far too much to buy a checkbox. So when a file is headed
+out as a link and is not shared, the composer shows an amber warning naming the
+files, with a direct "Open in Drive" link to flip sharing, and still lets the
+send go. Sending anyway is a legitimate choice: the recipient gets a
+request-access prompt, which for an internal recipient is often fine.
+
 ### Stage vocabulary + stage controls (BUILT, no migration)
 The four DB phases never change (`pre_pro -> shoot -> post -> delivered`); only
 their labels do. The default label for the middle phase is now **"Production"**,
@@ -1090,22 +1111,17 @@ parent (it predated project-level contacts and was rejecting them).
   Assets page (add a `review` prop, default off) but keep them on the Review
   page. Also decide how a file enters Review: (1) a "Send to review" button on
   the asset [recommended], or (2) an "Add to review" picker on the Review page.
-- **Sending email attachments larger than the cap. PARTLY RESOLVED 2026-07-29.**
-  The cap split is DONE (see "Attachment size limits" below): device files are
-  capped at 4MB by the request body, everything else at Gmail's 25MB. What is
-  still OPEN is the >25MB story, and whether "share as a link" should be an
-  explicit button in the composer or kick in automatically over the limit:
-  1. LINK INSTEAD OF BYTES [recommended]. Nearly built: createReviewLink()
-     already mints a /r/<token> per asset and app/r/[token]/file is a
-     token-guarded proxy. For a project asset this is a one-call reuse that
-     inserts the URL into the reply body; for a device file, upload it into the
-     project first (createAssetUploadUrl + uploadToSignedUrl already bypass the
-     request cap) and then link it. Better than an attachment for creative work
-     regardless of size, because feedback lands on the asset (pinned comments,
-     approve / request changes) instead of dying in an email thread.
-  2. ABOVE 25MB, INSERT A DRIVE LINK. What Gmail itself does over its limit.
-     The Drive connector and token already exist. The only real answer for a
-     multi-GB master.
+- **Sending email attachments larger than the cap. RESOLVED for Drive files
+  2026-07-29 (see "Over Gmail's limit" below). Still open for a PROJECT ASSET
+  or a device file over 25MB**, where the answer would be a /r/<token> review
+  link rather than bytes: createReviewLink() already mints one per asset and
+  app/r/[token]/file is a token-guarded proxy, so for a project asset it is a
+  one-call reuse that inserts the URL into the reply body; a device file would
+  be uploaded into the project first (createAssetUploadUrl +
+  uploadToSignedUrl already bypass the request cap) and then linked. Arguably
+  better than an attachment for creative work at ANY size, because feedback
+  lands on the asset (pinned comments, approve / request changes) instead of
+  dying in an email thread. Not built: no one has hit it yet.
 
 ### Pre-launch hardening pass (BUILT, branch claude/pre-launch-audit-competitive-a08026)
 Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07.md

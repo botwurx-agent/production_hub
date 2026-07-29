@@ -15,7 +15,11 @@ import {
 } from "@/components/projects/drive-browser";
 import { PlusIcon, EnvelopeIcon } from "@/components/app-shell/nav-icons";
 import { longDate, shortDate } from "@/lib/format";
-import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
+import {
+  MAX_EMAIL_BYTES,
+  MAX_UPLOAD_BYTES,
+  formatBytes,
+} from "@/lib/attachment-limits";
 import {
   getThreadMessages,
   unlinkThread,
@@ -249,6 +253,15 @@ export function ThreadReader({
   // best-effort early warning rather than the authoritative check.
   const attachedBytes = files.reduce((n, f) => n + f.size, 0);
   const tooBig = attachedBytes > MAX_UPLOAD_BYTES;
+
+  // A Drive file bigger than Gmail's limit is sent as a link rather than
+  // attached, the same substitution Gmail makes. Shown here per file only for
+  // the unambiguous case; the server does the authoritative split, since it is
+  // the only side that knows how big the project assets are.
+  const linked = driveFiles.filter((f) => f.size > MAX_EMAIL_BYTES);
+  // We can read a Drive file's sharing state but not change it (the connection
+  // is read-only), so an unshared file gets a warning rather than a silent fix.
+  const unshared = linked.filter((f) => !f.shared);
 
   function send() {
     if (!reply.trim()) return;
@@ -548,12 +561,20 @@ export function ThreadReader({
                     {driveFiles.map((f) => (
                       <span
                         key={f.id}
+                        title={
+                          f.size > MAX_EMAIL_BYTES
+                            ? `${formatBytes(f.size)}, too large to attach. Sent as a Drive link.`
+                            : undefined
+                        }
                         className="inline-flex items-center gap-1 rounded-pill bg-surface-2 px-2 py-0.5 text-[11px] text-text"
                       >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
                           <path d="M8.4 3.5h7.2l6.4 11.1-3.6 6.2H5.6L2 14.6 8.4 3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
                         </svg>
                         {f.name}
+                        {f.size > MAX_EMAIL_BYTES && (
+                          <span className="font-semibold text-accent">link</span>
+                        )}
                         <button
                           type="button"
                           onClick={() => toggleDriveFile(f)}
@@ -564,6 +585,30 @@ export function ThreadReader({
                         </button>
                       </span>
                     ))}
+                  </div>
+                )}
+                {unshared.length > 0 && (
+                  <div className="mt-1.5 rounded-md border border-amber bg-amber-bg px-2.5 py-2 text-[11px] leading-relaxed text-amber">
+                    <span className="font-semibold">
+                      {unshared.length === 1
+                        ? "This file is too large to attach and is not shared yet."
+                        : "These files are too large to attach and are not shared yet."}
+                    </span>{" "}
+                    They will be sent as Drive links, so your recipient will hit
+                    a request-access page unless you turn on link sharing first.
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                      {unshared.map((f) => (
+                        <a
+                          key={f.id}
+                          href={f.webViewLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold underline"
+                        >
+                          Open {f.name} in Drive
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
                 <input

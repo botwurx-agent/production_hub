@@ -26,6 +26,12 @@ export type DriveFile = {
   size: number; // 0 for Google-native docs (no direct size)
   isGoogleDoc: boolean;
   isFolder: boolean;
+  // Drive's own "open this file" URL, used when a file is too large to attach
+  // and gets sent as a link instead.
+  webViewLink: string;
+  // Whether the file is shared beyond its owner. Read-only scope can see this
+  // but cannot change it, so it drives a warning rather than a fix.
+  shared: boolean;
 };
 
 // Google-native files have no downloadable bytes; they must be exported to a
@@ -92,7 +98,7 @@ export async function listDrive(
     orderBy: "folder,name",
     pageSize: String(max),
     fields:
-      "files(id,name,mimeType,iconLink,thumbnailLink,hasThumbnail,modifiedTime,size)",
+      "files(id,name,mimeType,iconLink,thumbnailLink,hasThumbnail,modifiedTime,size,webViewLink,shared)",
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
   });
@@ -107,6 +113,8 @@ export async function listDrive(
       hasThumbnail?: boolean;
       modifiedTime?: string;
       size?: string;
+      webViewLink?: string;
+      shared?: boolean;
     }[];
   }>(token, `files?${params.toString()}`);
 
@@ -124,6 +132,8 @@ export async function listDrive(
       size: f.size ? Number(f.size) : 0,
       isGoogleDoc: isGoogleApps(f.mimeType || ""),
       isFolder: (f.mimeType || "") === DRIVE_FOLDER_MIME,
+      webViewLink: f.webViewLink || "",
+      shared: Boolean(f.shared),
     }));
 }
 

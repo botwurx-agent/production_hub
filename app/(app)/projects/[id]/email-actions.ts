@@ -22,6 +22,7 @@ import {
   MAX_EMAIL_BYTES,
   MAX_UPLOAD_BYTES,
   formatBytes,
+  splitDriveByLimit,
 } from "@/lib/attachment-limits";
 
 export type EmailState = { error?: string } | null;
@@ -247,7 +248,13 @@ export async function sendReplyWithFiles(
     assetIds = [];
   }
 
-  let driveFiles: { id: string; name: string; mimeType: string }[] = [];
+  let driveFiles: {
+    id: string;
+    name: string;
+    mimeType: string;
+    size?: number;
+    webViewLink?: string;
+  }[] = [];
   try {
     const raw = formData.get("driveFiles");
     if (raw) driveFiles = JSON.parse(String(raw));
@@ -284,11 +291,31 @@ export async function sendReplyWithFiles(
     });
   }
 
-  // Google Drive files chosen in the reply box (downloaded server-side).
-  if (driveFiles.length > 0) {
+  // Google Drive files chosen in the reply box. Small ones are downloaded and
+  // attached; anything that would not fit inside Gmail's limit is sent as a
+  // Drive link instead, the same substitution Gmail makes at its own ceiling.
+  // The bytes of a linked file are never fetched, so size is not a constraint.
+  const { attach: driveAttach, link: driveLink } = splitDriveByLimit(
+    driveFiles.map((d) => ({ ...d, size: d.size ?? 0 })),
+    attachments.reduce((n, a) => n + a.bytes.length, 0)
+  );
+
+  let body = text;
+  if (driveLink.length > 0) {
+    const lines = driveLink
+      .filter((d) => d.webViewLink)
+      .map((d) => `${d.name}: ${d.webViewLink}`);
+    if (lines.length > 0) {
+      body = `${text}\n\n${
+        lines.length === 1 ? "Shared file:" : "Shared files:"
+      }\n${lines.join("\n")}`;
+    }
+  }
+
+  if (driveAttach.length > 0) {
     try {
       const token = await getAccessToken(supabase, acct.account);
-      for (const d of driveFiles) {
+      for (const d of driveAttach) {
         const dl = await getDriveFileBytes(token, d.id, d.name, d.mimeType);
         attachments.push({
           filename: dl.filename,
@@ -303,7 +330,7 @@ export async function sendReplyWithFiles(
     }
   }
 
-  return deliverReply(supabase, ctx, acct.account, gmailThreadId, text, attachments, {
+  return deliverReply(supabase, ctx, acct.account, gmailThreadId, body, attachments, {
     projectId,
     revalidate,
   });

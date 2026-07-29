@@ -10,7 +10,17 @@ import { viewerKind } from "@/lib/file-kind";
 import { browseDrive, importDriveFile } from "@/app/(app)/projects/[id]/drive-actions";
 import type { DriveFile } from "@/lib/googledrive";
 
-export type PickedDriveFile = { id: string; name: string; mimeType: string };
+export type PickedDriveFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  // Carried so the composer can decide, before sending, whether the file is
+  // small enough to attach or has to go as a link (Google-native docs report
+  // size 0 and are always exported small, so they always attach).
+  size: number;
+  webViewLink: string;
+  shared: boolean;
+};
 
 type Crumb = { id: string; name: string };
 const ROOT: Crumb = { id: "root", name: "My Drive" };
@@ -388,6 +398,9 @@ export function DrivePickerModal({
                             id: f.id,
                             name: f.name,
                             mimeType: f.mimeType,
+                            size: f.size,
+                            webViewLink: f.webViewLink,
+                            shared: f.shared,
                           })
                         }
                       />

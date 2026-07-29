@@ -23,6 +23,37 @@ export const MAX_UPLOAD_BYTES = 4_000_000;
  */
 export const MAX_EMAIL_BYTES = 25_000_000;
 
+/**
+ * Splits picked Drive files into the ones small enough to attach as bytes and
+ * the ones that have to travel as a Drive link, mirroring what Gmail itself
+ * does at its size limit.
+ *
+ * Runs on a running total rather than per file, so three 10MB files do not all
+ * attach and then fail the message-level check with no way forward: the ones
+ * that no longer fit simply become links. `otherBytes` is everything already
+ * committed to the message (device files, project assets).
+ *
+ * Google-native docs (Docs, Sheets, Slides) report a size of 0 because they
+ * have no direct byte size. They export small, so they always attach.
+ */
+export function splitDriveByLimit<T extends { size: number }>(
+  files: T[],
+  otherBytes: number
+): { attach: T[]; link: T[] } {
+  let used = otherBytes;
+  const attach: T[] = [];
+  const link: T[] = [];
+  for (const f of files) {
+    if (f.size > 0 && used + f.size > MAX_EMAIL_BYTES) {
+      link.push(f);
+    } else {
+      attach.push(f);
+      used += f.size;
+    }
+  }
+  return { attach, link };
+}
+
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
