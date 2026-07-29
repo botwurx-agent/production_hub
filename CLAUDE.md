@@ -637,6 +637,31 @@ implemented (out of strict order, driven by the operator's real needs).
   colored top border. Status stays as chips (StatusTag); module/section/nav color
   is identity, kept separate so the two never compete.
 
+### Email reply attachments: TWO separate bugs (both FIXED)
+They produced the same symptom (attach a file, the email sends without it) but
+hit different paths, and the first one masked the second.
+
+**1. Device files never left the browser.** components/projects/project-email.tsx
+addFiles() did:
+```
+setFiles((prev) => [...prev, ...Array.from(list)]);   // deferred
+if (fileInputRef.current) fileInputRef.current.value = "";  // immediate
+```
+A FileList is a LIVE view of the input's selection, and resetting `value` empties
+it. React batches state updates from event handlers, so the updater closure (and
+the `Array.from` inside it) runs AFTER the handler returns, by which point the
+list is empty. `files` stayed `[]`: no chip in the composer, no `files` entries
+in the FormData, and server-side `attachments.length === 0` so sendGmailReply
+took its plain-text branch. Fix: copy the FileList to an array FIRST, then clear
+the input. Every other file input in the app (assets-dropzone, boards-workspace,
+pipeline-workspace) already read-then-cleared; only this one had it backwards.
+Worth remembering as a general rule: never read a FileList inside a setState
+updater.
+
+**2. The multipart MIME was malformed** (would have dropped PROJECT ASSET and
+DRIVE attachments, which are collected server-side and so were never affected by
+bug 1). See below.
+
 ### Email reply attachments: MIME bug (FIXED)
 Attaching a file to a Gmail reply sent the email but silently dropped the
 attachment. The cause was in lib/gmail.ts sendGmailReply: the multipart branch

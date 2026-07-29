@@ -186,8 +186,17 @@ export function ThreadReader({
 
   function addFiles(list: FileList | null) {
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+    // Copy the FileList into a real array BEFORE clearing the input. A
+    // FileList is a live view of the input's selection, and resetting `value`
+    // empties it. Doing the copy inside a setState updater defers it until
+    // after this handler returns (React batches), by which point the list has
+    // already been emptied and nothing gets attached: no chip, and a reply
+    // that sends with no file. Every other file input in the app reads first
+    // and clears second; this one had it backwards.
+    const picked = Array.from(list);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (picked.length === 0) return;
+    setFiles((prev) => [...prev, ...picked]);
   }
   function removeFile(idx: number) {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
