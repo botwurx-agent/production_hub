@@ -1047,6 +1047,40 @@ parent (it predated project-level contacts and was rejecting them).
   Assets page (add a `review` prop, default off) but keep them on the Review
   page. Also decide how a file enters Review: (1) a "Send to review" button on
   the asset [recommended], or (2) an "Add to review" picker on the Review page.
+- **Sending email attachments larger than the current cap. OPEN, operator still
+  deciding (raised 2026-07-29). Nothing built.**
+  The constraint is NOT Gmail (its own send limit is ~25MB). It is the ~4.5MB
+  SERVERLESS REQUEST-BODY cap, and it only applies to one of the three paths:
+  - Device file picked in the composer: browser -> Server Action -> Gmail, so
+    the bytes cross the capped request body. Genuinely limited to ~4MB.
+  - Project asset: `collectAssetAttachments` downloads from Supabase Storage
+    SERVER-SIDE; the form carries only asset ids. Never touches the cap.
+  - Drive file: fetched server-side from Drive. Never touches the cap.
+  FIRST, A CORRECTION TO MAKE: the MAX_ATTACHMENT_BYTES check in deliverReply
+  applies to the TOTAL of all three, so it currently limits server-fetched
+  attachments for a reason that does not apply to them. Split it: keep ~4MB for
+  device files (checked client-side too, which it already is), and allow the
+  grand total up to Gmail's ~25MB. That alone raises the ceiling to 25MB for
+  anything already in the project or in Drive, with no new infrastructure. This
+  part is a straight bug fix with no design content; do it whenever picked up.
+  THEN pick an approach for genuinely large files:
+  1. LINK INSTEAD OF BYTES [recommended]. Nearly built: createReviewLink()
+     already mints a /r/<token> per asset and app/r/[token]/file is a
+     token-guarded proxy. For a project asset this is a one-call reuse that
+     inserts the URL into the reply body; for a device file, upload it into the
+     project first (that path already bypasses the cap: createAssetUploadUrl +
+     uploadToSignedUrl) and then link it. Better than an attachment for
+     creative work regardless of size, because the feedback lands on the asset
+     (pinned comments, approve / request changes) instead of dying in an email
+     thread, and v3 does not need re-sending. Small effort.
+  2. TRUE ATTACHMENTS TO 25MB. Route device files through storage as well, so
+     every path is server-fetched. Medium effort. Only worth it if the operator
+     actually wants big binaries in email rather than links.
+  3. ABOVE 25MB, INSERT A DRIVE LINK. What Gmail itself does over its limit.
+     The Drive connector and token already exist. The only real answer for a
+     multi-GB master.
+  STILL TO DECIDE: whether "share as a link" is an explicit button in the
+  composer or kicks in automatically once a file is over the limit.
 
 ### Pre-launch hardening pass (BUILT, branch claude/pre-launch-audit-competitive-a08026)
 Ahead of first beta users. Full write-up in docs/launch/pre-launch-audit-2026-07.md
