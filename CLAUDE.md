@@ -1375,11 +1375,13 @@ created from a model reading a document unattended.
   `{type:"file", file:{filename, file_data:"data:...;base64,..."}}` part for a
   PDF, `image_url` w/ a data URL for an image (Chat Completions does NOT take a
   remote file URL, that is Responses-API only, which is why bytes are inlined).
-  VERIFICATION STATUS: the Anthropic shape is checked against the installed
-  @anthropic-ai/sdk 0.110.0 types (DocumentBlockParam / Base64PDFSource). The
-  OpenAI shape is from their file-input docs and has NOT been exercised against
-  the live API (no key outside Vercel). If a real invoice fails on the OpenAI
-  path, suspect that shape first.
+  VERIFICATION STATUS: the OpenAI path is CONFIRMED WORKING in production
+  (2026-07-29, real invoice through gpt-5-mini on the deployed app), so the
+  `file`/`file_data` request shape above is correct as written; do not "fix" it
+  against half-remembered docs. The Anthropic shape is checked against the
+  installed @anthropic-ai/sdk 0.110.0 types (DocumentBlockParam /
+  Base64PDFSource) but has NOT been run live, since OpenAI is the deployment's
+  actual provider.
 - `parseInvoiceDraft` is the TRUST BOUNDARY between model output and a money
   field, and is unit-tested in the scratchpad. It strips code fences, finds the
   JSON inside surrounding prose, rejects a hallucinated budget_line_id by
