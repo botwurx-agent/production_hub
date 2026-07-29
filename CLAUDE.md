@@ -859,10 +859,23 @@ membership). We only OPEN the project-scoped tables to them.
   the public portal (service client) and the internal RLS path, and on the
   latter a collaborator has no membership, so the member-gated bucket policy
   refused to sign and every image came back blank.
-- NEXT: (5) end-to-end verification with a real second (collaborator) account
-  (invite -> accept -> confirm they see only their project + can edit storyboard/
-  moodboard + cannot reach studio-wide pages). Collaborator asset viewing +
-  storyboard/moodboard editing now work, so a real collaborator can be tested.
+- VERIFIED END TO END (2026-07-29, real second account): invite from the project
+  hero -> email received -> accept link -> lands on the project. The collaborator
+  sees a stripped left nav (Projects only) and the projects list shows ONLY the
+  invited project, so the account reads as empty apart from that one job. No
+  financial information appears anywhere on the project, and the contacts roster
+  shows NO day rates, which is the important one because that protection lives in
+  application code (the server-side strip) rather than in RLS. NOT yet exercised:
+  the `ai_generations.cost` strip, since the test project was not an AI project;
+  it is the same strip-and-guard pattern as the other two.
+- KNOWN, DELIBERATELY NOT CHANGED: the app-layout redirect only guards paths
+  OUTSIDE /projects, so a collaborator can reach /projects/<id>/budget,
+  /delivery, /invoices and the project's Communication by typing the URL. Those
+  tables are all is_studio_member, so the pages render EMPTY rather than leaking:
+  no data escapes, but it reads as "the budget is blank" rather than "this is
+  closed to you". Nothing links a collaborator there. If it is ever worth
+  tightening, the fix is a per-page ctx.isCollaborator check on those four routes
+  returning the branded not-found instead of an empty shell.
 
 ### Team invites / multi-user (migration 0048) — BUILT
 Multiple people can now share one studio (the paid multi-user lever). The tenancy
