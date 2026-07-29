@@ -12,6 +12,13 @@ import {
 } from "@/app/(app)/projects/[id]/production/ops-actions";
 import type { Deliverable, ProjectBilling } from "@/lib/database.types";
 
+/**
+ * The client-facing rate is no longer a column on `deliverables` (migration
+ * 0074 moved it to a studio-only table), so it is merged in by the page and
+ * arrives as null for anyone without a membership.
+ */
+export type DeliverableRow = Deliverable & { rate: number | null };
+
 const field =
   "w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong";
 const cell =
@@ -44,14 +51,17 @@ export function DeliveryPanel({
   canSeePricing = true,
 }: {
   projectId: string;
-  deliverables: Deliverable[];
+  deliverables: DeliverableRow[];
   billing: ProjectBilling | null;
-  /** False for a project collaborator: what the client is charged is studio
-   * information, so the pricing columns are not even fetched for them. */
+  /**
+   * UI only: hides the pricing inputs. The protection is RLS on
+   * `deliverable_pricing` (migration 0074), which returns nothing for a
+   * collaborator, so removing this prop leaks nothing.
+   */
   canSeePricing?: boolean;
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState<Deliverable[]>(deliverables);
+  const [rows, setRows] = useState<DeliverableRow[]>(deliverables);
   const sig = deliverables.map((d) => d.id).join(",");
   useEffect(() => {
     setRows(deliverables);
@@ -66,7 +76,7 @@ export function DeliveryPanel({
     notes: billing?.notes ?? "",
   });
 
-  function edit(id: string, patch: Partial<Deliverable>) {
+  function edit(id: string, patch: Partial<DeliverableRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
   function add() {

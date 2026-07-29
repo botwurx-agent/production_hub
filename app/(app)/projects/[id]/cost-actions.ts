@@ -12,6 +12,7 @@ import {
   MAX_COST_DOC_BYTES,
 } from "@/lib/costs";
 import { aiConfigured, extractInvoice, type InvoiceDraft } from "@/lib/ai";
+import { loadContactRates } from "@/lib/rates";
 import { getAttachmentBytes, getAccessToken } from "@/lib/gmail";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
@@ -404,20 +405,23 @@ export async function draftCostFromAttachment(
       .order("position", { ascending: true }),
     supabase
       .from("contacts")
-      .select("id, name, company, role, rate")
+      .select("id, name, company, role")
       .eq("project_id", projectId)
       .order("name", { ascending: true }),
   ]);
 
+  // Rates live in their own studio-only table (migration 0074).
+  const contactRates = await loadContactRates(
+    supabase,
+    (roster ?? []).map((c) => c.id)
+  );
+
   const context = {
     lines: lines ?? [],
-    roster: (roster ?? []) as {
-      id: string;
-      name: string;
-      company: string | null;
-      role: string | null;
-      rate: number | null;
-    }[],
+    roster: (roster ?? []).map((c) => ({
+      ...c,
+      rate: contactRates.get(c.id) ?? null,
+    })),
   };
 
   // Without a provider the form still opens, just empty. The producer types the

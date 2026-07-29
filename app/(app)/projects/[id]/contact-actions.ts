@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { setContactRate } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite } from "@/lib/log";
 
@@ -53,19 +54,32 @@ export async function addProjectContact(
     .maybeSingle();
   if (!project) return { error: "Project not found." };
 
-  const { error } = await supabase.from("contacts").insert({
-    studio_id: ctx.studio.id,
-    project_id: projectId,
-    name,
-    type: cleanType(input.type),
-    role: clean(input.role),
-    company: clean(input.company),
-    email: clean(input.email),
-    phone: clean(input.phone),
-    rate: cleanRate(input.rate),
-    notes: clean(input.notes),
-  });
-  if (error) return { error: error.message };
+  const { data: created, error } = await supabase
+    .from("contacts")
+    .insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      name,
+      type: cleanType(input.type),
+      role: clean(input.role),
+      company: clean(input.company),
+      email: clean(input.email),
+      phone: clean(input.phone),
+      notes: clean(input.notes),
+    })
+    .select("id")
+    .single();
+  if (error || !created) return { error: error?.message ?? "Could not add that contact." };
+
+  // The rate is a separate is_studio_member row (migration 0074). A
+  // collaborator is refused by RLS rather than by a check here.
+  const rateErr = await setContactRate(
+    supabase,
+    ctx.studio.id,
+    created.id,
+    cleanRate(input.rate)
+  );
+  if (rateErr) return rateErr;
 
   revalidatePath(`/projects/${projectId}/contacts`);
   return null;
@@ -81,10 +95,6 @@ export async function updateProjectContact(
   if (!name) return { error: "Add a name." };
 
   const supabase = createClient();
-  // A collaborator is never sent the rate, so their form would post null and
-  // silently wipe the real figure. Omit the column entirely for them rather
-  // than trusting a value they were never shown.
-  const rate = ctx.isCollaborator ? {} : { rate: cleanRate(input.rate) };
   const { error } = await supabase
     .from("contacts")
     .update({
@@ -94,11 +104,23 @@ export async function updateProjectContact(
       company: clean(input.company),
       email: clean(input.email),
       phone: clean(input.phone),
-      ...rate,
       notes: clean(input.notes),
     })
     .eq("id", contactId);
   if (error) return { error: error.message };
+
+  // Skipped for a collaborator, who is never shown the real figure, so their
+  // form would otherwise post a blank and clear it. RLS would refuse the write
+  // anyway; this just avoids surfacing an error for something they cannot see.
+  if (!ctx.isCollaborator) {
+    const rateErr = await setContactRate(
+      supabase,
+      ctx.studio.id,
+      contactId,
+      cleanRate(input.rate)
+    );
+    if (rateErr) return rateErr;
+  }
 
   revalidatePath(`/projects/${projectId}/contacts`);
   return null;

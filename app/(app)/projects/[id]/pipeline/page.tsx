@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
+import { loadGenerationCosts } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
@@ -60,13 +61,15 @@ export default async function PipelinePage({
         .order("created_at", { ascending: true }),
     ]);
     prompts = (p ?? []) as AiPrompt[];
-    // What a generation cost is studio spend, same category as a crew rate.
-    // ai_generations is one of the tables migration 0056 opened to project
-    // collaborators, and RLS is row-level, so the column is dropped here
-    // before it reaches the browser.
-    generations = ((g ?? []) as AiGeneration[]).map((gen) =>
-      ctx.isCollaborator ? { ...gen, cost: null } : gen
+    // Spend lives in its own studio-only table (migration 0074) and is merged
+    // back on here. A collaborator's query returns nothing, so their rows
+    // simply have no cost, with no check needed on this side.
+    const rows = (g ?? []) as AiGeneration[];
+    const costs = await loadGenerationCosts(
+      supabase,
+      rows.map((r) => r.id)
     );
+    generations = rows.map((gen) => ({ ...gen, cost: costs.get(gen.id) ?? null }));
   }
 
   // Which shots are already in the review cycle (so the header can show status).

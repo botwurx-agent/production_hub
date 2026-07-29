@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { setDeliverableRate } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite } from "@/lib/log";
 
@@ -121,18 +122,17 @@ export async function updateDeliverable(
 ): Promise<void> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  // A collaborator is never shown rate or qty, so a patch from them carries
-  // placeholder values that would overwrite the real pricing. Drop those keys
-  // rather than trusting figures the caller was never given.
-  const safe = { ...patch };
-  if (ctx.isCollaborator) {
-    delete safe.rate;
-    delete safe.qty;
-  }
+  // The client-facing rate lives in its own studio-only table (migration
+  // 0074), so it is not part of this patch. qty is a plain count and stays.
+  const { rate, ...safe } = patch;
+  if (ctx.isCollaborator) delete safe.qty;
   await logWrite(
     "updateDeliverable/deliverables",
     supabase.from("deliverables").update(safe).eq("id", id)
   );
+  if (rate !== undefined && !ctx.isCollaborator) {
+    await setDeliverableRate(supabase, ctx.studio.id, id, rate);
+  }
   rp(projectId);
 }
 

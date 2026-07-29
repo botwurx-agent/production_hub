@@ -397,7 +397,14 @@ function AddGenModal({
 // ---- Shared bits ------------------------------------------------------------
 
 type SpecRow = [string, string | number | null | undefined];
-function genSpecRows(gen: AiGeneration): SpecRow[] {
+/**
+ * Spend is no longer a column on ai_generations (migration 0074 moved it to a
+ * studio-only table), so it is merged onto the row by the page and is simply
+ * absent for anyone without a membership.
+ */
+export type GenerationWithCost = AiGeneration & { cost?: number | null };
+
+function genSpecRows(gen: GenerationWithCost): SpecRow[] {
   return [
     ["Platform", gen.platform],
     ["Model", [gen.model, gen.model_version].filter(Boolean).join(" ") || null],
@@ -1157,7 +1164,10 @@ export function PipelineWorkspace({
   batchReviews?: Record<string, BatchReviewSummary[]>;
   currentUserId: string;
   reviewingShotIds?: string[];
-  /** False for a project collaborator: generation spend is studio information. */
+  /**
+   * UI only: hides the cost field. The protection is RLS on
+   * `generation_costs` (migration 0074), so removing this prop leaks nothing.
+   */
   canSeeCost?: boolean;
 }) {
   const router = useRouter();

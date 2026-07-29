@@ -388,7 +388,7 @@ export function TriageView({
                 ["Resolution", focused.resolution],
                 ["FPS", focused.fps],
                 ["Duration", focused.duration_sec ? `${focused.duration_sec}s` : null],
-                ["Cost", focused.cost],
+                ["Cost", (focused as { cost?: number | null }).cost],
                 ["By", focused.generated_by_name],
               ] as [string, string | number | null][])
                 .filter(([, v]) => v != null && v !== "")

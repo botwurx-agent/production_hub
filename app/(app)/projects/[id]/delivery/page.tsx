@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { loadDeliverablePricing } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
@@ -78,13 +79,17 @@ export default async function DeliveryPage({
     ...clientContacts,
   ];
 
-  // rate and qty are what the CLIENT is charged. deliverables is one of the
-  // tables opened to project collaborators (can_access_project), so the
-  // pricing is dropped before it reaches the browser. RLS is row-level and
-  // cannot mask a single column of a row the viewer may read.
-  const deliverableList = ((deliverables ?? []) as Deliverable[]).map((d) =>
-    ctx.isCollaborator ? { ...d, rate: null, qty: 1 } : d
+  // What the client is charged per deliverable lives in its own
+  // is_studio_member table (migration 0074), so a collaborator's query returns
+  // nothing and every rate comes back null with no check here.
+  const pricing = await loadDeliverablePricing(
+    supabase,
+    (deliverables ?? []).map((d) => d.id)
   );
+  const deliverableList = ((deliverables ?? []) as Deliverable[]).map((d) => ({
+    ...d,
+    rate: pricing.get(d.id) ?? null,
+  }));
 
   // Billing/invoicing is on hold pending the FreshBooks-vs-Melio decision (see
   // CLAUDE.md). Both entry points are hidden for beta; the DB tables and panels

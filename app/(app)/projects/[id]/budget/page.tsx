@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { BudgetTable } from "@/components/production/budget-table";
 import type { RosterOption } from "@/components/production/cost-ledger";
+import { loadContactRates } from "@/lib/rates";
 import { computeTotals, type DocSnapshotLine } from "@/lib/billing-doc";
 import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
@@ -46,7 +47,7 @@ export default async function BudgetPage({
       // from someone already on the project.
       supabase
         .from("contacts")
-        .select("id, name, company, role, rate")
+        .select("id, name, company, role")
         .eq("project_id", params.id)
         .order("name", { ascending: true }),
       // The billed side of margin. Only invoices count: an estimate or a
@@ -74,6 +75,17 @@ export default async function BudgetPage({
         .select("*")
         .in("cost_id", costIds)
     : { data: [] as CostPayment[] };
+
+  // Rates come from their own studio-only table, so a collaborator gets none
+  // without any check here (migration 0074).
+  const contactRates = await loadContactRates(
+    supabase,
+    (roster ?? []).map((c) => c.id)
+  );
+  const rosterWithRates = (roster ?? []).map((c) => ({
+    ...c,
+    rate: contactRates.get(c.id) ?? null,
+  }));
 
   // Today is resolved on the SERVER and passed down, matching the dashboard
   // calendar, so an overdue payment cannot render differently after hydration.
@@ -124,7 +136,7 @@ export default async function BudgetPage({
           projectId={project.id}
           lines={(budgetLines ?? []) as BudgetLine[]}
           costs={(costs ?? []) as ProjectCost[]}
-          roster={(roster ?? []) as RosterOption[]}
+          roster={rosterWithRates as RosterOption[]}
           billed={billed}
           billedFromInvoices={invoiceIds.length > 0}
           payments={(payments ?? []) as CostPayment[]}

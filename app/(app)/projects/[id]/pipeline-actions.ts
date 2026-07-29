@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { fetchMediaFromUrl, aspectRatio, resolutionLabel } from "@/lib/media-import";
+import { setGenerationCost } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
 import type { Json } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
@@ -217,7 +218,7 @@ export async function addGeneration(
       fps: input.fps ?? null,
       duration_sec: input.duration_sec ?? null,
       guidance: input.guidance ?? null,
-      cost: input.cost ?? null,
+      // cost is written separately, see below.
       params: input.params ?? null,
       parent_start_id: input.parent_start_id ?? null,
       parent_end_id: input.parent_end_id ?? null,
@@ -227,6 +228,10 @@ export async function addGeneration(
     .select("id")
     .single();
   if (error || !data) return { error: error?.message ?? "Could not add generation." };
+  // Spend goes in its own studio-only table (migration 0074).
+  if (input.cost != null) {
+    await setGenerationCost(supabase, ctx.studio.id, data.id, input.cost);
+  }
   rp(projectId);
   return { id: data.id };
 }
@@ -277,15 +282,24 @@ export async function addGenerationsBulk(
     fps: input.fps ?? null,
     duration_sec: input.duration_sec ?? null,
     guidance: input.guidance ?? null,
-    cost: input.cost ?? null,
     params: input.params ?? null,
     parent_start_id: input.stage === "video" ? input.parent_start_id ?? null : null,
     parent_end_id: input.stage === "video" ? input.parent_end_id ?? null : null,
     generated_by: ctx.userId,
     generated_by_name: input.generated_by_name ?? null,
   }));
-  const { error } = await supabase.from("ai_generations").insert(rows);
+  const { data: created, error } = await supabase
+    .from("ai_generations")
+    .insert(rows)
+    .select("id");
   if (error) return { error: error.message };
+  // One cost row per generation that carried one. Bulk imports usually share a
+  // single per-clip figure, so this is normally a handful of rows or none.
+  if (input.cost != null && created) {
+    for (const row of created) {
+      await setGenerationCost(supabase, ctx.studio.id, row.id, input.cost);
+    }
+  }
   rp(projectId);
   return null;
 }
@@ -380,15 +394,16 @@ export async function updateGeneration(
 ): Promise<void> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  // A collaborator is never shown what a generation cost, so a patch from them
-  // would carry a blank that overwrites the real figure. Drop the key rather
-  // than trusting a value they were not given.
-  const safe = { ...patch };
-  if (ctx.isCollaborator) delete safe.cost;
+  // cost lives in its own studio-only table (migration 0074), so it is not
+  // part of this patch at all. A collaborator is refused there by RLS.
+  const { cost, ...safe } = patch;
   await logWrite(
     "updateGeneration/ai_generations",
     supabase.from("ai_generations").update(safe).eq("id", id)
   );
+  if (cost !== undefined && !ctx.isCollaborator) {
+    await setGenerationCost(supabase, ctx.studio.id, id, cost);
+  }
   rp(projectId);
 }
 
@@ -629,7 +644,7 @@ export async function addGenerationFromLink(
       fps: input.fps ?? null,
       duration_sec: input.duration_sec ?? media.durationSec ?? null,
       guidance: input.guidance ?? null,
-      cost: input.cost ?? null,
+      // cost is written separately, see below.
       params: input.params ?? null,
       parent_start_id: input.parent_start_id ?? null,
       parent_end_id: input.parent_end_id ?? null,

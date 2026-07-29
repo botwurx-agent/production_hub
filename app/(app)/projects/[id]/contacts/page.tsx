@@ -2,23 +2,26 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
+import { loadContactRates } from "@/lib/rates";
 import {
   ProjectContacts,
   type ContactRow,
 } from "@/components/projects/project-contacts";
 
-const SELECT = "id, name, type, role, company, email, phone, rate, notes";
+const SELECT = "id, name, type, role, company, email, phone, notes";
 
 /**
- * A project collaborator (a DP, an AD, a PA) legitimately needs the roster,
- * but must not see what the rest of the crew is being paid. RLS is row-level
- * and cannot mask one column of a row the viewer is allowed to read, so the
- * rate is dropped here, before anything is handed to the browser. The durable
- * fix is to move rate into its own is_studio_member table, where RLS can
- * enforce it rather than this code.
+ * Day rates live in `contact_rates`, an is_studio_member table (migration
+ * 0074), so a project collaborator's query simply returns no rows and every
+ * rate comes back null without any check here. That is deliberate: the old
+ * approach stripped the column in this component, which worked but had to be
+ * remembered at every new read site.
  */
-function stripRates(rows: ContactRow[], hide: boolean): ContactRow[] {
-  return hide ? rows.map((c) => ({ ...c, rate: null })) : rows;
+function withRates(
+  rows: ContactRow[],
+  rates: Map<string, number>
+): ContactRow[] {
+  return rows.map((c) => ({ ...c, rate: rates.get(c.id) ?? null }));
 }
 
 export default async function ProjectContactsPage({
@@ -54,6 +57,11 @@ export default async function ProjectContactsPage({
       : Promise.resolve({ data: [] as ContactRow[] }),
   ]);
 
+  const rates = await loadContactRates(supabase, [
+    ...(projectRows ?? []).map((c) => c.id),
+    ...(clientRows ?? []).map((c) => c.id),
+  ]);
+
   return (
     <div>
       <ProjectSubhead
@@ -72,8 +80,8 @@ export default async function ProjectContactsPage({
       />
       <ProjectContacts
         projectId={project.id}
-        projectContacts={stripRates((projectRows ?? []) as ContactRow[], ctx.isCollaborator)}
-        clientContacts={stripRates((clientRows ?? []) as ContactRow[], ctx.isCollaborator)}
+        projectContacts={withRates((projectRows ?? []) as ContactRow[], rates)}
+        clientContacts={withRates((clientRows ?? []) as ContactRow[], rates)}
         clientId={project.client_id}
         clientName={clientName}
         canSeeRates={!ctx.isCollaborator}

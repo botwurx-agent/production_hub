@@ -698,7 +698,6 @@ export type Database = {
           status: string;
           link: string | null;
           notes: string | null;
-          rate: number | null;
           qty: number;
           created_by: string | null;
           created_at: string;
@@ -714,7 +713,6 @@ export type Database = {
           status?: string;
           link?: string | null;
           notes?: string | null;
-          rate?: number | null;
           qty?: number;
           created_by?: string | null;
           created_at?: string;
@@ -730,7 +728,6 @@ export type Database = {
           status?: string;
           link?: string | null;
           notes?: string | null;
-          rate?: number | null;
           qty?: number;
           created_by?: string | null;
           created_at?: string;
@@ -1315,7 +1312,6 @@ export type Database = {
           fps: number | null;
           duration_sec: number | null;
           guidance: number | null;
-          cost: number | null;
           params: Json | null;
           parent_start_id: string | null;
           parent_end_id: string | null;
@@ -1349,7 +1345,6 @@ export type Database = {
           fps?: number | null;
           duration_sec?: number | null;
           guidance?: number | null;
-          cost?: number | null;
           params?: Json | null;
           parent_start_id?: string | null;
           parent_end_id?: string | null;
@@ -1382,7 +1377,6 @@ export type Database = {
           fps?: number | null;
           duration_sec?: number | null;
           guidance?: number | null;
-          cost?: number | null;
           params?: Json | null;
           parent_start_id?: string | null;
           parent_end_id?: string | null;
@@ -2477,13 +2471,93 @@ export type Database = {
         };
         Relationships: [];
       };
+      contact_rates: {
+        Row: {
+          id: string;
+          studio_id: string;
+          contact_id: string;
+          rate: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          contact_id: string;
+          rate?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          contact_id?: string;
+          rate?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      deliverable_pricing: {
+        Row: {
+          id: string;
+          studio_id: string;
+          deliverable_id: string;
+          rate: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          deliverable_id: string;
+          rate?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          deliverable_id?: string;
+          rate?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      generation_costs: {
+        Row: {
+          id: string;
+          studio_id: string;
+          generation_id: string;
+          cost: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          generation_id: string;
+          cost?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          generation_id?: string;
+          cost?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       contacts: {
         Row: {
           client_id: string | null;
           project_id: string | null;
           company: string | null;
           type: string | null;
-          rate: number | null;
           notes: string | null;
           created_at: string;
           email: string | null;
@@ -2500,7 +2574,6 @@ export type Database = {
           project_id?: string | null;
           company?: string | null;
           type?: string | null;
-          rate?: number | null;
           notes?: string | null;
           created_at?: string;
           email?: string | null;
@@ -2517,7 +2590,6 @@ export type Database = {
           project_id?: string | null;
           company?: string | null;
           type?: string | null;
-          rate?: number | null;
           notes?: string | null;
           created_at?: string;
           email?: string | null;

@@ -65,7 +65,11 @@ export function ProjectContacts({
   clientContacts: ContactRow[];
   clientId: string | null;
   clientName: string | null;
-  /** False for a project collaborator: rates are studio-staff information. */
+  /**
+   * UI only: hides the rate field so a collaborator is not shown a money box
+   * they cannot fill. The actual protection is RLS on `contact_rates`
+   * (migration 0074), so removing this prop leaks nothing.
+   */
   canSeeRates?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("all");
