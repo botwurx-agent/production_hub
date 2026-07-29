@@ -1052,6 +1052,17 @@ Two invoicing paths were built and are deployed on `main`, but the whole area is
 PAUSED pending a decision on the billing platform. Both are non-intrusive (see
 below); leave them parked. The operator wants to choose the integration before
 optimizing the flow + IA of this whole section.
+- REVISITED 2026-07-29 and CLOSED AGAIN, keep as is. FreshBooks now has Bill Pay
+  (direct ACH to vendors, no payroll detour), which removes the OPERATOR's
+  friction. It does not change ours. API facts, checked against their docs so
+  nobody has to look a third time: Bills are createable/listable
+  (POST /accounting/account/<id>/bills/bills, GA), Vendors and Bill Payments are
+  BETA, and Bill Payments can only RECORD a payment, never INITIATE one. Their
+  hosted pages are still not embeddable. So an integration could push a cost out
+  as a bill and read paid/unpaid back, but the studio would still leave the app
+  to pay, which is the same hand-off that paused this originally. Operator chose
+  to keep things as they are. Only revisit if a real workflow demands it, not
+  because FreshBooks shipped a feature.
 - The open decision: **FreshBooks vs Melio (melio.com)**. FreshBooks =
   orchestrate-only (its API creates invoices but the document editor, hosted
   invoice page, and payments all live on FreshBooks' surface, so we always hand
