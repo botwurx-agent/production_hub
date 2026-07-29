@@ -1578,6 +1578,22 @@ already knew what was BILLED. Slice 4 just puts them on one page.
   project_costs is is_studio_member and the dashboard already redirects
   collaborators.
 
+### Gear & crew day rates (migration 0075)
+A `$/day` column on the Gear & crew page, plus a per-line `qty x rate` figure
+and a "$X/day" total next to the confirmed count.
+- The rate is NOT a column on `gear_items`: that table is collaborator-readable
+  (can_access_project), so a column there would reopen precisely the leak 0074
+  closed. It lives in `gear_rates` (studio/gear_item unique/rate,
+  is_studio_member RLS), loaded via loadGearRates and written via setGearRate in
+  lib/rates.ts, exactly like contact_rates. THIS IS THE PATTERN for any future
+  money field on a project-scoped table: side table, never a column.
+- Deliberately PER DAY, not per job. This page has no day count, and
+  multiplying by a guessed one would misstate the number. Turning it into a job
+  total is the budget page's business, where the day count lives.
+- updateGearItem strips `rate` out of the gear_items patch and routes it to the
+  side table; `canSeeRates` hides the column but is cosmetic, since RLS is the
+  boundary.
+
 ### Collaborators and money columns: now enforced by RLS (migration 0074)
 The long version of how this landed, because the first two attempts were both
 wrong in instructive ways.

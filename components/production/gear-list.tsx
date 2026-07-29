@@ -12,18 +12,38 @@ import {
 } from "@/app/(app)/projects/[id]/production/ops-actions";
 import type { GearItem } from "@/lib/database.types";
 
+/**
+ * The day rate is not a column on `gear_items` (that table is readable by
+ * project collaborators). It lives in the studio-only `gear_rates` table
+ * (migration 0075) and is merged in by the page, so it arrives null for
+ * anyone without a membership.
+ */
+export type GearRow = GearItem & { rate: number | null };
+
+const money = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
 const cell =
   "w-full rounded-[8px] border border-transparent bg-transparent px-2 py-1 text-sm text-text outline-none transition hover:border-border focus:border-border-strong focus:bg-surface";
 
 export function GearList({
   projectId,
   items,
+  canSeeRates = true,
 }: {
   projectId: string;
-  items: GearItem[];
+  items: GearRow[];
+  /**
+   * UI only: hides the rate column. The protection is RLS on `gear_rates`,
+   * so removing this prop leaks nothing.
+   */
+  canSeeRates?: boolean;
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState<GearItem[]>(items);
+  const [rows, setRows] = useState<GearRow[]>(items);
   const sig = items.map((i) => i.id).join(",");
   useEffect(() => {
     setRows(items);
@@ -31,10 +51,10 @@ export function GearList({
   }, [sig]);
   const [busy, start] = useTransition();
 
-  function edit(id: string, patch: Partial<GearItem>) {
+  function edit(id: string, patch: Partial<GearRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
-  function toggle(r: GearItem) {
+  function toggle(r: GearRow) {
     edit(r.id, { confirmed: !r.confirmed });
     void updateGearItem(projectId, r.id, { confirmed: !r.confirmed });
   }
@@ -53,7 +73,7 @@ export function GearList({
   }
 
   const groups = useMemo(() => {
-    const m = new Map<string, GearItem[]>();
+    const m = new Map<string, GearRow[]>();
     for (const r of rows) {
       const key = r.category || "Other";
       const list = m.get(key) ?? [];
@@ -64,6 +84,12 @@ export function GearList({
   }, [rows]);
 
   const confirmed = rows.filter((r) => r.confirmed).length;
+  // What this list costs for ONE shoot day. Multiplying by a day count is the
+  // budget page's job; this page does not know how many days the job runs.
+  const dayTotal = rows.reduce(
+    (n, r) => n + (r.rate ? (r.qty || 1) * r.rate : 0),
+    0
+  );
 
   if (rows.length === 0) {
     return (
@@ -97,6 +123,11 @@ export function GearList({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-text">
             {confirmed}/{rows.length} confirmed
+            {canSeeRates && dayTotal > 0 && (
+              <span className="ml-2 font-semibold text-text">
+                · {money.format(dayTotal)}/day
+              </span>
+            )}
           </p>
           <div className="mt-1.5 h-1.5 max-w-[16rem] overflow-hidden rounded-pill bg-surface-2">
             <div
@@ -164,7 +195,11 @@ export function GearList({
               {gItems.map((r) => (
                 <div
                   key={r.id}
-                  className={`grid grid-cols-[auto_3rem_1fr_1fr_auto] items-center gap-2 border-b border-border px-2 py-1 last:border-0 ${
+                  className={`grid ${
+                    canSeeRates
+                      ? "grid-cols-[auto_3rem_1fr_1fr_6rem_5rem_auto]"
+                      : "grid-cols-[auto_3rem_1fr_1fr_auto]"
+                  } items-center gap-2 border-b border-border px-2 py-1 last:border-0 ${
                     r.confirmed ? "bg-green-bg/30" : ""
                   }`}
                 >
@@ -204,6 +239,29 @@ export function GearList({
                     placeholder="Notes"
                     className={cell}
                   />
+                  {canSeeRates && (
+                    <>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={r.rate ?? ""}
+                        onChange={(e) =>
+                          edit(r.id, {
+                            rate: e.target.value === "" ? null : Number(e.target.value),
+                          })
+                        }
+                        onBlur={() => updateGearItem(projectId, r.id, { rate: r.rate })}
+                        placeholder="$/day"
+                        className={`${cell} text-right tabular-nums`}
+                      />
+                      {/* Per day, not per job: this page has no day count, and
+                          inventing one would misstate the number. */}
+                      <span className="px-1 text-right text-xs font-semibold tabular-nums text-text-muted">
+                        {r.rate ? money.format((r.qty || 1) * r.rate) : ""}
+                      </span>
+                    </>
+                  )}
                   <button
                     onClick={() => del(r.id)}
                     className="grid h-7 w-7 place-items-center rounded-[7px] text-text-faint transition hover:bg-red-bg hover:text-red"

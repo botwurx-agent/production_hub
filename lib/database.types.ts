@@ -644,6 +644,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      gear_rates: {
+        Row: {
+          id: string;
+          studio_id: string;
+          gear_item_id: string;
+          rate: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          gear_item_id: string;
+          rate?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          gear_item_id?: string;
+          rate?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       gear_items: {
         Row: {
           id: string;

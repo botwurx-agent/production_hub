@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { setDeliverableRate } from "@/lib/rates";
+import { setDeliverableRate, setGearRate } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite } from "@/lib/log";
 
@@ -44,14 +44,27 @@ export async function addGearItem(
 export async function updateGearItem(
   projectId: string,
   id: string,
-  patch: { category?: string; name?: string; qty?: number; confirmed?: boolean; notes?: string }
+  patch: {
+    category?: string;
+    name?: string;
+    qty?: number;
+    confirmed?: boolean;
+    notes?: string;
+    rate?: number | null;
+  }
 ): Promise<void> {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
+  // The day rate is a studio-only row (migration 0075), not a column on
+  // gear_items, which collaborators can read. A collaborator is refused by RLS.
+  const { rate, ...safe } = patch;
   await logWrite(
     "updateGearItem/gear_items",
-    supabase.from("gear_items").update(patch).eq("id", id)
+    supabase.from("gear_items").update(safe).eq("id", id)
   );
+  if (rate !== undefined && !ctx.isCollaborator) {
+    await setGearRate(supabase, ctx.studio.id, id, rate);
+  }
   rp(projectId);
 }
 

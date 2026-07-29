@@ -151,3 +151,44 @@ export async function setGenerationCost(
     { onConflict: "generation_id" }
   );
 }
+
+/** Day rate for a gear or crew line. Same studio-only shape as the others. */
+export async function loadGearRates(
+  client: SupabaseClient<Database>,
+  gearItemIds: string[]
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (gearItemIds.length === 0) return out;
+
+  const { data } = await client
+    .from("gear_rates")
+    .select("gear_item_id, rate")
+    .in("gear_item_id", gearItemIds);
+
+  for (const r of data ?? []) {
+    const n = Number(r.rate);
+    if (Number.isFinite(n)) out.set(r.gear_item_id, n);
+  }
+  return out;
+}
+
+export async function setGearRate(
+  client: SupabaseClient<Database>,
+  studioId: string,
+  gearItemId: string,
+  rate: number | null
+): Promise<void> {
+  if (rate === null || !Number.isFinite(rate) || rate <= 0) {
+    await client.from("gear_rates").delete().eq("gear_item_id", gearItemId);
+    return;
+  }
+  await client.from("gear_rates").upsert(
+    {
+      studio_id: studioId,
+      gear_item_id: gearItemId,
+      rate: Math.round(rate * 100) / 100,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "gear_item_id" }
+  );
+}

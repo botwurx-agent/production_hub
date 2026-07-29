@@ -4,14 +4,14 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { GearList } from "@/components/production/gear-list";
-import type { GearItem } from "@/lib/database.types";
+import { loadGearRates } from "@/lib/rates";
 
 export default async function GearPage({
   params,
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const { data: project } = await supabase
@@ -26,6 +26,17 @@ export default async function GearPage({
     .select("*")
     .eq("project_id", params.id)
     .order("position", { ascending: true });
+
+  // Rates live in their own studio-only table, so a collaborator's query
+  // returns nothing and every rate comes back null with no check here.
+  const rates = await loadGearRates(
+    supabase,
+    (gearItems ?? []).map((g) => g.id)
+  );
+  const items = (gearItems ?? []).map((g) => ({
+    ...g,
+    rate: rates.get(g.id) ?? null,
+  }));
 
   return (
     <div>
@@ -42,7 +53,11 @@ export default async function GearPage({
         }
       />
       <Card className="p-5">
-        <GearList projectId={project.id} items={(gearItems ?? []) as GearItem[]} />
+        <GearList
+          projectId={project.id}
+          items={items}
+          canSeeRates={!ctx.isCollaborator}
+        />
       </Card>
     </div>
   );
