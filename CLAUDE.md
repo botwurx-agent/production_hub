@@ -1519,9 +1519,32 @@ created from a model reading a document unattended.
 - CAP FIX from slice 1: MAX_COST_DOC_BYTES was 8MB, but the file crosses a
   Server Action, so the ~4.5MB serverless request body applies and an 8MB file
   would die at the platform edge with no error we could show. Now 4MB, matching
-  MAX_UPLOAD_BYTES on the email path. NOTE: `addDocAttachment`
-  (native-invoice-actions.ts) still checks 25MB on the same kind of path and has
-  the same latent problem; not touched here.
+  MAX_UPLOAD_BYTES on the email path. (The rest of this class is now fixed too,
+  see "Server Action upload caps" below.)
+
+### Server Action upload caps: the whole class, swept (no migration) — BUILT
+Any file that travels browser -> Server Action -> storage crosses the ~4.5MB
+serverless request body. Over it, the request is killed at the platform EDGE
+before our code runs, so there is nothing to catch and nothing to report: the
+click just appears to do nothing. A cap above that ceiling is therefore not a
+cap at all, it is dead code. `MAX_UPLOAD_BYTES` (4MB, lib/attachment-limits.ts)
+is the one true limit for this path, and a grep for `file.size` across the
+server actions found FOUR sites that were wrong or missing:
+- `addDocAttachment` (native-invoice-actions.ts): checked 25MB, so it could
+  never fire. Now MAX_UPLOAD_BYTES, and mirrored CLIENT-side in
+  invoice-workspace.tsx's onPickFile so an oversized proposal attachment is
+  refused before the upload rather than vanishing.
+- `saveStoryboardFrameImage` (storyboard-actions.ts) and the shot-board card
+  image (production/board-actions.ts): NO cap at all.
+- The moodboard device-file import (boards/actions.ts): no cap, and it takes
+  SEVERAL files, so the check is on the TOTAL (they share one request body, so
+  five 1MB images blow the same ceiling one 5MB image would).
+`branding-actions.ts` was already 3MB, under the ceiling, so it was left alone.
+NOT changed: the asset-version upload, which deliberately goes DIRECT to storage
+via a server-minted signed URL (createAssetUploadUrl + uploadToSignedUrl) and so
+is not bound by this at all. That is also the durable answer if a genuinely
+large storyboard or moodboard image is ever needed: move those to the signed-URL
+path rather than raising a number that physics will ignore.
 
 ### Budget slice 4: margin + studio-wide unpaid rollup (no migration) — BUILT
 Closes the loop: the ledger already knew what a job COST, and billing_documents

@@ -22,6 +22,7 @@ import {
 } from "@/app/(app)/projects/[id]/native-invoice-actions";
 import { SendDocEmailModal } from "@/components/production/send-doc-email-modal";
 import { toast } from "@/components/ui/toast";
+import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import { shortDate } from "@/lib/format";
 import {
   DOC_TEMPLATES,
@@ -179,9 +180,23 @@ export function InvoiceWorkspace({
 
   // Attachments (proposals).
   function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    // Read the selection before clearing the input: a FileList is a live view
+    // of it, so clearing first empties the list.
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !form) return;
+    // Mirrored client-side so an oversized file is caught before the upload.
+    // Past the request-body cap the server action never runs at all, so there
+    // would be no error to show.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast(
+        `That file is ${formatBytes(file.size)}, over the ${formatBytes(
+          MAX_UPLOAD_BYTES
+        )} limit. Attach a smaller file, or link to it in the notes.`,
+        "error"
+      );
+      return;
+    }
     const fd = new FormData();
     fd.set("file", file);
     start(async () => {

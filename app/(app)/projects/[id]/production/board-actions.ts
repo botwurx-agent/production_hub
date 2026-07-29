@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
+import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite } from "@/lib/log";
 
@@ -552,6 +553,17 @@ export async function uploadCardImage(formData: FormData): Promise<BoardActionSt
   const file = formData.get("file");
   if (!projectId || !cardId || !(file instanceof File) || file.size === 0) {
     return { error: "Missing image." };
+  }
+  // These bytes cross a Server Action, so the ~4.5MB serverless request body is
+  // the ceiling. Past it the request dies at the platform edge before this runs
+  // and the click just appears to do nothing, so the cap has to be under it for
+  // the failure to be explainable.
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      error: `That image is ${formatBytes(file.size)}, over the ${formatBytes(
+        MAX_UPLOAD_BYTES
+      )} upload limit. Export it smaller and try again.`,
+    };
   }
   const supabase = createClient();
   const bytes = Buffer.from(await file.arrayBuffer());

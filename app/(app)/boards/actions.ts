@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
+import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import { requireStudioContext } from "@/lib/studio";
 import { getAccessToken as getGoogleToken } from "@/lib/gmail";
 import { getDriveFileBytes } from "@/lib/googledrive";
@@ -398,6 +399,16 @@ export async function addUploadItems(formData: FormData): Promise<BoardState> {
     .getAll("files")
     .filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { error: "No files chosen." };
+  // Checked on the TOTAL, not per file: they travel in one request body, so
+  // five 1MB images blow the same ceiling one 5MB image would.
+  const totalBytes = files.reduce((n, f) => n + f.size, 0);
+  if (totalBytes > MAX_UPLOAD_BYTES) {
+    return {
+      error: `Those files come to ${formatBytes(totalBytes)}, over the ${formatBytes(
+        MAX_UPLOAD_BYTES
+      )} upload limit. Add them in smaller batches.`,
+    };
+  }
 
   const supabase = createClient();
   let z = await nextZ(supabase, boardId);

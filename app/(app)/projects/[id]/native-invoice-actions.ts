@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { generateReviewToken } from "@/lib/review-links";
+import {
+  MAX_UPLOAD_BYTES,
+  formatBytes,
+} from "@/lib/attachment-limits";
 import { reportError, logWrite } from "@/lib/log";
 import type {
   BillingProfile,
@@ -293,8 +297,17 @@ export async function addDocAttachment(
   if (!(file instanceof File) || file.size === 0) {
     return { error: "No file selected." };
   }
-  if (file.size > 25 * 1024 * 1024) {
-    return { error: "File is too large (25MB max)." };
+  // The file crosses a Server Action, so the ~4.5MB serverless request body is
+  // the real ceiling, not Gmail's or storage's. The old 25MB check could never
+  // fire: the request died at the platform edge first, so the click simply
+  // appeared to do nothing. Same reason MAX_UPLOAD_BYTES exists on the email
+  // path and MAX_COST_DOC_BYTES on the invoice path.
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      error: `That file is ${formatBytes(file.size)}, over the ${formatBytes(
+        MAX_UPLOAD_BYTES
+      )} limit for an upload. Attach a smaller file, or link to it in the notes.`,
+    };
   }
 
   const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-120) || "file";
