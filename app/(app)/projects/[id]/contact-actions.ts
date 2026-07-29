@@ -76,11 +76,15 @@ export async function updateProjectContact(
   contactId: string,
   input: ContactInput
 ): Promise<ContactState> {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const name = input.name.trim();
   if (!name) return { error: "Add a name." };
 
   const supabase = createClient();
+  // A collaborator is never sent the rate, so their form would post null and
+  // silently wipe the real figure. Omit the column entirely for them rather
+  // than trusting a value they were never shown.
+  const rate = ctx.isCollaborator ? {} : { rate: cleanRate(input.rate) };
   const { error } = await supabase
     .from("contacts")
     .update({
@@ -90,7 +94,7 @@ export async function updateProjectContact(
       company: clean(input.company),
       email: clean(input.email),
       phone: clean(input.phone),
-      rate: cleanRate(input.rate),
+      ...rate,
       notes: clean(input.notes),
     })
     .eq("id", contactId);

@@ -119,11 +119,19 @@ export async function updateDeliverable(
     qty?: number;
   }
 ): Promise<void> {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
+  // A collaborator is never shown rate or qty, so a patch from them carries
+  // placeholder values that would overwrite the real pricing. Drop those keys
+  // rather than trusting figures the caller was never given.
+  const safe = { ...patch };
+  if (ctx.isCollaborator) {
+    delete safe.rate;
+    delete safe.qty;
+  }
   await logWrite(
     "updateDeliverable/deliverables",
-    supabase.from("deliverables").update(patch).eq("id", id)
+    supabase.from("deliverables").update(safe).eq("id", id)
   );
   rp(projectId);
 }

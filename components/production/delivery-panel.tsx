@@ -41,10 +41,14 @@ export function DeliveryPanel({
   projectId,
   deliverables,
   billing,
+  canSeePricing = true,
 }: {
   projectId: string;
   deliverables: Deliverable[];
   billing: ProjectBilling | null;
+  /** False for a project collaborator: what the client is charged is studio
+   * information, so the pricing columns are not even fetched for them. */
+  canSeePricing?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Deliverable[]>(deliverables);
@@ -104,8 +108,8 @@ export function DeliveryPanel({
 
         {rows.length === 0 ? (
           <p className="rounded-[12px] border border-dashed border-border py-10 text-center text-sm text-text-faint">
-            No deliverables yet. List what ships to the client. Add a rate to pull
-            it into an invoice later (optional).
+            No deliverables yet. List what ships to the client.
+            {canSeePricing && " Add a rate to pull it into an invoice later (optional)."}
           </p>
         ) : (
           <div className="space-y-2">
@@ -143,7 +147,8 @@ export function DeliveryPanel({
                     </svg>
                   </button>
                 </div>
-                <div className="mt-1 grid grid-cols-2 gap-2 pl-1 sm:grid-cols-4">
+                <div className={`mt-1 grid gap-2 pl-1 ${canSeePricing ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1 sm:grid-cols-2"}`}>
+                  {canSeePricing && (
                   <label className="flex items-center gap-1 rounded-[8px] border border-transparent px-1 focus-within:border-border-strong">
                     <span className="text-xs font-semibold text-text-faint">$</span>
                     <input
@@ -160,6 +165,8 @@ export function DeliveryPanel({
                       className="w-full bg-transparent py-1 text-sm text-text outline-none"
                     />
                   </label>
+                  )}
+                  {canSeePricing && (
                   <label className="flex items-center gap-1 rounded-[8px] border border-transparent px-1 focus-within:border-border-strong">
                     <span className="text-xs font-semibold text-text-faint">×</span>
                     <input
@@ -172,6 +179,7 @@ export function DeliveryPanel({
                       className="w-full bg-transparent py-1 text-sm text-text outline-none"
                     />
                   </label>
+                  )}
                   <input
                     value={r.spec ?? ""}
                     onChange={(e) => edit(r.id, { spec: e.target.value })}

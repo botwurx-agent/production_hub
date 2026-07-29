@@ -78,7 +78,13 @@ export default async function DeliveryPage({
     ...clientContacts,
   ];
 
-  const deliverableList = (deliverables ?? []) as Deliverable[];
+  // rate and qty are what the CLIENT is charged. deliverables is one of the
+  // tables opened to project collaborators (can_access_project), so the
+  // pricing is dropped before it reaches the browser. RLS is row-level and
+  // cannot mask a single column of a row the viewer may read.
+  const deliverableList = ((deliverables ?? []) as Deliverable[]).map((d) =>
+    ctx.isCollaborator ? { ...d, rate: null, qty: 1 } : d
+  );
 
   // Billing/invoicing is on hold pending the FreshBooks-vs-Melio decision (see
   // CLAUDE.md). Both entry points are hidden for beta; the DB tables and panels
@@ -143,6 +149,7 @@ export default async function DeliveryPage({
           projectId={project.id}
           deliverables={deliverableList}
           billing={(billing as ProjectBilling | null) ?? null}
+          canSeePricing={!ctx.isCollaborator}
         />
       </Card>
     </div>

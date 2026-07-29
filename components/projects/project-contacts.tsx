@@ -58,12 +58,15 @@ export function ProjectContacts({
   clientContacts,
   clientId,
   clientName,
+  canSeeRates = true,
 }: {
   projectId: string;
   projectContacts: ContactRow[];
   clientContacts: ContactRow[];
   clientId: string | null;
   clientName: string | null;
+  /** False for a project collaborator: rates are studio-staff information. */
+  canSeeRates?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("all");
   const [editing, setEditing] = useState<ContactRow | null>(null);
@@ -209,6 +212,7 @@ export function ProjectContacts({
           contact={editing}
           prefill={prefill}
           defaultCategory={defaultCategory}
+          canSeeRates={canSeeRates}
           onClose={() => {
             setAdding(false);
             setEditing(null);
@@ -409,12 +413,14 @@ function ContactModal({
   contact,
   prefill,
   defaultCategory,
+  canSeeRates,
   onClose,
 }: {
   projectId: string;
   contact: ContactRow | null;
   prefill?: ContactInput | null;
   defaultCategory: ContactCategory;
+  canSeeRates: boolean;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -547,6 +553,7 @@ function ContactModal({
               className={inputCls}
             />
           </Field>
+          {canSeeRates && (
           <Field label="Rate (per day)" className="w-32">
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-text-faint">
@@ -564,6 +571,7 @@ function ContactModal({
               />
             </div>
           </Field>
+          )}
         </div>
 
         <div className="flex gap-3">

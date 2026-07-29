@@ -9,12 +9,24 @@ import {
 
 const SELECT = "id, name, type, role, company, email, phone, rate, notes";
 
+/**
+ * A project collaborator (a DP, an AD, a PA) legitimately needs the roster,
+ * but must not see what the rest of the crew is being paid. RLS is row-level
+ * and cannot mask one column of a row the viewer is allowed to read, so the
+ * rate is dropped here, before anything is handed to the browser. The durable
+ * fix is to move rate into its own is_studio_member table, where RLS can
+ * enforce it rather than this code.
+ */
+function stripRates(rows: ContactRow[], hide: boolean): ContactRow[] {
+  return hide ? rows.map((c) => ({ ...c, rate: null })) : rows;
+}
+
 export default async function ProjectContactsPage({
   params,
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const { data: project } = await supabase
@@ -60,10 +72,11 @@ export default async function ProjectContactsPage({
       />
       <ProjectContacts
         projectId={project.id}
-        projectContacts={(projectRows ?? []) as ContactRow[]}
-        clientContacts={(clientRows ?? []) as ContactRow[]}
+        projectContacts={stripRates((projectRows ?? []) as ContactRow[], ctx.isCollaborator)}
+        clientContacts={stripRates((clientRows ?? []) as ContactRow[], ctx.isCollaborator)}
         clientId={project.client_id}
         clientName={clientName}
+        canSeeRates={!ctx.isCollaborator}
       />
     </div>
   );

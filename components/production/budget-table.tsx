@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +9,9 @@ import {
   deleteBudgetLine,
   renameBudgetCategory,
 } from "@/app/(app)/projects/[id]/production/budget-actions";
-import type { BudgetLine } from "@/lib/database.types";
+import { CostLedger, type RosterOption } from "@/components/production/cost-ledger";
+import { costStatus, lineActual as lineActualOf, rollUpActual } from "@/lib/costs";
+import type { BudgetLine, ProjectCost } from "@/lib/database.types";
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -24,9 +26,13 @@ const num =
 export function BudgetTable({
   projectId,
   lines,
+  costs,
+  roster,
 }: {
   projectId: string;
   lines: BudgetLine[];
+  costs: ProjectCost[];
+  roster: RosterOption[];
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<BudgetLine[]>(lines);
@@ -52,9 +58,32 @@ export function BudgetTable({
     return [...m.entries()];
   }, [rows]);
 
+  // Actual is a ledger now, not a typed number. A line with invoices against
+  // it reports their sum and its own cell goes read-only; a line with none
+  // keeps the typed value, so the quick-estimate workflow still works and no
+  // existing number is stranded.
+  const costsByLine = useMemo(() => {
+    const m = new Map<string, ProjectCost[]>();
+    for (const c of costs) {
+      if (!c.budget_line_id) continue;
+      const list = m.get(c.budget_line_id) ?? [];
+      list.push(c);
+      m.set(c.budget_line_id, list);
+    }
+    return m;
+  }, [costs]);
+
+  const lineActual = useCallback(
+    (r: BudgetLine) => lineActualOf(r, costs),
+    [costs]
+  );
+
   const totalEst = rows.reduce((n, r) => n + (r.estimated || 0), 0);
-  const totalAct = rows.reduce((n, r) => n + (r.actual || 0), 0);
+  const totalAct = rollUpActual(rows, costs);
   const variance = totalAct - totalEst;
+  const unpaid = costs
+    .filter((c) => costStatus(c.status) !== "paid")
+    .reduce((n, c) => n + (Number(c.amount) || 0), 0);
 
   function addLine(category: string) {
     start(async () => {
@@ -79,7 +108,7 @@ export function BudgetTable({
   return (
     <div>
       {/* Summary */}
-      <div className="mb-5 grid grid-cols-3 gap-3">
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Tile label="Estimated" value={money.format(totalEst)} hue="indigo" />
         <Tile label="Actual" value={money.format(totalAct)} hue="blue" />
         <Tile
@@ -87,6 +116,7 @@ export function BudgetTable({
           value={`${variance > 0 ? "+" : ""}${money.format(variance)}`}
           hue={variance > 0 ? "red" : "green"}
         />
+        <Tile label="Still owed" value={money.format(unpaid)} hue="amber" />
       </div>
 
       <div className="mb-3 flex items-center justify-between">
@@ -104,7 +134,7 @@ export function BudgetTable({
         <div className="space-y-5">
           {groups.map(([category, gLines]) => {
             const est = gLines.reduce((n, r) => n + (r.estimated || 0), 0);
-            const act = gLines.reduce((n, r) => n + (r.actual || 0), 0);
+            const act = gLines.reduce((n, r) => n + lineActual(r), 0);
             return (
               <div key={category} className="overflow-hidden rounded-[12px] border border-border">
                 <div className="flex items-center justify-between gap-2 border-b border-border bg-surface-2/50 px-3 py-2">
@@ -153,14 +183,28 @@ export function BudgetTable({
                       placeholder="0"
                       className={num}
                     />
-                    <input
-                      type="number"
-                      value={r.actual || ""}
-                      onChange={(e) => edit(r.id, { actual: Number(e.target.value) || 0 })}
-                      onBlur={() => updateBudgetLine(projectId, r.id, { actual: r.actual || 0 })}
-                      placeholder="0"
-                      className={num}
-                    />
+                    {costsByLine.get(r.id)?.length ? (
+                      <div
+                        title={`Sum of ${costsByLine.get(r.id)!.length} invoice(s) below. Edit the costs to change it.`}
+                        className="flex items-center justify-end gap-1.5 px-2 py-1"
+                      >
+                        <span className="text-sm font-semibold tabular-nums text-text">
+                          {money.format(lineActual(r))}
+                        </span>
+                        <span className="rounded-pill bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                          {costsByLine.get(r.id)!.length}
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="number"
+                        value={r.actual || ""}
+                        onChange={(e) => edit(r.id, { actual: Number(e.target.value) || 0 })}
+                        onBlur={() => updateBudgetLine(projectId, r.id, { actual: r.actual || 0 })}
+                        placeholder="0"
+                        className={num}
+                      />
+                    )}
                     <input
                       value={r.notes ?? ""}
                       onChange={(e) => edit(r.id, { notes: e.target.value })}
@@ -192,6 +236,15 @@ export function BudgetTable({
           })}
         </div>
       )}
+
+      <div className="mt-6 border-t border-border pt-5">
+        <CostLedger
+          projectId={projectId}
+          costs={costs}
+          lines={rows}
+          roster={roster}
+        />
+      </div>
     </div>
   );
 }

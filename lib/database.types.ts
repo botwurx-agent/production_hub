@@ -1595,6 +1595,69 @@ export type Database = {
         };
         Relationships: [];
       };
+      project_costs: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          budget_line_id: string | null;
+          vendor: string;
+          contact_id: string | null;
+          description: string;
+          amount: number;
+          invoice_number: string | null;
+          invoice_date: string | null;
+          due_date: string | null;
+          status: string;
+          storage_path: string | null;
+          file_name: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          budget_line_id?: string | null;
+          vendor?: string;
+          contact_id?: string | null;
+          description?: string;
+          amount?: number;
+          invoice_number?: string | null;
+          invoice_date?: string | null;
+          due_date?: string | null;
+          status?: string;
+          storage_path?: string | null;
+          file_name?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          budget_line_id?: string | null;
+          vendor?: string;
+          contact_id?: string | null;
+          description?: string;
+          amount?: number;
+          invoice_number?: string | null;
+          invoice_date?: string | null;
+          due_date?: string | null;
+          status?: string;
+          storage_path?: string | null;
+          file_name?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       project_billing: {
         Row: {
           id: string;
@@ -3324,6 +3387,7 @@ export type StoryboardFrame = Tables<"storyboard_frames">;
 export type CallSheet = Tables<"call_sheets">;
 export type CallSheetEntry = Tables<"call_sheet_entries">;
 export type BudgetLine = Tables<"budget_lines">;
+export type ProjectCost = Tables<"project_costs">;
 export type GearItem = Tables<"gear_items">;
 export type Deliverable = Tables<"deliverables">;
 export type ProjectBilling = Tables<"project_billing">;

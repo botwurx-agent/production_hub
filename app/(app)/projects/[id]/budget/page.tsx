@@ -4,7 +4,8 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { BudgetTable } from "@/components/production/budget-table";
-import type { BudgetLine } from "@/lib/database.types";
+import type { RosterOption } from "@/components/production/cost-ledger";
+import type { BudgetLine, ProjectCost } from "@/lib/database.types";
 
 export default async function BudgetPage({
   params,
@@ -21,11 +22,27 @@ export default async function BudgetPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const { data: budgetLines } = await supabase
-    .from("budget_lines")
-    .select("*")
-    .eq("project_id", params.id)
-    .order("position", { ascending: true });
+  const [{ data: budgetLines }, { data: costs }, { data: roster }] =
+    await Promise.all([
+      supabase
+        .from("budget_lines")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("position", { ascending: true }),
+      supabase
+        .from("project_costs")
+        .select("*")
+        .eq("project_id", params.id)
+        .order("invoice_date", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false }),
+      // The roster is the vendor picker: a crew invoice almost always comes
+      // from someone already on the project.
+      supabase
+        .from("contacts")
+        .select("id, name, company, role, rate")
+        .eq("project_id", params.id)
+        .order("name", { ascending: true }),
+    ]);
 
   return (
     <div>
@@ -42,7 +59,12 @@ export default async function BudgetPage({
         }
       />
       <Card className="p-5">
-        <BudgetTable projectId={project.id} lines={(budgetLines ?? []) as BudgetLine[]} />
+        <BudgetTable
+          projectId={project.id}
+          lines={(budgetLines ?? []) as BudgetLine[]}
+          costs={(costs ?? []) as ProjectCost[]}
+          roster={(roster ?? []) as RosterOption[]}
+        />
       </Card>
     </div>
   );

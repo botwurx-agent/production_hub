@@ -1318,6 +1318,71 @@ shot review, and the master-cut review all gained it at once.
 - NOT built: comment attachments (a paid-tier question, per the operator), CC
   captions, per-comment @mentions.
 
+### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
+`budget_lines.actual` used to be a number you typed, with no provenance: the page
+could say you were $4,200 over but not why, who, or against what document. Actual
+is now a LEDGER, the same move that makes an Asset a file plus Versions.
+- `project_costs` (0070): studio/project/budget_line_id (nullable, a cost can
+  land before anyone categorises it)/vendor/contact_id/description/amount
+  numeric(12,2)/invoice_number/invoice_date/due_date/status (received ->
+  approved -> paid)/storage_path/file_name/notes. Constants + roll-up in
+  lib/costs.ts (COST_STATUS, costStatus, MAX_COST_DOC_BYTES, lineActual,
+  rollUpActual).
+- RLS IS DELIBERATELY `is_studio_member` ONLY, not the
+  `is_studio_member OR can_access_project` that migration 0056 gave the other 32
+  project-scoped tables. A project collaborator (DP, AD, PA) can reach the
+  project and must NOT see what the rest of the crew charged. The migration says
+  so in a comment; do not "fix" it to match its neighbours.
+- DERIVED ACTUAL: a budget line with costs attached reports their SUM and its
+  cell goes read-only (showing an invoice-count chip); a line with none keeps
+  the typed number, so the fast manual-estimate workflow still works and no
+  pre-ledger figure is stranded. Unassigned costs still count toward the project
+  total, since the money left the account whether or not anyone categorised it.
+  `rollUpActual` is shared by the budget page AND the project hub card, because
+  the hub read `actual` directly and would otherwise disagree with the page
+  about the same project.
+- GOTCHA worth remembering: postgres `numeric` comes back from PostgREST as a
+  STRING, so every amount goes through `Number(...)`. A plain `+` would
+  concatenate ("200.50" + "99.50" = "200.5099.50"). Asserted in a scratchpad
+  harness along with the NaN-degrades-to-0 and unknown-status cases.
+- UI: components/production/cost-ledger.tsx (list + add/edit modal + click-to-
+  advance status chip + on-demand signed doc URL) mounted under the estimate
+  table; a fourth "Still owed" tile. Vendor can be picked from the PROJECT
+  ROSTER, which carries an agreed day rate, so the modal shows "agreed rate
+  $X/day, N days at that rate" against the invoiced amount. Actions in
+  app/(app)/projects/[id]/cost-actions.ts (addCost/updateCost/setCostStatus/
+  deleteCost/uploadCostDoc/getCostDocUrl); the invoice document is signed on
+  CLICK, not on page load, since most rows are never opened.
+- NEXT SLICES (not built): (2) AI extraction from an uploaded invoice, draft-
+  and-confirm only, never posting straight into a financial record (lib/ai.ts is
+  text-only today, so this needs a multimodal path; verify current PDF/image
+  input support on the live provider first). (3) Log a cost straight from a
+  Gmail attachment; rate-vs-invoiced flagging. (4) Margin (billed vs cost) and a
+  studio-wide unpaid-vendor rollup. SCOPE LINE TO HOLD: this answers "what did
+  this job cost and who is owed". It does not become POs, payroll, approval
+  chains, or AICP bid ledgers (that is Saturation.io's ground, and the audit
+  already said no to it).
+
+### Collaborators could see rates (FIXED, no migration)
+Found while confirming the cost ledger's RLS. Budget and billing tables were
+already `is_studio_member` only (verified against pg_policies, not just the
+migration files), but TWO money columns were leaking through tables that 0056
+opened to collaborators:
+- `contacts.rate`: a collaborator on a project could open the contacts roster
+  and read every crew member's day rate.
+- `deliverables.rate` / `qty`: what the CLIENT is charged per deliverable.
+RLS is ROW-level and cannot mask a single column of a row the viewer is allowed
+to read, and the rows themselves are legitimately needed (the roster, the
+deliverable list). Supabase's typed client also parses the select string at
+compile time, so a runtime-conditional select breaks inference. So both are
+stripped server-side in the page component before anything reaches the browser
+(`stripRates` in contacts/page.tsx; a map in delivery/page.tsx), the inputs are
+hidden via `canSeeRates` / `canSeePricing` props, AND the write paths
+(updateProjectContact, updateDeliverable) DROP those keys for a collaborator, so
+a form that was never shown the real figure cannot overwrite it with a
+placeholder. DURABLE FIX (not done): move `rate` into its own is_studio_member
+table, where RLS enforces it instead of this code.
+
 ### Next step
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
 pending the FreshBooks-vs-Melio decision; do not extend it until confirmed.

@@ -21,6 +21,7 @@ import {
 import { StatusTag } from "@/components/status-tag";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { longDate, htmlToText } from "@/lib/format";
+import { rollUpActual } from "@/lib/costs";
 import {
   PROJECT_STATUS,
   ASSET_STATUS,
@@ -120,6 +121,7 @@ export default async function ProjectDetailPage({
     { data: shotGroups },
     { data: callSheet },
     { data: budgetLines },
+    { data: projectCosts },
     { data: deliverables },
     { data: rosterContacts },
     { data: upcomingEvents },
@@ -151,7 +153,13 @@ export default async function ProjectDetailPage({
       .maybeSingle(),
     supabase
       .from("budget_lines")
-      .select("estimated, actual")
+      .select("id, estimated, actual")
+      .eq("project_id", params.id),
+    // Actual spend is the cost ledger, so the hub has to roll up the same way
+    // the budget page does or the two disagree about the same project.
+    supabase
+      .from("project_costs")
+      .select("budget_line_id, amount")
       .eq("project_id", params.id),
     supabase.from("deliverables").select("status").eq("project_id", params.id),
     supabase.from("contacts").select("id").eq("project_id", params.id),
@@ -220,7 +228,7 @@ export default async function ProjectDetailPage({
   const versionCount = assets.reduce((n, a) => n + a.versions.length, 0);
   const shootDays = project.shoot_date ? daysUntil(project.shoot_date) : null;
   const budgetEstimated = (budgetLines ?? []).reduce((n, b) => n + (b.estimated ?? 0), 0);
-  const budgetActual = (budgetLines ?? []).reduce((n, b) => n + (b.actual ?? 0), 0);
+  const budgetActual = rollUpActual(budgetLines ?? [], projectCosts ?? []);
   const budgetPct =
     budgetEstimated > 0 ? Math.round((budgetActual / budgetEstimated) * 100) : null;
 
