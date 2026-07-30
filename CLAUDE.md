@@ -1838,6 +1838,27 @@ Polish button: the model assists, the human commits.
   a top tier later would read as taking something away. Runner is a surface of
   its own and has never shipped free, so gating it costs nobody anything they
   already had.
+- LIMITS (lib/agent/limits.ts), added before beta because Runner is a CHAT BOX
+  attached to a metered API, and a chat box invites holding down Enter. Two of
+  them, deliberately different in kind. A per-user BURST limit (12 turns / 5
+  min) uses the in-memory limiter and is honest about being best-effort. The
+  DAILY cap (200 turns per studio / rolling 24h, RUNNER_DAILY_LIMIT overrides)
+  is the one that actually bounds the bill, so it counts REAL ROWS: every turn
+  already writes a user message to agent_messages with a studio_id and a
+  timestamp, so the count IS the usage, shared across instances, no new table.
+  It fails OPEN if the count query errors, since taking Runner down for everyone
+  over a hiccup is worse than one uncounted question. Checked BEFORE any model
+  call.
+- SMOKE TEST: `GET /api/agent` makes one minimal round trip through the exact
+  path a real turn takes (runTurn with the full tool registry) and returns
+  {ok, provider, model, ms, replied, toolCalls} or the RAW provider error. It
+  exists because the tool-calling REQUEST SHAPE is the one thing that cannot be
+  verified without a live key, and a shape mistake arrives as a 400 from an API
+  rather than as anything readable. Staff only, rate limited like a turn. The
+  error is raw on purpose: the audience is whoever deployed it.
+- Provider failures are SANITIZED on the way to the browser (readableFailure in
+  the route): a raw "OpenAI 400: {...}" in a chat bubble tells a producer
+  nothing and reads as broken. Full detail still goes to Sentry.
 - Env: OPENAI_AGENT_MODEL / ANTHROPIC_AGENT_MODEL / OPENAI_AGENT_EFFORT, all
   optional. It defaults to the model already configured so it never silently
   costs more than the deployment budgets for. gpt-5-mini can do this; a bigger

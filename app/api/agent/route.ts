@@ -17,8 +17,9 @@ import { NextResponse } from "next/server";
 import { getStudioContext } from "@/lib/studio";
 import { createClient } from "@/lib/supabase/server";
 import { canUseRunner } from "@/lib/agent/access";
-import { aiConfigured } from "@/lib/ai";
-import { runTurn, type AgentMessage, type ToolCall } from "@/lib/agent/loop";
+import { checkRunnerLimits } from "@/lib/agent/limits";
+import { aiConfigured, aiProvider } from "@/lib/ai";
+import { agentModel, runTurn, type AgentMessage, type ToolCall } from "@/lib/agent/loop";
 import { dropOrphanToolResults } from "@/lib/agent/messages";
 import { ALL_TOOLS, cardKindFromTool, systemPrompt } from "@/lib/agent/tools";
 import { buildCard, isCardError, isCardKind, type ActionCard } from "@/lib/agent/cards";
@@ -77,6 +78,80 @@ type ClientRequest = {
   projectId?: string | null;
 };
 
+/**
+ * Smoke test: GET /api/agent
+ *
+ * Runner's tool-calling request shape is the one thing that cannot be verified
+ * without a real API key, and a shape error arrives as a 400 from a provider
+ * rather than as anything readable. This makes one minimal round trip through
+ * the EXACT path a real turn takes (runTurn with the full tool registry) and
+ * reports what happened, so "does Runner work in this deployment" is a URL
+ * rather than a guess.
+ *
+ * Staff only and rate limited like a turn, because it costs a real call. The
+ * error is returned RAW here on purpose: the audience is whoever deployed it,
+ * not a producer, and the provider's own words are the whole point.
+ */
+export async function GET() {
+  const ctx = await getStudioContext();
+  if (!ctx) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!canUseRunner(ctx)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        provider: aiProvider(),
+        error: aiConfigured()
+          ? "Runner is not available on this account."
+          : "No AI provider is configured on this deployment.",
+      },
+      { status: aiConfigured() ? 403 : 503 }
+    );
+  }
+
+  const limit = await checkRunnerLimits({
+    userId: ctx.userId,
+    studioId: ctx.studio.id,
+  });
+  if (!limit.ok) {
+    return NextResponse.json({ ok: false, error: limit.message }, { status: 429 });
+  }
+
+  const started = Date.now();
+  try {
+    const turn = await runTurn({
+      system:
+        "You are a health check. Reply with the single word: ok. Do not call any tools.",
+      messages: [{ role: "user", content: "ping" }],
+      // The real registry, because an oversized or malformed tool schema is
+      // exactly the kind of thing this is meant to catch.
+      tools: ALL_TOOLS,
+    });
+    return NextResponse.json({
+      ok: true,
+      provider: aiProvider(),
+      model: agentModel(),
+      ms: Date.now() - started,
+      tools: ALL_TOOLS.length,
+      // Either of these coming back proves the round trip worked; which one it
+      // is only says whether the model felt like reaching for a tool.
+      replied: turn.text || null,
+      toolCalls: turn.toolCalls.map((c) => c.name),
+    });
+  } catch (e) {
+    reportError("agent/health", e);
+    return NextResponse.json(
+      {
+        ok: false,
+        provider: aiProvider(),
+        model: agentModel(),
+        ms: Date.now() - started,
+        error: e instanceof Error ? e.message : String(e),
+      },
+      { status: 502 }
+    );
+  }
+}
+
 export async function POST(req: Request) {
   const ctx = await getStudioContext();
   if (!ctx) {
@@ -105,6 +180,16 @@ export async function POST(req: Request) {
   const text = (body.text ?? "").trim().slice(0, 4000);
   if (!text) {
     return NextResponse.json({ error: "Say something first." }, { status: 400 });
+  }
+
+  // Checked before any model call, since the whole point is to not spend money
+  // on the turn that crosses the line.
+  const limit = await checkRunnerLimits({
+    userId: ctx.userId,
+    studioId: ctx.studio.id,
+  });
+  if (!limit.ok) {
+    return NextResponse.json({ error: limit.message }, { status: 429 });
   }
 
   const supabase = createClient();
@@ -285,11 +370,13 @@ export async function POST(req: Request) {
         send({ type: "done" });
         controller.close();
       } catch (e) {
+        // The full provider error goes to Sentry; the producer gets a sentence.
+        // A raw "OpenAI 400: {...}" in a chat bubble tells them nothing they can
+        // act on and reads as broken rather than as a hiccup.
         reportError("agent/turn", e);
         send({
           type: "error",
-          message:
-            e instanceof Error ? e.message : "Something went wrong answering that.",
+          message: readableFailure(e),
         });
         controller.close();
       }
@@ -304,6 +391,26 @@ export async function POST(req: Request) {
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+/**
+ * Turns whatever went wrong into something worth reading. Provider errors are
+ * the common case and they arrive as a status code and a JSON blob, which is
+ * exactly what a producer cannot use.
+ */
+function readableFailure(e: unknown): string {
+  const raw = e instanceof Error ? e.message : "";
+  if (/\b429\b|rate limit/i.test(raw)) {
+    return "The AI provider is rate limiting us right now. Try again in a moment.";
+  }
+  if (/\b401\b|\b403\b|api key/i.test(raw)) {
+    return "The AI provider rejected our credentials. This one is on the deployment, not on you.";
+  }
+  if (/too long to finish|ran too long/i.test(raw)) return raw;
+  if (/\b5\d\d\b|timeout|ETIMEDOUT|fetch failed/i.test(raw)) {
+    return "The AI provider did not respond. Try that again.";
+  }
+  return "Something went wrong answering that. It has been logged.";
 }
 
 function stepLabel(call: ToolCall): string {
