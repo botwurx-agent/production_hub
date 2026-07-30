@@ -121,14 +121,36 @@ export function HubCard({
 }
 
 // Small labelled band divider that groups modules by production phase.
-export function BandLabel({ hue, label }: { hue: string; label: string }) {
+/**
+ * The heading for a phase of the job (Plan, Visualize, Review, Produce).
+ *
+ * The generous top margin is doing real work: these bands are the page's only
+ * structure, and without a clear gap the four groups read as one long run of
+ * cards. Whitespace is what says "this is a different part of the job", which
+ * is section 4.2's point about type and whitespace carrying the structure
+ * rather than colour doing it.
+ *
+ * `first` drops that margin on the opening band, which already has the summary
+ * card above it and would otherwise sit in a hole.
+ */
+export function BandLabel({
+  hue,
+  label,
+  first = false,
+}: {
+  hue: string;
+  label: string;
+  first?: boolean;
+}) {
   return (
-    <div className="mb-3 mt-2 flex items-center gap-2.5">
+    <div
+      className={`mb-4 flex items-center gap-2.5 ${first ? "mt-0" : "mt-9"}`}
+    >
       <span
-        className="h-2 w-2 rounded-full"
+        className="h-2.5 w-2.5 rounded-full"
         style={{ backgroundColor: `var(--h-${hue})` }}
       />
-      <span className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-text-muted">
+      <span className="text-[13px] font-extrabold uppercase tracking-[0.06em] text-text">
         {label}
       </span>
       <span className="h-px flex-1 bg-border" />

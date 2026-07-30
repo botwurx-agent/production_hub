@@ -476,7 +476,7 @@ export default async function ProjectDetailPage({
         {/* Module hub */}
         <div className="lg:col-span-2">
           <div data-tour="band-plan">
-            <BandLabel hue="blue" label="Plan" />
+            <BandLabel hue="blue" label="Plan" first />
           </div>
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
