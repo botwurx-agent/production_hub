@@ -95,9 +95,15 @@ Subject: `Confirm your Studio Flows account`
 
 Subject: `Reset your Studio Flows password`
 
-Same document as above with the card contents swapped:
-
 ```html
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f6f7f9;">
+    <div style="max-width:520px;margin:0 auto;padding:32px 20px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+      <div style="margin-bottom:20px;font-weight:800;font-size:18px;color:#1a1c1f;letter-spacing:-0.3px;">
+        <span style="display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;padding:3px 7px;font-size:13px;margin-right:8px;">SF</span>Studio Flows
+      </div>
+      <div style="background:#ffffff;border:1px solid #e4e6ea;border-radius:16px;padding:26px 24px;">
         <h1 style="margin:0 0 14px;font-size:20px;line-height:1.3;color:#1a1c1f;">Reset your password</h1>
         <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#3f4650;">Use the button below to set a new password. The link expires in one hour.</p>
         <div style="margin:24px 0;">
@@ -105,6 +111,11 @@ Same document as above with the card contents swapped:
         </div>
         <p style="margin:0 0 14px;font-size:12px;line-height:1.5;color:#99a1ad;word-break:break-all;">Or paste this link: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password</p>
         <p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:#99a1ad;">If you did not ask to reset your password, nothing has changed and you can ignore this email.</p>
+      </div>
+      <p style="margin:16px 4px 0;font-size:11px;color:#aeb4bd;">Sent by Studio Flows.</p>
+    </div>
+  </body>
+</html>
 ```
 
 ### Change email address
@@ -112,6 +123,14 @@ Same document as above with the card contents swapped:
 Subject: `Confirm your new Studio Flows email`
 
 ```html
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f6f7f9;">
+    <div style="max-width:520px;margin:0 auto;padding:32px 20px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+      <div style="margin-bottom:20px;font-weight:800;font-size:18px;color:#1a1c1f;letter-spacing:-0.3px;">
+        <span style="display:inline-block;background:#4f46e5;color:#fff;border-radius:8px;padding:3px 7px;font-size:13px;margin-right:8px;">SF</span>Studio Flows
+      </div>
+      <div style="background:#ffffff;border:1px solid #e4e6ea;border-radius:16px;padding:26px 24px;">
         <h1 style="margin:0 0 14px;font-size:20px;line-height:1.3;color:#1a1c1f;">Confirm your new email</h1>
         <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#3f4650;">Confirm this address to finish moving your Studio Flows account to it.</p>
         <div style="margin:24px 0;">
@@ -119,6 +138,11 @@ Subject: `Confirm your new Studio Flows email`
         </div>
         <p style="margin:0 0 14px;font-size:12px;line-height:1.5;color:#99a1ad;word-break:break-all;">Or paste this link: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&next=/settings</p>
         <p style="margin:18px 0 0;font-size:12px;line-height:1.5;color:#99a1ad;">If you did not request this change, ignore this email and your address stays as it is.</p>
+      </div>
+      <p style="margin:16px 4px 0;font-size:11px;color:#aeb4bd;">Sent by Studio Flows.</p>
+    </div>
+  </body>
+</html>
 ```
 
 The "Invite user" and "Magic link" templates can be left alone. Studio Flows
