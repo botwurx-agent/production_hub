@@ -129,16 +129,16 @@ one fires.
 
 **Authentication → Sign In / Providers → Email → Confirm email.**
 
-It is off today, and that is a real hole rather than a preference:
-`claim_pending_invites()` (migration 0048) matches a signup against
-`studio_invites.email` with no verification check, so anyone who knows an
-invited address can sign up as it and land inside that studio. Confirming the
-address closes it.
+DONE, 30 July 2026. It had been off, which was a real hole rather than a
+preference: `claim_pending_invites()` (migration 0048) matched a signup against
+`studio_invites.email` with no verification check, so anyone who knew an
+invited address could sign up as it and land inside that studio.
 
-Once it is on, the belt-and-braces version is a database guard as well: add
-`and u.email_confirmed_at is not null` to `claim_pending_invites()` and
-`claim_pending_project_invites()`. Do **not** apply that while confirmation is
-off, or no invite can ever be claimed.
+Migration **0079** now enforces the same rule in the database: both claim
+functions look up the caller's address with `email_confirmed_at is not null`,
+so an unconfirmed user matches no invite. That is deliberately applied AFTER
+the toggle, since with confirmation off it would have made every invite
+unclaimable. If the toggle is ever switched back off, revert 0079 with it.
 
 ## What stays unbranded
 
