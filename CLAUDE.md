@@ -1851,7 +1851,12 @@ Polish button: the model assists, the human commits.
   call.
 - SMOKE TEST: `GET /api/agent` makes one minimal round trip through the exact
   path a real turn takes (runTurn with the full tool registry) and returns
-  {ok, provider, model, ms, replied, toolCalls} or the RAW provider error. It
+  {ok, provider, model, ms, replied, toolCalls} or the RAW provider error.
+  VERIFIED WORKING 2026-07-30 on the deployment: ok true, provider openai,
+  model gpt-5-mini, 17 tools, ~1.9s. So the OpenAI tool-calling request shape in
+  lib/agent/messages.ts is confirmed correct as written; do not "fix" it against
+  half-remembered docs. The ANTHROPIC tool shape is still unexercised (checked
+  against the SDK types only), same status as the multimodal path. It
   exists because the tool-calling REQUEST SHAPE is the one thing that cannot be
   verified without a live key, and a shape mistake arrives as a 400 from an API
   rather than as anything readable. Staff only, rate limited like a turn. The
