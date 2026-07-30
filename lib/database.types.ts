@@ -16,6 +16,81 @@ export type Database = {
   };
   public: {
     Tables: {
+      agent_threads: {
+        Row: {
+          created_at: string;
+          id: string;
+          project_id: string | null;
+          studio_id: string;
+          title: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          project_id?: string | null;
+          studio_id: string;
+          title?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          project_id?: string | null;
+          studio_id?: string;
+          title?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      agent_messages: {
+        Row: {
+          call_id: string | null;
+          cards: Json | null;
+          content: string;
+          created_at: string;
+          id: string;
+          role: string;
+          seq: number;
+          studio_id: string;
+          thread_id: string;
+          tool_calls: Json | null;
+          tool_name: string | null;
+          user_id: string;
+        };
+        Insert: {
+          call_id?: string | null;
+          cards?: Json | null;
+          content?: string;
+          created_at?: string;
+          id?: string;
+          role: string;
+          seq?: number;
+          studio_id: string;
+          thread_id: string;
+          tool_calls?: Json | null;
+          tool_name?: string | null;
+          user_id: string;
+        };
+        Update: {
+          call_id?: string | null;
+          cards?: Json | null;
+          content?: string;
+          created_at?: string;
+          id?: string;
+          role?: string;
+          seq?: number;
+          studio_id?: string;
+          thread_id?: string;
+          tool_calls?: Json | null;
+          tool_name?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       activity: {
         Row: {
           author_id: string | null;

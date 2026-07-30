@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/app-shell/user-menu";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
+import { AgentLauncher } from "@/components/agent/agent-launcher";
 import type { StudioOption } from "@/components/app-shell/studio-switcher";
 
 const nav = [
@@ -22,12 +23,16 @@ export function Topbar({
   collaborator = false,
   studios = [],
   activeStudioId = "",
+  assistant = false,
 }: {
   email: string | null;
   needsYouCount?: number;
   collaborator?: boolean;
   studios?: StudioOption[];
   activeStudioId?: string;
+  /** The assistant reads studio-wide tables, so it is staff only, and it needs
+   *  an AI key to do anything at all. Both are decided on the server. */
+  assistant?: boolean;
 }) {
   const pathname = usePathname();
   const items = collaborator ? nav.filter((n) => n.href === "/projects") : nav;
@@ -66,6 +71,7 @@ export function Topbar({
         <div className="hidden flex-1 md:block" />
 
         <div className="flex items-center gap-2">
+          {assistant ? <AgentLauncher /> : null}
           <NotificationBell needsYouCount={needsYouCount} />
           <ThemeToggle />
           <UserMenu

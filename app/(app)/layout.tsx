@@ -56,6 +56,7 @@ export default async function AppLayout({
             collaborator={ctx.isCollaborator}
             studios={studios}
             activeStudioId={ctx.studio.id}
+            assistant={aiConfigured() && !ctx.isCollaborator}
           />
           <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">
             {children}

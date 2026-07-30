@@ -1703,6 +1703,100 @@ returns no rows, so the value is null with no application check at all.
   compile time, `npx tsc --noEmit` after dropping a column IS the audit. Every
   site that touched it fails to build.
 
+### The assistant (agent layer, migration 0077) — BUILT
+An in-app assistant ("Ask", topbar, Cmd/Ctrl+K) that reads the studio and
+PROPOSES changes. Studio-wide with a project selector that defaults to whatever
+project page you are on. This is the first thing built as a MARKET BET rather
+than from real friction (the operator's call: peers are shipping agents and its
+absence reads as dated), so the test is week two: if it is not being opened, it
+stops, and there is a lot to stop.
+
+THE CONTRACT, which is the whole design: the model never writes. Read tools run
+for real; write tools are named `propose_*`, touch nothing, and return a CARD
+listing every value that would be saved, with Create and Cancel. Only
+`confirmCard` writes, and it does so by calling the ORDINARY SERVER ACTIONS the
+UI calls (addCost, addTask, updateProjectStatus, ...). That is deliberate and
+should not be "optimised" into direct database access: it means the assistant
+inherits every existing guard (requireStudioContext, RLS, the money-column split
+from 0074, the studio derivation, revalidation) instead of needing a second
+safety layer that would drift. Same reasoning as the invoice extractor and the
+Polish button: the model assists, the human commits.
+
+- ARCHITECTURE. lib/agent/messages.ts = the normalized conversation shape plus
+  both provider conversions (NO "server-only" on purpose, so it is testable).
+  Anthropic carries tool calls as content BLOCKS and needs every result for one
+  turn in a SINGLE user message; OpenAI carries them as a FIELD and needs one
+  message per result with content null on a pure tool turn. Getting that wrong
+  surfaces as a 400 from an API, not as anything readable, which is why it is
+  unit-tested. lib/agent/loop.ts = provider dispatch (runTurn: one round trip
+  in, text + tool calls out). lib/agent/tools.ts = registry + system prompt.
+  lib/agent/read-tools.ts, cards.ts, values.ts, schema-map.ts, suggestions.ts.
+- ROUTE HANDLER, NOT A SERVER ACTION (app/api/agent/route.ts, maxDuration 60).
+  maxDuration belongs to the route segment and a Server Action inherits it from
+  the calling page; the assistant is reachable from every page, so as an action
+  its time limit would vary by route and a three-hop answer would die on some
+  pages and not others. Streams newline-delimited JSON events (thread / step /
+  text / card / error / done) so the panel can say "Reading the project" while
+  it happens. The final text is NOT token-streamed: that needs partial
+  tool-call accumulation on both providers, which is a lot of fiddly code for a
+  paragraph, and the wait is in the steps.
+- READS: five FAT tools (search, get_project with a sections argument,
+  get_money, get_crm, get_attention) plus ONE OPEN `query` tool. Fat rather
+  than granular because every call is a round trip: eight small reads is eight
+  sequential hops before the first word. The open tool is the important one: it
+  removes the ceiling where the assistant can only answer questions somebody
+  thought to write a tool for ("which client asks for the most revision
+  rounds" needs no new code). get_money and get_attention reuse
+  summarizePayments / rollUpActual / marginOf / getOutstanding, so the
+  assistant and the dashboard cannot disagree about the same number.
+- THE QUERY TOOL'S BOUNDARY, and this is the part worth remembering: RLS is the
+  real boundary for tenancy, but RLS will happily hand a studio member their
+  OWN Google refresh token. So lib/agent/schema-map.ts is a generated whitelist
+  of tables AND columns that excludes the credential tables (email_accounts,
+  billing_accounts), every share token (review_links.token and its six
+  siblings), drawn signatures, and the assistant's own conversation log.
+  Columns are listed explicitly and `*` is never sent, so a column added to the
+  database but not to the map is simply unreadable: it fails CLOSED, which is
+  the right direction when the thing being withheld might be a token or a day
+  rate. Regenerate the map when you add a table (same hand-maintained rule as
+  database.types.ts).
+- WRITES: eleven cards (log_cost, add_payment, mark_paid, create_task,
+  log_activity, add_deliverable, move_project_stage, move_deal_stage,
+  create_deal, add_contact, add_event). Deliberately NOT built, and not for
+  timidity: no delete, no archive, and nothing that leaves the building (no
+  sending email, no minting a share link, no invites). Deleting has no undo
+  outside boards/shot list/storyboard, and a wrong send cannot be recalled.
+  A card also has to be readable in two seconds; if a proposed change cannot be
+  summarised in a handful of labelled fields, it does not belong here, because
+  a confirmation you cannot check is not a confirmation.
+- lib/agent/values.ts holds the parsers, used TWICE: once building the card and
+  again in confirmCard, because the payload goes through the browser and comes
+  back. Same "n/a" must not become $0.00 rule as the invoice extractor. Bug the
+  tests caught: date() sliced to 10 characters before validating, so an ISO
+  timestamp silently became a date and so did "2026-08-14garbage"; it now
+  matches a time suffix deliberately and rejects trailing junk.
+- Migration 0077 (agent_threads + agent_messages) persists the conversation.
+  RLS is `user_id = auth.uid()`, NOT is_studio_member: a conversation carries
+  what one person asked in their own words, and a colleague has no more business
+  reading it than reading their notebook. Same shape as notification_reads.
+- Panel: components/agent/{agent-launcher,agent-panel,action-card,dictation}.
+  Never opens on a blank box (lib/agent/suggestions.ts seeds four chips from
+  REAL state: an overdue vendor by name, a stalled project by name), because an
+  empty chat box is how these features die and it fails the section 4.1 bar.
+  Dictation is the browser's own speech API, so no audio is uploaded and it
+  costs nothing; it hides itself where unsupported. Staff only (aiConfigured &&
+  !isCollaborator, decided on the server) since it reads studio-member tables.
+- NOT built, in rough order of likely usefulness: dropping a file into the chat
+  to get a cost card (the multimodal extractInvoiceDraft path already exists, so
+  this is mostly wiring and is the strongest remaining add), draft_email_reply
+  into the Gmail composer, token streaming, and a scheduled read-only digest
+  (which carries none of the autonomy risk because it cannot write, and the
+  cron + Resend plumbing is already there).
+- Env: OPENAI_AGENT_MODEL / ANTHROPIC_AGENT_MODEL / OPENAI_AGENT_EFFORT, all
+  optional. It defaults to the model already configured so it never silently
+  costs more than the deployment budgets for. gpt-5-mini can do this; a bigger
+  model will pick tools better, which is the trade to revisit if it misroutes.
+
 ### Next step
 NOTHING IS QUEUED. As of 2026-07-29 the operator has deliberately parked the
 whole proposed backlog: run real jobs, and only build when something actually
