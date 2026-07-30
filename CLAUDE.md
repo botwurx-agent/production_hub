@@ -1861,6 +1861,15 @@ you type the word "click", you are writing instruction, stop.
   viewport; the target is scrolled into view BEFORE measuring, since measuring
   mid-scroll puts the card where the element used to be. The scrim is one
   element (a 9999px spread box-shadow on the ring), not four.
+- SCROLLING IS NOT scrollIntoView({block:"center"}), and this was a real bug
+  found in testing: centring puts an element's MIDDLE on screen, so a STRETCHED
+  anchor (the sidebar's <nav> is flex-1, so on a long dashboard it is as tall as
+  the document) scrolled the page to somewhere near the calendar and drew its
+  ring off the edge as a lone vertical line. scrollToShow now moves the MINIMUM
+  distance and aligns the TOP when the target is taller than the viewport, and
+  the ring rect is clamped to the viewport. The step also stopped anchoring to
+  <nav> and anchors to the links inside it. Rule for a new anchor: point at
+  something that hugs its content, never at a flex-1 or h-full wrapper.
 - NOT built: tours that span pages (a step that navigates and resumes), which
   is a large jump in complexity for orientation content that does not need it.
 

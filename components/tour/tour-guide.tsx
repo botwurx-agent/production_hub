@@ -18,6 +18,48 @@ function anchorEl(step: TourStep): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-tour="${step.anchor}"]`);
 }
 
+/** The highlight ring, padded a little and kept inside the viewport. */
+function clampRect(r: DOMRect) {
+  const pad = 6;
+  const top = Math.max(0, r.top - pad);
+  const left = Math.max(0, r.left - pad);
+  const bottom = Math.min(window.innerHeight, r.bottom + pad);
+  const right = Math.min(window.innerWidth, r.right + pad);
+  return {
+    top,
+    left,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
+/**
+ * Scrolls the least distance that brings the target into view, and aligns its
+ * TOP when it is taller than the viewport.
+ *
+ * scrollIntoView({block:"center"}) was the obvious choice and it was wrong:
+ * centring a tall element puts its MIDDLE on screen, so an anchor that
+ * stretches (a flex-1 sidebar, a long list) scrolls the page to somewhere far
+ * below the part being described. Aligning to the top is right for the tall
+ * case because the top of a long element is almost always where its meaning
+ * is, and scrolling the minimum otherwise means a target already on screen
+ * does not jump at all.
+ */
+function scrollToShow(el: HTMLElement) {
+  const margin = 32;
+  const r = el.getBoundingClientRect();
+  const vh = window.innerHeight;
+
+  let delta = 0;
+  if (r.height > vh - margin * 2 || r.top < margin) {
+    delta = r.top - margin;
+  } else if (r.bottom > vh - margin) {
+    delta = r.bottom - (vh - margin);
+  }
+
+  if (Math.abs(delta) > 1) window.scrollBy({ top: delta, behavior: "smooth" });
+}
+
 /**
  * Renders whichever tour has been started. Mounted ONCE in the app shell, so
  * the replay entry in the user menu works from any page; a per-page mount
@@ -118,22 +160,21 @@ export function TourGuide() {
         top: Math.max(16, Math.min(top, window.innerHeight - h - 16)),
         left: Math.max(16, Math.min(left, window.innerWidth - CARD_W - 16)),
       },
-      spot: {
-        top: r.top - 6,
-        left: r.left - 6,
-        width: r.width + 12,
-        height: r.height + 12,
-      },
+      // Clamped to the viewport. An anchor taller or wider than the screen
+      // would otherwise draw its ring off into space, which is how a highlight
+      // ends up as a lone vertical line at the edge with nothing around it.
+      spot: clampRect(r),
     });
   }, [step]);
 
   // Bring the target into view first, then measure. Measuring before the
-  // scroll settles puts the card where the element used to be.
+  // scroll settles puts the card where the element used to be, and the scroll
+  // listener below keeps correcting it as a smooth scroll runs.
   useLayoutEffect(() => {
     if (!step) return;
     const el = anchorEl(step);
-    if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
-    const t = setTimeout(place, el ? 320 : 0);
+    if (el) scrollToShow(el);
+    const t = setTimeout(place, el ? 340 : 0);
     return () => clearTimeout(t);
   }, [step, place]);
 

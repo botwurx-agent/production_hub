@@ -92,7 +92,7 @@ export function Sidebar({
         />
       </div>
 
-      <nav className="flex-1 space-y-1 p-3" data-tour="nav">
+      <nav className="flex-1 space-y-1 p-3">
         {/* Runner opens the panel rather than navigating, so it is a button
             wearing a nav row's clothes. Deliberate: the panel slides over
             whatever you are reading and picks up the project you are already
@@ -124,31 +124,37 @@ export function Sidebar({
           </>
         ) : null}
 
-        {items.map(({ href, label, Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link
-              key={href}
-              href={href}
-              title={collapsed ? label : undefined}
-              className={`flex items-center rounded-[11px] py-2 text-sm font-semibold transition ${
-                collapsed ? "justify-center px-0" : "gap-3 px-3"
-              } ${
-                active
-                  ? "bg-accent-soft text-accent"
-                  : "text-text-muted hover:bg-surface-2 hover:text-text"
-              }`}
-            >
-              <Icon />
-              {!collapsed && (
-                <>
-                  {label}
-                  {href === "/communication" && <CommunicationBadge />}
-                </>
-              )}
-            </Link>
-          );
-        })}
+        {/* The tour anchors here rather than on <nav>, which is flex-1 and so
+            stretches to the full height of a long page. Anchoring to a
+            stretched element makes "scroll it into view" meaningless, since
+            its middle can be a thousand pixels below the links it contains. */}
+        <div className="space-y-1" data-tour="nav">
+          {items.map(({ href, label, Icon }) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link
+                key={href}
+                href={href}
+                title={collapsed ? label : undefined}
+                className={`flex items-center rounded-[11px] py-2 text-sm font-semibold transition ${
+                  collapsed ? "justify-center px-0" : "gap-3 px-3"
+                } ${
+                  active
+                    ? "bg-accent-soft text-accent"
+                    : "text-text-muted hover:bg-surface-2 hover:text-text"
+                }`}
+              >
+                <Icon />
+                {!collapsed && (
+                  <>
+                    {label}
+                    {href === "/communication" && <CommunicationBadge />}
+                  </>
+                )}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       <div className="border-t border-border p-3">
