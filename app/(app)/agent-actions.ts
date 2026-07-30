@@ -18,6 +18,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/log";
 import { isCardKind, type CardKind } from "@/lib/agent/cards";
+import { canUseRunner } from "@/lib/agent/access";
 import { costStatus } from "@/lib/costs";
 import { PROJECT_STATUS } from "@/lib/status";
 import type { ProjectStatus } from "@/lib/database.types";
@@ -57,7 +58,7 @@ export async function loadAgentContext(
   projectId?: string | null
 ): Promise<AgentContext> {
   const ctx = await requireStudioContext();
-  if (ctx.isCollaborator) return { projects: [], suggestions: [] };
+  if (!canUseRunner(ctx)) return { projects: [], suggestions: [] };
 
   const supabase = createClient();
   const { data } = await supabase
@@ -118,10 +119,11 @@ export async function confirmCard(input: {
   payload: Payload;
 }): Promise<ConfirmResult> {
   const ctx = await requireStudioContext();
-  // Every action below writes to a studio-member table. A collaborator would be
-  // refused by RLS anyway; refusing here means they get a sentence instead of a
-  // silent failure.
-  if (ctx.isCollaborator) {
+  // The second of the two real gates. Every action below writes to a
+  // studio-member table, so RLS would refuse a collaborator anyway; checking
+  // here means they get a sentence instead of a silent failure, and it is
+  // where a paid-tier refusal will land.
+  if (!canUseRunner(ctx)) {
     return { error: "That is not something your access allows." };
   }
   if (!isCardKind(input.kind)) {

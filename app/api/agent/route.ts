@@ -16,6 +16,7 @@
 import { NextResponse } from "next/server";
 import { getStudioContext } from "@/lib/studio";
 import { createClient } from "@/lib/supabase/server";
+import { canUseRunner } from "@/lib/agent/access";
 import { aiConfigured } from "@/lib/ai";
 import { runTurn, type AgentMessage, type ToolCall } from "@/lib/agent/loop";
 import { dropOrphanToolResults } from "@/lib/agent/messages";
@@ -81,16 +82,16 @@ export async function POST(req: Request) {
   if (!ctx) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
-  // The assistant reads across costs, deals and contacts, all of which are
-  // is_studio_member. A collaborator would get a working chat that could
-  // answer nothing, which reads worse than not having it.
-  if (ctx.isCollaborator) {
-    return NextResponse.json({ error: "Not available." }, { status: 403 });
-  }
-  if (!aiConfigured()) {
+  // This is one of the two real gates (the other is confirmCard). Hiding the
+  // nav row is presentation; a request still has to pass here.
+  if (!canUseRunner(ctx)) {
     return NextResponse.json(
-      { error: "No AI provider is configured on this deployment." },
-      { status: 503 }
+      {
+        error: aiConfigured()
+          ? "Runner is not available on this account."
+          : "No AI provider is configured on this deployment.",
+      },
+      { status: aiConfigured() ? 403 : 503 }
     );
   }
 

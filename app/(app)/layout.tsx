@@ -9,6 +9,7 @@ import { Topbar } from "@/components/app-shell/topbar";
 import { Toaster } from "@/components/ui/toast";
 import { AiAvailabilityProvider } from "@/components/ai/ai-availability";
 import { AgentMount } from "@/components/agent/agent-mount";
+import { canUseRunner } from "@/lib/agent/access";
 
 export default async function AppLayout({
   children,
@@ -27,9 +28,10 @@ export default async function AppLayout({
     if (pathname && !pathname.startsWith("/projects")) redirect("/projects");
   }
 
-  // Runner reads studio-member tables (costs, deals, contacts), so a project
-  // collaborator would get a chat that could answer nothing.
-  const assistant = aiConfigured() && !ctx.isCollaborator;
+  // One seam for "may this studio use Runner", so a paid-tier check lands in
+  // exactly one place later. This only decides whether the nav row is shown;
+  // the real gate is server-side in the route and in confirmCard.
+  const assistant = canUseRunner(ctx);
 
   const outstanding = await getOutstanding();
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);

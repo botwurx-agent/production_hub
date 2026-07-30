@@ -1801,6 +1801,24 @@ Polish button: the model assists, the human commits.
   into the Gmail composer, token streaming, and a scheduled read-only digest
   (which carries none of the autonomy risk because it cannot write, and the
   cron + Resend plumbing is already there).
+- COMMERCIAL INTENT (operator, 2026-07-30): Runner is meant to sit in a PAID
+  TIER, probably the highest one, as one reason among several rather than the
+  only reason. Two consequences for anyone building here. (1) The gate is one
+  function, lib/agent/access.ts canUseRunner(ctx), and it is called in exactly
+  three places: the app layout (shows the nav row), the /api/agent route, and
+  confirmCard. The last two are the REAL gate; hiding a nav row is presentation.
+  When a plan column lands on `studios`, change that one body and nothing else.
+  (2) Runner is the only feature in the app with a genuine PER-USE cost, which
+  is the honest argument for it being the top tier, but it also means the tier
+  cannot be priced without usage data. Nothing records tokens yet. Adding a
+  token count per turn to agent_messages is small and worth doing BEFORE pricing
+  rather than after.
+- WHERE THE TIER LINE SHOULD FALL, as advice not decision: on SURFACES, not on
+  "uses AI". The Polish button, the invoice extractor and the SOW reader are
+  already shipped, already AI, and are helpers inside a flow; pulling them into
+  a top tier later would read as taking something away. Runner is a surface of
+  its own and has never shipped free, so gating it costs nobody anything they
+  already had.
 - Env: OPENAI_AGENT_MODEL / ANTHROPIC_AGENT_MODEL / OPENAI_AGENT_EFFORT, all
   optional. It defaults to the model already configured so it never silently
   costs more than the deployment budgets for. gpt-5-mini can do this; a bigger
