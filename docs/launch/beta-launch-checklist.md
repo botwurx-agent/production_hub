@@ -6,10 +6,20 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
 
 ## Manual steps before inviting beta users
 
-- [ ] **Enable Supabase leaked-password protection.** Dashboard: Authentication
-      → Policies → turn on "Leaked password protection" (checks HaveIBeenPwned).
-      This is the one remaining actionable security-advisor item; it is a toggle,
-      not code.
+- [ ] **Enable Supabase leaked-password protection.** BLOCKED ON PLAN, not on
+      finding a menu: it is a PRO feature and the project is on Free, so the
+      control does not appear at all. It comes with the Pro upgrade below; it is
+      not worth upgrading for on its own.
+
+- [ ] **Upgrade Supabase to Pro before inviting anyone.** The reason is storage
+      and backups, not the password toggle. Checked 2026-07-30: 73 files, 545 MB
+      of the Free plan's 1 GB file limit, used by the operator's own testing
+      alone. Two or three beta studios uploading a single cut each will hit the
+      ceiling within days, and the failure mode is uploads silently failing,
+      which reads to a beta user as "the app is broken" rather than "the plan is
+      full". Free also has no point-in-time recovery, and beta users will be
+      storing client contracts, budgets and signed SOWs. The database itself is
+      tiny (17 MB); it is entirely a file-storage question.
 - [x] **Create a Sentry project and set the DSN.** DONE and VERIFIED 2026-07-30
       via `/api/diagnostics/sentry`: configured true, event captured, flush
       delivered. The browser SDK shares the same DSN but initialises separately
