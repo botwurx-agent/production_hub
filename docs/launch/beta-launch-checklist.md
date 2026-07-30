@@ -6,12 +6,17 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
 
 ## Manual steps before inviting beta users
 
-- [ ] **Enable Supabase leaked-password protection.** BLOCKED ON PLAN, not on
-      finding a menu: it is a PRO feature and the project is on Free, so the
-      control does not appear at all. It comes with the Pro upgrade below; it is
-      not worth upgrading for on its own.
+- [ ] **Enable Supabase leaked-password protection.** Was blocked on plan (a
+      PRO feature, and the project was on Free, so the control did not appear at
+      all). Pro is now active, so the toggle should be available; the advisor
+      still reports it disabled, so it has not been flipped yet. Look under
+      Authentication configuration, in the Password or Attack Protection
+      section.
 
-- [ ] **Upgrade Supabase to Pro before inviting anyone.** The reason is storage
+- [x] **Upgrade Supabase to Pro before inviting anyone.** DONE 2026-07-30.
+      Storage headroom and daily backups are the reason it mattered; point-in-
+      time recovery is a separate paid add-on and is not needed for beta.
+      Original reasoning: The reason is storage
       and backups, not the password toggle. Checked 2026-07-30: 73 files, 545 MB
       of the Free plan's 1 GB file limit, used by the operator's own testing
       alone. Two or three beta studios uploading a single cut each will hit the
