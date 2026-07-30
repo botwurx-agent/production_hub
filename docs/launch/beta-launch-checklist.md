@@ -14,6 +14,13 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
       in Vercel. For source-map upload also set `SENTRY_ORG`, `SENTRY_PROJECT`,
       and `SENTRY_AUTH_TOKEN` (Vercel + CI). Everything is inert until the DSN is
       set, so nothing breaks if you defer this.
+      VERIFY IT with `GET /api/diagnostics/sentry` while signed in as a studio
+      member: it reports whether a DSN is present in the runtime, sends a
+      deliberate test error, waits for the flush, and returns the event id to
+      search for. Add `?throw=1` to test the unhandled-throw path instead of the
+      explicit-capture path (most of the app reports through reportError, but an
+      uncaught throw goes through instrumentation's onRequestError, and they can
+      fail independently).
 - [ ] **Turn on Vercel Analytics** for the project in the Vercel dashboard (the
       `<Analytics/>` tag is already wired).
 - [ ] **Fill the legal placeholders** in `/terms` and `/privacy`
