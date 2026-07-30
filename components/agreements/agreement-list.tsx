@@ -12,8 +12,11 @@ import {
   deleteAgreement,
   uploadAgreementFile,
   getAgreementFileUrl,
+  draftFromSow,
+  applySowDeliverables,
   type AgreementInput,
 } from "@/app/(app)/agreement-actions";
+import { useAiEnabled } from "@/components/ai/ai-availability";
 import {
   AGREEMENT_KIND,
   AGREEMENT_KIND_ORDER,
@@ -39,6 +42,15 @@ const field =
   "w-full rounded-[8px] border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none transition focus:border-border-strong";
 const label =
   "mb-1 block text-[11px] font-bold uppercase tracking-wide text-text-faint";
+
+/** A deliverable proposed by reading a SOW, before the producer accepts it. */
+type SowRow = {
+  name: string;
+  spec: string | null;
+  dueDate: string | null;
+  amount: number | null;
+  include: boolean;
+};
 
 /** An agreement inherited from the account, shown read-only on a project. */
 export type InheritedAgreement = {
@@ -411,9 +423,78 @@ function AgreementModal({
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const aiEnabled = useAiEnabled();
+
+  // Reading is a DRAFT: it fills the form and proposes deliverables, and
+  // nothing is written until Save. `before` makes a bad read one click to undo,
+  // the same contract as the invoice extractor and the composer's Polish.
+  const [reading, setReading] = useState(false);
+  const [filled, setFilled] = useState<string[] | null>(null);
+  const [before, setBefore] = useState<AgreementInput | null>(null);
+  const [proposed, setProposed] = useState<SowRow[] | null>(null);
+  const [governedByNote, setGovernedByNote] = useState<string | null>(null);
 
   function set<K extends keyof AgreementInput>(k: K, v: AgreementInput[K]) {
     setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  async function readDocument(f: File) {
+    setReading(true);
+    setFilled(null);
+    const fd = new FormData();
+    fd.set("file", f);
+    const res = await draftFromSow(fd);
+    setReading(false);
+    if ("error" in res) {
+      toast(res.error, "error");
+      return;
+    }
+    const d = res.draft;
+    setBefore(form);
+
+    const got: string[] = [];
+    setForm((prev) => {
+      const next = { ...prev };
+      if (d.title) { next.title = d.title; got.push("title"); }
+      if (d.reference) { next.reference = d.reference; got.push("reference"); }
+      if (d.counterparty) { next.counterparty = d.counterparty; got.push("counterparty"); }
+      if (d.effectiveDate) { next.effectiveDate = d.effectiveDate; got.push("effective date"); }
+      if (d.total !== null) { next.value = d.total; got.push("total value"); }
+      if (d.ourSignerName) { next.ourSignerName = d.ourSignerName; got.push("our signer"); }
+      if (d.ourSignedAt) { next.ourSignedAt = d.ourSignedAt; got.push("our signature date"); }
+      if (d.theirSignerName) { next.theirSignerName = d.theirSignerName; got.push("their signer"); }
+      if (d.theirSignedAt) { next.theirSignedAt = d.theirSignedAt; got.push("their signature date"); }
+      // Payment terms have no structured home on the receivable side yet, so
+      // they go into notes where they stay readable without reopening the PDF.
+      if (d.paymentTerms) {
+        next.notes = [prev.notes, `Payment terms: ${d.paymentTerms}`]
+          .filter(Boolean)
+          .join("\n\n");
+        got.push("payment terms (into notes)");
+      }
+      return next;
+    });
+
+    setGovernedByNote(d.governedBy);
+    setProposed(
+      d.deliverables.map((x) => ({
+        name: x.name,
+        spec: x.spec,
+        dueDate: x.dueDate,
+        amount: x.amount,
+        include: true,
+      }))
+    );
+    setFilled(got);
+  }
+
+  function undoRead() {
+    if (!before) return;
+    setForm(before);
+    setBefore(null);
+    setFilled(null);
+    setProposed(null);
+    setGovernedByNote(null);
   }
 
   async function save() {
@@ -447,6 +528,33 @@ function AgreementModal({
         return;
       }
     }
+    // The deliverables the producer left ticked. Applied after the agreement
+    // exists, and reported separately: a failure here must not read as though
+    // the agreement itself did not save.
+    const rows = (proposed ?? []).filter((r) => r.include);
+    if (rows.length > 0 && scope.projectId) {
+      const applied = await applySowDeliverables(
+        scope.projectId,
+        rows.map((r) => ({
+          name: r.name,
+          spec: r.spec,
+          dueDate: r.dueDate,
+          amount: r.amount,
+        }))
+      );
+      if ("error" in applied) {
+        setSaving(false);
+        toast(`Agreement saved, but the deliverables did not: ${applied.error}`, "error");
+        router.refresh();
+        onClose();
+        return;
+      }
+      toast(
+        `Saved, and added ${applied.created} deliverable${applied.created === 1 ? "" : "s"}.`,
+        "success"
+      );
+    }
+
     setSaving(false);
     router.refresh();
     onClose();
@@ -646,6 +754,11 @@ function AgreementModal({
                 return;
               }
               setFile(picked);
+              // Reading a received SOW is the point of attaching it here, so it
+              // runs on pick. Still a draft, still confirmed before saving.
+              if (aiEnabled && !agreement && agreementKind(form.kind) === "sow") {
+                void readDocument(picked);
+              }
             }}
           />
           <div className="flex flex-wrap items-center gap-2">
@@ -657,8 +770,131 @@ function AgreementModal({
             ) : agreement?.file_name ? (
               <span className="text-xs text-text-muted">{agreement.file_name} attached</span>
             ) : null}
+            {aiEnabled && file && !reading && (
+              <button
+                type="button"
+                onClick={() => void readDocument(file)}
+                className="text-xs font-semibold text-accent hover:underline"
+              >
+                Read it again
+              </button>
+            )}
           </div>
+          {aiEnabled && !file && !agreement && agreementKind(form.kind) === "sow" && (
+            <p className="mt-1 text-[11px] text-text-faint">
+              Attach a received SOW and the fields below fill themselves, with its
+              deliverables offered for the project. You check them before saving.
+            </p>
+          )}
+
+          {reading && (
+            <div className="mt-2 flex items-center gap-2 rounded-[10px] border border-border bg-surface-2 px-2.5 py-2 text-xs text-text-muted">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+              Reading the document...
+            </div>
+          )}
+
+          {!reading && filled && (
+            <div className="mt-2 rounded-[10px] border border-amber bg-amber-bg px-2.5 py-2 text-[11px] leading-relaxed text-amber">
+              {filled.length === 0 ? (
+                <span className="font-semibold">
+                  Nothing could be read off that document. Fill the fields in by hand.
+                </span>
+              ) : (
+                <>
+                  <span className="font-semibold">
+                    Filled from the document: {filled.join(", ")}.
+                  </span>{" "}
+                  Check the total and the dates against the PDF before saving.
+                </>
+              )}
+              {governedByNote && (
+                <div className="mt-1">
+                  It says it is governed by:{" "}
+                  <span className="font-semibold">{governedByNote}</span>. File that
+                  on the client if it is not already there.
+                </div>
+              )}
+              {before && (
+                <button
+                  type="button"
+                  onClick={undoRead}
+                  className="ml-1 font-semibold underline"
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Deliverables the document names. Applied only on request, and only to
+            the rows still ticked, so a misread line is dropped rather than
+            corrected after the fact. */}
+        {proposed !== null && proposed.length > 0 && scope.projectId && (
+          <div className="rounded-[10px] border border-border p-2.5">
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+                Deliverables in this SOW
+              </span>
+              <span className="text-[11px] text-text-muted">
+                {proposed.filter((r) => r.include).length} of {proposed.length} selected
+                {proposed.some((r) => r.amount !== null) && (
+                  <>
+                    {" · "}
+                    {money.format(
+                      proposed
+                        .filter((r) => r.include)
+                        .reduce((n, r) => n + (r.amount ?? 0), 0)
+                    )}
+                  </>
+                )}
+              </span>
+            </div>
+            <ul className="space-y-1">
+              {proposed.map((r, i) => (
+                <li
+                  key={`${r.name}-${i}`}
+                  className="flex items-center gap-2 rounded-[8px] bg-surface-2 px-2 py-1.5"
+                >
+                  <input
+                    type="checkbox"
+                    checked={r.include}
+                    onChange={(e) =>
+                      setProposed((prev) =>
+                        prev
+                          ? prev.map((x, j) =>
+                              j === i ? { ...x, include: e.target.checked } : x
+                            )
+                          : prev
+                      )
+                    }
+                  />
+                  <span className="min-w-0 flex-1 truncate text-xs text-text">
+                    {r.name}
+                    {r.spec && (
+                      <span className="text-text-faint"> · {r.spec}</span>
+                    )}
+                  </span>
+                  {r.dueDate && (
+                    <span className="shrink-0 text-[11px] text-text-faint">
+                      {fmtAgreementDay(r.dueDate)}
+                    </span>
+                  )}
+                  {r.amount !== null && (
+                    <span className="shrink-0 text-xs font-bold tabular-nums text-text">
+                      {money.format(r.amount)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-[11px] text-text-faint">
+              Adding these creates them on the Delivery page with their fees. They
+              are appended, so nothing already there is replaced.
+            </p>
+          </div>
+        )}
 
         <div>
           <span className={label}>Notes</span>

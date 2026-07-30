@@ -562,3 +562,181 @@ export async function extractInvoice(
 
   return parseInvoiceDraft(raw, budgetLines.map((l) => l.id));
 }
+
+// --- SOW reading (an inbound statement of work) ------------------------------
+// A received SOW is a source of truth about what the studio promised: named
+// deliverables at named prices on named dates. Retyping that into the project
+// is exactly the work this removes.
+//
+// Prompt shaped from two real documents: one from a brand (deliverables as
+// prose, an initial payment and a total) and one from a production company
+// hiring the studio as a sub (a milestone table and a per-deliverable fee table
+// summing to a stated total). It has to handle both.
+
+const SOW_SYSTEM = `You read a Statement of Work and return only what is printed on it.
+
+A producer will check every field before it is saved, so accuracy matters far more than completeness. Anything you are unsure about must be null. A plausible guess is worse than nothing, because it may not get caught.
+
+Return ONLY a JSON object, no prose, no code fences, with exactly these keys:
+{
+  "title": string or null,           // the project or engagement name, not the words "Statement of Work"
+  "reference": string or null,       // the document's own number if shown, e.g. "SOW #1"
+  "counterparty": string or null,    // the OTHER party: who is commissioning or hiring. Never the service provider or subcontractor
+  "governedBy": string or null,      // the parent agreement named, e.g. "Master Services Agreement dated 1/28/2026"
+  "effectiveDate": string or null,   // YYYY-MM-DD, the date the SOW takes effect or is dated
+  "total": number or null,           // the TOTAL fee for the whole engagement, as a plain number
+  "paymentTerms": string or null,    // payment structure in one or two plain sentences, e.g. "50% on execution, 50% net 20"
+  "ourSignerName": string or null,   // printed name of whoever signed for the service provider, if filled in
+  "ourSignedAt": string or null,     // YYYY-MM-DD
+  "theirSignerName": string or null,
+  "theirSignedAt": string or null,
+  "deliverables": [                  // one entry per deliverable or line the document names
+    {
+      "name": string,                // short, e.g. "OLV :30 16x9" or "Moco Crew"
+      "spec": string or null,        // format, duration, quantity if stated
+      "dueDate": string or null,     // YYYY-MM-DD if a delivery date is given for this line
+      "amount": number or null       // the fee for THIS line, if the document breaks fees out per line
+    }
+  ],
+  "unreadable": boolean              // true if this is not a readable statement of work
+}
+
+Rules:
+- total is the whole engagement. If the document shows an initial payment and a total, take the TOTAL, and describe the split in paymentTerms.
+- Only fill a deliverable's amount when the document states a fee for that specific line. If it gives one lump sum, leave every amount null and put the sum in total.
+- deliverables is for what gets delivered or supplied. Include line items from a fee table even when they read as resources (crew, equipment, stage), because that is how the fee is broken out.
+- A date range like "6/09/26 - 6/11/26" should use the LAST date as dueDate.
+- An ambiguous date format should be read from other clues on the document; if it stays ambiguous, return null.
+- Never invent a fee, a date, or a deliverable that is not printed.
+- If the document is not a statement of work, set unreadable to true and everything else to null or empty.
+- Do not use em dashes in any text you return.`;
+
+export type SowDeliverable = {
+  name: string;
+  spec: string | null;
+  dueDate: string | null;
+  amount: number | null;
+};
+
+export type SowDraft = {
+  title: string | null;
+  reference: string | null;
+  counterparty: string | null;
+  governedBy: string | null;
+  effectiveDate: string | null;
+  total: number | null;
+  paymentTerms: string | null;
+  ourSignerName: string | null;
+  ourSignedAt: string | null;
+  theirSignerName: string | null;
+  theirSignedAt: string | null;
+  deliverables: SowDeliverable[];
+  unreadable: boolean;
+};
+
+/** Shared with the invoice parser: a money value that cannot be trusted raw. */
+function money(v: unknown): number | null {
+  let n: number | null = null;
+  if (typeof v === "number") {
+    n = v;
+  } else if (typeof v === "string") {
+    const digits = v.replace(/[^0-9.\-]/g, "");
+    // Number("") is 0, so a string with no digits would otherwise land as a
+    // real zero fee rather than as nothing extracted.
+    n = digits === "" ? NaN : Number(digits);
+  }
+  if (n === null || !Number.isFinite(n) || n < 0 || n > 1e9) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * The trust boundary between model output and a contract record. Everything is
+ * validated, and anything that fails becomes null rather than being written.
+ */
+export function parseSowDraft(raw: string): SowDraft {
+  const empty: SowDraft = {
+    title: null,
+    reference: null,
+    counterparty: null,
+    governedBy: null,
+    effectiveDate: null,
+    total: null,
+    paymentTerms: null,
+    ourSignerName: null,
+    ourSignedAt: null,
+    theirSignerName: null,
+    theirSignedAt: null,
+    deliverables: [],
+    unreadable: true,
+  };
+
+  const cleaned = raw.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end <= start) return empty;
+
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+  } catch {
+    return empty;
+  }
+
+  const rawList = Array.isArray(obj.deliverables) ? obj.deliverables : [];
+  const deliverables: SowDeliverable[] = [];
+  // Capped: a runaway list would be a misread, not a real SOW, and each entry
+  // becomes a row in the project.
+  for (const item of rawList.slice(0, 60)) {
+    if (typeof item !== "object" || item === null) continue;
+    const row = item as Record<string, unknown>;
+    const name = str(row.name, 200);
+    // A deliverable with no name cannot be filed against anything.
+    if (!name) continue;
+    deliverables.push({
+      name,
+      spec: str(row.spec, 300),
+      dueDate: day(row.dueDate),
+      amount: money(row.amount),
+    });
+  }
+
+  return {
+    title: str(obj.title, 300),
+    reference: str(obj.reference, 100),
+    counterparty: str(obj.counterparty, 200),
+    governedBy: str(obj.governedBy, 300),
+    effectiveDate: day(obj.effectiveDate),
+    total: money(obj.total),
+    paymentTerms: str(obj.paymentTerms, 1000),
+    ourSignerName: str(obj.ourSignerName, 200),
+    ourSignedAt: day(obj.ourSignedAt),
+    theirSignerName: str(obj.theirSignerName, 200),
+    theirSignedAt: day(obj.theirSignedAt),
+    deliverables,
+    unreadable: obj.unreadable === true,
+  };
+}
+
+/**
+ * Reads a received SOW into a DRAFT. Writes nothing: the producer confirms
+ * every field, and the deliverables are applied only if they choose to.
+ */
+export async function extractSow(doc: AiDocument): Promise<SowDraft> {
+  const provider = aiProvider();
+  const user =
+    "Read this Statement of Work and return the JSON object described in the instructions.";
+  // Generous: a SOW with a long fee table produces a lot of JSON, and on a
+  // reasoning model this budget also covers the reasoning tokens.
+  const maxTokens = 8000;
+
+  const raw =
+    provider === "openai"
+      ? await openaiReadDocument(SOW_SYSTEM, user, doc, maxTokens)
+      : provider === "anthropic"
+        ? await anthropicReadDocument(SOW_SYSTEM, user, doc, maxTokens)
+        : (() => {
+            throw new Error("No AI provider configured.");
+          })();
+
+  return parseSowDraft(raw);
+}

@@ -7,6 +7,9 @@ import { logWrite, reportError } from "@/lib/log";
 import { generateReviewToken } from "@/lib/review-links";
 import { agreementDirection, agreementKind } from "@/lib/agreements";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
+import { isCostDocType } from "@/lib/costs";
+import { aiConfigured, extractSow, type SowDraft } from "@/lib/ai";
+import { setDeliverableRate } from "@/lib/rates";
 
 /**
  * Agreements hang off either an account or a project, so revalidation covers
@@ -223,4 +226,129 @@ export async function getAgreementFileUrl(
     return { error: "Could not open that document." };
   }
   return { url: data.signedUrl };
+}
+
+/**
+ * Reads a received SOW into a DRAFT. Writes nothing.
+ *
+ * Same contract as the invoice extractor: the model assists, the human commits.
+ * A contract record is never created from a model reading a document unattended,
+ * and neither are the deliverables it implies.
+ */
+export async function draftFromSow(
+  formData: FormData
+): Promise<{ error: string } | { ok: true; draft: SowDraft }> {
+  await requireStudioContext();
+  if (!aiConfigured()) {
+    return { error: "No AI provider is set up, so documents cannot be read here." };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "No file selected." };
+  }
+  if (!isCostDocType(file.type)) {
+    return { error: "Only a PDF or an image can be read." };
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      error: `That file is ${formatBytes(file.size)}, over the ${formatBytes(
+        MAX_UPLOAD_BYTES
+      )} limit for reading.`,
+    };
+  }
+
+  let draft: SowDraft;
+  try {
+    draft = await extractSow({
+      base64: Buffer.from(await file.arrayBuffer()).toString("base64"),
+      mediaType: file.type,
+      fileName: file.name,
+    });
+  } catch (e) {
+    reportError("draftFromSow/ai", e);
+    return { error: "Could not read that document. Fill the form in by hand." };
+  }
+
+  if (draft.unreadable) {
+    return {
+      error: "That did not look like a statement of work. Fill the form in by hand.",
+    };
+  }
+  return { ok: true, draft };
+}
+
+/**
+ * Creates the project's deliverables from an already-confirmed SOW draft.
+ *
+ * Separate from drafting on purpose: the producer sees what would be created,
+ * edits or drops rows, and only then does anything get written. Prices go to
+ * `deliverable_pricing` because that is the studio-only table (migration 0074),
+ * never back onto the collaborator-readable `deliverables` row.
+ */
+export async function applySowDeliverables(
+  projectId: string,
+  rows: { name: string; spec: string | null; dueDate: string | null; amount: number | null }[]
+): Promise<{ error: string } | { ok: true; created: number }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const clean = rows
+    .map((r) => ({
+      name: r.name.trim().slice(0, 300),
+      spec: r.spec?.trim().slice(0, 300) || null,
+      due_date: r.dueDate || null,
+      amount:
+        r.amount !== null && Number.isFinite(r.amount) && r.amount >= 0
+          ? Math.round(r.amount * 100) / 100
+          : null,
+    }))
+    .filter((r) => r.name.length > 0);
+
+  if (clean.length === 0) return { error: "Nothing to add." };
+
+  // Appended after whatever is already there, so applying a SOW never quietly
+  // replaces deliverables someone entered by hand.
+  const { data: last } = await supabase
+    .from("deliverables")
+    .select("position")
+    .eq("project_id", projectId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let position = (last?.position ?? -1) + 1;
+
+  const { data: created, error } = await supabase
+    .from("deliverables")
+    .insert(
+      clean.map((r) => ({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        position: position++,
+        name: r.name,
+        spec: r.spec,
+        due_date: r.due_date,
+        status: "planned",
+        created_by: ctx.userId,
+      }))
+    )
+    .select("id");
+
+  if (error || !created) {
+    reportError("applySowDeliverables/deliverables", error);
+    return { error: "Could not add those deliverables." };
+  }
+
+  // Prices land in the studio-only side table, one row per priced line.
+  for (let i = 0; i < created.length; i++) {
+    const amount = clean[i]?.amount ?? null;
+    if (amount !== null) {
+      await setDeliverableRate(supabase, ctx.studio.id, created[i].id, amount);
+    }
+  }
+
+  revalidatePath(`/projects/${projectId}/delivery`);
+  revalidatePath(`/projects/${projectId}/agreements`);
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true, created: created.length };
 }

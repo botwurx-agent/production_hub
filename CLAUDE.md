@@ -1589,6 +1589,64 @@ already knew what was BILLED. Slice 4 just puts them on one page.
   project_costs is is_studio_member and the dashboard already redirects
   collaborators.
 
+### Agreements: NDAs, MSAs, SOWs, change orders (migration 0076) — BUILT
+Shaped from two REAL documents the operator supplied (a brand SOW they signed,
+and a subcontractor SOW from a production company that hired them). Both agreed
+on three things, and those three drove the model:
+- A SOW is a CHILD of a master agreement ("governed under the Master Services
+  Agreement dated 1/28/2026"; "part of and subject to the Subcontractor
+  Agreement"). Hence `parent_id`, and scope following the relationship: NDA and
+  MSA belong to the ACCOUNT (signed once, govern everything after), SOW and
+  change order belong to a PROJECT. The project page shows the account's masters
+  as read-only INHERITED context ("In place with the client") without claiming to
+  own them, which answers "is there an NDA in place" without a hunt.
+- BOTH parties sign. The proposal flow has ONE signer, fine for "client approved
+  this estimate" and not for a contract. So two signer name/date pairs, and
+  `signState` derives unsigned | partial | signed from them rather than storing a
+  status that could disagree. The row spells out WHICH side is missing, since
+  "awaiting signature" is useless otherwise.
+- The studio is usually the RECEIVER. `direction` defaults to inbound and the
+  stored PDF is the normal case, not an afterthought.
+RLS is is_studio_member ONLY: a contract states fees, so it sits with the money
+tables, not the project-scoped tables a collaborator reads. `expires_date` +
+`isExpired` against a SERVER-resolved todayIso flags a lapsed NDA.
+UI: components/agreements/agreement-list.tsx is shared by the account page
+(kinds nda/msa/other) and /projects/[id]/agreements (sow/change_order/nda/other,
+plus a hub card in the Produce band). Actions in app/(app)/agreement-actions.ts.
+OUTBOUND GENERATION IS DELIBERATELY NOT BUILT: the operator has no NDA/SOW
+template of their own, and writing legal text is not our business. Revisit only
+when they bring counsel-reviewed language; the mechanism (token page, signature
+pad, snapshot) already exists on the proposal path to reuse.
+
+### Agreements: read an inbound SOW (no migration) — BUILT
+A received SOW is a source of truth about what the studio PROMISED: named
+deliverables at named prices on named dates. Retyping that into the project is
+the work this removes.
+- lib/ai.ts `extractSow` + `parseSowDraft`, reusing the multimodal AiDocument
+  path built for invoices. The prompt was written against BOTH real documents,
+  because they differ: the brand one gives prose deliverables with an initial
+  payment and a total, the subcontractor one gives a milestone table plus a
+  per-deliverable fee table summing to a stated total. It must handle either.
+- `parseSowDraft` is the trust boundary and is unit-tested against both shapes,
+  including that the six Wave line fees add back to $57,544. It caps the list at
+  60 rows (a runaway list is a misread, and each row becomes a project row),
+  drops a nameless deliverable (nothing to file it against), rejects negative or
+  absurd money, reuses the empty-digits fix so "n/a" does not become $0.00, and
+  validates dates as REAL days. A date RANGE uses the last date, since that is
+  the delivery date.
+- Deliverables are PROPOSED, not applied: a checklist with per-row tick, running
+  selected total, and Undo restoring the pre-read form verbatim. Applying calls
+  `applySowDeliverables`, which APPENDS (never replaces hand-entered rows) and
+  routes fees to `deliverable_pricing`, the studio-only table from 0074, never
+  back onto the collaborator-readable `deliverables` row.
+- PAYMENT TERMS go into the agreement's NOTES as text, not into a structure.
+  Deliberate: cost_payments is money OUT, and there is no receivable-schedule
+  object. Inventing one is a bigger decision than this slice. The terms stay
+  readable without reopening the PDF, which is most of the value.
+- `governedBy` is surfaced as a prompt ("it says it is governed by X, file that
+  on the client") rather than auto-creating a parent, since we cannot know
+  whether that MSA is already on file.
+
 ### Gear & crew day rates (migration 0075)
 A `$/day` column on the Gear & crew page, plus a per-line `qty x rate` figure
 and a "$X/day" total next to the confirmed count.
