@@ -15,10 +15,11 @@ import { ChatPanel } from "@/components/communication/gchat-panel";
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
 import { RelationshipFeed } from "@/components/crm/relationship-feed";
 import { TaskList } from "@/components/crm/task-list";
+import { AgreementList } from "@/components/agreements/agreement-list";
 import { loadAccountFeed } from "@/lib/crm-feed";
 import { PROJECT_STATUS, ACCOUNT_STATUS, DEAL_STAGE } from "@/lib/status";
 import { shortDate, money, timeAgo } from "@/lib/format";
-import type { Contact } from "@/lib/database.types";
+import type { Agreement, Contact } from "@/lib/database.types";
 
 export default async function ClientDetailPage({
   params,
@@ -46,6 +47,7 @@ export default async function ClientDetailPage({
     { data: slackChannels },
     { data: slackAccount },
     { data: chatSpaces },
+    { data: agreements },
   ] = await Promise.all([
     supabase
       .from("contacts")
@@ -95,10 +97,19 @@ export default async function ClientDetailPage({
       .select("id, space_name, space_display_name")
       .eq("client_id", params.id)
       .order("created_at", { ascending: false }),
+    // Relationship-level paperwork only. A SOW belongs to its project.
+    supabase
+      .from("agreements")
+      .select("*")
+      .eq("client_id", params.id)
+      .order("effective_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false }),
   ]);
 
   const revalidate = `/clients/${params.id}`;
   const primaryEmail = (contacts ?? []).find((c) => c.email)?.email ?? "";
+
+  const agreementsToday = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
@@ -236,6 +247,19 @@ export default async function ClientDetailPage({
         <Card className="p-5">
           <h2 className="mb-4 font-display text-base font-bold">Tasks</h2>
           <TaskList accountId={client.id} tasks={tasks ?? []} />
+        </Card>
+
+        {/* Relationship-level paperwork: an NDA or master agreement is signed
+            once and governs every job after it, so it belongs here rather than
+            on any one project. */}
+        <Card className="p-5 lg:col-span-2">
+          <AgreementList
+            agreements={(agreements ?? []) as Agreement[]}
+            clientId={client.id}
+            todayIso={agreementsToday}
+            defaultCounterparty={client.name}
+            kinds={["nda", "msa", "other"]}
+          />
         </Card>
 
         {/* Activity */}

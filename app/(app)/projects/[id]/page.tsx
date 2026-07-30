@@ -123,6 +123,7 @@ export default async function ProjectDetailPage({
     { data: budgetLines },
     { data: projectCosts },
     { data: deliverables },
+    { data: agreementRows },
     { data: rosterContacts },
     { data: upcomingEvents },
     { data: taskRows },
@@ -162,6 +163,10 @@ export default async function ProjectDetailPage({
       .select("budget_line_id, amount")
       .eq("project_id", params.id),
     supabase.from("deliverables").select("status").eq("project_id", params.id),
+    supabase
+      .from("agreements")
+      .select("kind, our_signed_at, their_signed_at")
+      .eq("project_id", params.id),
     supabase.from("contacts").select("id").eq("project_id", params.id),
     supabase
       .from("project_events")
@@ -295,6 +300,13 @@ export default async function ProjectDetailPage({
   const slackCount = (slackChannels ?? []).length;
   const chatCount = (chatSpaces ?? []).length;
   const commsTotal = emailCount + slackCount + chatCount;
+
+  // Signed paperwork on this job, for the hub card. Fully signed means both
+  // sides, which is what an agreement actually needs.
+  const agreements = agreementRows ?? [];
+  const agreementsSigned = agreements.filter(
+    (a) => a.our_signed_at && a.their_signed_at
+  ).length;
 
   // Produce derivations.
   const deliveredCount = (deliverables ?? []).filter((d) => d.status === "delivered").length;
@@ -859,6 +871,30 @@ export default async function ProjectDetailPage({
                 {deliverTotal > 0
                   ? "Final deliverables and billing status."
                   : "List the final deliverables and invoice."}
+              </p>
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/agreements`}
+              hue="purple"
+              title="Agreements"
+              sub={
+                agreements.length > 0
+                  ? `${agreementsSigned} of ${agreements.length} fully signed`
+                  : "SOWs & change orders"
+              }
+              footer={agreements.length > 0 ? "Open agreements" : "File a SOW"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6M9 15h6M9 11h3" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                {agreements.length > 0
+                  ? "Scope, fees and what was signed."
+                  : "File the SOW so what you committed to is findable."}
               </p>
             </HubCard>
 
