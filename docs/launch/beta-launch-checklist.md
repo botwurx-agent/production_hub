@@ -38,9 +38,18 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
       fail independently).
 - [ ] **Turn on Vercel Analytics** for the project in the Vercel dashboard (the
       `<Analytics/>` tag is already wired).
-- [ ] **Fill the legal placeholders** in `/terms` and `/privacy`
-      (`[Studio legal name]`, `[contact email]`, `[jurisdiction]`) and have them
-      reviewed by counsel.
+- [x] **Fill the legal placeholders** in `/terms` and `/privacy`. DONE
+      2026-07-30. Written for the actual situation: a free invited beta run by
+      an individual, pre-incorporation, so the pages say that rather than
+      inventing an entity. Contact is studioflows1@gmail.com throughout. No
+      governing jurisdiction is named, deliberately: there is no company to
+      attach one to yet, and a made-up one is worse than an honest omission.
+      Privacy now names the real subprocessors (Supabase, Vercel, OpenAI,
+      Resend, Sentry), says data is stored in the US, states that project
+      content is sent to the AI provider only when an AI feature is invoked,
+      and commits to export or deletion within 30 days of an emailed request.
+      STILL NEEDS COUNSEL before the Service is offered commercially, and the
+      governing-law clause needs adding once the entity exists.
 - [ ] **Decide on email confirmation.** Users now have password reset and a
       resend-confirmation path, so keeping confirmation on is safe. If you want a
       frictionless beta, you can disable it in Supabase Auth instead.
