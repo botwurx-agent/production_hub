@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/log";
 
 export type AuthState = { error?: string; message?: string } | null;
 
@@ -99,9 +100,16 @@ export async function requestPasswordReset(
   const supabase = createClient();
   // The recovery link lands on /auth/confirm, which verifies the OTP (creating
   // a short-lived session) and forwards to /reset-password to set a new one.
-  await supabase.auth.resetPasswordForEmail(email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${siteOrigin()}/auth/confirm?next=/reset-password`,
   });
+
+  // An unknown address is NOT an error here: Supabase deliberately succeeds so
+  // the response cannot be used to discover which addresses have accounts. So
+  // anything that does come back is a real fault (SMTP refusing the login, a
+  // rate limit, the provider down) and is worth recording. It is logged rather
+  // than shown, because the message below has to stay identical either way.
+  if (error) reportError("requestPasswordReset", error);
 
   // Always report success so the form never reveals whether an account exists.
   return {
