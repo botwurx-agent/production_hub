@@ -1843,6 +1843,29 @@ Polish button: the model assists, the human commits.
   costs more than the deployment budgets for. gpt-5-mini can do this; a bigger
   model will pick tools better, which is the trade to revisit if it misroutes.
 
+### AI summary rendering (no migration) — BUILT
+The project summary was rendered as `whitespace-pre-wrap` muted grey text, so
+the structure the model was already producing (one status sentence, then
+labelled groups with "- " items) was thrown away and the operator got a grey
+paragraph to hunt through. lib/summary-format.ts parseSummary() reads it back
+into { lead, groups, rest } and components/projects/project-summary.tsx renders
+the lead at 15px in full text colour (it is the twenty-second read), each group
+behind a tinted status chip with a dot (green done / blue in progress / amber
+waiting on / indigo next action / red watch, which is colour AS SIGNAL, these
+labels are states), and items as spaced rows in full text colour rather than
+muted.
+- PARSED rather than switching the prompt to JSON, deliberately: summaries
+  already stored in project_summaries are plain text and would otherwise render
+  worse than before, and a model that drifts from the format should degrade to
+  readable prose rather than to an error.
+- NOTHING IS EVER DROPPED. Unrecognised lines come back in `rest` and are still
+  shown as prose; an announced but empty group is discarded as noise.
+- The model writes the two shapes interchangeably ("Waiting on:" then bullets on
+  following lines, or "Waiting on: - a - b" inline), so both are handled. The
+  inline split requires a dash with space on BOTH sides so "re-shoot the hero"
+  is not broken in two. Unit-tested in the scratchpad against both shapes plus
+  the hyphen case, unknown labels, and empty input.
+
 ### Project documents (migration 0078) — BUILT
 The paperwork side of a job: permits, insurance certificates, licences,
 delivery specs, agency schedules. Everything that arrives from outside, mostly

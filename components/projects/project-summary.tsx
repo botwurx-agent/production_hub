@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { shortDate } from "@/lib/format";
 import { summarizeProject } from "@/app/(app)/projects/[id]/ai-actions";
+import { parseSummary } from "@/lib/summary-format";
 
 // Small "AI" spark mark for the summary card.
 function SparkIcon({ className }: { className?: string }) {
@@ -77,14 +78,70 @@ export function ProjectSummary({
     );
   }
 
+  const parsed = parseSummary(content);
+
   return (
     <div>
-      <div
-        className={`whitespace-pre-wrap text-sm leading-relaxed text-text-muted transition ${
-          busy ? "opacity-50" : ""
-        }`}
-      >
-        {content}
+      <div className={`transition ${busy ? "opacity-50" : ""}`}>
+        {/* The opening status line is the twenty-second read, so it gets the
+            weight and the full text colour. Everything below it is detail. */}
+        {parsed.lead ? (
+          <p className="text-[15px] font-medium leading-[1.6] text-text">
+            {parsed.lead}
+          </p>
+        ) : null}
+
+        {parsed.groups.length > 0 ? (
+          <div className={parsed.lead ? "mt-5 space-y-5" : "space-y-5"}>
+            {parsed.groups.map((group) => (
+              <section key={group.label}>
+                {/* A tinted chip with a dot, the same status vocabulary used
+                    everywhere else, rather than a coloured row. */}
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-pill px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.05em]"
+                  style={{
+                    backgroundColor: `var(--h-${group.hue}-bg)`,
+                    color: `var(--h-${group.hue})`,
+                  }}
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: `var(--h-${group.hue})` }}
+                  />
+                  {group.label}
+                </span>
+                <ul className="mt-2.5 space-y-2">
+                  {group.items.map((item, i) => (
+                    <li key={i} className="flex gap-2.5">
+                      <span
+                        aria-hidden
+                        className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-border-strong"
+                      />
+                      <span className="text-sm leading-[1.6] text-text">
+                        {item}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Anything the parser did not recognise is still shown, so a summary
+            that drifts from the expected shape reads as prose rather than
+            silently losing half of itself. */}
+        {parsed.rest.length > 0 ? (
+          <div
+            className={`space-y-2 ${parsed.lead || parsed.groups.length ? "mt-5" : ""}`}
+          >
+            {parsed.rest.map((line, i) => (
+              <p key={i} className="text-sm leading-[1.6] text-text-muted">
+                {line}
+              </p>
+            ))}
+          </div>
+        ) : null}
       </div>
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
         <span className="text-xs text-text-faint">
