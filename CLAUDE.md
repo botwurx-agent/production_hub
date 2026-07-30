@@ -1703,9 +1703,17 @@ returns no rows, so the value is null with no application check at all.
   compile time, `npx tsc --noEmit` after dropping a column IS the audit. Every
   site that touched it fails to build.
 
-### The assistant (agent layer, migration 0077) — BUILT
-An in-app assistant ("Ask", topbar, Cmd/Ctrl+K) that reads the studio and
-PROPOSES changes. Studio-wide with a project selector that defaults to whatever
+### Runner (the agent layer, migration 0077) — BUILT
+An in-app assistant called RUNNER (left nav, Cmd/Ctrl+K) that reads the studio
+and PROPOSES changes. Named for the production role: a runner fetches things,
+checks things and reports back, and never decides, which is exactly the
+contract below. It is a NAV ROW THAT OPENS A PANEL, not a page: the panel
+slides over what you are reading and preselects the project whose page you are
+on, both of which a route change would throw away (components/agent/
+agent-open.ts is a toast-style pub/sub so the sidebar row, the mobile topbar
+button and Cmd+K all drive one AgentMount in the shell). It first shipped as a
+topbar icon next to the theme toggle, which the operator correctly called
+hidden: a headline feature in the utility tray reads as a utility. Studio-wide with a project selector that defaults to whatever
 project page you are on. This is the first thing built as a MARKET BET rather
 than from real friction (the operator's call: peers are shipping agents and its
 absence reads as dated), so the test is week two: if it is not being opened, it
@@ -1779,7 +1787,8 @@ Polish button: the model assists, the human commits.
   RLS is `user_id = auth.uid()`, NOT is_studio_member: a conversation carries
   what one person asked in their own words, and a colleague has no more business
   reading it than reading their notebook. Same shape as notification_reads.
-- Panel: components/agent/{agent-launcher,agent-panel,action-card,dictation}.
+- Panel: components/agent/{agent-mount,agent-panel,action-card,dictation,
+  agent-open}.
   Never opens on a blank box (lib/agent/suggestions.ts seeds four chips from
   REAL state: an overdue vendor by name, a stalled project by name), because an
   empty chat box is how these features die and it fails the section 4.1 bar.

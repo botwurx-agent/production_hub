@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/app-shell/user-menu";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
-import { AgentLauncher } from "@/components/agent/agent-launcher";
+import { openAgent } from "@/components/agent/agent-open";
+import { RunnerIcon } from "@/components/app-shell/nav-icons";
 import type { StudioOption } from "@/components/app-shell/studio-switcher";
 
 const nav = [
@@ -30,8 +31,8 @@ export function Topbar({
   collaborator?: boolean;
   studios?: StudioOption[];
   activeStudioId?: string;
-  /** The assistant reads studio-wide tables, so it is staff only, and it needs
-   *  an AI key to do anything at all. Both are decided on the server. */
+  /** Runner reads studio-wide tables, so it is staff only, and it needs an AI
+   *  key to do anything at all. Both are decided on the server. */
   assistant?: boolean;
 }) {
   const pathname = usePathname();
@@ -71,7 +72,18 @@ export function Topbar({
         <div className="hidden flex-1 md:block" />
 
         <div className="flex items-center gap-2">
-          {assistant ? <AgentLauncher /> : null}
+          {/* Desktop reaches Runner from the sidebar; this is the phone's
+              only route to it, since the sidebar is hidden below md. */}
+          {assistant ? (
+            <button
+              type="button"
+              onClick={openAgent}
+              aria-label="Open Runner"
+              className="flex h-8 w-8 items-center justify-center rounded-[8px] text-text-muted hover:bg-surface-2 hover:text-text md:hidden"
+            >
+              <RunnerIcon />
+            </button>
+          ) : null}
           <NotificationBell needsYouCount={needsYouCount} />
           <ThemeToggle />
           <UserMenu

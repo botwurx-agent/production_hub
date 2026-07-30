@@ -214,14 +214,14 @@ export function AgentPanel({ onClose }: { onClose: () => void }) {
     <aside
       className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col border-l border-border bg-bg shadow-lg"
       role="dialog"
-      aria-label="Assistant"
+      aria-label="Runner"
     >
       <header className="flex items-center gap-2 border-b border-border px-4 py-3">
         <span className="grid h-7 w-7 place-items-center rounded-[8px] bg-accent-soft text-accent">
           <SparkIcon />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-text">Assistant</p>
+          <p className="text-sm font-semibold text-text">Runner</p>
           <p className="truncate text-[11px] text-text-faint">
             Reads your studio. Asks before it changes anything.
           </p>

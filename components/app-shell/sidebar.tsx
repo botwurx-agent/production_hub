@@ -11,8 +11,10 @@ import {
   LeadsIcon,
   SettingsIcon,
   CommunicationIcon,
+  RunnerIcon,
 } from "@/components/app-shell/nav-icons";
 import { CommunicationBadge } from "@/components/app-shell/communication-badge";
+import { openAgent } from "@/components/agent/agent-open";
 import {
   StudioSwitcher,
   type StudioOption,
@@ -36,12 +38,15 @@ export function Sidebar({
   collaborator = false,
   studios = [],
   activeStudioId = "",
+  assistant = false,
 }: {
   studioName: string;
   logoUrl?: string | null;
   collaborator?: boolean;
   studios?: StudioOption[];
   activeStudioId?: string;
+  /** Show the Runner row. Staff only, and only with an AI key configured. */
+  assistant?: boolean;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -88,6 +93,36 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
+        {/* Runner opens the panel rather than navigating, so it is a button
+            wearing a nav row's clothes. Deliberate: the panel slides over
+            whatever you are reading and picks up the project you are already
+            on, both of which a route change would throw away. It sits above
+            the pages, and under its own divider, because it is a different
+            kind of thing to a destination. */}
+        {assistant ? (
+          <>
+            <button
+              type="button"
+              onClick={openAgent}
+              title={collapsed ? "Runner (Cmd+K)" : undefined}
+              className={`flex w-full items-center rounded-[11px] py-2 text-sm font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text ${
+                collapsed ? "justify-center px-0" : "gap-3 px-3"
+              }`}
+            >
+              <RunnerIcon />
+              {!collapsed && (
+                <>
+                  Runner
+                  <kbd className="ml-auto rounded-[6px] border border-border px-1.5 py-0.5 text-[10px] font-medium text-text-faint">
+                    ⌘K
+                  </kbd>
+                </>
+              )}
+            </button>
+            <div className="!my-2 border-t border-border" />
+          </>
+        ) : null}
+
         {items.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (

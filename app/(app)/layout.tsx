@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { Toaster } from "@/components/ui/toast";
 import { AiAvailabilityProvider } from "@/components/ai/ai-availability";
+import { AgentMount } from "@/components/agent/agent-mount";
 
 export default async function AppLayout({
   children,
@@ -25,6 +26,10 @@ export default async function AppLayout({
     // would risk a loop); the stripped nav + RLS still contain them regardless.
     if (pathname && !pathname.startsWith("/projects")) redirect("/projects");
   }
+
+  // Runner reads studio-member tables (costs, deals, contacts), so a project
+  // collaborator would get a chat that could answer nothing.
+  const assistant = aiConfigured() && !ctx.isCollaborator;
 
   const outstanding = await getOutstanding();
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
@@ -48,6 +53,7 @@ export default async function AppLayout({
           collaborator={ctx.isCollaborator}
           studios={studios}
           activeStudioId={ctx.studio.id}
+          assistant={assistant}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar
@@ -56,12 +62,13 @@ export default async function AppLayout({
             collaborator={ctx.isCollaborator}
             studios={studios}
             activeStudioId={ctx.studio.id}
-            assistant={aiConfigured() && !ctx.isCollaborator}
+            assistant={assistant}
           />
           <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">
             {children}
           </main>
         </div>
+        {assistant ? <AgentMount /> : null}
         <Toaster />
       </div>
     </AiAvailabilityProvider>

@@ -122,6 +122,14 @@ export function BellIcon({ className }: IconProps) {
   );
 }
 
+export function RunnerIcon({ className }: IconProps) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill={svg} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
+    </svg>
+  );
+}
+
 export function ChevronLeftIcon({ className }: IconProps) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill={svg} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
