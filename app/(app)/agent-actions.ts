@@ -83,9 +83,35 @@ export type ThreadMessage = {
   cards: unknown;
 };
 
-/** Replays a saved conversation into the panel after a reload. */
-export async function loadAgentThread(threadId: string): Promise<ThreadMessage[]> {
-  await requireStudioContext();
+export type ThreadSummary = {
+  id: string;
+  title: string | null;
+  projectId: string | null;
+  projectTitle: string | null;
+  updatedAt: string;
+};
+
+/**
+ * How recently a conversation must have been used to be picked back up.
+ *
+ * A rolling window rather than "today", because "today" needs the caller's
+ * timezone to mean anything and this runs on the server. Eight hours covers
+ * carrying on with something from this morning, and refuses to carry yesterday
+ * forward, which is the point: a thread is replayed to the model as context,
+ * so an old one is feeding it facts that have since changed. Deposits get paid,
+ * cuts get approved, and a stale thread will have the model stating both
+ * confidently.
+ */
+const RESUME_WINDOW_MS = 8 * 60 * 60 * 1000;
+
+function replayable(rows: ThreadMessage[]): ThreadMessage[] {
+  // Tool rows are deliberately not replayed: they are model bookkeeping, not
+  // conversation, and an assistant row with no text was a pure tool-calling
+  // turn with nothing to show.
+  return rows.filter((m) => m.content.trim() || m.cards);
+}
+
+async function messagesFor(threadId: string): Promise<ThreadMessage[]> {
   const supabase = createClient();
   const { data } = await supabase
     .from("agent_messages")
@@ -93,10 +119,102 @@ export async function loadAgentThread(threadId: string): Promise<ThreadMessage[]
     .eq("thread_id", threadId)
     .in("role", ["user", "assistant"])
     .order("seq");
-  // Tool rows are deliberately not replayed: they are model bookkeeping, not
-  // conversation, and an assistant row with no text was a pure tool-calling
-  // turn with nothing to show.
-  return (data ?? []).filter((m) => m.content.trim() || m.cards);
+  return replayable((data ?? []) as ThreadMessage[]);
+}
+
+/**
+ * Opens a scope: one project, or the studio as a whole.
+ *
+ * Resumes that scope's most recent conversation when it is recent enough,
+ * otherwise returns nothing and the next question starts a fresh thread. This
+ * is the rule that stops one endless conversation accumulating stale context,
+ * and it is also what makes switching project in the selector do the obvious
+ * thing rather than silently continuing to talk in the previous project's
+ * thread with a system prompt that now names a different job.
+ */
+export async function openAgentScope(
+  projectId: string | null
+): Promise<{ threadId: string | null; messages: ThreadMessage[] }> {
+  const ctx = await requireStudioContext();
+  if (!canUseRunner(ctx)) return { threadId: null, messages: [] };
+
+  const supabase = createClient();
+  let q = supabase
+    .from("agent_threads")
+    .select("id, updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  q = projectId ? q.eq("project_id", projectId) : q.is("project_id", null);
+
+  const { data } = await q.maybeSingle();
+  if (!data) return { threadId: null, messages: [] };
+
+  const age = Date.now() - new Date(data.updated_at).getTime();
+  if (age > RESUME_WINDOW_MS) return { threadId: null, messages: [] };
+
+  return { threadId: data.id, messages: await messagesFor(data.id) };
+}
+
+/** Opens a specific conversation from the history list. */
+export async function openAgentThread(
+  threadId: string
+): Promise<{ threadId: string; projectId: string | null; messages: ThreadMessage[] } | null> {
+  const ctx = await requireStudioContext();
+  if (!canUseRunner(ctx)) return null;
+
+  const supabase = createClient();
+  // RLS restricts agent_threads to the caller, so reading the row back IS the
+  // ownership check.
+  const { data } = await supabase
+    .from("agent_threads")
+    .select("id, project_id")
+    .eq("id", threadId)
+    .maybeSingle();
+  if (!data) return null;
+
+  return {
+    threadId: data.id,
+    projectId: data.project_id,
+    messages: await messagesFor(data.id),
+  };
+}
+
+/** Past conversations, newest first, for the history list. */
+export async function listAgentThreads(): Promise<ThreadSummary[]> {
+  const ctx = await requireStudioContext();
+  if (!canUseRunner(ctx)) return [];
+
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("agent_threads")
+    .select("id, title, project_id, updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(40);
+
+  const rows = data ?? [];
+  const ids = rows
+    .map((t) => t.project_id)
+    .filter((id): id is string => Boolean(id));
+
+  // Titles are looked up separately rather than joined: agent_threads carries
+  // no declared relationship to projects in the generated types, and the list
+  // is short.
+  const names = new Map<string, string>();
+  if (ids.length) {
+    const { data: projects } = await supabase
+      .from("projects")
+      .select("id, title")
+      .in("id", ids);
+    for (const p of projects ?? []) names.set(p.id, p.title);
+  }
+
+  return rows.map((t) => ({
+    id: t.id,
+    title: t.title,
+    projectId: t.project_id,
+    projectTitle: t.project_id ? (names.get(t.project_id) ?? null) : null,
+    updatedAt: t.updated_at,
+  }));
 }
 
 type Payload = Record<string, unknown>;

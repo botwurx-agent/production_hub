@@ -4,15 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ActionCard, type ClientCard } from "@/components/agent/action-card";
 import { Dictation } from "@/components/agent/dictation";
+import { ThreadHistory } from "@/components/agent/thread-history";
 import {
   loadAgentContext,
-  loadAgentThread,
+  openAgentScope,
+  openAgentThread,
   type AgentContext,
+  type ThreadMessage,
 } from "@/app/(app)/agent-actions";
 
-// The panel keeps the thread id and the selected project for the browser
-// session, so closing it and reopening it does not lose the conversation.
-const THREAD_KEY = "agent.threadId";
+// Only the SCOPE is remembered client-side. Which conversation belongs to a
+// scope is resolved on the server every time the panel opens, because that
+// answer depends on how long ago the last one was used, and a stale id in
+// sessionStorage would happily reopen a week-old thread.
 const PROJECT_KEY = "agent.projectId";
 
 type Entry =
@@ -22,6 +26,25 @@ type Entry =
   | { kind: "card"; card: ClientCard }
   | { kind: "error"; text: string };
 
+// Turns saved messages back into what the panel renders. Pure, so it lives
+// outside the component rather than being redefined every render.
+function replay(messages: ThreadMessage[]): Entry[] {
+  const out: Entry[] = [];
+  for (const m of messages) {
+    if (m.content.trim()) {
+      out.push(
+        m.role === "user"
+          ? { kind: "user", text: m.content }
+          : { kind: "assistant", text: m.content }
+      );
+    }
+    if (Array.isArray(m.cards)) {
+      for (const c of m.cards as ClientCard[]) out.push({ kind: "card", card: c });
+    }
+  }
+  return out;
+}
+
 export function AgentPanel({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -29,58 +52,41 @@ export function AgentPanel({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [ctx, setCtx] = useState<AgentContext | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [projectId, setProjectId] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
-  // The project the producer is looking at is almost always the one they mean,
-  // so a project page preselects itself. An explicit choice wins over the URL,
-  // which is why the stored value is only used when the path has no project in
-  // it.
-  useEffect(() => {
-    const fromPath = pathname.match(/^\/projects\/([0-9a-f-]{32,40})/i)?.[1];
-    const stored = sessionStorage.getItem(PROJECT_KEY) ?? "";
-    setProjectId(fromPath ?? stored);
-    setThreadId(sessionStorage.getItem(THREAD_KEY));
-  }, [pathname]);
+  // Opening a scope resolves which conversation it continues, if any.
+  const openScope = useCallback(async (pid: string) => {
+    setLoading(true);
+    try {
+      const res = await openAgentScope(pid || null);
+      setThreadId(res.threadId);
+      setEntries(replay(res.messages));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Context and any saved conversation, once, on open.
+  // On open: work out the scope (the project page you are on wins, else the
+  // last one you chose), then load it. Deliberately once, since re-resolving
+  // on every navigation would wipe a conversation in progress.
   useEffect(() => {
     let alive = true;
-    const stored = sessionStorage.getItem(THREAD_KEY);
-    (async () => {
-      const fromPath = pathname.match(/^\/projects\/([0-9a-f-]{32,40})/i)?.[1];
-      const loaded = await loadAgentContext(
-        fromPath ?? sessionStorage.getItem(PROJECT_KEY) ?? null
-      );
-      if (alive) setCtx(loaded);
+    const fromPath = pathname.match(/^\/projects\/([0-9a-f-]{32,40})/i)?.[1];
+    const pid = fromPath ?? sessionStorage.getItem(PROJECT_KEY) ?? "";
+    setProjectId(pid);
 
-      if (stored) {
-        const history = await loadAgentThread(stored);
-        if (!alive) return;
-        const replayed: Entry[] = [];
-        for (const m of history) {
-          if (m.content.trim()) {
-            replayed.push(
-              m.role === "user"
-                ? { kind: "user", text: m.content }
-                : { kind: "assistant", text: m.content }
-            );
-          }
-          if (Array.isArray(m.cards)) {
-            for (const c of m.cards as ClientCard[]) {
-              replayed.push({ kind: "card", card: c });
-            }
-          }
-        }
-        setEntries(replayed);
-      }
+    (async () => {
+      const loaded = await loadAgentContext(pid || null);
+      if (alive) setCtx(loaded);
+      if (alive) await openScope(pid);
     })();
+
     return () => {
       alive = false;
     };
-    // Deliberately once: reloading the thread on every navigation would wipe
-    // whatever is on screen mid-conversation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -107,7 +113,7 @@ export function AgentPanel({ onClose }: { onClose: () => void }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: question,
-            threadId: sessionStorage.getItem(THREAD_KEY),
+            threadId,
             projectId: projectId || null,
           }),
         });
@@ -157,17 +163,14 @@ export function AgentPanel({ onClose }: { onClose: () => void }) {
         setBusy(false);
       }
     },
-    [busy, projectId]
+    [busy, projectId, threadId]
   );
 
   function handleEvent(event: Record<string, unknown>) {
     switch (event.type) {
       case "thread": {
         const id = String(event.threadId ?? "");
-        if (id) {
-          sessionStorage.setItem(THREAD_KEY, id);
-          setThreadId(id);
-        }
+        if (id) setThreadId(id);
         break;
       }
       case "step":
@@ -198,16 +201,40 @@ export function AgentPanel({ onClose }: { onClose: () => void }) {
   }
 
   function newThread() {
-    sessionStorage.removeItem(THREAD_KEY);
+    // The next question creates the thread; nothing needs to exist until then.
     setThreadId(null);
     setEntries([]);
     boxRef.current?.focus();
   }
 
+  // Changing project changes the conversation. Continuing to talk in the old
+  // project's thread while the system prompt names a new one is the confusing
+  // behaviour this replaces.
   function pickProject(id: string) {
     setProjectId(id);
     if (id) sessionStorage.setItem(PROJECT_KEY, id);
     else sessionStorage.removeItem(PROJECT_KEY);
+    openScope(id);
+    // The suggestions name the selected job, so they follow it.
+    loadAgentContext(id || null).then(setCtx);
+  }
+
+  // Picking from history moves the selector too, so the header always says
+  // which job the conversation on screen belongs to.
+  async function pickThread(id: string) {
+    setLoading(true);
+    try {
+      const res = await openAgentThread(id);
+      if (!res) return;
+      setThreadId(res.threadId);
+      setEntries(replay(res.messages));
+      const pid = res.projectId ?? "";
+      setProjectId(pid);
+      if (pid) sessionStorage.setItem(PROJECT_KEY, pid);
+      else sessionStorage.removeItem(PROJECT_KEY);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -226,6 +253,7 @@ export function AgentPanel({ onClose }: { onClose: () => void }) {
             Reads your studio. Asks before it changes anything.
           </p>
         </div>
+        <ThreadHistory activeId={threadId} onPick={pickThread} />
         {threadId ? (
           <button
             type="button"
@@ -264,7 +292,9 @@ export function AgentPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {entries.length === 0 ? (
+        {loading ? (
+          <p className="text-xs text-text-faint">Loading...</p>
+        ) : entries.length === 0 ? (
           <div className="space-y-3">
             <p className="text-xs text-text-muted">
               Ask about any job, the money, or what needs you. To change

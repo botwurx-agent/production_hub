@@ -1783,6 +1783,25 @@ Polish button: the model assists, the human commits.
   tests caught: date() sliced to 10 characters before validating, so an ISO
   timestamp silently became a date and so did "2026-08-14garbage"; it now
   matches a time suffix deliberately and rejects trailing junk.
+- THREADS ARE SCOPED, not one endless conversation (no migration; 0077 already
+  had project_id, which was written once and never read). A thread belongs to a
+  PROJECT or to the studio as a whole, and a scope can hold many. Opening the
+  panel, or changing the project selector, calls openAgentScope, which resumes
+  that scope's most recent thread only if it was used in the last 8 HOURS and
+  otherwise starts a fresh one. The window is rolling rather than "today"
+  because "today" needs the caller's timezone and this runs on the server.
+  Reason it matters is correctness, not tidiness: each turn replays the last 40
+  messages as context, so a thread running for weeks feeds the model facts that
+  have since changed (a deposit now paid, a cut now approved) and it will state
+  them confidently. This also fixed a real bug: changing the project used to
+  keep the SAME thread, so the model saw ten turns about one job under a system
+  prompt naming another. The route now stamps agent_threads.updated_at on every
+  turn, without which the resume rule would be measuring when a thread STARTED.
+  The client no longer stores a thread id at all (a stale one in sessionStorage
+  would reopen a week-old conversation); only the scope is remembered.
+  components/agent/thread-history.tsx is the history list, grouped by project
+  because the question is "what have I been asking about Hint", not "what did I
+  say on Tuesday"; picking one moves the project selector to match.
 - Migration 0077 (agent_threads + agent_messages) persists the conversation.
   RLS is `user_id = auth.uid()`, NOT is_studio_member: a conversation carries
   what one person asked in their own words, and a colleague has no more business

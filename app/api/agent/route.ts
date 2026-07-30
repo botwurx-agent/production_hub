@@ -164,6 +164,16 @@ export async function POST(req: Request) {
     content: text,
   });
 
+  // Stamp the thread as used. Without this updated_at stays at creation time,
+  // and the rule that decides whether to resume a conversation ("was this used
+  // in the last few hours") would be answering about when it STARTED, so a
+  // thread opened this morning and used all day would stop being resumable
+  // halfway through the afternoon.
+  await supabase
+    .from("agent_threads")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", threadId);
+
   const system = systemPrompt({
     studioName: ctx.studio.name,
     userEmail: ctx.email,
