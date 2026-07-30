@@ -184,10 +184,19 @@ export default async function ProjectDetailPage({
       .eq("project_id", params.id),
   ]);
 
-  const [attention, { assets, reviewLinkByAsset }] = await Promise.all([
-    getProjectOutstanding(params.id),
-    loadProjectAssets(supabase, params.id),
-  ]);
+  const [attention, { assets, reviewLinkByAsset }, documents] =
+    await Promise.all([
+      getProjectOutstanding(params.id),
+      loadProjectAssets(supabase, params.id),
+      // Count only. The hub shows how much paperwork is filed; the Documents
+      // page is where it is read.
+      supabase
+        .from("assets")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", params.id)
+        .eq("type", "document"),
+    ]);
+  const documentCount = documents.count ?? 0;
 
   // Project collaborators + pending invites (for the staff-only People control).
   const [{ data: pmembers }, { data: pinvites }] = await Promise.all([
@@ -904,6 +913,30 @@ export default async function ProjectDetailPage({
                 {agreements.length > 0
                   ? "Scope, fees and what was signed."
                   : "File the SOW so what you committed to is findable."}
+              </p>
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/documents`}
+              hue="cyan"
+              title="Documents"
+              sub={
+                documentCount > 0
+                  ? `${documentCount} filed`
+                  : "Permits, specs, certificates"
+              }
+              footer={documentCount > 0 ? "Open documents" : "File paperwork"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6M8 13h8M8 17h5" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                {documentCount > 0
+                  ? "Paperwork from outside, with the email it arrived on."
+                  : "File what comes in by email so it stops living in a thread."}
               </p>
             </HubCard>
 

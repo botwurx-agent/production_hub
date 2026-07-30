@@ -22,18 +22,33 @@ export type ProjectAssets = {
 // and internal sign-offs. Shared by the project hub (for live previews and
 // counts) and the dedicated Assets page (for the full grid), so the two never
 // drift apart.
+/**
+ * Which side of the library to load.
+ *
+ * "creative" is everything the project is making (images, cuts, references) and
+ * is the default, so every existing caller keeps meaning what it meant.
+ * "document" is the paperwork that arrives from outside: permits, certificates,
+ * specs, schedules. They share a table because a document has versions too, but
+ * they are never shown in the same list, since a review status and a
+ * share-for-approval button mean nothing on an insurance certificate.
+ */
+export type AssetSide = "creative" | "document";
+
 export async function loadProjectAssets(
   supabase: SupabaseClient<Database>,
   projectId: string,
   // Current user, so their own reactions come back marked.
-  userId?: string | null
+  userId?: string | null,
+  side: AssetSide = "creative"
 ): Promise<ProjectAssets> {
   const [{ data: assetsRaw }, { data: reviewLinks }] = await Promise.all([
-    supabase
-      .from("assets")
-      .select(
-        "id, name, type, status, current_version_id, created_at, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
-      )
+    (side === "document"
+      ? supabase.from("assets").select(
+          "id, name, type, status, current_version_id, created_at, external_ref, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
+        ).eq("type", "document")
+      : supabase.from("assets").select(
+          "id, name, type, status, current_version_id, created_at, external_ref, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
+        ).neq("type", "document"))
       .eq("project_id", projectId)
       .order("created_at", { ascending: true })
       .order("version_number", {
@@ -125,6 +140,7 @@ export async function loadProjectAssets(
     status: a.status,
     current_version_id: a.current_version_id,
     created_at: a.created_at,
+    external_ref: (a.external_ref ?? null) as AssetWithVersions["external_ref"],
     versions: (a.versions ?? []).map((v) => ({
       ...v,
       signedUrl: v.storage_path ? (signed.get(v.storage_path) ?? null) : null,

@@ -50,7 +50,23 @@ export type AssetWithVersions = {
   current_version_id: string | null;
   created_at: string;
   versions: VersionRow[];
+  /**
+   * Where the file came from, when it did not come from an upload. For a Gmail
+   * import this carries the readable part (who sent it, the subject, the date)
+   * as well as the ids, because "which email was this in" is the question the
+   * whole documents idea exists to answer, and a message id cannot answer it.
+   */
+  external_ref?: EmailSource | null;
 };
+
+export type EmailSource = {
+  source?: string;
+  gmail_message_id?: string;
+  gmail_attachment_id?: string;
+  from?: string;
+  subject?: string;
+  received_at?: string;
+} | null;
 
 // Roll a version's internal sign-offs into a single signal:
 // any "changes requested" wins (red), else any approval (green), else pending.

@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/input";
 import { LinkEmailModal } from "@/components/projects/link-email-modal";
 import { ImportAttachment } from "@/components/projects/import-attachment";
 import { LogCostAttachment } from "@/components/projects/log-cost-attachment";
+import { ImportDocument } from "@/components/projects/import-document";
+import { isDocumentMime } from "@/lib/documents";
 import { isCostDocType } from "@/lib/costs";
 import { AttachmentCard } from "@/components/attachments/attachment-card";
 import { PolishButton } from "@/components/communication/polish-button";
@@ -437,6 +439,24 @@ export function ThreadReader({
                             previewUrl={`${base}&disp=inline`}
                             downloadUrl={base}
                           >
+                            {/* Destination depends on what the file IS. A cut
+                                or a still is creative work and belongs in
+                                assets; a permit or a spec is paperwork and
+                                belongs in documents. Offering both on
+                                everything would make the common case a choice
+                                rather than a click. */}
+                            {projectId && isDocumentMime(att.mimeType) ? (
+                              <ImportDocument
+                                projectId={projectId}
+                                messageId={m.id}
+                                attachmentId={att.attachmentId}
+                                filename={att.filename}
+                                mimeType={att.mimeType}
+                                from={m.from}
+                                subject={thread.subject}
+                                receivedAt={m.date}
+                              />
+                            ) : null}
                             <ImportAttachment
                               projectId={projectId}
                               messageId={m.id}

@@ -1843,6 +1843,57 @@ Polish button: the model assists, the human commits.
   costs more than the deployment budgets for. gpt-5-mini can do this; a bigger
   model will pick tools better, which is the trade to revisit if it misroutes.
 
+### Project documents (migration 0078) — BUILT
+The paperwork side of a job: permits, insurance certificates, licences,
+delivery specs, agency schedules. Everything that arrives from outside, mostly
+by email, and is not creative work. Came from the marketing question "where did
+that PDF go", which the app could not answer.
+- NO NEW TABLE. A document is an `assets` row with type='document' (0078 adds
+  the enum value). The deciding argument is VERSIONS: a document is superseded
+  constantly (call sheet v2, reissued permit, re-signed certificate), and a
+  documents table without version history turns the second copy into a second
+  row, which is exactly the spec_FINAL_v2.pdf mess this exists to end. Reusing
+  assets also means storage signing, the token-guarded file proxy, collaborator
+  access, search and the Runner schema all work unchanged.
+- loadProjectAssets gained a `side` argument ("creative" default | "document").
+  Creative EXCLUDES documents, so every existing caller (assets page, review,
+  hub counts) keeps meaning what it meant and paperwork never appears in the
+  creative library.
+- PROVENANCE IS THE POINT, and it was missing. The old importAttachment stored
+  only gmail_message_id + gmail_attachment_id, both unreadable, so a filed PDF
+  read as Scan_20260814.pdf and "which email did this arrive in" was
+  unanswerable without going back to Gmail. importAttachmentAsDocument
+  (email-actions.ts) also stores from / subject / received_at, and
+  lib/documents.ts documentSource() renders them as one line ("From Sean Doe,
+  Aug 14, re: Final delivery specs"). Without that the page is just a folder,
+  and Drive is a better folder.
+- UI: an "Add to documents" button on an email attachment card, shown by
+  isDocumentMime (anything not image/video/audio) on a thread tied to a
+  project. It sits alongside the existing "Add to assets" and "Log as a cost",
+  since a PDF can legitimately be any of the three. One click, no modal, on
+  purpose: filing has to cost less than leaving it in the inbox.
+  /projects/[id]/documents (components/projects/project-documents.tsx) lists
+  them with source line, version count, Open, New version, plus direct upload.
+  Deliberately NO review status and NO share-for-approval: nobody pins a
+  comment on an insurance certificate. Hub card in the Produce band.
+- ROUTING STAYS SPLIT, and this matters or the good structure unravels: a
+  contract still goes to `agreements` (studio-only, two signature dates,
+  expiry), an invoice still goes to a cost on the budget (amount, payment
+  schedule, rate check). Documents is explicitly the "everything else" home.
+- ACCESS, decided deliberately: documents ARE readable by project
+  collaborators, because crew should see the call sheet and the permit, and the
+  page says so out loud ("Crew with access to this project can see these"). The
+  sensitive categories already have studio-only homes. If that turns out wrong,
+  the fix is a per-document visibility flag, not a move to another table.
+- PROJECT-SCOPED, not studio-wide (operator's call). A studio-wide library
+  immediately raises "where does the master insurance certificate live", which
+  is a different question.
+- Bug found while building: email-actions.ts called reportError without
+  importing it, so TypeScript was resolving it to the DOM's global
+  reportError(e) (one argument). Every error in that file was being swallowed
+  into the browser global rather than reaching Sentry. Now imported from
+  lib/log.
+
 ### Guided tours (no migration) — BUILT
 Cards that pop up over the real UI and say what things are. Held to one rule,
 because section 4.1 says a flow that needs explaining is not done: a tour is

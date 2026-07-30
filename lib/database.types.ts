@@ -3617,7 +3617,14 @@ export type Database = {
         | "needs_changes"
         | "approved"
         | "delivered";
-      asset_type: "image" | "video" | "storyboard" | "reference" | "cut" | "other";
+      asset_type:
+        | "image"
+        | "video"
+        | "storyboard"
+        | "reference"
+        | "cut"
+        | "other"
+        | "document";
       account_status: "prospect" | "active" | "past";
       client_type: "brand" | "agency";
       crm_activity_kind:

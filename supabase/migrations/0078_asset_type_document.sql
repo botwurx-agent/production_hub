@@ -1,0 +1,22 @@
+-- Paperwork is not creative work, but it is still a file with a history.
+--
+-- A permit, an insurance certificate, a licence, a delivery spec, a schedule
+-- from the agency: these arrive constantly, mostly by email, and until now they
+-- landed in the project's creative library as type 'other', sitting next to the
+-- cuts and inheriting a review status and a share-for-approval button that mean
+-- nothing for them.
+--
+-- They stay in `assets` rather than getting their own table, for one reason:
+-- VERSIONS. A document is superseded constantly (call sheet v2, updated permit,
+-- re-signed certificate), and a documents table without version history would
+-- turn the second copy into a second row. That is how you end up with
+-- spec_FINAL_v2_updated.pdf next to spec_FINAL.pdf, which is precisely the mess
+-- this is meant to end. assets -> versions already solves it, and reusing it
+-- means storage signing, the token-guarded file proxy, collaborator access and
+-- search all work unchanged.
+--
+-- Note on access: assets are project-scoped, so a project collaborator can read
+-- these. That is deliberate and useful (crew should see the call sheet and the
+-- permit). Anything that must NOT reach crew already has a studio-only home:
+-- contracts in `agreements`, invoices on `project_costs`.
+alter type public.asset_type add value if not exists 'document';

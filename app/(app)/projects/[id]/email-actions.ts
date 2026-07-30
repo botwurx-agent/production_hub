@@ -17,7 +17,7 @@ import {
 import { getDriveFileBytes } from "@/lib/googledrive";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { logWrite } from "@/lib/log";
+import { logWrite, reportError } from "@/lib/log";
 import {
   MAX_EMAIL_BYTES,
   MAX_UPLOAD_BYTES,
@@ -509,6 +509,108 @@ export async function importAttachment(
 }
 
 // Import a Gmail attachment as a new version of an existing asset.
+/**
+ * Files an attachment as a project DOCUMENT rather than as creative work.
+ *
+ * Same table and the same versions machinery as an asset (a permit gets
+ * reissued, a call sheet reaches v3), but typed so it lists on the Documents
+ * page instead of polluting the creative library with paperwork.
+ *
+ * The provenance is the point. The existing import stored only a message id and
+ * an attachment id, which are unreadable, so a filed PDF showed up as
+ * Scan_20260814.pdf with no way to answer "which email did this arrive in"
+ * short of going back to Gmail. That question is the entire reason this exists,
+ * so the sender, the subject and the date are stored alongside the ids.
+ */
+export async function importAttachmentAsDocument(
+  projectId: string,
+  gmailMessageId: string,
+  attachmentId: string,
+  filename: string,
+  mimeType: string,
+  provenance?: { from?: string; subject?: string; receivedAt?: string }
+): Promise<EmailState> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  try {
+    const stored = await fetchAndStore(
+      supabase,
+      ctx.studio.id,
+      projectId,
+      gmailMessageId,
+      attachmentId,
+      filename,
+      mimeType
+    );
+    if ("error" in stored) return stored;
+
+    const { data: asset, error: aErr } = await supabase
+      .from("assets")
+      .insert({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        name: filename,
+        type: "document",
+        status: "draft",
+        source: "gmail",
+        external_ref: {
+          source: "gmail",
+          gmail_message_id: gmailMessageId,
+          gmail_attachment_id: attachmentId,
+          from: provenance?.from?.slice(0, 200) || null,
+          subject: provenance?.subject?.slice(0, 300) || null,
+          received_at: provenance?.receivedAt?.slice(0, 60) || null,
+        },
+        created_by: ctx.userId,
+      })
+      .select("id")
+      .single();
+    if (aErr) return { error: aErr.message };
+
+    const { data: version, error: vErr } = await supabase
+      .from("versions")
+      .insert({
+        studio_id: ctx.studio.id,
+        asset_id: asset.id,
+        version_number: 1,
+        storage_path: stored.path,
+        mime_type: mimeType || null,
+        size_bytes: stored.size,
+        notes: provenance?.subject ? `From: ${provenance.subject}` : "Filed from Gmail",
+        created_by: ctx.userId,
+      })
+      .select("id")
+      .single();
+    if (vErr) return { error: vErr.message };
+
+    await logWrite(
+      "importAttachmentAsDocument/assets",
+      supabase
+        .from("assets")
+        .update({ current_version_id: version.id })
+        .eq("id", asset.id)
+    );
+
+    await logWrite(
+      "importAttachmentAsDocument/activity",
+      supabase.from("activity").insert({
+        studio_id: ctx.studio.id,
+        project_id: projectId,
+        type: "note",
+        content: `Filed "${filename}" to documents from email`,
+        author_id: ctx.userId,
+      })
+    );
+
+    revalidatePath(`/projects/${projectId}/documents`);
+    revalidatePath(`/projects/${projectId}`);
+    return null;
+  } catch (e) {
+    reportError("importAttachmentAsDocument", e);
+    return { error: e instanceof Error ? e.message : "Could not file that." };
+  }
+}
+
 export async function importAttachmentAsVersion(
   projectId: string,
   assetId: string,
