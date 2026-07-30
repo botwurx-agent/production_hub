@@ -10,7 +10,12 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
       → Policies → turn on "Leaked password protection" (checks HaveIBeenPwned).
       This is the one remaining actionable security-advisor item; it is a toggle,
       not code.
-- [ ] **Create a Sentry project and set the DSN.** Set `NEXT_PUBLIC_SENTRY_DSN`
+- [x] **Create a Sentry project and set the DSN.** DONE and VERIFIED 2026-07-30
+      via `/api/diagnostics/sentry`: configured true, event captured, flush
+      delivered. The browser SDK shares the same DSN but initialises separately
+      in instrumentation-client.ts, so client capture is very likely fine and
+      strictly unproven until a real UI error occurs.
+      Original note: Set `NEXT_PUBLIC_SENTRY_DSN`
       in Vercel. For source-map upload also set `SENTRY_ORG`, `SENTRY_PROJECT`,
       and `SENTRY_AUTH_TOKEN` (Vercel + CI). Everything is inert until the DSN is
       set, so nothing breaks if you defer this.
