@@ -84,7 +84,9 @@ export function Topbar({
               <RunnerIcon />
             </button>
           ) : null}
-          <NotificationBell needsYouCount={needsYouCount} />
+          <span data-tour="notifications">
+            <NotificationBell needsYouCount={needsYouCount} />
+          </span>
           <ThemeToggle />
           <UserMenu
             email={email}

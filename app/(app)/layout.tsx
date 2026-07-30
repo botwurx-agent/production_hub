@@ -9,6 +9,7 @@ import { Topbar } from "@/components/app-shell/topbar";
 import { Toaster } from "@/components/ui/toast";
 import { AiAvailabilityProvider } from "@/components/ai/ai-availability";
 import { AgentMount } from "@/components/agent/agent-mount";
+import { TourGuide } from "@/components/tour/tour-guide";
 import { canUseRunner } from "@/lib/agent/access";
 
 export default async function AppLayout({
@@ -71,6 +72,10 @@ export default async function AppLayout({
           </main>
         </div>
         {assistant ? <AgentMount /> : null}
+        {/* One renderer for every tour, so the replay entry in the user menu
+            works from any page. Pages opt into a first-run tour with
+            TourTrigger. */}
+        <TourGuide />
         <Toaster />
       </div>
     </AiAvailabilityProvider>

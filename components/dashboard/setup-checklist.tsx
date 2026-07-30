@@ -39,7 +39,10 @@ export function SetupChecklist({ steps }: { steps: SetupStep[] }) {
   }
 
   return (
-    <section className="mb-6 rounded-[16px] border border-border bg-surface p-4 shadow-sm sm:p-5">
+    <section
+      data-tour="setup"
+      className="mb-6 rounded-[16px] border border-border bg-surface p-4 shadow-sm sm:p-5"
+    >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-display text-base font-bold text-text">

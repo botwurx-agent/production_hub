@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { DashboardIcon } from "@/components/app-shell/nav-icons";
 import { DashboardBody } from "@/components/dashboard/dashboard-body";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
+import { TourTrigger } from "@/components/tour/tour-trigger";
 import type { Stat } from "@/components/dashboard/stat-tiles";
 import { getOutstanding } from "@/lib/outstanding";
 import { loadSetupSteps } from "@/lib/setup-steps";
@@ -249,6 +250,10 @@ export default async function DashboardPage() {
         icon={<DashboardIcon className="h-6 w-6" />}
         hue="indigo"
       />
+      {/* The one automatic tour, on first visit only. The dashboard is where
+          a new studio lands, and the shell elements it points at are on every
+          page anyway. */}
+      <TourTrigger tour="welcome" />
       <SetupChecklist steps={setupSteps} />
       <DashboardBody
         stats={stats}

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/app/auth/actions";
 import { switchStudio } from "@/app/(app)/studio-actions";
 import { FeedbackModal } from "@/components/feedback/feedback-modal";
+import { startTour } from "@/components/tour/tour-open";
 import type { StudioOption } from "@/components/app-shell/studio-switcher";
 
 export function UserMenu({
@@ -17,6 +18,7 @@ export function UserMenu({
   activeStudioId?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [busy, start] = useTransition();
@@ -91,6 +93,23 @@ export function UserMenu({
               ))}
             </div>
           )}
+          {/* Replay. A tour that can only ever run once is a tour you cannot
+              go back to when you finally need it. */}
+          <button
+            onClick={() => {
+              setOpen(false);
+              // Offer the tour for the page you are on: on a project that is
+              // the one about the job's phases, everywhere else the shell one.
+              startTour(
+                /^\/projects\/[0-9a-f-]{32,40}\/?$/i.test(pathname)
+                  ? "project-hub"
+                  : "welcome"
+              );
+            }}
+            className="w-full px-4 py-2.5 text-left text-sm font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+          >
+            Take the tour
+          </button>
           <button
             onClick={() => {
               setOpen(false);

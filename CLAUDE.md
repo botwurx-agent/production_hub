@@ -1824,6 +1824,46 @@ Polish button: the model assists, the human commits.
   costs more than the deployment budgets for. gpt-5-mini can do this; a bigger
   model will pick tools better, which is the trade to revisit if it misroutes.
 
+### Guided tours (no migration) — BUILT
+Cards that pop up over the real UI and say what things are. Held to one rule,
+because section 4.1 says a flow that needs explaining is not done: a tour is
+ORIENTATION, never INSTRUCTION. It answers "what is here and where does it
+live", which is a real wayfinding problem now that a project has fourteen
+module pages. It must never answer "how do I fill in this form", because that
+hides a bad form instead of fixing it. Practical test when writing a step: if
+you type the word "click", you are writing instruction, stop.
+- lib/tour/tours.ts is the content (pure data). Two tours: `welcome` (the shell:
+  setup checklist, nav, Runner, notifications) auto-runs once on the dashboard,
+  and `project-hub` (stepper, the phase bands, needs-attention) auto-runs once
+  on a project. Steps are anchored by `data-tour` ATTRIBUTES, not CSS selectors,
+  so restyling cannot break them.
+- THE RULE THAT STOPS IT ROTTING: a step whose anchor is not on the page is
+  DROPPED, never rendered pointing at nothing, and a tour with no surviving
+  anchored steps does not start at all. So deleting an element costs one step
+  rather than breaking the tour, and the sidebar steps disappear by themselves
+  on a phone (no sidebar) with no mobile-specific code.
+- SPLIT ON PURPOSE: components/tour/tour-guide.tsx is the single renderer,
+  mounted ONCE in the app shell, and components/tour/tour-trigger.tsx is the
+  first-run starter that pages mount. An earlier version had the auto-start
+  inside the renderer, which meant the "Take the tour" entry in the user menu
+  silently did nothing on every page that did not mount one. tour-open.ts is
+  the same pub/sub shape as the toast and Runner.
+- "Seen" is localStorage (`tour.seen.<id>`), written when a tour ENDS rather
+  than starts, so closing the tab mid-tour does not count as having taken it.
+  Same call as the setup checklist: a per-person hint is not worth a migration.
+  Known cost: a second machine offers it once more.
+- The user menu's "Take the tour" replays, and picks the tour for the page you
+  are on (the project one on a project, the shell one everywhere else). A tour
+  that can only run once is one you cannot return to when you finally need it.
+- The project tour is staff only (it talks about budget and agreements, which a
+  collaborator cannot open).
+- Positioning: preferred side, then whichever has room, then clamped to the
+  viewport; the target is scrolled into view BEFORE measuring, since measuring
+  mid-scroll puts the card where the element used to be. The scrim is one
+  element (a 9999px spread box-shadow on the ring), not four.
+- NOT built: tours that span pages (a step that navigates and resumes), which
+  is a large jump in complexity for orientation content that does not need it.
+
 ### Next step
 NOTHING IS QUEUED. As of 2026-07-29 the operator has deliberately parked the
 whole proposed backlog: run real jobs, and only build when something actually

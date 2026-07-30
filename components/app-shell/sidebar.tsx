@@ -92,7 +92,7 @@ export function Sidebar({
         />
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="flex-1 space-y-1 p-3" data-tour="nav">
         {/* Runner opens the panel rather than navigating, so it is a button
             wearing a nav row's clothes. Deliberate: the panel slides over
             whatever you are reading and picks up the project you are already
@@ -104,6 +104,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={openAgent}
+              data-tour="runner"
               title={collapsed ? "Runner (Cmd+K)" : undefined}
               className={`flex w-full items-center rounded-[11px] py-2 text-sm font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text ${
                 collapsed ? "justify-center px-0" : "gap-3 px-3"

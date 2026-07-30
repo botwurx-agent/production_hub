@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { LifecycleStepper } from "@/components/projects/lifecycle-stepper";
+import { TourTrigger } from "@/components/tour/tour-trigger";
 import { ArchiveProjectButton } from "@/components/projects/archive-project-button";
 import { ProjectPeople } from "@/components/projects/project-people";
 import { ProjectClientPicker } from "@/components/projects/project-client-picker";
@@ -403,12 +404,14 @@ export default async function ProjectDetailPage({
             </div>
           </div>
 
-          <LifecycleStepper
-            projectId={project.id}
-            status={project.status}
-            projectType={project.project_type}
-            canEdit={!ctx.isCollaborator}
-          />
+          <div data-tour="lifecycle">
+            <LifecycleStepper
+              projectId={project.id}
+              status={project.status}
+              projectType={project.project_type}
+              canEdit={!ctx.isCollaborator}
+            />
+          </div>
         </div>
       </div>
 
@@ -463,7 +466,9 @@ export default async function ProjectDetailPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Module hub */}
         <div className="lg:col-span-2">
-          <BandLabel hue="blue" label="Plan" />
+          <div data-tour="band-plan">
+            <BandLabel hue="blue" label="Plan" />
+          </div>
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
               href={`/projects/${project.id}/brief`}
@@ -597,7 +602,9 @@ export default async function ProjectDetailPage({
             </HubCard>
           </div>
 
-          <BandLabel hue="pink" label="Review" />
+          <div data-tour="band-review">
+            <BandLabel hue="pink" label="Review" />
+          </div>
           <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
               href={`/projects/${project.id}/review`}
@@ -669,7 +676,9 @@ export default async function ProjectDetailPage({
             </HubCard>
           </div>
 
-          <BandLabel hue="green" label="Produce" />
+          <div data-tour="band-produce">
+            <BandLabel hue="green" label="Produce" />
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <HubCard
               href={`/projects/${project.id}/tasks`}
@@ -944,7 +953,9 @@ export default async function ProjectDetailPage({
 
         {/* Right rail: what needs you + activity, always present */}
         <div className="space-y-6 lg:col-span-1">
-          <ProjectAttention items={attention} />
+          <div data-tour="attention">
+            <ProjectAttention items={attention} />
+          </div>
           <Card className="p-5">
             <h2 className="mb-4 font-display text-base font-bold">
               Activity &amp; notes
@@ -957,6 +968,10 @@ export default async function ProjectDetailPage({
           </Card>
         </div>
       </div>
+
+      {/* Orientation for the project page, once. Staff only: the tour talks
+          about budget and agreements, which a collaborator cannot open. */}
+      {ctx.isCollaborator ? null : <TourTrigger tour="project-hub" />}
     </div>
   );
 }
