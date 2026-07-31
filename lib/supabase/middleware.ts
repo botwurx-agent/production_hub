@@ -3,6 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 
 const PUBLIC_PATHS = [
+  // The marketing home. Safe as an exact match only: the prefix test below
+  // compares against `${p}/`, which for "/" is "//" and matches nothing, so
+  // this does not open the rest of the app.
+  "/",
   "/login",
   "/signup",
   "/forgot-password",
