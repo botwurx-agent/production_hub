@@ -400,6 +400,56 @@ Recommended: SAME repo, new route group, host-based routing.
 - Marketing-only illustration style. Every visual is the product or supports
   a product shot.
 
+---
+
+## Part 7: Verified against the codebase (2026-07-31, Opus 5)
+
+Part 5.1 was written from design reasoning. Reading middleware.ts,
+lib/supabase/middleware.ts, app/layout.tsx, lib/theme.ts and tailwind.config.ts
+confirmed the shape but corrected three things. Skeleton now BUILT and pushed.
+
+1. MARKETING MUST SKIP updateSession ENTIRELY, not just join PUBLIC_PATHS. The
+   middleware calls `supabase.auth.getUser()` on every matched request BEFORE
+   the public-path check, so adding marketing to PUBLIC_PATHS would still pay an
+   auth round trip on the most-visited pages of the site and buy nothing.
+   middleware.ts now branches on host first and returns a rewrite without
+   touching Supabase.
+2. THE REWRITE IS AN ALLOWLIST, NOT A CATCH-ALL. The app owns public routes on
+   shared paths (/r, /rb, /b, /c, /p, /invite, /project-invite, /auth,
+   /api/cron). Rewriting everything on the apex would 404 any of those that
+   reached the wrong host, and would silently break Vercel cron if it ever hit
+   the apex. lib/marketing/hosts.ts keeps an explicit MARKETING_PATHS set plus
+   prefixes; adding a marketing page means adding it there. 22 assertions cover
+   the host and path rules (apex, www, port, case, lookalike domain, app
+   subdomain, localhost, vercel preview, and every shared app route).
+3. "LIGHT ONLY" IS NOT FREE, AND THE FIX IS A WRAPPER NOT A SCRIPT. The root
+   layout injects themeInitScript into <head>, which flips
+   `<html data-theme>` to the visitor's stored or system theme before paint, so
+   a visitor on a dark OS would get dark marketing pages behind light-theme
+   screenshots. Every token in globals.css is declared on an ATTRIBUTE selector
+   (`[data-theme="light"]`, `[data-accent="indigo"]`), which matches any
+   element, so the marketing layout re-declares both on a wrapper div and scopes
+   the subtree to light with no script, no flash, and no loss of static
+   rendering. Branching on headers() would have made the page dynamic; a second
+   script would have flashed. Confirmed static: the build reports `○ /site`.
+
+Also worth knowing for the next session: there is no icon dependency in
+package.json, so marketing icons are inline SVG like the rest of the app; and
+the marketing first-load JS is ~171 kB, most of it the shared app chunk plus the
+Sentry browser SDK. Scoping Sentry to server-only on marketing routes is the
+lever if Lighthouse matters, which the beta checklist already flagged.
+
+WHAT IS BUILT: lib/marketing/hosts.ts, host routing in middleware.ts,
+app/(marketing)/site/{layout,page}.tsx, and components/marketing/{section,cta,
+browser-frame,site-nav,site-footer}.tsx. The homepage runs hero, proof bar,
+phase bands, how-it-works, four feature rows, and the final CTA. Screenshots are
+BrowserFrame placeholders that name the shot that belongs in each slot, so
+dropping in real captures is a one-prop change.
+
+WHAT IS NOT: the Vercel domain attachment (studio-flows.com pointed at this
+project, an operator dashboard step), the staged demo-job screenshots, /pricing,
+/about, scroll motion, OG image, sitemap and robots.
+
 ## Sources
 
 - [Exposure Ninja: Monday.com marketing strategy deep-dive](https://exposureninja.com/podcast/209/)
