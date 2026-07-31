@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SiteNav } from "@/components/marketing/site-nav";
 import { SiteFooter } from "@/components/marketing/site-footer";
+import "./marketing.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://studio-flows.com"),

@@ -1,0 +1,223 @@
+/* ==========================================================================
+   Marketing-only animation. Scoped to the marketing route group by living in
+   its layout rather than in globals.css, so nothing here can reach the app.
+
+   The hero is a LOOPING ANIMATION OF REAL UI, not a video file. Every element
+   is a live DOM node styled from the same tokens as the product, so it stays
+   crisp at any density, costs no video download, and cannot drift out of date
+   the way a rendered clip would.
+
+   All elements share one 11s timeline and express their moment as PERCENTAGES
+   of it, so they stay in sync with no JS, no timers, and no hydration step.
+   Base styles are the RESTING VISIBLE state and animation is added only inside
+   the no-preference media query, so a visitor who asked for reduced motion sees
+   a still, complete composition rather than a blank frame.
+   ========================================================================== */
+
+.sf-scene {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background-color: var(--surface);
+}
+
+/* The frame under review. A calm gradient stands in for the shot itself until
+   the staged demo job is captured; it is deliberately abstract rather than a
+   stock photo, so nobody reads it as real client work. */
+.sf-plate {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      120% 90% at 30% 20%,
+      color-mix(in oklch, var(--h-amber) 26%, var(--surface)) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      100% 100% at 80% 80%,
+      color-mix(in oklch, var(--h-indigo) 30%, var(--surface)) 0%,
+      transparent 65%
+    ),
+    linear-gradient(
+      160deg,
+      color-mix(in oklch, var(--text) 88%, var(--surface)) 0%,
+      color-mix(in oklch, var(--text) 70%, var(--surface)) 100%
+    );
+}
+
+.sf-pin {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-fg);
+  background-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.sf-note {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background-color: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Two chips stacked in one grid cell so the status can cross-fade in place. */
+.sf-chip-stack {
+  display: grid;
+}
+.sf-chip-stack > * {
+  grid-area: 1 / 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-pin-1 {
+    animation: sf-pop 11s ease-out infinite;
+  }
+  .sf-pin-2 {
+    animation: sf-pop-late 11s ease-out infinite;
+  }
+  .sf-note-1 {
+    animation: sf-rise 11s ease-out infinite;
+  }
+  .sf-note-2 {
+    animation: sf-rise-late 11s ease-out infinite;
+  }
+  .sf-chip-review {
+    animation: sf-fade-out 11s ease-in-out infinite;
+  }
+  .sf-chip-approved {
+    animation: sf-fade-in 11s ease-in-out infinite;
+  }
+  .sf-toast {
+    animation: sf-toast 11s ease-out infinite;
+  }
+}
+
+@keyframes sf-pop {
+  0%,
+  6% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  10% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+  14%,
+  90% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  97%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes sf-pop-late {
+  0%,
+  30% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  34% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+  38%,
+  90% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  97%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes sf-rise {
+  0%,
+  11% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  17%,
+  90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  97%,
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sf-rise-late {
+  0%,
+  35% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  41%,
+  90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  97%,
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sf-fade-out {
+  0%,
+  58% {
+    opacity: 1;
+  }
+  64%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sf-fade-in {
+  0%,
+  58% {
+    opacity: 0;
+  }
+  64%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sf-toast {
+  0%,
+  70% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  76%,
+  92% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  98%,
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}

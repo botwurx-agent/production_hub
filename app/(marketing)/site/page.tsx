@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { IconTile } from "@/components/ui/icon-tile";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
+import { HeroAnimation } from "@/components/marketing/hero-animation";
 import {
   FeatureRow,
   Section,
@@ -181,10 +182,11 @@ export default function MarketingHome() {
 
         <div className="mt-16">
           <BrowserFrame
-            priority
-            caption="app.studio-flows.com/projects"
-            alt="The project hub for a commercial job: lifecycle stepper, module cards grouped by phase, and the needs-attention rail."
-          />
+            caption="studio-flows.com/r/hint-summer-hero-v2"
+            alt="A client review in progress."
+          >
+            <HeroAnimation />
+          </BrowserFrame>
         </div>
       </Section>
 

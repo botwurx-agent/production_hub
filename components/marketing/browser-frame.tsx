@@ -16,6 +16,7 @@ export function BrowserFrame({
   width = 1440,
   height = 900,
   priority = false,
+  children,
 }: {
   src?: string;
   alt: string;
@@ -23,6 +24,8 @@ export function BrowserFrame({
   width?: number;
   height?: number;
   priority?: boolean;
+  /** Live UI rendered inside the frame, used instead of an image. */
+  children?: React.ReactNode;
 }) {
   return (
     <figure className="overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
@@ -34,7 +37,9 @@ export function BrowserFrame({
           <span className="ml-3 truncate text-xs text-text-faint">{caption}</span>
         ) : null}
       </div>
-      {src ? (
+      {children ? (
+        children
+      ) : src ? (
         <Image
           src={src}
           alt={alt}
