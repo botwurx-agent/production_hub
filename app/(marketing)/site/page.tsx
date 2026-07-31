@@ -162,7 +162,7 @@ export default function MarketingHome() {
       <Section className="pt-16 sm:pt-24">
         <div className="mx-auto max-w-3xl text-center">
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-accent">
-            For boutique commercial studios
+            For production studios of every scale
           </p>
           <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-text sm:text-6xl">
             Every job, in one place.

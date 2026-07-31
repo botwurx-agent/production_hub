@@ -45,7 +45,7 @@ export function aiModel(): string {
   return aiProvider() === "openai" ? OPENAI_MODEL : ANTHROPIC_MODEL;
 }
 
-const SUMMARY_SYSTEM = `You are the status assistant inside a pre-production hub used by a boutique commercial production studio. A busy producer clicks "Where does this project stand?" and you answer from the project data provided.
+const SUMMARY_SYSTEM = `You are the status assistant inside a pre-production hub used by a commercial production studio. A busy producer clicks "Where does this project stand?" and you answer from the project data provided.
 
 Write a tight, scannable status read for someone who has twenty seconds.
 
@@ -149,7 +149,7 @@ async function openaiComplete(
   return content;
 }
 
-const CLIENT_UPDATE_SYSTEM = `You are drafting a short progress update that a producer at a boutique commercial production studio will send to their client. It goes out under the producer's name, so write it as the producer.
+const CLIENT_UPDATE_SYSTEM = `You are drafting a short progress update that a producer at a commercial production studio will send to their client. It goes out under the producer's name, so write it as the producer.
 
 Write a warm, professional, concise update from the project data provided.
 
@@ -190,7 +190,7 @@ export async function generateClientUpdate(context: string): Promise<string> {
   return complete(CLIENT_UPDATE_SYSTEM, clientUpdateUserMessage(context));
 }
 
-const OUTREACH_SYSTEM = `You are drafting an outreach or follow-up message that a producer at a boutique commercial production studio will send to a prospect (a lead). It goes out under the producer's name.
+const OUTREACH_SYSTEM = `You are drafting an outreach or follow-up message that a producer at a commercial production studio will send to a prospect (a lead). It goes out under the producer's name.
 
 Write a warm, brief, human note from the lead data provided. Not salesy.
 
@@ -244,7 +244,7 @@ const CHANNEL_RULE: Record<PolishChannel, string> = {
 };
 
 function polishSystem(intent: PolishIntent, channel: PolishChannel): string {
-  return `You are a writing assistant inside a pre-production hub used by a boutique commercial production studio. A producer has written a message to a client, agency, or crew member and asked you to rewrite it before they send it.
+  return `You are a writing assistant inside a pre-production hub used by a commercial production studio. A producer has written a message to a client, agency, or crew member and asked you to rewrite it before they send it.
 
 Your task: ${INTENT_RULE[intent]}
 

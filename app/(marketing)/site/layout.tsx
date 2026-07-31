@@ -10,14 +10,14 @@ export const metadata: Metadata = {
     template: "%s | Studio Flows",
   },
   description:
-    "The connected pre-production hub for boutique commercial studios. Briefs, boards, client approvals, call sheets, and budgets in one organized home.",
+    "The connected production hub for studios of every scale. Briefs, boards, client approvals, call sheets, and budgets in one organized home.",
   openGraph: {
     type: "website",
     siteName: "Studio Flows",
     url: "https://studio-flows.com",
     title: "Studio Flows: every job, in one place",
     description:
-      "The connected pre-production hub for boutique commercial studios.",
+      "The connected production hub for studios of every scale.",
   },
   robots: { index: true, follow: true },
 };

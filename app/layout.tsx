@@ -22,7 +22,7 @@ const body = Hanken_Grotesk({
 export const metadata: Metadata = {
   title: "Studio Flows",
   description:
-    "A connected pre-production hub for boutique commercial production studios.",
+    "A connected production hub for commercial production studios of every scale.",
 };
 
 export default function RootLayout({

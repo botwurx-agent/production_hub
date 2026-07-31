@@ -323,7 +323,7 @@ export function systemPrompt(opts: {
   today: string;
   project?: { id: string; title: string } | null;
 }): string {
-  return `You are the assistant inside Studio Flows, a production hub used by a boutique commercial production studio. You are talking to a producer at ${opts.studioName}${opts.userEmail ? ` (${opts.userEmail})` : ""}.
+  return `You are the assistant inside Studio Flows, a production hub used by a commercial production studio. You are talking to a producer at ${opts.studioName}${opts.userEmail ? ` (${opts.userEmail})` : ""}.
 
 Today is ${opts.today}. Resolve any relative date the producer says ("Friday", "next week", "end of the month") against that, and always pass dates to tools as YYYY-MM-DD.
 

@@ -14,11 +14,31 @@ Note on writing style: no em dashes in any generated content (code comments, cop
 
 ## 1. What the Hub is, in one line
 
-A connected pre-production hub for boutique commercial production studios that pulls a job's briefs, creative assets, versions, approvals, communication, and client and lead records into one organized home, built around how commercial production actually works.
+A connected production hub for commercial production studios of every scale that pulls a job's briefs, creative assets, versions, approvals, communication, and client and lead records into one organized home, built around how commercial production actually works.
 
 ## 2. Who it is for
 
-Boutique to medium commercial production studios (food, beverage, CPG, and brand commercial work) and the brands and agencies they serve. The first user is the studio operator. The product is built for the operator first and used on real jobs before it is sold to peers.
+Commercial production studios of every scale (food, beverage, CPG, and brand
+commercial work) and the brands and agencies they serve. The first user is the
+studio operator. The product is built for the operator first and used on real
+jobs before it is sold to peers.
+
+POSITIONING CHANGE (operator, 2026-07-31): the audience was originally
+"boutique to medium" studios, and that word is now retired from all
+user-facing copy. The feature set outgrew it: multi-user studios with roles
+and invites, project collaborators, budgets with a cost ledger and payment
+schedules, agreements, delivery and invoicing, and the AI pipeline are all
+things a full-scale production company needs, not just a solo operator. Do not
+reintroduce "boutique" in marketing copy, metadata, or AI system prompts. The
+VERTICAL is unchanged and is still the differentiator: this is shaped like
+commercial production specifically, not a generic work platform. Two related
+words also went: the product is a "production hub", not a "pre-production hub"
+(it now covers the job through delivery and billing).
+NOT yet updated to match: PROJECT_BRIEF.md still argues the boutique-niche
+market thesis (including the acquisition rationale), README.md still describes
+this repo as a pre-launch marketing site, and Marketing Site.dc.html is an old
+standalone mockup. Those are strategy documents rather than product copy, so
+they need the operator's own words, not a find and replace.
 
 ## 3. Tech stack
 

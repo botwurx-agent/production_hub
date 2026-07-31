@@ -48,8 +48,8 @@ export function SiteFooter() {
             </span>
           </div>
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-text-muted">
-            The connected pre-production hub for boutique commercial studios.
-            Built inside a working studio.
+            The connected production hub for studios of every scale. Built
+            inside a working studio.
           </p>
         </div>
 
