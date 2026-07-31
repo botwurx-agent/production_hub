@@ -1,0 +1,910 @@
+<title>Studio Flows deck</title>
+<style>
+/*FONTS*/
+
+:root {
+  color-scheme: light;
+
+  /* Paper ground, lifted from app/globals.css */
+  --bg:        oklch(0.962 0.014 84);
+  --surface:   oklch(0.985 0.008 86);
+  --surface-2: oklch(0.938 0.018 84);
+  --ink:       oklch(0.28 0.021 62);
+  --muted:     oklch(0.505 0.019 62);
+  --faint:     oklch(0.645 0.017 64);
+  --border:    oklch(0.902 0.016 80);
+  --border-strong: oklch(0.835 0.021 80);
+
+  --accent:      oklch(0.565 0.205 274);
+  --accent-soft: oklch(0.937 0.062 274);
+  --accent-ink:  oklch(0.44 0.16 274);
+  --accent-fg:   oklch(0.99 0.01 274);
+
+  --green: oklch(0.665 0.165 158); --green-bg: oklch(0.924 0.097 158); --green-ink: oklch(0.44 0.13 158);
+  --amber: oklch(0.755 0.16 72);   --amber-bg: oklch(0.937 0.087 72);  --amber-ink: oklch(0.48 0.12 62);
+  --red:   oklch(0.625 0.225 22);  --red-bg:   oklch(0.941 0.072 22);  --red-ink:   oklch(0.46 0.17 22);
+  --blue:  oklch(0.605 0.17 245);  --blue-bg:  oklch(0.931 0.067 245); --blue-ink:  oklch(0.44 0.13 245);
+  --purple:oklch(0.55 0.23 305);   --purple-bg:oklch(0.937 0.067 305); --purple-ink:oklch(0.44 0.17 305);
+
+  --display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --body: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-sm: 0 1px 2px rgba(72,56,32,.07), 0 1px 1px rgba(72,56,32,.05);
+  --shadow-md: 0 4px 12px -3px rgba(72,56,32,.12), 0 2px 5px -2px rgba(72,56,32,.08);
+  --shadow-lg: 0 18px 44px -18px rgba(72,56,32,.28), 0 6px 14px -8px rgba(72,56,32,.14);
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ deck shell ============ */
+
+.deck {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+.slide {
+  min-height: 100vh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  align-items: center;
+  padding: 72px 40px 72px 108px;
+  position: relative;
+}
+
+.stage {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* the rail is a real index: a deck is a sequence, so the numbers carry order */
+.rail {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  z-index: 40;
+  background: linear-gradient(90deg, var(--bg) 55%, transparent);
+}
+.rail a {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+  color: var(--faint);
+  text-decoration: none;
+  padding: 3px 7px;
+  border-radius: 6px;
+  transition: color .18s, background .18s;
+}
+.rail a:hover { color: var(--ink); background: var(--surface-2); }
+.rail a.on { color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+.rail a:focus-visible, .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ============ shared type ============ */
+
+.eyebrow {
+  font-size: 11.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1.7px;
+  color: var(--accent);
+  margin: 0 0 14px;
+}
+.eyebrow.q { color: var(--faint); }
+
+h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(38px, 6.4vw, 74px);
+  line-height: 1.02;
+  letter-spacing: -2.4px;
+  margin: 0 0 22px;
+  max-width: 15ch;
+  text-wrap: balance;
+}
+h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(28px, 4.2vw, 46px);
+  line-height: 1.06;
+  letter-spacing: -1.5px;
+  margin: 0 0 18px;
+  max-width: 19ch;
+  text-wrap: balance;
+}
+h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15.5px;
+  letter-spacing: -0.2px;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+.lede {
+  font-size: clamp(17px, 1.6vw, 20px);
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 54ch;
+  margin: 0;
+}
+.note {
+  font-size: 15.5px;
+  color: var(--muted);
+  max-width: 58ch;
+  margin: 26px 0 0;
+}
+.note strong { color: var(--ink); font-weight: 500; }
+.kicker {
+  font-size: 13px;
+  color: var(--faint);
+  margin: 18px 0 0;
+}
+
+/* ============ 01 cover ============ */
+
+.cover { background:
+  radial-gradient(1100px 620px at 78% 8%, oklch(0.975 0.022 78), transparent 68%),
+  var(--bg);
+}
+.masthead { display: flex; align-items: center; gap: 11px; margin-bottom: 56px; }
+.mark {
+  font-family: var(--display); font-weight: 800; font-size: 15px;
+  background: var(--accent); color: var(--accent-fg);
+  padding: 6px 9px; border-radius: 9px; letter-spacing: -0.3px;
+}
+.wordmark { font-family: var(--display); font-weight: 800; font-size: 19px; letter-spacing: -0.4px; }
+.masthead .who {
+  margin-left: auto; font-size: 11.5px; color: var(--faint);
+  text-transform: uppercase; letter-spacing: 1.4px;
+}
+.hint {
+  position: absolute; left: 108px; bottom: 44px;
+  font-size: 12px; color: var(--faint);
+  display: flex; align-items: center; gap: 9px;
+}
+.hint b {
+  font-weight: 500; font-size: 11px; color: var(--muted);
+  border: 1px solid var(--border-strong); border-radius: 5px;
+  padding: 1px 6px; background: var(--surface);
+}
+
+/* ============ 02 scatter ============ */
+
+.scatter {
+  position: relative;
+  height: min(52vh, 420px);
+  margin-top: 34px;
+}
+.pill {
+  position: absolute;
+  display: inline-flex; align-items: baseline; gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 13px;
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(14px) scale(.96);
+  transition: opacity .5s ease, transform .5s cubic-bezier(.2,.7,.3,1);
+}
+.on-screen .pill { opacity: 1; transform: none; }
+.pill .app { font-weight: 500; font-size: 14px; color: var(--ink); }
+.pill .what { font-size: 12.5px; color: var(--faint); }
+
+/* ============ 03 costs ============ */
+
+.costs { display: grid; margin-top: 30px; }
+.cost {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 14px;
+  padding: 20px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  align-items: start;
+}
+.cost:first-child { border-radius: 13px 13px 0 0; }
+.cost:last-child { border-radius: 0 0 13px 13px; }
+.cost + .cost { border-top: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 8px; }
+.cost p { margin: 0; color: var(--muted); font-size: 14.5px; max-width: 62ch; }
+
+/* ============ 04 spine ============ */
+
+.spine { margin-top: 34px; }
+.chain { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.node {
+  font-family: var(--display); font-weight: 700; font-size: 15px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 10px; padding: 10px 16px;
+}
+.node.hero { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.arrow { color: var(--faint); font-size: 15px; }
+.branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 22px;
+  border-top: 1px dashed var(--border-strong);
+}
+.branch {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 11px; padding: 13px 15px;
+}
+.branch .bn { font-weight: 500; font-size: 14px; }
+.branch .bd { font-size: 12.5px; color: var(--faint); margin-top: 2px; line-height: 1.45; }
+
+/* ============ 05 collapse ============ */
+
+.collapse {
+  margin-top: 30px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+.collapse .head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.collapse .head .t { font-family: var(--display); font-weight: 700; font-size: 14.5px; }
+.collapse .head .c { margin-left: auto; font-size: 12px; color: var(--faint); }
+.row {
+  display: grid;
+  grid-template-columns: 1fr 132px;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 18px;
+  font-size: 14px;
+}
+.row + .row { border-top: 1px solid var(--border); }
+.row .where { font-size: 12.5px; color: var(--faint); text-align: right; }
+
+/* ============ chips ============ */
+
+.tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  padding: 3px 10px 3px 8px; border-radius: 999px;
+  white-space: nowrap;
+}
+.tag i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.t-green { background: var(--green-bg); color: var(--green-ink); }
+.t-amber { background: var(--amber-bg); color: var(--amber-ink); }
+.t-red   { background: var(--red-bg);   color: var(--red-ink); }
+.t-blue  { background: var(--blue-bg);  color: var(--blue-ink); }
+.t-ind   { background: var(--accent-soft); color: var(--accent-ink); }
+.t-grey  { background: var(--surface-2); color: var(--faint); }
+
+/* ============ 06 review ============ */
+
+.review { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; margin-top: 30px; align-items: start; }
+.viewer {
+  border: 1px solid var(--border); border-radius: 13px;
+  background: var(--surface); overflow: hidden; box-shadow: var(--shadow-lg);
+}
+.frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background:
+    radial-gradient(120% 90% at 26% 26%, oklch(0.74 0.11 62), transparent 62%),
+    linear-gradient(122deg, oklch(0.6 0.14 30), oklch(0.44 0.1 22) 72%);
+}
+.pin {
+  position: absolute;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-fg);
+  font-family: var(--display); font-weight: 700; font-size: 12px;
+  display: grid; place-items: center;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.34), var(--shadow-md);
+}
+.scrub { padding: 12px 14px; border-top: 1px solid var(--border); }
+.track {
+  position: relative; height: 5px; border-radius: 3px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.track b {
+  position: absolute; top: -4px;
+  width: 3px; height: 11px; border-radius: 2px; background: var(--accent);
+}
+.track .played {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-radius: 3px 0 0 3px; background: var(--accent-soft);
+}
+.times {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--faint); margin-top: 7px;
+  font-variant-numeric: tabular-nums;
+}
+.thread { display: grid; gap: 10px; }
+.comment {
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); padding: 13px 15px;
+}
+.comment .meta {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--faint); margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.comment .meta .n {
+  font-family: var(--display); font-weight: 700; font-size: 11px;
+  background: var(--accent-soft); color: var(--accent-ink);
+  border-radius: 5px; padding: 1px 6px;
+}
+.comment p { margin: 0; font-size: 14px; color: var(--ink); }
+.comment.reply { margin-left: 20px; background: var(--surface-2); }
+.reviewpts { display: grid; gap: 7px; margin-top: 18px; }
+.reviewpts li { list-style: none; font-size: 14px; color: var(--muted); padding-left: 18px; position: relative; }
+.reviewpts li::before { content: ""; position: absolute; left: 0; top: 9px; width: 7px; height: 2px; background: var(--border-strong); }
+.reviewpts ul { margin: 0; padding: 0; }
+
+/* ============ 07 versions ============ */
+
+.versions { display: grid; gap: 10px; margin-top: 30px; max-width: 720px; }
+/* fixed last column so the status chips line up down the stack, not per row */
+.ver {
+  display: grid; grid-template-columns: 62px 1fr 156px; gap: 16px; align-items: center;
+  justify-items: start;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); padding: 14px 18px;
+}
+.ver.current { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ver .vn { font-family: var(--display); font-weight: 800; font-size: 19px; letter-spacing: -0.6px; }
+.ver .vd { font-size: 12.5px; color: var(--faint); margin-top: 1px; }
+.ver .vt { font-size: 14px; }
+
+/* ============ 08 modules ============ */
+
+/* three across, so six modules read as two full rows rather than five and an orphan */
+.mods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 30px; }
+.mod {
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); padding: 14px 15px;
+}
+.tile {
+  width: 34px; height: 34px; border-radius: 10px;
+  display: grid; place-items: center; font-size: 15px; margin-bottom: 10px;
+}
+.mod .mn { font-weight: 500; font-size: 14px; }
+.mod .md { font-size: 12.5px; color: var(--faint); margin-top: 2px; line-height: 1.45; }
+
+/* ============ 09 connectors ============ */
+
+.conns { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 30px; }
+.conn {
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); padding: 8px 16px;
+  font-size: 14px; font-weight: 500;
+}
+.conn span { color: var(--faint); font-weight: 400; font-size: 12.5px; }
+
+/* ============ 10 runner ============ */
+
+.runner { display: grid; grid-template-columns: 1fr 380px; gap: 34px; margin-top: 30px; align-items: start; }
+.card {
+  border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); box-shadow: var(--shadow-lg); overflow: hidden;
+}
+.card .ch {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-family: var(--display); font-weight: 700; font-size: 13.5px;
+}
+.card .cb { padding: 6px 16px 14px; }
+.field {
+  display: grid; grid-template-columns: 88px 1fr; gap: 12px;
+  padding: 9px 0; font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.field:last-of-type { border-bottom: none; }
+.field .fk { font-size: 12.5px; color: var(--faint); }
+.field .fv { font-variant-numeric: tabular-nums; }
+.card .actions { display: flex; gap: 9px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.btn {
+  font-family: var(--body); font-size: 13.5px; font-weight: 500;
+  border-radius: 9px; padding: 8px 16px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--ink);
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.said { font-size: 14.5px; color: var(--faint); font-style: italic; margin: 0 0 14px; }
+
+/* ============ 11 pipeline ============ */
+
+.pool { display: flex; gap: 8px; margin-top: 30px; flex-wrap: wrap; }
+.cand {
+  width: 84px; height: 56px; border-radius: 8px;
+  border: 1px solid var(--border);
+  background: linear-gradient(128deg, oklch(0.72 0.06 250), oklch(0.55 0.07 268));
+  position: relative;
+}
+.cand.b { background: linear-gradient(128deg, oklch(0.74 0.07 84), oklch(0.58 0.08 46)); }
+.cand.c { background: linear-gradient(128deg, oklch(0.7 0.06 168), oklch(0.5 0.07 196)); }
+.cand.dim { opacity: .34; }
+.cand.pick { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cand .badge {
+  position: absolute; right: -6px; top: -6px;
+  background: var(--accent); color: var(--accent-fg);
+  font-size: 10px; font-weight: 500; font-family: var(--display);
+  border-radius: 999px; padding: 2px 7px;
+}
+.lineage { display: grid; gap: 7px; margin-top: 24px; font-size: 13.5px; color: var(--muted); max-width: 820px; }
+.lineage div { display: grid; grid-template-columns: 116px 1fr; gap: 18px; }
+.lineage .lk { color: var(--faint); font-size: 12.5px; }
+
+/* ============ 13 close ============ */
+
+.close { background:
+  radial-gradient(900px 520px at 20% 88%, oklch(0.975 0.024 76), transparent 66%),
+  var(--bg);
+}
+.cta {
+  display: inline-block; margin-top: 30px;
+  font-family: var(--display); font-weight: 700; font-size: 15px;
+  background: var(--accent); color: var(--accent-fg);
+  border-radius: 11px; padding: 13px 24px; text-decoration: none;
+  box-shadow: var(--shadow-md);
+}
+.sig {
+  margin-top: 44px; padding-top: 20px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 11px;
+  font-size: 12.5px; color: var(--faint);
+}
+.sig .who { margin-left: auto; }
+
+/* ============ motion ============ */
+
+.reveal { opacity: 0; transform: translateY(12px); transition: opacity .55s ease, transform .55s cubic-bezier(.2,.7,.3,1); }
+.on-screen .reveal { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .deck { scroll-behavior: auto; }
+  .reveal, .pill { transition: none; opacity: 1; transform: none; }
+}
+
+/* ============ narrow ============ */
+
+@media (max-width: 900px) {
+  .review, .runner { grid-template-columns: 1fr; }
+  .mods { grid-template-columns: repeat(2, 1fr); }
+  .comment.reply { margin-left: 14px; }
+}
+@media (max-width: 760px) {
+  .deck { scroll-snap-type: none; }
+  .rail { display: none; }
+  .slide { min-height: auto; padding: 64px 22px; }
+  .hint { display: none; }
+  .mods { grid-template-columns: 1fr; }
+  .ver { grid-template-columns: 56px 1fr; row-gap: 8px; }
+  .scatter { height: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { position: static !important; }
+  .row { grid-template-columns: 1fr; gap: 3px; }
+  .row .where { text-align: left; }
+  .lineage div { grid-template-columns: 1fr; gap: 0; }
+}
+</style>
+
+<nav class="rail" aria-label="Slides"></nav>
+
+<div class="deck" id="deck">
+
+  <!-- 01 -->
+  <section class="slide cover" id="s1" data-n="01" data-label="Cover">
+    <div class="stage">
+      <div class="masthead">
+        <span class="mark">SF</span>
+        <span class="wordmark">Studio Flows</span>
+        <span class="who">For boutique commercial studios</span>
+      </div>
+      <h1>One home for the whole job</h1>
+      <p class="lede">The brief, the boards, the cuts, the client feedback, the call sheet and the budget. In one place, built around how a commercial job actually runs.</p>
+    </div>
+    <div class="hint"><b>&darr;</b> Scroll, or use the arrow keys<span>&middot;</span>13 slides</div>
+  </section>
+
+  <!-- 02 -->
+  <section class="slide" id="s2" data-n="02" data-label="The problem">
+    <div class="stage">
+      <p class="eyebrow reveal">The problem</p>
+      <h2 class="reveal">A job lives in eleven places</h2>
+      <p class="lede reveal">And not one of them knows about the other ten.</p>
+
+      <div class="scatter" aria-label="Eleven scattered tools">
+        <span class="pill" style="left:1%;  top:6%;  transition-delay:.00s"><span class="app">Gmail</span><span class="what">the brief</span></span>
+        <span class="pill" style="left:29%; top:0;   transition-delay:.01s"><span class="app">Figma</span><span class="what">the boards</span></span>
+        <span class="pill" style="left:57%; top:9%;  transition-delay:.01s"><span class="app">Drive</span><span class="what">the references</span></span>
+        <span class="pill" style="left:13%; top:26%; transition-delay:.02s"><span class="app">Dropbox</span><span class="what">the cut</span></span>
+        <span class="pill" style="left:47%; top:31%; transition-delay:.02s"><span class="app">WeTransfer</span><span class="what">the delivery</span></span>
+        <span class="pill" style="left:78%; top:26%; transition-delay:.03s"><span class="app">Sheets</span><span class="what">the budget</span></span>
+        <span class="pill" style="left:3%;  top:52%; transition-delay:.03s"><span class="app">Notes</span><span class="what">the shot list</span></span>
+        <span class="pill" style="left:31%; top:57%; transition-delay:.04s"><span class="app">WhatsApp</span><span class="what">the change</span></span>
+        <span class="pill" style="left:62%; top:53%; transition-delay:.04s"><span class="app">A reply-all thread</span><span class="what">the approval</span></span>
+        <span class="pill" style="left:16%; top:79%; transition-delay:.05s"><span class="app">FreshBooks</span><span class="what">the invoice</span></span>
+        <span class="pill" style="left:55%; top:80%; transition-delay:.05s"><span class="app">Hero_FINAL_v3.mov</span><span class="what">the file</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 -->
+  <section class="slide" id="s3" data-n="03" data-label="The cost">
+    <div class="stage">
+      <p class="eyebrow reveal">What it costs</p>
+      <h2 class="reveal">Three things that go wrong on every job</h2>
+
+      <div class="costs reveal">
+        <div class="cost">
+          <span class="dot" style="background:var(--red)"></span>
+          <div>
+            <h3>The approval nobody can find</h3>
+            <p>The client said yes, in a reply to a forwarded thread, on a phone. On Thursday, when it matters, nobody can produce it.</p>
+          </div>
+        </div>
+        <div class="cost">
+          <span class="dot" style="background:var(--amber)"></span>
+          <div>
+            <h3>The version that went out anyway</h3>
+            <p>v3 was the approved one. v2 was the one sitting in the folder with the shortest filename, and that is the one that shipped.</p>
+          </div>
+        </div>
+        <div class="cost">
+          <span class="dot" style="background:var(--blue)"></span>
+          <div>
+            <h3>The balance that aged quietly</h3>
+            <p>The deposit landed. The balance did not. Nothing in the pile was watching for it, so it surfaced six weeks late.</p>
+          </div>
+        </div>
+      </div>
+
+      <p class="note reveal">None of this is a discipline problem. Producers are the most organised people on a job. It is a <strong>filing</strong> problem, and filing is what software is for.</p>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section class="slide" id="s4" data-n="04" data-label="The spine">
+    <div class="stage">
+      <p class="eyebrow reveal">What it is</p>
+      <h2 class="reveal">One spine, first contact to final delivery</h2>
+      <p class="lede reveal">Not a generic project tool with production words pasted over it. The structure is the way a job already moves.</p>
+
+      <div class="spine reveal">
+        <div class="chain">
+          <span class="node">Lead</span>
+          <span class="arrow">&rarr;</span>
+          <span class="node">Client</span>
+          <span class="arrow">&rarr;</span>
+          <span class="node hero">Project</span>
+        </div>
+        <div class="branches">
+          <div class="branch"><div class="bn">Brief</div><div class="bd">The creative direction, with its attachments</div></div>
+          <div class="branch"><div class="bn">Assets</div><div class="bd">Every file, every version, one history</div></div>
+          <div class="branch"><div class="bn">Approvals</div><div class="bd">Internal sign-off and client sign-off, kept apart</div></div>
+          <div class="branch"><div class="bn">Communication</div><div class="bd">The threads, filed against the job</div></div>
+          <div class="branch"><div class="bn">Production</div><div class="bd">Shot list, call sheets, crew, calendar</div></div>
+          <div class="branch"><div class="bn">Money</div><div class="bd">Budget, costs, invoices, agreements</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section class="slide" id="s5" data-n="05" data-label="One place">
+    <div class="stage">
+      <p class="eyebrow reveal">The same eleven</p>
+      <h2 class="reveal">In one place, in the order you need them</h2>
+
+      <div class="collapse reveal">
+        <div class="head">
+          <span class="mark" style="font-size:11px;padding:4px 7px">SF</span>
+          <span class="t">Bright Water &middot; Hero spot</span>
+          <span class="tag t-blue"><i></i>In review</span>
+          <span class="c">Shoot Aug 12 &middot; Delivery Aug 29</span>
+        </div>
+        <div class="row"><span>The brief, with the agency's deck attached</span><span class="where">Brief</span></div>
+        <div class="row"><span>The boards, pulled in from Figma</span><span class="where">Storyboards</span></div>
+        <div class="row"><span>The references</span><span class="where">Moodboard</span></div>
+        <div class="row"><span>Hero_bottle, at v3</span><span class="where">Assets</span></div>
+        <div class="row"><span>The client's comments, on the frame</span><span class="where">Review</span></div>
+        <div class="row"><span>The approval, with a name and a timestamp</span><span class="where">Review</span></div>
+        <div class="row"><span>The shot list and the call sheet</span><span class="where">Production</span></div>
+        <div class="row"><span>The crew, with agreed day rates</span><span class="where">Contacts</span></div>
+        <div class="row"><span>The permit and the insurance certificate</span><span class="where">Documents</span></div>
+        <div class="row"><span>What it cost, and what is still owed</span><span class="where">Budget</span></div>
+        <div class="row"><span>The invoice, and whether it was opened</span><span class="where">Billing</span></div>
+      </div>
+
+      <p class="kicker reveal">One project. Eleven answers, none of them a search.</p>
+    </div>
+  </section>
+
+  <!-- 06 -->
+  <section class="slide" id="s6" data-n="06" data-label="Review">
+    <div class="stage">
+      <p class="eyebrow reveal">Review and approval</p>
+      <h2 class="reveal">Send a link. Your client needs no login.</h2>
+
+      <div class="review">
+        <div class="viewer reveal">
+          <div class="frame">
+            <span class="pin" style="left:24%; top:31%">1</span>
+            <span class="pin" style="left:63%; top:66%">2</span>
+          </div>
+          <div class="scrub">
+            <div class="track">
+              <span class="played" style="width:34%"></span>
+              <b style="left:34%"></b>
+              <b style="left:71%"></b>
+            </div>
+            <div class="times"><span>00:00:12:04</span><span>00:00:35:00</span></div>
+          </div>
+        </div>
+
+        <div class="thread reveal">
+          <div class="comment">
+            <div class="meta"><span class="n">1</span> Sean, agency <span>&middot;</span> 00:00:12:04</div>
+            <p>Label sits low against the cap, and the highlight is blown on the right shoulder.</p>
+          </div>
+          <div class="comment reply">
+            <div class="meta">You <span>&middot;</span> reply</div>
+            <p>Regrading that shoulder now. Label is a re-comp, back to you Thursday.</p>
+          </div>
+          <div class="comment">
+            <div class="meta"><span class="n">2</span> Priya, brand <span>&middot;</span> 00:00:26:18</div>
+            <p>Happy with everything from here. <span class="tag t-green" style="margin-left:4px"><i></i>Approved</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="reviewpts reveal">
+        <ul>
+          <li>Comments land on the frame, at the timecode, with the markup drawn on it.</li>
+          <li>Approve or request changes in the same place, and it is recorded with a name and a time.</li>
+          <li>Every round is kept, so the third conversation can see the first one.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 -->
+  <section class="slide" id="s7" data-n="07" data-label="Versions">
+    <div class="stage">
+      <p class="eyebrow reveal">Versions</p>
+      <h2 class="reveal">One asset. Every version. One thread.</h2>
+      <p class="lede reveal">A new cut is not a new file with a longer name. It is the next version of the thing you were already talking about.</p>
+
+      <div class="versions reveal">
+        <div class="ver current">
+          <div><span class="vn">v3</span><div class="vd">Aug 14</div></div>
+          <div><div class="vt">Hero_bottle</div><div class="vd">Regrade, label re-comp</div></div>
+          <span class="tag t-green"><i></i>Approved</span>
+        </div>
+        <div class="ver">
+          <div><span class="vn">v2</span><div class="vd">Aug 11</div></div>
+          <div><div class="vt">Hero_bottle</div><div class="vd">2 comments, both resolved</div></div>
+          <span class="tag t-amber"><i></i>Changes requested</span>
+        </div>
+        <div class="ver">
+          <div><span class="vn">v1</span><div class="vd">Aug 07</div></div>
+          <div><div class="vt">Hero_bottle</div><div class="vd">First offline</div></div>
+          <span class="tag t-grey"><i></i>Superseded</span>
+        </div>
+      </div>
+
+      <p class="note reveal">The file called <strong>Hero_FINAL_v3_ACTUAL.mov</strong> stops existing, because it was only ever a workaround for software that could not hold a history.</p>
+    </div>
+  </section>
+
+  <!-- 08 -->
+  <section class="slide" id="s8" data-n="08" data-label="Production">
+    <div class="stage">
+      <p class="eyebrow reveal">The rest of the job</p>
+      <h2 class="reveal">Everything after the brief, and everything after the shoot</h2>
+
+      <div class="mods reveal">
+        <div class="mod"><span class="tile" style="background:var(--purple-bg);color:var(--purple)">&#9673;</span><div class="mn">Storyboards</div><div class="md">Ordered frames, scene and sound per frame</div></div>
+        <div class="mod"><span class="tile" style="background:var(--blue-bg);color:var(--blue)">&#9635;</span><div class="mn">Shot list</div><div class="md">Size, type, movement, per shot</div></div>
+        <div class="mod"><span class="tile" style="background:var(--amber-bg);color:var(--amber)">&#9679;</span><div class="mn">Call sheets</div><div class="md">Built on the sheet itself, sent, confirmations tracked</div></div>
+        <div class="mod"><span class="tile" style="background:var(--green-bg);color:var(--green)">&#9650;</span><div class="mn">Crew and gear</div><div class="md">Roster by department, with agreed rates</div></div>
+        <div class="mod"><span class="tile" style="background:var(--accent-soft);color:var(--accent)">&#9632;</span><div class="mn">Budget</div><div class="md">Bid against actual, with the invoices behind each line</div></div>
+        <div class="mod"><span class="tile" style="background:var(--red-bg);color:var(--red)">&#9670;</span><div class="mn">Documents</div><div class="md">Permits, insurance, specs, filed from the email they arrived in</div></div>
+      </div>
+
+      <p class="note reveal">A vendor invoice arrives by email. One click files it as a cost against the right budget line, reads the amount off the PDF, and flags it if it does not match the day rate you agreed.</p>
+    </div>
+  </section>
+
+  <!-- 09 -->
+  <section class="slide" id="s9" data-n="09" data-label="Connections">
+    <div class="stage">
+      <p class="eyebrow reveal">The stance</p>
+      <h2 class="reveal">Organise, do not replace</h2>
+      <p class="lede reveal">Nobody is going to abandon Figma because a project tool asked them to. So Studio Flows reaches into where the work already lives and files it against the job.</p>
+
+      <div class="conns reveal">
+        <span class="conn">Gmail <span>threads, replies, attachments</span></span>
+        <span class="conn">Google Drive <span>browse and import</span></span>
+        <span class="conn">Figma <span>frames as assets</span></span>
+        <span class="conn">Slack <span>channels</span></span>
+        <span class="conn">Google Chat <span>spaces</span></span>
+        <span class="conn">Calendar <span>two way</span></span>
+      </div>
+
+      <p class="note reveal">The test for any connection is simple: it has to remove a tool switch that happens on every job. Anything else is a logo on a page.</p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide" id="s10" data-n="10" data-label="Assistance">
+    <div class="stage">
+      <p class="eyebrow reveal">Where AI sits</p>
+      <h2 class="reveal">It proposes. You commit.</h2>
+
+      <div class="runner">
+        <div class="reveal">
+          <p class="said">&ldquo;Log the Kessler invoice against lighting, half now and half on delivery.&rdquo;</p>
+          <p class="lede">Ask it in your own words. It reads the studio and comes back with a card, not a change. Nothing is written until you press Create.</p>
+          <p class="note">That line is not caution for its own sake. A model that files a cost unattended will eventually file the wrong one, and a financial record you did not agree to is worse than no record. Same rule everywhere it appears: it drafts the client update, it reads the invoice, it rewrites the reply. You send it.</p>
+        </div>
+
+        <div class="card reveal">
+          <div class="ch">Log a cost</div>
+          <div class="cb">
+            <div class="field"><span class="fk">Vendor</span><span class="fv">Kessler Lighting</span></div>
+            <div class="field"><span class="fk">Budget line</span><span class="fv">Lighting and grip</span></div>
+            <div class="field"><span class="fk">Amount</span><span class="fv">$4,800.00</span></div>
+            <div class="field"><span class="fk">Invoice</span><span class="fv">KL-2291</span></div>
+            <div class="field"><span class="fk">Schedule</span><span class="fv">$2,400 now, $2,400 Sep 12</span></div>
+          </div>
+          <div class="actions">
+            <button class="btn primary" type="button">Create</button>
+            <button class="btn" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide" id="s11" data-n="11" data-label="Generated work">
+    <div class="stage">
+      <p class="eyebrow reveal">Where it goes next</p>
+      <h2 class="reveal">The generated shot, organised</h2>
+      <p class="lede reveal">One shot can throw off a hundred candidates across four tools in an afternoon. The generating is handled. The keeping track of it is not.</p>
+
+      <div class="pool reveal" aria-label="Candidate generations, one picked">
+        <span class="cand dim"></span>
+        <span class="cand b dim"></span>
+        <span class="cand c"></span>
+        <span class="cand dim"></span>
+        <span class="cand b"></span>
+        <span class="cand pick"><span class="badge">Take</span></span>
+        <span class="cand c dim"></span>
+        <span class="cand dim"></span>
+        <span class="cand b dim"></span>
+      </div>
+
+      <div class="lineage reveal">
+        <div><span class="lk">Referenced</span><span>Two style frames and a motion clip, each kept as an input</span></div>
+        <div><span class="lk">Provenance</span><span>Platform, model, prompt and seed, captured per candidate</span></div>
+        <div><span class="lk">Triage</span><span>Keyboard first: keep, reject, star, compare four side by side</span></div>
+        <div><span class="lk">The pick</span><span>Shared as a link so a director chooses without an account</span></div>
+      </div>
+
+      <p class="kicker reveal">We stay above the generation tools. Organise, review, pick, and keep the lineage. That is the part nothing else is doing.</p>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide" id="s12" data-n="12" data-label="Why">
+    <div class="stage">
+      <p class="eyebrow reveal">Why it exists</p>
+      <h2 class="reveal">Every feature came from something that went wrong</h2>
+      <p class="lede reveal">Studio Flows is built by a working commercial studio operator, and used on live jobs before it is shown to anyone.</p>
+      <p class="note reveal">There is no roadmap workshop behind it. The backlog is a list of things that got in the way last week: an approval that could not be found, an invoice that arrived as a photograph, a crew rate a freelancer should never have been able to see. When a job runs clean, nothing gets built. That is the rule, and it is why the product does not sprawl.</p>
+      <p class="note reveal">It is also why the design is warm rather than white. On cold white the interface is the brightest thing on screen, and the work has to fight it. That matters when the work is the thing being judged.</p>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide close" id="s13" data-n="13" data-label="Close">
+    <div class="stage">
+      <p class="eyebrow reveal">The ask</p>
+      <h2 class="reveal">Run a real job through it</h2>
+      <p class="lede reveal">Not a trial account you poke at for ten minutes. One job, brief to delivery, with your real client and your real deadline. That is the only test that tells either of us anything.</p>
+      <a class="cta" href="https://studio-flows.com">studio-flows.com</a>
+
+      <div class="sig">
+        <span class="mark" style="font-size:11px;padding:4px 7px">SF</span>
+        <span>Studio Flows</span>
+        <span class="who">Pre-production, review and delivery for boutique commercial studios</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  var deck = document.getElementById("deck");
+  var slides = Array.prototype.slice.call(deck.querySelectorAll(".slide"));
+  var rail = document.querySelector(".rail");
+
+  // build the index from the slides themselves, so it cannot drift out of sync
+  slides.forEach(function (s) {
+    var a = document.createElement("a");
+    a.href = "#" + s.id;
+    a.textContent = s.dataset.n;
+    a.title = s.dataset.label;
+    a.setAttribute("aria-label", "Slide " + s.dataset.n + ", " + s.dataset.label);
+    rail.appendChild(a);
+  });
+  var links = Array.prototype.slice.call(rail.querySelectorAll("a"));
+
+  // the observer only reveals content; the rail is driven off scroll position,
+  // so two slides can never read as current during a transition
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) e.target.classList.add("on-screen");
+    });
+  }, { threshold: 0.15 });
+  slides.forEach(function (s) { io.observe(s); });
+
+  var ticking = false;
+  function mark() {
+    var i = current();
+    links.forEach(function (l, n) { l.classList.toggle("on", n === i); });
+    ticking = false;
+  }
+  deck.addEventListener("scroll", function () {
+    if (!ticking) { ticking = true; requestAnimationFrame(mark); }
+  }, { passive: true });
+  mark();
+
+  function current() {
+    var mid = deck.scrollTop + deck.clientHeight / 2;
+    for (var i = 0; i < slides.length; i++) {
+      if (slides[i].offsetTop + slides[i].offsetHeight > mid) return i;
+    }
+    return slides.length - 1;
+  }
+  function go(i) {
+    var n = Math.max(0, Math.min(slides.length - 1, i));
+    slides[n].scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  document.addEventListener("keydown", function (e) {
+    var t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") {
+      e.preventDefault(); go(current() + 1);
+    } else if (e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "PageUp") {
+      e.preventDefault(); go(current() - 1);
+    } else if (e.key === "Home") { e.preventDefault(); go(0); }
+    else if (e.key === "End") { e.preventDefault(); go(slides.length - 1); }
+  });
+})();
+</script>
