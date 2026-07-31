@@ -6,12 +6,12 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
 
 ## Manual steps before inviting beta users
 
-- [ ] **Enable Supabase leaked-password protection.** Was blocked on plan (a
-      PRO feature, and the project was on Free, so the control did not appear at
-      all). Pro is now active, so the toggle should be available; the advisor
-      still reports it disabled, so it has not been flipped yet. Look under
-      Authentication configuration, in the Password or Attack Protection
-      section.
+- [x] **Enable Supabase leaked-password protection.** DONE and VERIFIED
+      2026-07-31: the `auth_leaked_password_protection` lint no longer appears in
+      `get_advisors(type: "security")`, which is the check, not the dashboard
+      toggle looking flipped. Was blocked on plan for a while (a PRO feature, so
+      on Free the control did not appear at all, which reads as "cannot find it"
+      rather than "not available").
 
 - [x] **Upgrade Supabase to Pro before inviting anyone.** DONE 2026-07-30.
       Storage headroom and daily backups are the reason it mattered; point-in-
@@ -76,6 +76,27 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
       collects in-app submissions (there is no read policy by design).
 
 ## Deliberate follow-ups (not beta blockers)
+
+- **SECURITY DEFINER functions executable by `anon` / `authenticated`** (lints
+  0028 / 0029, all WARN, checked 2026-07-31). These are the only security
+  advisories left. Not a leak, and mostly by design, but worth a pass before a
+  public launch rather than a colleague beta:
+  - `studio_invite_preview` / `project_invite_preview` are DELIBERATELY granted
+    to `anon`: the accept page reads them before the invitee has a session, and
+    both require a 192-bit token. Leave alone.
+  - `is_studio_member` / `is_studio_admin` / `can_access_project` /
+    `review_target_project` / `review_comment_project` are the RLS helpers. They
+    answer only about the CALLER (is_studio_member) or resolve a row to its
+    project id, so a signed-in user learns nothing about anyone else.
+  - `claim_pending_invites` / `claim_pending_project_invites` must stay callable
+    by `authenticated`, that is the whole mechanism, and since 0079 they match
+    only a CONFIRMED address, so an anon or unconfirmed caller matches nothing.
+  - The tightening, if done: revoke EXECUTE from `anon` ONLY, and only on the
+    five that no anon path uses (the public portals `/r`, `/rb`, `/c`, `/p` go
+    through the SERVICE role, so they are unaffected: verify that before
+    changing anything). Do NOT revoke from `authenticated`: a policy that calls
+    a function needs the querying role to hold EXECUTE, so that would break RLS
+    across the app rather than harden it.
 
 - ~~Collaborator asset-version upload + internal doc-review image signing.~~
   DONE. Uploads stay direct-to-storage (a server relay would hit the ~4.5MB
