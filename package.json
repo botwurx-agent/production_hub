@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "types": "tsc --noEmit"
+    "types": "tsc --noEmit",
+    "shots": "node scripts/capture-shots.mjs",
+    "demo:media": "node scripts/demo-media.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
