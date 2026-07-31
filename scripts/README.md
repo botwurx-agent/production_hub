@@ -48,12 +48,14 @@ into the bucket with the service role, pinned to the demo studio's folder so it
 could not write anywhere else. It was invoked from Postgres through the `http`
 extension.
 
-Both halves of that scaffolding are now shut: the token table it authenticated
-against is dropped, so the function fails closed, and the `http` extension is
-uninstalled. **The function itself still needs deleting by hand** in the
-Supabase dashboard under Edge Functions, since the tooling here can deploy one
-but not remove it. It cannot currently do anything, but a write endpoint should
-not outlive the job it was written for.
+All of that scaffolding is now shut. The token table it authenticated against is
+dropped, the `http` extension is uninstalled, and the function's body has been
+replaced with an empty one that holds no credentials, touches nothing, and
+answers 410 with `verify_jwt` back on.
+
+It is left in place only because the tooling that deployed it cannot delete it.
+**Delete `seed-demo-media` from the Supabase dashboard** under Edge Functions
+whenever convenient. That is tidiness at this point, not a live risk.
 </details>
 
 ## 2. Capture the screenshots
