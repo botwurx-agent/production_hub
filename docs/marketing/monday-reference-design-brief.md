@@ -433,6 +433,17 @@ confirmed the shape but corrected three things. Skeleton now BUILT and pushed.
    rendering. Branching on headers() would have made the page dynamic; a second
    script would have flashed. Confirmed static: the build reports `○ /site`.
 
+4. THE MARKETING ROUTE MUST BE PUBLIC ON EVERY HOST, not only the apex. The
+   first cut gated it behind the host check, so /site fell through to
+   updateSession, which treats it as protected and redirects to /login. Since
+   the apex domain is not attached yet, that made the marketing site
+   unreachable everywhere: localhost, Vercel preview, all of it. Caught only by
+   actually requesting the page (curl returned 307, not 200). middleware.ts now
+   serves anything under /site without auth on any host, and the page declares
+   the apex as its canonical URL so the duplicate on app.studio-flows.com never
+   competes with it in search. Verified: /site returns 200 with every section,
+   while / and /dashboard still redirect to login.
+
 Also worth knowing for the next session: there is no icon dependency in
 package.json, so marketing icons are inline SVG like the rest of the app; and
 the marketing first-load JS is ~171 kB, most of it the shared app chunk plus the

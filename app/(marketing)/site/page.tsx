@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { IconTile } from "@/components/ui/icon-tile";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
@@ -69,6 +70,10 @@ const PHASES = [
     ),
   },
 ];
+
+/* The page is reachable at /site on the app and preview hosts as well as at "/"
+   on the apex, so it names the apex as canonical and search never has to pick. */
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 const STEPS = [
   { n: "01", t: "Win the job", b: "Track the deal from first contact to awarded." },
