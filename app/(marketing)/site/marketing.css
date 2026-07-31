@@ -14,6 +14,59 @@
    a still, complete composition rather than a blank frame.
    ========================================================================== */
 
+/* --------------------------------------------------------------------------
+   Hero CTA: a highlight sweeps across the button on a loop, the attention-grab
+   Monday gets from their cycling gradient.
+
+   Deliberately kept INSIDE the Studio Flows accent: the sweep is a violet-white
+   sheen over our indigo, not a pink-to-orange rainbow. The brand rule is one
+   restrained accent, and a multi-hue sweep would be the loudest thing on the
+   page. It is easy to push louder later by widening the mix below; walking a
+   rainbow back is harder.
+
+   The highlight rests fully off the button, so the loop has no visible seam and
+   nothing to reset. TO RETUNE THE CADENCE, change the 2.4s duration on .sf-shine
+   and nothing else: the sweep occupies the first ~45% of the cycle and the rest
+   is the pause, so a longer duration means a longer rest, not a slower wipe.
+   -------------------------------------------------------------------------- */
+
+.sf-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-shine::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 0;
+    width: 40%;
+    background: linear-gradient(
+      100deg,
+      transparent 0%,
+      color-mix(in oklch, var(--h-purple) 35%, white) 50%,
+      transparent 100%
+    );
+    opacity: 0.5;
+    transform: translateX(-180%) skewX(-14deg);
+    animation: sf-shine 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes sf-shine {
+  0% {
+    transform: translateX(-180%) skewX(-14deg);
+  }
+  45%,
+  100% {
+    transform: translateX(340%) skewX(-14deg);
+  }
+}
+
 .sf-scene {
   position: relative;
   aspect-ratio: 16 / 10;

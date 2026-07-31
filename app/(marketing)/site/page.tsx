@@ -4,6 +4,7 @@ import { IconTile } from "@/components/ui/icon-tile";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
 import { HeroAnimation } from "@/components/marketing/hero-animation";
+import { PersonaChips } from "@/components/marketing/persona-chips";
 import {
   FeatureRow,
   Section,
@@ -171,9 +172,11 @@ export default function MarketingHome() {
             sheets, and budgets into one organized home, built around how
             commercial production actually works.
           </p>
-          <div className="mt-9 flex flex-col items-center gap-4">
+          <PersonaChips className="mt-7" />
+
+          <div className="mt-8 flex flex-col items-center gap-4">
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <CtaButton />
+              <CtaButton shine />
               <CtaButton variant="quiet" href="/#product" label="See how it works" />
             </div>
             <CtaMicrocopy />

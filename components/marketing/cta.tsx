@@ -13,11 +13,19 @@ export function CtaButton({
   size = "md",
   href = SIGNUP_URL,
   label = CTA_LABEL,
+  shine = false,
 }: {
   variant?: "primary" | "quiet";
   size?: "sm" | "md";
   href?: string;
   label?: string;
+  /**
+   * Sweeps a highlight across the button on a loop. Reserved for the ONE
+   * button that should pull the eye (the hero), the same restraint Monday
+   * shows: their hero button animates and the one in the nav does not. Putting
+   * it on every CTA would spend the attention it is meant to buy.
+   */
+  shine?: boolean;
 }) {
   const dims =
     size === "sm" ? "px-4 py-2 text-sm" : "px-6 py-3 text-[15px]";
@@ -26,26 +34,30 @@ export function CtaButton({
     variant === "primary"
       ? "bg-accent text-accent-fg shadow-md hover:bg-accent-strong"
       : "border border-border-strong bg-surface text-text hover:bg-surface-2";
+  const fx = shine && variant === "primary" ? "sf-shine" : "";
   return (
-    <a href={href} className={`${base} ${style}`}>
-      {label}
-      {variant === "primary" ? (
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : null}
+    <a href={href} className={`${base} ${style} ${fx}`}>
+      {/* Held above the sweeping highlight, which paints in a pseudo-element. */}
+      <span className="relative z-10 inline-flex items-center gap-2">
+        {label}
+        {variant === "primary" ? (
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ) : null}
+      </span>
     </a>
   );
 }
