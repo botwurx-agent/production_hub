@@ -23,6 +23,8 @@ Fixing it takes three settings changes in the Supabase dashboard. No code.
 
 ## 1. Point Supabase Auth at Resend (Custom SMTP)
 
+DONE, 30 July 2026. Settings below are what is live.
+
 Dashboard: **Authentication → Emails → SMTP Settings → Enable Custom SMTP**.
 
 | Field | Value |
@@ -47,10 +49,47 @@ Supabase's shared SMTP is capped low on purpose (a handful per hour, which is
 its own reason not to run a beta on it). Custom SMTP starts at 30 per hour and
 can be raised.
 
+### Two things that cost an hour when this was first set up
+
+Both surfaced as "no email arrives", with nothing in the inbox to diagnose
+from. The auth log is the place to look: **Supabase → Logs → Auth**, or the
+`get_logs` MCP tool. A failed send appears as `POST /recover` with status 500
+and the SMTP error attached.
+
+- **The Password field takes the Resend API key, which starts `re_`.** A
+  Supabase key (`sb_publishable_...` / `sb_secret_...`) pasted there is a
+  different credential entirely, and Resend answers `535 "Authentication
+  credentials invalid"`. The 535 is raised at login to the mail server, before
+  any message exists, so it says nothing about the address or the template.
+- **Sender email must be on the Resend-verified domain**, spelled exactly.
+  `support@studio-flow.com` (missing the s) would have failed after the key was
+  fixed, with a different error, sending the hunt round a second time. The
+  address that works is the same one in `EMAIL_FROM` on Vercel.
+
+That duplication is worth knowing about: the sender address lives in two places
+(`EMAIL_FROM` in Vercel, and this dashboard field) with nothing keeping them in
+step, which is exactly how the typo survived.
+
 ## 2. Replace the templates
 
+DONE, 30 July 2026. All three pasted and the reset one verified end to end:
+branded, link on `app.studio-flows.com`, lands on `/reset-password`.
+
 Dashboard: **Authentication → Emails → Templates**. Three templates can fire.
-Paste the HTML below into each. It is the same layout as
+Paste the HTML below into each, replacing the existing body outright rather
+than editing it.
+
+**Copy from inside the fences, not including them.** Each block below is
+delimited by an opening ` ```html ` and a closing ` ``` `. Those belong to this
+markdown file, not to the template. Supabase pastes whatever it is given
+verbatim, so a stray fence renders as literal text at the top of the email that
+every recipient sees. It happened on the first pass here. The content must
+start at `<!doctype html>` and end at `</html>`.
+
+Set the **Subject** on each screen too: `Confirm your Studio Flows account`,
+`Reset your Studio Flows password`, `Confirm your new Studio Flows email`.
+
+It is the same layout as
 `lib/email-template.ts`, hand-inlined, since Supabase renders a raw string and
 cannot import from this codebase. If the app's email design changes, these
 have to be updated by hand; that duplication is the price of Supabase owning
@@ -62,7 +101,14 @@ recipient hovers reads `studio-flows.com`, not `<project-ref>.supabase.co`.
 The route already accepts exactly these parameters.
 
 `{{ .SiteURL }}` comes from **Authentication → URL Configuration → Site URL**,
-so set that to the production origin before pasting these in.
+so set that to the production origin before pasting these in. It is
+`https://app.studio-flows.com`, matching `NEXT_PUBLIC_SITE_URL` on Vercel.
+
+The `app.` matters. Both `studio-flows.com` and `app.studio-flows.com` alias
+the same Vercel deployment, so a link to either will load. But the session
+cookie is set on whichever host serves the confirm route, so if Supabase sends
+people to the bare domain while the app runs on `app.`, a user can be signed in
+on one host and signed out on the other. Keep the two settings identical.
 
 ### Confirm signup
 
@@ -163,6 +209,32 @@ functions look up the caller's address with `email_confirmed_at is not null`,
 so an unconfirmed user matches no invite. That is deliberately applied AFTER
 the toggle, since with confirmation off it would have made every invite
 unclaimable. If the toggle is ever switched back off, revert 0079 with it.
+
+## The confirm route accepts both link shapes
+
+`app/auth/confirm/route.ts` handles two kinds of link, and it has to.
+
+- **`token_hash` + `type`**, which the templates above produce. The link comes
+  straight here and `verifyOtp` spends the token. One hop, our domain
+  throughout. (With PKCE enabled the hash arrives prefixed `pkce_`, which
+  `verifyOtp` handles.)
+- **`code`**, which Supabase's DEFAULT templates produce via
+  `{{ .ConfirmationURL }}`. That URL points at the project's own
+  `/auth/v1/verify`, which spends the token itself, creates the session, then
+  redirects here with a code to exchange.
+
+The second branch was added on 30 July after recovery failed on the stock
+template. The route only accepted `token_hash`, so it discarded a valid session
+and redirected to `/login?error=confirmation_failed`. The message said the link
+may have expired, which was false on the first click and then true on every
+retry, because the first click had already spent the token. The auth log showed
+it exactly: a 303 carrying a `login` event, then two 403s reading `One-time
+token not found`.
+
+So do not "simplify" the route back to one branch on the grounds that our
+templates only ever send `token_hash`. The default template is what a fresh
+Supabase project ships with, and the failure it causes is both silent and
+self-disguising.
 
 ## What stays unbranded
 

@@ -55,9 +55,23 @@ the codebase (dashboards, accounts) plus the deliberate follow-ups.
       and commits to export or deletion within 30 days of an emailed request.
       STILL NEEDS COUNSEL before the Service is offered commercially, and the
       governing-law clause needs adding once the entity exists.
-- [ ] **Decide on email confirmation.** Users now have password reset and a
-      resend-confirmation path, so keeping confirmation on is safe. If you want a
-      frictionless beta, you can disable it in Supabase Auth instead.
+- [x] **Decide on email confirmation.** DONE 2026-07-30: confirmation is ON.
+      It is not only a preference: `claim_pending_invites()` matched a signup
+      against an invited address with no verification check, so with the toggle
+      off anyone who knew an invited address could sign up as it and land inside
+      that studio. Migration 0079 enforces the same rule in the database. ORDER
+      MATTERS if this is ever revisited: with confirmation off nobody gets an
+      `email_confirmed_at`, so 0079 would make every invite permanently
+      unclaimable. Revert 0079 alongside the toggle, never on its own.
+- [x] **Brand the Supabase Auth emails.** DONE and VERIFIED 2026-07-30, see
+      `supabase-auth-emails.md`. Custom SMTP points at the same Resend account
+      the app uses, all three templates carry the SF layout, and Site URL matches
+      `NEXT_PUBLIC_SITE_URL`. A password reset was run end to end: branded mail,
+      link on `app.studio-flows.com`, landing on `/reset-password`. Shipped with
+      it: `/auth/confirm` now also accepts a PKCE `code`, without which recovery
+      is broken under Supabase's default templates, and `requestPasswordReset`
+      reports a real send failure to Sentry instead of always saying "check your
+      inbox".
 - [ ] **Read beta feedback** in the Supabase dashboard: the `feedback` table
       collects in-app submissions (there is no read policy by design).
 
