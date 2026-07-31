@@ -21,20 +21,40 @@ and an NDA, and a sent invoice. Every name in it is invented.
 **This account is public-facing by intent.** Do not put anything in it you would
 not show a stranger, and do not point it at a real client's files.
 
-## 1. Put the media in place
+## 1. The media is already in place
 
-The rows reference deterministic storage paths, so the files have to exist or
-every thumbnail renders broken.
+Thirteen files are in storage: ten stills and three five-second cuts of the hero
+spot, generated on Higgsfield and written straight into the bucket. Nothing
+needs running for the demo studio to look finished.
+
+To **replace** any of them with real work, drop a file of the matching name into
+`scripts/demo-media/` and run:
 
 ```bash
 node scripts/demo-media.mjs
 ```
 
-`scripts/demo-media/` holds neutral placeholders. **Replace them with real
-stills** of the same filenames and re-run: a screenshot of the product is only
-as convincing as the work inside it, and a food and beverage studio showing grey
-rectangles undoes the point of showing the product at all. Filenames are listed
-at the top of the script.
+It signs in as the demo user and overwrites in place, so the paths the seeded
+rows point at never change. Filenames are listed at the top of the script.
+
+<details>
+<summary>How the files got there, since it is not the obvious route</summary>
+
+The session that seeded the rows could reach the database but not the storage
+API, so it could not upload anything directly. The way through was a temporary
+Edge Function (`seed-demo-media`), which runs on Supabase's own infrastructure
+and can therefore reach both: it took a list of source URLs and wrote each one
+into the bucket with the service role, pinned to the demo studio's folder so it
+could not write anywhere else. It was invoked from Postgres through the `http`
+extension.
+
+Both halves of that scaffolding are now shut: the token table it authenticated
+against is dropped, so the function fails closed, and the `http` extension is
+uninstalled. **The function itself still needs deleting by hand** in the
+Supabase dashboard under Edge Functions, since the tooling here can deploy one
+but not remove it. It cannot currently do anything, but a write endpoint should
+not outlive the job it was written for.
+</details>
 
 ## 2. Capture the screenshots
 
