@@ -877,6 +877,26 @@ membership). We only OPEN the project-scoped tables to them.
   the public portal (service client) and the internal RLS path, and on the
   latter a collaborator has no membership, so the member-gated bucket policy
   refused to sign and every image came back blank.
+- THE VERIFICATION BELOW IS IN DOUBT (found 2026-07-31, not yet re-run). The
+  test account (stevenazari1@gmail.com) had SIGNED UP INDEPENDENTLY on 07-16,
+  which gave it its own personal studio, and was invited as a collaborator on
+  07-29. lib/studio.ts:57 returns a full member with isCollaborator FALSE as
+  soon as the user has ANY membership row; the project_members branch at :78 is
+  only reached when there are none. So the code path that produces the stripped
+  nav and the single-project list could not have run, and the observation below
+  and the code disagree. Treat the collaborator boundary as UNVERIFIED until
+  re-run with an account that is INVITED FIRST and never signs up separately
+  (handle_new_user skips personal-studio creation for a pending invitee, which
+  is the condition the whole design rests on).
+- THE UNDERLYING GAP, which is real regardless of how that re-test goes: a user
+  cannot hold a membership in one studio AND collaborator access in another.
+  The second is silently invisible, because the projects list scopes to the
+  active studio and the switcher lists only membership rows. RLS still allows
+  the project by direct URL (can_access_project), so nothing leaks; it just
+  cannot be navigated to. This is the NORMAL shape for a freelance DP or editor
+  who has their own account and gets booked on someone else's job, so it will
+  arrive with real users. Fixing it means letting the context carry both
+  (resolver + switcher together), not a patch.
 - VERIFIED END TO END (2026-07-29, real second account): invite from the project
   hero -> email received -> accept link -> lands on the project. The collaborator
   sees a stripped left nav (Projects only) and the projects list shows ONLY the
