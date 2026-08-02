@@ -130,16 +130,14 @@ export async function loadCast(projectId: string, studioId: string) {
         position: l.position,
         itemIds: itemsByLook.get(l.id) ?? [],
         handles: handlesFor((h) => h.look_id === l.id),
+        sheets: (sheetRows ?? [])
+          .filter((r) => r.look_id === l.id && signed.has(r.id))
+          .map((r) => ({ id: r.id, url: signed.get(r.id) as string })),
       }));
 
-    const myLookIds = new Set(myLooks.map((l) => l.id));
     const sheets = (sheetRows ?? [])
-      .filter(
-        (r) =>
-          (r.entity_id === e.id || (r.look_id && myLookIds.has(r.look_id))) &&
-          signed.has(r.id)
-      )
-      .map((r) => signed.get(r.id) as string);
+      .filter((r) => r.entity_id === e.id && signed.has(r.id))
+      .map((r) => ({ id: r.id, url: signed.get(r.id) as string }));
 
     return {
       id: e.id,

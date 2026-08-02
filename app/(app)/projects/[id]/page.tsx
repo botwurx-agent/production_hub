@@ -553,7 +553,7 @@ export default async function ProjectDetailPage({
               </HubCard>
             )}
 
-            {isAiVideo && (
+            {(isAiVideo || project.project_type === "cgi_vfx") && (
               <HubCard
                 href={`/projects/${project.id}/cast`}
                 hue="purple"

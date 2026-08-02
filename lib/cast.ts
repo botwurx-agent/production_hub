@@ -135,6 +135,9 @@ export type CastHandle = {
   look_id: string | null;
 };
 
+/** A reference sheet: an ai_generations row owned by an entity or a look. */
+export type CastSheet = { id: string; url: string };
+
 export type CastLook = {
   id: string;
   entity_id: string;
@@ -144,6 +147,7 @@ export type CastLook = {
   position: number;
   itemIds: string[];
   handles: CastHandle[];
+  sheets: CastSheet[];
 };
 
 export type CastEntity = {
@@ -156,8 +160,8 @@ export type CastEntity = {
   notes: string | null;
   looks: CastLook[];
   handles: CastHandle[];
-  /** Signed URLs for this entity's sheets, newest first. */
-  sheets: string[];
+  /** This entity's own sheets, newest first. Look sheets live on the look. */
+  sheets: CastSheet[];
 };
 
 export type CastAssignment = {

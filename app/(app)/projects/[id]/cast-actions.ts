@@ -265,3 +265,60 @@ export async function setShotCast(
   rp(projectId);
   return {};
 }
+
+/**
+ * Reference sheets. A sheet is an ai_generations row owned by the entity or the
+ * look rather than by a shot (migration 0080), so it inherits storage,
+ * provenance, signing and the review machinery instead of needing a table of
+ * its own.
+ *
+ * The bytes are already in storage by the time this runs: the browser uploads
+ * directly through a server-minted signed URL, because routing a multi-megabyte
+ * sheet through a server action would hit the ~4.5MB request cap.
+ */
+export async function addSheet(
+  projectId: string,
+  owner: { entityId: string } | { lookId: string },
+  filePath: string,
+  platform?: string | null
+) {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { error } = await supabase.from("ai_generations").insert({
+    studio_id: ctx.studio.id,
+    shot_id: null,
+    entity_id: "entityId" in owner ? owner.entityId : null,
+    look_id: "lookId" in owner ? owner.lookId : null,
+    stage: "image",
+    kind: "image",
+    // 'reference' keeps sheets out of the candidate pool in triage, the same
+    // way v2v driving clips are kept out.
+    status: "reference",
+    file_path: filePath,
+    platform: platform || null,
+    generated_by: ctx.userId,
+  });
+
+  if (error) {
+    reportError("addSheet", { error, projectId });
+    return { error: "Could not save that sheet." };
+  }
+  rp(projectId);
+  return {};
+}
+
+export async function deleteSheet(projectId: string, generationId: string) {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("ai_generations")
+    .delete()
+    .eq("id", generationId);
+  if (error) {
+    reportError("deleteSheet", { error, projectId });
+    return { error: "Could not remove that sheet." };
+  }
+  rp(projectId);
+  return {};
+}

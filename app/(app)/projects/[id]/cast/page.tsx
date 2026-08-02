@@ -40,6 +40,7 @@ export default async function ProjectCastPage({
       />
       <CastWorkspace
         projectId={project.id}
+        studioId={ctx.studio.id}
         entities={entities}
         shots={shots}
         assignments={assignments}

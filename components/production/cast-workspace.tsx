@@ -18,28 +18,34 @@ import {
   type CastAssignment,
   type CastEntity,
   type CastLook,
+  type CastSheet,
   type CastShot,
   type EntityKind,
 } from "@/lib/cast";
 import {
+  addSheet,
   archiveEntity,
   deleteHandle,
   deleteLook,
+  deleteSheet,
   saveEntity,
   saveHandle,
   saveLook,
 } from "@/app/(app)/projects/[id]/cast-actions";
+import { uploadAssetFile } from "@/components/projects/upload-file";
 
 const field =
   "w-full rounded-[11px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition focus:border-accent";
 
 export function CastWorkspace({
   projectId,
+  studioId,
   entities,
   shots,
   assignments,
 }: {
   projectId: string;
+  studioId: string;
   entities: CastEntity[];
   shots: CastShot[];
   assignments: CastAssignment[];
@@ -105,6 +111,7 @@ export function CastWorkspace({
         {editing && (
           <EntityModal
             projectId={projectId}
+            studioId={studioId}
             entity={editing === "new" ? null : editing}
             defaultKind={newKind}
             onClose={() => setEditing(null)}
@@ -230,6 +237,7 @@ export function CastWorkspace({
       {editing && (
         <EntityModal
           projectId={projectId}
+          studioId={studioId}
           entity={editing === "new" ? null : editing}
           defaultKind={newKind}
           onClose={() => setEditing(null)}
@@ -240,6 +248,7 @@ export function CastWorkspace({
       {lookFor && (
         <LookModal
           projectId={projectId}
+          studioId={studioId}
           entity={lookFor.entity}
           look={lookFor.look}
           elements={entities.filter((e) => e.kind === "element")}
@@ -247,6 +256,102 @@ export function CastWorkspace({
           onSaved={() => { setLookFor(null); router.refresh(); }}
         />
       )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ sheets --
+
+/**
+ * Reference sheets for an entity or a look.
+ *
+ * The file goes browser -> Storage directly through a server-minted signed URL,
+ * the same path asset versions use. Routing a multi-megabyte character sheet
+ * through a server action would hit the ~4.5MB request cap and die at the
+ * platform edge with nothing we could show.
+ */
+function SheetStrip({
+  projectId,
+  studioId,
+  owner,
+  sheets,
+}: {
+  projectId: string;
+  studioId: string;
+  owner: { entityId: string } | { lookId: string };
+  sheets: CastSheet[];
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [, start] = useTransition();
+
+  async function pick(files: FileList | null) {
+    // Copy the FileList to an array BEFORE the input is cleared: a FileList is
+    // a live view of the input's selection, so reading it later reads nothing.
+    const list = Array.from(files ?? []);
+    if (!list.length) return;
+    setBusy(true);
+    try {
+      for (const file of list) {
+        const up = await uploadAssetFile({ studioId, projectId, file });
+        const res = await addSheet(projectId, owner, up.storagePath);
+        if (res?.error) {
+          toast(res.error, "error");
+          break;
+        }
+      }
+      router.refresh();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Upload failed.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold text-text-muted">Reference sheets</p>
+      {sheets.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {sheets.map((sh) => (
+            <span key={sh.id} className="group relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={sh.url}
+                alt="Reference sheet"
+                className="h-20 w-32 rounded-[9px] border border-border object-cover"
+              />
+              <button
+                onClick={() =>
+                  start(async () => {
+                    const res = await deleteSheet(projectId, sh.id);
+                    if (res?.error) toast(res.error, "error");
+                    else router.refresh();
+                  })
+                }
+                className="absolute right-1 top-1 rounded-[6px] bg-surface px-1.5 text-xs font-bold opacity-0 shadow-sm transition group-hover:opacity-100"
+                aria-label="Remove this sheet"
+              >
+                &times;
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <label className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] border border-border-strong bg-surface px-3 py-1.5 text-xs font-semibold transition hover:border-accent hover:text-accent">
+        {busy ? "Uploading..." : sheets.length ? "Add another" : "Upload a sheet"}
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          disabled={busy}
+          className="hidden"
+          onChange={(e) => {
+            void pick(e.target.files);
+            e.target.value = "";
+          }}
+        />
+      </label>
     </div>
   );
 }
@@ -278,7 +383,7 @@ function EntityCard({
       {entity.sheets[0] ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={entity.sheets[0]}
+          src={entity.sheets[0].url}
           alt={`${entity.name} reference sheet`}
           className="h-28 w-full object-cover"
         />
@@ -384,12 +489,14 @@ function EntityCard({
 
 function EntityModal({
   projectId,
+  studioId,
   entity,
   defaultKind,
   onClose,
   onSaved,
 }: {
   projectId: string;
+  studioId: string;
   entity: CastEntity | null;
   defaultKind: EntityKind;
   onClose: () => void;
@@ -491,6 +598,17 @@ function EntityModal({
           />
         </label>
 
+        {entity && (
+          <div className="rounded-[11px] border border-border bg-surface-2 p-3">
+            <SheetStrip
+              projectId={projectId}
+              studioId={studioId}
+              owner={{ entityId: entity.id }}
+              sheets={entity.sheets}
+            />
+          </div>
+        )}
+
         {kindMeta(kind).needsHandle && (
           <div className="rounded-[11px] border border-border bg-surface-2 p-3">
             <p className="mb-2 text-xs font-semibold text-text-muted">
@@ -583,6 +701,7 @@ function EntityModal({
 
 function LookModal({
   projectId,
+  studioId,
   entity,
   look,
   elements,
@@ -590,6 +709,7 @@ function LookModal({
   onSaved,
 }: {
   projectId: string;
+  studioId: string;
   entity: CastEntity;
   look: CastLook | null;
   elements: CastEntity[];
@@ -683,6 +803,21 @@ function LookModal({
             </div>
           )}
         </div>
+
+        {look && (
+          <div className="rounded-[11px] border border-border bg-surface-2 p-3">
+            <SheetStrip
+              projectId={projectId}
+              studioId={studioId}
+              owner={{ lookId: look.id }}
+              sheets={look.sheets}
+            />
+            <p className="mt-2 text-[11.5px] text-text-faint">
+              This is the combined sheet: the character wearing this look, which
+              is what you reference when generating the shot.
+            </p>
+          </div>
+        )}
 
         {look && (
           <div className="rounded-[11px] border border-border bg-surface-2 p-3">
