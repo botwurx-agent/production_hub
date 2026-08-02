@@ -2312,7 +2312,7 @@ Shot cockpit / Triage) was shown to the operator.
     marks (FK cascade, confirm-gated) vs "Turn off" (revoke, keeps the row).
     Actions updateBatchReviewItems/deleteBatchReview in batch-review-actions.ts; the
     create + edit panels share one CandidateGrid in batch-review-button.tsx.
-  - THE CAST LAYER (specced 2026-08-01, NOT built): the pipeline models lineage
+  - THE CAST LAYER (slice 1 BUILT 2026-08-01, migration 0080): the pipeline models lineage
     between anonymous media but has no named, persistent Maya, no wardrobe, and
     no way to ask which shots an entity appears in. Full spec appended to
     docs/ai-pipeline.md: entities (character | element | location | crowd),
@@ -2326,6 +2326,18 @@ Shot cockpit / Triage) was shown to the operator.
     that is deliberately NOT identity-locked, or the linter cries wolf. The
     continuity grid ships in slice 1 because without it this is data entry
     with no payoff. Import stays anchored to the SHOT, not the filename.
+    SHIPPED: ai_entities / ai_looks / ai_look_items / ai_shot_cast /
+    ai_entity_handles; ai_generations.shot_id is now NULLABLE with
+    entity_id/look_id beside it and a one-owner check, and its RLS policy
+    also resolves the project through the entity and look (without that,
+    collaborators lose the whole cast). lib/cast.ts holds the pure rules
+    (slugify, normalizeHandle, looksSceneBound, castWarnings) and is unit
+    tested; lib/cast-data.ts loads and signs sheets; cast-actions.ts writes.
+    UI at /projects/[id]/cast (components/production/cast-workspace.tsx +
+    continuity-grid.tsx), hub card in Visualize for ai_video projects.
+    NEXT SLICES: prompt composition from the assigned cast plus the
+    three-warning linter; sheet upload on an entity (the media path exists,
+    the UI does not); derived look-sheet flow recording lineage.
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-
