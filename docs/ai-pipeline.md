@@ -154,3 +154,175 @@ multi-model project sane.
   reference).
 - Reference-image flexibility (0 / 1 / 2+ refs) per video model.
 - Which generation platforms to prioritize for the eventual connectors.
+
+---
+
+# The cast layer: characters, elements, looks (SPEC, not yet built)
+
+Added 2026-08-01, from a real job. The pipeline can say "this take came from
+those two images". It cannot say "Maya is in shots 1, 4 and 7, wearing the grey
+tee and the gold ring in all three". That second sentence is what keeps a
+generated spot from drifting, and nothing in the schema can express it today.
+
+## What is actually missing
+
+`ai_generation_refs` (0063) models lineage between anonymous media with a role
+(`character`, `style`, `element`, `motion`). There is no named, persistent
+*Maya*. Three consequences:
+
+- `ai_generations.shot_id` is `not null`, so every reference belongs to one
+  shot. A character in six shots is uploaded six times or hand-picked from
+  another shot each time.
+- No wardrobe concept, so "what is she wearing in scene 4" lives in someone's
+  head.
+- No way to ask which shots an entity appears in, so continuity cannot be
+  checked, only remembered.
+
+The missing layer is not storage. It is that the pipeline has **no cast**.
+
+## The three tiers, from the operator's real sheets
+
+The artifacts a job actually produces, in the order they are made:
+
+1. **Identity.** `@maya`: four views (full front, face, three-quarter, profile)
+   in a deliberately neutral base outfit. This is who she is, wardrobe-free.
+2. **Garments, itemised.** `@mayawardrobe`: a flat-lay sheet where every piece
+   carries its own code. WD-01 grey tee, WD-10 dark shorts, WD-A1 gold ring,
+   WD-A2 gold studs. The itemisation is the important part and it is already how
+   the operator works.
+3. **The combined sheet.** `@mayawithwardrobescene1`: identity wearing that
+   wardrobe, re-rendered in the same four-view format. **This is the artifact
+   actually referenced when generating the scene**, and it is *derived* from the
+   first two.
+
+Tier 3 being derived is the load-bearing observation: it is a generation whose
+inputs are tiers 1 and 2, which is exactly what `ai_generation_refs` already
+models. We are not inventing a mechanism, we are pointing an existing one at
+named entities.
+
+## Model
+
+**`ai_entities`** — the cast and contents of a job.
+`studio_id`, `project_id` (NULLABLE: null means studio-wide, for a recurring
+mascot or spokesperson, the same convention `ai_prompt_library` already uses),
+`kind`, `name`, `slug`, `description`, `notes`, `archived_at`.
+
+`kind` is one of:
+- `character` — identity-locked. A person the audience must recognise.
+- `element` — a garment, prop, product, or anything that must be exact. WD-01
+  and WD-A1 are elements, and so is the hero bottle.
+- `location` — a set or place, carrying its scout sheet.
+- `crowd` — background extras. See below; deliberately not identity-locked.
+
+**`ai_looks`** — a named state of an entity. "Scene 1 casual" on a character;
+"empty" versus "full" on a bottle; "golden hour" on a location.
+`entity_id`, `name`, `slug`, `description`, `position`.
+
+**`ai_look_items`** — a look is a **composition**, not a container.
+`look_id`, `item_entity_id`, `position`. So the ring is one entity referenced by
+every look it appears in, and "which scenes is the ring in" is a query rather
+than an archaeology exercise.
+
+**`ai_shot_cast`** — the join everything hangs off.
+`shot_id`, `entity_id`, `look_id` (nullable), `notes`, `position`. Reads as
+"Maya, in her scene 1 look, appears in shot 4". Naturally handles several talent
+in one shot, because it is a join and always was.
+
+**`ai_entity_handles`** — the platform identifiers.
+`entity_id` OR `look_id` (exactly one), `platform`, `handle`, `external_id`,
+`account_ref`, `verified_at`.
+
+A handle is **recorded external state, not a slug we invent**. It is the string
+Higgsfield gave back when the element was uploaded, and the prompt only resolves
+if we emit it exactly. Both levels need one, because the operator uploads the
+wardrobe as its own element and gets its own `@name` for it. It is per platform
+because the same Maya is a different handle elsewhere, and `account_ref` exists
+because handles die the day you move accounts.
+
+**Media.** Make `ai_generations.shot_id` NULLABLE and add `entity_id` +
+`look_id`, with a check that exactly one owner is set (the same one-owner shape
+`email_threads` uses). Character sheets then inherit storage, provenance, link
+import, triage and review rather than duplicating all of it in a parallel table.
+Existing queries all filter by `shot_id`, so entity-owned rows simply never
+match them: the change is additive in practice.
+
+## Naming rules, decided now because handles are expensive to change later
+
+- **Name the look, not the scene.** `@maya_wd1`, never
+  `@mayawithwardrobescene1`. The moment that outfit reappears in scene 4 a
+  scene-bound name either forces a duplicate sheet or starts lying. Where it
+  appears is the shot assignment's job.
+- **Normalise on write.** Lowercase, `[a-z0-9_]`. The operator's own three
+  examples already disagree on casing, and these are literal strings going into
+  prompts.
+- **Refuse collisions** within a project and platform rather than allowing two
+  near-identical handles to coexist.
+- The stored `slug` is ours (search, prompt composition, display). The `handle`
+  is theirs. Keep them separate even when they match.
+
+## Extras are deliberately different
+
+A background extra must NOT be identity-locked. You want three plausible people,
+not the same face three times, which is the classic generated-video tell. So a
+`crowd` entity carries a description and a count, has no character sheet, and
+the linter must never flag it for a missing handle. Modelling extras as
+characters with missing sheets would produce constant false alarms and train the
+operator to ignore every warning, including the real ones.
+
+## The continuity grid
+
+Entities down the side, shots across the top, the look in each cell. This is the
+wardrobe continuity board live action has always kept, and it is the reason to
+open the feature at all. It makes four errors visible at a glance:
+
+- a character assigned to a shot with no look chosen
+- an entity with no sheet, so it exists only as prose
+- an entity with no handle on the platform being targeted
+- the same character in different looks in adjacent shots, which is either a
+  deliberate change or the bug this whole layer exists to catch
+
+## Prompt composition and the linter
+
+When writing a shot's prompt, the cast assigned to that shot appears as
+click-to-insert chips carrying the **real handles for the target platform**, so
+nobody types `@maya` from memory. Three warnings, in order of how quietly they
+fail:
+
+1. An entity assigned to the shot that the prompt never references.
+2. A handle in the prompt belonging to nothing in this shot. Usually a typo, or
+   a leftover from the shot the prompt was copied from.
+3. **An entity with no handle on the target platform.** The silent one. The
+   prompt reads perfectly, the element was never uploaded, and the model
+   improvises the wardrobe. Nobody notices until the client does.
+
+The entity's `description` is the fallback for platforms without element
+support, and the UI should say so, so prose is never trusted where a handle was
+needed.
+
+## Import stays anchored to the shot, not the filename
+
+Higgsfield returns `hf_20260731_...mp4`; our naming does not survive the round
+trip. The importer already targets the shot being viewed, so a generation
+inherits that shot's cast and looks automatically. No filename parsing required.
+Handles earn their place in the prompt, in search, and as a fallback when a
+batch arrives unsorted, not as the matching key.
+
+## Slices
+
+1. Entities, looks, composition, shot assignment, handles, entity-owned media,
+   and **the continuity grid**. The grid ships first because without it this is
+   data entry with no payoff.
+2. Prompt composition from the assigned cast, plus the three-warning linter.
+3. Derived sheet flow: generate the combined look sheet from identity plus
+   garments, recording lineage through the existing `ai_generation_refs`.
+4. Later, agent-mediated: read the platform's element library (Higgsfield
+   exposes a way to list reference elements) and reconcile handles instead of
+   typing them.
+
+## Open
+
+- Whether a `location` needs its prop list modelled as looks or as a plain set
+  of associated element entities. Leaning plain set; a location's "props" are
+  not states of the location.
+- Whether `crowd` needs a count field or whether that belongs in the shot
+  assignment's notes. Leaning count on the assignment, since it varies per shot.

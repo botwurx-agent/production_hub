@@ -2312,6 +2312,20 @@ Shot cockpit / Triage) was shown to the operator.
     marks (FK cascade, confirm-gated) vs "Turn off" (revoke, keeps the row).
     Actions updateBatchReviewItems/deleteBatchReview in batch-review-actions.ts; the
     create + edit panels share one CandidateGrid in batch-review-button.tsx.
+  - THE CAST LAYER (specced 2026-08-01, NOT built): the pipeline models lineage
+    between anonymous media but has no named, persistent Maya, no wardrobe, and
+    no way to ask which shots an entity appears in. Full spec appended to
+    docs/ai-pipeline.md: entities (character | element | location | crowd),
+    looks as COMPOSITIONS of item entities (the ring is its own entity, so
+    accessory continuity is a query), a shot-cast join, and per-platform
+    HANDLES recorded on both entities and looks. A handle is external state
+    (the @name Higgsfield gave back), not a slug we invent, so it is stored
+    and validated rather than generated. Naming rule fixed now because
+    handles are costly to change later: name the LOOK, not the scene
+    (@maya_wd1, never @mayawithwardrobescene1). Extras are a separate kind
+    that is deliberately NOT identity-locked, or the linter cries wolf. The
+    continuity grid ships in slice 1 because without it this is data entry
+    with no payoff. Import stays anchored to the SHOT, not the filename.
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-
