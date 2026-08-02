@@ -1251,6 +1251,10 @@ export function PipelineWorkspace({
     const byShot = new Map<string, AiGeneration[]>();
     for (const g of generations) {
       if (g.status === "reference") continue; // inputs aren't the shot's frame
+      // Since the cast layer (0080) a generation can belong to an entity or a
+      // look instead of a shot, so shot_id is nullable. A character sheet is
+      // not any shot's thumbnail.
+      if (!g.shot_id) continue;
       const a = byShot.get(g.shot_id) ?? []; a.push(g); byShot.set(g.shot_id, a);
     }
     const m = new Map<string, { url: string; kind: string } | null>();

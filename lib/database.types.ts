@@ -1352,6 +1352,196 @@ export type Database = {
         };
         Relationships: [];
       };
+      // The cast layer (migration 0080). See docs/ai-pipeline.md.
+      ai_entities: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string | null;
+          kind: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          notes: string | null;
+          archived_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id?: string | null;
+          kind?: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          notes?: string | null;
+          archived_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string | null;
+          kind?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          notes?: string | null;
+          archived_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_looks: {
+        Row: {
+          id: string;
+          studio_id: string;
+          entity_id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          position: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          entity_id: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          position?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          entity_id?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          position?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_look_items: {
+        Row: {
+          id: string;
+          studio_id: string;
+          look_id: string;
+          item_entity_id: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          look_id: string;
+          item_entity_id: string;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          look_id?: string;
+          item_entity_id?: string;
+          position?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_shot_cast: {
+        Row: {
+          id: string;
+          studio_id: string;
+          shot_id: string;
+          entity_id: string;
+          look_id: string | null;
+          count: number | null;
+          notes: string | null;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          shot_id: string;
+          entity_id: string;
+          look_id?: string | null;
+          count?: number | null;
+          notes?: string | null;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          shot_id?: string;
+          entity_id?: string;
+          look_id?: string | null;
+          count?: number | null;
+          notes?: string | null;
+          position?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_entity_handles: {
+        Row: {
+          id: string;
+          studio_id: string;
+          entity_id: string | null;
+          look_id: string | null;
+          platform: string;
+          handle: string;
+          external_id: string | null;
+          account_ref: string | null;
+          verified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          entity_id?: string | null;
+          look_id?: string | null;
+          platform: string;
+          handle: string;
+          external_id?: string | null;
+          account_ref?: string | null;
+          verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          entity_id?: string | null;
+          look_id?: string | null;
+          platform?: string;
+          handle?: string;
+          external_id?: string | null;
+          account_ref?: string | null;
+          verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       ai_prompts: {
         Row: {
           id: string;
@@ -1473,7 +1663,9 @@ export type Database = {
         Row: {
           id: string;
           studio_id: string;
-          shot_id: string;
+          shot_id: string | null;
+          entity_id: string | null;
+          look_id: string | null;
           prompt_id: string | null;
           prompt: string | null;
           stage: string;
@@ -1505,7 +1697,9 @@ export type Database = {
         Insert: {
           id?: string;
           studio_id: string;
-          shot_id: string;
+          shot_id?: string | null;
+          entity_id?: string | null;
+          look_id?: string | null;
           prompt_id?: string | null;
           prompt?: string | null;
           stage?: string;
@@ -1537,7 +1731,9 @@ export type Database = {
         Update: {
           id?: string;
           studio_id?: string;
-          shot_id?: string;
+          shot_id?: string | null;
+          entity_id?: string | null;
+          look_id?: string | null;
           prompt_id?: string | null;
           prompt?: string | null;
           stage?: string;
@@ -3732,6 +3928,11 @@ export type AiShot = Tables<"ai_shots">;
 export type AiGenerationRef = Tables<"ai_generation_refs">;
 export type AiPrompt = Tables<"ai_prompts">;
 export type AiPromptLibraryEntry = Tables<"ai_prompt_library">;
+export type AiEntity = Tables<"ai_entities">;
+export type AiLook = Tables<"ai_looks">;
+export type AiLookItem = Tables<"ai_look_items">;
+export type AiShotCast = Tables<"ai_shot_cast">;
+export type AiEntityHandle = Tables<"ai_entity_handles">;
 export type AiGeneration = Tables<"ai_generations">;
 export type AiBatchReview = Tables<"ai_batch_reviews">;
 export type AiBatchReviewItem = Tables<"ai_batch_review_items">;
