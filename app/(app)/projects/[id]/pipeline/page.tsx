@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
 import { loadGenerationCosts } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
+import { loadCast } from "@/lib/cast-data";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { PipelineWorkspace } from "@/components/production/pipeline-workspace";
@@ -95,6 +96,10 @@ export default async function PipelinePage({
   // Batch reviews ("send options for a pick"), grouped by shot.
   const batchReviews = await loadBatchReviewsForProject(supabase, params.id);
 
+  // Cast for the prompt composer: chips carrying the real handles, plus the
+  // lint that fires before credits are spent rather than after.
+  const cast = await loadCast(params.id, ctx.studio.id);
+
   // Sign uploaded files (private bucket) for display, keyed by generation id.
   const media: Record<string, string> = {};
   await Promise.all(
@@ -137,6 +142,8 @@ export default async function PipelinePage({
           masterCutLinkId={masterCutLink?.id ?? null}
           batchReviews={batchReviews}
           currentUserId={ctx.userId}
+          castEntities={cast.entities}
+          castAssignments={cast.assignments}
           reviewingShotIds={reviewingShotIds}
         />
       </Card>

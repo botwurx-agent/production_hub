@@ -248,3 +248,86 @@ export function castWarnings(
 
   return out;
 }
+
+// --------------------------------------------------------- the prompt linter --
+
+/** What is in a shot, flattened for the composer. */
+export type ShotCastMember = {
+  entity: CastEntity;
+  look: CastLook | null;
+};
+
+export type PromptIssue =
+  /** Assigned to this shot, has a handle, but the prompt never mentions it. */
+  | { kind: "unused"; label: string; handle: string }
+  /** A handle in the prompt that belongs to nothing in this shot. */
+  | { kind: "unknown"; handle: string }
+  /** Assigned, needs a handle, has none on the platform being targeted. */
+  | { kind: "no-handle"; label: string };
+
+const HANDLE_IN_TEXT = /@([a-z0-9_]+)/gi;
+
+/**
+ * Checks a prompt against the cast assigned to its shot, at the moment before
+ * credits get spent. The grid answers the same questions for the whole job;
+ * this answers them for the thing you are about to generate.
+ *
+ * Deliberately quiet when the shot has no cast assigned: with nothing to
+ * compare against, every handle in the text would read as unknown, which is
+ * noise rather than information and would train the operator to ignore it.
+ */
+export function lintPrompt(
+  text: string,
+  members: ShotCastMember[],
+  platform: string | null
+): PromptIssue[] {
+  const issues: PromptIssue[] = [];
+  if (members.length === 0) return issues;
+
+  const found = new Set<string>();
+  for (const m of text.matchAll(HANDLE_IN_TEXT)) found.add(m[1].toLowerCase());
+
+  const known = new Set<string>();
+
+  for (const { entity, look } of members) {
+    const meta = kindMeta(entity.kind);
+    const entityHandle = platform
+      ? entity.handles.find((h) => h.platform === platform)
+      : entity.handles[0];
+    const lookHandle = look
+      ? platform
+        ? look.handles.find((h) => h.platform === platform)
+        : look.handles[0]
+      : undefined;
+
+    if (entityHandle) {
+      known.add(entityHandle.handle.toLowerCase());
+      if (!found.has(entityHandle.handle.toLowerCase())) {
+        issues.push({
+          kind: "unused",
+          label: entity.name,
+          handle: entityHandle.handle,
+        });
+      }
+    } else if (meta.needsHandle) {
+      issues.push({ kind: "no-handle", label: entity.name });
+    }
+
+    if (lookHandle && look) {
+      known.add(lookHandle.handle.toLowerCase());
+      if (!found.has(lookHandle.handle.toLowerCase())) {
+        issues.push({
+          kind: "unused",
+          label: `${entity.name}, ${look.name}`,
+          handle: lookHandle.handle,
+        });
+      }
+    }
+  }
+
+  for (const handle of found) {
+    if (!known.has(handle)) issues.push({ kind: "unknown", handle });
+  }
+
+  return issues;
+}

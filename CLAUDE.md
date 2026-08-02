@@ -2335,9 +2335,22 @@ Shot cockpit / Triage) was shown to the operator.
     tested; lib/cast-data.ts loads and signs sheets; cast-actions.ts writes.
     UI at /projects/[id]/cast (components/production/cast-workspace.tsx +
     continuity-grid.tsx), hub card in Visualize for ai_video projects.
-    NEXT SLICES: prompt composition from the assigned cast plus the
-    three-warning linter; sheet upload on an entity (the media path exists,
-    the UI does not); derived look-sheet flow recording lineage.
+    SLICE 2 (BUILT): sheet upload on entities and looks (kept apart: a look's
+    sheet is the COMBINED render, which is the artifact you reference when
+    generating), and the PROMPT COMPOSER in the pipeline. The shot's cast sits
+    above the working prompt as chips carrying the real handle for the platform
+    you pick (stored in localStorage, a per-person working preference); clicking
+    one inserts at the caret via lib/caret.ts insertToken. lib/cast.ts
+    lintPrompt runs three checks at the moment before credits are spent: an
+    entity with NO handle on that platform (the silent one, prompt reads fine
+    and the model improvises), a handle in the text belonging to nothing in this
+    shot (a leftover from a copied prompt), and an assigned entity the prompt
+    never mentions. It stays SILENT when the shot has no cast, since with
+    nothing to compare against every token reads as unknown, which is noise.
+    Unit tested including the different-platform case.
+    NEXT SLICES: derived look-sheet flow recording lineage through
+    ai_generation_refs; agent-mediated handle reconciliation from the platform's
+    element library.
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-
