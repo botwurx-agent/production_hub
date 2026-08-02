@@ -136,7 +136,17 @@ export type CastHandle = {
 };
 
 /** A reference sheet: an ai_generations row owned by an entity or a look. */
-export type CastSheet = { id: string; url: string };
+export type CastSheet = {
+  id: string;
+  url: string;
+  /**
+   * For a look's combined sheet: the names of the sheets it was generated
+   * from, resolved through ai_generation_refs. Empty when the lineage was not
+   * recorded, which is the case for anything uploaded before the sources
+   * existed.
+   */
+  from?: string[];
+};
 
 export type CastLook = {
   id: string;

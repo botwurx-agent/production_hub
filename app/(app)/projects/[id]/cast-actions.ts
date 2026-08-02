@@ -285,27 +285,108 @@ export async function addSheet(
   const ctx = await requireStudioContext();
   const supabase = createClient();
 
-  const { error } = await supabase.from("ai_generations").insert({
-    studio_id: ctx.studio.id,
-    shot_id: null,
-    entity_id: "entityId" in owner ? owner.entityId : null,
-    look_id: "lookId" in owner ? owner.lookId : null,
-    stage: "image",
-    kind: "image",
-    // 'reference' keeps sheets out of the candidate pool in triage, the same
-    // way v2v driving clips are kept out.
-    status: "reference",
-    file_path: filePath,
-    platform: platform || null,
-    generated_by: ctx.userId,
-  });
+  const { data: created, error } = await supabase
+    .from("ai_generations")
+    .insert({
+      studio_id: ctx.studio.id,
+      shot_id: null,
+      entity_id: "entityId" in owner ? owner.entityId : null,
+      look_id: "lookId" in owner ? owner.lookId : null,
+      stage: "image",
+      kind: "image",
+      // 'reference' keeps sheets out of the candidate pool in triage, the same
+      // way v2v driving clips are kept out.
+      status: "reference",
+      file_path: filePath,
+      platform: platform || null,
+      generated_by: ctx.userId,
+    })
+    .select("id")
+    .maybeSingle();
 
-  if (error) {
+  if (error || !created) {
     reportError("addSheet", { error, projectId });
     return { error: "Could not save that sheet." };
   }
+
+  // A look's sheet is the COMBINED render: the character wearing this
+  // wardrobe. It is derived from the identity sheet and the garment sheets, so
+  // record that lineage through ai_generation_refs, the same table the pipeline
+  // already uses for "this take came from those inputs". Six months later that
+  // is the difference between a sheet you can rebuild and one you cannot.
+  if ("lookId" in owner) {
+    await recordLookLineage(supabase, ctx.studio.id, owner.lookId, created.id);
+  }
+
   rp(projectId);
   return {};
+}
+
+/**
+ * Links a freshly uploaded look sheet to the sheets it was made from: the
+ * character's identity sheet, and one per garment in the look's composition.
+ *
+ * Best effort by design. A missing source sheet means less recorded lineage,
+ * never a failed upload, because losing the file the operator just waited on
+ * would be a far worse outcome than losing a provenance row.
+ */
+async function recordLookLineage(
+  supabase: ReturnType<typeof createClient>,
+  studioId: string,
+  lookId: string,
+  generationId: string
+) {
+  const { data: look } = await supabase
+    .from("ai_looks")
+    .select("entity_id")
+    .eq("id", lookId)
+    .maybeSingle();
+  if (!look) return;
+
+  const { data: items } = await supabase
+    .from("ai_look_items")
+    .select("item_entity_id, position")
+    .eq("look_id", lookId)
+    .order("position", { ascending: true });
+
+  const sourceEntityIds = [
+    look.entity_id,
+    ...(items ?? []).map((i) => i.item_entity_id),
+  ];
+
+  // Newest sheet per source entity: the current reference, not the first one
+  // ever uploaded.
+  const { data: sheets } = await supabase
+    .from("ai_generations")
+    .select("id, entity_id, created_at")
+    .eq("studio_id", studioId)
+    .in("entity_id", sourceEntityIds)
+    .order("created_at", { ascending: false });
+
+  const newest = new Map<string, string>();
+  for (const s of sheets ?? []) {
+    if (s.entity_id && !newest.has(s.entity_id)) newest.set(s.entity_id, s.id);
+  }
+  if (newest.size === 0) return;
+
+  const rows = sourceEntityIds
+    .map((entityId, i) => {
+      const refId = newest.get(entityId);
+      if (!refId) return null;
+      return {
+        studio_id: studioId,
+        generation_id: generationId,
+        ref_generation_id: refId,
+        // 'character' for the identity sheet, 'element' for each garment, the
+        // same vocabulary REF_ROLES already uses in the pipeline.
+        role: entityId === look.entity_id ? "character" : "element",
+        position: i,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  const { error } = await supabase.from("ai_generation_refs").insert(rows);
+  if (error) reportError("recordLookLineage", { error, lookId });
 }
 
 export async function deleteSheet(projectId: string, generationId: string) {

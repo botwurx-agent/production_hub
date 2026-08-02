@@ -107,6 +107,36 @@ export async function loadCast(projectId: string, studioId: string) {
     }
   }
 
+  // Lineage for look sheets: which identity and garment sheets each combined
+  // render was made from. Resolved to names here so the UI never has to know
+  // about ai_generation_refs.
+  const lookSheetIds = (sheetRows ?? [])
+    .filter((r) => r.look_id)
+    .map((r) => r.id);
+  const lineage = new Map<string, string[]>();
+  if (lookSheetIds.length) {
+    const { data: refRows } = await supabase
+      .from("ai_generation_refs")
+      .select("generation_id, ref_generation_id, position")
+      .in("generation_id", lookSheetIds)
+      .order("position", { ascending: true });
+
+    const entityOfGeneration = new Map<string, string>();
+    for (const r of sheetRows ?? []) {
+      if (r.entity_id) entityOfGeneration.set(r.id, r.entity_id);
+    }
+    const nameOfEntity = new Map(entities.map((e) => [e.id, e.name]));
+
+    for (const r of refRows ?? []) {
+      const entityId = entityOfGeneration.get(r.ref_generation_id);
+      const name = entityId ? nameOfEntity.get(entityId) : undefined;
+      if (!name) continue;
+      const list = lineage.get(r.generation_id) ?? [];
+      list.push(name);
+      lineage.set(r.generation_id, list);
+    }
+  }
+
   const handlesFor = (
     predicate: (h: { entity_id: string | null; look_id: string | null }) => boolean
   ): CastHandle[] => (handleRows ?? []).filter(predicate) as CastHandle[];
@@ -132,7 +162,11 @@ export async function loadCast(projectId: string, studioId: string) {
         handles: handlesFor((h) => h.look_id === l.id),
         sheets: (sheetRows ?? [])
           .filter((r) => r.look_id === l.id && signed.has(r.id))
-          .map((r) => ({ id: r.id, url: signed.get(r.id) as string })),
+          .map((r) => ({
+            id: r.id,
+            url: signed.get(r.id) as string,
+            from: lineage.get(r.id) ?? [],
+          })),
       }));
 
     const sheets = (sheetRows ?? [])

@@ -338,6 +338,14 @@ function SheetStrip({
           ))}
         </div>
       )}
+      {/* Lineage, when it was recorded: which sheets this render was made from.
+          Shown on the newest sheet only, since that is the one in use. */}
+      {sheets[0]?.from && sheets[0].from.length > 0 && (
+        <p className="mb-2 text-[11px] text-text-faint">
+          Made from {sheets[0].from.join(", ")}
+        </p>
+      )}
+
       <label className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] border border-border-strong bg-surface px-3 py-1.5 text-xs font-semibold transition hover:border-accent hover:text-accent">
         {busy ? "Uploading..." : sheets.length ? "Add another" : "Upload a sheet"}
         <input

@@ -2348,9 +2348,17 @@ Shot cockpit / Triage) was shown to the operator.
     never mentions. It stays SILENT when the shot has no cast, since with
     nothing to compare against every token reads as unknown, which is noise.
     Unit tested including the different-platform case.
-    NEXT SLICES: derived look-sheet flow recording lineage through
-    ai_generation_refs; agent-mediated handle reconciliation from the platform's
-    element library.
+    SLICE 3 (BUILT): a look's combined sheet records where it came from.
+    Uploading one links it through ai_generation_refs to the newest identity
+    sheet (role 'character') and the newest sheet of each garment in the look's
+    composition (role 'element'), the same vocabulary REF_ROLES already uses. It
+    is BEST EFFORT: a missing source sheet costs a provenance row, never the
+    upload, because losing the file someone just waited on is far worse. The
+    cast page resolves those refs to names and shows "Made from Maya, WD-01,
+    WD-A1" under the sheet.
+    NEXT SLICES: agent-mediated handle reconciliation from the platform's
+    element library (Higgsfield exposes a way to list reference elements, so the
+    app could read them and match rather than have you type).
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-
