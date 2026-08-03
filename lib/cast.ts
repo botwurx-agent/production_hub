@@ -98,13 +98,13 @@ export function slugify(input: string): string {
  * near-identical handles are worse than one.
  */
 export function normalizeHandle(input: string): string {
-  return input
-    .trim()
-    .replace(/^@+/, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 60);
+  // Kept VERBATIM apart from whitespace and a leading @, because a handle is
+  // recorded external state, not a slug we invent. Higgsfield names an element
+  // "Maya-Scene-1-Wardrobe": hyphens, capitals and all, and that exact string
+  // is what a prompt has to carry. An earlier version lowercased it and turned
+  // every hyphen into an underscore, which produced a handle that looks right,
+  // resolves to nothing, and spends credits before anyone notices.
+  return input.trim().replace(/^@+/, "").replace(/\s+/g, "-").slice(0, 60);
 }
 
 /** Display form. Handles are stored bare and shown with the @. */
@@ -279,7 +279,11 @@ export type PromptIssue =
   /** Assigned, needs a handle, has none on the platform being targeted. */
   | { kind: "no-handle"; label: string };
 
-const HANDLE_IN_TEXT = /@([a-z0-9_]+)/gi;
+// Hyphens and dots are in here because platforms use them: Higgsfield turns a
+// spaced element name into "Maya-Scene-1-Wardrobe". Matching is case-insensitive
+// on both sides, so a capital in the prompt is not reported as an unknown
+// handle, but what gets STORED and inserted keeps its original case.
+const HANDLE_IN_TEXT = /@([a-z0-9_.-]+)/gi;
 
 /**
  * Checks a prompt against the cast assigned to its shot, at the moment before
