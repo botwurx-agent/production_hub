@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Card, EmptyState } from "@/components/ui/card";
+import { IconTile } from "@/components/ui/icon-tile";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
@@ -36,6 +37,77 @@ import { uploadAssetFile } from "@/components/projects/upload-file";
 
 const field =
   "w-full rounded-[11px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition focus:border-accent";
+
+/** One glyph per kind, so the four doors are told apart before they are read. */
+const KIND_ICONS: Record<EntityKind, ReactNode> = {
+  character: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
+  element: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z" />
+      <circle cx="7" cy="7" r="1.5" />
+    </svg>
+  ),
+  location: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
+  crowd: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+};
+
+/**
+ * A door out of the empty state, one per kind.
+ *
+ * Written to read as something you press rather than something you read: the
+ * hue tile carries the identity, the accent "Add" line and the lift on hover
+ * carry the affordance. An earlier version was a bordered card with a dot and
+ * a caption, which looked like information about the four kinds rather than a
+ * way to create one.
+ */
+function KindTile({
+  kind,
+  onClick,
+}: {
+  kind: (typeof ENTITY_KINDS)[number];
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      // The hue top edge is the same identity device the contact roster uses.
+      style={{ borderTop: `3px solid var(--h-${kind.hue})` }}
+      className="group flex w-[176px] flex-col rounded-[14px] border border-border-strong bg-surface p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-accent hover:shadow-md focus-visible:border-accent focus-visible:outline-none"
+    >
+      <IconTile hue={kind.hue}>{KIND_ICONS[kind.key]}</IconTile>
+      <span className="mt-3 font-display text-[15px] font-bold tracking-[-0.2px]">
+        {kind.label}
+      </span>
+      <span className="mt-1 text-[11.5px] leading-snug text-text-faint">
+        {kind.hint}
+      </span>
+      {/* mt-auto pins the action to the bottom, so four different hint lengths
+          do not leave four differently placed Add lines. */}
+      <span className="mt-auto flex items-center gap-1 pt-3 font-display text-[12px] font-bold text-accent">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        Add
+      </span>
+    </button>
+  );
+}
 
 export function CastWorkspace({
   projectId,
@@ -106,26 +178,13 @@ export function CastWorkspace({
               // "Add a character" button hid the other three behind a chip row
               // you could only find by opening the modal, so the page read as
               // character-only until you had already committed to something.
-              <div className="flex flex-wrap justify-center gap-2">
+              <div className="flex flex-wrap justify-center gap-3">
                 {ENTITY_KINDS.map((k) => (
-                  <button
+                  <KindTile
                     key={k.key}
+                    kind={k}
                     onClick={() => { setNewKind(k.key); setEditing("new"); }}
-                    className="w-[168px] rounded-[12px] border border-border bg-surface p-3 text-left transition hover:border-border-strong hover:bg-surface-2"
-                  >
-                    <span className="mb-1 flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: `var(--h-${k.hue})` }}
-                      />
-                      <span className="font-display text-[13px] font-bold">
-                        {k.label}
-                      </span>
-                    </span>
-                    <span className="block text-[11.5px] leading-snug text-text-faint">
-                      {k.hint}
-                    </span>
-                  </button>
+                  />
                 ))}
               </div>
             }
