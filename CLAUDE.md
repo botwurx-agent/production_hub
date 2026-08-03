@@ -2384,6 +2384,23 @@ Shot cockpit / Triage) was shown to the operator.
     size-capped), stored under <studio>/cast/<project>/, platform/aspect/
     resolution auto-derived, and external_url keeps the original one click
     away. Non-image links are refused, since a reference sheet is a still.
+    WANTED: CAST ON A LIVE-ACTION SHOOT (operator, 2026-08-03, "I definitely
+    think it will come into play"). The hub card shows only for ai_video and
+    cgi_vfx today; the route is deliberately not hard-blocked, per the standing
+    project_type convention (a light label that tailors which cards surface,
+    never a wall). Wardrobe and set continuity is a real live-action discipline
+    with no AI in it, so the entity/look/grid half of this is already the right
+    model for a live job. What must NOT come with it is the handle machinery:
+    needsHandle is true for character/element/location, so on a live job every
+    entity would raise a permanent red "no handle" warning, and a warning that
+    is always on trains the operator to ignore all of them including the real
+    ones. The change is therefore needsHandle (and the handle rows in
+    EntityModal/LookModal, and lintPrompt's no-handle branch) becoming
+    CONDITIONAL ON THE PROJECT TYPE rather than a constant on ENTITY_KINDS: a
+    live-action project gets sheets + looks + the continuity grid, an ai_video
+    project additionally gets handles and the prompt linter. Roughly twenty
+    lines plus threading project_type into castWarnings and PromptCastBar.
+    Do it when a real live job wants it, not before.
     NEXT SLICES: agent-mediated handle reconciliation from the platform's
     element library (Higgsfield exposes a way to list reference elements, so the
     app could read them and match rather than have you type).

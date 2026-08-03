@@ -321,8 +321,37 @@ batch arrives unsorted, not as the matching key.
 
 ## Open
 
-- Whether a `location` needs its prop list modelled as looks or as a plain set
-  of associated element entities. Leaning plain set; a location's "props" are
-  not states of the location.
+- RESOLVED in use (2026-08-03): a `location` uses LOOKS for its variations, the
+  same as wardrobe. `LOC-01` is the place, `LOC-01/A Morning, blinds open` and
+  `LOC-01/B Night, practicals on` are looks on it, and the dressing for a given
+  variation is ticked into that look's composition. The earlier lean toward a
+  plain set of associated elements was wrong: a location's state is exactly what
+  a look models, and going through looks means the grid's look-change tint
+  flags a set that changed between consecutive shots that should match. The
+  test for variation vs new entity is whether you would start from the same
+  scout sheet. Same rule for a prop: a glass full and a glass empty is one
+  element with two looks, not two elements.
 - Whether `crowd` needs a count field or whether that belongs in the shot
   assignment's notes. Leaning count on the assignment, since it varies per shot.
+
+## Wanted: the cast on a live-action shoot
+
+The operator expects this on live jobs (2026-08-03). Wardrobe and set continuity
+is a real live-action discipline with no AI in it, and the entity / look /
+continuity-grid half of this model is already the right shape for one.
+
+What must not come with it is the handle machinery. `needsHandle` is true for
+character, element and location, so on a live job every entity would raise a
+permanent red "no handle on <platform>" warning. A warning that is always on
+trains the operator to ignore all of them, including the ones that matter, which
+is the same reason `crowd` was exempted in the first place.
+
+So the change is: `needsHandle` (plus the handle rows in EntityModal and
+LookModal, and `lintPrompt`'s no-handle branch) becomes CONDITIONAL ON THE
+PROJECT TYPE rather than a constant on `ENTITY_KINDS`. A live-action project
+gets sheets, looks and the grid; a generated project additionally gets handles
+and the prompt linter. Roughly twenty lines plus threading `project_type` into
+`castWarnings` and `PromptCastBar`. The hub card would then also list for
+`live_action` and `commercial`.
+
+Do it when a real live job wants it, not before.
