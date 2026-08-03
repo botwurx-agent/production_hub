@@ -310,7 +310,14 @@ export function CastWorkspace({
 
       {/* --------------------------------------------- the continuity grid */}
       <Card className="p-4">
-        <h2 className="mb-3 font-display text-sm font-bold">Continuity</h2>
+        <h2 className="font-display text-sm font-bold">Continuity</h2>
+        {/* Said once, at the top, because the grid's rows are the thing people
+            get wrong: they assume every entity needs an answer per shot. */}
+        <p className="mb-3 mt-0.5 text-[12px] text-text-faint">
+          One row per thing that needs its own decision. A garment or prop that
+          belongs to a look is not listed here: it follows whoever is wearing
+          it.
+        </p>
         <ContinuityGrid
           projectId={projectId}
           entities={entities}
