@@ -125,8 +125,48 @@ export function CastWorkspace({
   const router = useRouter();
   const [editing, setEditing] = useState<CastEntity | "new" | null>(null);
   const [newKind, setNewKind] = useState<EntityKind>("character");
-  const [lookFor, setLookFor] = useState<{ entity: CastEntity; look: CastLook | null } | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [lookFor, setLookFor] = useState<{ entityId: string; lookId: string | null } | null>(null);
+  const [createdLookId, setCreatedLookId] = useState<string | null>(null);
   const [platform, setPlatform] = useState(HANDLE_PLATFORMS[0]);
+
+  /**
+   * The open modal's subject, resolved by id out of the CURRENT server data
+   * rather than held as a snapshot.
+   *
+   * This is what lets a modal stay open across a save. Creating an entity sets
+   * createdId, the refresh lands, and the same open modal is now editing a real
+   * row, so the sheet and handle blocks appear where the operator already is
+   * instead of after a close-reopen. It also fixes a quieter bug: uploading a
+   * sheet to an EXISTING entity refreshed the page but not the snapshot the
+   * modal was holding, so the sheet you just uploaded did not appear until you
+   * closed and reopened.
+   */
+  const editingEntity = useMemo(() => {
+    if (!editing) return null;
+    const id = editing === "new" ? createdId : editing.id;
+    if (!id) return null;
+    return entities.find((e) => e.id === id) ?? (editing === "new" ? null : editing);
+  }, [editing, createdId, entities]);
+
+  const lookSubject = useMemo(() => {
+    if (!lookFor) return null;
+    const entity = entities.find((e) => e.id === lookFor.entityId);
+    if (!entity) return null;
+    const lookId = lookFor.lookId ?? createdLookId;
+    const look = lookId ? entity.looks.find((l) => l.id === lookId) ?? null : null;
+    return { entity, look };
+  }, [lookFor, createdLookId, entities]);
+
+  function closeEntity() {
+    setEditing(null);
+    setCreatedId(null);
+  }
+
+  function closeLook() {
+    setLookFor(null);
+    setCreatedLookId(null);
+  }
 
   const warnings = useMemo(
     () => castWarnings(entities, shots, assignments, platform),
@@ -194,10 +234,11 @@ export function CastWorkspace({
           <EntityModal
             projectId={projectId}
             studioId={studioId}
-            entity={editing === "new" ? null : editing}
+            entity={editingEntity}
             defaultKind={newKind}
-            onClose={() => setEditing(null)}
-            onSaved={() => { setEditing(null); router.refresh(); }}
+            onCreated={(id) => { setCreatedId(id); router.refresh(); }}
+            onClose={closeEntity}
+            onSaved={() => { closeEntity(); router.refresh(); }}
           />
         )}
       </>
@@ -306,8 +347,8 @@ export function CastWorkspace({
                     projectId={projectId}
                     entity={e}
                     onEdit={() => setEditing(e)}
-                    onAddLook={() => setLookFor({ entity: e, look: null })}
-                    onEditLook={(l) => setLookFor({ entity: e, look: l })}
+                    onAddLook={() => setLookFor({ entityId: e.id, lookId: null })}
+                    onEditLook={(l) => setLookFor({ entityId: e.id, lookId: l.id })}
                   />
                 ))}
               </div>
@@ -320,22 +361,24 @@ export function CastWorkspace({
         <EntityModal
           projectId={projectId}
           studioId={studioId}
-          entity={editing === "new" ? null : editing}
+          entity={editingEntity}
           defaultKind={newKind}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); router.refresh(); }}
+          onCreated={(id) => { setCreatedId(id); router.refresh(); }}
+          onClose={closeEntity}
+          onSaved={() => { closeEntity(); router.refresh(); }}
         />
       )}
 
-      {lookFor && (
+      {lookSubject && (
         <LookModal
           projectId={projectId}
           studioId={studioId}
-          entity={lookFor.entity}
-          look={lookFor.look}
+          entity={lookSubject.entity}
+          look={lookSubject.look}
           elements={entities.filter((e) => e.kind === "element")}
-          onClose={() => setLookFor(null)}
-          onSaved={() => { setLookFor(null); router.refresh(); }}
+          onCreated={(id) => { setCreatedLookId(id); router.refresh(); }}
+          onClose={closeLook}
+          onSaved={() => { closeLook(); router.refresh(); }}
         />
       )}
     </div>
@@ -582,6 +625,7 @@ function EntityModal({
   studioId,
   entity,
   defaultKind,
+  onCreated,
   onClose,
   onSaved,
 }: {
@@ -589,6 +633,8 @@ function EntityModal({
   studioId: string;
   entity: CastEntity | null;
   defaultKind: EntityKind;
+  /** Fired once, with the new row's id, so the parent can keep this open. */
+  onCreated: (id: string) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -601,12 +647,14 @@ function EntityModal({
   const [studioWide, setStudioWide] = useState(entity ? entity.project_id === null : false);
   const [platform, setPlatform] = useState(HANDLE_PLATFORMS[0]);
   const [handle, setHandle] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
   const [busy, start] = useTransition();
 
   // Auto-derive the slug until it is touched, so nobody has to think about it.
   const effectiveSlug = slug || slugify(name);
 
   function submit() {
+    const creating = !entity;
     start(async () => {
       const res = await saveEntity(projectId, entity?.id ?? null, {
         kind,
@@ -616,16 +664,24 @@ function EntityModal({
         notes,
         studioWide,
       });
-      if ("error" in res && res.error) toast(res.error, "error");
-      else onSaved();
+      if ("error" in res && res.error) {
+        toast(res.error, "error");
+        return;
+      }
+      // A new one stays open, because the sheet and the handle are the point of
+      // adding it and both need the row to exist. Closing here would send the
+      // operator back to the page to reopen the thing they just made.
+      if (creating && "id" in res && res.id) {
+        setJustSaved(true);
+        onCreated(res.id);
+        return;
+      }
+      onSaved();
     });
   }
 
   function addHandle() {
-    if (!entity) {
-      toast("Save this first, then add its handle.", "info");
-      return;
-    }
+    if (!entity) return;
     start(async () => {
       const res = await saveHandle(projectId, { entityId: entity.id }, platform, handle);
       if ("error" in res && res.error) toast(res.error, "error");
@@ -688,16 +744,36 @@ function EntityModal({
           />
         </label>
 
-        {entity && (
-          <div className="rounded-[11px] border border-border bg-surface-2 p-3">
+        {justSaved && (
+          <p className="rounded-[10px] bg-green-bg px-3 py-2 text-[12.5px] text-green">
+            Saved. Add the reference sheet and the platform handle below, then
+            close.
+          </p>
+        )}
+
+        <div className="rounded-[11px] border border-border bg-surface-2 p-3">
+          {entity ? (
             <SheetStrip
               projectId={projectId}
               studioId={studioId}
               owner={{ entityId: entity.id }}
               sheets={entity.sheets}
             />
-          </div>
-        )}
+          ) : (
+            // Shown rather than hidden, so it is clear the sheet has a home
+            // here and no second trip is coming. Same rule as the review
+            // composer toolbar: never hide a capability behind a gate.
+            <>
+              <p className="mb-2 text-xs font-semibold text-text-muted">
+                Reference sheets
+              </p>
+              <p className="text-[11.5px] text-text-faint">
+                Save first and the upload opens here. A file has to belong to
+                something.
+              </p>
+            </>
+          )}
+        </div>
 
         {kindMeta(kind).needsHandle && (
           <div className="rounded-[11px] border border-border bg-surface-2 p-3">
@@ -734,7 +810,12 @@ function EntityModal({
                 className={`${field} font-mono`}
                 placeholder="@maya"
               />
-              <Button variant="secondary" onClick={addHandle} disabled={busy || !handle.trim()}>
+              <Button
+                variant="secondary"
+                onClick={addHandle}
+                disabled={busy || !entity || !handle.trim()}
+                title={entity ? undefined : "Save first, then the handle has something to attach to."}
+              >
                 Add
               </Button>
             </div>
@@ -762,10 +843,25 @@ function EntityModal({
         </label>
 
         <div className="flex items-center gap-2 border-t border-border pt-3">
-          <Button onClick={submit} disabled={busy || !name.trim()}>
-            {busy ? "Saving..." : "Save"}
+          {/* Between the insert and the refresh landing there is a moment where
+              the row exists but this modal has not been handed it yet. Pressing
+              Save again in that window would insert a second one. */}
+          <Button
+            onClick={submit}
+            disabled={busy || !name.trim() || (justSaved && !entity)}
+          >
+            {busy
+              ? "Saving..."
+              : justSaved && !entity
+                ? "Saved"
+                : entity
+                  ? "Save changes"
+                  : "Save"}
           </Button>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          {/* Cancel would be a lie once the row exists. */}
+          <Button variant="ghost" onClick={onClose}>
+            {entity ? "Close" : "Cancel"}
+          </Button>
           {entity && (
             <Button
               variant="danger"
@@ -795,6 +891,7 @@ function LookModal({
   entity,
   look,
   elements,
+  onCreated,
   onClose,
   onSaved,
 }: {
@@ -803,10 +900,12 @@ function LookModal({
   entity: CastEntity;
   look: CastLook | null;
   elements: CastEntity[];
+  onCreated: (id: string) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const router = useRouter();
+  const [justSaved, setJustSaved] = useState(false);
   const [name, setName] = useState(look?.name ?? "");
   const [slug, setSlug] = useState(look?.slug ?? "");
   const [description, setDescription] = useState(look?.description ?? "");
@@ -894,20 +993,31 @@ function LookModal({
           )}
         </div>
 
-        {look && (
-          <div className="rounded-[11px] border border-border bg-surface-2 p-3">
+        {justSaved && (
+          <p className="rounded-[10px] bg-green-bg px-3 py-2 text-[12.5px] text-green">
+            Saved. Add the combined sheet and the handle below, then close.
+          </p>
+        )}
+
+        <div className="rounded-[11px] border border-border bg-surface-2 p-3">
+          {look ? (
             <SheetStrip
               projectId={projectId}
               studioId={studioId}
               owner={{ lookId: look.id }}
               sheets={look.sheets}
             />
-            <p className="mt-2 text-[11.5px] text-text-faint">
-              This is the combined sheet: the character wearing this look, which
-              is what you reference when generating the shot.
+          ) : (
+            <p className="mb-2 text-xs font-semibold text-text-muted">
+              Reference sheets
             </p>
-          </div>
-        )}
+          )}
+          <p className="mt-2 text-[11.5px] text-text-faint">
+            This is the combined sheet: the character wearing this look, which
+            is what you reference when generating the shot.
+            {look ? "" : " Save the look first and the upload opens here."}
+          </p>
+        </div>
 
         {look && (
           <div className="rounded-[11px] border border-border bg-surface-2 p-3">
@@ -966,23 +1076,42 @@ function LookModal({
 
         <div className="flex items-center gap-2 border-t border-border pt-3">
           <Button
-            disabled={busy || !name.trim()}
+            disabled={busy || !name.trim() || (justSaved && !look)}
             onClick={() =>
               start(async () => {
+                const creating = !look;
                 const res = await saveLook(projectId, entity.id, look?.id ?? null, {
                   name,
                   slug: effectiveSlug,
                   description,
                   itemEntityIds: items,
                 });
-                if ("error" in res && res.error) toast(res.error, "error");
-                else onSaved();
+                if ("error" in res && res.error) {
+                  toast(res.error, "error");
+                  return;
+                }
+                // Same reasoning as the entity: the combined sheet is why you
+                // made the look, so do not close before it can be uploaded.
+                if (creating && "id" in res && res.id) {
+                  setJustSaved(true);
+                  onCreated(res.id);
+                  return;
+                }
+                onSaved();
               })
             }
           >
-            {busy ? "Saving..." : "Save look"}
+            {busy
+              ? "Saving..."
+              : justSaved && !look
+                ? "Saved"
+                : look
+                  ? "Save changes"
+                  : "Save look"}
           </Button>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={onClose}>
+            {look ? "Close" : "Cancel"}
+          </Button>
           {look && (
             <Button
               variant="danger"
