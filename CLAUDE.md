@@ -2356,6 +2356,34 @@ Shot cockpit / Triage) was shown to the operator.
     upload, because losing the file someone just waited on is far worse. The
     cast page resolves those refs to names and shows "Made from Maya, WD-01,
     WD-A1" under the sheet.
+    OPERATOR TESTING PASS (2026-08-03), four things found by using it:
+    (1) The empty state's only door was "Add a character", so element,
+    location and crowd were reachable only by opening the modal and finding
+    the chip row inside. Four KindTiles now, each with its kind's hue as a top
+    edge (the contact-roster device), its glyph in an IconTile and an accent
+    "+ Add" line; the action is pinned with mt-auto so four hint lengths do
+    not leave four differently placed Add lines.
+    (2) THE MODALS NOW STAY OPEN ACROSS THE FIRST SAVE. Adding a character
+    meant save, close, find the card, reopen, and only then upload the sheet,
+    which is a round trip back to where you already were. The open modal's
+    subject is RESOLVED BY ID out of current server data rather than held as a
+    snapshot (editingEntity / lookSubject in cast-workspace), so a create
+    hands the same open modal a real row. That also fixed a quieter bug: a
+    sheet uploaded to an EXISTING entity refreshed the page but not the
+    snapshot the modal held, so it did not appear until close-reopen. The
+    upload block is SHOWN before saving saying the row has to exist first,
+    never hidden; Save is disabled between the insert and the refresh landing
+    (pressing it again would insert a second row) and Cancel becomes Close.
+    (3) `prompt` on ai_entities + ai_looks (migration 0081). The RECIPE, not a
+    log: ai_generations.prompt already records what was sent for one sheet,
+    and "what do I paste next time" is a different question. A Copy button
+    sits on the label, since pasting it into the tool is the whole point.
+    (4) A sheet can arrive as a LINK as well as a file (addSheetFromLink),
+    reusing lib/media-import fetchMediaFromUrl, so a share page or a direct
+    image URL both work: the bytes are fetched server side (SSRF-guarded,
+    size-capped), stored under <studio>/cast/<project>/, platform/aspect/
+    resolution auto-derived, and external_url keeps the original one click
+    away. Non-image links are refused, since a reference sheet is a still.
     NEXT SLICES: agent-mediated handle reconciliation from the platform's
     element library (Higgsfield exposes a way to list reference elements, so the
     app could read them and match rather than have you type).

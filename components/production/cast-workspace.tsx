@@ -25,6 +25,7 @@ import {
 } from "@/lib/cast";
 import {
   addSheet,
+  addSheetFromLink,
   archiveEntity,
   deleteHandle,
   deleteLook,
@@ -387,6 +388,25 @@ export function CastWorkspace({
 
 // ------------------------------------------------------------------ sheets --
 
+/** Copy the stored prompt out, since pasting it into the tool is the point. */
+function CopyPrompt({ text }: { text: string }) {
+  if (!text.trim()) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void navigator.clipboard
+          .writeText(text)
+          .then(() => toast("Prompt copied.", "success"))
+          .catch(() => toast("Could not copy.", "error"));
+      }}
+      className="rounded-[7px] border border-border px-1.5 py-0.5 text-[11px] font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+    >
+      Copy
+    </button>
+  );
+}
+
 /**
  * Reference sheets for an entity or a look.
  *
@@ -408,7 +428,27 @@ function SheetStrip({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [url, setUrl] = useState("");
   const [, start] = useTransition();
+
+  async function addLink() {
+    const value = url.trim();
+    if (!value) return;
+    setBusy(true);
+    try {
+      const res = await addSheetFromLink(projectId, owner, value);
+      if (res?.error) {
+        toast(res.error, "error");
+        return;
+      }
+      setUrl("");
+      setLinking(false);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function pick(files: FileList | null) {
     // Copy the FileList to an array BEFORE the input is cleared: a FileList is
@@ -471,20 +511,54 @@ function SheetStrip({
         </p>
       )}
 
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] border border-border-strong bg-surface px-3 py-1.5 text-xs font-semibold transition hover:border-accent hover:text-accent">
-        {busy ? "Uploading..." : sheets.length ? "Add another" : "Upload a sheet"}
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          disabled={busy}
-          className="hidden"
-          onChange={(e) => {
-            void pick(e.target.files);
-            e.target.value = "";
-          }}
-        />
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] border border-border-strong bg-surface px-3 py-1.5 text-xs font-semibold transition hover:border-accent hover:text-accent">
+          {busy ? "Working..." : sheets.length ? "Add another" : "Upload a sheet"}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={busy}
+            className="hidden"
+            onChange={(e) => {
+              void pick(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <button
+          onClick={() => setLinking((v) => !v)}
+          className="rounded-[10px] border border-border-strong bg-surface px-3 py-1.5 text-xs font-semibold transition hover:border-accent hover:text-accent"
+        >
+          {linking ? "Cancel" : "Paste a link"}
+        </button>
+      </div>
+
+      {/* A sheet is usually generated somewhere else and lives behind a share
+          page, so downloading it to re-upload it is a round trip for nothing.
+          Same import the pipeline already uses: the bytes are fetched server
+          side and the source link is kept on the row. */}
+      {linking && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void addLink();
+            }}
+            className={`${field} max-w-[420px] flex-1 text-[13px]`}
+            placeholder="Share page or direct image link"
+            autoFocus
+          />
+          <Button
+            variant="secondary"
+            disabled={busy || !url.trim()}
+            onClick={() => void addLink()}
+          >
+            {busy ? "Fetching..." : "Add"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -643,6 +717,7 @@ function EntityModal({
   const [name, setName] = useState(entity?.name ?? "");
   const [slug, setSlug] = useState(entity?.slug ?? "");
   const [description, setDescription] = useState(entity?.description ?? "");
+  const [prompt, setPrompt] = useState(entity?.prompt ?? "");
   const [notes, setNotes] = useState(entity?.notes ?? "");
   const [studioWide, setStudioWide] = useState(entity ? entity.project_id === null : false);
   const [platform, setPlatform] = useState(HANDLE_PLATFORMS[0]);
@@ -661,6 +736,7 @@ function EntityModal({
         name,
         slug: effectiveSlug,
         description,
+        prompt,
         notes,
         studioWide,
       });
@@ -741,6 +817,23 @@ function EntityModal({
             rows={3}
             className={field}
             placeholder="Late 20s, dark curly hair, warm olive skin. The words a prompt falls back on when no handle exists."
+          />
+        </label>
+
+        {/* The RECIPE, not a log. ai_generations.prompt already records what
+            was sent for a given sheet; this is the text you paste next time,
+            so it earns a copy button rather than a select-all drag. */}
+        <label className="block">
+          <span className="mb-1 flex items-center gap-2 text-xs font-semibold text-text-muted">
+            Prompt
+            <CopyPrompt text={prompt} />
+          </span>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            className={field}
+            placeholder="The prompt that generates this one's sheets, so it is not rewritten from memory next time."
           />
         </label>
 
@@ -909,6 +1002,7 @@ function LookModal({
   const [name, setName] = useState(look?.name ?? "");
   const [slug, setSlug] = useState(look?.slug ?? "");
   const [description, setDescription] = useState(look?.description ?? "");
+  const [prompt, setPrompt] = useState(look?.prompt ?? "");
   const [items, setItems] = useState<string[]>(look?.itemIds ?? []);
   const [platform, setPlatform] = useState(HANDLE_PLATFORMS[0]);
   const [handle, setHandle] = useState("");
@@ -954,6 +1048,20 @@ function LookModal({
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             className={field}
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-1 flex items-center gap-2 text-xs font-semibold text-text-muted">
+            Prompt
+            <CopyPrompt text={prompt} />
+          </span>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            className={field}
+            placeholder="The prompt that generates the combined sheet, the character wearing this look."
           />
         </label>
 
@@ -1084,6 +1192,7 @@ function LookModal({
                   name,
                   slug: effectiveSlug,
                   description,
+                  prompt,
                   itemEntityIds: items,
                 });
                 if ("error" in res && res.error) {

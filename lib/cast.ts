@@ -154,6 +154,8 @@ export type CastLook = {
   name: string;
   slug: string;
   description: string | null;
+  /** The reusable prompt that generates this look's combined sheet. */
+  prompt: string | null;
   position: number;
   itemIds: string[];
   handles: CastHandle[];
@@ -168,6 +170,8 @@ export type CastEntity = {
   slug: string;
   description: string | null;
   notes: string | null;
+  /** The reusable prompt that generates this entity's sheets. */
+  prompt: string | null;
   looks: CastLook[];
   handles: CastHandle[];
   /** This entity's own sheets, newest first. Look sheets live on the look. */

@@ -1363,6 +1363,7 @@ export type Database = {
           slug: string;
           description: string | null;
           notes: string | null;
+          prompt: string | null;
           archived_at: string | null;
           created_by: string | null;
           created_at: string;
@@ -1377,6 +1378,7 @@ export type Database = {
           slug: string;
           description?: string | null;
           notes?: string | null;
+          prompt?: string | null;
           archived_at?: string | null;
           created_by?: string | null;
           created_at?: string;
@@ -1391,6 +1393,7 @@ export type Database = {
           slug?: string;
           description?: string | null;
           notes?: string | null;
+          prompt?: string | null;
           archived_at?: string | null;
           created_by?: string | null;
           created_at?: string;
@@ -1406,6 +1409,7 @@ export type Database = {
           name: string;
           slug: string;
           description: string | null;
+          prompt: string | null;
           position: number;
           created_by: string | null;
           created_at: string;
@@ -1418,6 +1422,7 @@ export type Database = {
           name: string;
           slug: string;
           description?: string | null;
+          prompt?: string | null;
           position?: number;
           created_by?: string | null;
           created_at?: string;
@@ -1430,6 +1435,7 @@ export type Database = {
           name?: string;
           slug?: string;
           description?: string | null;
+          prompt?: string | null;
           position?: number;
           created_by?: string | null;
           created_at?: string;

@@ -5,6 +5,16 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
 import { entityKind, normalizeHandle, slugify } from "@/lib/cast";
+import { assetStorage } from "@/lib/asset-storage";
+import {
+  aspectRatio,
+  fetchMediaFromUrl,
+  resolutionLabel,
+} from "@/lib/media-import";
+
+function safeName(name: string): string {
+  return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "sheet";
+}
 
 function rp(projectId: string) {
   revalidatePath(`/projects/${projectId}/cast`);
@@ -17,6 +27,8 @@ export type EntityInput = {
   slug: string;
   description: string | null;
   notes: string | null;
+  /** The reusable prompt that generates this one's sheets. */
+  prompt: string | null;
   /** true = studio-wide, for a recurring mascot or spokesperson */
   studioWide: boolean;
 };
@@ -44,6 +56,7 @@ export async function saveEntity(
     slug,
     description: input.description?.trim() || null,
     notes: input.notes?.trim() || null,
+    prompt: input.prompt?.trim() || null,
   };
 
   const { data, error } = entityId
@@ -90,6 +103,7 @@ export type LookInput = {
   name: string;
   slug: string;
   description: string | null;
+  prompt: string | null;
   itemEntityIds: string[];
 };
 
@@ -113,6 +127,7 @@ export async function saveLook(
     name,
     slug,
     description: input.description?.trim() || null,
+    prompt: input.prompt?.trim() || null,
   };
 
   const { data, error } = lookId
@@ -387,6 +402,81 @@ async function recordLookLineage(
 
   const { error } = await supabase.from("ai_generation_refs").insert(rows);
   if (error) reportError("recordLookLineage", { error, lookId });
+}
+
+/**
+ * The same sheet, arriving as a link instead of a file.
+ *
+ * A sheet is usually generated on another platform and sits behind a share
+ * page, so downloading it just to upload it again is a round trip through the
+ * filesystem for no reason. This is the pipeline's paste-a-link import applied
+ * to the cast: the bytes are fetched SERVER-side (fetchMediaFromUrl is
+ * SSRF-guarded and caps the size), stored in the studio folder, and the source
+ * link is kept on the row so the original is one click away.
+ *
+ * A direct image URL and a share page both work: the fetcher parses og:image
+ * when the URL is a page rather than a file.
+ */
+export async function addSheetFromLink(
+  projectId: string,
+  owner: { entityId: string } | { lookId: string },
+  rawUrl: string
+) {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const url = rawUrl.trim();
+  if (!url) return { error: "Paste a link first." };
+
+  const media = await fetchMediaFromUrl(url);
+  if ("error" in media) return { error: media.error };
+  if (media.kind !== "image") {
+    return { error: "That link is not an image. A reference sheet is a still." };
+  }
+
+  const path = `${ctx.studio.id}/cast/${projectId}/${crypto.randomUUID()}-${safeName(media.filename)}`;
+  const { error: upErr } = await assetStorage().upload(path, media.bytes, {
+    contentType: media.contentType || undefined,
+    upsert: false,
+  });
+  if (upErr) {
+    reportError("addSheetFromLink:upload", { error: upErr, projectId });
+    return { error: "Could not save that image." };
+  }
+
+  const { data: created, error } = await supabase
+    .from("ai_generations")
+    .insert({
+      studio_id: ctx.studio.id,
+      shot_id: null,
+      entity_id: "entityId" in owner ? owner.entityId : null,
+      look_id: "lookId" in owner ? owner.lookId : null,
+      stage: "image",
+      kind: "image",
+      status: "reference",
+      file_path: path,
+      // Auto-derived, same as the pipeline import: the platform from the link's
+      // host, the shape from the real bytes.
+      platform: media.platform,
+      aspect: aspectRatio(media.width, media.height),
+      resolution: resolutionLabel(media.width, media.height, media.kind),
+      external_url: media.sourceUrl,
+      generated_by: ctx.userId,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error || !created) {
+    reportError("addSheetFromLink", { error, projectId });
+    return { error: "Could not save that sheet." };
+  }
+
+  if ("lookId" in owner) {
+    await recordLookLineage(supabase, ctx.studio.id, owner.lookId, created.id);
+  }
+
+  rp(projectId);
+  return {};
 }
 
 export async function deleteSheet(projectId: string, generationId: string) {
