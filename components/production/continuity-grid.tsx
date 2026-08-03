@@ -40,6 +40,26 @@ export function ContinuityGrid({
     assignments.map((a) => [`${a.shot_id}:${a.entity_id}`, a])
   );
 
+  /**
+   * An element that belongs to a look gets NO row of its own.
+   *
+   * The wardrobe is in the shot exactly when the look is, so a second row for
+   * it is not extra control, it is a second place to state the same fact, and
+   * two places that can disagree. "Maya in LK-01" and "LK-01 wardrobe: not in
+   * shot" is a contradiction the grid should not be able to express.
+   *
+   * A prop that is in no look keeps its row, because nothing else speaks for
+   * it.
+   */
+  const inSomeLook = new Set<string>();
+  for (const e of entities) {
+    for (const l of e.looks) for (const id of l.itemIds) inSomeLook.add(id);
+  }
+  const rows = entities.filter(
+    (e) => !(e.kind === "element" && inSomeLook.has(e.id))
+  );
+  const covered = entities.length - rows.length;
+
   function change(shotId: string, entity: CastEntity, value: string) {
     const key = `${shotId}:${entity.id}`;
     setBusy(key);
@@ -87,7 +107,7 @@ export function ContinuityGrid({
           </tr>
         </thead>
         <tbody>
-          {entities.map((e) => {
+          {rows.map((e) => {
             const meta = kindMeta(e.kind);
             return (
               <tr key={e.id}>
@@ -134,7 +154,7 @@ export function ContinuityGrid({
                           a ? "border-border-strong text-text" : "border-transparent text-text-faint"
                         } ${missingLook ? "border-amber" : ""}`}
                       >
-                        <option value="out">&mdash;</option>
+                        <option value="out">Not in this shot</option>
                         <option value="in">
                           {e.looks.length ? "In shot, no look" : "In shot"}
                         </option>
@@ -157,6 +177,14 @@ export function ContinuityGrid({
           })}
         </tbody>
       </table>
+      {covered > 0 && (
+        <p className="border-t border-border px-3 py-2 text-[11.5px] text-text-faint">
+          {covered === 1 ? "One element is" : `${covered} elements are`} part of a
+          look, so {covered === 1 ? "it follows" : "they follow"} whoever is
+          wearing {covered === 1 ? "it" : "them"} and {covered === 1 ? "does" : "do"} not
+          need a row here.
+        </p>
+      )}
     </div>
   );
 }
