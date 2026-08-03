@@ -98,8 +98,13 @@ export function ContinuityGrid({
                 className="min-w-[150px] border-b border-border bg-surface-2 px-3 py-2.5 text-left"
                 title={s.title || `Shot ${i + 1}`}
               >
-                <span className="block text-xs font-semibold">{i + 1}</span>
-                <span className="block truncate text-[11px] font-normal text-text-faint">
+                {/* "Shot 1" rather than a bare "1", because a number stacked
+                    directly above a title reads as one phrase: "1" over
+                    "Bedroom" was read as "1 bedroom". */}
+                <span className="block text-[11px] font-semibold uppercase tracking-wide text-text-faint">
+                  Shot {i + 1}
+                </span>
+                <span className="block truncate text-[12.5px] font-semibold text-text">
                   {s.title || "Untitled"}
                 </span>
               </th>
