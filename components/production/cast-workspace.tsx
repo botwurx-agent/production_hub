@@ -102,9 +102,32 @@ export function CastWorkspace({
               },
             ]}
             action={
-              <Button onClick={() => { setNewKind("character"); setEditing("new"); }}>
-                Add a character
-              </Button>
+              // All four kinds are doors, not just the character. A single
+              // "Add a character" button hid the other three behind a chip row
+              // you could only find by opening the modal, so the page read as
+              // character-only until you had already committed to something.
+              <div className="flex flex-wrap justify-center gap-2">
+                {ENTITY_KINDS.map((k) => (
+                  <button
+                    key={k.key}
+                    onClick={() => { setNewKind(k.key); setEditing("new"); }}
+                    className="w-[168px] rounded-[12px] border border-border bg-surface p-3 text-left transition hover:border-border-strong hover:bg-surface-2"
+                  >
+                    <span className="mb-1 flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: `var(--h-${k.hue})` }}
+                      />
+                      <span className="font-display text-[13px] font-bold">
+                        {k.label}
+                      </span>
+                    </span>
+                    <span className="block text-[11.5px] leading-snug text-text-faint">
+                      {k.hint}
+                    </span>
+                  </button>
+                ))}
+              </div>
             }
           />
         </Card>
