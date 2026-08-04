@@ -21,6 +21,17 @@ export const ENTITY_KINDS: {
    * including the ones that matter.
    */
   needsHandle: boolean;
+  /**
+   * Whether being in a shot with no look chosen is worth flagging.
+   *
+   * A person is always wearing something, so a character in a shot with no
+   * look is genuinely unanswered. A place, a prop and a garment all have a
+   * legitimate BASE state: the empty room, the plain glass, the jacket as it
+   * comes. Their own sheet and handle describe that state, and a look is the
+   * departure from it. Flagging those would mean every shot using the base
+   * bedroom carries a warning for being correct.
+   */
+  needsLook: boolean;
 }[] = [
   {
     key: "character",
@@ -29,6 +40,7 @@ export const ENTITY_KINDS: {
     hue: "purple",
     hint: "Someone the audience has to recognise from shot to shot",
     needsHandle: true,
+    needsLook: true,
   },
   {
     key: "element",
@@ -37,6 +49,7 @@ export const ENTITY_KINDS: {
     hue: "blue",
     hint: "A garment, prop or product that has to be exact",
     needsHandle: true,
+    needsLook: false,
   },
   {
     key: "location",
@@ -45,6 +58,7 @@ export const ENTITY_KINDS: {
     hue: "green",
     hint: "A set or place, with its scout sheet",
     needsHandle: true,
+    needsLook: false,
   },
   {
     key: "crowd",
@@ -53,6 +67,7 @@ export const ENTITY_KINDS: {
     hue: "amber",
     hint: "Background people, deliberately not locked to one face",
     needsHandle: false,
+    needsLook: false,
   },
 ];
 
@@ -267,8 +282,8 @@ export function castWarnings(
       (a, b) => (order.get(a.shot_id) ?? 0) - (order.get(b.shot_id) ?? 0)
     );
     for (const a of sorted) {
-      // A look is only meaningful if the entity has any defined.
-      if (!a.look_id && entity.looks.length > 0) {
+      // Only where a missing look leaves a real question. See needsLook.
+      if (!a.look_id && entity.looks.length > 0 && kindMeta(entity.kind).needsLook) {
         out.push({ kind: "no-look", entityId, shotId: a.shot_id });
       }
     }

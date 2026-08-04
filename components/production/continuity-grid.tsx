@@ -138,7 +138,11 @@ export function ContinuityGrid({
                   const a = byCell.get(key);
                   const value = !a ? "out" : a.look_id ?? "in";
                   const changed = changedShotIds.get(e.id)?.has(s.id) ?? false;
-                  const missingLook = Boolean(a) && !a?.look_id && e.looks.length > 0;
+                  const missingLook =
+                    Boolean(a) &&
+                    !a?.look_id &&
+                    e.looks.length > 0 &&
+                    meta.needsLook;
 
                   return (
                     <td
@@ -161,7 +165,14 @@ export function ContinuityGrid({
                       >
                         <option value="out">Not in this shot</option>
                         <option value="in">
-                          {e.looks.length ? "In shot, no look" : "In shot"}
+                          {/* For a location or a prop, no look IS an answer:
+                              the base state, described by the entity's own
+                              sheet. Only a character leaves a real question. */}
+                          {e.looks.length
+                            ? kindMeta(e.kind).needsLook
+                              ? "In shot, no look"
+                              : "In shot, base state"
+                            : "In shot"}
                         </option>
                         {e.looks.map((l) => (
                           <option key={l.id} value={l.id}>
