@@ -1,86 +1,66 @@
-// The cast layer: characters, elements, locations and extras for a generated
-// job, plus the looks that dress them and the platform handles that make a
-// prompt resolve. Spec: docs/ai-pipeline.md, "The cast layer".
+// References: the images a generation is built from, and the handles the
+// platform gave them. Spec: docs/ai-pipeline.md, "The cast layer".
 //
-// Pure module. No "use server", no imports from the Supabase client, so the
-// normalisation rules below can be unit tested and used on both sides.
+// ONE object on purpose. An earlier version split this into entities, looks and
+// compositions, which modelled the domain correctly and cost more than it
+// returned: generating a single shot meant maintaining a hand-typed mirror of
+// the platform's element library, in a vocabulary this app invented, on a page
+// away from the work. A reference is exactly what the platform has. Nothing to
+// translate.
+//
+// Pure module. No "use server", no Supabase imports, so the rules below can be
+// unit tested and used on both sides.
 
-export type EntityKind = "character" | "element" | "location" | "crowd";
+/** A light label for grouping and colour. It carries NO behaviour. */
+export type RefKind = "character" | "element" | "location" | "crowd";
 
-export const ENTITY_KINDS: {
-  key: EntityKind;
+export const REF_KINDS: {
+  key: RefKind;
   label: string;
   plural: string;
   hue: string;
   hint: string;
-  /**
-   * Whether missing a platform handle is worth warning about. Extras are
-   * deliberately NOT identity-locked: you want three plausible people, not the
-   * same face three times. Flagging them for a missing sheet would produce
-   * constant false alarms and train the operator to ignore every warning,
-   * including the ones that matter.
-   */
-  needsHandle: boolean;
-  /**
-   * Whether being in a shot with no look chosen is worth flagging.
-   *
-   * A person is always wearing something, so a character in a shot with no
-   * look is genuinely unanswered. A place, a prop and a garment all have a
-   * legitimate BASE state: the empty room, the plain glass, the jacket as it
-   * comes. Their own sheet and handle describe that state, and a look is the
-   * departure from it. Flagging those would mean every shot using the base
-   * bedroom carries a warning for being correct.
-   */
-  needsLook: boolean;
 }[] = [
   {
     key: "character",
     label: "Character",
     plural: "Characters",
     hue: "purple",
-    hint: "Someone the audience has to recognise from shot to shot",
-    needsHandle: true,
-    needsLook: true,
+    hint: "A person the audience has to recognise",
   },
   {
     key: "element",
     label: "Element",
     plural: "Elements",
     hue: "blue",
-    hint: "A garment, prop or product that has to be exact",
-    needsHandle: true,
-    needsLook: false,
+    hint: "Wardrobe, a prop, a product",
   },
   {
     key: "location",
     label: "Location",
     plural: "Locations",
     hue: "green",
-    hint: "A set or place, with its scout sheet",
-    needsHandle: true,
-    needsLook: false,
+    hint: "A place, or one state of it",
   },
   {
     key: "crowd",
     label: "Extras",
     plural: "Extras",
     hue: "amber",
-    hint: "Background people, deliberately not locked to one face",
-    needsHandle: false,
-    needsLook: false,
+    hint: "Background people",
   },
 ];
 
-export function entityKind(value: string | null | undefined): EntityKind {
-  const found = ENTITY_KINDS.find((k) => k.key === value);
+export function refKind(value: string | null | undefined): RefKind {
+  const found = REF_KINDS.find((k) => k.key === value);
   return found ? found.key : "character";
 }
 
 export function kindMeta(kind: string) {
-  return ENTITY_KINDS.find((k) => k.key === kind) ?? ENTITY_KINDS[0];
+  return REF_KINDS.find((k) => k.key === kind) ?? REF_KINDS[0];
 }
 
-/** Platforms that support named reference elements, for the handle rows. */
+/** Platforms that support named reference elements. */
 export const HANDLE_PLATFORMS = [
   "Higgsfield",
   "Midjourney",
@@ -92,10 +72,7 @@ export const HANDLE_PLATFORMS = [
   "Other",
 ];
 
-/**
- * Our identifier: search, display, and prompt composition. Lowercase and
- * underscore-only so it is safe in a filename, a URL and a prompt.
- */
+/** Our own identifier. Safe in a filename, a URL and a query. */
 export function slugify(input: string): string {
   return input
     .toLowerCase()
@@ -106,56 +83,23 @@ export function slugify(input: string): string {
 }
 
 /**
- * The platform's identifier, normalised. This is RECORDED EXTERNAL STATE, not
- * something we invent: the prompt only resolves if we emit the string the
- * platform gave back. We normalise casing and strip a leading @ because the
- * same handle typed three times by hand comes out three different ways, and two
- * near-identical handles are worse than one.
+ * The platform's identifier, kept VERBATIM apart from whitespace and a leading
+ * @. This is RECORDED EXTERNAL STATE, not a slug we invent: the prompt only
+ * resolves if we emit the exact string the platform gave back.
+ *
+ * Two corrections are baked in here. An early version lowercased and replaced
+ * hyphens, which turned "Maya-Scene-1-Wardrobe" into something that reads right
+ * and resolves to nothing. A later one refused any character outside a fixed
+ * alphabet, which made "LOC-01/B" unrecordable even though that is genuinely
+ * what Higgsfield names an element. We impose no charset.
  */
 export function normalizeHandle(input: string): string {
-  // Kept VERBATIM apart from whitespace and a leading @, because a handle is
-  // recorded external state, not a slug we invent. Higgsfield names an element
-  // "Maya-Scene-1-Wardrobe": hyphens, capitals and all, and that exact string
-  // is what a prompt has to carry. An earlier version lowercased it and turned
-  // every hyphen into an underscore, which produced a handle that looks right,
-  // resolves to nothing, and spends credits before anyone notices.
   return input.trim().replace(/^@+/, "").replace(/\s+/g, "-").slice(0, 60);
-}
-
-/**
- * Whether a handle is unusable, and why.
- *
- * Deliberately almost nothing. An earlier version refused any character outside
- * letters, numbers, dot, dash and underscore, on the theory that a prompt token
- * cannot carry more than that. Checked against a live Higgsfield workspace: it
- * names an element "LOC-01/B", slash included, and that is the string its own
- * prompts carry. So the rule was not a fact about prompts, it was a house style
- * imposed on recorded external state, and it made the true handle unrecordable.
- *
- * The matcher below was widened instead, which is the correct place to absorb
- * whatever a platform decides to allow.
- */
-export function handleProblem(handle: string): string | null {
-  if (!handle) return "Enter the handle the platform gave you.";
-  return null;
 }
 
 /** Display form. Handles are stored bare and shown with the @. */
 export function displayHandle(handle: string): string {
   return handle.startsWith("@") ? handle : `@${handle}`;
-}
-
-/**
- * Looks are named for THEMSELVES, never for a scene. A scene-bound name starts
- * lying the moment the outfit reappears in another scene: you either regenerate
- * an identical sheet under a second handle, or you reference "scene1" from
- * scene 4. Where a look appears is the shot assignment's job.
- *
- * Advisory rather than enforced, because a studio may have a naming convention
- * we have not thought of, and a hard block on a name is a bad trade.
- */
-export function looksSceneBound(name: string): boolean {
-  return /\b(scene|shot|sc|sh)\s*[-_]?\s*\d+/i.test(name);
 }
 
 // ------------------------------------------------------------- shaped reads --
@@ -164,240 +108,102 @@ export type CastHandle = {
   id: string;
   platform: string;
   handle: string;
-  entity_id: string | null;
-  look_id: string | null;
 };
 
-/** A reference sheet: an ai_generations row owned by an entity or a look. */
 export type CastSheet = {
   id: string;
   url: string;
-  /**
-   * For a look's combined sheet: the names of the sheets it was generated
-   * from, resolved through ai_generation_refs. Empty when the lineage was not
-   * recorded, which is the case for anything uploaded before the sources
-   * existed.
-   */
-  from?: string[];
 };
 
-export type CastLook = {
-  id: string;
-  entity_id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  /** The reusable prompt that generates this look's combined sheet. */
-  prompt: string | null;
-  position: number;
-  itemIds: string[];
-  handles: CastHandle[];
-  sheets: CastSheet[];
-};
-
-export type CastEntity = {
+export type CastReference = {
   id: string;
   project_id: string | null;
-  kind: EntityKind;
+  kind: RefKind;
   name: string;
   slug: string;
   description: string | null;
   notes: string | null;
-  /** The reusable prompt that generates this entity's sheets. */
+  /** The reusable prompt that generates this one. The recipe, not a log. */
   prompt: string | null;
-  looks: CastLook[];
   handles: CastHandle[];
-  /** This entity's own sheets, newest first. Look sheets live on the look. */
+  /** Newest first. */
   sheets: CastSheet[];
 };
 
-export type CastAssignment = {
-  id: string;
+/** Which references a shot uses. */
+export type CastUse = {
   shot_id: string;
   entity_id: string;
-  look_id: string | null;
-  count: number | null;
-  notes: string | null;
 };
 
 export type CastShot = { id: string; position: number; title: string };
 
-/** One cell's worth of trouble, for the continuity grid. */
-export type CastWarning =
-  | { kind: "no-look"; entityId: string; shotId: string }
-  | { kind: "no-sheet"; entityId: string }
-  | { kind: "no-handle"; entityId: string; platform: string }
-  | { kind: "look-change"; entityId: string; shotId: string; fromShotId: string };
+// ------------------------------------------------------------ prompt checks --
 
 /**
- * The four things the continuity grid exists to make visible. Computed here
- * rather than in the component so it can be tested and reused by the prompt
- * linter later.
+ * The ONE check worth making, and the reason is that it is invisible without
+ * us: a handle in the prompt that no reference owns does not error on the
+ * platform, it silently resolves to nothing and the model improvises. Every
+ * other check this file used to run fired on correct setups often enough to
+ * teach the operator to ignore all of them.
  *
- * `platform` is the one being targeted; a handle for a different platform does
- * not help a prompt written for this one.
+ * Leaving a reference out of a prompt is a choice, not a mistake, so it is
+ * reported by the chip showing as unused rather than as a warning.
  */
-export function castWarnings(
-  entities: CastEntity[],
-  shots: CastShot[],
-  assignments: CastAssignment[],
-  platform: string | null
-): CastWarning[] {
-  const out: CastWarning[] = [];
-  const byId = new Map(entities.map((e) => [e.id, e]));
+export type PromptIssue = { handle: string };
 
-  for (const e of entities) {
-    const meta = kindMeta(e.kind);
-    if (!meta.needsHandle) continue;
-    if (e.sheets.length === 0) out.push({ kind: "no-sheet", entityId: e.id });
-    if (platform) {
-      // A handle on a LOOK counts for the entity it belongs to. A location
-      // whose two variations are each uploaded separately never has an element
-      // of its own, and is always referenced through one of them, so demanding
-      // a handle on the bare entity would be a warning that can never be
-      // cleared: the same false-alarm problem that keeps extras exempt.
-      const has =
-        e.handles.some((h) => h.platform === platform) ||
-        e.looks.some((l) => l.handles.some((h) => h.platform === platform));
-      if (!has) out.push({ kind: "no-handle", entityId: e.id, platform });
-    }
-  }
-
-  // Ordered walk per entity so a wardrobe change between consecutive appearances
-  // is detectable. Only flagged between shots the entity is actually in: a gap
-  // is not a change.
-  const order = new Map(shots.map((s, i) => [s.id, i]));
-  const byEntity = new Map<string, CastAssignment[]>();
-  for (const a of assignments) {
-    const list = byEntity.get(a.entity_id) ?? [];
-    list.push(a);
-    byEntity.set(a.entity_id, list);
-  }
-
-  for (const [entityId, list] of byEntity) {
-    const entity = byId.get(entityId);
-    if (!entity) continue;
-    const sorted = [...list].sort(
-      (a, b) => (order.get(a.shot_id) ?? 0) - (order.get(b.shot_id) ?? 0)
-    );
-    for (const a of sorted) {
-      // Only where a missing look leaves a real question. See needsLook.
-      if (!a.look_id && entity.looks.length > 0 && kindMeta(entity.kind).needsLook) {
-        out.push({ kind: "no-look", entityId, shotId: a.shot_id });
-      }
-    }
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1];
-      const curr = sorted[i];
-      if (prev.look_id && curr.look_id && prev.look_id !== curr.look_id) {
-        out.push({
-          kind: "look-change",
-          entityId,
-          shotId: curr.shot_id,
-          fromShotId: prev.shot_id,
-        });
-      }
-    }
-  }
-
-  return out;
-}
-
-// --------------------------------------------------------- the prompt linter --
-
-/** What is in a shot, flattened for the composer. */
-export type ShotCastMember = {
-  entity: CastEntity;
-  look: CastLook | null;
-};
-
-export type PromptIssue =
-  /** Assigned to this shot, has a handle, but the prompt never mentions it. */
-  | { kind: "unused"; label: string; handle: string }
-  /** A handle in the prompt that belongs to nothing in this shot. */
-  | { kind: "unknown"; handle: string }
-  /** Assigned, needs a handle, has none on the platform being targeted. */
-  | { kind: "no-handle"; label: string };
-
-// Used only to find tokens the cast does NOT own. Whether a handle we DO own is
-// present is answered by literal containment instead (see mentions), because a
-// regex has to guess an alphabet and the platform keeps widening it: Higgsfield
-// allows hyphens, dots and slashes in an element name.
+// Only used to find tokens the shot does NOT own. Whether a handle we DO own
+// appears is answered by literal containment below, because a regex has to
+// guess an alphabet and platforms keep widening theirs.
 const HANDLE_IN_TEXT = /@([a-z0-9_./-]+)/gi;
 
 /** Is this exact handle written in the prompt? Case-insensitive, any charset. */
-function mentions(text: string, handle: string): boolean {
+export function mentions(text: string, handle: string): boolean {
   return text.toLowerCase().includes(`@${handle.toLowerCase()}`);
 }
 
-/**
- * Checks a prompt against the cast assigned to its shot, at the moment before
- * credits get spent. The grid answers the same questions for the whole job;
- * this answers them for the thing you are about to generate.
- *
- * Deliberately quiet when the shot has no cast assigned: with nothing to
- * compare against, every handle in the text would read as unknown, which is
- * noise rather than information and would train the operator to ignore it.
- */
+/** Every handle this shot's references own, for the platform being targeted. */
+export function handlesFor(
+  refs: CastReference[],
+  platform: string | null
+): { ref: CastReference; handle: string }[] {
+  const out: { ref: CastReference; handle: string }[] = [];
+  for (const ref of refs) {
+    const h = platform
+      ? ref.handles.find((x) => x.platform === platform)
+      : ref.handles[0];
+    if (h) out.push({ ref, handle: h.handle });
+  }
+  return out;
+}
+
 export function lintPrompt(
   text: string,
-  members: ShotCastMember[],
+  refs: CastReference[],
   platform: string | null
 ): PromptIssue[] {
+  if (refs.length === 0) return [];
+
+  const known = new Set(
+    handlesFor(refs, platform).map((x) => x.handle.toLowerCase())
+  );
+  // A handle for another platform is still a handle the operator recorded, so
+  // it is not a leftover. Only a token nothing owns at all is.
+  for (const ref of refs) {
+    for (const h of ref.handles) known.add(h.handle.toLowerCase());
+  }
+
   const issues: PromptIssue[] = [];
-  if (members.length === 0) return issues;
-
-  const found = new Set<string>();
-  for (const m of text.matchAll(HANDLE_IN_TEXT)) found.add(m[1].toLowerCase());
-
-  const known = new Set<string>();
-
-  for (const { entity, look } of members) {
-    const meta = kindMeta(entity.kind);
-    const entityHandle = platform
-      ? entity.handles.find((h) => h.platform === platform)
-      : entity.handles[0];
-    const lookHandle = look
-      ? platform
-        ? look.handles.find((h) => h.platform === platform)
-        : look.handles[0]
-      : undefined;
-
-    if (entityHandle) {
-      known.add(entityHandle.handle.toLowerCase());
-      if (!mentions(text, entityHandle.handle)) {
-        issues.push({
-          kind: "unused",
-          label: entity.name,
-          handle: entityHandle.handle,
-        });
-      }
-    } else if (meta.needsHandle && !lookHandle) {
-      // Only when the look does not speak for it either, for the same reason
-      // castWarnings accepts a look's handle: some entities are only ever
-      // referenced through one of their variations.
-      issues.push({ kind: "no-handle", label: entity.name });
-    }
-
-    if (lookHandle && look) {
-      known.add(lookHandle.handle.toLowerCase());
-      if (!mentions(text, lookHandle.handle)) {
-        issues.push({
-          kind: "unused",
-          label: `${entity.name}, ${look.name}`,
-          handle: lookHandle.handle,
-        });
-      }
-    }
+  const seen = new Set<string>();
+  for (const m of text.matchAll(HANDLE_IN_TEXT)) {
+    const token = m[1].toLowerCase();
+    if (seen.has(token)) continue;
+    seen.add(token);
+    if (known.has(token)) continue;
+    // A token that merely starts a handle we own is that handle clipped by the
+    // tokenizer, not a stray reference.
+    if (Array.from(known).some((k) => k.startsWith(token))) continue;
+    issues.push({ handle: token });
   }
-
-  for (const handle of found) {
-    // A token that merely starts a handle we own is that handle, clipped by the
-    // tokenizer, not a stray reference. Only a token nothing owns is a leftover.
-    if (known.has(handle)) continue;
-    if (Array.from(known).some((k) => k.startsWith(handle))) continue;
-    issues.push({ kind: "unknown", handle });
-  }
-
   return issues;
 }

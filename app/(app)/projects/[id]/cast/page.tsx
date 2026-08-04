@@ -20,16 +20,16 @@ export default async function ProjectCastPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const { entities, shots, assignments } = await loadCast(project.id, ctx.studio.id);
+  const { references, shots, uses } = await loadCast(project.id, ctx.studio.id);
 
   return (
     <div>
       <ProjectSubhead
         projectId={project.id}
         projectTitle={project.title}
-        section="Cast & elements"
+        section="References"
         hue="purple"
-        subtitle="Who and what is in this job, what they wear, and the handles that keep a generation consistent."
+        subtitle="The images a generation is built from, and the handles that make a prompt resolve the same way every time."
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -41,9 +41,9 @@ export default async function ProjectCastPage({
       <CastWorkspace
         projectId={project.id}
         studioId={ctx.studio.id}
-        entities={entities}
+        references={references}
         shots={shots}
-        assignments={assignments}
+        uses={uses}
       />
     </div>
   );

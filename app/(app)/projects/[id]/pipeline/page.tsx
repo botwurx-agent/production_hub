@@ -142,8 +142,8 @@ export default async function PipelinePage({
           masterCutLinkId={masterCutLink?.id ?? null}
           batchReviews={batchReviews}
           currentUserId={ctx.userId}
-          castEntities={cast.entities}
-          castAssignments={cast.assignments}
+          castReferences={cast.references}
+          castUses={cast.uses}
           reviewingShotIds={reviewingShotIds}
         />
       </Card>

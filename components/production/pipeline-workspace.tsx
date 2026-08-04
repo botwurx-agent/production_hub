@@ -29,7 +29,7 @@ import { TriageView } from "@/components/production/triage-view";
 import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
 import { PromptCastBar } from "@/components/production/prompt-cast-bar";
 import { insertToken } from "@/lib/caret";
-import type { CastAssignment, CastEntity, ShotCastMember } from "@/lib/cast";
+import type { CastReference, CastUse } from "@/lib/cast";
 import { MasterCutBand } from "@/components/production/master-cut-band";
 import { BatchReviewButton } from "@/components/production/batch-review-button";
 import type { AssetWithVersions } from "@/components/projects/asset-types";
@@ -815,7 +815,7 @@ function ReferencesPanel({
 
 function StagePanel({
   projectId, studioId, shot, stage, prompt, gens, media, library, reviews, refStartId, refEndId, onRun,
-  canSeeCost, castMembers,
+  canSeeCost, allRefs, usedRefs,
 }: {
   canSeeCost: boolean;
   projectId: string; studioId: string; shot: AiShot; stage: Stage;
@@ -824,8 +824,9 @@ function StagePanel({
   reviews: BatchReviewSummary[];
   refStartId: string | null; refEndId: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
-  /** Who and what is assigned to this shot, for the composer chips + linter. */
-  castMembers: ShotCastMember[];
+  /** Every reference in the job, and the ones this shot uses. */
+  allRefs: CastReference[];
+  usedRefs: CastReference[];
 }) {
   const router = useRouter();
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
@@ -865,7 +866,10 @@ function StagePanel({
           Working prompt <span className="font-normal normal-case text-text-faint">· pre-fills each new batch; the exact prompt is saved on every generation</span>
         </label>
         <PromptCastBar
-          members={castMembers}
+          projectId={projectId}
+          shotId={shot.id}
+          all={allRefs}
+          used={usedRefs}
           text={pText}
           onInsert={(token) => {
             insertToken(promptRef.current, pText, token, (next) => {
@@ -1165,8 +1169,8 @@ export function PipelineWorkspace({
   batchReviews = {}, currentUserId,
   reviewingShotIds = [],
   canSeeCost = true,
-  castEntities = [],
-  castAssignments = [],
+  castReferences = [],
+  castUses = [],
 }: {
   projectId: string;
   studioId: string;
@@ -1187,31 +1191,23 @@ export function PipelineWorkspace({
    * `generation_costs` (migration 0074), so removing this prop leaks nothing.
    */
   canSeeCost?: boolean;
-  castEntities?: CastEntity[];
-  castAssignments?: CastAssignment[];
+  castReferences?: CastReference[];
+  castUses?: CastUse[];
 }) {
   const router = useRouter();
   const [, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(shots[0]?.id ?? null);
 
-  // A shot's cast, resolved from ids to the entity and look objects the
-  // composer needs. Kept here rather than in StagePanel so the image and video
-  // panels of one shot cannot disagree about who is in it.
-  const castFor = useMemo(() => {
-    const byEntity = new Map(castEntities.map((e) => [e.id, e]));
-    return (shotId: string): ShotCastMember[] =>
-      castAssignments
-        .filter((a) => a.shot_id === shotId)
-        .map((a) => {
-          const entity = byEntity.get(a.entity_id);
-          if (!entity) return null;
-          const look = a.look_id
-            ? entity.looks.find((l) => l.id === a.look_id) ?? null
-            : null;
-          return { entity, look };
-        })
-        .filter((m): m is ShotCastMember => m !== null);
-  }, [castEntities, castAssignments]);
+  // The references a shot uses. Resolved here rather than in StagePanel so the
+  // image and video panels of one shot cannot disagree about what is in it.
+  const refsFor = useMemo(() => {
+    const byId = new Map(castReferences.map((r) => [r.id, r]));
+    return (shotId: string): CastReference[] =>
+      castUses
+        .filter((u) => u.shot_id === shotId)
+        .map((u) => byId.get(u.entity_id))
+        .filter((r): r is CastReference => Boolean(r));
+  }, [castReferences, castUses]);
   const [scriptOpen, setScriptOpen] = useState(false);
   const cutVersions = masterCut?.versions?.length ?? 0;
   const [cutOpen, setCutOpen] = useState<boolean>(cutVersions > 0);
@@ -1445,7 +1441,7 @@ export function PipelineWorkspace({
                 {showImageStage && (
                   <>
                     <Flow label="prompt, generate & pick images" />
-                    <StagePanel castMembers={castFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
+                    <StagePanel allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
                       prompt={shotPrompts.get(`${active.id}:image`) ?? null}
                       gens={imgGens} media={media} library={library}
                       reviews={batchReviews[active.id] ?? []}
@@ -1457,7 +1453,7 @@ export function PipelineWorkspace({
                     : inputMode === "video_to_video" ? "add a reference video, then generate"
                     : "prompt & generate video"
                 } />
-                <StagePanel castMembers={castFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
+                <StagePanel allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
                   media={media} library={library}

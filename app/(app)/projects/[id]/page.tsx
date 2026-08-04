@@ -557,9 +557,9 @@ export default async function ProjectDetailPage({
               <HubCard
                 href={`/projects/${project.id}/cast`}
                 hue="purple"
-                title="Cast & elements"
+                title="References"
                 sub="Characters, wardrobe, props, locations"
-                footer="Open the cast"
+                footer="Open references"
                 icon={
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -569,8 +569,8 @@ export default async function ProjectDetailPage({
                 }
               >
                 <p className="text-[13px] text-text-muted">
-                  Who is in which shot and what they are wearing, with the platform
-                  handles that keep a generation consistent between them.
+                  The images a generation is built from, each carrying the handle
+                  its platform gave it, so a prompt resolves the same way twice.
                 </p>
               </HubCard>
             )}
