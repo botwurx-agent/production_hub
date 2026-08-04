@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
-import { entityKind, normalizeHandle, slugify } from "@/lib/cast";
+import { entityKind, handleProblem, normalizeHandle, slugify } from "@/lib/cast";
 import { assetStorage } from "@/lib/asset-storage";
 import {
   aspectRatio,
@@ -196,7 +196,8 @@ export async function saveHandle(
   const supabase = createClient();
 
   const handle = normalizeHandle(rawHandle);
-  if (!handle) return { error: "Enter the handle the platform gave you." };
+  const problem = handleProblem(handle);
+  if (problem) return { error: problem };
   if (!platform.trim()) return { error: "Say which platform it is on." };
 
   const { error } = await supabase.from("ai_entity_handles").insert({

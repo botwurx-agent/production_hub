@@ -107,6 +107,25 @@ export function normalizeHandle(input: string): string {
   return input.trim().replace(/^@+/, "").replace(/\s+/g, "-").slice(0, 60);
 }
 
+/**
+ * Whether a handle can survive being written into a prompt, and why not.
+ *
+ * This is NOT us imposing a house style on recorded external state. A prompt
+ * carries a handle as a bare @token, so anything outside letters, numbers, dot,
+ * dash and underscore ends the token early: a handle stored as "LOC-01/A" is
+ * read by the platform, and by our own linter, as "LOC-01". The result is a
+ * warning that can never be cleared and a reference that silently does not
+ * resolve, which is the failure this whole field exists to prevent. Better to
+ * refuse it while the operator is looking at it.
+ */
+export function handleProblem(handle: string): string | null {
+  if (!handle) return "Enter the handle the platform gave you.";
+  const bad = handle.match(/[^A-Za-z0-9_.-]/g);
+  if (!bad) return null;
+  const shown = Array.from(new Set(bad)).join(" ");
+  return `A prompt cannot carry ${shown} inside a handle, so this would stop resolving at that character. Use letters, numbers, dot, dash or underscore (Higgsfield turns spaces into dashes).`;
+}
+
 /** Display form. Handles are stored bare and shown with the @. */
 export function displayHandle(handle: string): string {
   return handle.startsWith("@") ? handle : `@${handle}`;
