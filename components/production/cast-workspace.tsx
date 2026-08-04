@@ -641,7 +641,7 @@ function EntityCard({
                       else router.refresh();
                     })
                   }
-                  className="opacity-0 transition group-hover:opacity-100"
+                  className="opacity-50 transition hover:opacity-100"
                   aria-label={`Remove ${h.handle}`}
                 >
                   &times;
@@ -890,6 +890,22 @@ function EntityModal({
                   <li key={h.id} className="flex items-center gap-2 text-[12.5px]">
                     <span className="text-text-faint">{h.platform}</span>
                     <span className="font-mono text-accent">{displayHandle(h.handle)}</span>
+                    {/* The modal is where you go to manage a handle, so the
+                        remove has to live here and be visible, not only as a
+                        hover-revealed x on the card behind it. */}
+                    <button
+                      onClick={() =>
+                        start(async () => {
+                          const res = await deleteHandle(projectId, h.id);
+                          if (res?.error) toast(res.error, "error");
+                          else router.refresh();
+                        })
+                      }
+                      disabled={busy}
+                      className="ml-auto rounded-[7px] border border-border px-1.5 py-0.5 text-[11px] font-semibold text-text-muted transition hover:border-red hover:text-red"
+                    >
+                      Remove
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -1171,6 +1187,19 @@ function LookModal({
                   <li key={h.id} className="flex items-center gap-2 text-[12.5px]">
                     <span className="text-text-faint">{h.platform}</span>
                     <span className="font-mono text-accent">{displayHandle(h.handle)}</span>
+                    <button
+                      onClick={() =>
+                        start(async () => {
+                          const res = await deleteHandle(projectId, h.id);
+                          if (res?.error) toast(res.error, "error");
+                          else router.refresh();
+                        })
+                      }
+                      disabled={busy}
+                      className="ml-auto rounded-[7px] border border-border px-1.5 py-0.5 text-[11px] font-semibold text-text-muted transition hover:border-red hover:text-red"
+                    >
+                      Remove
+                    </button>
                   </li>
                 ))}
               </ul>
