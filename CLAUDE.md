@@ -2312,98 +2312,65 @@ Shot cockpit / Triage) was shown to the operator.
     marks (FK cascade, confirm-gated) vs "Turn off" (revoke, keeps the row).
     Actions updateBatchReviewItems/deleteBatchReview in batch-review-actions.ts; the
     create + edit panels share one CandidateGrid in batch-review-button.tsx.
-  - THE CAST LAYER (slice 1 BUILT 2026-08-01, migration 0080): the pipeline models lineage
-    between anonymous media but has no named, persistent Maya, no wardrobe, and
-    no way to ask which shots an entity appears in. Full spec appended to
-    docs/ai-pipeline.md: entities (character | element | location | crowd),
-    looks as COMPOSITIONS of item entities (the ring is its own entity, so
-    accessory continuity is a query), a shot-cast join, and per-platform
-    HANDLES recorded on both entities and looks. A handle is external state
-    (the @name Higgsfield gave back), not a slug we invent, so it is stored
-    and validated rather than generated. Naming rule fixed now because
-    handles are costly to change later: name the LOOK, not the scene
-    (@maya_wd1, never @mayawithwardrobescene1). Extras are a separate kind
-    that is deliberately NOT identity-locked, or the linter cries wolf. The
-    continuity grid ships in slice 1 because without it this is data entry
-    with no payoff. Import stays anchored to the SHOT, not the filename.
-    SHIPPED: ai_entities / ai_looks / ai_look_items / ai_shot_cast /
-    ai_entity_handles; ai_generations.shot_id is now NULLABLE with
-    entity_id/look_id beside it and a one-owner check, and its RLS policy
-    also resolves the project through the entity and look (without that,
-    collaborators lose the whole cast). lib/cast.ts holds the pure rules
-    (slugify, normalizeHandle, looksSceneBound, castWarnings) and is unit
-    tested; lib/cast-data.ts loads and signs sheets; cast-actions.ts writes.
-    UI at /projects/[id]/cast (components/production/cast-workspace.tsx +
-    continuity-grid.tsx), hub card in Visualize for ai_video projects.
-    SLICE 2 (BUILT): sheet upload on entities and looks (kept apart: a look's
-    sheet is the COMBINED render, which is the artifact you reference when
-    generating), and the PROMPT COMPOSER in the pipeline. The shot's cast sits
-    above the working prompt as chips carrying the real handle for the platform
-    you pick (stored in localStorage, a per-person working preference); clicking
-    one inserts at the caret via lib/caret.ts insertToken. lib/cast.ts
-    lintPrompt runs three checks at the moment before credits are spent: an
-    entity with NO handle on that platform (the silent one, prompt reads fine
-    and the model improvises), a handle in the text belonging to nothing in this
-    shot (a leftover from a copied prompt), and an assigned entity the prompt
-    never mentions. It stays SILENT when the shot has no cast, since with
-    nothing to compare against every token reads as unknown, which is noise.
-    Unit tested including the different-platform case.
-    SLICE 3 (BUILT): a look's combined sheet records where it came from.
-    Uploading one links it through ai_generation_refs to the newest identity
-    sheet (role 'character') and the newest sheet of each garment in the look's
-    composition (role 'element'), the same vocabulary REF_ROLES already uses. It
-    is BEST EFFORT: a missing source sheet costs a provenance row, never the
-    upload, because losing the file someone just waited on is far worse. The
-    cast page resolves those refs to names and shows "Made from Maya, WD-01,
-    WD-A1" under the sheet.
-    OPERATOR TESTING PASS (2026-08-03), four things found by using it:
-    (1) The empty state's only door was "Add a character", so element,
-    location and crowd were reachable only by opening the modal and finding
-    the chip row inside. Four KindTiles now, each with its kind's hue as a top
-    edge (the contact-roster device), its glyph in an IconTile and an accent
-    "+ Add" line; the action is pinned with mt-auto so four hint lengths do
-    not leave four differently placed Add lines.
-    (2) THE MODALS NOW STAY OPEN ACROSS THE FIRST SAVE. Adding a character
-    meant save, close, find the card, reopen, and only then upload the sheet,
-    which is a round trip back to where you already were. The open modal's
-    subject is RESOLVED BY ID out of current server data rather than held as a
-    snapshot (editingEntity / lookSubject in cast-workspace), so a create
-    hands the same open modal a real row. That also fixed a quieter bug: a
-    sheet uploaded to an EXISTING entity refreshed the page but not the
-    snapshot the modal held, so it did not appear until close-reopen. The
-    upload block is SHOWN before saving saying the row has to exist first,
-    never hidden; Save is disabled between the insert and the refresh landing
-    (pressing it again would insert a second row) and Cancel becomes Close.
-    (3) `prompt` on ai_entities + ai_looks (migration 0081). The RECIPE, not a
-    log: ai_generations.prompt already records what was sent for one sheet,
-    and "what do I paste next time" is a different question. A Copy button
-    sits on the label, since pasting it into the tool is the whole point.
-    (4) A sheet can arrive as a LINK as well as a file (addSheetFromLink),
-    reusing lib/media-import fetchMediaFromUrl, so a share page or a direct
-    image URL both work: the bytes are fetched server side (SSRF-guarded,
-    size-capped), stored under <studio>/cast/<project>/, platform/aspect/
-    resolution auto-derived, and external_url keeps the original one click
-    away. Non-image links are refused, since a reference sheet is a still.
-    WANTED: CAST ON A LIVE-ACTION SHOOT (operator, 2026-08-03, "I definitely
-    think it will come into play"). The hub card shows only for ai_video and
-    cgi_vfx today; the route is deliberately not hard-blocked, per the standing
-    project_type convention (a light label that tailors which cards surface,
-    never a wall). Wardrobe and set continuity is a real live-action discipline
-    with no AI in it, so the entity/look/grid half of this is already the right
-    model for a live job. What must NOT come with it is the handle machinery:
-    needsHandle is true for character/element/location, so on a live job every
-    entity would raise a permanent red "no handle" warning, and a warning that
-    is always on trains the operator to ignore all of them including the real
-    ones. The change is therefore needsHandle (and the handle rows in
-    EntityModal/LookModal, and lintPrompt's no-handle branch) becoming
-    CONDITIONAL ON THE PROJECT TYPE rather than a constant on ENTITY_KINDS: a
-    live-action project gets sheets + looks + the continuity grid, an ai_video
-    project additionally gets handles and the prompt linter. Roughly twenty
-    lines plus threading project_type into castWarnings and PromptCastBar.
-    Do it when a real live job wants it, not before.
-    NEXT SLICES: agent-mediated handle reconciliation from the platform's
-    element library (Higgsfield exposes a way to list reference elements, so the
-    app could read them and match rather than have you type).
+  - REFERENCES (was "the cast layer"; migrations 0080, 0081, 0082). ONE object:
+    a reference is an image, a name, and the HANDLE the platform gave it. That
+    is what Higgsfield actually stores, so there is nothing to translate.
+    HOW IT GOT HERE, because the lesson is worth more than the feature. 0080
+    shipped a three-level model (entities -> looks as COMPOSITIONS of element
+    entities -> per-platform handles) plus a continuity grid and a four-check
+    prompt linter. It was correct about the domain and wrong about the job: to
+    generate ONE shot the operator had to maintain a hand-typed mirror of their
+    Higgsfield element library, in a vocabulary this app invented, on a page
+    away from the work, and then satisfy warnings about it. The tell was a dozen
+    consecutive commits each fixing a rule that fired on a CORRECT setup (a look
+    handle not counting for its entity, "no look" flagged on a base state, a
+    charset rule that made "LOC-01/B" unrecordable). When the corrections
+    outnumber the work, the model is wrong, not the edge cases. 0082 flattened
+    every look into a reference, carrying handles, images and shot assignments
+    across, and re-added the parent to any shot whose assignment moved (Maya
+    wearing LK-01 is two references, not one). ai_looks / ai_look_items survive
+    UNREAD for rollback; ai_shot_cast.look_id is always null.
+    WHAT EXISTS NOW. `ai_entities` holds references (name kept from 0080; a
+    rename would churn 32 RLS policies and the agent schema map for no
+    behaviour). `ai_entity_handles` are entity-owned only. A reference's images
+    are `ai_generations` rows with status='reference' and entity_id set.
+    `ai_shot_cast` is (shot, reference), nothing else. lib/cast.ts is the pure
+    module: REF_KINDS mirrors Higgsfield's own categories (Auto / Character /
+    Location / Prop; `crowd` is legacy, kept out of the picker via
+    PICKABLE_KINDS), normalizeHandle keeps a handle VERBATIM (no charset of ours
+    -- both an early lowercase-and-underscore rule and a later allowed-character
+    rule silently broke real handles), suggestedHandle derives it from the name
+    since Higgsfield does the same, and lintPrompt makes exactly ONE check: a
+    handle in the prompt that none of this shot's references owns. That is the
+    only failure invisible without us; the platform ignores it silently and the
+    model improvises. A reference LEFT OUT of a prompt is reported by its chip
+    not showing a tick, which is feedback rather than a scolding.
+    WHERE THE WORK HAPPENS. Which references a shot uses is set ON THE SHOT, in
+    the pipeline, above the prompt being written (components/production/
+    prompt-cast-bar.tsx: chips insert the handle at the caret, "+ References"
+    opens a checkbox picker, a platform selector persists in localStorage). That
+    ordering is the single biggest thing the rework fixed: data entry used to
+    live on a page you had to know to visit first. /projects/[id]/cast is now a
+    flat grid of reference cards plus a READ-ONLY usage map (dots, not
+    dropdowns), and its modal mirrors Higgsfield's New Element dialog field for
+    field. Actions in cast-actions.ts: saveReference / archiveReference /
+    saveHandle / deleteHandle / setShotReference / addSheet / addSheetFromLink
+    (link import reuses lib/media-import fetchMediaFromUrl, SSRF-guarded) /
+    deleteSheet.
+    LOST DELIBERATELY: asking which shots a single garment appears in
+    independently of the outfit. Real, but it can return as optional GROUPING on
+    top of references rather than as a concept nobody can avoid on day one.
+    WANTED: this on a LIVE-ACTION shoot (operator, 2026-08-03). Wardrobe and set
+    continuity is a real discipline with no AI in it, and references + the usage
+    map already fit. What must not come along is the handle machinery, so the
+    change is showing the hub card for live_action/commercial AND hiding the
+    handle field + the prompt linter when the project type is not generated.
+    Small, and only worth doing when a real live job asks.
+    NEXT: agent-mediated handle reconciliation. Higgsfield's MCP exposes
+    show_reference_elements (verified live: it returns id, name, category and
+    media per element), so the app could READ the element library and match or
+    fill handles rather than have anyone type them. Their public REST API is
+    generation-only, so this needs the agent path, not a server-side sync.
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-

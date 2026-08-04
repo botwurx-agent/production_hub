@@ -1,6 +1,7 @@
 # AI film/video generation pipeline — architecture spec
 
-Status: **Slice 1 BUILT + deployed.** Roadmap Phase 7 (the forward-looking
+Status: **Built and deployed.** NOTE: the cast-layer sections near the end are
+SUPERSEDED by "References (what actually exists)"; read that first. Roadmap Phase 7 (the forward-looking
 differentiator). This is the spec we build slices against. Clickable mockups
 exist (published as Claude artifacts; the red-annotated flow is the reference).
 
@@ -355,3 +356,48 @@ and the prompt linter. Roughly twenty lines plus threading `project_type` into
 `live_action` and `commercial`.
 
 Do it when a real live job wants it, not before.
+## The cast layer: SUPERSEDED, see "References" below
+
+Everything from here to the end of this document describes the three-level
+model shipped in migration 0080 (entities, looks as compositions, per-platform
+handles, a continuity grid you edited, a four-check prompt linter). Migration
+0082 replaced it. The text is kept because the reasoning is still worth reading
+and because the tables it describes still exist unread, but do NOT build against
+it.
+
+## References (what actually exists)
+
+One object. A reference is an image, a name, and the handle the platform gave
+it, which is exactly what Higgsfield stores, so there is nothing to translate.
+
+Why the earlier model failed, since it failed for a reason worth remembering: it
+was right about the domain and wrong about the job. Generating one shot required
+maintaining a hand-typed mirror of the platform's element library, in vocabulary
+this app invented, on a page away from the work, and then satisfying warnings
+about it. A dozen consecutive commits each fixed a rule that fired on a correct
+setup. When the corrections outnumber the work, the model is wrong, not the edge
+cases.
+
+What replaced it:
+
+- `ai_entities` holds references. `ai_entity_handles` are entity-owned only. A
+  reference's images are `ai_generations` rows with status='reference'.
+  `ai_shot_cast` is (shot, reference) and nothing more.
+- Which references a shot uses is set ON THE SHOT, in the pipeline, above the
+  prompt being written. That ordering is the fix, not a detail.
+- The grid is a read-only usage map.
+- Exactly one prompt check survives: a handle nothing in this shot owns. It is
+  the only failure invisible without us. A reference left out of a prompt is a
+  choice, shown by its chip lacking a tick.
+- Categories mirror Higgsfield's own dialog (Auto / Character / Location /
+  Prop), and the handle follows the name, because Higgsfield derives its @name
+  the same way.
+
+Deliberately lost: asking which shots one garment appears in independently of
+the outfit. It can return as optional grouping on top of references.
+
+Next: agent-mediated handle reconciliation. Higgsfield's MCP exposes
+`show_reference_elements` (verified live), so the app could read the element
+library and match handles rather than have anyone type them. Their public REST
+API is generation-only, so this is the agent path, not a server-side sync.
+
