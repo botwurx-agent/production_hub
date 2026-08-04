@@ -123,22 +123,21 @@ export function normalizeHandle(input: string): string {
 }
 
 /**
- * Whether a handle can survive being written into a prompt, and why not.
+ * Whether a handle is unusable, and why.
  *
- * This is NOT us imposing a house style on recorded external state. A prompt
- * carries a handle as a bare @token, so anything outside letters, numbers, dot,
- * dash and underscore ends the token early: a handle stored as "LOC-01/A" is
- * read by the platform, and by our own linter, as "LOC-01". The result is a
- * warning that can never be cleared and a reference that silently does not
- * resolve, which is the failure this whole field exists to prevent. Better to
- * refuse it while the operator is looking at it.
+ * Deliberately almost nothing. An earlier version refused any character outside
+ * letters, numbers, dot, dash and underscore, on the theory that a prompt token
+ * cannot carry more than that. Checked against a live Higgsfield workspace: it
+ * names an element "LOC-01/B", slash included, and that is the string its own
+ * prompts carry. So the rule was not a fact about prompts, it was a house style
+ * imposed on recorded external state, and it made the true handle unrecordable.
+ *
+ * The matcher below was widened instead, which is the correct place to absorb
+ * whatever a platform decides to allow.
  */
 export function handleProblem(handle: string): string | null {
   if (!handle) return "Enter the handle the platform gave you.";
-  const bad = handle.match(/[^A-Za-z0-9_.-]/g);
-  if (!bad) return null;
-  const shown = Array.from(new Set(bad)).join(" ");
-  return `A prompt cannot carry ${shown} inside a handle, so this would stop resolving at that character. Use letters, numbers, dot, dash or underscore (Higgsfield turns spaces into dashes).`;
+  return null;
 }
 
 /** Display form. Handles are stored bare and shown with the @. */
@@ -320,11 +319,16 @@ export type PromptIssue =
   /** Assigned, needs a handle, has none on the platform being targeted. */
   | { kind: "no-handle"; label: string };
 
-// Hyphens and dots are in here because platforms use them: Higgsfield turns a
-// spaced element name into "Maya-Scene-1-Wardrobe". Matching is case-insensitive
-// on both sides, so a capital in the prompt is not reported as an unknown
-// handle, but what gets STORED and inserted keeps its original case.
-const HANDLE_IN_TEXT = /@([a-z0-9_.-]+)/gi;
+// Used only to find tokens the cast does NOT own. Whether a handle we DO own is
+// present is answered by literal containment instead (see mentions), because a
+// regex has to guess an alphabet and the platform keeps widening it: Higgsfield
+// allows hyphens, dots and slashes in an element name.
+const HANDLE_IN_TEXT = /@([a-z0-9_./-]+)/gi;
+
+/** Is this exact handle written in the prompt? Case-insensitive, any charset. */
+function mentions(text: string, handle: string): boolean {
+  return text.toLowerCase().includes(`@${handle.toLowerCase()}`);
+}
 
 /**
  * Checks a prompt against the cast assigned to its shot, at the moment before
@@ -361,7 +365,7 @@ export function lintPrompt(
 
     if (entityHandle) {
       known.add(entityHandle.handle.toLowerCase());
-      if (!found.has(entityHandle.handle.toLowerCase())) {
+      if (!mentions(text, entityHandle.handle)) {
         issues.push({
           kind: "unused",
           label: entity.name,
@@ -377,7 +381,7 @@ export function lintPrompt(
 
     if (lookHandle && look) {
       known.add(lookHandle.handle.toLowerCase());
-      if (!found.has(lookHandle.handle.toLowerCase())) {
+      if (!mentions(text, lookHandle.handle)) {
         issues.push({
           kind: "unused",
           label: `${entity.name}, ${look.name}`,
@@ -388,7 +392,11 @@ export function lintPrompt(
   }
 
   for (const handle of found) {
-    if (!known.has(handle)) issues.push({ kind: "unknown", handle });
+    // A token that merely starts a handle we own is that handle, clipped by the
+    // tokenizer, not a stray reference. Only a token nothing owns is a leftover.
+    if (known.has(handle)) continue;
+    if (Array.from(known).some((k) => k.startsWith(handle))) continue;
+    issues.push({ kind: "unknown", handle });
   }
 
   return issues;
