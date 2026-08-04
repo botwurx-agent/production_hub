@@ -1073,35 +1073,57 @@ function LookModal({
         </label>
 
         <div>
-          <p className="mb-1.5 text-xs font-semibold text-text-muted">What it is made of</p>
+          <p className="mb-1.5 text-xs font-semibold text-text-muted">
+            What it is made of
+            {items.length > 0 && (
+              <span className="ml-1.5 font-normal text-text-faint">
+                {items.length} selected
+              </span>
+            )}
+          </p>
           <p className="mb-2 text-[11.5px] text-text-faint">
-            Each garment and accessory is its own element, so the ring can appear in
-            three looks and you can still ask which shots it is in.
+            Tick each garment and accessory in this look. Each one is its own
+            element, so the ring can appear in three looks and you can still ask
+            which shots it is in. Anything ticked here stops needing its own row
+            in the continuity grid.
           </p>
           {elements.length === 0 ? (
             <p className="text-[12.5px] text-text-faint">
               No elements yet. Add the garments as elements first.
             </p>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
+            // Real checkboxes, not toggle pills. An unselected pill is an
+            // outlined chip with muted text, which reads as a label describing
+            // something rather than a control, so the whole composition step was
+            // invisible. A checkbox cannot be mistaken for anything else.
+            <div className="grid gap-0.5">
               {elements.map((el) => {
                 const on = items.includes(el.id);
                 return (
-                  <button
+                  <label
                     key={el.id}
-                    onClick={() =>
-                      setItems((prev) =>
-                        on ? prev.filter((i) => i !== el.id) : [...prev, el.id]
-                      )
-                    }
-                    className={`rounded-pill px-2.5 py-1 text-xs font-medium transition ${
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-[10px] border px-2.5 py-2 text-[13px] transition ${
                       on
-                        ? "bg-accent text-accent-fg"
-                        : "border border-border text-text-muted hover:border-border-strong"
+                        ? "border-accent bg-accent-soft"
+                        : "border-transparent hover:bg-surface-2"
                     }`}
                   >
-                    {el.name}
-                  </button>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() =>
+                        setItems((prev) =>
+                          on ? prev.filter((i) => i !== el.id) : [...prev, el.id]
+                        )
+                      }
+                      className="h-4 w-4 shrink-0 accent-[var(--accent)]"
+                    />
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: "var(--h-blue)" }}
+                    />
+                    <span className="min-w-0 truncate">{el.name}</span>
+                  </label>
                 );
               })}
             </div>
