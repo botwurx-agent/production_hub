@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import {
   HANDLE_PLATFORMS,
-  REF_KINDS,
+  PICKABLE_KINDS,
+  suggestedHandle,
   displayHandle,
   kindMeta,
   type CastReference,
@@ -32,6 +33,14 @@ const field =
   "w-full rounded-[11px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition focus:border-accent";
 
 const KIND_ICONS: Record<RefKind, ReactNode> = {
+  auto: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="3" />
+      <circle cx="17" cy="7" r="2" />
+      <circle cx="16" cy="16" r="3" />
+      <circle cx="7" cy="17" r="2" />
+    </svg>
+  ),
   character: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
@@ -87,7 +96,7 @@ export function CastWorkspace({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<CastReference | "new" | null>(null);
-  const [newKind, setNewKind] = useState<RefKind>("character");
+  const [newKind, setNewKind] = useState<RefKind>("auto");
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   // Resolved by id out of current server data rather than held as a snapshot,
@@ -147,7 +156,7 @@ export function CastWorkspace({
             ]}
             action={
               <div className="flex flex-wrap justify-center gap-3">
-                {REF_KINDS.map((k) => (
+                {PICKABLE_KINDS.map((k) => (
                   <KindTile
                     key={k.key}
                     kind={k}
@@ -175,7 +184,7 @@ export function CastWorkspace({
             {references.length} in this job
           </span>
           <div className="ml-auto flex flex-wrap gap-1.5">
-            {REF_KINDS.map((k) => (
+            {PICKABLE_KINDS.map((k) => (
               <button
                 key={k.key}
                 onClick={() => {
@@ -208,7 +217,7 @@ function KindTile({
   kind,
   onClick,
 }: {
-  kind: (typeof REF_KINDS)[number];
+  kind: (typeof PICKABLE_KINDS)[number];
   onClick: () => void;
 }) {
   return (
@@ -419,8 +428,16 @@ function ReferenceModal({
   );
   const [platform, setPlatform] = useState(HANDLE_PLATFORMS[0]);
   const [handle, setHandle] = useState("");
+  const [handleTouched, setHandleTouched] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [busy, start] = useTransition();
+
+  // Higgsfield derives an element's @name from the name you type in its own
+  // dialog. Naming the thing the same in both places is the sane way to work,
+  // so the handle follows the name until the operator overrides it. Saves the
+  // step entirely in the common case, and the platform stays the authority
+  // because the field is still editable.
+  const effectiveHandle = handleTouched ? handle : suggestedHandle(name);
 
   function submit() {
     const creating = !reference;
@@ -437,9 +454,13 @@ function ReferenceModal({
         toast(res.error, "error");
         return;
       }
-      // Stays open on a create: the image and the handle are the point of
-      // adding it, and both need the row to exist.
       if (creating && "id" in res && res.id) {
+        // Record the handle in the same breath as the create, so the common
+        // path is one action rather than save-then-remember.
+        if (effectiveHandle.trim()) {
+          const h = await saveHandle(projectId, res.id, platform, effectiveHandle);
+          if ("error" in h && h.error) toast(h.error, "error");
+        }
         setJustSaved(true);
         onCreated(res.id);
         return;
@@ -452,47 +473,188 @@ function ReferenceModal({
     <Modal
       open
       onClose={onClose}
-      title={reference ? reference.name : "Add a reference"}
-      size="lg"
+      title={reference ? reference.name : "New reference"}
+      size="xl"
     >
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {REF_KINDS.map((k) => (
-            <button
-              key={k.key}
-              onClick={() => setKind(k.key)}
-              className={`rounded-pill px-3 py-1.5 text-xs font-semibold transition ${
-                kind === k.key
-                  ? "text-accent-fg"
-                  : "border border-border text-text-muted hover:border-border-strong"
-              }`}
-              style={kind === k.key ? { backgroundColor: `var(--h-${k.hue})` } : undefined}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
-
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-text-muted">
-            Name
-          </span>
+      {/* Laid out like Higgsfield's own New Element dialog: the details on the
+          left, the media on the right. Same shape and same words in both
+          places means nothing to translate when flipping between them. */}
+      <div className="grid gap-5 md:grid-cols-[1fr_1fr]">
+        <div className="space-y-3">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className={field}
-            placeholder="Maya, or LK-01 grey loungewear"
+            className={`${field} text-[15px] font-semibold`}
+            placeholder="Enter name"
             autoFocus={!reference}
           />
-        </label>
 
-        {justSaved && (
-          <p className="rounded-[10px] bg-green-bg px-3 py-2 text-[12.5px] text-green">
-            Saved. Add its image and its handle below, then close.
-          </p>
-        )}
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            className={field}
+            placeholder="Add description"
+          />
 
-        <div className="rounded-[11px] border border-border bg-surface-2 p-3">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-text-muted">Category</span>
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as RefKind)}
+              className="rounded-[10px] border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-accent"
+            >
+              {PICKABLE_KINDS.map((k) => (
+                <option key={k.key} value={k.key}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-[11px] border border-border bg-surface-2 p-3">
+            <p className="mb-1 text-xs font-semibold text-text-muted">
+              Handle on the platform
+            </p>
+            <p className="mb-2.5 text-[11.5px] text-text-faint">
+              What a prompt calls this. It follows the name above, which is what
+              Higgsfield does too. Change it if the platform named it something
+              else: a prompt only resolves on an exact match.
+            </p>
+
+            {reference && reference.handles.length > 0 && (
+              <ul className="mb-2.5 grid gap-1">
+                {reference.handles.map((h) => (
+                  <li key={h.id} className="flex items-center gap-2 text-[12.5px]">
+                    <span className="text-text-faint">{h.platform}</span>
+                    <span className="font-mono text-accent">
+                      {displayHandle(h.handle)}
+                    </span>
+                    <button
+                      onClick={() =>
+                        start(async () => {
+                          const res = await deleteHandle(projectId, h.id);
+                          if (res?.error) toast(res.error, "error");
+                          else router.refresh();
+                        })
+                      }
+                      disabled={busy}
+                      className="ml-auto rounded-[7px] border border-border px-1.5 py-0.5 text-[11px] font-semibold text-text-muted transition hover:border-red hover:text-red"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="flex gap-2">
+              <select
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+                className="rounded-[10px] border border-border bg-surface px-2 py-2 text-[13px] outline-none focus:border-accent"
+              >
+                {HANDLE_PLATFORMS.map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+              <input
+                value={effectiveHandle}
+                onChange={(e) => {
+                  setHandleTouched(true);
+                  setHandle(e.target.value);
+                }}
+                className={`${field} font-mono text-[13px]`}
+                placeholder="Maya"
+              />
+              {reference && (
+                <Button
+                  variant="secondary"
+                  disabled={busy || !effectiveHandle.trim()}
+                  onClick={() =>
+                    start(async () => {
+                      const res = await saveHandle(
+                        projectId,
+                        reference.id,
+                        platform,
+                        effectiveHandle
+                      );
+                      if ("error" in res && res.error) toast(res.error, "error");
+                      else {
+                        setHandle("");
+                        setHandleTouched(false);
+                        router.refresh();
+                      }
+                    })
+                  }
+                >
+                  Add
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <details className="rounded-[11px] border border-border px-3 py-2">
+            <summary className="cursor-pointer text-xs font-semibold text-text-muted">
+              Prompt and notes
+            </summary>
+            <div className="mt-3 space-y-3">
+              <label className="block">
+                <span className="mb-1 flex items-center gap-2 text-xs font-semibold text-text-muted">
+                  Prompt
+                  {prompt.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard
+                          .writeText(prompt)
+                          .then(() => toast("Prompt copied.", "success"))
+                          .catch(() => toast("Could not copy.", "error"));
+                      }}
+                      className="rounded-[7px] border border-border px-1.5 py-0.5 text-[11px] font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+                    >
+                      Copy
+                    </button>
+                  )}
+                </span>
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  rows={3}
+                  className={field}
+                  placeholder="The prompt that generates this one, so it is not rewritten from memory next time."
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-text-muted">
+                  Notes
+                </span>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  className={field}
+                />
+              </label>
+              <label className="flex items-start gap-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={studioWide}
+                  onChange={(e) => setStudioWide(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Keep across projects
+                  <span className="block text-[11.5px] text-text-faint">
+                    For a mascot or spokesperson who comes back on the next job.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </details>
+        </div>
+
+        <div className="flex flex-col">
           {reference ? (
             <SheetStrip
               projectId={projectId}
@@ -501,196 +663,65 @@ function ReferenceModal({
               sheets={reference.sheets}
             />
           ) : (
-            <>
-              <p className="mb-1 text-xs font-semibold text-text-muted">Image</p>
-              <p className="text-[11.5px] text-text-faint">
-                Save first and the upload opens here. A file has to belong to
-                something.
-              </p>
-            </>
+            <div className="flex min-h-[220px] flex-1 flex-col items-center justify-center rounded-[13px] border-2 border-dashed border-border bg-surface-2 p-6 text-center">
+              <span className="mb-2 grid h-10 w-10 place-items-center rounded-full border border-border-strong text-lg text-text-faint">
+                +
+              </span>
+              <span className="font-display text-sm font-bold text-text-muted">
+                Upload media
+              </span>
+              <span className="mt-1 text-[11.5px] text-text-faint">
+                Save first and this opens. A file has to belong to something.
+              </span>
+            </div>
           )}
         </div>
+      </div>
 
-        <div className="rounded-[11px] border border-border bg-surface-2 p-3">
-          <p className="mb-1 text-xs font-semibold text-text-muted">Handle</p>
-          <p className="mb-2.5 text-[11.5px] text-text-faint">
-            The name the platform gave this when you uploaded it. Paste it rather
-            than retyping: the prompt only resolves on an exact match.
-          </p>
-          {reference && reference.handles.length > 0 && (
-            <ul className="mb-2.5 grid gap-1">
-              {reference.handles.map((h) => (
-                <li key={h.id} className="flex items-center gap-2 text-[12.5px]">
-                  <span className="text-text-faint">{h.platform}</span>
-                  <span className="font-mono text-accent">
-                    {displayHandle(h.handle)}
-                  </span>
-                  <button
-                    onClick={() =>
-                      start(async () => {
-                        const res = await deleteHandle(projectId, h.id);
-                        if (res?.error) toast(res.error, "error");
-                        else router.refresh();
-                      })
-                    }
-                    disabled={busy}
-                    className="ml-auto rounded-[7px] border border-border px-1.5 py-0.5 text-[11px] font-semibold text-text-muted transition hover:border-red hover:text-red"
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex gap-2">
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
-              className="rounded-[11px] border border-border bg-surface px-2 py-2 text-sm outline-none focus:border-accent"
-            >
-              {HANDLE_PLATFORMS.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
-            </select>
-            <input
-              value={handle}
-              onChange={(e) => setHandle(e.target.value)}
-              className={`${field} font-mono`}
-              placeholder="@Maya-LK01"
-            />
-            <Button
-              variant="secondary"
-              disabled={busy || !reference || !handle.trim()}
-              onClick={() =>
-                start(async () => {
-                  if (!reference) return;
-                  const res = await saveHandle(
-                    projectId,
-                    reference.id,
-                    platform,
-                    handle
-                  );
-                  if ("error" in res && res.error) toast(res.error, "error");
-                  else {
-                    setHandle("");
-                    router.refresh();
-                  }
-                })
-              }
-            >
-              Add
-            </Button>
-          </div>
-        </div>
+      {justSaved && (
+        <p className="mt-4 rounded-[10px] bg-green-bg px-3 py-2 text-[12.5px] text-green">
+          Saved{effectiveHandle.trim() ? ` as @${suggestedHandle(effectiveHandle)}` : ""}.
+          Drop its image in on the right, then close.
+        </p>
+      )}
 
-        <details className="rounded-[11px] border border-border px-3 py-2">
-          <summary className="cursor-pointer text-xs font-semibold text-text-muted">
-            Description, prompt and notes
-          </summary>
-          <div className="mt-3 space-y-3">
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-text-muted">
-                Description
-              </span>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={2}
-                className={field}
-                placeholder="The words a prompt falls back on when no handle exists."
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 flex items-center gap-2 text-xs font-semibold text-text-muted">
-                Prompt
-                {prompt.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void navigator.clipboard
-                        .writeText(prompt)
-                        .then(() => toast("Prompt copied.", "success"))
-                        .catch(() => toast("Could not copy.", "error"));
-                    }}
-                    className="rounded-[7px] border border-border px-1.5 py-0.5 text-[11px] font-semibold text-text-muted transition hover:border-accent hover:text-accent"
-                  >
-                    Copy
-                  </button>
-                )}
-              </span>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={3}
-                className={field}
-                placeholder="The prompt that generates this one, so it is not rewritten from memory next time."
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-text-muted">
-                Notes
-              </span>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                className={field}
-              />
-            </label>
-            <label className="flex items-start gap-2 text-[13px]">
-              <input
-                type="checkbox"
-                checked={studioWide}
-                onChange={(e) => setStudioWide(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span>
-                Keep across projects
-                <span className="block text-[11.5px] text-text-faint">
-                  For a mascot or spokesperson who comes back on the next job.
-                </span>
-              </span>
-            </label>
-          </div>
-        </details>
-
-        <div className="flex items-center gap-2 border-t border-border pt-3">
+      <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
+        <Button
+          onClick={submit}
+          disabled={busy || !name.trim() || (justSaved && !reference)}
+        >
+          {busy
+            ? "Saving..."
+            : justSaved && !reference
+              ? "Saved"
+              : reference
+                ? "Save changes"
+                : "Create"}
+        </Button>
+        <Button variant="ghost" onClick={onClose}>
+          {reference ? "Close" : "Cancel"}
+        </Button>
+        {reference && (
           <Button
-            onClick={submit}
-            disabled={busy || !name.trim() || (justSaved && !reference)}
+            variant="danger"
+            className="ml-auto"
+            disabled={busy}
+            onClick={() =>
+              start(async () => {
+                const res = await archiveReference(projectId, reference.id);
+                if (res?.error) toast(res.error, "error");
+                else onGone();
+              })
+            }
           >
-            {busy
-              ? "Saving..."
-              : justSaved && !reference
-                ? "Saved"
-                : reference
-                  ? "Save changes"
-                  : "Save"}
+            Remove
           </Button>
-          <Button variant="ghost" onClick={onClose}>
-            {reference ? "Close" : "Cancel"}
-          </Button>
-          {reference && (
-            <Button
-              variant="danger"
-              className="ml-auto"
-              disabled={busy}
-              onClick={() =>
-                start(async () => {
-                  const res = await archiveReference(projectId, reference.id);
-                  if (res?.error) toast(res.error, "error");
-                  else onGone();
-                })
-              }
-            >
-              Remove
-            </Button>
-          )}
-        </div>
+        )}
       </div>
     </Modal>
   );
 }
+
 
 function SheetStrip({
   projectId,
@@ -707,6 +738,7 @@ function SheetStrip({
   const [busy, setBusy] = useState(false);
   const [linking, setLinking] = useState(false);
   const [url, setUrl] = useState("");
+  const [over, setOver] = useState(false);
   const [, start] = useTransition();
 
   async function pick(files: FileList | null) {
@@ -751,7 +783,24 @@ function SheetStrip({
   }
 
   return (
-    <div>
+    <div
+      // Drag and drop, because that is how the platform's own dialog takes a
+      // file and because dragging a render straight out of a folder is the
+      // whole interaction here.
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        void pick(e.dataTransfer.files);
+      }}
+      className={`rounded-[13px] border-2 border-dashed p-3 transition ${
+        over ? "border-accent bg-accent-soft" : "border-border bg-surface-2"
+      }`}
+    >
       <p className="mb-2 text-xs font-semibold text-text-muted">Image</p>
       {sheets.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
@@ -783,7 +832,7 @@ function SheetStrip({
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] border border-border-strong bg-surface px-3 py-1.5 text-xs font-semibold transition hover:border-accent hover:text-accent">
-          {busy ? "Working..." : sheets.length ? "Add another" : "Upload"}
+          {busy ? "Working..." : sheets.length ? "Add another" : "Upload media"}
           <input
             type="file"
             accept="image/*"
@@ -803,6 +852,12 @@ function SheetStrip({
           {linking ? "Cancel" : "Paste a link"}
         </button>
       </div>
+
+      {!sheets.length && !linking && (
+        <p className="mt-2 text-[11.5px] text-text-faint">
+          Drag and drop, or click to upload.
+        </p>
+      )}
 
       {linking && (
         <div className="mt-2 flex flex-wrap gap-2">

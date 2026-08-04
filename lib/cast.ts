@@ -11,8 +11,16 @@
 // Pure module. No "use server", no Supabase imports, so the rules below can be
 // unit tested and used on both sides.
 
-/** A light label for grouping and colour. It carries NO behaviour. */
-export type RefKind = "character" | "element" | "location" | "crowd";
+/**
+ * A light label for grouping and colour. It carries NO behaviour.
+ *
+ * The set MIRRORS Higgsfield's own New Element dialog (Auto / Character /
+ * Location / Prop), deliberately. The operator names and categorises a thing
+ * once over there and once here; using a different vocabulary in the second
+ * place makes them translate for no reason. "Auto" means uncategorised: their
+ * server classifies from the image, we simply do not insist.
+ */
+export type RefKind = "auto" | "character" | "location" | "element" | "crowd";
 
 export const REF_KINDS: {
   key: RefKind;
@@ -20,20 +28,24 @@ export const REF_KINDS: {
   plural: string;
   hue: string;
   hint: string;
+  /** Shown in the category picker. `crowd` is legacy data only. */
+  pick: boolean;
 }[] = [
+  {
+    key: "auto",
+    label: "Auto",
+    plural: "Uncategorised",
+    hue: "cyan",
+    hint: "Not sorted yet",
+    pick: true,
+  },
   {
     key: "character",
     label: "Character",
     plural: "Characters",
     hue: "purple",
     hint: "A person the audience has to recognise",
-  },
-  {
-    key: "element",
-    label: "Element",
-    plural: "Elements",
-    hue: "blue",
-    hint: "Wardrobe, a prop, a product",
+    pick: true,
   },
   {
     key: "location",
@@ -41,6 +53,15 @@ export const REF_KINDS: {
     plural: "Locations",
     hue: "green",
     hint: "A place, or one state of it",
+    pick: true,
+  },
+  {
+    key: "element",
+    label: "Prop",
+    plural: "Props",
+    hue: "blue",
+    hint: "Wardrobe, a prop, a product",
+    pick: true,
   },
   {
     key: "crowd",
@@ -48,16 +69,34 @@ export const REF_KINDS: {
     plural: "Extras",
     hue: "amber",
     hint: "Background people",
+    pick: false,
   },
 ];
 
 export function refKind(value: string | null | undefined): RefKind {
   const found = REF_KINDS.find((k) => k.key === value);
-  return found ? found.key : "character";
+  return found ? found.key : "auto";
 }
 
 export function kindMeta(kind: string) {
   return REF_KINDS.find((k) => k.key === kind) ?? REF_KINDS[0];
+}
+
+/** The categories offered when creating. */
+export const PICKABLE_KINDS = REF_KINDS.filter((k) => k.pick);
+
+/**
+ * The handle a platform will most likely give this, from its name.
+ *
+ * Higgsfield derives an element's @name from what you type in its New Element
+ * dialog, normalising spaces to hyphens. So when the reference is named the
+ * same in both places, which is the sane way to work, the handle needs no
+ * separate typing at all. Offered as a default the operator can overwrite,
+ * never forced, because the platform is still the authority on what it called
+ * the thing.
+ */
+export function suggestedHandle(name: string): string {
+  return normalizeHandle(name);
 }
 
 /** Platforms that support named reference elements. */
