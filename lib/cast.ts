@@ -237,7 +237,14 @@ export function castWarnings(
     if (!meta.needsHandle) continue;
     if (e.sheets.length === 0) out.push({ kind: "no-sheet", entityId: e.id });
     if (platform) {
-      const has = e.handles.some((h) => h.platform === platform);
+      // A handle on a LOOK counts for the entity it belongs to. A location
+      // whose two variations are each uploaded separately never has an element
+      // of its own, and is always referenced through one of them, so demanding
+      // a handle on the bare entity would be a warning that can never be
+      // cleared: the same false-alarm problem that keeps extras exempt.
+      const has =
+        e.handles.some((h) => h.platform === platform) ||
+        e.looks.some((l) => l.handles.some((h) => h.platform === platform));
       if (!has) out.push({ kind: "no-handle", entityId: e.id, platform });
     }
   }
@@ -346,7 +353,10 @@ export function lintPrompt(
           handle: entityHandle.handle,
         });
       }
-    } else if (meta.needsHandle) {
+    } else if (meta.needsHandle && !lookHandle) {
+      // Only when the look does not speak for it either, for the same reason
+      // castWarnings accepts a look's handle: some entities are only ever
+      // referenced through one of their variations.
       issues.push({ kind: "no-handle", label: entity.name });
     }
 
