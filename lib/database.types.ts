@@ -3007,6 +3007,45 @@ export type Database = {
           },
         ];
       };
+      editor_handoffs: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          label: string | null;
+          created_by: string | null;
+          created_at: string;
+          revoked_at: string | null;
+          last_viewed_at: string | null;
+          view_count: number;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          label?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          view_count?: number;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          token?: string;
+          label?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          view_count?: number;
+        };
+        Relationships: [];
+      };
       email_accounts: {
         Row: {
           id: string;

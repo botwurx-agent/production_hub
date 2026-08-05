@@ -29,6 +29,7 @@ import { TriageView } from "@/components/production/triage-view";
 import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
 import { PromptCastBar } from "@/components/production/prompt-cast-bar";
 import { ShareDocButton } from "@/components/review/share-doc-button";
+import { EditorHandoffButton } from "@/components/production/editor-handoff-button";
 import { insertToken } from "@/lib/caret";
 import type { CastReference, CastUse } from "@/lib/cast";
 import { MasterCutBand } from "@/components/production/master-cut-band";
@@ -1016,7 +1017,8 @@ function SequenceStrip({
         {/* The ORDER is its own reviewable document. A client asking for shots
             to be rearranged is not reviewing any single shot, and the per-shot
             review could never answer them. */}
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-2">
+          <EditorHandoffButton projectId={projectId} />
           <ShareDocButton projectId={projectId} kind="sequence" targetId={projectId} />
         </span>
       </div>

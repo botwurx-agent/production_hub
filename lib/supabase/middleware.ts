@@ -15,6 +15,7 @@ const PUBLIC_PATHS = [
   "/b",
   "/c",
   "/p",
+  "/h",
   "/invite",
   "/project-invite",
   "/api/cron",
