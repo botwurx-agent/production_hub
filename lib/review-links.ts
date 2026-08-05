@@ -199,14 +199,20 @@ export async function gatherReview(
 // A link can target a whole doc surface instead of an asset version. The client
 // sees a read-only render of the live doc and drops the same numbered pins.
 
-export type DocKind = "shot_list" | "storyboard" | "moodboard" | "ai_shot";
+export type DocKind =
+  | "shot_list"
+  | "storyboard"
+  | "moodboard"
+  | "ai_shot"
+  | "sequence";
 
 export function isDocKind(v: string | null | undefined): v is DocKind {
   return (
     v === "shot_list" ||
     v === "storyboard" ||
     v === "moodboard" ||
-    v === "ai_shot"
+    v === "ai_shot" ||
+    v === "sequence"
   );
 }
 
@@ -274,7 +280,28 @@ export type DocSurface =
       frames: DocShotMedia[]; // start + end (images): reference + pin fallback
       take: DocShotMedia | null; // the picked take (usually video)
       takeVideoUrl: string | null; // playable take video -> timecode review
+    }
+  | {
+      /**
+       * The whole cut order. What a client is actually reviewing when they ask
+       * for shots to be rearranged: each shot in position, showing its picked
+       * take where one exists, so the order can be read at a glance.
+       */
+      kind: "sequence";
+      shots: DocSequenceShot[];
     };
+
+export type DocSequenceShot = {
+  id: string;
+  position: number;
+  title: string;
+  beat: string | null;
+  /** Still to show: the take's poster, else the start frame. */
+  posterUrl: string | null;
+  /** Playable take, when there is one. */
+  videoUrl: string | null;
+  isVideo: boolean;
+};
 
 export type DocReviewData = {
   studioName: string;
@@ -374,6 +401,65 @@ export async function loadDocSurface(
         })),
       },
       docTitle: board?.title || "Shot list",
+    };
+  }
+
+  if (kind === "sequence") {
+    // target_id = the project. A project has exactly one sequence, the same way
+    // it has exactly one shot list.
+    const { data: shots } = await client
+      .from("ai_shots")
+      .select("id, position, title, beat")
+      .eq("project_id", targetId)
+      .order("position", { ascending: true });
+    if (!shots || shots.length === 0) return null;
+
+    const { data: gens } = await client
+      .from("ai_generations")
+      .select("id, shot_id, role, kind, stage, file_path, external_url, thumb_url")
+      .in(
+        "shot_id",
+        shots.map((s) => s.id)
+      )
+      .not("role", "is", null);
+
+    const rows = gens ?? [];
+    const signed = await signPaths(
+      client,
+      rows.map((g) => g.file_path as string).filter(Boolean)
+    );
+
+    const seqShots: DocSequenceShot[] = shots.map((s, i) => {
+      const mine = rows.filter((g) => g.shot_id === s.id);
+      const take =
+        mine.find((g) => g.role === "take" || g.role === "final") ?? null;
+      const start = mine.find((g) => g.role === "start") ?? null;
+      const pick = take ?? start;
+      const isVideo =
+        Boolean(take) && (take!.kind === "video" || take!.stage === "video");
+      const file = pick?.file_path ? signed.get(pick.file_path) ?? null : null;
+      // A video's poster is its thumb; a still is the image itself. Falling
+      // back to the start frame means a shot with no take still READS in the
+      // order, which is the whole point of sending this.
+      const posterUrl = isVideo
+        ? pick?.thumb_url ?? null
+        : file ?? pick?.external_url ?? null;
+      const takeFile = take?.file_path ? signed.get(take.file_path) ?? null : null;
+      return {
+        id: s.id,
+        position: i + 1,
+        title: s.title || `Shot ${i + 1}`,
+        beat: s.beat,
+        posterUrl,
+        // Only a stored file plays in a <video>; a share-page URL will not.
+        videoUrl: isVideo ? takeFile : null,
+        isVideo,
+      };
+    });
+
+    return {
+      surface: { kind: "sequence", shots: seqShots },
+      docTitle: "Sequence",
     };
   }
 

@@ -69,14 +69,15 @@ export async function createReviewLink(
 // (target = boards.id). Verifies the target belongs to this project + studio.
 export async function createDocReviewLink(
   projectId: string,
-  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot",
+  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot" | "sequence",
   targetId: string
 ): Promise<{ token: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
 
-  if (kind === "shot_list") {
-    if (targetId !== projectId) return { error: "Invalid shot list target." };
+  if (kind === "shot_list" || kind === "sequence") {
+    // Both belong to the project itself: one shot list, one sequence.
+    if (targetId !== projectId) return { error: "Invalid target." };
     const { data: project } = await supabase
       .from("projects")
       .select("id")
@@ -132,7 +133,7 @@ export async function createDocReviewLink(
 // creates or reuses the /r/<token> link, then sends it. Gated on emailConfigured().
 export async function emailDocReviewLink(
   projectId: string,
-  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot",
+  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot" | "sequence",
   targetId: string,
   input: { to: string; subject: string; message?: string; dueDate?: string }
 ): Promise<{ ok: true } | { error: string }> {

@@ -3812,7 +3812,8 @@ export type Database = {
         | "shot_list"
         | "storyboard"
         | "moodboard"
-        | "ai_shot";
+        | "ai_shot"
+        | "sequence";
       asset_status:
         | "draft"
         | "in_review"

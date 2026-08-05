@@ -28,6 +28,7 @@ import { ScriptEditor } from "@/components/production/script-editor";
 import { TriageView } from "@/components/production/triage-view";
 import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
 import { PromptCastBar } from "@/components/production/prompt-cast-bar";
+import { ShareDocButton } from "@/components/review/share-doc-button";
 import { insertToken } from "@/lib/caret";
 import type { CastReference, CastUse } from "@/lib/cast";
 import { MasterCutBand } from "@/components/production/master-cut-band";
@@ -972,8 +973,9 @@ function StagePanel({
 // ---- Sequence strip (all shots at once, drag to reorder) --------------------
 
 function SequenceStrip({
-  shots, thumbs, activeId, onSelect, onReorder,
+  projectId, shots, thumbs, activeId, onSelect, onReorder,
 }: {
+  projectId: string;
   shots: AiShot[];
   thumbs: Map<string, { url: string; kind: string } | null>;
   activeId: string | null;
@@ -1011,6 +1013,12 @@ function SequenceStrip({
       <div className="mb-2 flex items-center gap-2">
         <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Sequence</span>
         <span className="text-xs text-text-faint">{shots.length} shot{shots.length === 1 ? "" : "s"} · drag to reorder</span>
+        {/* The ORDER is its own reviewable document. A client asking for shots
+            to be rearranged is not reviewing any single shot, and the per-shot
+            review could never answer them. */}
+        <span className="ml-auto">
+          <ShareDocButton projectId={projectId} kind="sequence" targetId={projectId} />
+        </span>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {order.map((id, i) => {
@@ -1348,6 +1356,7 @@ export function PipelineWorkspace({
       {/* Sequence: all shots at once */}
       {shots.length > 0 && (
         <SequenceStrip
+          projectId={projectId}
           shots={displayShots}
           thumbs={shotThumb}
           activeId={activeId}

@@ -13,7 +13,83 @@ export function DocSurfaceView({ surface }: { surface: DocSurface }) {
   if (surface.kind === "shot_list") return <ShotListSurface surface={surface} />;
   if (surface.kind === "storyboard") return <StoryboardSurface surface={surface} />;
   if (surface.kind === "ai_shot") return <AiShotSurface surface={surface} />;
+  if (surface.kind === "sequence") return <SequenceSurface surface={surface} />;
   return <MoodboardSurface surface={surface} />;
+}
+
+/**
+ * The cut order, as the client reads it.
+ *
+ * Numbered and in a single column rather than a grid, because the question
+ * being asked is "does this order work", and a grid invites reading across
+ * rows. Each shot plays where a take exists, so the client is judging the real
+ * thing rather than a contact sheet, and a shot with no take still holds its
+ * place with its start frame: a gap in the order would misrepresent the cut.
+ */
+function SequenceSurface({
+  surface,
+}: {
+  surface: Extract<DocSurface, { kind: "sequence" }>;
+}) {
+  return (
+    <div className="w-full rounded-[12px] bg-surface p-4 text-text sm:p-6">
+      <div className="mb-5 border-b border-border pb-4">
+        <h2 className="font-display text-xl font-extrabold tracking-tight">
+          Sequence
+        </h2>
+        <p className="mt-0.5 text-sm text-text-muted">
+          {surface.shots.length} shot{surface.shots.length === 1 ? "" : "s"}, in
+          order. Comment on any shot to say where it should sit.
+        </p>
+      </div>
+
+      <ol className="grid gap-4">
+        {surface.shots.map((shot) => (
+          <li
+            key={shot.id}
+            className="grid gap-3 rounded-[12px] border border-border p-3 sm:grid-cols-[220px_1fr]"
+          >
+            <div className="overflow-hidden rounded-[9px] bg-surface-2">
+              {shot.videoUrl ? (
+                <video
+                  src={shot.videoUrl}
+                  poster={shot.posterUrl ?? undefined}
+                  controls
+                  preload="metadata"
+                  className="aspect-video w-full object-contain"
+                />
+              ) : shot.posterUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={shot.posterUrl}
+                  alt=""
+                  className="aspect-video w-full object-cover"
+                />
+              ) : (
+                <div className="grid aspect-video w-full place-items-center text-[11.5px] text-text-faint">
+                  Nothing picked yet
+                </div>
+              )}
+            </div>
+
+            <div className="min-w-0">
+              <span className={`${shotChip} bg-surface-2 text-text-muted`}>
+                {shot.position}
+              </span>
+              <h3 className="mt-1.5 font-display text-[15px] font-bold">
+                {shot.title}
+              </h3>
+              {shot.beat && (
+                <p className="mt-1 whitespace-pre-wrap text-[13px] text-text-muted">
+                  {shot.beat}
+                </p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 function AiShotSurface({
