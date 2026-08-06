@@ -27,7 +27,7 @@ import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
 import { TriageView } from "@/components/production/triage-view";
 import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
-import { PromptCastBar } from "@/components/production/prompt-cast-bar";
+import { ShotReferences, type LooseRef } from "@/components/production/shot-references";
 import { ShareDocButton } from "@/components/review/share-doc-button";
 import { EditorHandoffButton } from "@/components/production/editor-handoff-button";
 import { insertToken } from "@/lib/caret";
@@ -759,62 +759,6 @@ function AddRefModal({
   );
 }
 
-function ReferencesPanel({
-  projectId, studioId, shot, stage, refs, media, onRun,
-}: {
-  projectId: string; studioId: string; shot: AiShot; stage: Stage;
-  refs: AiGeneration[]; media: Record<string, string>;
-  onRun: (fn: () => Promise<unknown>) => void;
-}) {
-  const [adding, setAdding] = useState(false);
-  const srcOf = (g: AiGeneration) => media[g.id] ?? g.external_url ?? null;
-  return (
-    <div className="mb-3 rounded-[12px] border border-dashed border-border p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-          References{" "}
-          <span className="font-normal normal-case text-text-faint">
-            {stage === "image"
-              ? "— characters, styles & elements used in these images"
-              : "— what this shot generates from (v2v)"}
-          </span>
-        </p>
-        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>+ Reference</Button>
-      </div>
-      {refs.length === 0 ? (
-        <p className="text-xs text-text-faint">
-          {stage === "image"
-            ? "None yet. Add a character, style, or element reference for this shot."
-            : "None yet. Add a driving/style/character clip for video-to-video."}
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {refs.map((g) => {
-            const src = srcOf(g);
-            return (
-              <div key={g.id} className="overflow-hidden rounded-[10px] border border-border">
-                <div className="relative" style={{ aspectRatio: "16/9", background: gradFor(g.id) }}>
-                  {src && (g.kind === "video"
-                    ? <video src={src} muted className="absolute inset-0 h-full w-full object-cover" />
-                    // eslint-disable-next-line @next/next/no-img-element
-                    : <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />)}
-                  <span className="absolute left-1 top-1 rounded-[4px] bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-white">
-                    {g.role || "ref"}
-                  </span>
-                  <button onClick={() => onRun(() => deleteGeneration(projectId, g.id))}
-                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-xs text-white transition hover:bg-red"
-                    title="Remove reference" aria-label="Remove reference">×</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {adding && <AddRefModal projectId={projectId} studioId={studioId} shot={shot} stage={stage} onClose={() => setAdding(false)} />}
-    </div>
-  );
-}
-
 function StagePanel({
   projectId, studioId, shot, stage, prompt, gens, media, library, reviews, refStartId, refEndId, onRun,
   canSeeCost, allRefs, usedRefs,
@@ -835,6 +779,9 @@ function StagePanel({
   const [pText, setPText] = useState(prompt?.text ?? "");
   const [pModel, setPModel] = useState(prompt?.target_model ?? "");
   const [adding, setAdding] = useState(false);
+  // Separate from `adding`, which opens the CANDIDATE dialog. Sharing one flag
+  // would have made "+ Image" in the reference panel add a candidate instead.
+  const [addingRef, setAddingRef] = useState(false);
   const [triaging, setTriaging] = useState(false);
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
   const label = stage === "image" ? "Image" : "Video";
@@ -860,26 +807,36 @@ function StagePanel({
         <span className="text-xs text-text-faint">{kept} kept · {pool.length} total</span>
       </div>
 
-      <ReferencesPanel projectId={projectId} studioId={studioId} shot={shot} stage={stage} refs={refs} media={media} onRun={onRun} />
 
+      {/* ONE reference area, sitting directly above the prompt it feeds. The
+          stage used to carry two: a per-stage image panel and a separate cast
+          chip row, which is one more than the platform has. */}
+      <ShotReferences
+        projectId={projectId}
+        shotId={shot.id}
+        library={allRefs}
+        used={usedRefs}
+        loose={refs.map((g): LooseRef => ({
+          id: g.id,
+          role: g.role,
+          kind: g.kind,
+          src: media[g.id] ?? g.external_url ?? null,
+        }))}
+        text={pText}
+        onInsert={(token) => {
+          insertToken(promptRef.current, pText, token, (next) => {
+            setPText(next);
+            savePrompt(projectId, shot.id, stage, { text: next }).then(() => router.refresh());
+          });
+        }}
+        onAddImage={() => setAddingRef(true)}
+        onRemoveLoose={(id) => onRun(() => deleteGeneration(projectId, id))}
+      />
 
       <div className="mb-3 space-y-2">
         <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
           Working prompt <span className="font-normal normal-case text-text-faint">· pre-fills each new batch; the exact prompt is saved on every generation</span>
         </label>
-        <PromptCastBar
-          projectId={projectId}
-          shotId={shot.id}
-          all={allRefs}
-          used={usedRefs}
-          text={pText}
-          onInsert={(token) => {
-            insertToken(promptRef.current, pText, token, (next) => {
-              setPText(next);
-              savePrompt(projectId, shot.id, stage, { text: next }).then(() => router.refresh());
-            });
-          }}
-        />
         <textarea ref={promptRef} value={pText} onChange={(e) => setPText(e.target.value)}
           onBlur={() => { savePrompt(projectId, shot.id, stage, { text: pText }).then(() => router.refresh()); }}
           rows={2} placeholder={`Base ${label.toLowerCase()} prompt…`} className={field} />
@@ -962,6 +919,10 @@ function StagePanel({
         <AddGenModal canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={shot} stage={stage}
           promptId={prompt?.id ?? null} basePrompt={pText} refStartId={refStartId} refEndId={refEndId}
           onClose={() => setAdding(false)} />
+      )}
+      {addingRef && (
+        <AddRefModal projectId={projectId} studioId={studioId} shot={shot} stage={stage}
+          onClose={() => setAddingRef(false)} />
       )}
       {triaging && (
         <TriageView projectId={projectId} stage={stage} shotId={shot.id}

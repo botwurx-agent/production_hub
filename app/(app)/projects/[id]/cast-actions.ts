@@ -315,3 +315,80 @@ export async function deleteSheet(projectId: string, generationId: string) {
   rp(projectId);
   return {};
 }
+
+/**
+ * Turn a loose image reference into a named element.
+ *
+ * This is the move Higgsfield itself supports and the reason the two things
+ * were never really separate: you feed an image into a shot, it works, and then
+ * you save it so every later prompt can call it by name. Before this, doing that
+ * here meant re-uploading the same file on another page.
+ *
+ * The generation is NOT moved. A new reference row points at the same stored
+ * file, so the shot keeps the input it was built from and the library gets its
+ * own copy of the record. Storage holds one blob either way.
+ */
+export async function promoteToReference(
+  projectId: string,
+  generationId: string,
+  input: { name: string; kind: string; platform: string; handle: string }
+) {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const name = input.name.trim();
+  if (!name) return { error: "Give it a name." };
+
+  const { data: gen } = await supabase
+    .from("ai_generations")
+    .select("id, file_path, external_url, platform, shot_id")
+    .eq("id", generationId)
+    .maybeSingle();
+  if (!gen) return { error: "That image was not found." };
+
+  const created = await saveReference(projectId, null, {
+    kind: input.kind,
+    name,
+    description: null,
+    notes: null,
+    prompt: null,
+    studioWide: false,
+  });
+  if ("error" in created && created.error) return { error: created.error };
+  const refId = "id" in created ? created.id : null;
+  if (!refId) return { error: "Could not save that." };
+
+  const { error: sheetError } = await supabase.from("ai_generations").insert({
+    studio_id: ctx.studio.id,
+    shot_id: null,
+    entity_id: refId,
+    look_id: null,
+    stage: "image",
+    kind: "image",
+    status: "reference",
+    file_path: gen.file_path,
+    external_url: gen.external_url,
+    platform: gen.platform,
+    generated_by: ctx.userId,
+  });
+  if (sheetError) reportError("promoteToReference:sheet", { error: sheetError, projectId });
+
+  const handle = input.handle.trim();
+  if (handle) {
+    const h = await saveHandle(projectId, refId, input.platform, handle);
+    if ("error" in h && h.error) return { id: refId, warning: h.error };
+  }
+
+  // It is already in this shot: that is where it was being used.
+  if (gen.shot_id) {
+    await supabase
+      .from("ai_shot_cast")
+      .upsert(
+        { studio_id: ctx.studio.id, shot_id: gen.shot_id, entity_id: refId },
+        { onConflict: "shot_id,entity_id" }
+      );
+  }
+
+  rp(projectId);
+  return { id: refId };
+}
