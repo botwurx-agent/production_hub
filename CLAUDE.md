@@ -2350,10 +2350,17 @@ Shot cockpit / Triage) was shown to the operator.
     prompt-cast-bar.tsx: chips insert the handle at the caret, "+ References"
     opens a checkbox picker, a platform selector persists in localStorage). That
     ordering is the single biggest thing the rework fixed: data entry used to
-    live on a page you had to know to visit first. /projects/[id]/cast is now a
-    flat grid of reference cards plus a READ-ONLY usage map (dots, not
-    dropdowns), and its modal mirrors Higgsfield's New Element dialog field for
-    field. Actions in cast-actions.ts: saveReference / archiveReference /
+    live on a page you had to know to visit first. /projects/[id]/elements is a
+    flat grid of element cards plus a READ-ONLY usage map (dots, not dropdowns),
+    and its modal mirrors Higgsfield's New Element dialog field for field.
+    VOCABULARY, settled 2026-08-04 and matching the platform exactly: an
+    ELEMENT is saved, named and carries an @handle (the library page, and the
+    top row of a shot's "Built from" panel); a REFERENCE is a one-off image fed
+    into one shot with no handle (the bottom row). A reference is promoted with
+    "Save as element" (promoteToReference), which is the move Higgsfield itself
+    supports and the reason they were never really two systems. Do not
+    reintroduce a third word: the page was briefly called References while the
+    shot panel called the same objects Elements, and the route was /cast. Actions in cast-actions.ts: saveReference / archiveReference /
     saveHandle / deleteHandle / setShotReference / addSheet / addSheetFromLink
     (link import reuses lib/media-import fetchMediaFromUrl, SSRF-guarded) /
     deleteSheet.

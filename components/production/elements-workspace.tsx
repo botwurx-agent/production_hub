@@ -81,7 +81,7 @@ const KIND_ICONS: Record<RefKind, ReactNode> = {
  * you are already working. The map at the bottom of this page is a read-only
  * view of that.
  */
-export function CastWorkspace({
+export function ElementsWorkspace({
   projectId,
   studioId,
   references,
@@ -138,16 +138,16 @@ export function CastWorkspace({
         <Card className="p-6">
           <EmptyState
             hue="purple"
-            title="No references yet"
-            description="The images a generation is built from: a character, wardrobe, a prop, a place. Each one carries the handle its platform gave it, so a prompt resolves the same way every time."
+            title="No elements yet"
+            description="A saved, named image you can call by handle in any prompt: a character, wardrobe, a prop, a place. The same thing Higgsfield calls an element."
             steps={[
               {
-                title: "Add a reference",
+                title: "Add an element",
                 text: "Its image, and the handle the platform gave it.",
               },
               {
                 title: "Use it on a shot",
-                text: "Pick which references a shot uses, in the pipeline.",
+                text: "Pick which elements a shot uses, in the pipeline.",
               },
               {
                 title: "Write the prompt",
@@ -179,7 +179,7 @@ export function CastWorkspace({
     <div className="space-y-6">
       <Card className="p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h2 className="font-display text-sm font-bold">References</h2>
+          <h2 className="font-display text-sm font-bold">Elements</h2>
           <span className="text-xs text-text-faint">
             {references.length} in this job
           </span>
@@ -336,7 +336,7 @@ function UsageMap({
           <thead>
             <tr>
               <th className="sticky left-0 z-10 min-w-[190px] border-b border-r border-border bg-surface-2 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-text-faint">
-                Reference
+                Element
               </th>
               {shots.map((s, i) => (
                 <th
@@ -473,7 +473,7 @@ function ReferenceModal({
     <Modal
       open
       onClose={onClose}
-      title={reference ? reference.name : "New reference"}
+      title={reference ? reference.name : "New element"}
       size="xl"
     >
       {/* Laid out like Higgsfield's own New Element dialog: the details on the

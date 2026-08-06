@@ -17,7 +17,7 @@ function safeName(name: string): string {
 }
 
 function rp(projectId: string) {
-  revalidatePath(`/projects/${projectId}/cast`);
+  revalidatePath(`/projects/${projectId}/elements`);
   revalidatePath(`/projects/${projectId}/pipeline`);
 }
 

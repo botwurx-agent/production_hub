@@ -188,7 +188,7 @@ export function ShotReferences({
         <div className="mb-3 rounded-[11px] border border-border bg-surface-2 p-2.5">
           {library.length === 0 ? (
             <p className="text-[12px] text-text-faint">
-              No elements saved yet. Add one on the References page, or save a
+              No elements saved yet. Add one on the Elements page, or save a
               reference below as an element.
             </p>
           ) : (
