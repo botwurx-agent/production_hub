@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { assetStorage } from "@/lib/asset-storage";
-import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import { requireStudioContext } from "@/lib/studio";
 import type { Board } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
@@ -12,10 +10,6 @@ export type StoryboardState = { error?: string } | null;
 
 function rp(projectId: string) {
   revalidatePath(`/projects/${projectId}/storyboards`);
-}
-
-function safeName(name: string): string {
-  return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "image";
 }
 
 // A storyboard is a boards row (kind='storyboard') scoped to the project.
@@ -223,50 +217,46 @@ export async function restoreStoryboard(
   return null;
 }
 
-export async function uploadFrameImage(
-  formData: FormData
+/**
+ * Record a frame image that the browser has ALREADY put in storage.
+ *
+ * This replaced an action that took the file itself. A storyboard frame is
+ * routinely a 6-12MB export, and bytes through a Server Action cross the ~4.5MB
+ * serverless request body: over that the request dies at the platform EDGE, so
+ * the size check inside the old action could never run for the case it existed
+ * to catch. The click appeared to do nothing, the transition never settled, and
+ * every button on the frame stayed disabled. That is the freeze a producer hit
+ * on his first upload.
+ *
+ * The bytes now go straight to storage through a server-minted signed URL, the
+ * same path asset versions use, so there is no ceiling to explain.
+ */
+export async function setFrameImage(
+  projectId: string,
+  frameId: string,
+  storagePath: string,
+  mimeType: string | null,
+  imageName: string | null
 ): Promise<StoryboardState> {
-  const ctx = await requireStudioContext();
-  const projectId = String(formData.get("projectId") ?? "");
-  const frameId = String(formData.get("frameId") ?? "");
-  const file = formData.get("file");
-  if (!projectId || !frameId || !(file instanceof File) || file.size === 0) {
-    return { error: "Missing image." };
-  }
-  // These bytes cross a Server Action, so the ~4.5MB serverless request body is
-  // the ceiling. Past it the request dies at the platform edge before this runs
-  // and the click just appears to do nothing, so the cap has to be under it for
-  // the failure to be explainable.
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return {
-      error: `That image is ${formatBytes(file.size)}, over the ${formatBytes(
-        MAX_UPLOAD_BYTES
-      )} upload limit. Export it smaller and try again.`,
-    };
-  }
+  await requireStudioContext();
   const supabase = createClient();
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const path = `${ctx.studio.id}/storyboard/${projectId}/${crypto.randomUUID()}-${safeName(file.name)}`;
-  const { error: upErr } = await assetStorage()
-    .upload(path, bytes, { contentType: file.type || undefined, upsert: false });
-  if (upErr) return { error: upErr.message };
-  await logWrite(
-    "uploadFrameImage/storyboard_frames",
+  const { error } = await logWrite(
+    "setFrameImage/storyboard_frames",
     supabase
       .from("storyboard_frames")
       .update({
         asset_id: null,
-        storage_path: path,
-        mime_type: file.type || null,
-        image_name: file.name,
+        storage_path: storagePath,
+        mime_type: mimeType,
+        image_name: imageName,
       })
       .eq("id", frameId)
   );
+  if (error) return { error: "Could not attach that image." };
   rp(projectId);
   return null;
 }
 
-// Attach a project asset's current image to a frame.
 export async function setFrameAsset(
   projectId: string,
   frameId: string,

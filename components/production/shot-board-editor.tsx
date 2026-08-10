@@ -14,13 +14,14 @@ import {
   deleteCard,
   duplicateCard,
   moveCard,
-  uploadCardImage,
+  setCardImage,
   setCardAsset,
   clearCardAsset,
   restoreShotBoard,
 } from "@/app/(app)/projects/[id]/production/board-actions";
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
+import { uploadAssetFile } from "@/components/projects/upload-file";
 import { DocReviewButton } from "@/components/review/doc-review-button";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -606,14 +607,31 @@ function ShotRow({
   const rowHue = "indigo";
 
   function upload(files: FileList | null) {
-    if (!files?.[0]) return;
-    const fd = new FormData();
-    fd.set("projectId", projectId);
-    fd.set("cardId", card.id);
-    fd.set("file", files[0]);
+    const file = files?.[0];
+    if (!file) return;
     startUpload(async () => {
-      await uploadCardImage(fd);
-      onChange();
+      try {
+        // Direct to storage via a server-minted signed URL, so a full-size
+        // frame is not bounded by the Server Action request body.
+        const up = await uploadAssetFile({ studioId: "", projectId, file });
+        const res = await setCardImage(
+          projectId,
+          card.id,
+          up.storagePath,
+          up.mimeType || null,
+          file.name
+        );
+        if (res?.error) {
+          toast(res.error, "error");
+          return;
+        }
+        onChange();
+      } catch (e) {
+        toast(
+          e instanceof Error ? e.message : "That image could not be uploaded.",
+          "error"
+        );
+      }
     });
   }
 

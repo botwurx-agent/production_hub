@@ -13,13 +13,14 @@ import {
   updateFrame,
   deleteFrame,
   swapFrames,
-  uploadFrameImage,
+  setFrameImage,
   setFrameAsset,
   clearFrameImage,
   restoreStoryboard,
 } from "@/app/(app)/projects/[id]/storyboard-actions";
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
+import { uploadAssetFile } from "@/components/projects/upload-file";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -364,14 +365,40 @@ function FrameCard({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   function upload(files: FileList | null) {
-    if (!files?.[0]) return;
-    const fd = new FormData();
-    fd.set("projectId", projectId);
-    fd.set("frameId", frame.id);
-    fd.set("file", files[0]);
+    // Copy off the FileList before anything can clear the input: it is a live
+    // view of the input's selection, not an array.
+    const file = files?.[0];
+    if (!file) return;
     startUpload(async () => {
-      await uploadFrameImage(fd);
-      onChange();
+      try {
+        // Straight to storage through a server-minted signed URL. The previous
+        // version sent the bytes through a Server Action, which put a 4.5MB
+        // platform ceiling on a storyboard frame: a normal camera JPG died at
+        // the edge, the promise never settled, and every button on the frame
+        // stayed disabled. It read as the app freezing.
+        // studioId is vestigial in this helper: the server picks the path so
+        // the browser cannot choose which studio folder it writes into.
+        const up = await uploadAssetFile({ studioId: "", projectId, file });
+        const res = await setFrameImage(
+          projectId,
+          frame.id,
+          up.storagePath,
+          up.mimeType || null,
+          file.name
+        );
+        if (res?.error) {
+          toast(res.error, "error");
+          return;
+        }
+        onChange();
+      } catch (e) {
+        // Anything that goes wrong now SAYS so. Swallowing this is what turned
+        // a failed upload into a frozen page.
+        toast(
+          e instanceof Error ? e.message : "That image could not be uploaded.",
+          "error"
+        );
+      }
     });
   }
   function chooseAsset(assetId: string) {

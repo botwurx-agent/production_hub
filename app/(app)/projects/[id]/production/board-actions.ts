@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { assetStorage } from "@/lib/asset-storage";
-import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite } from "@/lib/log";
 
@@ -542,44 +540,34 @@ export async function swapCards(
   rp(projectId);
 }
 
-function safeName(name: string): string {
-  return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "image";
-}
-
-export async function uploadCardImage(formData: FormData): Promise<BoardActionState> {
-  const ctx = await requireStudioContext();
-  const projectId = String(formData.get("projectId") ?? "");
-  const cardId = String(formData.get("cardId") ?? "");
-  const file = formData.get("file");
-  if (!projectId || !cardId || !(file instanceof File) || file.size === 0) {
-    return { error: "Missing image." };
-  }
-  // These bytes cross a Server Action, so the ~4.5MB serverless request body is
-  // the ceiling. Past it the request dies at the platform edge before this runs
-  // and the click just appears to do nothing, so the cap has to be under it for
-  // the failure to be explainable.
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return {
-      error: `That image is ${formatBytes(file.size)}, over the ${formatBytes(
-        MAX_UPLOAD_BYTES
-      )} upload limit. Export it smaller and try again.`,
-    };
-  }
+/**
+ * Record a shot image the browser has ALREADY put in storage.
+ *
+ * Replaced an action that carried the file. A director's frame is routinely
+ * bigger than the ~4.5MB serverless request body, and past that the request
+ * dies at the platform EDGE, so the size check below it never ran for the case
+ * it existed to catch: the click did nothing, the transition never settled, and
+ * the row's buttons stayed disabled. Same defect a producer hit on the
+ * storyboard; fixed the same way.
+ */
+export async function setCardImage(
+  projectId: string,
+  cardId: string,
+  storagePath: string,
+  mimeType: string | null,
+  imageName: string | null
+): Promise<BoardActionState> {
+  await requireStudioContext();
   const supabase = createClient();
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const path = `${ctx.studio.id}/shotboard/${projectId}/${crypto.randomUUID()}-${safeName(file.name)}`;
-  const { error: upErr } = await assetStorage()
-    .upload(path, bytes, { contentType: file.type || undefined, upsert: false });
-  if (upErr) return { error: upErr.message };
   const { error } = await supabase
     .from("shot_cards")
     .update({
-      storage_path: path,
-      mime_type: file.type || null,
-      image_name: file.name,
+      storage_path: storagePath,
+      mime_type: mimeType,
+      image_name: imageName,
     })
     .eq("id", cardId);
-  if (error) return { error: error.message };
+  if (error) return { error: "Could not attach that image." };
   rp(projectId);
   return null;
 }
