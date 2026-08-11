@@ -553,7 +553,11 @@ export default async function ProjectDetailPage({
               </HubCard>
             )}
 
-            {(isAiVideo || project.project_type === "cgi_vfx") && (
+            {/* ai_video ONLY, matching the AI Pipeline card above. Elements
+                earn their keep next to the pipeline's prompt bar, where a
+                handle gets inserted; cgi_vfx used to see this card without the
+                pipeline, so it was a library with nothing to spend it on. */}
+            {isAiVideo && (
               <HubCard
                 href={`/projects/${project.id}/elements`}
                 hue="purple"

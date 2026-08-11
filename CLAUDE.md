@@ -2367,6 +2367,12 @@ Shot cockpit / Triage) was shown to the operator.
     LOST DELIBERATELY: asking which shots a single garment appears in
     independently of the outfit. Real, but it can return as optional GROUPING on
     top of references rather than as a concept nobody can avoid on day one.
+    GATING: the hub card is ai_video ONLY (2026-08-04), matching the AI
+    Pipeline card. It briefly also showed for cgi_vfx on the theory that a CG
+    job has the same continuity problem, which is true but beside the point:
+    elements are spent in the pipeline's prompt bar, and a cgi_vfx project has
+    no pipeline, so it was a library with nothing to use it on. The route is not
+    hard-blocked, per the standing project_type convention.
     WANTED: this on a LIVE-ACTION shoot (operator, 2026-08-03). Wardrobe and set
     continuity is a real discipline with no AI in it, and references + the usage
     map already fit. What must not come along is the handle machinery, so the
