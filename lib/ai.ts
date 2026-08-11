@@ -5,6 +5,8 @@
 // aiConfigured() and show an "add a key" prompt until one is set.
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { parseShotDocDraft, type ShotDocDraft } from "@/lib/shot-doc";
+export type { ShotDocDraft, ShotDocRow, ShotDocPage } from "@/lib/shot-doc";
 
 export const ANTHROPIC_MODEL = "claude-opus-4-8";
 // Short, cheap rewrites (the composer's Polish button) run on the small model.
@@ -739,4 +741,77 @@ export async function extractSow(doc: AiDocument): Promise<SowDraft> {
           })();
 
   return parseSowDraft(raw);
+}
+
+// ------------------------------------------------ shot list / storyboard in --
+
+const SHOTDOC_SYSTEM = `You read a document from a film or commercial production and pull out its shot list and any storyboard captions.
+
+Return ONLY a JSON object:
+{
+  "kind": "shot_list" | "storyboard" | "both" | "neither",
+  "title": string | null,          // what the document calls itself
+  "shots": [
+    {
+      "code": string | null,       // shot number or code exactly as printed, e.g. "1A", "12"
+      "description": string | null,
+      "size": string | null,       // WIDE, MS, CU, ECU, OTS, etc, as printed
+      "type": string | null,       // the angle or setup, if given separately
+      "movement": string | null,   // STATIC, PAN, DOLLY, HANDHELD, CRANE, etc
+      "day": string | null,        // shoot day, if the document assigns one
+      "notes": string | null,
+      "page": number | null        // 1-based page this row came from
+    }
+  ],
+  "pages": [
+    { "page": number, "panels": number | null, "cols": number | null, "rows": number | null,
+      "captions": [ string ] }
+  ],
+  "unreadable": boolean
+}
+
+Rules:
+- Copy values as printed. Do not translate "MS" to "medium shot" or expand an abbreviation.
+- Leave a field null rather than guessing it. A shot list with no movement column should return movement null on every row, not invented values.
+- Never invent a shot. The number of rows you return must match the number printed.
+- pages describes the storyboard PANEL LAYOUT per page, when the document has drawn panels: how many panels, and the grid if it is regular. Give captions in reading order, left to right then down, one string per panel, empty string for a panel with no caption.
+- If a page has no drawn panels, omit it from pages.
+- kind is "both" when the document has drawn panels AND a shot table.
+- If this is not a shot list or a storyboard, set unreadable true and return empty arrays.
+- Do not use em dashes in any text you return.`;
+
+/**
+ * Read a production document.
+ *
+ * Takes either the PDF's extracted TEXT (cheap, exact, and what a digital PDF
+ * gives us for free) or rendered page images when the PDF has no text layer,
+ * which is what a scan or an image-only export produces.
+ */
+export async function extractShotDoc(
+  input: { text: string } | { docs: AiDocument[] }
+): Promise<ShotDocDraft> {
+  const provider = aiProvider();
+  const maxTokens = 12000;
+
+  const raw = await (async () => {
+    if ("text" in input) {
+      const user = `Read this production document and return the JSON described in the instructions.\n\n${input.text.slice(0, 120000)}`;
+      if (provider === "openai") return openaiComplete(SHOTDOC_SYSTEM, user, { maxTokens });
+      if (provider === "anthropic") return anthropicComplete(SHOTDOC_SYSTEM, user, { maxTokens });
+      throw new Error("No AI provider configured.");
+    }
+    // Image path: one call per page would be several round trips, so the pages
+    // go in together and the model tags each row with the page it came from.
+    const doc = input.docs[0];
+    if (!doc) throw new Error("Nothing to read.");
+    const user =
+      "Read this production document and return the JSON described in the instructions.";
+    if (provider === "openai")
+      return openaiReadDocument(SHOTDOC_SYSTEM, user, doc, maxTokens);
+    if (provider === "anthropic")
+      return anthropicReadDocument(SHOTDOC_SYSTEM, user, doc, maxTokens);
+    throw new Error("No AI provider configured.");
+  })();
+
+  return parseShotDocDraft(raw);
 }

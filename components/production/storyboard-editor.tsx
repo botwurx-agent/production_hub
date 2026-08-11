@@ -21,6 +21,7 @@ import {
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
 import { uploadAssetFile } from "@/components/projects/upload-file";
+import { ImportDocModal } from "@/components/production/import-doc-modal";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -67,6 +68,7 @@ export function StoryboardEditor({
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
+  const [importing, setImporting] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(boards[0]?.id ?? null);
   const refresh = () => router.refresh();
   const history = useHistory<FrameView[]>();
@@ -181,6 +183,15 @@ export function StoryboardEditor({
           className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border py-2 text-sm font-semibold text-text-muted transition hover:border-border-strong hover:text-text"
         >
           + New storyboard
+        </button>
+        {/* A director's board arrives as a PDF far more often than it gets
+            built frame by frame in here, so the import sits alongside. */}
+        <button
+          onClick={() => setImporting(true)}
+          disabled={busy}
+          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border py-2 text-sm font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+        >
+          Import from a PDF
         </button>
       </aside>
 
@@ -329,6 +340,13 @@ export function StoryboardEditor({
           </div>
         )}
       </div>
+
+      <ImportDocModal
+        projectId={projectId}
+        studioId=""
+        open={importing}
+        onClose={() => setImporting(false)}
+      />
     </div>
   );
 }

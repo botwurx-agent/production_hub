@@ -22,6 +22,7 @@ import {
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
 import { uploadAssetFile } from "@/components/projects/upload-file";
+import { ImportDocModal } from "@/components/production/import-doc-modal";
 import { DocReviewButton } from "@/components/review/doc-review-button";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -126,6 +127,7 @@ export function ShotBoardEditor({
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
+  const [importing, setImporting] = useState(false);
   const refresh = () => router.refresh();
   const history = useHistory<{ groups: ShotGroup[]; cards: CardView[] }>();
   const act = (fn: () => Promise<unknown>) => {
@@ -389,6 +391,15 @@ export function ShotBoardEditor({
           >
             + New shot list
           </button>
+          {/* The director's package usually arrives as a PDF, so importing one
+              belongs next to creating an empty list, not buried elsewhere. */}
+          <button
+            onClick={() => setImporting(true)}
+            disabled={busy}
+            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border py-2 text-sm font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+          >
+            Import from a PDF
+          </button>
         </aside>
 
         {/* Active list */}
@@ -569,6 +580,13 @@ export function ShotBoardEditor({
           )}
         </div>
       </div>
+
+      <ImportDocModal
+        projectId={projectId}
+        studioId=""
+        open={importing}
+        onClose={() => setImporting(false)}
+      />
     </div>
   );
 }
