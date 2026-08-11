@@ -475,6 +475,7 @@ function ReferenceModal({
       onClose={onClose}
       title={reference ? reference.name : "New element"}
       size="xl"
+      id="element-edit"
     >
       {/* Laid out like Higgsfield's own New Element dialog: the details on the
           left, the media on the right. Same shape and same words in both

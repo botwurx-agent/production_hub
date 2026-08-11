@@ -524,6 +524,7 @@ function GenCard({
 
       {open && (
         <Modal open onClose={() => setOpen(false)} size="xl"
+      id="pipeline-gen"
           title={`${isImage ? "Image" : "Take"}${gen.model ? ` · ${gen.model}` : ""}`}>
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-[12px] bg-black" style={{ aspectRatio: "16/9" }}>

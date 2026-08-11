@@ -16,6 +16,7 @@ import { EmojiPicker } from "@/components/review/emoji-picker";
 import { DrawToolbar } from "@/components/review/draw-toolbar";
 import { CommentReactions } from "@/components/review/comment-reactions";
 import type { PortalComment } from "@/lib/review-links";
+import { useModalRoomy } from "@/components/ui/modal";
 
 // Frame.io-grade video review: the shared ScrubVideo player (accurate scrubbing,
 // frame stepping, speed, loop, shuttle keys) + a comment rail with threaded
@@ -298,13 +299,18 @@ export function VideoReview({
     if (ok) setEditingId(null);
   }
 
+  // Expanding the window has to make the MEDIA bigger, not the margins. The
+  // canvas already has a roomy layout behind `wide`; reading the modal's state
+  // here means every caller gets it without threading a prop.
+  const roomy = wide || useModalRoomy();
+
   const railBtn =
     "grid h-7 w-7 place-items-center rounded-[7px] text-text-faint transition hover:bg-surface-2 hover:text-text";
 
   return (
     <div
       className={`grid grid-cols-1 gap-4 ${
-        wide ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_360px]"
+        roomy ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_360px]"
       }`}
     >
       <div>
@@ -317,7 +323,7 @@ export function VideoReview({
             seekTo(c?.timecode ?? null, id);
           }}
           onTime={setCurrentTime}
-          maxHeightClass={wide ? "max-h-[78vh]" : "max-h-[58vh]"}
+          maxHeightClass={roomy ? "max-h-[78vh]" : "max-h-[58vh]"}
           drawing={shownDrawing}
           drawActive={drawMode}
           drawTool={tool}
@@ -359,7 +365,7 @@ export function VideoReview({
           it. */}
       <div
         className={`flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm ${
-          wide ? "lg:max-h-[78vh]" : "lg:max-h-[58vh]"
+          roomy ? "lg:max-h-[78vh]" : "lg:max-h-[58vh]"
         }`}
       >
         <div className="border-b border-border px-3 py-2.5">

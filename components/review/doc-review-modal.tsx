@@ -93,7 +93,8 @@ export function DocReviewModal({
   const decided = detail?.myDecision ?? null;
 
   return (
-    <Modal open={open} onClose={onClose} title={`Review · ${title}`} size="xl">
+    <Modal open={open} onClose={onClose} title={`Review · ${title}`} size="xl"
+      id="doc-review">
       {loading || !detail ? (
         <p className="py-16 text-center text-sm text-text-faint">Loading…</p>
       ) : (

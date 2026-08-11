@@ -222,6 +222,9 @@ export function ReviewModal({
       open={open}
       onClose={onClose}
       size={isImage || isVideo ? "xl" : "md"}
+      // Remembered per browser: a producer who works expanded should not have
+      // to expand it again on every asset.
+      id="asset-review"
       title={`Review v${version.version_number} of ${assetName}`}
     >
       <div className="space-y-5">
