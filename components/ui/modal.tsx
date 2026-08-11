@@ -45,8 +45,12 @@ export function Modal({
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className={`relative z-10 w-full ${maxW} rounded-[18px] border border-border bg-surface shadow-lg`}>
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      {/* Capped to the viewport and scrolled INTERNALLY. Without this a long
+          body (a review with seven client comments) grew the panel past the
+          screen and pushed the media off the top, where the operator could not
+          see the thing they were reviewing. */}
+      <div className={`relative z-10 flex max-h-[calc(100vh-2rem)] w-full flex-col ${maxW} rounded-[18px] border border-border bg-surface shadow-lg`}>
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
           <h2 className="font-display text-lg font-bold text-text">{title}</h2>
           <button
             onClick={onClose}
@@ -58,7 +62,7 @@ export function Modal({
             </svg>
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
       </div>
     </div>,
     document.body

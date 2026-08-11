@@ -354,7 +354,14 @@ export function VideoReview({
       </div>
 
       {/* Comments */}
-      <div className="flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
+      {/* Height matched to the player. The rail already scrolls internally,
+          but with no cap it simply grew, taking the grid row and the modal with
+          it. */}
+      <div
+        className={`flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm ${
+          wide ? "lg:max-h-[78vh]" : "lg:max-h-[58vh]"
+        }`}
+      >
         <div className="border-b border-border px-3 py-2.5">
           <div className="flex items-center gap-1">
             <span className="font-display text-sm font-bold text-text">

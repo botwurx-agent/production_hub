@@ -222,8 +222,14 @@ export function PinCanvas({
         </div>
       )}
 
-      {/* Comments */}
-      <div className="flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
+      {/* Comments. Capped for the same reason as the video rail: it scrolls
+          internally, but uncapped it grows the grid row and pushes the stage
+          out of view. */}
+      <div
+        className={`flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm ${
+          wide ? "lg:max-h-[78vh]" : "lg:max-h-[58vh]"
+        }`}
+      >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="font-display text-sm font-bold text-text">Comments</span>
