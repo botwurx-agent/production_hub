@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { BulkElementsModal } from "@/components/production/bulk-elements-modal";
 import { Card, EmptyState } from "@/components/ui/card";
 import { IconTile } from "@/components/ui/icon-tile";
 import { Modal } from "@/components/ui/modal";
@@ -97,6 +98,7 @@ export function ElementsWorkspace({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<CastReference | "new" | null>(null);
+  const [bulk, setBulk] = useState(false);
   const [newKind, setNewKind] = useState<RefKind>("auto");
   const [createdId, setCreatedId] = useState<string | null>(null);
 
@@ -114,6 +116,16 @@ export function ElementsWorkspace({
     setEditing(null);
     setCreatedId(null);
   }
+
+  const bulkModal = (
+    <BulkElementsModal
+      projectId={projectId}
+      studioId={studioId}
+      open={bulk}
+      onClose={() => setBulk(false)}
+      defaultKind={newKind}
+    />
+  );
 
   const modal = editing && (
     <ReferenceModal
@@ -172,6 +184,7 @@ export function ElementsWorkspace({
           />
         </Card>
         {modal}
+        {bulkModal}
       </>
     );
   }
@@ -197,6 +210,15 @@ export function ElementsWorkspace({
                 + {k.label}
               </button>
             ))}
+            {/* The door for a folder of reference images, which is how a job
+                actually starts. The per-kind buttons above stay for adding one
+                properly, with its prompt and handle. */}
+            <button
+              onClick={() => setBulk(true)}
+              className="rounded-[9px] bg-accent px-2.5 py-1 text-xs font-bold text-accent-fg transition hover:bg-accent-strong"
+            >
+              + Add several
+            </button>
           </div>
         </div>
 
@@ -210,6 +232,7 @@ export function ElementsWorkspace({
       <UsageMap references={references} shots={shots} uses={uses} />
 
       {modal}
+      {bulkModal}
     </div>
   );
 }

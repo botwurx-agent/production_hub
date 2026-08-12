@@ -392,3 +392,68 @@ export async function promoteToReference(
   rp(projectId);
   return { id: refId };
 }
+
+/**
+ * Create several elements in one pass, each from one uploaded image.
+ *
+ * Came straight out of real use: a job needed twenty-one elements, and the
+ * one-at-a-time dialog meant twenty-one rounds of open, name, upload, close.
+ * The dialog is right for one element with a description, a prompt and several
+ * sheets; it is the wrong shape for filing a folder of reference images.
+ *
+ * Deliberately thin. Each row is a name, a kind and one image, which is the
+ * minimum an element needs to exist and be picked from a prompt bar. Anything
+ * more (description, prompt, extra sheets, a handle) is added afterwards by
+ * opening the element, so this stays a fast door rather than a second, worse
+ * copy of the full editor.
+ *
+ * Reuses saveReference and addSheet rather than inserting directly, so slug
+ * dedup, studio scoping and the reference status all keep one implementation.
+ */
+export async function addReferencesBulk(
+  projectId: string,
+  items: {
+    name: string;
+    kind: string;
+    filePath: string;
+    studioWide?: boolean;
+  }[]
+): Promise<{ added: number; failed: { name: string; reason: string }[] }> {
+  await requireStudioContext();
+  const failed: { name: string; reason: string }[] = [];
+  let added = 0;
+
+  // Sequential, not parallel: saveReference reads back to dedupe the slug, and
+  // twenty concurrent writers would each read before the others had written,
+  // handing several elements the same slug.
+  for (const item of items) {
+    const res = await saveReference(projectId, null, {
+      kind: item.kind,
+      name: item.name,
+      description: null,
+      notes: null,
+      prompt: null,
+      studioWide: Boolean(item.studioWide),
+    });
+    if ("error" in res && res.error) {
+      failed.push({ name: item.name, reason: res.error });
+      continue;
+    }
+    const id = "id" in res ? res.id : null;
+    if (!id) {
+      failed.push({ name: item.name, reason: "Could not create it." });
+      continue;
+    }
+    const sheet = await addSheet(projectId, id, item.filePath);
+    if ("error" in sheet && sheet.error) {
+      // The element exists and is usable; only its image is missing, which the
+      // caller is told about rather than left to discover.
+      failed.push({ name: item.name, reason: sheet.error });
+      continue;
+    }
+    added++;
+  }
+
+  rp(projectId);
+  return { added, failed };
+}
