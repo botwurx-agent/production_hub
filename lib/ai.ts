@@ -773,7 +773,10 @@ Return ONLY a JSON object:
 Rules:
 - Copy values as printed. Do not translate "MS" to "medium shot" or expand an abbreviation.
 - Leave a field null rather than guessing it. A shot list with no movement column should return movement null on every row, not invented values.
-- Never invent a shot. The number of rows you return must match the number printed.
+- Never invent a shot. Every row you return must correspond to something written in the document.
+- A creative treatment or a script counts. Much of this work arrives as a deck rather than a table: a numbered list of desired shots, or a script whose beats each describe one setup ("We see a closeup of the label, water dripping down"). Return one row per written beat or numbered item, description copied from the document, and leave size, type and movement null unless they are actually stated. Do not merge several written beats into one row or split one into several.
+- On-screen text goes in notes: a SUPER, a title card, or a line of voice over belongs to the beat it is printed with, as printed.
+- When the same document holds more than one cut of the film (a :30 and a :15), return the rows of the longest cut only. The shorter cut is a trim of the same shots, so returning both would list every shot twice.
 - pages describes the storyboard PANEL LAYOUT per page, when the document has drawn panels: how many panels, and the grid if it is regular. Give captions in reading order, left to right then down, one string per panel, empty string for a panel with no caption.
 - If a page has no drawn panels, omit it from pages.
 - kind is "both" when the document has drawn panels AND a shot table.

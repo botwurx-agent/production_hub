@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
-import { findPanels, readingOrder, sliceGrid, type Rect } from "@/lib/panels";
+import {
+  findPanels,
+  panelsFromImages,
+  readingOrder,
+  sliceGrid,
+  type Rect,
+} from "@/lib/panels";
 import {
   MAX_PAGES,
   cropToBlob,
@@ -102,7 +108,17 @@ export function ImportDocModal({
 
       // Panels first: local, instant, and it tells us whether there is a board
       // here at all before we spend a model call.
-      const found: PagePlan[] = pages.map((p) => {
+      //
+      // Placed pictures are asked first because they are read from the document
+      // rather than inferred from it, so they are exact and hold up on a
+      // designed deck (tiles butted together over a dark background, where
+      // there is no gutter to find). Gutter detection then covers the other
+      // family: a drawn or printed board that arrives as one scan per page.
+      const byImage = panelsFromImages(pages);
+      const found: PagePlan[] = pages.map((p, i) => {
+        if (byImage[i].length) {
+          return { page: p, rects: byImage[i], auto: true, captions: [] };
+        }
         const grid = findPanels(toGray(p.canvas));
         return {
           page: p,

@@ -125,6 +125,160 @@ export function findPanels(page: GrayPage): Grid {
   return { rects, cols: widest, rows: rowBands.length, confident };
 }
 
+/** A page's placed images, as rectangles on the rendered page. */
+export type ImagePage = {
+  width: number;
+  height: number;
+  images: Rect[];
+};
+
+/** Smaller than this on either side and it is a logo or an icon, not a frame. */
+const MIN_IMAGE_SIDE = 0.12;
+/** Covering this much of the page makes it the background, not a panel. */
+const FULL_BLEED = 0.92;
+/** A picture this far buried under later ones is not on the page any more. */
+const BURIED = 0.8;
+/** A covering picture within this much of a full side counts as spanning it. */
+const SPANS = 0.02;
+/** A rect repeating on this share of the pages is page furniture. */
+const FURNITURE_SHARE = 0.6;
+
+function area(r: Rect) {
+  return Math.max(0, r.w) * Math.max(0, r.h);
+}
+
+function overlaps(a: Rect, b: Rect) {
+  return (
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+  );
+}
+
+/**
+ * How much of `r` the given rects bury, 0 to 1.
+ *
+ * Sampled on a coarse grid rather than solved as a union of rectangles: the
+ * answer is only ever compared against a threshold, and three overlapping
+ * covers is a genuinely awkward bit of geometry to get right for no gain.
+ */
+function coveredShare(r: Rect, covers: Rect[]) {
+  if (!covers.length) return 0;
+  const N = 32;
+  let hit = 0;
+  for (let iy = 0; iy < N; iy++) {
+    const y = r.y + ((iy + 0.5) * r.h) / N;
+    for (let ix = 0; ix < N; ix++) {
+      const x = r.x + ((ix + 0.5) * r.w) / N;
+      if (
+        covers.some((c) => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h)
+      ) {
+        hit++;
+      }
+    }
+  }
+  return hit / (N * N);
+}
+
+/**
+ * Pull a rect back from any edge a later picture sits across.
+ *
+ * A layout routinely places a photo larger than the hole it shows through and
+ * lets the next picture cover the overhang. Cropping the whole placed rect
+ * would then carry a slice of its neighbour, so the overhang comes off.
+ */
+function trimAgainst(r: Rect, covers: Rect[]): Rect {
+  let out = { ...r };
+  for (const c of covers) {
+    if (!overlaps(out, c)) continue;
+    const spansWidth =
+      c.x <= out.x + out.w * SPANS && c.x + c.w >= out.x + out.w * (1 - SPANS);
+    const spansHeight =
+      c.y <= out.y + out.h * SPANS && c.y + c.h >= out.y + out.h * (1 - SPANS);
+    if (spansWidth) {
+      if (c.y <= out.y) {
+        const bottom = out.y + out.h;
+        out = { ...out, y: c.y + c.h, h: bottom - (c.y + c.h) };
+      } else if (c.y + c.h >= out.y + out.h) {
+        out = { ...out, h: c.y - out.y };
+      }
+    } else if (spansHeight) {
+      if (c.x <= out.x) {
+        const right = out.x + out.w;
+        out = { ...out, x: c.x + c.w, w: right - (c.x + c.w) };
+      } else if (c.x + c.w >= out.x + out.w) {
+        out = { ...out, w: c.x - out.x };
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Panels from the pictures the document ALREADY places.
+ *
+ * The better first guess, and it came from a real client deck. A modern
+ * treatment or board is a designed layout: frames are placed image tiles on a
+ * coloured background, often butted edge to edge with no gutter at all, often
+ * over black. Gutter detection cannot see any of that, and correctly says so,
+ * which leaves the operator slicing by hand. But the PDF knows exactly where
+ * every picture sits, so the rectangles can simply be read out instead of
+ * inferred, which is exact rather than approximate and cares nothing for the
+ * background colour.
+ *
+ * Gutter detection still earns its place for the other family of document: a
+ * drawn or printed board, where the panels are ink on paper and the file holds
+ * one scanned image per page.
+ *
+ * Takes every page at once because the giveaway for page furniture (a logo, a
+ * footer rule) is that it lands in the same place on most pages.
+ *
+ * `images` must be in DRAW ORDER, since that is what decides which of two
+ * overlapping pictures is the one you can actually see.
+ */
+export function panelsFromImages(pages: ImagePage[]): Rect[][] {
+  const seen = new Map<string, number>();
+  const key = (r: Rect) =>
+    `${Math.round(r.x / 8)}:${Math.round(r.y / 8)}:${Math.round(r.w / 8)}:${Math.round(r.h / 8)}`;
+  for (const page of pages) {
+    // Once per page, so a picture repeated within one page does not look like
+    // it repeats across the document.
+    for (const k of new Set(page.images.map(key))) {
+      seen.set(k, (seen.get(k) ?? 0) + 1);
+    }
+  }
+  const furniture = (r: Rect) =>
+    pages.length >= 3 && (seen.get(key(r)) ?? 0) >= pages.length * FURNITURE_SHARE;
+
+  return pages.map((page) => {
+    const big = (r: Rect) =>
+      r.w >= page.width * MIN_IMAGE_SIDE && r.h >= page.height * MIN_IMAGE_SIDE;
+
+    // Draw order preserved throughout: everything below depends on it.
+    const candidates = page.images
+      .map((r) => ({
+        // A picture can hang off the page edge; only the visible part is a panel.
+        x: Math.max(0, r.x),
+        y: Math.max(0, r.y),
+        w: Math.min(r.x + r.w, page.width) - Math.max(0, r.x),
+        h: Math.min(r.y + r.h, page.height) - Math.max(0, r.y),
+      }))
+      .filter(
+        (r) =>
+          big(r) &&
+          !(r.w >= page.width * FULL_BLEED && r.h >= page.height * FULL_BLEED) &&
+          !furniture(r)
+      );
+
+    const kept: Rect[] = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const later = candidates.slice(i + 1);
+      if (coveredShare(candidates[i], later) >= BURIED) continue;
+      const trimmed = trimAgainst(candidates[i], later);
+      if (big(trimmed) && area(trimmed) > 0) kept.push(trimmed);
+    }
+    return readingOrder(kept);
+  });
+}
+
 /**
  * The fallback, and the override.
  *

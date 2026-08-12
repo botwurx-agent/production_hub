@@ -19,8 +19,81 @@ export type PdfPage = {
   height: number;
   /** The text layer, empty on a scan or an image-only export. */
   text: string;
+  /** Where the document places each picture, in rendered page pixels. */
+  images: Rect[];
   canvas: HTMLCanvasElement;
 };
+
+/** 2D affine matrices, in pdf.js order [a, b, c, d, e, f]. */
+type Matrix = [number, number, number, number, number, number];
+
+function multiply(m: Matrix, n: Matrix): Matrix {
+  return [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5],
+  ];
+}
+
+/**
+ * Where every picture on the page was placed.
+ *
+ * A drawing operation paints the UNIT SQUARE and lets the current transform
+ * decide where that lands, so the rectangle is not written down anywhere: it
+ * has to be recovered by replaying the operator list and keeping the transform
+ * stack, exactly as the renderer does. Cheap, because the operators are already
+ * parsed by the time the page has been drawn.
+ */
+function placedImages(
+  ops: { fnArray: number[]; argsArray: unknown[][] },
+  OPS: Record<string, number>,
+  start: Matrix
+): Rect[] {
+  const out: Rect[] = [];
+  const stack: Matrix[] = [];
+  let ctm: Matrix = start;
+
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i];
+    if (fn === OPS.save) {
+      stack.push(ctm);
+    } else if (fn === OPS.restore) {
+      ctm = stack.pop() ?? ctm;
+    } else if (fn === OPS.transform) {
+      ctm = multiply(ctm, ops.argsArray[i] as unknown as Matrix);
+    } else if (
+      fn === OPS.paintImageXObject ||
+      fn === OPS.paintInlineImageXObject ||
+      fn === OPS.paintImageMaskXObject
+    ) {
+      // The four corners of the unit square, through the transform. Taking the
+      // bounding box rather than the corners keeps a rotated picture whole.
+      const xs: number[] = [];
+      const ys: number[] = [];
+      for (const [ux, uy] of [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ]) {
+        xs.push(ctm[0] * ux + ctm[2] * uy + ctm[4]);
+        ys.push(ctm[1] * ux + ctm[3] * uy + ctm[5]);
+      }
+      const x = Math.min(...xs);
+      const y = Math.min(...ys);
+      out.push({
+        x: Math.round(x),
+        y: Math.round(y),
+        w: Math.round(Math.max(...xs) - x),
+        h: Math.round(Math.max(...ys) - y),
+      });
+    }
+  }
+  return out;
+}
 
 type PdfjsModule = typeof import("pdfjs-dist");
 let pdfjsPromise: Promise<PdfjsModule> | null = null;
@@ -74,6 +147,19 @@ export async function readPdf(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
 
+    let images: Rect[] = [];
+    try {
+      const ops = await page.getOperatorList();
+      images = placedImages(
+        ops,
+        lib.OPS as unknown as Record<string, number>,
+        viewport.transform as Matrix
+      );
+    } catch {
+      // A page whose operators will not replay still renders, and gutter
+      // detection can still read it.
+    }
+
     let text = "";
     try {
       const content = await page.getTextContent();
@@ -86,7 +172,14 @@ export async function readPdf(
       // A page with no text layer is normal, not an error.
     }
 
-    out.push({ page: n, width: canvas.width, height: canvas.height, text, canvas });
+    out.push({
+      page: n,
+      width: canvas.width,
+      height: canvas.height,
+      text,
+      images,
+      canvas,
+    });
     onProgress?.(n, total);
   }
 
