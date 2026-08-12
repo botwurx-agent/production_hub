@@ -39,6 +39,21 @@ function tag(v: unknown, max = 40): string | null {
   return s.slice(0, max);
 }
 
+/**
+ * A shot code, with list punctuation taken off.
+ *
+ * A treatment usually numbers its shots as a list ("1." "2."), and the reader
+ * is told to copy what is printed, so the full stop arrives with the number.
+ * On a shot list that is not part of the code, it is the bullet, and it looks
+ * wrong in a code column. Only stripped from a plain number or a number with a
+ * letter, so a genuine printed code is never quietly altered.
+ */
+function shotCode(v: unknown): string | null {
+  const s = tag(v, 16);
+  if (!s) return null;
+  return /^\d+[A-Za-z]?[.)]$/.test(s) ? s.slice(0, -1) : s;
+}
+
 function count(v: unknown, max: number): number | null {
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
   if (!Number.isFinite(n) || n < 1 || n > max) return null;
@@ -89,7 +104,7 @@ export function parseShotDocDraft(raw: string): ShotDocDraft {
         .map((r) => {
           const row = (r ?? {}) as Record<string, unknown>;
           return {
-            code: tag(row.code, 16),
+            code: shotCode(row.code),
             description: tag(row.description, 500),
             size: tag(row.size),
             type: tag(row.type),
