@@ -415,7 +415,10 @@ export async function addReferencesBulk(
   items: {
     name: string;
     kind: string;
-    filePath: string;
+    /** An already-uploaded file, for the device path. */
+    filePath?: string | null;
+    /** A share page or direct image link, fetched and stored here. */
+    url?: string | null;
     studioWide?: boolean;
   }[]
 ): Promise<{ added: number; failed: { name: string; reason: string }[] }> {
@@ -444,7 +447,14 @@ export async function addReferencesBulk(
       failed.push({ name: item.name, reason: "Could not create it." });
       continue;
     }
-    const sheet = await addSheet(projectId, id, item.filePath);
+    // A link is the normal case here: the images are generated elsewhere and
+    // arrive as share pages, so pulling them in beats asking anybody to
+    // download and re-upload twenty-one files.
+    const sheet = item.url
+      ? await addSheetFromLink(projectId, id, item.url)
+      : item.filePath
+        ? await addSheet(projectId, id, item.filePath)
+        : { error: "No image given." };
     if ("error" in sheet && sheet.error) {
       // The element exists and is usable; only its image is missing, which the
       // caller is told about rather than left to discover.

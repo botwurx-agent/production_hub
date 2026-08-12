@@ -237,6 +237,129 @@ export function ElementsWorkspace({
   );
 }
 
+/**
+ * Media chosen before the element exists.
+ *
+ * Same two doors as SheetStrip (a link, or files), but nothing is sent
+ * anywhere: the picks are held by the parent and attached the moment the
+ * element is created. That is the whole point, since the dialog used to say
+ * "save first and this opens", which made adding one element two round trips.
+ */
+function PendingSheets({
+  links,
+  files,
+  onAddLink,
+  onAddFiles,
+  onRemoveLink,
+  onRemoveFile,
+}: {
+  links: string[];
+  files: File[];
+  onAddLink: (url: string) => void;
+  onAddFiles: (files: File[]) => void;
+  onRemoveLink: (index: number) => void;
+  onRemoveFile: (index: number) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const total = links.length + files.length;
+
+  function commit() {
+    const value = url.trim();
+    if (!/^https?:\/\//i.test(value)) {
+      toast("That does not look like a link.", "error");
+      return;
+    }
+    onAddLink(value);
+    setUrl("");
+  }
+
+  return (
+    <div className="flex min-h-[220px] flex-1 flex-col rounded-[13px] border border-border bg-surface-2 p-3">
+      <p className="mb-2 text-xs font-semibold text-text-muted">
+        Image{total > 0 ? ` · ${total} ready` : ""}
+      </p>
+
+      {total > 0 && (
+        <div className="mb-2 space-y-1.5">
+          {links.map((l, i) => (
+            <div
+              key={`l${i}`}
+              className="flex items-center gap-2 rounded-[9px] border border-border bg-surface px-2 py-1.5"
+            >
+              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-text-muted">
+                {l}
+              </span>
+              <button
+                onClick={() => onRemoveLink(i)}
+                aria-label="Remove"
+                className="shrink-0 text-text-faint transition hover:text-red"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+          {files.map((f, i) => (
+            <div
+              key={`f${i}`}
+              className="flex items-center gap-2 rounded-[9px] border border-border bg-surface px-2 py-1.5"
+            >
+              <span className="min-w-0 flex-1 truncate text-[11.5px] text-text-muted">
+                {f.name}
+              </span>
+              <button
+                onClick={() => onRemoveFile(i)}
+                aria-label="Remove"
+                className="shrink-0 text-text-faint transition hover:text-red"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          placeholder="Paste a share page or image link"
+          className="min-w-0 flex-1 rounded-[10px] border border-border bg-surface px-3 py-2 text-[13px] text-text outline-none focus:border-border-strong"
+        />
+        <Button variant="secondary" onClick={commit} disabled={!url.trim()}>
+          Add
+        </Button>
+      </div>
+
+      <label className="mt-2 inline-flex cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-border-strong bg-surface px-3 py-1.5 text-xs font-semibold transition hover:border-accent hover:text-accent">
+        Or choose files
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const picked = e.target.files ? Array.from(e.target.files) : [];
+            e.target.value = "";
+            onAddFiles(picked.filter((f) => f.type.startsWith("image/")));
+          }}
+        />
+      </label>
+
+      <p className="mt-auto pt-2 text-[11.5px] text-text-faint">
+        {total > 0
+          ? "Attached when you press Create."
+          : "The link is pulled in and stored, so it keeps working."}
+      </p>
+    </div>
+  );
+}
+
 function KindTile({
   kind,
   onClick,
@@ -456,6 +579,12 @@ function ReferenceModal({
   const [handle, setHandle] = useState("");
   const [handleTouched, setHandleTouched] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  // Media chosen BEFORE the element exists. A sheet row needs an entity to hang
+  // off, so the old dialog made you save first and come back, which is the step
+  // the operator called out. Now it is held here and attached in the same
+  // action as the create, so it is one window and one button.
+  const [pendingLinks, setPendingLinks] = useState<string[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [busy, start] = useTransition();
 
   // Higgsfield derives an element's @name from the name you type in its own
@@ -486,6 +615,26 @@ function ReferenceModal({
         if (effectiveHandle.trim()) {
           const h = await saveHandle(projectId, res.id, platform, effectiveHandle);
           if ("error" in h && h.error) toast(h.error, "error");
+        }
+        for (const url of pendingLinks) {
+          const r = await addSheetFromLink(projectId, res.id, url);
+          if ("error" in r && r.error) toast(r.error, "error");
+        }
+        for (const file of pendingFiles) {
+          try {
+            const up = await uploadAssetFile({ studioId, projectId, file });
+            const r = await addSheet(projectId, res.id, up.storagePath);
+            if ("error" in r && r.error) toast(r.error, "error");
+          } catch (e) {
+            toast((e as Error).message, "error");
+          }
+        }
+        // With its image already attached there is nothing left to come back
+        // for, so the dialog closes rather than switching to a second state.
+        if (pendingLinks.length || pendingFiles.length) {
+          onCreated(res.id);
+          onClose();
+          return;
         }
         setJustSaved(true);
         onCreated(res.id);
@@ -690,17 +839,18 @@ function ReferenceModal({
               sheets={reference.sheets}
             />
           ) : (
-            <div className="flex min-h-[220px] flex-1 flex-col items-center justify-center rounded-[13px] border-2 border-dashed border-border bg-surface-2 p-6 text-center">
-              <span className="mb-2 grid h-10 w-10 place-items-center rounded-full border border-border-strong text-lg text-text-faint">
-                +
-              </span>
-              <span className="font-display text-sm font-bold text-text-muted">
-                Upload media
-              </span>
-              <span className="mt-1 text-[11.5px] text-text-faint">
-                Save first and this opens. A file has to belong to something.
-              </span>
-            </div>
+            <PendingSheets
+              links={pendingLinks}
+              files={pendingFiles}
+              onAddLink={(u) => setPendingLinks((prev) => [...prev, u])}
+              onAddFiles={(f) => setPendingFiles((prev) => [...prev, ...f])}
+              onRemoveLink={(i) =>
+                setPendingLinks((prev) => prev.filter((_, n) => n !== i))
+              }
+              onRemoveFile={(i) =>
+                setPendingFiles((prev) => prev.filter((_, n) => n !== i))
+              }
+            />
           )}
         </div>
       </div>
@@ -708,7 +858,7 @@ function ReferenceModal({
       {justSaved && (
         <p className="mt-4 rounded-[10px] bg-green-bg px-3 py-2 text-[12.5px] text-green">
           Saved{effectiveHandle.trim() ? ` as @${suggestedHandle(effectiveHandle)}` : ""}.
-          Drop its image in on the right, then close.
+          Add its image on the right, then close.
         </p>
       )}
 
