@@ -11,6 +11,7 @@
 // handful of downscaled page images.
 
 import type { Rect } from "@/lib/panels";
+import type { TextRun } from "@/lib/captions";
 
 export type PdfPage = {
   /** 1-based, matching how anybody refers to a page. */
@@ -21,6 +22,8 @@ export type PdfPage = {
   text: string;
   /** Where the document places each picture, in rendered page pixels. */
   images: Rect[];
+  /** The same text, positioned, so a caption can be tied to the panel above it. */
+  runs: TextRun[];
   canvas: HTMLCanvasElement;
 };
 
@@ -161,6 +164,7 @@ export async function readPdf(
     }
 
     let text = "";
+    const runs: TextRun[] = [];
     try {
       const content = await page.getTextContent();
       text = content.items
@@ -168,6 +172,24 @@ export async function readPdf(
         .join(" ")
         .replace(/\s+/g, " ")
         .trim();
+
+      const scale = viewport.scale;
+      for (const item of content.items) {
+        if (!("str" in item) || !item.str.trim()) continue;
+        // A text item carries its own transform in PDF space; through the
+        // viewport it lands where the word was drawn on the canvas.
+        const t = multiply(viewport.transform as Matrix, item.transform as Matrix);
+        const h = Math.hypot(t[2], t[3]) || item.height * scale;
+        runs.push({
+          text: item.str,
+          x: t[4],
+          // t[5] is the BASELINE, and a caption is matched by where the word
+          // sits, so it is lifted to the top of the glyphs.
+          y: t[5] - h,
+          w: item.width * scale,
+          h,
+        });
+      }
     } catch {
       // A page with no text layer is normal, not an error.
     }
@@ -178,6 +200,7 @@ export async function readPdf(
       height: canvas.height,
       text,
       images,
+      runs,
       canvas,
     });
     onProgress?.(n, total);

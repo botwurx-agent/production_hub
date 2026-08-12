@@ -20,6 +20,7 @@ import {
   toGray,
   type PdfPage,
 } from "@/lib/pdf-client";
+import { captionFor, splitCaption } from "@/lib/captions";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import {
   fileSourceDocument,
@@ -116,15 +117,28 @@ export function ImportDocModal({
       // family: a drawn or printed board that arrives as one scan per page.
       const byImage = panelsFromImages(pages);
       const found: PagePlan[] = pages.map((p, i) => {
-        if (byImage[i].length) {
-          return { page: p, rects: byImage[i], auto: true, captions: [] };
-        }
-        const grid = findPanels(toGray(p.canvas));
+        const rects = byImage[i].length
+          ? byImage[i]
+          : (() => {
+              const grid = findPanels(toGray(p.canvas));
+              return grid.confident ? readingOrder(grid.rects) : [];
+            })();
         return {
           page: p,
-          rects: grid.confident ? readingOrder(grid.rects) : [],
-          auto: grid.confident,
-          captions: [],
+          rects,
+          auto: rects.length > 0,
+          // Read off the page rather than asked for. The words printed under a
+          // panel are its caption, and their position says so exactly, where
+          // matching a model's list of captions to our panels by index only
+          // works when it happened to count them the same way.
+          captions: rects.map(
+            (r, ri) =>
+              captionFor(
+                r,
+                p.runs,
+                rects.filter((_, other) => other !== ri)
+              ) ?? ""
+          ),
         };
       });
 
@@ -158,15 +172,33 @@ export function ImportDocModal({
         return;
       }
 
-      // Captions the model read, matched to the panels we cut, per page.
+      // The model's captions are the FALLBACK now, used only where the page
+      // printed nothing under a panel: on a board whose captions live in the
+      // artwork rather than in the text layer, it is the only thing that can
+      // read them.
       const withCaptions = found.map((plan) => {
         const said = res.draft.pages.find((p) => p.page === plan.page.page);
         let rects = plan.rects;
+        let captions = plan.captions;
         // The model saw a regular grid where the detector was unsure: use it.
         if (!plan.auto && said?.cols && said?.rows) {
           rects = sliceGrid(plan.page.width, plan.page.height, said.cols, said.rows);
+          captions = rects.map(
+            (r, ri) =>
+              captionFor(
+                r,
+                plan.page.runs,
+                rects.filter((_, other) => other !== ri)
+              ) ?? ""
+          );
         }
-        return { ...plan, rects, captions: said?.captions ?? [] };
+        return {
+          ...plan,
+          rects,
+          captions: rects.map(
+            (_, ri) => captions[ri] || said?.captions?.[ri] || ""
+          ),
+        };
       });
 
       setDraft(res.draft);
@@ -185,11 +217,25 @@ export function ImportDocModal({
 
   function reslice(index: number, cols: number, rows: number) {
     setPlans((prev) =>
-      prev.map((p, i) =>
-        i === index
-          ? { ...p, auto: false, rects: sliceGrid(p.page.width, p.page.height, cols, rows) }
-          : p
-      )
+      prev.map((p, i) => {
+        if (i !== index) return p;
+        const rects = sliceGrid(p.page.width, p.page.height, cols, rows);
+        return {
+          ...p,
+          auto: false,
+          rects,
+          // Captions follow the new cut, since they belong to whatever panel is
+          // above them and the panels have just moved.
+          captions: rects.map(
+            (r, ri) =>
+              captionFor(
+                r,
+                p.page.runs,
+                rects.filter((_, other) => other !== ri)
+              ) ?? ""
+          ),
+        };
+      })
     );
   }
 
@@ -210,6 +256,7 @@ export function ImportDocModal({
         const frames: {
           storagePath: string;
           mimeType: string | null;
+          scene: string | null;
           caption: string | null;
         }[] = [];
         let done = 0;
@@ -224,10 +271,15 @@ export function ImportDocModal({
               { type: "image/jpeg" }
             );
             const up = await uploadAssetFile({ studioId, projectId, file: asFile });
+            // "4A. She turns to the window" is two fields on a frame, not one.
+            const { scene, description } = splitCaption(
+              plan.captions[ri]?.trim() || null
+            );
             frames.push({
               storagePath: up.storagePath,
               mimeType: up.mimeType || "image/jpeg",
-              caption: plan.captions[ri]?.trim() || null,
+              scene,
+              caption: description,
             });
             done++;
             setNote(`Uploading panel ${done} of ${panelCount}...`);

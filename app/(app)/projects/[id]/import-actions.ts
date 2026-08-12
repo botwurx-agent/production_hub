@@ -130,7 +130,13 @@ export async function importShotList(
 export async function importStoryboard(
   projectId: string,
   name: string,
-  frames: { storagePath: string; mimeType: string | null; caption: string | null }[]
+  frames: {
+    storagePath: string;
+    mimeType: string | null;
+    /** A shot code printed with the caption, when the board prints one. */
+    scene?: string | null;
+    caption: string | null;
+  }[]
 ): Promise<{ boardId: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -168,6 +174,7 @@ export async function importStoryboard(
       position,
       storage_path: f.storagePath,
       mime_type: f.mimeType,
+      scene: f.scene?.slice(0, 40) || null,
       description: f.caption,
       created_by: ctx.userId,
     }))
