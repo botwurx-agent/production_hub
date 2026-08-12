@@ -21,6 +21,7 @@ import {
 } from "@/app/(app)/projects/[id]/production/board-actions";
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
+import { confirmAction } from "@/components/ui/confirm";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import { ImportDocModal } from "@/components/production/import-doc-modal";
 import { DocReviewButton } from "@/components/review/doc-review-button";
@@ -457,7 +458,17 @@ export function ShotBoardEditor({
                   {activeCards.length} {activeCards.length === 1 ? "shot" : "shots"}
                 </span>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    // Same reasoning as the storyboard: undo restores shots
+                    // within a list, so it cannot bring the list back.
+                    const ok = await confirmAction({
+                      title: `Delete "${active.title || "this shot list"}"?`,
+                      body: `This list and its ${activeCards.length} shot${
+                        activeCards.length === 1 ? "" : "s"
+                      } will be removed. This cannot be undone.`,
+                      confirmLabel: "Delete shot list",
+                    });
+                    if (!ok) return;
                     act(() => deleteGroup(projectId, active.id));
                     setActiveId(null);
                   }}

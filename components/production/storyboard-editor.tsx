@@ -20,6 +20,7 @@ import {
 } from "@/app/(app)/projects/[id]/storyboard-actions";
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
+import { confirmAction } from "@/components/ui/confirm";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import { ImportDocModal } from "@/components/production/import-doc-modal";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
@@ -298,7 +299,18 @@ export function StoryboardEditor({
                 Present
               </Link>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  // Asked because this one cannot be taken back. Undo restores
+                  // FRAMES within a board, so it has nothing to restore them
+                  // into once the board itself is gone.
+                  const ok = await confirmAction({
+                    title: `Delete "${active.name}"?`,
+                    body: `This storyboard and its ${activeFrames.length} frame${
+                      activeFrames.length === 1 ? "" : "s"
+                    } will be removed. This cannot be undone.`,
+                    confirmLabel: "Delete storyboard",
+                  });
+                  if (!ok) return;
                   act(() => deleteStoryboard(projectId, active.id));
                   setActiveId(null);
                 }}
