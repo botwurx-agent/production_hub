@@ -7,7 +7,12 @@ import { toast } from "@/components/ui/toast";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import { addReferencesBulk } from "@/app/(app)/projects/[id]/cast-actions";
 import { nameFromFilename } from "@/lib/filename-name";
-import { PICKABLE_KINDS, kindMeta } from "@/lib/cast";
+import {
+  PICKABLE_KINDS,
+  displayHandle,
+  kindMeta,
+  suggestedHandle,
+} from "@/lib/cast";
 
 /**
  * File a batch of elements in one pass.
@@ -200,6 +205,14 @@ export function BulkElementsModal({
           "success"
         );
       }
+      if (res.warnings.length) {
+        toast(
+          `${res.warnings.length} handle${
+            res.warnings.length === 1 ? "" : "s"
+          } could not be set. Open the element to add it.`,
+          "info"
+        );
+      }
       close();
       router.refresh();
     } catch (e) {
@@ -226,7 +239,8 @@ export function BulkElementsModal({
           <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
             Paste links{" "}
             <span className="font-normal normal-case text-text-faint">
-              · one per line, share pages or direct image links
+              · one per line. The name you give each one becomes its handle, so
+              MOA-3 is @MOA-3.
             </span>
           </label>
           <textarea
@@ -345,11 +359,18 @@ export function BulkElementsModal({
                           r.name.trim() ? "border-border" : "border-amber"
                         }`}
                       />
-                      {r.url && (
-                        <span className="mt-0.5 block truncate font-mono text-[10.5px] text-text-faint">
-                          {r.url}
-                        </span>
-                      )}
+                      <span className="mt-0.5 flex items-center gap-2 text-[10.5px]">
+                        {r.name.trim() && (
+                          <span className="shrink-0 font-mono font-bold text-accent">
+                            {displayHandle(suggestedHandle(r.name))}
+                          </span>
+                        )}
+                        {r.url && (
+                          <span className="min-w-0 truncate font-mono text-text-faint">
+                            {r.url}
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <select
                       value={r.kind}

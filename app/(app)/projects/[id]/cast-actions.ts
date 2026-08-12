@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
-import { normalizeHandle, refKind, slugify } from "@/lib/cast";
+import { HANDLE_PLATFORMS, normalizeHandle, refKind, slugify } from "@/lib/cast";
 import { assetStorage } from "@/lib/asset-storage";
 import {
   aspectRatio,
@@ -420,10 +420,18 @@ export async function addReferencesBulk(
     /** A share page or direct image link, fetched and stored here. */
     url?: string | null;
     studioWide?: boolean;
-  }[]
-): Promise<{ added: number; failed: { name: string; reason: string }[] }> {
+  }[],
+  /** Which platform's element library these handles belong to. */
+  platform: string = HANDLE_PLATFORMS[0]
+): Promise<{
+  added: number;
+  failed: { name: string; reason: string }[];
+  /** Created, but something optional did not stick. Not a failure. */
+  warnings: { name: string; reason: string }[];
+}> {
   await requireStudioContext();
   const failed: { name: string; reason: string }[] = [];
+  const warnings: { name: string; reason: string }[] = [];
   let added = 0;
 
   // Sequential, not parallel: saveReference reads back to dedupe the slug, and
@@ -447,6 +455,19 @@ export async function addReferencesBulk(
       failed.push({ name: item.name, reason: "Could not create it." });
       continue;
     }
+
+    // The handle IS the name, which is the operator's own rule: an element
+    // called MOA-3 is @MOA-3. Higgsfield derives it the same way, so anything
+    // cleverer would only invent a second identifier to keep in step. Recorded
+    // here rather than left for later, since an element with no handle cannot
+    // be spent in a prompt, which is the whole point of having one.
+    const handle = await saveHandle(projectId, id, platform, item.name);
+    if ("error" in handle && handle.error) {
+      // The element is real and usable; only its handle is missing. Counting
+      // that as a failure would report the same element as both added and
+      // failed, so it is a warning.
+      warnings.push({ name: item.name, reason: handle.error });
+    }
     // A link is the normal case here: the images are generated elsewhere and
     // arrive as share pages, so pulling them in beats asking anybody to
     // download and re-upload twenty-one files.
@@ -465,5 +486,5 @@ export async function addReferencesBulk(
   }
 
   rp(projectId);
-  return { added, failed };
+  return { added, failed, warnings };
 }
