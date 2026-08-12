@@ -775,8 +775,9 @@ Rules:
 - Leave a field null rather than guessing it. A shot list with no movement column should return movement null on every row, not invented values.
 - Never invent a shot. Every row you return must correspond to something written in the document.
 - A creative treatment or a script counts. Much of this work arrives as a deck rather than a table: a numbered list of desired shots, or a script whose beats each describe one setup ("We see a closeup of the label, water dripping down"). Return one row per written beat or numbered item, description copied from the document, and leave size, type and movement null unless they are actually stated. Do not merge several written beats into one row or split one into several.
-- On-screen text goes in notes: a SUPER, a title card, or a line of voice over belongs to the beat it is printed with, as printed.
-- When the same document holds more than one cut of the film (a :30 and a :15), return the rows of the longest cut only. The shorter cut is a trim of the same shots, so returning both would list every shot twice.
+- On-screen text is not a shot. A SUPER, a title card, an end card or a line of voice over goes in notes, as printed, on the beat it is printed with. If a written beat is nothing but on-screen text, it earns no row of its own.
+- Return every list the document holds. A script's beats and a separate list of desired shots or stills are different lists and both belong. Keep them in the order the document presents them, script first.
+- The one exception is alternate CUTS of the same film, for example a :30 and a :15 of the same script. Those are the same shots trimmed to length, so return the longest cut only. A list of desired shots or stills is not an alternate cut and is always kept.
 - pages describes the storyboard PANEL LAYOUT per page, when the document has drawn panels: how many panels, and the grid if it is regular. Give captions in reading order, left to right then down, one string per panel, empty string for a panel with no caption.
 - If a page has no drawn panels, omit it from pages.
 - kind is "both" when the document has drawn panels AND a shot table.
