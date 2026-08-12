@@ -120,7 +120,7 @@ export async function reorderShots(projectId: string, ids: string[]): Promise<vo
 export async function savePrompt(
   projectId: string,
   shotId: string,
-  stage: "image" | "video",
+  stage: "image" | "video" | "audio",
   patch: { text?: string; target_model?: string | null; params?: Json | null },
 ): Promise<PipelineState> {
   const ctx = await requireStudioContext();
@@ -160,13 +160,25 @@ export async function savePrompt(
   return { id: data.id };
 }
 
-// ---- Generations (image candidates + video takes) --------------------------
+/**
+ * What a generation at this stage IS.
+ *
+ * Kept as its own function rather than a ternary, because a stage was added
+ * (audio, for voiceover) and the old `video ? video : image` shape silently
+ * files anything new as an image, which then renders as a broken thumbnail
+ * rather than as an error anybody would notice.
+ */
+function kindForStage(stage: string): string {
+  return stage === "video" ? "video" : stage === "audio" ? "audio" : "image";
+}
+
+// ---- Generations (image candidates + video takes + voiceover) --------------
 
 export async function addGeneration(
   projectId: string,
   input: {
     shotId: string;
-    stage: "image" | "video";
+    stage: "image" | "video" | "audio";
     promptId?: string | null;
     prompt?: string | null;
     file_path?: string | null;
@@ -201,7 +213,7 @@ export async function addGeneration(
       studio_id: ctx.studio.id,
       shot_id: input.shotId,
       stage: input.stage,
-      kind: input.kind ?? (input.stage === "video" ? "video" : "image"),
+      kind: input.kind ?? kindForStage(input.stage),
       role: input.role ?? null,
       status: input.status ?? undefined,
       prompt_id: input.promptId ?? null,
@@ -242,7 +254,7 @@ export async function addGenerationsBulk(
   projectId: string,
   input: {
     shotId: string;
-    stage: "image" | "video";
+    stage: "image" | "video" | "audio";
     promptId?: string | null;
     prompt?: string | null;
     filePaths: string[];
@@ -269,7 +281,7 @@ export async function addGenerationsBulk(
     studio_id: ctx.studio.id,
     shot_id: input.shotId,
     stage: input.stage,
-    kind: input.stage === "video" ? "video" : "image",
+    kind: kindForStage(input.stage),
     prompt_id: input.promptId ?? null,
     prompt: input.prompt ?? null,
     file_path: fp,

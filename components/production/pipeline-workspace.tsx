@@ -27,6 +27,7 @@ import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
 import { TriageView } from "@/components/production/triage-view";
 import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
+import { AudioPanel } from "@/components/production/audio-panel";
 import { ShotReferences, type LooseRef } from "@/components/production/shot-references";
 import { ShareDocButton } from "@/components/review/share-doc-button";
 import { EditorHandoffButton } from "@/components/production/editor-handoff-button";
@@ -1433,6 +1434,13 @@ export function PipelineWorkspace({
                   reviews={batchReviews[active.id] ?? []}
                   refStartId={showImageStage ? approvedStart?.id ?? null : null}
                   refEndId={showImageStage ? approvedEnd?.id ?? null : null} onRun={run} />
+                {/* Voiceover last, because it is written against the picture
+                    rather than the other way round. */}
+                <Flow label="add the read that plays over it" />
+                <AudioPanel projectId={projectId} studioId={studioId} shot={active}
+                  prompt={shotPrompts.get(`${active.id}:audio`) ?? null}
+                  gens={shotGens.get(`${active.id}:audio`) ?? []}
+                  media={media} onRun={run} />
               </>
             )}
           </div>

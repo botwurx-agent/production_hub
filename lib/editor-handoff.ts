@@ -30,6 +30,23 @@ export type HandoffShot = {
   resolution: string | null;
   model: string | null;
   isVideo: boolean;
+  /**
+   * The picked voiceover read, when the shot has one.
+   *
+   * Its own field rather than another entry in a list of files, because the
+   * pairing is the information the editor needs: this read goes over this
+   * clip. A flat list of forty files would hand that problem straight back.
+   */
+  voice: HandoffVoice | null;
+};
+
+export type HandoffVoice = {
+  generationId: string;
+  filename: string;
+  url: string | null;
+  durationSec: number | null;
+  /** What is said, when the shot recorded its line. */
+  line: string | null;
 };
 
 export type HandoffData = {
@@ -92,7 +109,7 @@ export async function loadHandoffByToken(
   const { data: gens } = await service
     .from("ai_generations")
     .select(
-      "id, shot_id, role, kind, stage, file_path, external_url, thumb_url, duration_sec, resolution, model, created_at"
+      "id, shot_id, role, kind, stage, file_path, external_url, thumb_url, duration_sec, resolution, model, prompt, created_at"
     )
     .in(
       "shot_id",
@@ -116,10 +133,17 @@ export async function loadHandoffByToken(
 
   let updatedAt: string | null = null;
   const out: HandoffShot[] = shots.map((s, i) => {
-    const take = rows.find((g) => g.shot_id === s.id) ?? null;
+    // Split by stage. Picking the first row for the shot was fine while every
+    // pick was a video, but a voiceover take carries the same role, so an
+    // unsplit find() would hand the editor an audio file where the clip goes.
+    const mine = rows.filter((g) => g.shot_id === s.id);
+    const take = mine.find((g) => g.stage !== "audio") ?? null;
+    const voiceRow = mine.find((g) => g.stage === "audio") ?? null;
     const position = i + 1;
-    if (take?.created_at && (!updatedAt || take.created_at > updatedAt)) {
-      updatedAt = take.created_at;
+    for (const row of mine) {
+      if (row.created_at && (!updatedAt || row.created_at > updatedAt)) {
+        updatedAt = row.created_at;
+      }
     }
     const isVideo = Boolean(
       take && (take.kind === "video" || take.stage === "video")
@@ -142,6 +166,24 @@ export async function loadHandoffByToken(
       resolution: take?.resolution ?? null,
       model: take?.model ?? null,
       isVideo,
+      voice:
+        voiceRow && voiceRow.file_path
+          ? {
+              generationId: voiceRow.id,
+              // Same stem as the clip, so the pair sits together in a Finder
+              // window sorted by name and the pairing survives the download.
+              filename: fileNameFor(
+                position,
+                s.title || `shot-${position}`,
+                voiceRow.file_path
+              ),
+              url: signed.get(voiceRow.file_path) ?? null,
+              durationSec: voiceRow.duration_sec
+                ? Number(voiceRow.duration_sec)
+                : null,
+              line: voiceRow.prompt?.trim() || null,
+            }
+          : null,
     };
   });
 

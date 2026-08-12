@@ -83,6 +83,8 @@ export default async function EditorHandoffPage({
           </h1>
           <p className="mt-1.5 text-sm text-text-muted">
             {data.readyCount} of {data.shots.length} shots ready, in cut order.
+            {data.shots.some((s) => s.voice) &&
+              ` ${data.shots.filter((s) => s.voice).length} carry a voiceover.`}
             Files download numbered, so they sort correctly in a bin.
           </p>
           {/* Stated out loud because this page is LIVE. An editor who pulled
@@ -159,6 +161,47 @@ export default async function EditorHandoffPage({
                     </span>
                   )}
                 </div>
+
+                {/* The read that plays over this shot, kept ON the shot rather
+                    than in a folder of its own, since which read goes with
+                    which clip is the thing an editor otherwise has to work out
+                    by ear. */}
+                {shot.voice && (
+                  <div className="mt-3 rounded-[10px] border border-border bg-surface-2 p-2.5">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
+                        Voiceover
+                      </span>
+                      {secs(shot.voice.durationSec) && (
+                        <span className="text-[11.5px] text-text-faint">
+                          {secs(shot.voice.durationSec)}
+                        </span>
+                      )}
+                      <a
+                        href={`/h/${params.token}/file?g=${shot.voice.generationId}`}
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-2.5 py-1 font-display text-[12px] font-bold text-text transition hover:bg-surface-2"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 3v12M7 12l5 5 5-5M5 21h14" />
+                        </svg>
+                        {shot.voice.filename}
+                      </a>
+                    </div>
+                    {shot.voice.line && (
+                      <p className="mb-1.5 text-[12.5px] italic text-text-muted">
+                        &ldquo;{shot.voice.line}&rdquo;
+                      </p>
+                    )}
+                    {shot.voice.url && (
+                      <audio
+                        src={shot.voice.url}
+                        controls
+                        preload="none"
+                        className="w-full"
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             </li>
           ))}
