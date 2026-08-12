@@ -152,6 +152,12 @@ export type CastHandle = {
 export type CastSheet = {
   id: string;
   url: string;
+  /**
+   * A resized copy for the grid. Null when there is no stored file to resize
+   * (an external link) or when resizing is unavailable, and the caller falls
+   * back to `url`.
+   */
+  thumbUrl: string | null;
 };
 
 export type CastReference = {

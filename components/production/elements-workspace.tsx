@@ -14,6 +14,7 @@ import {
   displayHandle,
   kindMeta,
   type CastReference,
+  type CastSheet,
   type CastShot,
   type CastUse,
   type RefKind,
@@ -262,8 +263,10 @@ function ReferenceCard({
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={cover.url}
+            src={cover.thumbUrl ?? cover.url}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover"
           />
         ) : (
@@ -733,7 +736,7 @@ function SheetStrip({
   projectId: string;
   studioId: string;
   refId: string;
-  sheets: { id: string; url: string }[];
+  sheets: CastSheet[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -809,8 +812,10 @@ function SheetStrip({
             <span key={sh.id} className="group relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={sh.url}
+                src={sh.thumbUrl ?? sh.url}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 className="h-20 w-32 rounded-[9px] border border-border object-cover"
               />
               <button

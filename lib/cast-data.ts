@@ -1,10 +1,11 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { assetStorage } from "@/lib/asset-storage";
+import { assetStorage, signThumb } from "@/lib/asset-storage";
 import {
   refKind,
   type CastHandle,
   type CastReference,
+  type CastSheet,
   type CastShot,
   type CastUse,
 } from "@/lib/cast";
@@ -89,13 +90,26 @@ export async function loadCast(projectId: string, studioId: string) {
     handlesBy.set(h.entity_id, list);
   }
 
-  const sheetsBy = new Map<string, { id: string; url: string }[]>();
+  // A resized copy per sheet, for the grid. These are generator output, so a
+  // reference sheet is routinely a 20 to 30MB PNG, and the elements page draws
+  // every one of them at card size. The full file is still what opens.
+  const thumbed = new Map<string, string>();
+  await Promise.all(
+    (sheetRows ?? [])
+      .filter((r) => r.file_path)
+      .map(async (r) => {
+        const url = await signThumb(r.file_path as string);
+        if (url) thumbed.set(r.id, url);
+      })
+  );
+
+  const sheetsBy = new Map<string, CastSheet[]>();
   for (const r of sheetRows ?? []) {
     if (!r.entity_id) continue;
     const url = r.file_path ? signed.get(r.file_path) : r.external_url;
     if (!url) continue;
     const list = sheetsBy.get(r.entity_id) ?? [];
-    list.push({ id: r.id, url });
+    list.push({ id: r.id, url, thumbUrl: thumbed.get(r.id) ?? null });
     sheetsBy.set(r.entity_id, list);
   }
 
