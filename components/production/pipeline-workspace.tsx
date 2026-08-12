@@ -475,13 +475,19 @@ function FrameSlot({ label, color, gen, src, empty, video }: {
 // ---- Generation card --------------------------------------------------------
 
 function GenCard({
-  projectId, shot, gen, src, onRun,
+  projectId, shot, gen, src, thumb, onRun,
 }: {
   projectId: string; shot: AiShot; gen: AiGeneration; src: string | null;
+  /** Resized copy for the card. The full file is still what opens. */
+  thumb?: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
 }) {
   const [spec, setSpec] = useState(false);
   const [open, setOpen] = useState(false);
+  // Falls back to the original if the resize is unavailable, so a grid that is
+  // slow beats a grid that is empty.
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const cardSrc = !thumbFailed && thumb ? thumb : src;
   const isImage = gen.stage === "image";
   const isVideo = gen.kind === "video";
   const roleTag = gen.role ? ROLE_TAG[gen.role] ?? null : null;
@@ -497,8 +503,15 @@ function GenCard({
             className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          <img src={cardSrc ?? undefined} alt=""
+            // Off-screen candidates fetch nothing until scrolled to, which on a
+            // pool of thirty is most of them.
+            loading="lazy" decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={(e) => {
+              if (!thumbFailed && thumb && cardSrc === thumb) { setThumbFailed(true); return; }
+              (e.target as HTMLImageElement).style.display = "none";
+            }} />
         ))}
         {isVideo && (
           <span className="absolute inset-0 grid place-items-center">
@@ -762,12 +775,14 @@ function AddRefModal({
 }
 
 function StagePanel({
-  projectId, studioId, shot, stage, prompt, gens, media, library, reviews, refStartId, refEndId, onRun,
+  projectId, studioId, shot, stage, prompt, gens, media, thumbs = {}, library, reviews, refStartId, refEndId, onRun,
   canSeeCost, allRefs, usedRefs,
 }: {
   canSeeCost: boolean;
   projectId: string; studioId: string; shot: AiShot; stage: Stage;
   prompt: AiPrompt | null; gens: AiGeneration[]; media: Record<string, string>;
+  /** Resized copies for the candidate grid. */
+  thumbs?: Record<string, string>;
   library: AiPromptLibraryEntry[];
   reviews: BatchReviewSummary[];
   refStartId: string | null; refEndId: string | null;
@@ -891,7 +906,7 @@ function StagePanel({
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {pool.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} src={srcOf(g)} onRun={onRun} />)}
+          {pool.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} src={srcOf(g)} thumb={thumbs[g.id] ?? null} onRun={onRun} />)}
         </div>
       )}
 
@@ -928,7 +943,7 @@ function StagePanel({
       )}
       {triaging && (
         <TriageView projectId={projectId} stage={stage} shotId={shot.id}
-          items={pool} media={media} onClose={() => setTriaging(false)} />
+          items={pool} media={media} thumbs={thumbs} onClose={() => setTriaging(false)} />
       )}
     </div>
   );
@@ -1010,7 +1025,8 @@ function SequenceStrip({
                     className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={thumb.url} alt="" className="absolute inset-0 h-full w-full object-cover"
+                  <img src={thumb.url} alt="" loading="lazy" decoding="async"
+                    className="absolute inset-0 h-full w-full object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 ))}
                 <span className="absolute left-1 top-1 rounded-[4px] bg-black/55 px-1.5 py-0.5 text-[9px] font-extrabold text-white">{i + 1}</span>
@@ -1144,6 +1160,7 @@ export function PipelineWorkspace({
   canSeeCost = true,
   castReferences = [],
   castUses = [],
+  thumbUrls = {},
 }: {
   projectId: string;
   studioId: string;
@@ -1152,6 +1169,8 @@ export function PipelineWorkspace({
   prompts: AiPrompt[];
   generations: AiGeneration[];
   media: Record<string, string>;
+  /** Resized copies for grids. Falls back to `media` where absent. */
+  thumbUrls?: Record<string, string>;
   library?: AiPromptLibraryEntry[];
   masterCut?: AssetWithVersions | null;
   masterCutToken?: string | null;
@@ -1251,6 +1270,9 @@ export function PipelineWorkspace({
     // storage URL (media map) or a direct image/video URL. A share-page URL
     // can't render, so skip it and fall through to the next candidate.
     const renderable = (g: AiGeneration): string | null => {
+      // Resized copy first: the strip draws one small picture per shot, and the
+      // original behind it can be 34MB.
+      if (thumbUrls[g.id]) return thumbUrls[g.id];
       if (media[g.id]) return media[g.id];
       const u = g.external_url ?? "";
       if (/\.(png|jpe?g|gif|webp|avif|mp4|webm|mov)(\?|$)/i.test(u)) return u;
@@ -1285,7 +1307,7 @@ export function PipelineWorkspace({
       m.set(s.id, picked);
     }
     return m;
-  }, [generations, shots, media]);
+  }, [generations, shots, media, thumbUrls]);
 
   return (
     <div className="space-y-5">
@@ -1417,7 +1439,7 @@ export function PipelineWorkspace({
                     <Flow label="prompt, generate & pick images" />
                     <StagePanel allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
                       prompt={shotPrompts.get(`${active.id}:image`) ?? null}
-                      gens={imgGens} media={media} library={library}
+                      gens={imgGens} media={media} thumbs={thumbUrls} library={library}
                       reviews={batchReviews[active.id] ?? []}
                       refStartId={null} refEndId={null} onRun={run} />
                   </>
@@ -1430,7 +1452,7 @@ export function PipelineWorkspace({
                 <StagePanel allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
-                  media={media} library={library}
+                  media={media} thumbs={thumbUrls} library={library}
                   reviews={batchReviews[active.id] ?? []}
                   refStartId={showImageStage ? approvedStart?.id ?? null : null}
                   refEndId={showImageStage ? approvedEnd?.id ?? null : null} onRun={run} />

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { assetStorage } from "@/lib/asset-storage";
+import { assetStorage, signThumb } from "@/lib/asset-storage";
 import { loadGenerationCosts } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
 import { loadCast } from "@/lib/cast-data";
@@ -101,14 +101,27 @@ export default async function PipelinePage({
   const cast = await loadCast(params.id, ctx.studio.id);
 
   // Sign uploaded files (private bucket) for display, keyed by generation id.
+  //
+  // Two URLs per image, not one. `media` is the real file, served when a
+  // candidate is opened or handed on. `thumbs` is a resized copy for the grid,
+  // because these are generator outputs: a Higgsfield still is a 20 to 34MB
+  // PNG, and drawing eighteen of them into cards a couple of hundred pixels
+  // wide was downloading half a gigabyte to show thumbnails.
   const media: Record<string, string> = {};
+  const thumbs: Record<string, string> = {};
   await Promise.all(
     generations
       .filter((g) => g.file_path)
       .map(async (g) => {
-        const { data } = await assetStorage()
-          .createSignedUrl(g.file_path as string, 60 * 60);
+        const path = g.file_path as string;
+        const { data } = await assetStorage().createSignedUrl(path, 60 * 60);
         if (data?.signedUrl) media[g.id] = data.signedUrl;
+        // Video has no server-side resize, and its poster is handled by the
+        // player, so only stills get one.
+        if (g.kind !== "video" && g.kind !== "audio") {
+          const thumb = await signThumb(path);
+          if (thumb) thumbs[g.id] = thumb;
+        }
       }),
   );
 
@@ -136,6 +149,7 @@ export default async function PipelinePage({
           prompts={prompts}
           generations={generations}
           media={media}
+          thumbUrls={thumbs}
           library={library}
           masterCut={masterCut}
           masterCutToken={masterCutLink?.token ?? null}

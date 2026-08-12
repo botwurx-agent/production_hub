@@ -19,3 +19,35 @@ export function assetStorage() {
   const client = serviceConfigured() ? createServiceClient() : createClient();
   return client.storage.from("assets");
 }
+
+/** Wide enough to stay sharp on a retina card, small enough to be instant. */
+const THUMB_WIDTH = 640;
+const THUMB_QUALITY = 70;
+
+/**
+ * A signed URL for DISPLAYING an image in a grid, rather than for keeping.
+ *
+ * The pipeline stores what the generator produced, which for a Higgsfield still
+ * is a 20 to 34MB PNG. That is correct for the master, and ruinous for a grid:
+ * eighteen candidates meant half a gigabyte of downloads to draw thumbnails the
+ * size of a postage stamp, which is what a producer experiences as "the images
+ * take forever".
+ *
+ * Storage resizes on the fly and caches the result, so the original is never
+ * touched again for the grid and nothing needs re-uploading. Only the grid uses
+ * this; opening a candidate still serves the full file, since that is the point
+ * of opening it.
+ *
+ * Returns null rather than throwing when resizing is unavailable, so the caller
+ * falls back to the original and a grid that is slow beats a grid that is
+ * blank.
+ */
+export async function signThumb(
+  path: string,
+  width = THUMB_WIDTH
+): Promise<string | null> {
+  const { data } = await assetStorage().createSignedUrl(path, 60 * 60, {
+    transform: { width, quality: THUMB_QUALITY, resize: "contain" },
+  });
+  return data?.signedUrl ?? null;
+}

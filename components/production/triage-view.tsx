@@ -32,6 +32,7 @@ export function TriageView({
   shotId,
   items,
   media,
+  thumbs = {},
   onClose,
 }: {
   projectId: string;
@@ -39,6 +40,8 @@ export function TriageView({
   shotId: string;
   items: AiGeneration[];
   media: Record<string, string>;
+  /** Resized copies for the filmstrip only. The stage always shows the real file. */
+  thumbs?: Record<string, string>;
   onClose: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -411,7 +414,10 @@ export function TriageView({
       <div className="border-t border-white/10 px-3 py-2">
         <div ref={stripRef} className="flex gap-2 overflow-x-auto pb-1">
           {filtered.map((g, i) => {
-            const src = srcOf(g);
+            // The strip renders every candidate at once, so it gets the resized
+            // copy. The stage above keeps the real file, because judging a
+            // still at 640px is not judging it.
+            const src = thumbs[g.id] ?? srcOf(g);
             const rl = roleLabel(g.role);
             const inCompare = compareIds.includes(g.id);
             return (
@@ -425,7 +431,7 @@ export function TriageView({
                   <video src={`${src}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <img src={src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                 ))}
                 <span className="absolute left-1 top-1 rounded bg-black/60 px-1 text-[9px] font-bold">{i + 1}</span>
                 {g.starred && <span className="absolute right-1 top-1 text-[11px] text-amber-300">★</span>}
