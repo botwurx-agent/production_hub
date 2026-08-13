@@ -438,10 +438,15 @@ function Flow({ label }: { label?: string }) {
 }
 
 // A large, labeled frame slot for the locked Start / End (image) or Take (video).
-function FrameSlot({ label, color, gen, src, empty, video }: {
-  label: string; color: string; gen: AiGeneration | null; src: string | null; empty: string; video?: boolean;
+function FrameSlot({ label, color, gen, src, thumb, empty, video }: {
+  label: string; color: string; gen: AiGeneration | null; src: string | null;
+  /** Resized copy. This box is about 220px wide; the original can be 34MB. */
+  thumb?: string | null;
+  empty: string; video?: boolean;
 }) {
   const isVideo = video || gen?.kind === "video";
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const stillSrc = !thumbFailed && thumb ? thumb : src;
   return (
     <div>
       <div className="mb-1 text-[10.5px] font-extrabold uppercase tracking-wide" style={{ color }}>{label}</div>
@@ -451,8 +456,12 @@ function FrameSlot({ label, color, gen, src, empty, video }: {
             <video src={src} controls playsInline preload="metadata" className="absolute inset-0 h-full w-full object-contain bg-black" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            <img src={stillSrc ?? undefined} alt="" decoding="async"
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={(e) => {
+                if (!thumbFailed && thumb && stillSrc === thumb) { setThumbFailed(true); return; }
+                (e.target as HTMLImageElement).style.display = "none";
+              }} />
           ))}
           {isVideo && !src && (
             <span className="absolute inset-0 grid place-items-center">
@@ -837,7 +846,7 @@ function StagePanel({
           id: g.id,
           role: g.role,
           kind: g.kind,
-          src: media[g.id] ?? g.external_url ?? null,
+          src: thumbs[g.id] ?? media[g.id] ?? g.external_url ?? null,
         }))}
         text={pText}
         onInsert={(token) => {
@@ -919,8 +928,8 @@ function StagePanel({
             Selected frames · the video animates between these
           </div>
           <div className="grid max-w-md grid-cols-2 gap-3">
-            <FrameSlot label="Start" color="var(--h-cyan)" gen={start} src={srcOf(start)} empty="Tag a candidate 'Start' above" />
-            <FrameSlot label="End" color="var(--h-pink)" gen={end} src={srcOf(end)} empty="Tag a candidate 'End' above" />
+            <FrameSlot label="Start" color="var(--h-cyan)" gen={start} src={srcOf(start)} thumb={start ? thumbs[start.id] ?? null : null} empty="Tag a candidate 'Start' above" />
+            <FrameSlot label="End" color="var(--h-pink)" gen={end} src={srcOf(end)} thumb={end ? thumbs[end.id] ?? null : null} empty="Tag a candidate 'End' above" />
           </div>
         </div>
       ) : (

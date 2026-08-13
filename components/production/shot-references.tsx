@@ -146,8 +146,12 @@ export function ShotReferences({
               {ref.sheets[0] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={ref.sheets[0].url}
+                  // A 20px circle. Without the resized copy this was pulling
+                  // the full generator output, tens of megabytes, per chip.
+                  src={ref.sheets[0].thumbUrl ?? ref.sheets[0].url}
                   alt=""
+                  loading="lazy"
+                  decoding="async"
                   className="h-5 w-5 rounded-full object-cover"
                 />
               ) : (
