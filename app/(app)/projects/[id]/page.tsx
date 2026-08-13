@@ -129,6 +129,7 @@ export default async function ProjectDetailPage({
     { data: upcomingEvents },
     { data: taskRows },
     { data: billingDocs },
+    { data: binderRows },
   ] = await Promise.all([
     supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
     supabase
@@ -181,6 +182,10 @@ export default async function ProjectDetailPage({
     supabase
       .from("billing_documents")
       .select("kind, status")
+      .eq("project_id", params.id),
+      supabase
+      .from("project_binders")
+      .select("shared_at, revoked_at")
       .eq("project_id", params.id),
   ]);
 
@@ -310,6 +315,13 @@ export default async function ProjectDetailPage({
   const slackCount = (slackChannels ?? []).length;
   const chatCount = (chatSpaces ?? []).length;
   const commsTotal = emailCount + slackCount + chatCount;
+
+  // Binders on this job, and how many are live. "Shared" is the number a
+  // client could open right now, so a revoked one does not count.
+  const binderCount = (binderRows ?? []).length;
+  const binderShared = (binderRows ?? []).filter(
+    (b) => b.shared_at && !b.revoked_at
+  ).length;
 
   // Signed paperwork on this job, for the hub card. Fully signed means both
   // sides, which is what an agreement actually needs.
@@ -915,6 +927,33 @@ export default async function ProjectDetailPage({
                 {deliverTotal > 0
                   ? "Final deliverables and billing status."
                   : "List the final deliverables and invoice."}
+              </p>
+            </HubCard>
+
+            {/* The binder is the LAST card in Produce on purpose: it is what you
+                reach for once the rest of the job exists, since it is
+                assembled from those. */}
+            <HubCard
+              href={`/projects/${project.id}/binder`}
+              hue="orange"
+              title="Client binder"
+              sub={
+                binderCount > 0
+                  ? `${binderCount} binder${binderCount === 1 ? "" : "s"}${binderShared > 0 ? ` · ${binderShared} shared` : ""}`
+                  : "Everything in one place"
+              }
+              footer={binderCount > 0 ? "Open binders" : "Build a binder"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z" />
+                  <path d="M8 3v18M4 8h4M4 12h4M4 16h4" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                {binderCount > 0
+                  ? "Call sheets, boards and the shot list, compiled to share or print."
+                  : "Compile the job into one printable, shareable document."}
               </p>
             </HubCard>
 

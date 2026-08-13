@@ -3428,6 +3428,54 @@ export type Database = {
           },
         ];
       };
+      project_binders: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          title: string | null;
+          token: string;
+          sections: Json;
+          shared_at: string | null;
+          revoked_at: string | null;
+          view_count: number;
+          last_viewed_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          title?: string | null;
+          token: string;
+          sections?: Json;
+          shared_at?: string | null;
+          revoked_at?: string | null;
+          view_count?: number;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          title?: string | null;
+          token?: string;
+          sections?: Json;
+          shared_at?: string | null;
+          revoked_at?: string | null;
+          view_count?: number;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       project_events: {
         Row: {
           id: string;

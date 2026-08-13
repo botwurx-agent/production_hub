@@ -17,6 +17,8 @@ const PUBLIC_PATHS = [
   "/r",
   "/rb",
   "/b",
+  // The client project binder. Its own prefix because /b is the shared board.
+  "/bd",
   "/c",
   "/p",
   "/h",
