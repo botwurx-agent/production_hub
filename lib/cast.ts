@@ -14,13 +14,28 @@
 /**
  * A light label for grouping and colour. It carries NO behaviour.
  *
- * The set MIRRORS Higgsfield's own New Element dialog (Auto / Character /
- * Location / Prop), deliberately. The operator names and categorises a thing
- * once over there and once here; using a different vocabulary in the second
- * place makes them translate for no reason. "Auto" means uncategorised: their
- * server classifies from the image, we simply do not insist.
+ * Started as a mirror of Higgsfield's own New Element dialog (Auto / Character
+ * / Location / Prop), so that naming a thing once over there and once here
+ * needed no translation. It has since diverged in exactly two places, both
+ * deliberate.
+ *
+ * WARDROBE is its own category rather than living inside Prop. On a real job
+ * it is its own discipline with its own continuity problem (which look is Maya
+ * wearing in scene 3), and lumping a costume in with a product means the one
+ * question the page exists to answer takes a hunt.
+ *
+ * AUTO is no longer offered. It means "not sorted yet", which is the platform
+ * declining to insist; here the category is the grouping the page is built on,
+ * so an element with no category is just an element in the wrong place. It
+ * survives as the fallback for a kind we do not recognise.
  */
-export type RefKind = "auto" | "character" | "location" | "element" | "crowd";
+export type RefKind =
+  | "auto"
+  | "character"
+  | "wardrobe"
+  | "location"
+  | "element"
+  | "crowd";
 
 export const REF_KINDS: {
   key: RefKind;
@@ -32,12 +47,15 @@ export const REF_KINDS: {
   pick: boolean;
 }[] = [
   {
+    // Kept FIRST and unpickable: kindMeta falls back to this entry for a kind
+    // it does not know, so the fallback has to read as "uncategorised" rather
+    // than mislabel the thing as a real category.
     key: "auto",
     label: "Auto",
     plural: "Uncategorised",
     hue: "cyan",
     hint: "Not sorted yet",
-    pick: true,
+    pick: false,
   },
   {
     key: "character",
@@ -45,6 +63,14 @@ export const REF_KINDS: {
     plural: "Characters",
     hue: "purple",
     hint: "A person the audience has to recognise",
+    pick: true,
+  },
+  {
+    key: "wardrobe",
+    label: "Wardrobe",
+    plural: "Wardrobe",
+    hue: "pink",
+    hint: "What someone wears, or one look of it",
     pick: true,
   },
   {
@@ -60,7 +86,7 @@ export const REF_KINDS: {
     label: "Prop",
     plural: "Props",
     hue: "blue",
-    hint: "Wardrobe, a prop, a product",
+    hint: "A prop, a product, an object",
     pick: true,
   },
   {

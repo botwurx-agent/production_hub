@@ -335,7 +335,7 @@ function PromoteModal({
   onDone: () => void;
 }) {
   const [name, setName] = useState("");
-  const [kind, setKind] = useState("auto");
+  const [kind, setKind] = useState<string>(PICKABLE_KINDS[0].key);
   const [handle, setHandle] = useState("");
   const [touched, setTouched] = useState(false);
   const [busy, start] = useTransition();

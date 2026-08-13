@@ -55,6 +55,13 @@ const KIND_ICONS: Record<RefKind, ReactNode> = {
       <circle cx="7" cy="7" r="1.5" />
     </svg>
   ),
+  wardrobe: (
+    // A hanger: the one object that reads as wardrobe at 20px without a label.
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 5a2 2 0 1 1 2 2c-1.2 0-2 .8-2 2" />
+      <path d="M12 9 3.5 15.2A1.2 1.2 0 0 0 4.2 17.4h15.6a1.2 1.2 0 0 0 .7-2.2L12 9Z" />
+    </svg>
+  ),
   location: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
@@ -99,7 +106,7 @@ export function ElementsWorkspace({
   const router = useRouter();
   const [editing, setEditing] = useState<CastReference | "new" | null>(null);
   const [bulk, setBulk] = useState(false);
-  const [newKind, setNewKind] = useState<RefKind>("auto");
+  const [newKind, setNewKind] = useState<RefKind>(PICKABLE_KINDS[0].key);
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   // Resolved by id out of current server data rather than held as a snapshot,
