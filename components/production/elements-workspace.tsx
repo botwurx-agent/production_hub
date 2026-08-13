@@ -168,17 +168,31 @@ export function ElementsWorkspace({
               },
             ]}
             action={
-              <div className="flex flex-wrap justify-center gap-3">
-                {PICKABLE_KINDS.map((k) => (
-                  <KindTile
-                    key={k.key}
-                    kind={k}
-                    onClick={() => {
-                      setNewKind(k.key);
-                      setEditing("new");
-                    }}
-                  />
-                ))}
+              <div className="flex flex-col items-center gap-3">
+                {/* The tiles stay here, unlike the toolbar, because on an empty
+                    page the question is "what counts as an element" rather than
+                    "which one am I adding". */}
+                <div className="flex flex-wrap justify-center gap-3">
+                  {PICKABLE_KINDS.map((k) => (
+                    <KindTile
+                      key={k.key}
+                      kind={k}
+                      onClick={() => {
+                        setNewKind(k.key);
+                        setEditing("new");
+                      }}
+                    />
+                  ))}
+                </div>
+                {/* A job usually starts with a folder of links, so the batch
+                    door has to exist HERE. It was only in the toolbar, which
+                    an empty page does not show. */}
+                <button
+                  onClick={() => setBulk(true)}
+                  className="text-[13px] font-semibold text-accent transition hover:underline"
+                >
+                  Or paste a list of links and add several at once
+                </button>
               </div>
             }
           />
@@ -197,25 +211,23 @@ export function ElementsWorkspace({
           <span className="text-xs text-text-faint">
             {references.length} in this job
           </span>
+          {/* Two buttons, not five. There used to be one per category, which
+              put the category choice in the toolbar AND again in the dialog
+              that opens; the dialog is where it belongs, so the toolbar just
+              says what you are doing. Mirrors the platform's own New Element. */}
           <div className="ml-auto flex flex-wrap gap-1.5">
-            {PICKABLE_KINDS.map((k) => (
-              <button
-                key={k.key}
-                onClick={() => {
-                  setNewKind(k.key);
-                  setEditing("new");
-                }}
-                className="rounded-[9px] border border-border-strong px-2.5 py-1 text-xs font-semibold transition hover:border-accent hover:text-accent"
-              >
-                + {k.label}
-              </button>
-            ))}
-            {/* The door for a folder of reference images, which is how a job
-                actually starts. The per-kind buttons above stay for adding one
-                properly, with its prompt and handle. */}
+            <button
+              onClick={() => {
+                setNewKind(PICKABLE_KINDS[0].key);
+                setEditing("new");
+              }}
+              className="rounded-[9px] bg-accent px-3 py-1.5 text-xs font-bold text-accent-fg transition hover:bg-accent-strong"
+            >
+              + New element
+            </button>
             <button
               onClick={() => setBulk(true)}
-              className="rounded-[9px] bg-accent px-2.5 py-1 text-xs font-bold text-accent-fg transition hover:bg-accent-strong"
+              className="rounded-[9px] border border-border-strong px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:border-accent hover:text-accent"
             >
               + Add several
             </button>
