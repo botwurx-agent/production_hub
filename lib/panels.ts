@@ -306,6 +306,33 @@ export function panelsFromImages(pages: ImagePage[]): Rect[][] {
 }
 
 /**
+ * Keep only the slices that actually contain a picture.
+ *
+ * Applied to the AUTOMATIC fallbacks, never to a grid the operator asked for.
+ * When detection cannot read a page it slices by content bands, and on a board
+ * whose text sits beside the artwork every text column becomes a "panel": the
+ * producer is then offered a grid of cropped paragraphs to tick, which is
+ * worse than offering nothing, because it reads as the tool having understood
+ * something.
+ *
+ * A page with no placed pictures at all is left alone. That is a scan, where
+ * the artwork is the page and there is nothing to test against.
+ */
+export function withPictures(rects: Rect[], images: Rect[]): Rect[] {
+  if (!images.length) return rects;
+  return rects.filter((r) =>
+    images.some((img) => {
+      const w = Math.min(r.x + r.w, img.x + img.w) - Math.max(r.x, img.x);
+      const h = Math.min(r.y + r.h, img.y + img.h) - Math.max(r.y, img.y);
+      if (w <= 0 || h <= 0) return false;
+      // A sliver of a neighbouring picture along an edge is not this slice
+      // containing a picture, so the overlap has to be a real share of it.
+      return (w * h) / Math.max(1, area(img)) >= 0.2;
+    })
+  );
+}
+
+/**
  * The fallback, and the override.
  *
  * Used when detection is not confident, and when the operator corrects it

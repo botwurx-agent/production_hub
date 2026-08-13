@@ -10,6 +10,7 @@ import {
   panelsFromImages,
   readingOrder,
   sliceGrid,
+  withPictures,
   type Rect,
 } from "@/lib/panels";
 import {
@@ -121,7 +122,11 @@ export function ImportDocModal({
           ? byImage[i]
           : (() => {
               const grid = findPanels(toGray(p.canvas));
-              return grid.confident ? readingOrder(grid.rects) : [];
+              if (!grid.confident) return [];
+              // Content bands on a page whose text sits beside the artwork
+              // include the text columns, so anything holding no picture is
+              // dropped rather than offered as a frame.
+              return withPictures(readingOrder(grid.rects), p.images);
             })();
         return {
           page: p,
@@ -182,7 +187,10 @@ export function ImportDocModal({
         let captions = plan.captions;
         // The model saw a regular grid where the detector was unsure: use it.
         if (!plan.auto && said?.cols && said?.rows) {
-          rects = sliceGrid(plan.page.width, plan.page.height, said.cols, said.rows);
+          rects = withPictures(
+            sliceGrid(plan.page.width, plan.page.height, said.cols, said.rows),
+            plan.page.images
+          );
           captions = rects.map(
             (r, ri) =>
               captionFor(
@@ -419,10 +427,14 @@ export function ImportDocModal({
                     />
                     <span>
                       <strong className="font-semibold text-text">
-                        {panelCount} storyboard panel{panelCount === 1 ? "" : "s"}
+                        {panelCount} storyboard frame{panelCount === 1 ? "" : "s"}
                       </strong>{" "}
                       across {plans.filter((p) => p.rects.length).length} page
                       {plans.filter((p) => p.rects.length).length === 1 ? "" : "s"}
+                      {/* Naming what they become answers the question the grid
+                          below raises: it is one new storyboard, not a pile of
+                          crops. */}
+                      , as one storyboard
                     </span>
                   </label>
                 </li>
@@ -464,8 +476,12 @@ export function ImportDocModal({
                       Page {plan.page.page}
                     </span>
                     <span className="text-[11.5px] text-text-faint">
-                      {plan.auto ? "detected" : "set by grid"} &middot;{" "}
-                      {plan.rects.length} panels
+                      {/* Say where these came from in words a producer can
+                          act on. "detected" told them nothing about whether
+                          to trust it. */}
+                      {plan.auto
+                        ? `${plan.rects.length} frame${plan.rects.length === 1 ? "" : "s"} read from the file`
+                        : `${plan.rects.length} cut by grid`}
                     </span>
                     {/* The escape hatch. Detection never has to be perfect, it
                         has to be one click to correct. */}
@@ -510,8 +526,12 @@ export function ImportDocModal({
                           }`}
                         >
                           <PanelThumb page={plan.page} rect={rect} />
-                          <span className="block px-2 py-1 text-[11px] text-text-muted">
-                            {plan.captions[ri]?.trim() || `Panel ${ri + 1}`}
+                          <span className="block px-2 py-1.5">
+                            <PanelLabel
+                              caption={plan.captions[ri] ?? ""}
+                              index={ri}
+                              off={off}
+                            />
                           </span>
                         </button>
                       );
@@ -587,6 +607,50 @@ export function ImportDocModal({
 }
 
 /** A crop drawn straight from the rendered page: no upload to preview it. */
+/**
+ * What this panel will become once imported.
+ *
+ * The confirm step used to show a crop and the word "Panel 3", which answers
+ * nothing: the producer could see a picture but not what would be saved with
+ * it. Showing the frame's own number and the first line of its description
+ * makes the grid checkable at a glance, which is the only reason it exists.
+ */
+function PanelLabel({
+  caption,
+  index,
+  off,
+}: {
+  caption: string;
+  index: number;
+  off: boolean;
+}) {
+  const { scene, description, sound } = useMemo(
+    () => splitCaption(caption.trim() || null),
+    [caption]
+  );
+  const line = description || sound;
+
+  return (
+    <>
+      <span className="flex items-center gap-1.5">
+        <span
+          className={`text-[11.5px] font-bold ${off ? "text-text-faint" : "text-text"}`}
+        >
+          {scene || `Frame ${index + 1}`}
+        </span>
+        {off && (
+          <span className="text-[10.5px] font-semibold uppercase tracking-wide text-text-faint">
+            skipped
+          </span>
+        )}
+      </span>
+      <span className="mt-0.5 block text-[11px] leading-snug text-text-muted line-clamp-2">
+        {line || "No text found beside this frame"}
+      </span>
+    </>
+  );
+}
+
 function PanelThumb({ page, rect }: { page: PdfPage; rect: Rect }) {
   // useMemo, not state-during-render: this is a pure function of its props, and
   // setting state in a render body is how you get React's loop guard.
