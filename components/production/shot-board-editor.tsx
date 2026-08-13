@@ -46,6 +46,8 @@ export type CardView = {
   asset_id: string | null;
   tags: string[];
   signedUrl: string | null;
+  /** Resized copy for the row thumbnail. */
+  thumbUrl?: string | null;
   image_name: string | null;
   // Persisted fields carried so a history snapshot can rebuild the row on undo.
   storagePath: string | null;
@@ -697,7 +699,7 @@ function ShotRow({
           <div className="grid aspect-[4/3] place-items-center overflow-hidden rounded-[10px] border border-border bg-surface-2/60">
             {card.signedUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={card.signedUrl} alt="" className="h-full w-full object-cover" />
+              <img src={card.thumbUrl ?? card.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             ) : (
               <span className="text-xs font-semibold text-text-faint">No image</span>
             )}
@@ -751,7 +753,7 @@ function ShotRow({
                     <span className="grid h-9 w-11 shrink-0 place-items-center overflow-hidden rounded-[6px] border border-border bg-surface-2/60">
                       {a.signedUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={a.signedUrl} alt="" className="h-full w-full object-cover" />
+                        <img src={a.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                       ) : (
                         <span className="text-[9px] text-text-faint">file</span>
                       )}

@@ -38,6 +38,11 @@ export type VersionRow = {
   notes: string | null;
   created_at: string;
   signedUrl: string | null;
+  /**
+   * A resized copy, for anything drawn at card size. Null for video and for
+   * anything with no stored file, so callers fall back to signedUrl.
+   */
+  thumbUrl: string | null;
   comments: VersionComment[];
   approvals: VersionApproval[];
 };

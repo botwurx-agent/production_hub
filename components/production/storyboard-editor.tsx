@@ -39,6 +39,8 @@ export type FrameView = {
   sound: string | null;
   notes: string | null;
   signedUrl: string | null;
+  /** Resized copy for the frame grid. Null when there is nothing to resize. */
+  thumbUrl?: string | null;
   image_name: string | null;
   // Persisted fields carried so a history snapshot can rebuild the frame on undo.
   storagePath: string | null;
@@ -502,7 +504,7 @@ function FrameCard({
         <div className="grid aspect-[16/10] place-items-center overflow-hidden bg-surface-2/60">
           {frame.signedUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={frame.signedUrl} alt="" className="h-full w-full object-cover" />
+            <img src={frame.thumbUrl ?? frame.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
           ) : (
             <span className="text-xs font-semibold text-text-faint">No image</span>
           )}
@@ -555,7 +557,7 @@ function FrameCard({
                   <span className="grid h-8 w-10 shrink-0 place-items-center overflow-hidden rounded-[6px] border border-border bg-surface-2/60">
                     {a.signedUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.signedUrl} alt="" className="h-full w-full object-cover" />
+                      <img src={a.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                     ) : (
                       <span className="text-[9px] text-text-faint">file</span>
                     )}

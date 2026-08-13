@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { assetStorage } from "@/lib/asset-storage";
+import { assetStorage, isResizable, signThumbs } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
 import { emailConfigured } from "@/lib/email";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
@@ -70,6 +70,12 @@ export default async function ShotListPage({
         .createSignedUrls(paths, SIGNED_TTL);
       for (const s of list ?? []) if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
     }
+    // Resized copies for the row thumbnails, which are small.
+    const thumbs = await signThumbs(
+      (cardRows ?? [])
+        .filter((c) => c.storage_path && isResizable(c.mime_type))
+        .map((c) => c.storage_path as string)
+    );
     cards = (cardRows ?? []).map((c) => ({
       id: c.id,
       group_id: c.group_id,
@@ -86,6 +92,7 @@ export default async function ShotListPage({
       asset_id: c.asset_id,
       tags: Array.isArray(c.tags) ? (c.tags as string[]) : [],
       signedUrl: c.storage_path ? (signed.get(c.storage_path) ?? null) : null,
+      thumbUrl: c.storage_path ? (thumbs.get(c.storage_path) ?? null) : null,
       image_name: c.image_name,
       storagePath: c.storage_path,
       mimeType: c.mime_type,
@@ -97,7 +104,13 @@ export default async function ShotListPage({
   const pickable: PickableAsset[] = assets.map((a) => {
     const cur =
       a.versions.find((v) => v.id === a.current_version_id) ?? a.versions[0];
-    return { id: a.id, name: a.name, signedUrl: cur?.signedUrl ?? null };
+    // The picker only ever DISPLAYS these, as a grid of small tiles, and the
+    // pick itself carries the asset id, so the resized copy is all it needs.
+    return {
+      id: a.id,
+      name: a.name,
+      signedUrl: cur?.thumbUrl ?? cur?.signedUrl ?? null,
+    };
   });
 
   return (

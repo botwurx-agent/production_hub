@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { assetStorage } from "@/lib/asset-storage";
+import { assetStorage, isResizable, signThumbs } from "@/lib/asset-storage";
 import { loadReactions } from "@/lib/review-reactions-load";
 import type {
   AssetWithVersions,
@@ -94,6 +94,16 @@ export async function loadProjectAssets(
     }
   }
 
+  // A resized copy for anything drawn at card size. An asset library is where
+  // the biggest files land, and a grid of them was pulling every original in
+  // full to draw a thumbnail. The real file is still what opens, reviews and
+  // downloads.
+  const stillPaths = (assetsRaw ?? [])
+    .flatMap((a) => a.versions ?? [])
+    .filter((v) => v.storage_path && isResizable(v.mime_type))
+    .map((v) => v.storage_path as string);
+  const thumbs = await signThumbs(stillPaths);
+
   const versionIds = (assetsRaw ?? []).flatMap((a) =>
     (a.versions ?? []).map((v) => v.id)
   );
@@ -144,6 +154,7 @@ export async function loadProjectAssets(
     versions: (a.versions ?? []).map((v) => ({
       ...v,
       signedUrl: v.storage_path ? (signed.get(v.storage_path) ?? null) : null,
+      thumbUrl: v.storage_path ? (thumbs.get(v.storage_path) ?? null) : null,
       comments: commentsByVersion.get(v.id) ?? [],
       approvals: approvalsByVersion.get(v.id) ?? [],
     })),

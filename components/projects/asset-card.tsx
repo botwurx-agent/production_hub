@@ -48,6 +48,10 @@ function Preview({
   onOpen?: () => void;
 }) {
   const link = version?.signedUrl ?? version?.url ?? null;
+  // The card is a small tile, so it takes the resized copy when there is one.
+  // `link` stays the real file for opening and for a video, which has no
+  // server-side resize.
+  const tile = version?.thumbUrl ?? link;
   const kind = version
     ? viewerKind(version.mime_type, version.storage_path ?? version.url)
     : "other";
@@ -57,7 +61,7 @@ function Preview({
     <>
       {kind === "image" && link ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={link} alt="" className="h-full w-full object-cover" />
+        <img src={tile ?? undefined} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
       ) : kind === "video" && link ? (
         // A muted video element shows the first frame as a thumbnail.
         <video

@@ -51,3 +51,32 @@ export async function signThumb(
   });
   return data?.signedUrl ?? null;
 }
+
+/**
+ * The same, for a page that signs a whole list.
+ *
+ * Keyed by PATH rather than by row id, because every caller already builds a
+ * path-keyed map from createSignedUrls and this drops in beside it.
+ *
+ * Signed one at a time on purpose: the batch endpoint takes no transform, so
+ * there is no plural form to call. They go in parallel and a failure is simply
+ * an absent key, leaving the caller on the original.
+ */
+export async function signThumbs(
+  paths: string[],
+  width = THUMB_WIDTH
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  await Promise.all(
+    [...new Set(paths.filter(Boolean))].map(async (path) => {
+      const url = await signThumb(path, width);
+      if (url) out.set(path, url);
+    })
+  );
+  return out;
+}
+
+/** Anything that is not a still has no server-side resize. */
+export function isResizable(mimeType: string | null | undefined): boolean {
+  return Boolean(mimeType && mimeType.startsWith("image/"));
+}

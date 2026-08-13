@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { assetStorage } from "@/lib/asset-storage";
+import { assetStorage, isResizable, signThumbs } from "@/lib/asset-storage";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import { requireStudioContext } from "@/lib/studio";
 import { getAccessToken as getGoogleToken } from "@/lib/gmail";
@@ -18,6 +18,8 @@ import type { Database, Board } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
 
 export type BoardState = { error?: string } | null;
+/** A board card can be scaled up on the canvas, so it gets more pixels. */
+const BOARD_IMAGE_WIDTH = 1200;
 const SIGNED_TTL = 60 * 60;
 const DEFAULT_W = 260;
 const DEFAULT_H = 200;
@@ -155,12 +157,27 @@ export async function getBoardItems(
   const paths = (data ?? [])
     .map((i) => i.storage_path)
     .filter((p): p is string => Boolean(p));
-  const signed = new Map<string, string>();
+  // Resized, not the original. A board card is drawn on the canvas and never
+  // opened at full size, so the full file is only ever a download the canvas
+  // does not need: a 34MB generator export behind a 300px card is pure wait.
+  //
+  // Wider than a grid thumbnail (1200 rather than 640) because a card can be
+  // dragged large and zoomed into, so it has to survive being scaled up.
+  const signed = await signThumbs(
+    (data ?? [])
+      .filter((i) => i.storage_path && isResizable(i.mime_type))
+      .map((i) => i.storage_path as string),
+    BOARD_IMAGE_WIDTH
+  );
   if (paths.length > 0) {
-    const { data: list } = await assetStorage()
-      .createSignedUrls(paths, SIGNED_TTL);
-    for (const s of list ?? []) {
-      if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+    // Anything not resizable (a video frame, an odd mime) still needs a URL.
+    const missing = paths.filter((p) => !signed.has(p));
+    if (missing.length) {
+      const { data: list } = await assetStorage()
+        .createSignedUrls(missing, SIGNED_TTL);
+      for (const s of list ?? []) {
+        if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+      }
     }
   }
 
