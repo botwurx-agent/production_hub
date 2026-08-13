@@ -1,15 +1,34 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { saveScript } from "@/app/(app)/projects/[id]/pipeline-actions";
 
 // Lightweight rich-text editor for the project script. Uses a contentEditable
 // surface + document.execCommand for formatting (bold/italic/underline/size/
 // font/lists) and stores the resulting HTML in ai_scripts.content. Pragmatic
 // and dependency-free; the script is studio-internal content.
+//
+// HEIGHT IS CAPPED, and this is the point of the component rather than a
+// detail. The surface used to have a floor and no ceiling, so a real script
+// pushed the sequence, the shots and everything else below the fold: the page
+// became a scroll to reach the work.
+//
+// Capped rather than moved into a window, because the script is READ WHILE the
+// sequence is built. You take a beat and make it a shot, so putting it behind
+// a modal would fight the job it is there for.
+//
+// Generous rather than small, and draggable. A nested scroller inside a page
+// that also scrolls is only annoying when the box is too short to read in, so
+// the default shows a good stretch of script and the operator can set their
+// own height, which sticks.
 
 const btn =
   "rounded-[7px] px-2 py-1 text-[13px] font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text";
+
+/** Roughly twenty lines: enough to read several beats without hunting. */
+const DEFAULT_HEIGHT = 420;
+const MIN_HEIGHT = 160;
+const HEIGHT_KEY = "pipeline.script.height";
 
 export function ScriptEditor({
   projectId,
@@ -19,11 +38,43 @@ export function ScriptEditor({
   initial: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number | null>(null);
 
   // Seed the editor once on mount (uncontrolled, to avoid caret jumps).
   useEffect(() => {
     if (ref.current) ref.current.innerHTML = initial || "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Restore the height this browser was left at. A per-person view preference
+  // about one box, so localStorage rather than a column on the row.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HEIGHT_KEY);
+      const n = raw ? Number(raw) : NaN;
+      if (Number.isFinite(n) && n >= MIN_HEIGHT) setHeight(n);
+    } catch {}
+  }, []);
+
+  // The drag handle is the browser's own (CSS resize), so the height change
+  // arrives as a resize rather than as an event we raised.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const obs = new ResizeObserver(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          window.localStorage.setItem(HEIGHT_KEY, String(el.offsetHeight));
+        } catch {}
+      }, 400);
+    });
+    obs.observe(el);
+    return () => {
+      if (timer) clearTimeout(timer);
+      obs.disconnect();
+    };
   }, []);
 
   function exec(cmd: string, value?: string) {
@@ -81,8 +132,19 @@ export function ScriptEditor({
         suppressContentEditableWarning
         onBlur={save}
         data-placeholder="Paste or write the script. Break each beat into a shot on the left."
-        className="rte min-h-[200px] px-3 py-2.5 text-sm leading-relaxed text-text outline-none"
+        style={{
+          height: height ?? DEFAULT_HEIGHT,
+          minHeight: MIN_HEIGHT,
+          // The browser's own handle, which costs nothing and behaves the way
+          // a resize handle is expected to. `overflow` is what enables it.
+          resize: "vertical",
+          overflowY: "auto",
+        }}
+        className="rte px-3 py-2.5 text-sm leading-relaxed text-text outline-none"
       />
+      <p className="border-t border-border px-3 py-1 text-[10.5px] text-text-faint">
+        Drag the bottom edge to make this taller. The height sticks.
+      </p>
     </div>
   );
 }
