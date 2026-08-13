@@ -143,8 +143,25 @@ export async function saveHandle(
   if (error) {
     reportError("saveHandle", { error, projectId });
     if (error.code === "23505") {
+      // Name the holder. "Already used by something else" is true and useless:
+      // a handle resolves to one thing on the platform, so the only question
+      // worth answering is WHICH thing, and the usual cause is a duplicate
+      // element rather than a genuine clash.
+      const { data: holder } = await supabase
+        .from("ai_entity_handles")
+        .select("entity_id, ai_entities(name, kind)")
+        .eq("studio_id", ctx.studio.id)
+        .eq("platform", platform.trim())
+        .eq("handle", handle)
+        .maybeSingle();
+      const other = holder?.ai_entities as
+        | { name: string; kind: string }
+        | null
+        | undefined;
       return {
-        error: `@${handle} is already used by something else on ${platform}.`,
+        error: other
+          ? `@${handle} already belongs to "${other.name}" (${other.kind}) on ${platform}. If that is a duplicate, remove one of them.`
+          : `@${handle} is already used on ${platform}.`,
       };
     }
     return { error: "Could not save that handle." };
