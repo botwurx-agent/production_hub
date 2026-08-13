@@ -258,6 +258,7 @@ export function ImportDocModal({
           mimeType: string | null;
           scene: string | null;
           caption: string | null;
+          sound: string | null;
         }[] = [];
         let done = 0;
         for (let pi = 0; pi < plans.length; pi++) {
@@ -271,8 +272,9 @@ export function ImportDocModal({
               { type: "image/jpeg" }
             );
             const up = await uploadAssetFile({ studioId, projectId, file: asFile });
-            // "4A. She turns to the window" is two fields on a frame, not one.
-            const { scene, description } = splitCaption(
+            // A board's caption is several fields, not one: a shot number, a
+            // scene, what is said over it and what the camera does.
+            const { scene, description, sound } = splitCaption(
               plan.captions[ri]?.trim() || null
             );
             frames.push({
@@ -280,6 +282,7 @@ export function ImportDocModal({
               mimeType: up.mimeType || "image/jpeg",
               scene,
               caption: description,
+              sound,
             });
             done++;
             setNote(`Uploading panel ${done} of ${panelCount}...`);

@@ -28,7 +28,13 @@ const MIN_ZONE = 34;
 const IN_COLUMN = 0.5;
 /** Runs within this much of a line height of each other are one line. */
 const SAME_LINE = 0.6;
-const MAX_CAPTION = 400;
+/**
+ * A storyboard caption is routinely a paragraph, not a line: a shot
+ * description on a real board ran three lines plus a voiceover.
+ */
+const MAX_CAPTION = 1200;
+/** How far a panel's band reaches past it when there is no neighbour to stop it. */
+const BAND_SLACK = 0.15;
 
 function centerY(r: TextRun) {
   return r.y + r.h / 2;
@@ -52,20 +58,16 @@ export function captionFor(
   runs: TextRun[],
   others: Rect[] = []
 ): string | null {
-  const zoneTop = panel.y + panel.h;
-  const zoneBottom = zoneTop + Math.max(MIN_ZONE, panel.h * ZONE_SHARE);
+  const usable = runs.filter(
+    (r) => r.text.trim() && !others.some((o) => inside(r, o))
+  );
 
-  const mine = runs.filter((r) => {
-    if (!r.text.trim()) return false;
-    const cy = centerY(r);
-    if (cy < zoneTop || cy > zoneBottom) return false;
-    // Horizontally within the panel's own columns, so a caption belonging to
-    // the panel beside this one is not picked up.
-    const overlap =
-      Math.min(r.x + r.w, panel.x + panel.w) - Math.max(r.x, panel.x);
-    if (overlap < r.w * IN_COLUMN) return false;
-    return !others.some((o) => inside(r, o));
-  });
+  const below = belowRuns(panel, usable);
+  // Underneath first, since that is the classic caption. Beside is the other
+  // common storyboard layout and was the one that failed on a real board:
+  // frames down the left, the shot description in a column to the right, so
+  // nothing sat under a panel at all and every caption came back empty.
+  const mine = below.length ? below : besideRuns(panel, usable, others);
 
   if (!mine.length) return null;
 
@@ -98,25 +100,142 @@ export function captionFor(
   return text ? text.slice(0, MAX_CAPTION) : null;
 }
 
+/** Text in the strip directly under a panel. */
+function belowRuns(panel: Rect, runs: TextRun[]): TextRun[] {
+  const top = panel.y + panel.h;
+  const bottom = top + Math.max(MIN_ZONE, panel.h * ZONE_SHARE);
+  return runs.filter((r) => {
+    const cy = centerY(r);
+    if (cy < top || cy > bottom) return false;
+    // Horizontally within the panel's own columns, so a caption belonging to
+    // the panel beside this one is not picked up.
+    const overlap =
+      Math.min(r.x + r.w, panel.x + panel.w) - Math.max(r.x, panel.x);
+    return overlap >= r.w * IN_COLUMN;
+  });
+}
+
+/**
+ * Text in a column beside a panel, on either side.
+ *
+ * The vertical band is bounded by the panels above and below rather than by
+ * the panel's own edges, and it stops HALFWAY to each of them. That is what
+ * keeps the second frame's description out of the first frame's caption on a
+ * board where the text starts a few pixels ABOVE the picture it describes,
+ * which is exactly how a real one is typeset.
+ *
+ * Where there is no neighbour the band reaches only a little past the panel,
+ * so the running header and the page footer stay out.
+ */
+function besideRuns(panel: Rect, runs: TextRun[], others: Rect[]): TextRun[] {
+  // Only panels sharing this one's rows can bound it: a panel in the next
+  // column along says nothing about where this one's text ends.
+  const column = others.filter(
+    (o) => o.x < panel.x + panel.w && panel.x < o.x + o.w
+  );
+  const above = column.filter((o) => o.y + o.h <= panel.y);
+  const below = column.filter((o) => o.y >= panel.y + panel.h);
+
+  const prevBottom = above.length
+    ? Math.max(...above.map((o) => o.y + o.h))
+    : null;
+  const nextTop = below.length ? Math.min(...below.map((o) => o.y)) : null;
+
+  const top =
+    prevBottom !== null
+      ? (prevBottom + panel.y) / 2
+      : panel.y - panel.h * BAND_SLACK;
+  const bottom =
+    nextTop !== null
+      ? (panel.y + panel.h + nextTop) / 2
+      : panel.y + panel.h + panel.h * BAND_SLACK;
+
+  return runs.filter((r) => {
+    const cy = centerY(r);
+    if (cy < top || cy > bottom) return false;
+    // Outside the panel's own columns: this is the text NEXT to the picture.
+    const overlap =
+      Math.min(r.x + r.w, panel.x + panel.w) - Math.max(r.x, panel.x);
+    return overlap < r.w * IN_COLUMN;
+  });
+}
+
 /** A leading shot number, the way a board prints it above its caption. */
 const LEADING_CODE = /^(?:SHOT\s+|SH\.?\s+)?(\d{1,3}[A-Za-z]?)\s*[.):-]?\s+(?=\S)/i;
 
+/** How a board labels the line that is spoken over a frame. */
+const VOICE_MARKER = /\b(?:VOICE\s?OVER|VOICEOVER|NARRATION|VO)\b[:.\s]*/i;
+/** How it labels what the camera does. */
+const SHOT_MARKER = /\b(?:SHOT|ACTION|CAMERA|VISUAL)\b[:.\s]*/i;
+
 /**
- * Split a caption into the shot code and the rest.
+ * Split a caption into the fields a frame actually has.
  *
- * A board captions a panel "4A. She turns to the window", and those are two
- * different fields on a frame. Only a number, or a number with a letter, is
- * taken as a code, so a caption that simply opens with a word is left whole.
+ * A board does not caption a frame with one sentence. A real one reads
+ *
+ *   1  0:00-0:04  Bedroom - night
+ *   VOICEOVER  You know the itch.
+ *   SHOT  Low, mattress height, looking lengthwise across the bed.
+ *
+ * and a frame here holds a scene, a description and a sound field, so dropping
+ * all of that into one box would mean the producer separating it again by
+ * hand, which is the work this import exists to remove.
+ *
+ * The labels themselves are the split. Where a board uses none, the whole
+ * caption stays as the description rather than being guessed at.
  */
 export function splitCaption(caption: string | null): {
   scene: string | null;
   description: string | null;
+  sound: string | null;
 } {
-  if (!caption) return { scene: null, description: null };
+  if (!caption) return { scene: null, description: null, sound: null };
+
+  const voice = caption.match(VOICE_MARKER);
+  const shot = caption.match(SHOT_MARKER);
+  const voiceAt = voice?.index ?? -1;
+  const shotAt = shot?.index ?? -1;
+
+  // Where the labelled part starts is where the heading ends.
+  const marks = [voiceAt, shotAt].filter((i) => i >= 0);
+  const headEnd = marks.length ? Math.min(...marks) : caption.length;
+  let head = caption.slice(0, headEnd).trim();
+
+  const section = (start: number, match: RegExpMatchArray | null) => {
+    if (start < 0 || !match) return null;
+    const from = start + match[0].length;
+    // Runs until the OTHER label, whichever order the board printed them in.
+    const others = [voiceAt, shotAt].filter((i) => i > start);
+    const to = others.length ? Math.min(...others) : caption.length;
+    return caption.slice(from, to).trim() || null;
+  };
+
+  const sound = section(voiceAt, voice);
+  const shotText = section(shotAt, shot);
+
+  // The leading number is the frame's own code and belongs at the front of the
+  // scene, not buried in it.
+  const m = head.match(LEADING_CODE);
+  let scene: string | null = null;
+  if (m) {
+    const rest = head.slice(m[0].length).trim();
+    scene = rest ? `${m[1].toUpperCase()} · ${rest}` : m[1].toUpperCase();
+    head = rest;
+  } else if (head) {
+    scene = head;
+  }
+
+  return {
+    scene: scene ? scene.slice(0, 120) : null,
+    // With no SHOT label there is nothing to separate, so the caption stands
+    // as the description, minus a heading already captured as the scene.
+    description: shotText ?? (marks.length ? null : stripCode(caption)),
+    sound,
+  };
+}
+
+function stripCode(caption: string): string {
   const m = caption.match(LEADING_CODE);
-  if (!m) return { scene: null, description: caption };
-  const rest = caption.slice(m[0].length).trim();
-  // A code with nothing after it is just a caption that starts with a number.
-  if (!rest) return { scene: null, description: caption };
-  return { scene: m[1].toUpperCase(), description: rest };
+  const rest = m ? caption.slice(m[0].length).trim() : caption;
+  return rest || caption;
 }

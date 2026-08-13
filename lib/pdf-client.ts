@@ -10,7 +10,7 @@
 // rendered here and only the RESULTS travel: a few kilobytes of text, or a
 // handful of downscaled page images.
 
-import type { Rect } from "@/lib/panels";
+import type { PlacedImage, Rect } from "@/lib/panels";
 import type { TextRun } from "@/lib/captions";
 
 export type PdfPage = {
@@ -21,7 +21,7 @@ export type PdfPage = {
   /** The text layer, empty on a scan or an image-only export. */
   text: string;
   /** Where the document places each picture, in rendered page pixels. */
-  images: Rect[];
+  images: PlacedImage[];
   /** The same text, positioned, so a caption can be tied to the panel above it. */
   runs: TextRun[];
   canvas: HTMLCanvasElement;
@@ -54,8 +54,8 @@ function placedImages(
   ops: { fnArray: number[]; argsArray: unknown[][] },
   OPS: Record<string, number>,
   start: Matrix
-): Rect[] {
-  const out: Rect[] = [];
+): PlacedImage[] {
+  const out: PlacedImage[] = [];
   const stack: Matrix[] = [];
   let ctm: Matrix = start;
 
@@ -87,7 +87,11 @@ function placedImages(
       }
       const x = Math.min(...xs);
       const y = Math.min(...ys);
+      // The image object's own id. Furniture detection needs to know WHICH
+      // picture this is, not just where it landed.
+      const arg = ops.argsArray[i]?.[0];
       out.push({
+        ref: typeof arg === "string" ? arg : null,
         x: Math.round(x),
         y: Math.round(y),
         w: Math.round(Math.max(...xs) - x),
@@ -150,7 +154,7 @@ export async function readPdf(
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
 
-    let images: Rect[] = [];
+    let images: PlacedImage[] = [];
     try {
       const ops = await page.getOperatorList();
       images = placedImages(

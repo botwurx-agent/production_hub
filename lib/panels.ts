@@ -125,11 +125,24 @@ export function findPanels(page: GrayPage): Grid {
   return { rects, cols: widest, rows: rowBands.length, confident };
 }
 
+/** A placed picture: where it sits, and WHICH picture it is. */
+export type PlacedImage = Rect & {
+  /**
+   * The document's own id for the image object.
+   *
+   * Load-bearing for furniture detection, and the reason that detection was
+   * wrong before it existed: a storyboard template puts a DIFFERENT picture in
+   * the SAME slot on every page, which is indistinguishable from a logo if you
+   * only look at position.
+   */
+  ref?: string | null;
+};
+
 /** A page's placed images, as rectangles on the rendered page. */
 export type ImagePage = {
   width: number;
   height: number;
-  images: Rect[];
+  images: PlacedImage[];
 };
 
 /** Smaller than this on either side and it is a logo or an icon, not a frame. */
@@ -235,18 +248,30 @@ function trimAgainst(r: Rect, covers: Rect[]): Rect {
  * overlapping pictures is the one you can actually see.
  */
 export function panelsFromImages(pages: ImagePage[]): Rect[][] {
+  // Furniture is the SAME PICTURE on most pages: a logo, a footer rule. It is
+  // identified by the image object, never by where it sits.
+  //
+  // Position was the first attempt and it was badly wrong on the document this
+  // feature exists for. A storyboard template drops a different frame into the
+  // same slot on every page, so keying on position declared all sixteen frames
+  // of a real board to be a repeating logo and dropped every one of them.
+  //
+  // An image with no id (an inline image) is never furniture. Keeping a logo
+  // costs one unticked panel; dropping a frame costs the import.
   const seen = new Map<string, number>();
-  const key = (r: Rect) =>
-    `${Math.round(r.x / 8)}:${Math.round(r.y / 8)}:${Math.round(r.w / 8)}:${Math.round(r.h / 8)}`;
   for (const page of pages) {
-    // Once per page, so a picture repeated within one page does not look like
-    // it repeats across the document.
-    for (const k of new Set(page.images.map(key))) {
-      seen.set(k, (seen.get(k) ?? 0) + 1);
+    // Once per page, so a picture used twice on one page does not look like it
+    // repeats across the document.
+    for (const ref of new Set(
+      page.images.map((i) => i.ref).filter((r): r is string => Boolean(r))
+    )) {
+      seen.set(ref, (seen.get(ref) ?? 0) + 1);
     }
   }
-  const furniture = (r: Rect) =>
-    pages.length >= 3 && (seen.get(key(r)) ?? 0) >= pages.length * FURNITURE_SHARE;
+  const furniture = (r: PlacedImage) =>
+    Boolean(r.ref) &&
+    pages.length >= 3 &&
+    (seen.get(r.ref as string) ?? 0) >= pages.length * FURNITURE_SHARE;
 
   return pages.map((page) => {
     const big = (r: Rect) =>
@@ -255,6 +280,7 @@ export function panelsFromImages(pages: ImagePage[]): Rect[][] {
     // Draw order preserved throughout: everything below depends on it.
     const candidates = page.images
       .map((r) => ({
+        ref: r.ref,
         // A picture can hang off the page edge; only the visible part is a panel.
         x: Math.max(0, r.x),
         y: Math.max(0, r.y),
