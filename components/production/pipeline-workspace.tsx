@@ -112,7 +112,7 @@ function AddGenModal({
     () => Array.from(new Set(urlsText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))),
     [urlsText],
   );
-  const noun = stage === "image" ? "candidate" : "take";
+  const noun = stage === "image" ? "reference" : "take";
   const total = files.length + links.length;
 
   // Auto-fill provenance we can derive from the pasted link: platform (from the
@@ -816,7 +816,13 @@ function StagePanel({
   // character clips for v2v) live alongside the pool but are kept out of the
   // candidate/take grid. Both stages support them.
   const refs = gens.filter((g) => g.status === "reference");
-  const pool = gens.filter((g) => g.status !== "reference");
+  // On the image stage everything is one pool. A picture brought in as a
+  // reference and a picture tagged Start are the same kind of thing, and which
+  // it becomes is decided by tagging it, not by which box it was added to.
+  // The video stage keeps the split, where it is real: a motion clip driving a
+  // v2v generation is an input, and a take is an output.
+  const pool =
+    stage === "image" ? gens : gens.filter((g) => g.status !== "reference");
   const kept = pool.filter((g) => g.status !== "rejected").length;
   const start = stage === "image" ? pool.find((g) => g.role === "start") ?? null : null;
   const end = stage === "image" ? pool.find((g) => g.role === "end") ?? null : null;
@@ -855,6 +861,7 @@ function StagePanel({
             savePrompt(projectId, shot.id, stage, { text: next }).then(() => router.refresh());
           });
         }}
+        showLoose={stage !== "image"}
         onAddImage={() => setAddingRef(true)}
         onRemoveLoose={(id) => onRun(() => deleteGeneration(projectId, id))}
       />
@@ -904,14 +911,14 @@ function StagePanel({
           )}
           <Button size="sm" variant="secondary" onClick={() => setAdding(true)}
             title="Upload files, or paste the links you generated on Higgsfield / etc. to pull them straight in">
-            + {stage === "image" ? "Candidate" : "Take"}
+            + {stage === "image" ? "Reference" : "Take"}
           </Button>
         </div>
       </div>
 
       {pool.length === 0 ? (
         <p className="rounded-[10px] border border-dashed border-border py-6 text-center text-xs text-text-faint">
-          No {stage === "image" ? "images" : "takes"} yet. Add generations as you make them.
+          No {stage === "image" ? "references" : "takes"} yet. Paste the links you generated, or upload the files.
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -928,8 +935,8 @@ function StagePanel({
             Selected frames · the video animates between these
           </div>
           <div className="grid max-w-md grid-cols-2 gap-3">
-            <FrameSlot label="Start" color="var(--h-cyan)" gen={start} src={srcOf(start)} thumb={start ? thumbs[start.id] ?? null : null} empty="Tag a candidate 'Start' above" />
-            <FrameSlot label="End" color="var(--h-pink)" gen={end} src={srcOf(end)} thumb={end ? thumbs[end.id] ?? null : null} empty="Tag a candidate 'End' above" />
+            <FrameSlot label="Start" color="var(--h-cyan)" gen={start} src={srcOf(start)} thumb={start ? thumbs[start.id] ?? null : null} empty="Tag a reference 'Start' above" />
+            <FrameSlot label="End" color="var(--h-pink)" gen={end} src={srcOf(end)} thumb={end ? thumbs[end.id] ?? null : null} empty="Tag a reference 'End' above" />
           </div>
         </div>
       ) : (
@@ -1289,7 +1296,10 @@ export function PipelineWorkspace({
     };
     const byShot = new Map<string, AiGeneration[]>();
     for (const g of generations) {
-      if (g.status === "reference") continue; // inputs aren't the shot's frame
+      // An untagged input is not the shot's frame. A TAGGED one is: since the
+      // image stage merged its pool, a picture added as a reference and then
+      // tagged Start is exactly what the strip should be showing.
+      if (g.status === "reference" && !g.role) continue;
       // Since the cast layer (0080) a generation can belong to an entity or a
       // look instead of a shot, so shot_id is nullable. A character sheet is
       // not any shot's thumbnail.

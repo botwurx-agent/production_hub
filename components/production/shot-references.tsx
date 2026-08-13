@@ -57,6 +57,7 @@ export function ShotReferences({
   onInsert,
   onAddImage,
   onRemoveLoose,
+  showLoose = true,
 }: {
   projectId: string;
   shotId: string;
@@ -70,6 +71,20 @@ export function ShotReferences({
   onInsert: (token: string) => void;
   onAddImage: () => void;
   onRemoveLoose: (id: string) => void;
+  /**
+   * Whether this stage has loose references SEPARATE from its pool.
+   *
+   * False on the image stage, where they were the same thing twice: an image
+   * brought into a shot and an image tagged Start were sitting in different
+   * boxes despite both being "a picture I put on this shot", and the operator
+   * had to decide which box before knowing whether it would be a frame. The
+   * pool below now holds all of them and any one can be tagged.
+   *
+   * True on the video stage, where the distinction is real: a motion clip
+   * driving a video-to-video generation is an INPUT, and a take is an OUTPUT,
+   * and merging those would say the driving clip is a candidate for the cut.
+   */
+  showLoose?: boolean;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -230,10 +245,12 @@ export function ShotReferences({
       )}
 
       {/* -------------------------------------------------------- references */}
+      {!showLoose ? null : (
+      <>
       <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-text-faint">
         References
         <span className="ml-1.5 font-normal normal-case">
-          one-off images for this shot, no handle
+          one-off inputs for this shot, no handle
         </span>
       </p>
 
@@ -296,6 +313,8 @@ export function ShotReferences({
             + Image
           </button>
         </div>
+      )}
+      </>
       )}
 
       {strays.length > 0 && (
