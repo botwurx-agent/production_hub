@@ -8,6 +8,8 @@ export type VersionComment = {
   author_id: string | null;
   reviewer_name: string | null;
   pin_number: number | null;
+  /** For a PDF, the 1-based page a pin sits on. */
+  pin_page: number | null;
   pos_x: number | null;
   pos_y: number | null;
   timecode: number | null;

@@ -40,6 +40,13 @@ export type PortalComment = {
   pinNumber: number | null;
   x: number | null;
   y: number | null;
+  /**
+   * For a multi-page surface (a PDF), which page the pin sits on.
+   *
+   * Null on everything with one surface, which is every image, storyboard and
+   * moodboard review, so an existing pin needs no backfill.
+   */
+  pinPage: number | null;
   // Video review: seconds into the timeline this comment is tied to. When
   // timecodeEnd is set the comment covers the range timecode -> timecodeEnd.
   timecode: number | null;
@@ -127,7 +134,7 @@ export async function gatherReview(
       service
         .from("review_comments")
         .select(
-          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
         )
         .in("version_id", versionIds)
         .order("created_at", { ascending: true }),
@@ -153,6 +160,7 @@ export async function gatherReview(
         author: isClient ? (c.reviewer_name as string) : studioName,
         isClient,
         pinNumber: c.pin_number ?? null,
+        pinPage: c.pin_page ?? null,
         x: c.pos_x ?? null,
         y: c.pos_y ?? null,
         timecode: c.timecode ?? null,
@@ -617,7 +625,7 @@ export async function gatherDocReview(
     service
       .from("review_comments")
       .select(
-        "id, body, created_at, author_id, reviewer_name, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+        "id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
@@ -641,6 +649,7 @@ export async function gatherDocReview(
       author: isClient ? (c.reviewer_name as string) : studioName,
       isClient,
       pinNumber: c.pin_number ?? null,
+      pinPage: c.pin_page ?? null,
       x: c.pos_x ?? null,
       y: c.pos_y ?? null,
       timecode: c.timecode ?? null,

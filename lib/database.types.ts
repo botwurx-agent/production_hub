@@ -3597,6 +3597,7 @@ export type Database = {
           target_type: string | null;
           target_id: string | null;
           pin_number: number | null;
+          pin_page: number | null;
           pos_x: number | null;
           pos_y: number | null;
           timecode: number | null;
@@ -3619,6 +3620,7 @@ export type Database = {
           target_type?: string | null;
           target_id?: string | null;
           pin_number?: number | null;
+          pin_page?: number | null;
           pos_x?: number | null;
           pos_y?: number | null;
           timecode?: number | null;
@@ -3641,6 +3643,7 @@ export type Database = {
           target_type?: string | null;
           target_id?: string | null;
           pin_number?: number | null;
+          pin_page?: number | null;
           pos_x?: number | null;
           pos_y?: number | null;
           timecode?: number | null;

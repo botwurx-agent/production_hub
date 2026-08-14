@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { StatusTag } from "@/components/status-tag";
 import { PinReview } from "@/components/review/pin-review";
+import { PdfReview } from "@/components/review/pdf-review";
 import { VideoReview } from "@/components/review/video-review";
 import { viewerKind } from "@/lib/file-kind";
 import {
@@ -79,6 +80,9 @@ export function ReviewModal({
   const kind = viewerKind(version.mime_type, assetName);
   const isImage = kind === "image" && Boolean(version.signedUrl);
   const isVideo = kind === "video" && Boolean(version.signedUrl);
+  // A PDF pins like an image now, so the studio's own review matches what the
+  // client sees rather than being the poorer of the two.
+  const isPdf = kind === "pdf" && Boolean(version.signedUrl);
 
   // Map internal comments to the shared review-comment shape.
   function toPortal(c: VersionComment): PortalComment {
@@ -95,6 +99,7 @@ export function ReviewModal({
           : "Team member",
       isClient,
       pinNumber: c.pin_number,
+      pinPage: c.pin_page ?? null,
       x: c.pos_x,
       y: c.pos_y,
       timecode: c.timecode,
@@ -114,7 +119,7 @@ export function ReviewModal({
   async function postPinned(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null }
+    extra?: { drawing?: Drawing | null; page?: number }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
       projectId,
@@ -123,7 +128,9 @@ export function ReviewModal({
       pin,
       null,
       null,
-      extra?.drawing ?? null
+      extra?.drawing ?? null,
+      null,
+      extra?.page ?? null
     );
     if (res?.error) return false;
     router.refresh();
@@ -221,7 +228,7 @@ export function ReviewModal({
     <Modal
       open={open}
       onClose={onClose}
-      size={isImage || isVideo ? "xl" : "md"}
+      size={isImage || isVideo || isPdf ? "xl" : "md"}
       // Remembered per browser: a producer who works expanded should not have
       // to expand it again on every asset.
       id="asset-review"
@@ -234,6 +241,13 @@ export function ReviewModal({
           <PinReview
             imageUrl={version.signedUrl as string}
             alt={assetName}
+            comments={portalComments}
+            onPost={postPinned}
+            onResolve={resolve}
+          />
+        ) : isPdf ? (
+          <PdfReview
+            fileUrl={version.signedUrl as string}
             comments={portalComments}
             onPost={postPinned}
             onResolve={resolve}

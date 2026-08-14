@@ -7,6 +7,7 @@ import { DueBanner } from "@/components/review/due-banner";
 import { VersionCompare } from "@/components/review/version-compare";
 import { fileSize, shortDate, timeAgo } from "@/lib/format";
 import { PinReview } from "@/components/review/pin-review";
+import { PdfReview } from "@/components/review/pdf-review";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Drawing } from "@/lib/review-drawing";
 import { VideoReview } from "@/components/review/video-review";
@@ -83,6 +84,9 @@ export function ClientReview({
   const kind = viewing ? viewerKind(viewing.mime_type, data.asset.name) : null;
   const isImage = kind === "image";
   const isVideo = kind === "video";
+  // A PDF is now a first-class review surface: its pages render to a canvas
+  // and each one takes pins, the same as an image.
+  const isPdf = kind === "pdf";
 
   function fileUrl(versionId: string) {
     return `${origin}/r/${token}/file?v=${versionId}`;
@@ -92,7 +96,7 @@ export function ClientReview({
   async function postPinned(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null }
+    extra?: { drawing?: Drawing | null; page?: number }
   ): Promise<boolean> {
     if (!viewing) return false;
     if (!name.trim()) {
@@ -110,7 +114,9 @@ export function ClientReview({
       null,
       extra?.drawing ?? null,
       null,
-      myKey
+      myKey,
+      // Only a PDF sends one; everything else leaves the column null.
+      extra?.page ?? null
     );
     if (res?.error) {
       setError(res.error);
@@ -402,6 +408,32 @@ export function ClientReview({
           <PinReview
             imageUrl={fileUrl(viewing.id)}
             alt={data.asset.name}
+            comments={comments}
+            disabled={isOlder || !name.trim()}
+            disabledHint={
+              isOlder
+                ? `v${viewing.version_number} is an earlier version, so it is read-only.`
+                : "Add your name above to comment."
+            }
+            wide
+            onPost={postPinned}
+            onResolve={resolve}
+          />
+          {metaRow}
+          {!isOlder && decision}
+          {error && (
+            <p className="mt-4 rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
+              {error}
+            </p>
+          )}
+        </>
+      ) : isPdf ? (
+        <>
+          <div className="mb-4 max-w-md">{nameField}</div>
+          {versionSwitcher}
+          {olderBanner}
+          <PdfReview
+            fileUrl={fileUrl(viewing.id)}
             comments={comments}
             disabled={isOlder || !name.trim()}
             disabledHint={
