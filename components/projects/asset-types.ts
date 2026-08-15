@@ -45,6 +45,12 @@ export type VersionRow = {
    * anything with no stored file, so callers fall back to signedUrl.
    */
   thumbUrl: string | null;
+  /**
+   * A rendered page-1 preview for a file that cannot preview itself (a PDF).
+   * Null until someone has viewed it once, so a grid falls back to the icon
+   * and fills in as it is looked at.
+   */
+  posterUrl: string | null;
   comments: VersionComment[];
   approvals: VersionApproval[];
 };

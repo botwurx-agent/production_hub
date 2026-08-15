@@ -3802,6 +3802,7 @@ export type Database = {
           id: string;
           mime_type: string | null;
           notes: string | null;
+          poster_path: string | null;
           size_bytes: number | null;
           storage_path: string | null;
           studio_id: string;
@@ -3815,6 +3816,7 @@ export type Database = {
           id?: string;
           mime_type?: string | null;
           notes?: string | null;
+          poster_path?: string | null;
           size_bytes?: number | null;
           storage_path?: string | null;
           studio_id: string;
@@ -3828,6 +3830,7 @@ export type Database = {
           id?: string;
           mime_type?: string | null;
           notes?: string | null;
+          poster_path?: string | null;
           size_bytes?: number | null;
           storage_path?: string | null;
           studio_id?: string;

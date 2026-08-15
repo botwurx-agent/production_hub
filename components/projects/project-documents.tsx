@@ -7,6 +7,8 @@ import { toast } from "@/components/ui/toast";
 import { fileSize, shortDate } from "@/lib/format";
 import { documentSource } from "@/lib/documents";
 import { uploadAssetFile } from "@/components/projects/upload-file";
+import { PdfThumb } from "@/components/projects/pdf-thumb";
+import { viewerKind } from "@/lib/file-kind";
 import { createAsset, addVersion } from "@/app/(app)/projects/[id]/actions";
 import type { AssetWithVersions } from "@/components/projects/asset-types";
 
@@ -22,6 +24,24 @@ import type { AssetWithVersions } from "@/components/projects/asset-types";
  * filing something rather than leaving it in a thread: the sender, the date and
  * the subject of the email it came in on.
  */
+function DocIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      className="text-text-faint"
+      aria-hidden
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+
 export function ProjectDocuments({
   projectId,
   documents,
@@ -151,8 +171,32 @@ export function ProjectDocuments({
               doc.versions.find((v) => v.id === doc.current_version_id) ??
               doc.versions[0];
             const source = documentSource(doc.external_ref ?? null);
+            // Only a PDF has a page to draw. A .docx would just fail and fall
+            // back, so it is never asked.
+            const isPdf =
+              viewerKind(
+                current?.mime_type ?? null,
+                current?.storage_path ?? doc.name
+              ) === "pdf";
             return (
               <li key={doc.id} className="flex flex-wrap items-center gap-3 py-3">
+                {/* A row of filenames tells you nothing about which permit is
+                    which. Page one does. */}
+                <span className="grid h-[52px] w-[42px] shrink-0 place-items-center overflow-hidden rounded-[7px] border border-border bg-surface-2">
+                  {isPdf && current ? (
+                    <PdfThumb
+                      fileUrl={current.signedUrl ?? current.url}
+                      posterUrl={current.posterUrl}
+                      projectId={projectId}
+                      versionId={current.id}
+                      className="h-full w-full object-cover object-top"
+                      boxClassName="flex h-full w-full items-center justify-center overflow-hidden"
+                      fallback={<DocIcon />}
+                    />
+                  ) : (
+                    <DocIcon />
+                  )}
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-text">
                     {doc.name}
