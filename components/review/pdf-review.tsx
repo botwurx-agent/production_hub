@@ -37,6 +37,14 @@ type PdfDoc = {
  * carries the page it was dropped on, and the rail shows only that page's
  * comments so a mark on page four does not appear over page one.
  */
+/** Rendered width at 100%: wide enough to read a caption, cheap enough to redo. */
+const BASE_WIDTH = 1400;
+
+/** Kept small on purpose: a 3x page is a several-megabyte data URL. */
+const CACHE_LIMIT = 8;
+
+const ZOOMS = [1, 1.5, 2, 3] as const;
+
 export function PdfReview({
   fileUrl,
   comments,
@@ -62,14 +70,16 @@ export function PdfReview({
 }) {
   const [pageCount, setPageCount] = useState(0);
   const [page, setPage] = useState(1);
+  const [zoom, setZoom] = useState(1);
   const [pageUrl, setPageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Held across page changes so flicking through a board does not re-download
-  // and re-parse the file every time.
+  // and re-parse the file every time. Keyed by page AND zoom, because zooming
+  // re-renders rather than stretching (see below).
   const docRef = useRef<PdfDoc | null>(null);
-  const cacheRef = useRef(new Map<number, string>());
+  const cacheRef = useRef(new Map<string, string>());
   const [ready, setReady] = useState(0);
 
   useEffect(() => {
@@ -106,7 +116,8 @@ export function PdfReview({
     const doc = docRef.current;
     if (!doc) return;
 
-    const cached = cacheRef.current.get(page);
+    const key = `${page}@${zoom}`;
+    const cached = cacheRef.current.get(key);
     if (cached) {
       setPageUrl(cached);
       setLoading(false);
@@ -118,10 +129,12 @@ export function PdfReview({
         setLoading(true);
         const pdfPage = await doc.getPage(page);
         const base = pdfPage.getViewport({ scale: 1 });
-        // Wide enough to read a caption and to pin accurately, without
-        // rendering a poster for every page of a long document.
+        // Zoom RE-RENDERS the page rather than stretching the picture. That is
+        // the whole point: a board's type and its product labels are the detail
+        // a client is trying to read, and scaling up a 1400px raster just gives
+        // them bigger blur. Rendering at the zoomed size gives them real pixels.
         const viewport = pdfPage.getViewport({
-          scale: Math.min(2, 1400 / base.width),
+          scale: Math.min(4, (BASE_WIDTH * zoom) / base.width),
         });
         const canvas = document.createElement("canvas");
         canvas.width = Math.round(viewport.width);
@@ -135,7 +148,14 @@ export function PdfReview({
         await pdfPage.render({ canvasContext: ctx, viewport }).promise;
         if (!alive) return;
         const url = canvas.toDataURL("image/jpeg", 0.86);
-        cacheRef.current.set(page, url);
+        // Oldest out first. A Map keeps insertion order, so the first key is
+        // the least recently rendered.
+        while (cacheRef.current.size >= CACHE_LIMIT) {
+          const oldest = cacheRef.current.keys().next().value;
+          if (oldest === undefined) break;
+          cacheRef.current.delete(oldest);
+        }
+        cacheRef.current.set(key, url);
         setPageUrl(url);
         setLoading(false);
       } catch {
@@ -149,7 +169,7 @@ export function PdfReview({
     return () => {
       alive = false;
     };
-  }, [page, ready]);
+  }, [page, zoom, ready]);
 
   /**
    * Only this page's comments reach the rail.
@@ -181,14 +201,42 @@ export function PdfReview({
     );
   }
 
+  const zoomControl = (
+    <div className="ml-auto flex items-center gap-1.5">
+      {loading && pageUrl && (
+        <span className="text-[11px] font-semibold text-text-faint">
+          Sharpening...
+        </span>
+      )}
+      <div className="flex items-center gap-0.5 rounded-[9px] border border-border p-0.5">
+        {ZOOMS.map((z) => (
+          <button
+            key={z}
+            onClick={() => setZoom(z)}
+            className={`rounded-[6px] px-2 py-1 text-[11px] font-bold transition ${
+              z === zoom
+                ? "bg-accent text-accent-fg"
+                : "text-text-muted hover:text-text"
+            }`}
+            title={z === 1 ? "Fit the page" : `Zoom to ${z}x`}
+          >
+            {z === 1 ? "Fit" : `${z}x`}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div>
-      {pageCount > 1 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {pageCount > 1 && (
           <span className="text-[11px] font-bold uppercase tracking-wide text-text-faint">
             Page
           </span>
-          <div className="flex flex-wrap gap-1">
+        )}
+        {pageCount > 1 && (
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Pages">
             {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => {
               const marks = comments.filter((c) => (c.pinPage ?? 1) === n).length;
               return (
@@ -217,13 +265,14 @@ export function PdfReview({
               );
             })}
           </div>
-          {elsewhere > 0 && (
-            <span className="text-[11.5px] text-text-faint">
-              {elsewhere} comment{elsewhere === 1 ? "" : "s"} on other pages
-            </span>
-          )}
-        </div>
-      )}
+        )}
+        {elsewhere > 0 && (
+          <span className="text-[11.5px] text-text-faint">
+            {elsewhere} comment{elsewhere === 1 ? "" : "s"} on other pages
+          </span>
+        )}
+        {zoomControl}
+      </div>
 
       {loading && !pageUrl ? (
         <div className="grid min-h-[50vh] place-items-center rounded-[14px] border border-border bg-surface-2">
@@ -253,7 +302,15 @@ export function PdfReview({
             <img
               src={pageUrl}
               alt={`Page ${page}`}
-              className="block max-h-[66vh] w-auto max-w-full rounded-[10px] object-contain shadow-2xl"
+              className="block w-auto rounded-[10px] object-contain shadow-2xl"
+              // Both limits scale together, so the page grows by exactly the
+              // factor on the button whichever way round it is. The stage
+              // scrolls, and PinCanvas sizes its pin layer to this element, so
+              // a pin dropped zoomed in lands where it was clicked.
+              style={{
+                maxHeight: `${66 * zoom}vh`,
+                maxWidth: `${100 * zoom}%`,
+              }}
               draggable={false}
             />
           }

@@ -138,7 +138,12 @@ export function PinCanvas({
     <div className={`grid grid-cols-1 gap-4 ${roomy ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_340px]"}`}>
       {/* Stage — a stable viewing environment for judging the work */}
       <div
-        className="flex items-start justify-center overflow-auto rounded-[16px] p-4"
+        // `safe center` rather than plain centring: a centred flex item that
+        // grows wider than its container overflows equally in both directions,
+        // and the left half becomes unreachable because scrolling cannot go
+        // below zero. `safe` falls back to start-alignment exactly when that
+        // would happen, which is what makes zooming past the frame usable.
+        className="flex items-start [justify-content:safe_center] overflow-auto rounded-[16px] p-4"
         style={{ backgroundColor: stageBg }}
       >
         <div
