@@ -46,13 +46,29 @@ export function Modal({
   onClose,
   title,
   children,
+  titleNode,
+  actions,
+  bodyClassName = "min-h-0 flex-1 overflow-y-auto p-5",
   size = "md",
   resizable,
   id,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Always supplied: it labels the dialog even when titleNode replaces it. */
   title: string;
+  /**
+   * A richer heading than a string, for a window whose title is editable or
+   * carries its own meta line. The plain `title` still names the dialog.
+   */
+  titleNode?: ReactNode;
+  /** Header controls, placed before Expand and Close. */
+  actions?: ReactNode;
+  /**
+   * The body's own classes. A viewer wants a stage that centres its media on a
+   * neutral ground, not the default padded scroller.
+   */
+  bodyClassName?: string;
   children: ReactNode;
   size?: "md" | "lg" | "xl";
   /**
@@ -77,7 +93,7 @@ export function Modal({
   const [full, setFull] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; w: number; h: number } | null>(
-    null
+    null,
   );
 
   const storeKey = id ? `modal.size.${id}` : null;
@@ -107,11 +123,11 @@ export function Modal({
         else
           window.localStorage.setItem(
             storeKey,
-            value === "full" ? "full" : JSON.stringify(value)
+            value === "full" ? "full" : JSON.stringify(value),
           );
       } catch {}
     },
-    [storeKey]
+    [storeKey],
   );
 
   useEffect(() => {
@@ -148,7 +164,7 @@ export function Modal({
       clamp({
         w: d.w + (e.clientX - d.x) * 2,
         h: d.h + (e.clientY - d.y) * 2,
-      })
+      }),
     );
   }
 
@@ -190,15 +206,21 @@ export function Modal({
       <div
         ref={panelRef}
         style={panelStyle}
-        className={`relative z-10 flex max-h-[calc(100vh-2rem)] w-full flex-col ${
+        className={`relative z-10 flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden ${
           full || custom ? "" : maxW
         } rounded-[18px] border border-border bg-surface shadow-lg`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-5 py-4">
-          <h2 className="min-w-0 truncate font-display text-lg font-bold text-text">
-            {title}
-          </h2>
+          {titleNode ?? (
+            <h2 className="min-w-0 truncate font-display text-lg font-bold text-text">
+              {title}
+            </h2>
+          )}
           <div className="flex shrink-0 items-center gap-1">
+            {actions}
             {canResize && (
               <button
                 onClick={toggleFull}
@@ -207,11 +229,29 @@ export function Modal({
                 className="grid h-8 w-8 place-items-center rounded-[9px] text-text-muted transition hover:bg-surface-2 hover:text-text"
               >
                 {full ? (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M9 3v6H3M15 21v-6h6M3 15h6v6M21 9h-6V3" />
                   </svg>
                 ) : (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
                   </svg>
                 )}
@@ -222,7 +262,15 @@ export function Modal({
               aria-label="Close"
               className="grid h-8 w-8 place-items-center rounded-[9px] text-text-muted transition hover:bg-surface-2 hover:text-text"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
                 <path d="M18 6 6 18M6 6l12 12" />
               </svg>
             </button>
@@ -230,7 +278,7 @@ export function Modal({
         </div>
 
         <ModalRoom.Provider value={roomy}>
-          <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+          <div className={bodyClassName}>{children}</div>
         </ModalRoom.Provider>
 
         {canResize && !full && (
@@ -244,13 +292,21 @@ export function Modal({
             title="Drag to resize"
             className="absolute bottom-1 right-1 h-4 w-4 cursor-nwse-resize touch-none text-text-faint transition hover:text-text"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
               <path d="M14 6 6 14M14 11l-3 3" />
             </svg>
           </div>
         )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

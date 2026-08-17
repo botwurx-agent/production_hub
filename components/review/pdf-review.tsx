@@ -10,11 +10,22 @@ type PdfDoc = {
   numPages: number;
   getPage: (n: number) => Promise<{
     getViewport: (o: { scale: number }) => { width: number; height: number };
-    render: (o: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => {
+    render: (o: {
+      canvasContext: CanvasRenderingContext2D;
+      viewport: unknown;
+    }) => {
       promise: Promise<void>;
     };
   }>;
 };
+
+/** Rendered width at 100%: wide enough to read a caption, cheap enough to redo. */
+const BASE_WIDTH = 1400;
+
+/** Kept small on purpose: a 3x page is a several-megabyte data URL. */
+const CACHE_LIMIT = 8;
+
+const ZOOMS = [1, 1.5, 2, 3] as const;
 
 /**
  * Reviewing a PDF, with pins.
@@ -36,15 +47,10 @@ type PdfDoc = {
  * A PDF is several surfaces, which is the one thing genuinely new: a pin
  * carries the page it was dropped on, and the rail shows only that page's
  * comments so a mark on page four does not appear over page one.
+ *
+ * Zoom re-renders the page rather than scaling the picture, so getting closer
+ * to a board actually resolves its type instead of enlarging the blur.
  */
-/** Rendered width at 100%: wide enough to read a caption, cheap enough to redo. */
-const BASE_WIDTH = 1400;
-
-/** Kept small on purpose: a 3x page is a several-megabyte data URL. */
-const CACHE_LIMIT = 8;
-
-const ZOOMS = [1, 1.5, 2, 3] as const;
-
 export function PdfReview({
   fileUrl,
   comments,
@@ -64,7 +70,7 @@ export function PdfReview({
   onPost: (
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; page?: number }
+    extra?: { drawing?: Drawing | null; page?: number },
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
@@ -178,9 +184,8 @@ export function PdfReview({
    * pinning anything, so it shows on page one rather than disappearing.
    */
   const pageComments = useMemo(
-    () =>
-      comments.filter((c) => (c.pinPage ?? 1) === page),
-    [comments, page]
+    () => comments.filter((c) => (c.pinPage ?? 1) === page),
+    [comments, page],
   );
 
   const elsewhere = comments.length - pageComments.length;
@@ -238,7 +243,9 @@ export function PdfReview({
         {pageCount > 1 && (
           <div className="flex flex-wrap gap-1" role="group" aria-label="Pages">
             {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => {
-              const marks = comments.filter((c) => (c.pinPage ?? 1) === n).length;
+              const marks = comments.filter(
+                (c) => (c.pinPage ?? 1) === n,
+              ).length;
               return (
                 <button
                   key={n}
