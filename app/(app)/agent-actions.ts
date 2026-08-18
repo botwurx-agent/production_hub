@@ -69,7 +69,24 @@ export async function loadAgentContext(
     .limit(50);
 
   const projects = data ?? [];
-  const selected = projectId ? projects.find((p) => p.id === projectId) : null;
+
+  // The list is deliberately live projects only: the picker is for the work in
+  // front of you, not a filing cabinet. But an archived project's page still
+  // opens, and opening Runner from it used to silently fall back to studio
+  // scope, which is exactly backwards for "pull something out of that old job".
+  // So the one you are standing on is added even when it is archived.
+  let selected = projectId ? projects.find((p) => p.id === projectId) : null;
+  if (projectId && !selected) {
+    const { data: one } = await supabase
+      .from("projects")
+      .select("id, title")
+      .eq("id", projectId)
+      .maybeSingle();
+    if (one) {
+      projects.unshift(one);
+      selected = one;
+    }
+  }
 
   return {
     projects,
