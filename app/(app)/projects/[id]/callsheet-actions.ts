@@ -404,5 +404,125 @@ export async function sendCallSheetEmail(
     text,
   });
   if (!result.ok) return { error: result.error ?? "The email could not be sent." };
+
+  // Emailing it IS sending it. Without this the status stayed on Draft unless
+  // someone remembered to move the chip, which is a thing nobody remembers, and
+  // the automatic reminders skip a draft on purpose.
+  await markSheetSent(supabase, r.call_sheet_id);
+  rp(projectId);
   return { ok: true };
+}
+
+async function markSheetSent(
+  supabase: ReturnType<typeof createClient>,
+  callSheetId: string
+): Promise<void> {
+  const { data } = await supabase
+    .from("call_sheets")
+    .select("status")
+    .eq("id", callSheetId)
+    .maybeSingle();
+  // Only ever draft -> sent. A sheet already marked Confirmed must not be
+  // walked backwards by one more email going out.
+  if (data?.status !== "draft") return;
+  await logWrite(
+    "markSheetSent/call_sheets",
+    supabase.from("call_sheets").update({ status: "sent" }).eq("id", callSheetId)
+  );
+}
+
+/**
+ * Chase everyone on this sheet who has not confirmed, now.
+ *
+ * The daily job does this on its own inside the window before the shoot; this
+ * is the same nudge on demand, for the producer who wants it handled before
+ * they stop thinking about it. It only ever writes to people who have not
+ * answered, so pressing it twice cannot reach someone who is already confirmed.
+ */
+export async function remindUnconfirmed(
+  projectId: string,
+  callSheetId: string
+): Promise<{ sent: number; noEmail: number } | { error: string }> {
+  await requireStudioContext();
+  if (!emailConfigured()) return { error: "Email is not set up yet." };
+
+  const supabase = createClient();
+  const { data: rows } = await supabase
+    .from("call_sheet_recipients")
+    .select("id, name, email, token, confirmed_at, reminder_count")
+    .eq("call_sheet_id", callSheetId)
+    .is("confirmed_at", null);
+
+  const pending = rows ?? [];
+  if (pending.length === 0) return { error: "Everyone has confirmed." };
+
+  const { data: sheet } = await supabase
+    .from("call_sheets")
+    .select("title, production_title, shoot_date, call_time")
+    .eq("id", callSheetId)
+    .maybeSingle();
+
+  const title = sheet?.production_title || sheet?.title || "the shoot";
+  let dateStr: string | null = null;
+  if (sheet?.shoot_date) {
+    try {
+      dateStr = new Date(`${sheet.shoot_date}T00:00:00`).toLocaleDateString(
+        undefined,
+        { weekday: "long", month: "long", day: "numeric" }
+      );
+    } catch {
+      dateStr = sheet.shoot_date;
+    }
+  }
+
+  let sent = 0;
+  let noEmail = 0;
+  const stamp = new Date().toISOString();
+
+  for (const r of pending) {
+    if (!r.email) {
+      // Not a failure: they were always a copy-the-link case, and the panel
+      // shows who they are.
+      noEmail++;
+      continue;
+    }
+    const lines = [
+      `Hi ${r.name}, we still need your confirmation for ${title}${
+        dateStr ? `, shooting ${dateStr}${sheet?.call_time ? ` at ${sheet.call_time}` : ""}` : ""
+      }.`,
+      "Open your call sheet below and press Confirm so production knows you are set.",
+    ];
+    const { html, text } = renderEmail({
+      heading: `Please confirm: ${title}`,
+      lines,
+      ctaLabel: "View and confirm",
+      ctaUrl: `${siteOrigin()}/c/${r.token}`,
+      footnote:
+        "You received this because you are on this call sheet. Confirming stops these reminders.",
+    });
+    const res = await sendEmail({
+      to: r.email,
+      subject: `Please confirm your call: ${title}`,
+      html,
+      text,
+    });
+    if (!res.ok) continue;
+    sent++;
+    // Counted alongside the automatic nudges, so a manual chase and the daily
+    // job together stay inside one cap rather than doubling up on people.
+    await logWrite(
+      "remindUnconfirmed/call_sheet_recipients",
+      supabase
+        .from("call_sheet_recipients")
+        .update({
+          last_reminded_at: stamp,
+          reminder_count: (r.reminder_count ?? 0) + 1,
+        })
+        .eq("id", r.id)
+    );
+  }
+
+  if (sent > 0) await markSheetSent(supabase, callSheetId);
+  rp(projectId);
+  return { sent, noEmail };
 }

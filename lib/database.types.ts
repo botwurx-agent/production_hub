@@ -2827,6 +2827,8 @@ export type Database = {
           token: string;
           viewed_at: string | null;
           confirmed_at: string | null;
+          last_reminded_at: string | null;
+          reminder_count: number;
           created_at: string;
         };
         Insert: {
@@ -2838,6 +2840,8 @@ export type Database = {
           token: string;
           viewed_at?: string | null;
           confirmed_at?: string | null;
+          last_reminded_at?: string | null;
+          reminder_count?: number;
           created_at?: string;
         };
         Update: {
@@ -2849,9 +2853,26 @@ export type Database = {
           token?: string;
           viewed_at?: string | null;
           confirmed_at?: string | null;
+          last_reminded_at?: string | null;
+          reminder_count?: number;
           created_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "call_sheet_recipients_call_sheet_id_fkey";
+            columns: ["call_sheet_id"];
+            isOneToOne: false;
+            referencedRelation: "call_sheets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "call_sheet_recipients_studio_id_fkey";
+            columns: ["studio_id"];
+            isOneToOne: false;
+            referencedRelation: "studios";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       contact_rates: {
         Row: {

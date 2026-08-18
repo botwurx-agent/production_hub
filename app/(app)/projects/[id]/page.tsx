@@ -149,7 +149,11 @@ export default async function ProjectDetailPage({
     supabase.from("shot_groups").select("id").eq("project_id", params.id),
     supabase
       .from("call_sheets")
-      .select("shoot_date, call_time, crew_call, location")
+      // Recipients ride along so the hub can answer "has the crew confirmed"
+      // without opening the sheet: it is the question the day before a shoot.
+      .select(
+        "shoot_date, call_time, crew_call, location, call_sheet_recipients(confirmed_at)"
+      )
       .eq("project_id", params.id)
       .order("position", { ascending: true })
       .limit(1)
@@ -251,6 +255,12 @@ export default async function ProjectDetailPage({
   const budgetActual = rollUpActual(budgetLines ?? [], projectCosts ?? []);
   const budgetPct =
     budgetEstimated > 0 ? Math.round((budgetActual / budgetEstimated) * 100) : null;
+
+  // Call-sheet confirmations, so the hub answers "is the crew set" without a
+  // click. Only meaningful once someone has actually been sent a link.
+  const callSheetPeople = callSheet?.call_sheet_recipients ?? [];
+  const callSheetSent = callSheetPeople.length;
+  const callSheetConfirmed = callSheetPeople.filter((r) => r.confirmed_at).length;
 
   // Brief preview (brief content may be rich-text HTML; flatten for the snippet).
   const briefText = htmlToText(brief?.content ?? "");
@@ -842,6 +852,22 @@ export default async function ProjectDetailPage({
                       crew call
                     </span>
                     {callSheet.location && <span className="truncate">📍 {callSheet.location}</span>}
+                    {callSheetSent > 0 && (
+                      <span>
+                        <span
+                          className="font-bold"
+                          style={{
+                            color:
+                              callSheetConfirmed === callSheetSent
+                                ? "var(--h-green)"
+                                : "var(--h-amber)",
+                          }}
+                        >
+                          {callSheetConfirmed}/{callSheetSent}
+                        </span>{" "}
+                        confirmed
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <p className="text-[13px] text-text-muted">
