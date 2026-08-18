@@ -16,7 +16,7 @@ const LINKS = [
 export function SiteNav() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur">
-      <nav className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5">
+      <nav className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between px-6 sm:px-10">
         <Link href="/" className="flex items-center gap-2.5">
           <span
             className="grid h-8 w-8 place-items-center rounded-[9px] font-display text-[13px] font-extrabold"

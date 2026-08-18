@@ -16,6 +16,7 @@ export function BrowserFrame({
   width = 1440,
   height = 900,
   priority = false,
+  hue = "indigo",
   children,
 }: {
   src?: string;
@@ -24,6 +25,8 @@ export function BrowserFrame({
   width?: number;
   height?: number;
   priority?: boolean;
+  /** Tints the pending-screenshot placeholder to its section's identity hue. */
+  hue?: string;
   /** Live UI rendered inside the frame, used instead of an image. */
   children?: React.ReactNode;
 }) {
@@ -49,12 +52,20 @@ export function BrowserFrame({
           className="h-auto w-full"
         />
       ) : (
-        <div className="grid aspect-[16/10] place-items-center bg-surface-2 px-6 text-center">
+        <div
+          className="grid aspect-[16/10] place-items-center px-8 text-center"
+          style={{
+            background: `linear-gradient(135deg, var(--h-${hue}-bg) 0%, var(--surface-2) 55%, var(--surface) 100%)`,
+          }}
+        >
           <div>
-            <p className="font-display text-sm font-semibold text-text-muted">
+            <p
+              className="font-display text-sm font-bold"
+              style={{ color: `var(--h-${hue})` }}
+            >
               Screenshot pending
             </p>
-            <p className="mt-1 max-w-sm text-xs leading-relaxed text-text-faint">
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">
               {alt}
             </p>
           </div>

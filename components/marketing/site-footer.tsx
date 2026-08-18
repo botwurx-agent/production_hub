@@ -30,8 +30,8 @@ const COLUMNS = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border bg-surface px-5 py-16">
-      <div className="mx-auto grid w-full max-w-6xl gap-12 sm:grid-cols-2 lg:grid-cols-4">
+    <footer className="border-t border-border bg-surface px-6 py-16 sm:px-10">
+      <div className="mx-auto grid w-full max-w-[1400px] gap-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="flex items-center gap-2.5">
             <span
@@ -74,7 +74,7 @@ export function SiteFooter() {
         ))}
       </div>
 
-      <div className="mx-auto mt-12 w-full max-w-6xl border-t border-border pt-6">
+      <div className="mx-auto mt-12 w-full max-w-[1400px] border-t border-border pt-6">
         <p className="text-xs text-text-faint">
           © {new Date().getFullYear()} Studio Flows. All rights reserved.
         </p>

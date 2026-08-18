@@ -96,14 +96,29 @@ function PhaseCard({
   icon: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6 shadow-sm transition hover:shadow-md">
-      <IconTile hue={hue}>
-        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-          {icon}
-        </svg>
-      </IconTile>
-      <h3 className="mt-4 font-display text-lg font-bold text-text">{name}</h3>
-      <p className="mt-2 text-[15px] leading-relaxed text-text-muted">{body}</p>
+    // Colored top edge + hue-tinted wash, the same bolder language the app's
+    // own board columns and page headers already use.
+    <div
+      className="group relative overflow-hidden rounded-2xl border border-border bg-surface p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+      style={{ borderTop: `3px solid var(--h-${hue})` }}
+    >
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-28 opacity-60"
+        style={{
+          background: `linear-gradient(to bottom, var(--h-${hue}-bg), transparent)`,
+        }}
+      />
+      <div className="relative">
+        <IconTile hue={hue} size="lg">
+          <svg width="24" height="24" viewBox="0 0 20 20" aria-hidden="true">
+            {icon}
+          </svg>
+        </IconTile>
+        <h3 className="mt-5 font-display text-xl font-bold text-text">{name}</h3>
+        <p className="mt-2.5 text-[15px] leading-relaxed text-text-muted">
+          {body}
+        </p>
+      </div>
     </div>
   );
 }
@@ -124,11 +139,13 @@ function FeatureCopy({
       <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-accent">
         {eyebrow}
       </p>
-      <h2 className="font-display text-3xl font-bold leading-tight tracking-tight text-text sm:text-4xl">
+      <h2 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-text sm:text-5xl">
         {title}
       </h2>
-      <p className="mt-4 text-lg leading-relaxed text-text-muted">{body}</p>
-      <ul className="mt-6 space-y-3">
+      <p className="mt-5 text-lg leading-relaxed text-text-muted sm:text-xl">
+        {body}
+      </p>
+      <ul className="mt-7 space-y-3.5">
         {points.map((p) => (
           <li key={p} className="flex gap-3 text-[15px] text-text">
             <svg
@@ -160,14 +177,14 @@ export default function MarketingHome() {
     <>
       {/* Hero */}
       <Section className="pt-16 sm:pt-24">
-        <div className="mx-auto max-w-3xl text-center">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-accent">
+        <div className="mx-auto max-w-4xl text-center">
+          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.16em] text-accent">
             For production studios of every scale
           </p>
-          <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-text sm:text-6xl">
+          <h1 className="font-display text-5xl font-extrabold leading-[1.02] tracking-[-0.02em] text-text sm:text-7xl lg:text-[5.25rem]">
             Every job, in one place.
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-text-muted sm:text-xl">
+          <p className="mx-auto mt-7 max-w-2xl text-xl leading-relaxed text-text-muted sm:text-2xl">
             Studio Flows pulls your briefs, boards, client approvals, call
             sheets, and budgets into one organized home, built around how
             commercial production actually works.
@@ -250,6 +267,7 @@ export default function MarketingHome() {
             visual={
               <BrowserFrame
                 caption="studio-flows.com/r/shared-link"
+                hue="green"
                 alt="The client review portal: a hero frame with two numbered comment pins and the comment rail beside it."
               />
             }
@@ -277,6 +295,7 @@ export default function MarketingHome() {
             visual={
               <BrowserFrame
                 caption="app.studio-flows.com/projects/hint-summer/callsheet"
+                hue="amber"
                 alt="A storyboard frame grid beside a call sheet showing per-recipient confirmed chips."
               />
             }
@@ -303,6 +322,7 @@ export default function MarketingHome() {
             visual={
               <BrowserFrame
                 caption="app.studio-flows.com/projects/hint-summer/budget"
+                hue="blue"
                 alt="The budget page: bid versus actual lines, the cost ledger, and the margin band."
               />
             }
@@ -330,6 +350,7 @@ export default function MarketingHome() {
             visual={
               <BrowserFrame
                 caption="app.studio-flows.com/projects/hint-summer/pipeline"
+                hue="purple"
                 alt="The AI pipeline triage view: a large candidate on stage with the filmstrip of takes below and provenance in the sidebar."
               />
             }
