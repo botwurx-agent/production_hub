@@ -58,7 +58,15 @@ const SHOTS = [
 
 mkdirSync(OUT, { recursive: true });
 
-const browser = await chromium.launch();
+// CHROMIUM_PATH lets this run where a browser is already installed at a
+// revision Playwright did not download itself (CI images, dev containers),
+// which otherwise fails with "Executable doesn't exist" and a prompt to run
+// `npx playwright install`. Unset, behaviour is exactly as before.
+const browser = await chromium.launch(
+  process.env.CHROMIUM_PATH
+    ? { executablePath: process.env.CHROMIUM_PATH }
+    : undefined,
+);
 
 async function shoot(page, name, path, theme, settle) {
   await page.goto(BASE + path, { waitUntil: "domcontentloaded" });

@@ -72,6 +72,15 @@ npm run dev          # one terminal
 npm run shots        # the other
 ```
 
+Where a browser is already installed at a revision Playwright did not download
+itself (a CI image or a dev container), the launch fails with "Executable
+doesn't exist" and tells you to run `npx playwright install`, which is the wrong
+advice there. Point it at the browser instead:
+
+```bash
+CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npm run shots
+```
+
 Writes PNGs to `public/marketing/shots/`, which is what the marketing pages
 read. Re-run it whenever the UI changes. That is the whole reason this is a
 script and not a folder of hand-taken images: the site cannot quietly drift away
