@@ -13,6 +13,8 @@ export type BatchItem = {
   generationId: string;
   kind: string; // 'video' | 'image'
   mediaUrl: string | null;
+  /** Resized copy for the filmstrip. Null for video and when resizing is off. */
+  thumbUrl: string | null;
   model: string | null;
   platform: string | null;
   prompt: string | null;
@@ -93,6 +95,23 @@ export async function loadBatchByToken(token: string): Promise<BatchReviewData |
     for (const s of data ?? []) if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
   }
 
+  // A resized copy per still, for the reviewer's filmstrip. This page is shown
+  // to a client on whatever connection they have, and the originals are
+  // generator output: a 30MB PNG per option is not a review, it is a wait.
+  const thumbs = new Map<string, string>();
+  await Promise.all(
+    gens
+      .filter((g) => g.kind !== "video" && g.kind !== "audio" && g.file_path)
+      .map(async (g) => {
+        const { data } = await service.storage
+          .from("assets")
+          .createSignedUrl(g.file_path as string, SIGNED_TTL, {
+            transform: { width: 640, quality: 70, resize: "contain" },
+          });
+        if (data?.signedUrl) thumbs.set(g.id, data.signedUrl);
+      })
+  );
+
   const shotTitle = batch.shot_id
     ? (await service.from("ai_shots").select("title").eq("id", batch.shot_id).maybeSingle()).data?.title ?? null
     : null;
@@ -104,6 +123,7 @@ export async function loadBatchByToken(token: string): Promise<BatchReviewData |
       generationId: g.id,
       kind: g.kind,
       mediaUrl: renderable(g.external_url, g.file_path ? signed.get(g.file_path) ?? null : null),
+      thumbUrl: thumbs.get(g.id) ?? null,
       model: g.model,
       platform: g.platform,
       prompt: g.prompt,

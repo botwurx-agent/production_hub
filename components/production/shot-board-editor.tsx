@@ -14,13 +14,16 @@ import {
   deleteCard,
   duplicateCard,
   moveCard,
-  uploadCardImage,
+  setCardImage,
   setCardAsset,
   clearCardAsset,
   restoreShotBoard,
 } from "@/app/(app)/projects/[id]/production/board-actions";
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
+import { confirmAction } from "@/components/ui/confirm";
+import { uploadAssetFile } from "@/components/projects/upload-file";
+import { ImportDocModal } from "@/components/production/import-doc-modal";
 import { DocReviewButton } from "@/components/review/doc-review-button";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -43,6 +46,8 @@ export type CardView = {
   asset_id: string | null;
   tags: string[];
   signedUrl: string | null;
+  /** Resized copy for the row thumbnail. */
+  thumbUrl?: string | null;
   image_name: string | null;
   // Persisted fields carried so a history snapshot can rebuild the row on undo.
   storagePath: string | null;
@@ -125,6 +130,7 @@ export function ShotBoardEditor({
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
+  const [importing, setImporting] = useState(false);
   const refresh = () => router.refresh();
   const history = useHistory<{ groups: ShotGroup[]; cards: CardView[] }>();
   const act = (fn: () => Promise<unknown>) => {
@@ -388,6 +394,15 @@ export function ShotBoardEditor({
           >
             + New shot list
           </button>
+          {/* The director's package usually arrives as a PDF, so importing one
+              belongs next to creating an empty list, not buried elsewhere. */}
+          <button
+            onClick={() => setImporting(true)}
+            disabled={busy}
+            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border py-2 text-sm font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+          >
+            Import from a PDF
+          </button>
         </aside>
 
         {/* Active list */}
@@ -445,7 +460,17 @@ export function ShotBoardEditor({
                   {activeCards.length} {activeCards.length === 1 ? "shot" : "shots"}
                 </span>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    // Same reasoning as the storyboard: undo restores shots
+                    // within a list, so it cannot bring the list back.
+                    const ok = await confirmAction({
+                      title: `Delete "${active.title || "this shot list"}"?`,
+                      body: `This list and its ${activeCards.length} shot${
+                        activeCards.length === 1 ? "" : "s"
+                      } will be removed. This cannot be undone.`,
+                      confirmLabel: "Delete shot list",
+                    });
+                    if (!ok) return;
                     act(() => deleteGroup(projectId, active.id));
                     setActiveId(null);
                   }}
@@ -568,6 +593,13 @@ export function ShotBoardEditor({
           )}
         </div>
       </div>
+
+      <ImportDocModal
+        projectId={projectId}
+        studioId=""
+        open={importing}
+        onClose={() => setImporting(false)}
+      />
     </div>
   );
 }
@@ -606,14 +638,31 @@ function ShotRow({
   const rowHue = "indigo";
 
   function upload(files: FileList | null) {
-    if (!files?.[0]) return;
-    const fd = new FormData();
-    fd.set("projectId", projectId);
-    fd.set("cardId", card.id);
-    fd.set("file", files[0]);
+    const file = files?.[0];
+    if (!file) return;
     startUpload(async () => {
-      await uploadCardImage(fd);
-      onChange();
+      try {
+        // Direct to storage via a server-minted signed URL, so a full-size
+        // frame is not bounded by the Server Action request body.
+        const up = await uploadAssetFile({ studioId: "", projectId, file });
+        const res = await setCardImage(
+          projectId,
+          card.id,
+          up.storagePath,
+          up.mimeType || null,
+          file.name
+        );
+        if (res?.error) {
+          toast(res.error, "error");
+          return;
+        }
+        onChange();
+      } catch (e) {
+        toast(
+          e instanceof Error ? e.message : "That image could not be uploaded.",
+          "error"
+        );
+      }
     });
   }
 
@@ -650,7 +699,7 @@ function ShotRow({
           <div className="grid aspect-[4/3] place-items-center overflow-hidden rounded-[10px] border border-border bg-surface-2/60">
             {card.signedUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={card.signedUrl} alt="" className="h-full w-full object-cover" />
+              <img src={card.thumbUrl ?? card.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             ) : (
               <span className="text-xs font-semibold text-text-faint">No image</span>
             )}
@@ -704,7 +753,7 @@ function ShotRow({
                     <span className="grid h-9 w-11 shrink-0 place-items-center overflow-hidden rounded-[6px] border border-border bg-surface-2/60">
                       {a.signedUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={a.signedUrl} alt="" className="h-full w-full object-cover" />
+                        <img src={a.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                       ) : (
                         <span className="text-[9px] text-text-faint">file</span>
                       )}

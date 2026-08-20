@@ -2332,6 +2332,78 @@ Shot cockpit / Triage) was shown to the operator.
     marks (FK cascade, confirm-gated) vs "Turn off" (revoke, keeps the row).
     Actions updateBatchReviewItems/deleteBatchReview in batch-review-actions.ts; the
     create + edit panels share one CandidateGrid in batch-review-button.tsx.
+  - REFERENCES (was "the cast layer"; migrations 0080, 0081, 0082). ONE object:
+    a reference is an image, a name, and the HANDLE the platform gave it. That
+    is what Higgsfield actually stores, so there is nothing to translate.
+    HOW IT GOT HERE, because the lesson is worth more than the feature. 0080
+    shipped a three-level model (entities -> looks as COMPOSITIONS of element
+    entities -> per-platform handles) plus a continuity grid and a four-check
+    prompt linter. It was correct about the domain and wrong about the job: to
+    generate ONE shot the operator had to maintain a hand-typed mirror of their
+    Higgsfield element library, in a vocabulary this app invented, on a page
+    away from the work, and then satisfy warnings about it. The tell was a dozen
+    consecutive commits each fixing a rule that fired on a CORRECT setup (a look
+    handle not counting for its entity, "no look" flagged on a base state, a
+    charset rule that made "LOC-01/B" unrecordable). When the corrections
+    outnumber the work, the model is wrong, not the edge cases. 0082 flattened
+    every look into a reference, carrying handles, images and shot assignments
+    across, and re-added the parent to any shot whose assignment moved (Maya
+    wearing LK-01 is two references, not one). ai_looks / ai_look_items survive
+    UNREAD for rollback; ai_shot_cast.look_id is always null.
+    WHAT EXISTS NOW. `ai_entities` holds references (name kept from 0080; a
+    rename would churn 32 RLS policies and the agent schema map for no
+    behaviour). `ai_entity_handles` are entity-owned only. A reference's images
+    are `ai_generations` rows with status='reference' and entity_id set.
+    `ai_shot_cast` is (shot, reference), nothing else. lib/cast.ts is the pure
+    module: REF_KINDS mirrors Higgsfield's own categories (Auto / Character /
+    Location / Prop; `crowd` is legacy, kept out of the picker via
+    PICKABLE_KINDS), normalizeHandle keeps a handle VERBATIM (no charset of ours
+    -- both an early lowercase-and-underscore rule and a later allowed-character
+    rule silently broke real handles), suggestedHandle derives it from the name
+    since Higgsfield does the same, and lintPrompt makes exactly ONE check: a
+    handle in the prompt that none of this shot's references owns. That is the
+    only failure invisible without us; the platform ignores it silently and the
+    model improvises. A reference LEFT OUT of a prompt is reported by its chip
+    not showing a tick, which is feedback rather than a scolding.
+    WHERE THE WORK HAPPENS. Which references a shot uses is set ON THE SHOT, in
+    the pipeline, above the prompt being written (components/production/
+    prompt-cast-bar.tsx: chips insert the handle at the caret, "+ References"
+    opens a checkbox picker, a platform selector persists in localStorage). That
+    ordering is the single biggest thing the rework fixed: data entry used to
+    live on a page you had to know to visit first. /projects/[id]/elements is a
+    flat grid of element cards plus a READ-ONLY usage map (dots, not dropdowns),
+    and its modal mirrors Higgsfield's New Element dialog field for field.
+    VOCABULARY, settled 2026-08-04 and matching the platform exactly: an
+    ELEMENT is saved, named and carries an @handle (the library page, and the
+    top row of a shot's "Built from" panel); a REFERENCE is a one-off image fed
+    into one shot with no handle (the bottom row). A reference is promoted with
+    "Save as element" (promoteToReference), which is the move Higgsfield itself
+    supports and the reason they were never really two systems. Do not
+    reintroduce a third word: the page was briefly called References while the
+    shot panel called the same objects Elements, and the route was /cast. Actions in cast-actions.ts: saveReference / archiveReference /
+    saveHandle / deleteHandle / setShotReference / addSheet / addSheetFromLink
+    (link import reuses lib/media-import fetchMediaFromUrl, SSRF-guarded) /
+    deleteSheet.
+    LOST DELIBERATELY: asking which shots a single garment appears in
+    independently of the outfit. Real, but it can return as optional GROUPING on
+    top of references rather than as a concept nobody can avoid on day one.
+    GATING: the hub card is ai_video ONLY (2026-08-04), matching the AI
+    Pipeline card. It briefly also showed for cgi_vfx on the theory that a CG
+    job has the same continuity problem, which is true but beside the point:
+    elements are spent in the pipeline's prompt bar, and a cgi_vfx project has
+    no pipeline, so it was a library with nothing to use it on. The route is not
+    hard-blocked, per the standing project_type convention.
+    WANTED: this on a LIVE-ACTION shoot (operator, 2026-08-03). Wardrobe and set
+    continuity is a real discipline with no AI in it, and references + the usage
+    map already fit. What must not come along is the handle machinery, so the
+    change is showing the hub card for live_action/commercial AND hiding the
+    handle field + the prompt linter when the project type is not generated.
+    Small, and only worth doing when a real live job asks.
+    NEXT: agent-mediated handle reconciliation. Higgsfield's MCP exposes
+    show_reference_elements (verified live: it returns id, name, category and
+    media per element), so the app could READ the element library and match or
+    fill handles rather than have anyone type them. Their public REST API is
+    generation-only, so this needs the agent path, not a server-side sync.
   - NEXT (this refinement): record refs on created takes (references live at shot
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-

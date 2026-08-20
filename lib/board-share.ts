@@ -58,9 +58,26 @@ export async function loadSharedBoard(
     .filter((p): p is string => Boolean(p));
   const signed = new Map<string, string>();
   if (paths.length > 0) {
-    const { data: list } = await service.storage.from("assets").createSignedUrls(paths, SIGNED_TTL);
-    for (const s of list ?? []) {
-      if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+    // Resized where possible. This is the PUBLIC board: whoever opens it is on
+    // whatever connection they have, and the originals are generator output.
+    await Promise.all(
+      (rows ?? [])
+        .filter((i) => i.storage_path && (i.mime_type ?? "").startsWith("image/"))
+        .map(async (i) => {
+          const { data } = await service.storage
+            .from("assets")
+            .createSignedUrl(i.storage_path as string, SIGNED_TTL, {
+              transform: { width: 1200, quality: 70, resize: "contain" },
+            });
+          if (data?.signedUrl) signed.set(i.storage_path as string, data.signedUrl);
+        })
+    );
+    const missing = paths.filter((p) => !signed.has(p));
+    if (missing.length) {
+      const { data: list } = await service.storage.from("assets").createSignedUrls(missing, SIGNED_TTL);
+      for (const s of list ?? []) {
+        if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+      }
     }
   }
 

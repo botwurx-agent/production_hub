@@ -1,0 +1,430 @@
+<title>Studio Flows brand foundation</title>
+<style>
+/*FONTS*/
+
+:root {
+  color-scheme: light;
+
+  /* Ground: the paper theme, lifted straight from app/globals.css */
+  --bg:        oklch(0.962 0.014 84);
+  --surface:   oklch(0.985 0.008 86);
+  --surface-2: oklch(0.938 0.018 84);
+  --ink:       oklch(0.28 0.021 62);
+  --muted:     oklch(0.505 0.019 62);
+  --faint:     oklch(0.645 0.017 64);
+  --border:    oklch(0.902 0.016 80);
+  --border-strong: oklch(0.835 0.021 80);
+
+  --accent:      oklch(0.565 0.205 274);
+  --accent-soft: oklch(0.937 0.062 274);
+  --accent-fg:   oklch(0.99 0.01 274);
+
+  --green: oklch(0.665 0.165 158); --green-bg: oklch(0.924 0.097 158);
+  --amber: oklch(0.755 0.16 72);   --amber-bg: oklch(0.937 0.087 72);
+  --red:   oklch(0.625 0.225 22);  --red-bg:   oklch(0.941 0.072 22);
+  --blue:  oklch(0.605 0.17 245);  --blue-bg:  oklch(0.931 0.067 245);
+  --purple:oklch(0.55 0.23 305);   --purple-bg:oklch(0.937 0.067 305);
+
+  --display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --body: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+
+  --measure: 62ch;
+  --shadow-sm: 0 1px 2px rgba(72,56,32,.07), 0 1px 1px rgba(72,56,32,.05);
+  --shadow-md: 0 4px 10px -3px rgba(72,56,32,.13), 0 2px 4px -2px rgba(72,56,32,.09);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 32px 96px; }
+
+/* ---------- masthead ---------- */
+.masthead {
+  display: flex; align-items: center; gap: 12px;
+  padding: 40px 0 20px;
+}
+.mark {
+  font-family: var(--display); font-weight: 800; font-size: 15px;
+  background: var(--accent); color: var(--accent-fg);
+  padding: 6px 9px; border-radius: 9px; letter-spacing: -0.3px;
+}
+.wordmark {
+  font-family: var(--display); font-weight: 800; font-size: 19px;
+  letter-spacing: -0.4px;
+}
+.masthead .meta {
+  margin-left: auto; font-size: 12px; color: var(--faint);
+  text-transform: uppercase; letter-spacing: 1.3px;
+}
+
+/* ---------- thesis ---------- */
+.thesis { padding: 28px 0 8px; border-top: 1px solid var(--border); }
+h1 {
+  font-family: var(--display); font-weight: 800;
+  font-size: clamp(32px, 5vw, 46px); line-height: 1.08;
+  letter-spacing: -1.4px; margin: 0 0 18px; max-width: 18ch;
+  text-wrap: balance;
+}
+.lede { font-size: 19px; line-height: 1.55; color: var(--ink); max-width: var(--measure); margin: 0 0 14px; }
+p { max-width: var(--measure); margin: 0 0 14px; color: var(--muted); }
+p strong { color: var(--ink); font-weight: 600; }
+
+/* ---------- sections ---------- */
+section { padding-top: 56px; }
+.label {
+  font-family: var(--body); font-size: 11.5px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 1.6px; color: var(--accent);
+  margin: 0 0 10px;
+}
+h2 {
+  font-family: var(--display); font-weight: 800; font-size: 27px;
+  letter-spacing: -0.7px; margin: 0 0 12px; text-wrap: balance;
+}
+h3 {
+  font-family: var(--display); font-weight: 700; font-size: 15px;
+  letter-spacing: -0.2px; margin: 0 0 6px; color: var(--ink);
+}
+.rule { height: 1px; background: var(--border); margin-top: 56px; }
+
+/* ---------- swatches ---------- */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; margin: 22px 0 8px; }
+.sw { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: var(--surface); }
+.sw .chip { height: 62px; }
+.sw .txt { padding: 9px 11px 11px; }
+.sw .nm { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.sw .val { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; margin-top: 1px; }
+
+/* ---------- theme rows ---------- */
+.themes { display: grid; gap: 10px; margin-top: 20px; }
+.themerow {
+  display: grid; grid-template-columns: 108px 1fr; align-items: center; gap: 16px;
+  border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px; background: var(--surface);
+}
+.themerow .nm { font-weight: 600; font-size: 13.5px; }
+.themerow .nm span { display: block; font-weight: 400; font-size: 11.5px; color: var(--faint); }
+.bar { display: flex; height: 34px; border-radius: 7px; overflow: hidden; border: 1px solid var(--border); }
+.bar i { flex: 1; }
+
+/* ---------- the proof ---------- */
+.proof { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 24px 0 10px; }
+.stage { border-radius: 13px; padding: 22px; border: 1px solid var(--border); }
+.stage.cold { background: #fbfbfc; }
+.stage.warm { background: var(--bg); }
+.stage .cap {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.4px;
+  color: var(--faint); margin-bottom: 14px; font-weight: 500;
+}
+.frame { border-radius: 9px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.frame .img { height: 108px; background: linear-gradient(118deg, oklch(0.62 0.13 32), oklch(0.72 0.11 62) 55%, oklch(0.55 0.09 24)); }
+.frame .bd { background: var(--surface); padding: 11px 13px; }
+.stage.cold .frame .bd { background: #fff; }
+.frame .t { font-weight: 600; font-size: 13px; }
+.frame .s { font-size: 11.5px; color: var(--faint); margin-top: 1px; }
+
+/* ---------- chips ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 6px; }
+.tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 500; padding: 4px 10px 4px 8px; border-radius: 999px;
+}
+.tag i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.t-green { background: var(--green-bg); color: oklch(0.44 0.13 158); }
+.t-amber { background: var(--amber-bg); color: oklch(0.48 0.12 62); }
+.t-red   { background: var(--red-bg);   color: oklch(0.46 0.17 22); }
+.t-blue  { background: var(--blue-bg);  color: oklch(0.44 0.13 245); }
+.t-ind   { background: var(--accent-soft); color: oklch(0.44 0.16 274); }
+
+/* ---------- identity tiles ---------- */
+.tiles { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 6px; }
+.tile {
+  width: 46px; height: 46px; border-radius: 12px;
+  display: grid; place-items: center; font-size: 19px;
+}
+
+/* ---------- type specimen ---------- */
+.spec { border: 1px solid var(--border); border-radius: 13px; background: var(--surface); padding: 26px 28px; margin-top: 22px; }
+.spec + .spec { margin-top: 14px; }
+.spec .role {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--faint); margin-bottom: 14px; font-weight: 500;
+}
+/* colour set explicitly: these are <p> and would otherwise inherit --muted */
+.sample-d { font-family: var(--display); font-weight: 800; font-size: 40px; letter-spacing: -1.2px; line-height: 1.1; margin: 0 0 6px; color: var(--ink); }
+.sample-b { font-family: var(--body); font-weight: 400; font-size: 16.5px; line-height: 1.6; max-width: var(--measure); margin: 0; color: var(--ink); }
+.scale { display: grid; gap: 9px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+.scale div { display: grid; grid-template-columns: 128px 1fr; gap: 16px; align-items: baseline; }
+.scale .k { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* ---------- in use ---------- */
+.uses { display: grid; gap: 18px; margin-top: 22px; }
+.slide {
+  aspect-ratio: 16 / 9; border-radius: 13px; border: 1px solid var(--border);
+  background: var(--surface); padding: 46px 52px; display: flex; flex-direction: column;
+  justify-content: center; box-shadow: var(--shadow-md); position: relative; overflow: hidden;
+}
+.slide .eyebrow {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 1.8px;
+  color: var(--accent); font-weight: 500; margin-bottom: 16px;
+}
+.slide h4 {
+  font-family: var(--display); font-weight: 800;
+  font-size: clamp(26px, 3.6vw, 42px); line-height: 1.06; letter-spacing: -1.3px;
+  margin: 0 0 16px; max-width: 17ch; text-wrap: balance;
+}
+.slide p { font-size: 17px; max-width: 44ch; margin: 0; }
+.slide .edge { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--accent); }
+
+/* ---------- rules ---------- */
+.rules { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 22px; }
+.rules ul { margin: 0; padding: 0; list-style: none; }
+.rules li { position: relative; padding-left: 22px; margin-bottom: 9px; color: var(--muted); max-width: 44ch; }
+.rules li::before {
+  position: absolute; left: 0; top: 0; font-weight: 600;
+}
+.do li::before { content: "+"; color: var(--green); }
+.dont li::before { content: "\2013"; color: var(--red); }
+.rules h3 { margin-bottom: 12px; }
+
+footer {
+  margin-top: 68px; padding-top: 18px; border-top: 1px solid var(--border);
+  font-size: 12.5px; color: var(--faint);
+}
+footer p { color: var(--faint); font-size: 12.5px; }
+
+@media (max-width: 760px) {
+  .wrap { padding: 0 20px 64px; }
+  .proof, .rules { grid-template-columns: 1fr; }
+  .scale div { grid-template-columns: 92px 1fr; }
+  .slide { padding: 28px 26px; aspect-ratio: auto; }
+}
+</style>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <span class="mark">SF</span>
+    <span class="wordmark">Studio Flows</span>
+    <span class="meta">Brand foundation</span>
+  </div>
+
+  <div class="thesis">
+    <h1>Built on paper, not on glare</h1>
+    <p class="lede">Studio Flows is where a commercial job lives. The brand has one job: to look like it was made by someone who has actually sat through a colour session, and not by a software company.</p>
+    <p>Everything here already exists in the product as design tokens. This sheet fixes which of them the <strong>outward-facing</strong> surfaces use, so the deck, the marketing site and the app read as one thing. The rule that governs all of it: <strong>the ground is warm, the accent is rare, and colour means something.</strong></p>
+  </div>
+
+  <div class="rule"></div>
+
+  <section>
+    <p class="label">The ground</p>
+    <h2>Warm neutral, not white</h2>
+    <p>The category is cold. Monday, ClickUp, Asana and Notion all sit on blue-white with saturated accents. Sitting on a warm ground is the cheapest, most durable way to not look like them, and it is the one choice a viewer registers before reading a single word.</p>
+    <p>It is also functional, which is what makes it defensible rather than decorative. This palette exists in the product as the <strong>paper</strong> theme, built for long review sessions because the brightness of the interface changes how you judge the work sitting inside it.</p>
+
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:oklch(0.962 0.014 84)"></div><div class="txt"><div class="nm">Ground</div><div class="val">0.962 0.014 84</div></div></div>
+      <div class="sw"><div class="chip" style="background:oklch(0.985 0.008 86)"></div><div class="txt"><div class="nm">Surface</div><div class="val">0.985 0.008 86</div></div></div>
+      <div class="sw"><div class="chip" style="background:oklch(0.938 0.018 84)"></div><div class="txt"><div class="nm">Surface 2</div><div class="val">0.938 0.018 84</div></div></div>
+      <div class="sw"><div class="chip" style="background:oklch(0.28 0.021 62)"></div><div class="txt"><div class="nm">Ink</div><div class="val">0.28 0.021 62</div></div></div>
+      <div class="sw"><div class="chip" style="background:oklch(0.505 0.019 62)"></div><div class="txt"><div class="nm">Muted</div><div class="val">0.505 0.019 62</div></div></div>
+      <div class="sw"><div class="chip" style="background:oklch(0.565 0.205 274)"></div><div class="txt"><div class="nm">Accent</div><div class="val">0.565 0.205 274</div></div></div>
+    </div>
+    <p style="font-size:13.5px;color:var(--faint);max-width:var(--measure)">Values are OKLCH, as in <span style="font-family:ui-monospace,monospace;font-size:12.5px">app/globals.css</span>. Text on surface measures 14.0:1 and muted 5.7:1, both clear of AA. Contrast was measured, not eyeballed.</p>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <p class="label">The proof</p>
+    <h2>Why the ground is the argument</h2>
+    <p>The same frame, awaiting the same approval, on cold white and on paper. Nobody needs the theory explained once they have seen it twice.</p>
+
+    <div class="proof">
+      <div class="stage cold">
+        <div class="cap">Cold white, the category default</div>
+        <div class="frame">
+          <div class="img"></div>
+          <div class="bd">
+            <div class="t">Hero_bottle_v4.mov</div>
+            <div class="s">Awaiting client approval</div>
+          </div>
+        </div>
+      </div>
+      <div class="stage warm">
+        <div class="cap">Paper, ours</div>
+        <div class="frame">
+          <div class="img"></div>
+          <div class="bd">
+            <div class="t">Hero_bottle_v4.mov</div>
+            <div class="s">Awaiting client approval</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p>The warm ground stops competing with the image. On white, the interface is the brightest thing on screen and the frame has to fight it. That is a real problem when the frame is the thing being judged, and it is the sentence to use when anyone asks why the site does not look like every other tool.</p>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <p class="label">Themes</p>
+    <h2>Three grounds, one system</h2>
+    <p>The product ships light, paper and dark as three value sets for the same tokens. Outward-facing surfaces use <strong>paper</strong>. Light and dark remain in the app, chosen by the user, and dark is the right ground for a screenshot of a review session.</p>
+
+    <div class="themes">
+      <div class="themerow">
+        <div class="nm">Paper<span>Deck, site, docs</span></div>
+        <div class="bar"><i style="background:oklch(0.962 0.014 84)"></i><i style="background:oklch(0.985 0.008 86)"></i><i style="background:oklch(0.938 0.018 84)"></i><i style="background:oklch(0.505 0.019 62)"></i><i style="background:oklch(0.28 0.021 62)"></i><i style="background:oklch(0.565 0.205 274)"></i></div>
+      </div>
+      <div class="themerow">
+        <div class="nm">Light<span>In product</span></div>
+        <div class="bar"><i style="background:oklch(0.987 0.005 280)"></i><i style="background:oklch(1 0 0)"></i><i style="background:oklch(0.975 0.008 285)"></i><i style="background:oklch(0.52 0.03 282)"></i><i style="background:oklch(0.255 0.035 282)"></i><i style="background:oklch(0.565 0.205 274)"></i></div>
+      </div>
+      <div class="themerow">
+        <div class="nm">Dark<span>Review sessions</span></div>
+        <div class="bar"><i style="background:oklch(0.185 0.022 282)"></i><i style="background:oklch(0.225 0.022 282)"></i><i style="background:oklch(0.265 0.024 282)"></i><i style="background:oklch(0.66 0.025 282)"></i><i style="background:oklch(0.965 0.012 282)"></i><i style="background:oklch(0.565 0.205 274)"></i></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <p class="label">Type</p>
+    <h2>Jakarta sets the tone, Hanken carries the reading</h2>
+    <p>Plus Jakarta Sans is geometric with enough character in the <strong>a</strong>, <strong>g</strong> and <strong>y</strong> to avoid the anonymity of Inter. It is used heavy and tight, and only for display. Hanken Grotesk is the workhorse: open, slightly warm, and comfortable at length.</p>
+
+    <div class="spec">
+      <div class="role">Plus Jakarta Sans &middot; 800 &middot; display only</div>
+      <p class="sample-d">One home for the whole job</p>
+      <p style="margin:0;font-size:13.5px;color:var(--faint)">Set tight. Letter-spacing goes negative as size goes up, to &minus;1.4px at display sizes.</p>
+    </div>
+
+    <div class="spec">
+      <div class="role">Hanken Grotesk &middot; 400 and 500 &middot; everything else</div>
+      <p class="sample-b">The brief, the boards, the shot list, the call sheet, the cuts, the client feedback, the budget and the contracts. Built around how a job actually runs, rather than as a generic project tool with our words pasted over it.</p>
+      <div class="scale">
+        <div><span class="k">Display / 46</span><span style="font-family:var(--display);font-weight:800;font-size:25px;letter-spacing:-0.9px">Nothing gets lost</span></div>
+        <div><span class="k">Heading / 27</span><span style="font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-0.5px">Review and approval</span></div>
+        <div><span class="k">Lede / 19</span><span style="font-size:16px">Send a link. No login.</span></div>
+        <div><span class="k">Body / 16</span><span style="font-size:14.5px">Comments land on the frame.</span></div>
+        <div><span class="k">Label / 11.5</span><span style="font-size:11px;text-transform:uppercase;letter-spacing:1.6px;font-weight:500;color:var(--muted)">Pre-production</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <p class="label">Colour as signal</p>
+    <h2>Two colour systems that never mix</h2>
+    <p>This is the rule most tools get wrong, and the one that keeps the interface calm as the product grows. Colour is either <strong>state</strong> or <strong>identity</strong>. It is never decoration, and the two never appear in the same role.</p>
+
+    <h3>State: small, contained, always a chip</h3>
+    <p>A tinted pill with a dot. It never floods a row or a card, because a full colour wash makes the whole screen feel urgent and then nothing does.</p>
+    <div class="chips">
+      <span class="tag t-blue"><i></i>In review</span>
+      <span class="tag t-amber"><i></i>Changes requested</span>
+      <span class="tag t-green"><i></i>Approved</span>
+      <span class="tag t-red"><i></i>Overdue</span>
+      <span class="tag t-ind"><i></i>Delivered</span>
+    </div>
+
+    <h3 style="margin-top:26px">Identity: wayfinding, never status</h3>
+    <p>Each module carries a fixed hue so the eye learns where things are. These are never read as good or bad.</p>
+    <div class="tiles">
+      <span class="tile" style="background:var(--blue-bg);color:var(--blue)">&#9635;</span>
+      <span class="tile" style="background:var(--purple-bg);color:var(--purple)">&#9673;</span>
+      <span class="tile" style="background:var(--green-bg);color:var(--green)">&#9650;</span>
+      <span class="tile" style="background:var(--amber-bg);color:var(--amber)">&#9679;</span>
+      <span class="tile" style="background:var(--accent-soft);color:var(--accent)">&#9632;</span>
+    </div>
+
+    <h3 style="margin-top:26px">Indigo is for action only</h3>
+    <p>The accent marks the primary button, the active state and the mark itself. If indigo appears anywhere it is not inviting a click, it is being used as decoration, and it should come out.</p>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <p class="label">In use</p>
+    <h2>What it looks like applied</h2>
+    <p>A deck slide on the same tokens. The site inherits this directly.</p>
+
+    <div class="uses">
+      <div class="slide">
+        <div class="edge"></div>
+        <div class="eyebrow">The problem</div>
+        <h4>A job lives in eleven places</h4>
+        <p>The brief is in email. The boards are in Figma. The cut is in Dropbox. The feedback is in a thread nobody can find by Thursday.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <p class="label">Voice</p>
+    <h2>One operator talking to another</h2>
+    <p>Write the way a producer talks on a Tuesday. Plain, specific, unhurried. Name the real thing: a call sheet is a call sheet, not a "resource document".</p>
+    <div class="rules">
+      <div class="do">
+        <h3>Say</h3>
+        <ul>
+          <li>Send a link. Your client needs no login.</li>
+          <li>Comments land on the frame, at the timecode.</li>
+          <li>Every version stays one thing, not nine files.</li>
+        </ul>
+      </div>
+      <div class="dont">
+        <h3>Never say</h3>
+        <ul>
+          <li>Platform, solution, streamline, seamless.</li>
+          <li>Empower, unlock, supercharge, revolutionise.</li>
+          <li>Anything a producer would not say out loud on set.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <p class="label">Rules</p>
+    <h2>The short version</h2>
+    <div class="rules">
+      <div class="do">
+        <h3>Do</h3>
+        <ul>
+          <li>Ground everything outward-facing in paper.</li>
+          <li>Keep indigo for actions and the mark.</li>
+          <li>Let type and whitespace carry the structure.</li>
+          <li>Show real product, real project names, real dates.</li>
+          <li>Set display type tight and heavy.</li>
+        </ul>
+      </div>
+      <div class="dont">
+        <h3>Do not</h3>
+        <ul>
+          <li>Put the brand on pure white.</li>
+          <li>Use a second accent, or a gradient as identity.</li>
+          <li>Colour a whole row or card by status.</li>
+          <li>Use stock photography of people in offices.</li>
+          <li>Centre body copy, or set display type loose.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>This sheet is deliberately single-theme. It is a specimen of the paper ground, so inverting it would remove the thing it exists to show. Colour values are the live tokens in <span style="font-family:ui-monospace,monospace;font-size:12px">app/globals.css</span>; if they change there, they change here.</p>
+  </footer>
+
+</div>

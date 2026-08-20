@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Studio Flows: what is in it</title>
+<style>
+  /* Same shell as the beta outreach PDF: Letter, same margins, same type
+     scale, same accent rule under the masthead, same footer. */
+  @page {
+    size: Letter;
+    margin: 18mm 20mm 20mm 20mm;
+  }
+
+  :root {
+    --ink: #1a1c1f;
+    --body: #33383f;
+    --muted: #6b7280;
+    --faint: #9aa1ab;
+    --accent: #4f46e5;
+    --rule: #e4e6ea;
+    --card: #f7f8fa;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: var(--body);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ---- masthead ---- */
+  .masthead {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-bottom: 13px;
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: 22px;
+  }
+  .mark {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 800;
+    font-size: 11pt;
+    letter-spacing: -0.2px;
+    padding: 4px 8px;
+    border-radius: 7px;
+  }
+  .wordmark {
+    font-weight: 800;
+    font-size: 13pt;
+    color: var(--ink);
+    letter-spacing: -0.3px;
+  }
+  .masthead .doctype {
+    margin-left: auto;
+    font-size: 8.5pt;
+    color: var(--faint);
+    text-transform: uppercase;
+    letter-spacing: 1.1px;
+  }
+
+  h1 {
+    font-size: 20pt;
+    line-height: 1.2;
+    color: var(--ink);
+    margin: 0 0 8px;
+    letter-spacing: -0.5px;
+  }
+  .standfirst {
+    font-size: 11pt;
+    color: var(--muted);
+    margin: 0 0 6px;
+    max-width: 46em;
+  }
+
+  h2 {
+    font-size: 13.5pt;
+    color: var(--ink);
+    margin: 26px 0 4px;
+    letter-spacing: -0.3px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+  }
+
+  p { margin: 0 0 9px; max-width: 46em; }
+  strong { color: var(--ink); }
+
+  /* A heading must never be the last thing on a page, and a short section
+     should not be split across two. */
+  section { break-inside: avoid; page-break-inside: avoid; }
+  h2 { break-after: avoid; page-break-after: avoid; }
+
+  /* The one section that is a caveat rather than a capability, so it reads as
+     an aside rather than another feature block. */
+  .aside {
+    background: var(--card);
+    border-radius: 9px;
+    padding: 13px 16px;
+    margin: 22px 0 0;
+    font-size: 9.5pt;
+    break-inside: avoid;
+  }
+  .aside p { margin: 0; max-width: none; }
+  .aside .label {
+    display: block;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  footer {
+    margin-top: 26px;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    font-size: 8.5pt;
+    color: var(--faint);
+  }
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <span class="mark">SF</span>
+  <span class="wordmark">Studio Flows</span>
+  <span class="doctype">What is in it</span>
+</div>
+
+<h1>One home for the whole job</h1>
+<p class="standfirst">The idea is that a job has one home, and the home is shaped like production rather than like a database. Here is what is in it.</p>
+
+<section>
+  <h2>The job</h2>
+  <p>Every project has a hub: brief, assets, boards, review, contacts, calendar, call sheets, budget, documents, contracts. Board, list, and a studio-wide timeline so you can see every job's shoot and delivery dates in one view and catch two shoots landing on the same day.</p>
+</section>
+
+<section>
+  <h2>Creative and review</h2>
+  <p>Assets with real version history, so v1 through v9 stay one thing instead of nine files. Storyboards, shot lists, and moodboards built in.</p>
+  <p>Review is the part I care most about. Internally your team comments and signs off. Externally you send a link, no account needed. On a still they pin a comment to the exact spot and can draw on it. On a cut they comment at a timecode, or across a range for "this whole section drags", and clicking the note plays that stretch back. Threaded replies, reactions, filters, crop guides for checking a 9:16 cutdown survives, and a response-by date that chases them for you if it passes.</p>
+</section>
+
+<section>
+  <h2>Shoot</h2>
+  <p>Call sheets you build on the sheet itself rather than in a form, with templates, and per-person links so you can see who opened it and who confirmed. A contacts roster per job split into crew, talent, extras, vendors and client, with day rates. Project calendar for the dates a job actually has.</p>
+</section>
+
+<section>
+  <h2>Money</h2>
+  <p>Budget with bid against actual, and actuals backed by a cost ledger rather than a number you typed. Log a vendor invoice and it holds the invoice itself, what is owed, and when. Deposits and payment schedules, so "25% up front, balance on delivery" is one commitment with two payments. Margin against what you actually billed. Estimates, proposals your client signs in the browser, and invoices, delivered by email, link, or PDF.</p>
+</section>
+
+<section>
+  <h2>Paperwork</h2>
+  <p>Somewhere for permits, insurance certificates, licences and delivery specs, versioned, and tagged with the email they arrived in, so "where did that PDF go" has an answer. NDAs and MSAs live on the client and SOWs live on the job, tracking both signatures and flagging an NDA about to lapse.</p>
+</section>
+
+<section>
+  <h2>Clients</h2>
+  <p>Accounts, contacts, and a deal pipeline, because the same brand comes back with a different job and the old way of tracking that was a spreadsheet. Activity timeline, tasks, and linked email threads so "when did we last talk to them" is answerable.</p>
+</section>
+
+<section>
+  <h2>Connects to what you already use</h2>
+  <p>Gmail, Google Drive, Google Calendar, Slack and Figma. Link an email thread to a job and reply from inside it. Pull frames from a Figma file or files from Drive straight in as assets. The idea is to stop you tab-switching, not to make you abandon tools that work.</p>
+</section>
+
+<section>
+  <h2>AI, only where it earns it</h2>
+  <p>Nothing runs on its own and nothing sends on your behalf. Drop in a vendor invoice and it fills the cost form for you to check. Drop in a SOW and it pulls out the deliverables and fees. A polish button on a message you are already writing. Project summaries. There is also an assistant that reads the studio and answers questions, but it proposes changes and you confirm them; it never writes on its own.</p>
+</section>
+
+<section>
+  <h2>If you do generated work</h2>
+  <p>There is a whole pipeline for it: shots, references, candidate triage by keyboard, provenance on every generation, a prompt and style library, and a shareable link where a client picks their favourite from a set of takes. Organising the fan-out, not generating.</p>
+</section>
+
+<footer>Studio Flows &middot; studio-flows.com</footer>
+
+</body>
+</html>

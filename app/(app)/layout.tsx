@@ -7,6 +7,7 @@ import { aiConfigured } from "@/lib/ai";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { Toaster } from "@/components/ui/toast";
+import { ConfirmHost } from "@/components/ui/confirm";
 import { AiAvailabilityProvider } from "@/components/ai/ai-availability";
 import { AgentMount } from "@/components/agent/agent-mount";
 import { TourGuide } from "@/components/tour/tour-guide";
@@ -77,6 +78,7 @@ export default async function AppLayout({
             TourTrigger. */}
         <TourGuide />
         <Toaster />
+        <ConfirmHost />
       </div>
     </AiAvailabilityProvider>
   );

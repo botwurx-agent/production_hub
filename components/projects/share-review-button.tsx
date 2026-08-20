@@ -117,6 +117,25 @@ export function ShareReviewButton({
                   {copied ? "Copied" : "Copy"}
                 </Button>
               </div>
+
+              {/* Without this the only way to see the client's side of a review
+                  was to copy the link and paste it into the address bar, which
+                  is why nobody ever checked it before sending. Opening the
+                  portal records nothing, so previewing cannot pollute the
+                  round. */}
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <path d="M15 3h6v6M10 14 21 3" />
+                </svg>
+                Open what the client sees
+              </a>
+
               <div className="flex items-center justify-between border-t border-border pt-3">
                 <span className="text-xs text-text-faint">
                   Link is active

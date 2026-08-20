@@ -27,6 +27,12 @@ import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import { ScriptEditor } from "@/components/production/script-editor";
 import { TriageView } from "@/components/production/triage-view";
 import { LibraryButton, LibraryBar } from "@/components/production/prompt-library";
+import { AudioPanel } from "@/components/production/audio-panel";
+import { ShotReferences, type LooseRef } from "@/components/production/shot-references";
+import { ShareDocButton } from "@/components/review/share-doc-button";
+import { EditorHandoffButton } from "@/components/production/editor-handoff-button";
+import { insertToken } from "@/lib/caret";
+import type { CastReference, CastUse } from "@/lib/cast";
 import { MasterCutBand } from "@/components/production/master-cut-band";
 import { BatchReviewButton } from "@/components/production/batch-review-button";
 import type { AssetWithVersions } from "@/components/projects/asset-types";
@@ -106,7 +112,7 @@ function AddGenModal({
     () => Array.from(new Set(urlsText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))),
     [urlsText],
   );
-  const noun = stage === "image" ? "candidate" : "take";
+  const noun = stage === "image" ? "reference" : "take";
   const total = files.length + links.length;
 
   // Auto-fill provenance we can derive from the pasted link: platform (from the
@@ -432,10 +438,15 @@ function Flow({ label }: { label?: string }) {
 }
 
 // A large, labeled frame slot for the locked Start / End (image) or Take (video).
-function FrameSlot({ label, color, gen, src, empty, video }: {
-  label: string; color: string; gen: AiGeneration | null; src: string | null; empty: string; video?: boolean;
+function FrameSlot({ label, color, gen, src, thumb, empty, video }: {
+  label: string; color: string; gen: AiGeneration | null; src: string | null;
+  /** Resized copy. This box is about 220px wide; the original can be 34MB. */
+  thumb?: string | null;
+  empty: string; video?: boolean;
 }) {
   const isVideo = video || gen?.kind === "video";
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const stillSrc = !thumbFailed && thumb ? thumb : src;
   return (
     <div>
       <div className="mb-1 text-[10.5px] font-extrabold uppercase tracking-wide" style={{ color }}>{label}</div>
@@ -445,8 +456,12 @@ function FrameSlot({ label, color, gen, src, empty, video }: {
             <video src={src} controls playsInline preload="metadata" className="absolute inset-0 h-full w-full object-contain bg-black" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            <img src={stillSrc ?? undefined} alt="" decoding="async"
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={(e) => {
+                if (!thumbFailed && thumb && stillSrc === thumb) { setThumbFailed(true); return; }
+                (e.target as HTMLImageElement).style.display = "none";
+              }} />
           ))}
           {isVideo && !src && (
             <span className="absolute inset-0 grid place-items-center">
@@ -469,13 +484,19 @@ function FrameSlot({ label, color, gen, src, empty, video }: {
 // ---- Generation card --------------------------------------------------------
 
 function GenCard({
-  projectId, shot, gen, src, onRun,
+  projectId, shot, gen, src, thumb, onRun,
 }: {
   projectId: string; shot: AiShot; gen: AiGeneration; src: string | null;
+  /** Resized copy for the card. The full file is still what opens. */
+  thumb?: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
 }) {
   const [spec, setSpec] = useState(false);
   const [open, setOpen] = useState(false);
+  // Falls back to the original if the resize is unavailable, so a grid that is
+  // slow beats a grid that is empty.
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const cardSrc = !thumbFailed && thumb ? thumb : src;
   const isImage = gen.stage === "image";
   const isVideo = gen.kind === "video";
   const roleTag = gen.role ? ROLE_TAG[gen.role] ?? null : null;
@@ -491,8 +512,15 @@ function GenCard({
             className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          <img src={cardSrc ?? undefined} alt=""
+            // Off-screen candidates fetch nothing until scrolled to, which on a
+            // pool of thirty is most of them.
+            loading="lazy" decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={(e) => {
+              if (!thumbFailed && thumb && cardSrc === thumb) { setThumbFailed(true); return; }
+              (e.target as HTMLImageElement).style.display = "none";
+            }} />
         ))}
         {isVideo && (
           <span className="absolute inset-0 grid place-items-center">
@@ -519,6 +547,7 @@ function GenCard({
 
       {open && (
         <Modal open onClose={() => setOpen(false)} size="xl"
+      id="pipeline-gen"
           title={`${isImage ? "Image" : "Take"}${gen.model ? ` · ${gen.model}` : ""}`}>
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-[12px] bg-black" style={{ aspectRatio: "16/9" }}>
@@ -754,78 +783,31 @@ function AddRefModal({
   );
 }
 
-function ReferencesPanel({
-  projectId, studioId, shot, stage, refs, media, onRun,
-}: {
-  projectId: string; studioId: string; shot: AiShot; stage: Stage;
-  refs: AiGeneration[]; media: Record<string, string>;
-  onRun: (fn: () => Promise<unknown>) => void;
-}) {
-  const [adding, setAdding] = useState(false);
-  const srcOf = (g: AiGeneration) => media[g.id] ?? g.external_url ?? null;
-  return (
-    <div className="mb-3 rounded-[12px] border border-dashed border-border p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
-          References{" "}
-          <span className="font-normal normal-case text-text-faint">
-            {stage === "image"
-              ? "— characters, styles & elements used in these images"
-              : "— what this shot generates from (v2v)"}
-          </span>
-        </p>
-        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>+ Reference</Button>
-      </div>
-      {refs.length === 0 ? (
-        <p className="text-xs text-text-faint">
-          {stage === "image"
-            ? "None yet. Add a character, style, or element reference for this shot."
-            : "None yet. Add a driving/style/character clip for video-to-video."}
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {refs.map((g) => {
-            const src = srcOf(g);
-            return (
-              <div key={g.id} className="overflow-hidden rounded-[10px] border border-border">
-                <div className="relative" style={{ aspectRatio: "16/9", background: gradFor(g.id) }}>
-                  {src && (g.kind === "video"
-                    ? <video src={src} muted className="absolute inset-0 h-full w-full object-cover" />
-                    // eslint-disable-next-line @next/next/no-img-element
-                    : <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />)}
-                  <span className="absolute left-1 top-1 rounded-[4px] bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-white">
-                    {g.role || "ref"}
-                  </span>
-                  <button onClick={() => onRun(() => deleteGeneration(projectId, g.id))}
-                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-xs text-white transition hover:bg-red"
-                    title="Remove reference" aria-label="Remove reference">×</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {adding && <AddRefModal projectId={projectId} studioId={studioId} shot={shot} stage={stage} onClose={() => setAdding(false)} />}
-    </div>
-  );
-}
-
 function StagePanel({
-  projectId, studioId, shot, stage, prompt, gens, media, library, reviews, refStartId, refEndId, onRun,
-  canSeeCost,
+  projectId, studioId, shot, stage, prompt, gens, media, thumbs = {}, library, reviews, refStartId, refEndId, onRun,
+  canSeeCost, allRefs, usedRefs,
 }: {
   canSeeCost: boolean;
   projectId: string; studioId: string; shot: AiShot; stage: Stage;
   prompt: AiPrompt | null; gens: AiGeneration[]; media: Record<string, string>;
+  /** Resized copies for the candidate grid. */
+  thumbs?: Record<string, string>;
   library: AiPromptLibraryEntry[];
   reviews: BatchReviewSummary[];
   refStartId: string | null; refEndId: string | null;
   onRun: (fn: () => Promise<unknown>) => void;
+  /** Every reference in the job, and the ones this shot uses. */
+  allRefs: CastReference[];
+  usedRefs: CastReference[];
 }) {
   const router = useRouter();
+  const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const [pText, setPText] = useState(prompt?.text ?? "");
   const [pModel, setPModel] = useState(prompt?.target_model ?? "");
   const [adding, setAdding] = useState(false);
+  // Separate from `adding`, which opens the CANDIDATE dialog. Sharing one flag
+  // would have made "+ Image" in the reference panel add a candidate instead.
+  const [addingRef, setAddingRef] = useState(false);
   const [triaging, setTriaging] = useState(false);
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
   const label = stage === "image" ? "Image" : "Video";
@@ -834,7 +816,13 @@ function StagePanel({
   // character clips for v2v) live alongside the pool but are kept out of the
   // candidate/take grid. Both stages support them.
   const refs = gens.filter((g) => g.status === "reference");
-  const pool = gens.filter((g) => g.status !== "reference");
+  // On the image stage everything is one pool. A picture brought in as a
+  // reference and a picture tagged Start are the same kind of thing, and which
+  // it becomes is decided by tagging it, not by which box it was added to.
+  // The video stage keeps the split, where it is real: a motion clip driving a
+  // v2v generation is an input, and a take is an output.
+  const pool =
+    stage === "image" ? gens : gens.filter((g) => g.status !== "reference");
   const kept = pool.filter((g) => g.status !== "rejected").length;
   const start = stage === "image" ? pool.find((g) => g.role === "start") ?? null : null;
   const end = stage === "image" ? pool.find((g) => g.role === "end") ?? null : null;
@@ -851,14 +839,38 @@ function StagePanel({
         <span className="text-xs text-text-faint">{kept} kept · {pool.length} total</span>
       </div>
 
-      <ReferencesPanel projectId={projectId} studioId={studioId} shot={shot} stage={stage} refs={refs} media={media} onRun={onRun} />
 
+      {/* ONE reference area, sitting directly above the prompt it feeds. The
+          stage used to carry two: a per-stage image panel and a separate cast
+          chip row, which is one more than the platform has. */}
+      <ShotReferences
+        projectId={projectId}
+        shotId={shot.id}
+        library={allRefs}
+        used={usedRefs}
+        loose={refs.map((g): LooseRef => ({
+          id: g.id,
+          role: g.role,
+          kind: g.kind,
+          src: thumbs[g.id] ?? media[g.id] ?? g.external_url ?? null,
+        }))}
+        text={pText}
+        onInsert={(token) => {
+          insertToken(promptRef.current, pText, token, (next) => {
+            setPText(next);
+            savePrompt(projectId, shot.id, stage, { text: next }).then(() => router.refresh());
+          });
+        }}
+        showLoose={stage !== "image"}
+        onAddImage={() => setAddingRef(true)}
+        onRemoveLoose={(id) => onRun(() => deleteGeneration(projectId, id))}
+      />
 
       <div className="mb-3 space-y-2">
         <label className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
           Working prompt <span className="font-normal normal-case text-text-faint">· pre-fills each new batch; the exact prompt is saved on every generation</span>
         </label>
-        <textarea value={pText} onChange={(e) => setPText(e.target.value)}
+        <textarea ref={promptRef} value={pText} onChange={(e) => setPText(e.target.value)}
           onBlur={() => { savePrompt(projectId, shot.id, stage, { text: pText }).then(() => router.refresh()); }}
           rows={2} placeholder={`Base ${label.toLowerCase()} prompt…`} className={field} />
         <LibraryBar
@@ -899,18 +911,18 @@ function StagePanel({
           )}
           <Button size="sm" variant="secondary" onClick={() => setAdding(true)}
             title="Upload files, or paste the links you generated on Higgsfield / etc. to pull them straight in">
-            + {stage === "image" ? "Candidate" : "Take"}
+            + {stage === "image" ? "Reference" : "Take"}
           </Button>
         </div>
       </div>
 
       {pool.length === 0 ? (
         <p className="rounded-[10px] border border-dashed border-border py-6 text-center text-xs text-text-faint">
-          No {stage === "image" ? "images" : "takes"} yet. Add generations as you make them.
+          No {stage === "image" ? "references" : "takes"} yet. Paste the links you generated, or upload the files.
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {pool.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} src={srcOf(g)} onRun={onRun} />)}
+          {pool.map((g) => <GenCard key={g.id} projectId={projectId} shot={shot} gen={g} src={srcOf(g)} thumb={thumbs[g.id] ?? null} onRun={onRun} />)}
         </div>
       )}
 
@@ -923,8 +935,8 @@ function StagePanel({
             Selected frames · the video animates between these
           </div>
           <div className="grid max-w-md grid-cols-2 gap-3">
-            <FrameSlot label="Start" color="var(--h-cyan)" gen={start} src={srcOf(start)} empty="Tag a candidate 'Start' above" />
-            <FrameSlot label="End" color="var(--h-pink)" gen={end} src={srcOf(end)} empty="Tag a candidate 'End' above" />
+            <FrameSlot label="Start" color="var(--h-cyan)" gen={start} src={srcOf(start)} thumb={start ? thumbs[start.id] ?? null : null} empty="Tag a reference 'Start' above" />
+            <FrameSlot label="End" color="var(--h-pink)" gen={end} src={srcOf(end)} thumb={end ? thumbs[end.id] ?? null : null} empty="Tag a reference 'End' above" />
           </div>
         </div>
       ) : (
@@ -941,9 +953,13 @@ function StagePanel({
           promptId={prompt?.id ?? null} basePrompt={pText} refStartId={refStartId} refEndId={refEndId}
           onClose={() => setAdding(false)} />
       )}
+      {addingRef && (
+        <AddRefModal projectId={projectId} studioId={studioId} shot={shot} stage={stage}
+          onClose={() => setAddingRef(false)} />
+      )}
       {triaging && (
         <TriageView projectId={projectId} stage={stage} shotId={shot.id}
-          items={pool} media={media} onClose={() => setTriaging(false)} />
+          items={pool} media={media} thumbs={thumbs} onClose={() => setTriaging(false)} />
       )}
     </div>
   );
@@ -952,8 +968,9 @@ function StagePanel({
 // ---- Sequence strip (all shots at once, drag to reorder) --------------------
 
 function SequenceStrip({
-  shots, thumbs, activeId, onSelect, onReorder,
+  projectId, shots, thumbs, activeId, onSelect, onReorder,
 }: {
+  projectId: string;
   shots: AiShot[];
   thumbs: Map<string, { url: string; kind: string } | null>;
   activeId: string | null;
@@ -991,6 +1008,13 @@ function SequenceStrip({
       <div className="mb-2 flex items-center gap-2">
         <span className="text-[11px] font-bold uppercase tracking-wide text-text-muted">Sequence</span>
         <span className="text-xs text-text-faint">{shots.length} shot{shots.length === 1 ? "" : "s"} · drag to reorder</span>
+        {/* The ORDER is its own reviewable document. A client asking for shots
+            to be rearranged is not reviewing any single shot, and the per-shot
+            review could never answer them. */}
+        <span className="ml-auto flex items-center gap-2">
+          <EditorHandoffButton projectId={projectId} />
+          <ShareDocButton projectId={projectId} kind="sequence" targetId={projectId} />
+        </span>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {order.map((id, i) => {
@@ -1017,7 +1041,8 @@ function SequenceStrip({
                     className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={thumb.url} alt="" className="absolute inset-0 h-full w-full object-cover"
+                  <img src={thumb.url} alt="" loading="lazy" decoding="async"
+                    className="absolute inset-0 h-full w-full object-cover"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 ))}
                 <span className="absolute left-1 top-1 rounded-[4px] bg-black/55 px-1.5 py-0.5 text-[9px] font-extrabold text-white">{i + 1}</span>
@@ -1149,6 +1174,9 @@ export function PipelineWorkspace({
   batchReviews = {}, currentUserId,
   reviewingShotIds = [],
   canSeeCost = true,
+  castReferences = [],
+  castUses = [],
+  thumbUrls = {},
 }: {
   projectId: string;
   studioId: string;
@@ -1157,6 +1185,8 @@ export function PipelineWorkspace({
   prompts: AiPrompt[];
   generations: AiGeneration[];
   media: Record<string, string>;
+  /** Resized copies for grids. Falls back to `media` where absent. */
+  thumbUrls?: Record<string, string>;
   library?: AiPromptLibraryEntry[];
   masterCut?: AssetWithVersions | null;
   masterCutToken?: string | null;
@@ -1169,10 +1199,23 @@ export function PipelineWorkspace({
    * `generation_costs` (migration 0074), so removing this prop leaks nothing.
    */
   canSeeCost?: boolean;
+  castReferences?: CastReference[];
+  castUses?: CastUse[];
 }) {
   const router = useRouter();
   const [, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(shots[0]?.id ?? null);
+
+  // The references a shot uses. Resolved here rather than in StagePanel so the
+  // image and video panels of one shot cannot disagree about what is in it.
+  const refsFor = useMemo(() => {
+    const byId = new Map(castReferences.map((r) => [r.id, r]));
+    return (shotId: string): CastReference[] =>
+      castUses
+        .filter((u) => u.shot_id === shotId)
+        .map((u) => byId.get(u.entity_id))
+        .filter((r): r is CastReference => Boolean(r));
+  }, [castReferences, castUses]);
   const [scriptOpen, setScriptOpen] = useState(false);
   const cutVersions = masterCut?.versions?.length ?? 0;
   const [cutOpen, setCutOpen] = useState<boolean>(cutVersions > 0);
@@ -1243,6 +1286,9 @@ export function PipelineWorkspace({
     // storage URL (media map) or a direct image/video URL. A share-page URL
     // can't render, so skip it and fall through to the next candidate.
     const renderable = (g: AiGeneration): string | null => {
+      // Resized copy first: the strip draws one small picture per shot, and the
+      // original behind it can be 34MB.
+      if (thumbUrls[g.id]) return thumbUrls[g.id];
       if (media[g.id]) return media[g.id];
       const u = g.external_url ?? "";
       if (/\.(png|jpe?g|gif|webp|avif|mp4|webm|mov)(\?|$)/i.test(u)) return u;
@@ -1250,7 +1296,14 @@ export function PipelineWorkspace({
     };
     const byShot = new Map<string, AiGeneration[]>();
     for (const g of generations) {
-      if (g.status === "reference") continue; // inputs aren't the shot's frame
+      // An untagged input is not the shot's frame. A TAGGED one is: since the
+      // image stage merged its pool, a picture added as a reference and then
+      // tagged Start is exactly what the strip should be showing.
+      if (g.status === "reference" && !g.role) continue;
+      // Since the cast layer (0080) a generation can belong to an entity or a
+      // look instead of a shot, so shot_id is nullable. A character sheet is
+      // not any shot's thumbnail.
+      if (!g.shot_id) continue;
       const a = byShot.get(g.shot_id) ?? []; a.push(g); byShot.set(g.shot_id, a);
     }
     const m = new Map<string, { url: string; kind: string } | null>();
@@ -1273,7 +1326,7 @@ export function PipelineWorkspace({
       m.set(s.id, picked);
     }
     return m;
-  }, [generations, shots, media]);
+  }, [generations, shots, media, thumbUrls]);
 
   return (
     <div className="space-y-5">
@@ -1309,6 +1362,7 @@ export function PipelineWorkspace({
       {/* Sequence: all shots at once */}
       {shots.length > 0 && (
         <SequenceStrip
+          projectId={projectId}
           shots={displayShots}
           thumbs={shotThumb}
           activeId={activeId}
@@ -1402,9 +1456,9 @@ export function PipelineWorkspace({
                 {showImageStage && (
                   <>
                     <Flow label="prompt, generate & pick images" />
-                    <StagePanel canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
+                    <StagePanel allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
                       prompt={shotPrompts.get(`${active.id}:image`) ?? null}
-                      gens={imgGens} media={media} library={library}
+                      gens={imgGens} media={media} thumbs={thumbUrls} library={library}
                       reviews={batchReviews[active.id] ?? []}
                       refStartId={null} refEndId={null} onRun={run} />
                   </>
@@ -1414,13 +1468,20 @@ export function PipelineWorkspace({
                     : inputMode === "video_to_video" ? "add a reference video, then generate"
                     : "prompt & generate video"
                 } />
-                <StagePanel canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
+                <StagePanel allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
-                  media={media} library={library}
+                  media={media} thumbs={thumbUrls} library={library}
                   reviews={batchReviews[active.id] ?? []}
                   refStartId={showImageStage ? approvedStart?.id ?? null : null}
                   refEndId={showImageStage ? approvedEnd?.id ?? null : null} onRun={run} />
+                {/* Voiceover last, because it is written against the picture
+                    rather than the other way round. */}
+                <Flow label="add the read that plays over it" />
+                <AudioPanel projectId={projectId} studioId={studioId} shot={active}
+                  prompt={shotPrompts.get(`${active.id}:audio`) ?? null}
+                  gens={shotGens.get(`${active.id}:audio`) ?? []}
+                  media={media} onRun={run} />
               </>
             )}
           </div>

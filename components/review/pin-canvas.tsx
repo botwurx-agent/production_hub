@@ -7,6 +7,7 @@ import { DrawToolbar } from "@/components/review/draw-toolbar";
 import { EmojiPicker } from "@/components/review/emoji-picker";
 import { DRAW_COLORS, type Drawing, type DrawTool } from "@/lib/review-drawing";
 import type { PortalComment } from "@/lib/review-links";
+import { useModalRoomy } from "@/components/ui/modal";
 
 // Frame.io-style pinned review over an arbitrary surface: click the surface to
 // drop the next numbered pin and open a matching comment; the sidebar stays in
@@ -125,14 +126,24 @@ export function PinCanvas({
   const activeComment = comments.find((c) => c.id === activeId) ?? null;
   const shownDrawing = drawMode ? draft : (activeComment?.drawing ?? null);
 
+  // Expanding the window has to make the MEDIA bigger, not the margins. The
+  // canvas already has a roomy layout behind `wide`; reading the modal's state
+  // here means every caller gets it without threading a prop.
+  const roomy = wide || useModalRoomy();
+
   const teardrop =
     "grid h-7 w-7 place-items-center rounded-[50%_50%_50%_2px] border-2 border-white text-xs font-extrabold text-white shadow-lg";
 
   return (
-    <div className={`grid grid-cols-1 gap-4 ${wide ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_340px]"}`}>
+    <div className={`grid grid-cols-1 gap-4 ${roomy ? "lg:grid-cols-[1fr_400px]" : "lg:grid-cols-[1fr_340px]"}`}>
       {/* Stage — a stable viewing environment for judging the work */}
       <div
-        className="flex items-start justify-center overflow-auto rounded-[16px] p-4"
+        // `safe center` rather than plain centring: a centred flex item that
+        // grows wider than its container overflows equally in both directions,
+        // and the left half becomes unreachable because scrolling cannot go
+        // below zero. `safe` falls back to start-alignment exactly when that
+        // would happen, which is what makes zooming past the frame usable.
+        className="flex items-start [justify-content:safe_center] overflow-auto rounded-[16px] p-4"
         style={{ backgroundColor: stageBg }}
       >
         <div
@@ -222,8 +233,14 @@ export function PinCanvas({
         </div>
       )}
 
-      {/* Comments */}
-      <div className="flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
+      {/* Comments. Capped for the same reason as the video rail: it scrolls
+          internally, but uncapped it grows the grid row and pushes the stage
+          out of view. */}
+      <div
+        className={`flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm ${
+          roomy ? "lg:max-h-[78vh]" : "lg:max-h-[58vh]"
+        }`}
+      >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="font-display text-sm font-bold text-text">Comments</span>

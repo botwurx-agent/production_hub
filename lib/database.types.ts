@@ -1352,6 +1352,202 @@ export type Database = {
         };
         Relationships: [];
       };
+      // The cast layer (migration 0080). See docs/ai-pipeline.md.
+      ai_entities: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string | null;
+          kind: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          notes: string | null;
+          prompt: string | null;
+          archived_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id?: string | null;
+          kind?: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          notes?: string | null;
+          prompt?: string | null;
+          archived_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string | null;
+          kind?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          notes?: string | null;
+          prompt?: string | null;
+          archived_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_looks: {
+        Row: {
+          id: string;
+          studio_id: string;
+          entity_id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          prompt: string | null;
+          position: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          entity_id: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          prompt?: string | null;
+          position?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          entity_id?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          prompt?: string | null;
+          position?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_look_items: {
+        Row: {
+          id: string;
+          studio_id: string;
+          look_id: string;
+          item_entity_id: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          look_id: string;
+          item_entity_id: string;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          look_id?: string;
+          item_entity_id?: string;
+          position?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_shot_cast: {
+        Row: {
+          id: string;
+          studio_id: string;
+          shot_id: string;
+          entity_id: string;
+          look_id: string | null;
+          count: number | null;
+          notes: string | null;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          shot_id: string;
+          entity_id: string;
+          look_id?: string | null;
+          count?: number | null;
+          notes?: string | null;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          shot_id?: string;
+          entity_id?: string;
+          look_id?: string | null;
+          count?: number | null;
+          notes?: string | null;
+          position?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_entity_handles: {
+        Row: {
+          id: string;
+          studio_id: string;
+          entity_id: string | null;
+          look_id: string | null;
+          platform: string;
+          handle: string;
+          external_id: string | null;
+          account_ref: string | null;
+          verified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          entity_id?: string | null;
+          look_id?: string | null;
+          platform: string;
+          handle: string;
+          external_id?: string | null;
+          account_ref?: string | null;
+          verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          entity_id?: string | null;
+          look_id?: string | null;
+          platform?: string;
+          handle?: string;
+          external_id?: string | null;
+          account_ref?: string | null;
+          verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       ai_prompts: {
         Row: {
           id: string;
@@ -1473,7 +1669,9 @@ export type Database = {
         Row: {
           id: string;
           studio_id: string;
-          shot_id: string;
+          shot_id: string | null;
+          entity_id: string | null;
+          look_id: string | null;
           prompt_id: string | null;
           prompt: string | null;
           stage: string;
@@ -1505,7 +1703,9 @@ export type Database = {
         Insert: {
           id?: string;
           studio_id: string;
-          shot_id: string;
+          shot_id?: string | null;
+          entity_id?: string | null;
+          look_id?: string | null;
           prompt_id?: string | null;
           prompt?: string | null;
           stage?: string;
@@ -1537,7 +1737,9 @@ export type Database = {
         Update: {
           id?: string;
           studio_id?: string;
-          shot_id?: string;
+          shot_id?: string | null;
+          entity_id?: string | null;
+          look_id?: string | null;
           prompt_id?: string | null;
           prompt?: string | null;
           stage?: string;
@@ -2625,6 +2827,8 @@ export type Database = {
           token: string;
           viewed_at: string | null;
           confirmed_at: string | null;
+          last_reminded_at: string | null;
+          reminder_count: number;
           created_at: string;
         };
         Insert: {
@@ -2636,6 +2840,8 @@ export type Database = {
           token: string;
           viewed_at?: string | null;
           confirmed_at?: string | null;
+          last_reminded_at?: string | null;
+          reminder_count?: number;
           created_at?: string;
         };
         Update: {
@@ -2647,9 +2853,26 @@ export type Database = {
           token?: string;
           viewed_at?: string | null;
           confirmed_at?: string | null;
+          last_reminded_at?: string | null;
+          reminder_count?: number;
           created_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "call_sheet_recipients_call_sheet_id_fkey";
+            columns: ["call_sheet_id"];
+            isOneToOne: false;
+            referencedRelation: "call_sheets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "call_sheet_recipients_studio_id_fkey";
+            columns: ["studio_id"];
+            isOneToOne: false;
+            referencedRelation: "studios";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       contact_rates: {
         Row: {
@@ -2804,6 +3027,45 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      editor_handoffs: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          label: string | null;
+          created_by: string | null;
+          created_at: string;
+          revoked_at: string | null;
+          last_viewed_at: string | null;
+          view_count: number;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          label?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          view_count?: number;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          token?: string;
+          label?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          view_count?: number;
+        };
+        Relationships: [];
       };
       email_accounts: {
         Row: {
@@ -3187,6 +3449,54 @@ export type Database = {
           },
         ];
       };
+      project_binders: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          title: string | null;
+          token: string;
+          sections: Json;
+          shared_at: string | null;
+          revoked_at: string | null;
+          view_count: number;
+          last_viewed_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          title?: string | null;
+          token: string;
+          sections?: Json;
+          shared_at?: string | null;
+          revoked_at?: string | null;
+          view_count?: number;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          title?: string | null;
+          token?: string;
+          sections?: Json;
+          shared_at?: string | null;
+          revoked_at?: string | null;
+          view_count?: number;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       project_events: {
         Row: {
           id: string;
@@ -3308,6 +3618,7 @@ export type Database = {
           target_type: string | null;
           target_id: string | null;
           pin_number: number | null;
+          pin_page: number | null;
           pos_x: number | null;
           pos_y: number | null;
           timecode: number | null;
@@ -3330,6 +3641,7 @@ export type Database = {
           target_type?: string | null;
           target_id?: string | null;
           pin_number?: number | null;
+          pin_page?: number | null;
           pos_x?: number | null;
           pos_y?: number | null;
           timecode?: number | null;
@@ -3352,6 +3664,7 @@ export type Database = {
           target_type?: string | null;
           target_id?: string | null;
           pin_number?: number | null;
+          pin_page?: number | null;
           pos_x?: number | null;
           pos_y?: number | null;
           timecode?: number | null;
@@ -3510,6 +3823,7 @@ export type Database = {
           id: string;
           mime_type: string | null;
           notes: string | null;
+          poster_path: string | null;
           size_bytes: number | null;
           storage_path: string | null;
           studio_id: string;
@@ -3523,6 +3837,7 @@ export type Database = {
           id?: string;
           mime_type?: string | null;
           notes?: string | null;
+          poster_path?: string | null;
           size_bytes?: number | null;
           storage_path?: string | null;
           studio_id: string;
@@ -3536,6 +3851,7 @@ export type Database = {
           id?: string;
           mime_type?: string | null;
           notes?: string | null;
+          poster_path?: string | null;
           size_bytes?: number | null;
           storage_path?: string | null;
           studio_id?: string;
@@ -3610,7 +3926,8 @@ export type Database = {
         | "shot_list"
         | "storyboard"
         | "moodboard"
-        | "ai_shot";
+        | "ai_shot"
+        | "sequence";
       asset_status:
         | "draft"
         | "in_review"
@@ -3732,6 +4049,11 @@ export type AiShot = Tables<"ai_shots">;
 export type AiGenerationRef = Tables<"ai_generation_refs">;
 export type AiPrompt = Tables<"ai_prompts">;
 export type AiPromptLibraryEntry = Tables<"ai_prompt_library">;
+export type AiEntity = Tables<"ai_entities">;
+export type AiLook = Tables<"ai_looks">;
+export type AiLookItem = Tables<"ai_look_items">;
+export type AiShotCast = Tables<"ai_shot_cast">;
+export type AiEntityHandle = Tables<"ai_entity_handles">;
 export type AiGeneration = Tables<"ai_generations">;
 export type AiBatchReview = Tables<"ai_batch_reviews">;
 export type AiBatchReviewItem = Tables<"ai_batch_review_items">;

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { assetStorage } from "@/lib/asset-storage";
+import { assetStorage, isResizable, signThumbs } from "@/lib/asset-storage";
 import { requireStudioContext } from "@/lib/studio";
 import { emailConfigured } from "@/lib/email";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
@@ -54,6 +54,13 @@ export default async function ProjectStoryboardsPage({
         .createSignedUrls(paths, SIGNED_TTL);
       for (const s of list ?? []) if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
     }
+    // Resized copies for the frame grid. A board frame is a card; the original
+    // behind it can be an unresized generator export.
+    const thumbs = await signThumbs(
+      (frameRows ?? [])
+        .filter((f) => f.storage_path && isResizable(f.mime_type))
+        .map((f) => f.storage_path as string)
+    );
     frames = (frameRows ?? []).map((f) => ({
       id: f.id,
       board_id: f.board_id,
@@ -63,6 +70,7 @@ export default async function ProjectStoryboardsPage({
       sound: f.sound,
       notes: f.notes,
       signedUrl: f.storage_path ? (signed.get(f.storage_path) ?? null) : null,
+      thumbUrl: f.storage_path ? (thumbs.get(f.storage_path) ?? null) : null,
       image_name: f.image_name,
       storagePath: f.storage_path,
       mimeType: f.mime_type,
@@ -94,7 +102,13 @@ export default async function ProjectStoryboardsPage({
   const pickable: PickableAsset[] = assets.map((a) => {
     const cur =
       a.versions.find((v) => v.id === a.current_version_id) ?? a.versions[0];
-    return { id: a.id, name: a.name, signedUrl: cur?.signedUrl ?? null };
+    // The picker only ever DISPLAYS these, as a grid of small tiles, and the
+    // pick itself carries the asset id, so the resized copy is all it needs.
+    return {
+      id: a.id,
+      name: a.name,
+      signedUrl: cur?.thumbUrl ?? cur?.signedUrl ?? null,
+    };
   });
 
   return (

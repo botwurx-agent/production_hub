@@ -5,6 +5,8 @@
 // aiConfigured() and show an "add a key" prompt until one is set.
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { parseShotDocDraft, type ShotDocDraft } from "@/lib/shot-doc";
+export type { ShotDocDraft, ShotDocRow, ShotDocPage } from "@/lib/shot-doc";
 
 export const ANTHROPIC_MODEL = "claude-opus-4-8";
 // Short, cheap rewrites (the composer's Polish button) run on the small model.
@@ -739,4 +741,84 @@ export async function extractSow(doc: AiDocument): Promise<SowDraft> {
           })();
 
   return parseSowDraft(raw);
+}
+
+// ------------------------------------------------ shot list / storyboard in --
+
+const SHOTDOC_SYSTEM = `You read a document from a film or commercial production and pull out its shot list and any storyboard captions.
+
+Return ONLY a JSON object:
+{
+  "kind": "shot_list" | "storyboard" | "both" | "neither",
+  "title": string | null,          // what the document calls itself
+  "shots": [
+    {
+      "code": string | null,       // shot number or code exactly as printed, e.g. "1A", "12"
+      "description": string | null,
+      "size": string | null,       // WIDE, MS, CU, ECU, OTS, etc, as printed
+      "type": string | null,       // the angle or setup, if given separately
+      "movement": string | null,   // STATIC, PAN, DOLLY, HANDHELD, CRANE, etc
+      "day": string | null,        // shoot day, if the document assigns one
+      "notes": string | null,
+      "page": number | null        // 1-based page this row came from
+    }
+  ],
+  "pages": [
+    { "page": number, "panels": number | null, "cols": number | null, "rows": number | null,
+      "captions": [ string ] }
+  ],
+  "unreadable": boolean
+}
+
+Rules:
+- Copy values as printed. Do not translate "MS" to "medium shot" or expand an abbreviation.
+- Leave a field null rather than guessing it. A shot list with no movement column should return movement null on every row, not invented values.
+- Never invent a shot. Every row you return must correspond to something written in the document.
+- A creative treatment or a script counts. Much of this work arrives as a deck rather than a table: a numbered list of desired shots, or a script whose beats each describe one setup ("We see a closeup of the label, water dripping down"). Return one row per written beat or numbered item, description copied from the document, and leave size, type and movement null unless they are actually stated. Do not merge several written beats into one row or split one into several.
+- A treatment's visual-direction pages count too. A deck often describes the look a page or two before it lays out the script ("We see closeups of the label, water dripping across the surface", "Glistening shots of the bottles floating against a dreamlike sky backdrop"). Each of those is a shot somebody has to go and get, so each earns a row, in the order the document prints them.
+- The test is whether the writing describes SOMETHING SEEN. A page about tone, voice over character, music, strategy or what the brand stands for describes no shot and earns no rows, however many sentences it runs to.
+- On-screen text is not a shot. A SUPER, a title card, an end card or a line of voice over goes in notes, as printed, on the beat it is printed with. If a written beat is nothing but on-screen text, it earns no row of its own.
+- A supers-only script sets the on-screen text in CAPITALS and the shot beats in sentence case, and the two are interleaved, sometimes with the capitals landing before the beat they follow rather than after it. A run of capitals is on-screen text: it belongs in notes on the neighbouring beat and never inside a description. A description starts at the sentence-case writing and contains no capitalised run.
+- Return every list the document holds. A script's beats and a separate list of desired shots or stills are different lists and both belong. Keep them in the order the document presents them, script first.
+- The one exception is CUTS of the same film. A heading naming a duration (:15, :30, :60) marks one cut. When a document carries more than one such heading, read only the beats under the longest duration and ignore every other cut completely, even though it is written out in full and reads like new material. It is the same film trimmed, so its beats repeat shots you have already returned. A list of desired shots or stills carries no duration heading, is not a cut, and is always kept.
+- pages describes the storyboard PANEL LAYOUT per page, when the document has drawn panels: how many panels, and the grid if it is regular. Give captions in reading order, left to right then down, one string per panel, empty string for a panel with no caption.
+- If a page has no drawn panels, omit it from pages.
+- kind is "both" when the document has drawn panels AND a shot table.
+- If this is not a shot list or a storyboard, set unreadable true and return empty arrays.
+- Do not use em dashes in any text you return.`;
+
+/**
+ * Read a production document.
+ *
+ * Takes either the PDF's extracted TEXT (cheap, exact, and what a digital PDF
+ * gives us for free) or rendered page images when the PDF has no text layer,
+ * which is what a scan or an image-only export produces.
+ */
+export async function extractShotDoc(
+  input: { text: string } | { docs: AiDocument[] }
+): Promise<ShotDocDraft> {
+  const provider = aiProvider();
+  const maxTokens = 12000;
+
+  const raw = await (async () => {
+    if ("text" in input) {
+      const user = `Read this production document and return the JSON described in the instructions.\n\n${input.text.slice(0, 120000)}`;
+      if (provider === "openai") return openaiComplete(SHOTDOC_SYSTEM, user, { maxTokens });
+      if (provider === "anthropic") return anthropicComplete(SHOTDOC_SYSTEM, user, { maxTokens });
+      throw new Error("No AI provider configured.");
+    }
+    // Image path: one call per page would be several round trips, so the pages
+    // go in together and the model tags each row with the page it came from.
+    const doc = input.docs[0];
+    if (!doc) throw new Error("Nothing to read.");
+    const user =
+      "Read this production document and return the JSON described in the instructions.";
+    if (provider === "openai")
+      return openaiReadDocument(SHOTDOC_SYSTEM, user, doc, maxTokens);
+    if (provider === "anthropic")
+      return anthropicReadDocument(SHOTDOC_SYSTEM, user, doc, maxTokens);
+    throw new Error("No AI provider configured.");
+  })();
+
+  return parseShotDocDraft(raw);
 }

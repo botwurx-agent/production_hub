@@ -13,13 +13,16 @@ import {
   updateFrame,
   deleteFrame,
   swapFrames,
-  uploadFrameImage,
+  setFrameImage,
   setFrameAsset,
   clearFrameImage,
   restoreStoryboard,
 } from "@/app/(app)/projects/[id]/storyboard-actions";
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
+import { confirmAction } from "@/components/ui/confirm";
+import { uploadAssetFile } from "@/components/projects/upload-file";
+import { ImportDocModal } from "@/components/production/import-doc-modal";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -36,6 +39,8 @@ export type FrameView = {
   sound: string | null;
   notes: string | null;
   signedUrl: string | null;
+  /** Resized copy for the frame grid. Null when there is nothing to resize. */
+  thumbUrl?: string | null;
   image_name: string | null;
   // Persisted fields carried so a history snapshot can rebuild the frame on undo.
   storagePath: string | null;
@@ -66,6 +71,7 @@ export function StoryboardEditor({
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
+  const [importing, setImporting] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(boards[0]?.id ?? null);
   const refresh = () => router.refresh();
   const history = useHistory<FrameView[]>();
@@ -181,6 +187,15 @@ export function StoryboardEditor({
         >
           + New storyboard
         </button>
+        {/* A director's board arrives as a PDF far more often than it gets
+            built frame by frame in here, so the import sits alongside. */}
+        <button
+          onClick={() => setImporting(true)}
+          disabled={busy}
+          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border py-2 text-sm font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+        >
+          Import from a PDF
+        </button>
       </aside>
 
       {/* Active storyboard */}
@@ -286,7 +301,18 @@ export function StoryboardEditor({
                 Present
               </Link>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  // Asked because this one cannot be taken back. Undo restores
+                  // FRAMES within a board, so it has nothing to restore them
+                  // into once the board itself is gone.
+                  const ok = await confirmAction({
+                    title: `Delete "${active.name}"?`,
+                    body: `This storyboard and its ${activeFrames.length} frame${
+                      activeFrames.length === 1 ? "" : "s"
+                    } will be removed. This cannot be undone.`,
+                    confirmLabel: "Delete storyboard",
+                  });
+                  if (!ok) return;
                   act(() => deleteStoryboard(projectId, active.id));
                   setActiveId(null);
                 }}
@@ -328,6 +354,13 @@ export function StoryboardEditor({
           </div>
         )}
       </div>
+
+      <ImportDocModal
+        projectId={projectId}
+        studioId=""
+        open={importing}
+        onClose={() => setImporting(false)}
+      />
     </div>
   );
 }
@@ -364,14 +397,40 @@ function FrameCard({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   function upload(files: FileList | null) {
-    if (!files?.[0]) return;
-    const fd = new FormData();
-    fd.set("projectId", projectId);
-    fd.set("frameId", frame.id);
-    fd.set("file", files[0]);
+    // Copy off the FileList before anything can clear the input: it is a live
+    // view of the input's selection, not an array.
+    const file = files?.[0];
+    if (!file) return;
     startUpload(async () => {
-      await uploadFrameImage(fd);
-      onChange();
+      try {
+        // Straight to storage through a server-minted signed URL. The previous
+        // version sent the bytes through a Server Action, which put a 4.5MB
+        // platform ceiling on a storyboard frame: a normal camera JPG died at
+        // the edge, the promise never settled, and every button on the frame
+        // stayed disabled. It read as the app freezing.
+        // studioId is vestigial in this helper: the server picks the path so
+        // the browser cannot choose which studio folder it writes into.
+        const up = await uploadAssetFile({ studioId: "", projectId, file });
+        const res = await setFrameImage(
+          projectId,
+          frame.id,
+          up.storagePath,
+          up.mimeType || null,
+          file.name
+        );
+        if (res?.error) {
+          toast(res.error, "error");
+          return;
+        }
+        onChange();
+      } catch (e) {
+        // Anything that goes wrong now SAYS so. Swallowing this is what turned
+        // a failed upload into a frozen page.
+        toast(
+          e instanceof Error ? e.message : "That image could not be uploaded.",
+          "error"
+        );
+      }
     });
   }
   function chooseAsset(assetId: string) {
@@ -445,7 +504,7 @@ function FrameCard({
         <div className="grid aspect-[16/10] place-items-center overflow-hidden bg-surface-2/60">
           {frame.signedUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={frame.signedUrl} alt="" className="h-full w-full object-cover" />
+            <img src={frame.thumbUrl ?? frame.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
           ) : (
             <span className="text-xs font-semibold text-text-faint">No image</span>
           )}
@@ -498,7 +557,7 @@ function FrameCard({
                   <span className="grid h-8 w-10 shrink-0 place-items-center overflow-hidden rounded-[6px] border border-border bg-surface-2/60">
                     {a.signedUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.signedUrl} alt="" className="h-full w-full object-cover" />
+                      <img src={a.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                     ) : (
                       <span className="text-[9px] text-text-faint">file</span>
                     )}

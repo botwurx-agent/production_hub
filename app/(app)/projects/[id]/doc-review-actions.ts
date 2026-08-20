@@ -20,6 +20,7 @@ const NOUN: Record<DocKind, string> = {
   storyboard: "storyboard",
   moodboard: "moodboard",
   ai_shot: "shot",
+  sequence: "sequence",
 };
 
 // Confirms the target belongs to this project (and, via RLS, this studio).

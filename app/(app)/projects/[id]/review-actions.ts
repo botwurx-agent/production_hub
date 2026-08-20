@@ -48,7 +48,9 @@ export async function addReviewCommentAt(
   parentId?: string | null,
   drawing?: unknown,
   // Out-point for a range comment; timecode is the in-point.
-  timecodeEnd?: number | null
+  timecodeEnd?: number | null,
+  // For a PDF, which page the pin was dropped on.
+  pinPage?: number | null
 ): Promise<ReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -107,6 +109,10 @@ export async function addReviewCommentAt(
     author_id: ctx.userId,
     body: text,
     pin_number: pinNumber,
+    pin_page:
+      posX != null && pinPage != null && Number.isFinite(pinPage)
+        ? Math.max(1, Math.min(2000, Math.floor(pinPage)))
+        : null,
     pos_x: posX,
     pos_y: posY,
     timecode: time,

@@ -87,7 +87,10 @@ export async function submitClientComment(
   // Out-point for a range comment; timecode is the in-point.
   timecodeEnd?: number | null,
   // Random per-browser id, required later to edit or delete this comment.
-  authorKey?: string | null
+  authorKey?: string | null,
+  // For a PDF, which page the pin was dropped on. A single-surface review
+  // sends nothing and the column stays null.
+  pinPage?: number | null
 ): Promise<PortalState> {
   if (!allowPublic("r-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -158,6 +161,12 @@ export async function submitClientComment(
     reviewer_name: reviewer,
     body: text,
     pin_number: pinNumber,
+    // Only meaningful alongside a pin, and bounded so a bad payload cannot
+    // write an arbitrary number into the column.
+    pin_page:
+      posX != null && pinPage != null && Number.isFinite(pinPage)
+        ? Math.max(1, Math.min(2000, Math.floor(pinPage)))
+        : null,
     pos_x: posX,
     pos_y: posY,
     timecode: time,

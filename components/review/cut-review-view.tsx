@@ -73,6 +73,7 @@ export function CutReviewView({
           : "Team member",
       isClient,
       pinNumber: c.pin_number,
+      pinPage: c.pin_page ?? null,
       x: c.pos_x,
       y: c.pos_y,
       timecode: c.timecode,

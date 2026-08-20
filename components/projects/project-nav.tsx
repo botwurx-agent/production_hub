@@ -43,6 +43,7 @@ const BANDS: Band[] = [
     icon: I(<><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 9h20M8 4v5M16 4v5M8 20v-5M16 20v-5" /></>),
     mods: [
       { seg: "pipeline", label: "AI Pipeline", sub: "Script → images → video", hue: "purple", ai: true, icon: Ismall(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M8 4v16" /><circle cx="14.5" cy="14" r="2.5" /></>) },
+      { seg: "elements", label: "Elements", sub: "Characters, wardrobe, props, locations", hue: "purple", ai: true, icon: Ismall(<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>) },
       { seg: "storyboards", label: "Storyboards", sub: "Plan the edit, frame by frame", hue: "indigo", icon: Ismall(<><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M2 9h20M8 4v5M16 4v5M8 20v-5M16 20v-5" /></>) },
       { seg: "shot-list", label: "Shot list", sub: "Lay out every shot", hue: "purple", icon: Ismall(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 3v18" /></>) },
       { seg: "moodboard", label: "Moodboard", sub: "Collect references & style", hue: "cyan", icon: Ismall(<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" /></>) },
@@ -64,12 +65,16 @@ const BANDS: Band[] = [
     hue: "green",
     icon: I(<><path d="M3 11l19-9-9 19-2-8-8-2z" /></>),
     mods: [
+      { seg: "tasks", label: "Tasks", sub: "What this project needs", hue: "purple", icon: Ismall(<><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>) },
       { seg: "contacts", label: "Project contacts", sub: "Crew, talent, vendors", hue: "orange", icon: Ismall(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>) },
       { seg: "calendar", label: "Calendar", sub: "Shoot & delivery dates", hue: "blue", icon: Ismall(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>) },
       { seg: "callsheet", label: "Call sheet", sub: "Industry call sheet + PDF", hue: "green", icon: Ismall(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h8M8 18h5" /></>) },
       { seg: "gear", label: "Gear & crew", sub: "Equipment and roster", hue: "cyan", icon: Ismall(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 13h6M9 17h4" /></>) },
       { seg: "budget", label: "Budget", sub: "Bid vs actual", hue: "indigo", icon: Ismall(<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />) },
       { seg: "delivery", label: "Delivery & billing", sub: "Final files and invoices", hue: "green", icon: Ismall(<><path d="M16.5 9.4 7.5 4.2M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.3 7 12 12l8.7-5M12 22V12" /></>) },
+      { seg: "agreements", label: "Agreements", sub: "NDAs, SOWs, change orders", hue: "purple", icon: Ismall(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 15l2 2 4-4" /></>) },
+      { seg: "documents", label: "Documents", sub: "Permits, insurance, specs", hue: "cyan", icon: Ismall(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 13h6M9 17h6" /></>) },
+      { seg: "invoices", label: "Estimates & invoices", sub: "Estimate, proposal, invoice", hue: "cyan", icon: Ismall(<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h4" /></>) },
     ],
   },
 ];

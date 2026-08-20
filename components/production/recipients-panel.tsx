@@ -9,6 +9,7 @@ import {
   addCallSheetRecipients,
   deleteCallSheetRecipient,
   sendCallSheetEmail,
+  remindUnconfirmed,
 } from "@/app/(app)/projects/[id]/callsheet-actions";
 import { toast } from "@/components/ui/toast";
 import type { CallSheetRecipient } from "@/lib/database.types";
@@ -32,6 +33,35 @@ function fmt(ts: string | null) {
   }
 }
 
+type Filter = "all" | "open" | "confirmed";
+
+/** One number, said plainly. Colour is the signal, not decoration. */
+function Tally({
+  label,
+  count,
+  total,
+  hue,
+}: {
+  label: string;
+  count: number;
+  total?: number;
+  hue: string;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 rounded-[9px] px-2.5 py-1"
+      style={{ backgroundColor: `var(--h-${hue}-bg)`, color: `var(--h-${hue})` }}
+    >
+      <span className="text-sm font-extrabold">
+        {count}
+        {total != null ? `/${total}` : ""}
+      </span>
+      <span className="text-[11px] font-bold uppercase tracking-wide opacity-80">
+        {label}
+      </span>
+    </span>
+  );
+}
+
 export function RecipientsPanel({
   projectId,
   callSheetId,
@@ -53,7 +83,39 @@ export function RecipientsPanel({
   const [sending, setSending] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<Filter>("all");
+  const [chasing, setChasing] = useState(false);
   const [busy, start] = useTransition();
+
+  // The three states a producer actually cares about on the morning of a
+  // shoot, in the order they care about them.
+  const confirmed = recipients.filter((r) => r.confirmed_at);
+  const waiting = recipients.filter((r) => !r.confirmed_at && r.viewed_at);
+  const unopened = recipients.filter((r) => !r.confirmed_at && !r.viewed_at);
+  const outstanding = recipients.length - confirmed.length;
+
+  const shown =
+    filter === "confirmed"
+      ? confirmed
+      : filter === "open"
+        ? [...unopened, ...waiting]
+        : recipients;
+
+  function chase() {
+    setChasing(true);
+    remindUnconfirmed(projectId, callSheetId).then((res) => {
+      setChasing(false);
+      if ("error" in res) {
+        toast(res.error, "error");
+        return;
+      }
+      const parts = [`Reminded ${res.sent}`];
+      if (res.noEmail > 0)
+        parts.push(`${res.noEmail} with no email address, send their link`);
+      toast(parts.join(". "), res.sent > 0 ? "success" : "error");
+      router.refresh();
+    });
+  }
 
   function emailLink(recipientId: string) {
     setSending(recipientId);
@@ -236,6 +298,61 @@ export function RecipientsPanel({
         <p className="rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{error}</p>
       )}
 
+      {/* Where twenty people stop being a list and start being an answer. The
+          three numbers are the question a producer is really asking, and the
+          chips filter straight to the ones still outstanding. */}
+      {recipients.length > 0 && (
+        <div className="rounded-[12px] border border-border bg-surface-2/30 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Tally
+              label="Confirmed"
+              count={confirmed.length}
+              total={recipients.length}
+              hue="green"
+            />
+            <Tally label="Viewed, not confirmed" count={waiting.length} hue="amber" />
+            <Tally label="Not opened" count={unopened.length} hue="red" />
+            {emailEnabled && outstanding > 0 && (
+              <button
+                onClick={chase}
+                disabled={chasing}
+                className="ml-auto rounded-[9px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
+              >
+                {chasing ? "Sending..." : `Remind ${outstanding} unconfirmed`}
+              </button>
+            )}
+          </div>
+          {outstanding > 0 && (
+            <p className="mt-2 text-[11.5px] text-text-muted">
+              Anyone still unconfirmed is reminded automatically once a day in
+              the three days before the shoot, twice at most. Confirming stops
+              it.
+            </p>
+          )}
+          <div className="mt-2.5 flex flex-wrap gap-1">
+            {(
+              [
+                ["all", `Everyone (${recipients.length})`],
+                ["open", `Outstanding (${outstanding})`],
+                ["confirmed", `Confirmed (${confirmed.length})`],
+              ] as [Filter, string][]
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`rounded-pill px-2.5 py-1 text-xs font-semibold transition ${
+                  filter === key
+                    ? "bg-accent text-accent-fg"
+                    : "border border-border text-text-muted hover:text-text"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* List */}
       {recipients.length === 0 ? (
         <p className="rounded-[12px] border border-dashed border-border py-8 text-center text-sm text-text-faint">
@@ -249,7 +366,14 @@ export function RecipientsPanel({
             <span>Confirmed</span>
             <span />
           </div>
-          {recipients.map((r) => (
+          {shown.length === 0 && (
+            <p className="px-3 py-6 text-center text-sm text-text-faint">
+              {filter === "open"
+                ? "Everyone has confirmed."
+                : "Nobody has confirmed yet."}
+            </p>
+          )}
+          {shown.map((r) => (
             <div
               key={r.id}
               className="grid grid-cols-[1.4fr_0.8fr_0.8fr_auto] items-center gap-2 border-b border-border px-3 py-2 last:border-0"

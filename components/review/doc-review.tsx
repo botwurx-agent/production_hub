@@ -24,6 +24,7 @@ const KIND_LABEL: Record<string, string> = {
   storyboard: "storyboard",
   moodboard: "moodboard",
   ai_shot: "shot",
+  sequence: "sequence",
 };
 
 export function DocReview({
@@ -117,7 +118,9 @@ export function DocReview({
             <p className="mt-1 text-sm text-text-muted">
               {data.surface.kind === "ai_shot" && data.surface.takeVideoUrl
                 ? "Pause the take where you want feedback and comment at that moment, then approve or request changes."
-                : `Click anywhere on the ${noun} to leave a pinned comment, then approve or request changes.`}
+                : data.surface.kind === "sequence"
+                  ? "Play any shot, and click it to pin a comment about where it should sit. Then approve the order or request changes."
+                  : `Click anywhere on the ${noun} to leave a pinned comment, then approve or request changes.`}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">

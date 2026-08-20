@@ -230,7 +230,7 @@ export function BatchReview({ token, data }: { token: string; data: BatchReviewD
                       <video src={`${it.mediaUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={it.mediaUrl} alt="" className="h-full w-full object-cover" />
+                      <img src={it.thumbUrl ?? it.mediaUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                     )
                   ) : null}
                   <span className="absolute left-1 top-1 rounded bg-black/60 px-1 text-[9px] font-bold text-white">{i + 1}</span>

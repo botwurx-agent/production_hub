@@ -17,6 +17,7 @@ import { AddVersionForm } from "@/components/projects/add-version-form";
 import { ReviewModal } from "@/components/projects/review-modal";
 import { AssetViewer, viewerKind } from "@/components/projects/asset-viewer";
 import { ShareReviewButton } from "@/components/projects/share-review-button";
+import { PdfThumb } from "@/components/projects/pdf-thumb";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag } from "@/components/status-tag";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
@@ -41,23 +42,56 @@ const TYPE_ICON: Record<string, string> = {
 function Preview({
   version,
   hue,
+  projectId,
   onOpen,
 }: {
   version: VersionRow | undefined;
   hue: string;
+  projectId: string;
   onOpen?: () => void;
 }) {
   const link = version?.signedUrl ?? version?.url ?? null;
+  // The card is a small tile, so it takes the resized copy when there is one.
+  // `link` stays the real file for opening and for a video, which has no
+  // server-side resize.
+  const tile = version?.thumbUrl ?? link;
   const kind = version
     ? viewerKind(version.mime_type, version.storage_path ?? version.url)
     : "other";
   const canOpen = Boolean(version && link && onOpen);
 
+  const fileIcon = (
+    <span
+      className="flex flex-col items-center gap-1 text-xs font-bold"
+      style={{ color: `var(--h-${hue})` }}
+    >
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+      </svg>
+      {TYPE_ICON[kind] ?? "File"}
+    </span>
+  );
+
   const inner = (
     <>
       {kind === "image" && link ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={link} alt="" className="h-full w-full object-cover" />
+        <img src={tile ?? undefined} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+      ) : kind === "pdf" && version && link ? (
+        // A storyboard, a treatment or a permit is a picture; showing it as a
+        // grey icon made a folder of them indistinguishable.
+        <PdfThumb
+          fileUrl={link}
+          posterUrl={version.posterUrl}
+          projectId={projectId}
+          versionId={version.id}
+          // Cropped like an image tile, and anchored to the TOP: a page's
+          // title block is the part that identifies it, and centring a tall
+          // page in a 4:3 tile cuts exactly that off.
+          className="h-full w-full object-cover object-top"
+          fallback={fileIcon}
+        />
       ) : kind === "video" && link ? (
         // A muted video element shows the first frame as a thumbnail.
         <video
@@ -68,16 +102,7 @@ function Preview({
           className="h-full w-full object-cover"
         />
       ) : version ? (
-        <span
-          className="flex flex-col items-center gap-1 text-xs font-bold"
-          style={{ color: `var(--h-${hue})` }}
-        >
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <path d="M14 2v6h6" />
-          </svg>
-          {TYPE_ICON[kind] ?? "File"}
-        </span>
+        fileIcon
       ) : (
         <span
           className="text-xs font-semibold"
@@ -165,6 +190,7 @@ export function AssetCard({
       <Preview
         version={current}
         hue={hue}
+        projectId={projectId}
         onOpen={current ? () => setViewVersion(current) : undefined}
       />
 

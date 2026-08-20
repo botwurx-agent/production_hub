@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { assetStorage } from "@/lib/asset-storage";
+import { assetStorage, isResizable, signThumbs } from "@/lib/asset-storage";
 import { loadReactions } from "@/lib/review-reactions-load";
 import type {
   AssetWithVersions,
@@ -44,10 +44,10 @@ export async function loadProjectAssets(
   const [{ data: assetsRaw }, { data: reviewLinks }] = await Promise.all([
     (side === "document"
       ? supabase.from("assets").select(
-          "id, name, type, status, current_version_id, created_at, external_ref, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
+          "id, name, type, status, current_version_id, created_at, external_ref, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, poster_path, url, mime_type, size_bytes, notes, created_at)"
         ).eq("type", "document")
       : supabase.from("assets").select(
-          "id, name, type, status, current_version_id, created_at, external_ref, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, url, mime_type, size_bytes, notes, created_at)"
+          "id, name, type, status, current_version_id, created_at, external_ref, versions:versions!versions_asset_id_fkey(id, version_number, storage_path, poster_path, url, mime_type, size_bytes, notes, created_at)"
         ).neq("type", "document"))
       .eq("project_id", projectId)
       .order("created_at", { ascending: true })
@@ -94,6 +94,23 @@ export async function loadProjectAssets(
     }
   }
 
+  // A resized copy for anything drawn at card size. An asset library is where
+  // the biggest files land, and a grid of them was pulling every original in
+  // full to draw a thumbnail. The real file is still what opens, reviews and
+  // downloads.
+  const stillPaths = (assetsRaw ?? [])
+    .flatMap((a) => a.versions ?? [])
+    .filter((v) => v.storage_path && isResizable(v.mime_type))
+    .map((v) => v.storage_path as string);
+  // A rendered page-1 preview for anything that is not itself an image (a PDF).
+  // It is already a small jpeg, but it goes through the same resize so a grid
+  // and a full-width row ask for the same cached copy.
+  const posterPaths = (assetsRaw ?? [])
+    .flatMap((a) => a.versions ?? [])
+    .map((v) => v.poster_path)
+    .filter((p): p is string => Boolean(p));
+  const thumbs = await signThumbs([...stillPaths, ...posterPaths]);
+
   const versionIds = (assetsRaw ?? []).flatMap((a) =>
     (a.versions ?? []).map((v) => v.id)
   );
@@ -104,7 +121,7 @@ export async function loadProjectAssets(
       supabase
         .from("review_comments")
         .select(
-          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
         )
         .in("version_id", versionIds),
       supabase
@@ -144,6 +161,8 @@ export async function loadProjectAssets(
     versions: (a.versions ?? []).map((v) => ({
       ...v,
       signedUrl: v.storage_path ? (signed.get(v.storage_path) ?? null) : null,
+      thumbUrl: v.storage_path ? (thumbs.get(v.storage_path) ?? null) : null,
+      posterUrl: v.poster_path ? (thumbs.get(v.poster_path) ?? null) : null,
       comments: commentsByVersion.get(v.id) ?? [],
       approvals: approvalsByVersion.get(v.id) ?? [],
     })),

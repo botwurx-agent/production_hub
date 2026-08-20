@@ -129,6 +129,7 @@ export default async function ProjectDetailPage({
     { data: upcomingEvents },
     { data: taskRows },
     { data: billingDocs },
+    { data: binderRows },
   ] = await Promise.all([
     supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
     supabase
@@ -148,7 +149,11 @@ export default async function ProjectDetailPage({
     supabase.from("shot_groups").select("id").eq("project_id", params.id),
     supabase
       .from("call_sheets")
-      .select("shoot_date, call_time, crew_call, location")
+      // Recipients ride along so the hub can answer "has the crew confirmed"
+      // without opening the sheet: it is the question the day before a shoot.
+      .select(
+        "shoot_date, call_time, crew_call, location, call_sheet_recipients(confirmed_at)"
+      )
       .eq("project_id", params.id)
       .order("position", { ascending: true })
       .limit(1)
@@ -181,6 +186,10 @@ export default async function ProjectDetailPage({
     supabase
       .from("billing_documents")
       .select("kind, status")
+      .eq("project_id", params.id),
+      supabase
+      .from("project_binders")
+      .select("shared_at, revoked_at")
       .eq("project_id", params.id),
   ]);
 
@@ -247,6 +256,12 @@ export default async function ProjectDetailPage({
   const budgetPct =
     budgetEstimated > 0 ? Math.round((budgetActual / budgetEstimated) * 100) : null;
 
+  // Call-sheet confirmations, so the hub answers "is the crew set" without a
+  // click. Only meaningful once someone has actually been sent a link.
+  const callSheetPeople = callSheet?.call_sheet_recipients ?? [];
+  const callSheetSent = callSheetPeople.length;
+  const callSheetConfirmed = callSheetPeople.filter((r) => r.confirmed_at).length;
+
   // Brief preview (brief content may be rich-text HTML; flatten for the snippet).
   const briefText = htmlToText(brief?.content ?? "");
   const briefSnippet = briefText.length > 150 ? `${briefText.slice(0, 150)}…` : briefText;
@@ -310,6 +325,13 @@ export default async function ProjectDetailPage({
   const slackCount = (slackChannels ?? []).length;
   const chatCount = (chatSpaces ?? []).length;
   const commsTotal = emailCount + slackCount + chatCount;
+
+  // Binders on this job, and how many are live. "Shared" is the number a
+  // client could open right now, so a revoked one does not count.
+  const binderCount = (binderRows ?? []).length;
+  const binderShared = (binderRows ?? []).filter(
+    (b) => b.shared_at && !b.revoked_at
+  ).length;
 
   // Signed paperwork on this job, for the hub card. Fully signed means both
   // sides, which is what an agreement actually needs.
@@ -549,6 +571,32 @@ export default async function ProjectDetailPage({
                 <p className="text-[13px] text-text-muted">
                   Break the script into shots, then generate and triage images and
                   video, keeping every model, prompt, and seed on record.
+                </p>
+              </HubCard>
+            )}
+
+            {/* ai_video ONLY, matching the AI Pipeline card above. Elements
+                earn their keep next to the pipeline's prompt bar, where a
+                handle gets inserted; cgi_vfx used to see this card without the
+                pipeline, so it was a library with nothing to spend it on. */}
+            {isAiVideo && (
+              <HubCard
+                href={`/projects/${project.id}/elements`}
+                hue="purple"
+                title="Elements"
+                sub="Characters, wardrobe, props, locations"
+                footer="Open elements"
+                icon={
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                }
+              >
+                <p className="text-[13px] text-text-muted">
+                  Saved, named images each carrying the handle its platform gave
+                  it, so a prompt calls the same thing every time.
                 </p>
               </HubCard>
             )}
@@ -804,6 +852,22 @@ export default async function ProjectDetailPage({
                       crew call
                     </span>
                     {callSheet.location && <span className="truncate">📍 {callSheet.location}</span>}
+                    {callSheetSent > 0 && (
+                      <span>
+                        <span
+                          className="font-bold"
+                          style={{
+                            color:
+                              callSheetConfirmed === callSheetSent
+                                ? "var(--h-green)"
+                                : "var(--h-amber)",
+                          }}
+                        >
+                          {callSheetConfirmed}/{callSheetSent}
+                        </span>{" "}
+                        confirmed
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <p className="text-[13px] text-text-muted">
@@ -889,6 +953,33 @@ export default async function ProjectDetailPage({
                 {deliverTotal > 0
                   ? "Final deliverables and billing status."
                   : "List the final deliverables and invoice."}
+              </p>
+            </HubCard>
+
+            {/* The binder is the LAST card in Produce on purpose: it is what you
+                reach for once the rest of the job exists, since it is
+                assembled from those. */}
+            <HubCard
+              href={`/projects/${project.id}/binder`}
+              hue="orange"
+              title="Client binder"
+              sub={
+                binderCount > 0
+                  ? `${binderCount} binder${binderCount === 1 ? "" : "s"}${binderShared > 0 ? ` · ${binderShared} shared` : ""}`
+                  : "Everything in one place"
+              }
+              footer={binderCount > 0 ? "Open binders" : "Build a binder"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z" />
+                  <path d="M8 3v18M4 8h4M4 12h4M4 16h4" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                {binderCount > 0
+                  ? "Call sheets, boards and the shot list, compiled to share or print."
+                  : "Compile the job into one printable, shareable document."}
               </p>
             </HubCard>
 

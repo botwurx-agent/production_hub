@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
+import { confirmAction } from "@/components/ui/confirm";
 import { CallSheetBuilder } from "@/components/production/callsheet-builder";
 import { RecipientsPanel, type ContactOption } from "@/components/production/recipients-panel";
 import { shortDate } from "@/lib/format";
@@ -70,7 +71,19 @@ export function CallSheetWorkspace({
     });
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
+    const sheet = sheets.find((s) => s.id === id);
+    const sent = recipients.filter((r) => r.call_sheet_id === id).length;
+    const ok = await confirmAction({
+      title: `Delete "${sheet?.title || "this call sheet"}"?`,
+      body: sent
+        ? `Its schedule, locations and crew go with it, and the ${sent} link${
+            sent === 1 ? "" : "s"
+          } already sent will stop working. This cannot be undone.`
+        : "Its schedule, locations and crew go with it. This cannot be undone.",
+      confirmLabel: "Delete call sheet",
+    });
+    if (!ok) return;
     start(async () => {
       await deleteCallSheet(projectId, id);
       if (activeId === id) setActiveId(null);
@@ -201,7 +214,7 @@ export function CallSheetWorkspace({
                 )}
               </button>
               <button
-                onClick={() => remove(active.id)}
+                onClick={() => void remove(active.id)}
                 disabled={busy}
                 className="shrink-0 text-text-faint transition hover:text-red"
                 aria-label="Delete call sheet"
