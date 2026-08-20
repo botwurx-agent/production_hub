@@ -2119,10 +2119,25 @@ chasing whoever ignored it. This owns everything either side of that link.
   the fastest way to get this switched off: nothing before the lead window,
   NOTHING after the cutoff (an email about a closed order is pure noise), two
   nudges with a gap, and opening the link stops it instantly.
-- The cron runs EVERY 15 MINUTES, unlike the daily review and call-sheet ones. A
-  meal cutoff is a time of day, not a date, so a 15:00 UTC job would deliver a
-  10am order at lunchtime. Everything it does is idempotent, and `sent_at` is
-  stamped after the batch so an overlapping run cannot send twice.
+- The cron WANTS to run every 15 minutes, unlike the daily review and call-sheet
+  ones. A meal cutoff is a time of day, not a date, so a 15:00 UTC job would
+  deliver a 10am order at lunchtime. Everything it does is idempotent, and
+  `sent_at` is stamped after the batch so an overlapping run cannot send twice.
+- BUT THE VERCEL CRON IS NOT WIRED, and the way that surfaced is worth knowing.
+  Adding a THIRD entry to vercel.json crons (on `*/15`) made Vercel stop
+  creating deployments AT ALL for pushes to the branch. Not a failed build: no
+  deployment record appeared, so there was nothing to read an error from, and
+  five pushes silently did nothing while a dashboard Redeploy of the previous
+  commit still worked. Removing the entry fired a build within a minute. The
+  account's plan caps crons (Hobby is 2, daily only), and Vercel refuses the
+  deployment rather than reporting it. IF A PUSH EVER STOPS PRODUCING A
+  DEPLOYMENT, CHECK vercel.json FIRST.
+  The route (`/api/cron/meal-reminders`) is built, guarded by CRON_SECRET, and
+  works when called. It just has no driver yet. The manual half of the feature
+  is unaffected: "Save and send" and "Chase outstanding" in the panel are
+  ordinary server actions. Options for the unattended half, none chosen yet:
+  upgrade the Vercel plan, a Supabase pg_cron + pg_net job (their DB is already
+  the source of truth), or a scheduled GitHub Action curling the endpoint.
 - The printed call sheet gets a `meals` BLOCK (notation only, never the live
   link: a call sheet is forwarded and photographed far too widely). Existing
   sheets keep their stored layout and can add it from the palette.
