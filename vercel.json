@@ -9,10 +9,6 @@
     {
       "path": "/api/cron/callsheet-reminders",
       "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/cron/meal-reminders",
-      "schedule": "*/15 * * * *"
     }
   ]
 }
