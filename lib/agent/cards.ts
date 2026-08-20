@@ -20,6 +20,8 @@ import { money } from "@/lib/format";
 import { costStatus } from "@/lib/costs";
 import { PROJECT_STATUS, DEAL_STAGE, CRM_MANUAL_ACTIVITY } from "@/lib/status";
 import { amount, count, date, str, uuid } from "@/lib/agent/values";
+import { isMealKey, mealLabel, cutoffLabel } from "@/lib/meals";
+import { isFetchableUrl } from "@/lib/unfurl";
 
 export const CARD_KINDS = [
   "log_cost",
@@ -33,6 +35,7 @@ export const CARD_KINDS = [
   "create_deal",
   "add_contact",
   "add_event",
+  "send_meal_round",
 ] as const;
 
 export type CardKind = (typeof CARD_KINDS)[number];
@@ -558,6 +561,118 @@ async function buildAddEvent(args: Args): Promise<Built> {
   };
 }
 
+
+/**
+ * The one card that reaches OUTSIDE the studio.
+ *
+ * Every other card writes a row. This one puts email in front of crew, which is
+ * why it spells out the headcount and names the first few people: the thing the
+ * producer is actually confirming is "these humans are about to be emailed",
+ * not "a database row will change".
+ *
+ * It is deliberately the first outward action Runner may take, and a narrow
+ * one: internal recipients already on the call sheet, a link the producer
+ * pasted, no money, and nothing that cannot be repeated harmlessly.
+ */
+async function buildSendMealRound(args: Args): Promise<Built> {
+  const projectId = uuid(args.project_id);
+  if (!projectId) return { error: "Which project is the shoot on?" };
+  const title = await projectName(projectId);
+  if (!title) return { error: "That project is not one I can see." };
+
+  const url = str(args.order_url, 500);
+  if (!url || !isFetchableUrl(url)) {
+    return { error: "I need the ordering link as a full web address." };
+  }
+
+  const mealRaw = str(args.meal, 20) ?? "lunch";
+  const meal = isMealKey(mealRaw) ? mealRaw : "lunch";
+
+  const supabase = createClient();
+
+  // Which sheet: the one named, else the project's next shoot day, since a
+  // producer asking about lunch means the shoot they are standing on.
+  let callSheetId = uuid(args.call_sheet_id);
+  let sheet: { id: string; title: string | null; shoot_date: string | null } | null = null;
+  if (callSheetId) {
+    const { data } = await supabase
+      .from("call_sheets")
+      .select("id, title, shoot_date, project_id")
+      .eq("id", callSheetId)
+      .maybeSingle();
+    if (!data || data.project_id !== projectId) {
+      return { error: "That call sheet is not on this project." };
+    }
+    sheet = data;
+  } else {
+    const { data } = await supabase
+      .from("call_sheets")
+      .select("id, title, shoot_date, project_id")
+      .eq("project_id", projectId)
+      .order("shoot_date", { ascending: true })
+      .limit(20);
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = (data ?? []).filter((d) => !d.shoot_date || d.shoot_date >= today);
+    const pick = upcoming[0] ?? (data ?? [])[0];
+    if (!pick) {
+      return {
+        error: `${title} has no call sheet yet, and a meal order hangs off one.`,
+      };
+    }
+    sheet = pick;
+    callSheetId = pick.id;
+  }
+
+  const { data: people } = await supabase
+    .from("call_sheet_recipients")
+    .select("id, name, email")
+    .eq("call_sheet_id", callSheetId as string)
+    .order("created_at", { ascending: true });
+
+  const withEmail = (people ?? []).filter((r) => r.email);
+  if (withEmail.length === 0) {
+    return {
+      error:
+        "Nobody on that call sheet has an email address, so there is no one to send the order to.",
+    };
+  }
+
+  // A cutoff is a moment, not a day, so it does not go through date(). Junk is
+  // dropped rather than rejected: a meal round without a deadline still works,
+  // it just cannot be chased.
+  const cutoffRaw = str(args.cutoff_at, 40);
+  const cutoffMs = cutoffRaw ? Date.parse(cutoffRaw) : NaN;
+  const cutoff = Number.isNaN(cutoffMs) ? null : new Date(cutoffMs).toISOString();
+  const names = withEmail.slice(0, 4).map((r) => r.name).join(", ");
+  const rest = withEmail.length - Math.min(4, withEmail.length);
+
+  return {
+    id: cardId("send_meal_round"),
+    kind: "send_meal_round",
+    title: `Email the ${mealLabel(meal).toLowerCase()} order`,
+    summary: `${mealLabel(meal)} link to ${withEmail.length} on ${sheet?.title || title}`,
+    fields: fields(
+      field("Emails", `${withEmail.length} people`),
+      field("Who", rest > 0 ? `${names} and ${rest} more` : names),
+      field("Meal", mealLabel(meal)),
+      field("Link", url),
+      field("Orders close", cutoffLabel(cutoff) ?? "not set"),
+      field("Budget", args.budget_per_head ? `$${amount(args.budget_per_head)} per person` : null),
+      field("Instructions", str(args.instructions, 400)),
+    ),
+    payload: {
+      projectId,
+      callSheetId,
+      meal,
+      orderUrl: url,
+      cutoffAt: cutoff,
+      budgetPerHead: amount(args.budget_per_head),
+      instructions: str(args.instructions, 400),
+      recipientIds: withEmail.map((r) => r.id),
+    },
+  };
+}
+
 const BUILDERS: Record<CardKind, (args: Args) => Promise<Built>> = {
   log_cost: buildLogCost,
   add_payment: buildAddPayment,
@@ -570,6 +685,7 @@ const BUILDERS: Record<CardKind, (args: Args) => Promise<Built>> = {
   create_deal: buildCreateDeal,
   add_contact: buildAddContact,
   add_event: buildAddEvent,
+  send_meal_round: buildSendMealRound,
 };
 
 /**

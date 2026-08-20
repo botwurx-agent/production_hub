@@ -17,6 +17,10 @@ export const FIXED_BLOCKS: { type: string; label: string }[] = [
   { type: "locations", label: "Locations & safety" },
   { type: "cast", label: "Cast & talent" },
   { type: "crew", label: "Crew" },
+  // Renders only when the sheet has a meal round, so a sheet without one is
+  // unchanged. Existing sheets keep their stored layout and can add it from
+  // the block palette; new sheets get it by default.
+  { type: "meals", label: "Meals" },
   { type: "notes", label: "Notes" },
 ];
 

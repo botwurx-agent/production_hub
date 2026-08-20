@@ -1,4 +1,5 @@
 import { normalizeLayout } from "@/lib/callsheet-blocks";
+import { cutoffLabel, mealLabel } from "@/lib/meals";
 import type { CallSheet, CallSheetEntry } from "@/lib/database.types";
 
 // "Tuesday 2/17/26" from a YYYY-MM-DD string (parsed as a local date).
@@ -143,12 +144,17 @@ export function CallSheetDocument({
   logoUrl,
   studioName,
   clientName,
+  meals = [],
 }: {
   sheet: CallSheet | null;
   entries: CallSheetEntry[];
   logoUrl: string | null;
   studioName: string;
   clientName: string | null;
+  /** The lunch NOTATION, matching what a real sheet carries. The ordering link
+      itself is never printed here: it goes out in its own message, and a sheet
+      is forwarded and photographed far too widely to carry a live order link. */
+  meals?: { meal: string; cutoffAt: string | null; budgetPerHead: number | null }[];
 }) {
   const s = sheet;
   const cast = entries.filter((e) => e.kind === "cast");
@@ -254,6 +260,25 @@ export function CallSheetDocument({
               <p className="mt-0.5 whitespace-pre-wrap text-sm text-text-muted">{s?.notes?.trim() || "—"}</p>
             </div>
           )}
+        </div>
+      )}
+
+      {show("meals") && meals.length > 0 && (
+        <div className="mt-3 border border-border p-3">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-text-faint">Meals</div>
+          <ul className="mt-1 space-y-0.5">
+            {meals.map((m) => {
+              const at = cutoffLabel(m.cutoffAt);
+              return (
+                <li key={m.meal} className="text-sm text-text">
+                  <span className="font-semibold">{mealLabel(m.meal)}</span>
+                  {": ordering instructions sent separately"}
+                  {at ? `, orders close ${at}` : ""}
+                  {m.budgetPerHead ? ` ($${m.budgetPerHead.toFixed(2)} per person)` : ""}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

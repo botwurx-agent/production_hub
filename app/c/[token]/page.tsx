@@ -3,7 +3,9 @@ import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import {
   getCallSheetRecipient,
   loadCallSheetForRecipient,
+  loadMealsForRecipient,
 } from "@/lib/callsheet-links";
+import { MealCard } from "@/app/c/[token]/meal-card";
 import { CallSheetDocument } from "@/components/production/callsheet-document";
 import { recordCallSheetView } from "@/app/c/[token]/actions";
 import { ConfirmBar } from "@/app/c/[token]/confirm-bar";
@@ -55,7 +57,10 @@ export default async function PublicCallSheetPage({
   // Record the open (first time only).
   await recordCallSheetView(params.token);
 
-  const data = await loadCallSheetForRecipient(service, recipient);
+  const [data, meals] = await Promise.all([
+    loadCallSheetForRecipient(service, recipient),
+    loadMealsForRecipient(service, recipient),
+  ]);
   if (!data) {
     return (
       <Centered>
@@ -87,6 +92,17 @@ export default async function PublicCallSheetPage({
         confirmed={Boolean(recipient.confirmed_at)}
       />
 
+      {/* Above the sheet on purpose: the meal has a deadline and the sheet does
+          not, so on the morning of a shoot it is the thing that needs acting on
+          first. */}
+      {meals.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {meals.map((m) => (
+            <MealCard key={m.roundId} token={params.token} meal={m} />
+          ))}
+        </div>
+      ) : null}
+
       <div className="mt-4">
         <CallSheetDocument
           sheet={data.sheet}
@@ -94,6 +110,11 @@ export default async function PublicCallSheetPage({
           logoUrl={data.logoUrl}
           studioName={data.studioName}
           clientName={data.clientName}
+          meals={meals.map((m) => ({
+            meal: m.meal,
+            cutoffAt: m.cutoffAt,
+            budgetPerHead: m.budgetPerHead,
+          }))}
         />
       </div>
 

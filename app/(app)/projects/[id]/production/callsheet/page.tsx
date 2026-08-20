@@ -44,6 +44,21 @@ export default async function CallSheetPrintPage({
     entries = (data ?? []) as CallSheetEntry[];
   }
 
+  // The lunch notation on the printed sheet. The ordering link is deliberately
+  // not printed: a call sheet gets forwarded and photographed widely, and a
+  // live order link does not belong on it.
+  const { data: mealRows } = s
+    ? await supabase
+        .from("meal_rounds")
+        .select("meal, cutoff_at, budget_per_head")
+        .eq("call_sheet_id", s.id)
+    : { data: null };
+  const meals = (mealRows ?? []).map((m) => ({
+    meal: m.meal,
+    cutoffAt: m.cutoff_at,
+    budgetPerHead: m.budget_per_head === null ? null : Number(m.budget_per_head),
+  }));
+
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
   const clientName = (project.client as { name: string } | null)?.name ?? null;
 
@@ -66,6 +81,7 @@ export default async function CallSheetPrintPage({
         logoUrl={logoUrl}
         studioName={ctx.studio.name}
         clientName={clientName}
+        meals={meals}
       />
     </div>
   );

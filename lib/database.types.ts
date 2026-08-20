@@ -2817,6 +2817,87 @@ export type Database = {
         };
         Relationships: [];
       };
+      meal_rounds: {
+        Row: {
+          id: string;
+          studio_id: string;
+          call_sheet_id: string;
+          meal: string;
+          order_url: string;
+          instructions: string | null;
+          cutoff_at: string | null;
+          budget_per_head: number | null;
+          send_at: string | null;
+          sent_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          call_sheet_id: string;
+          meal?: string;
+          order_url: string;
+          instructions?: string | null;
+          cutoff_at?: string | null;
+          budget_per_head?: number | null;
+          send_at?: string | null;
+          sent_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          call_sheet_id?: string;
+          meal?: string;
+          order_url?: string;
+          instructions?: string | null;
+          cutoff_at?: string | null;
+          budget_per_head?: number | null;
+          send_at?: string | null;
+          sent_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      meal_responses: {
+        Row: {
+          id: string;
+          studio_id: string;
+          meal_round_id: string;
+          recipient_id: string;
+          opened_at: string | null;
+          ordered_at: string | null;
+          last_reminded_at: string | null;
+          reminder_count: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          meal_round_id: string;
+          recipient_id: string;
+          opened_at?: string | null;
+          ordered_at?: string | null;
+          last_reminded_at?: string | null;
+          reminder_count?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          meal_round_id?: string;
+          recipient_id?: string;
+          opened_at?: string | null;
+          ordered_at?: string | null;
+          last_reminded_at?: string | null;
+          reminder_count?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       call_sheet_recipients: {
         Row: {
           id: string;
@@ -4020,6 +4101,8 @@ export type ReviewLink = Tables<"review_links">;
 export type DocReview = Tables<"doc_reviews">;
 export type ProjectEvent = Tables<"project_events">;
 export type CallSheetRecipient = Tables<"call_sheet_recipients">;
+export type MealRound = Tables<"meal_rounds">;
+export type MealResponse = Tables<"meal_responses">;
 export type CallSheetTemplate = Tables<"call_sheet_templates">;
 export type Board = Tables<"boards">;
 export type BoardItem = Tables<"board_items">;

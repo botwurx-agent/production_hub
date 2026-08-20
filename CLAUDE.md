@@ -2093,6 +2093,54 @@ you type the word "click", you are writing instruction, stop.
 - NOT built: tours that span pages (a step that navigates and resumes), which
   is a large jump in complexity for orientation content that does not need it.
 
+### Crew meals: the separate lunch email, automated (migration 0089) — BUILT
+Came straight off a shoot, which is the signal section 4.5 waits for. On a real
+job the call sheet carries a lunch NOTATION and a SECOND email goes out with a
+group-order link and a cutoff, after which the producer spends the morning
+chasing whoever ignored it. This owns everything either side of that link.
+- NOTHING PLACES AN ORDER, and that is not timidity: DoorDash's public APIs
+  (Drive, Marketplace, Item Management) and ezCater's are all MERCHANT-side, for
+  restaurants receiving orders and syncing menus. None exposes ordering on a
+  consumer's behalf. DoorDash's 2026 CLI wraps an internal consumer API, which
+  is not a documented third-party surface and would break without warning. So
+  the producer pastes a group link and the crew order on that platform.
+- `meal_rounds` hangs off the CALL SHEET, not the project, because call sheets
+  are already multi-per-project and a meal belongs to one shoot day. Unique on
+  (call_sheet_id, meal), so a second lunch is a mistake rather than a use case;
+  breakfast/lunch/dinner coexist (verified against the live DB, then rolled
+  back).
+- `meal_responses` IS the inclusion list: a row means you are on this order, so
+  dropping the client and the agency from a crew lunch needs no extra flag.
+  `opened_at` is a click-through, which is the honest signal (the platform will
+  never tell us an order completed, and a click needs nothing from the crew);
+  `ordered_at` is self-reported for whoever orders off a forwarded link.
+  `tallyMeal` keeps the two EXCLUSIVE so the three counts add back to the total.
+- CHASING IS BOUNDED ON BOTH SIDES, because nagging crew on a shoot morning is
+  the fastest way to get this switched off: nothing before the lead window,
+  NOTHING after the cutoff (an email about a closed order is pure noise), two
+  nudges with a gap, and opening the link stops it instantly.
+- The cron runs EVERY 15 MINUTES, unlike the daily review and call-sheet ones. A
+  meal cutoff is a time of day, not a date, so a 15:00 UTC job would deliver a
+  10am order at lunchtime. Everything it does is idempotent, and `sent_at` is
+  stamped after the batch so an overlapping run cannot send twice.
+- The printed call sheet gets a `meals` BLOCK (notation only, never the live
+  link: a call sheet is forwarded and photographed far too widely). Existing
+  sheets keep their stored layout and can add it from the palette.
+- RUNNER'S FIRST OUTWARD ACTION, and a deliberate change to its contract. Every
+  other card writes a row; `send_meal_round` puts email in front of people, so
+  the card names the headcount and the first few recipients, because what is
+  being confirmed is "these humans are about to be emailed". Chosen as the seal-
+  breaker precisely because the blast radius is tiny: internal crew already on
+  the sheet, a link the producer pasted, no money, harmlessly repeatable. It
+  still goes through propose-and-confirm, and confirmCard calls the ordinary
+  server actions. `lib/meals.ts` is unit-tested (15 assertions) in the
+  scratchpad.
+- NOT built, on purpose, pending one real shoot: SMS (email is the wrong channel
+  on a shoot morning and is the likeliest gap, but it means Twilio, a number,
+  per-message cost and opt-out handling), dietary flags on contacts, per-person
+  order contents, and any spend reconciliation (the receipt still goes in
+  through the existing cost flow).
+
 ### Next step
 NOTHING IS QUEUED. As of 2026-07-29 the operator has deliberately parked the
 whole proposed backlog: run real jobs, and only build when something actually

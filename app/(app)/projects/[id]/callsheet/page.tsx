@@ -5,6 +5,7 @@ import { signedLogoUrl } from "@/lib/branding";
 import { emailConfigured } from "@/lib/email";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { CallSheetWorkspace } from "@/components/production/callsheet-workspace";
+import type { MealRoundWithResponses } from "@/components/production/meal-panel";
 import type {
   CallSheet as CS,
   CallSheetEntry,
@@ -65,8 +66,10 @@ export default async function CallSheetPage({
   const sheetIds = (sheets ?? []).map((s) => s.id);
   let entries: CallSheetEntry[] = [];
   let recipients: CallSheetRecipient[] = [];
+  let mealRounds: MealRoundWithResponses[] = [];
   if (sheetIds.length > 0) {
-    const [{ data: entryRows }, { data: recipientRows }] = await Promise.all([
+    const [{ data: entryRows }, { data: recipientRows }, { data: mealRows }] =
+      await Promise.all([
       supabase
         .from("call_sheet_entries")
         .select("*")
@@ -77,9 +80,16 @@ export default async function CallSheetPage({
         .select("*")
         .in("call_sheet_id", sheetIds)
         .order("created_at", { ascending: true }),
+      // The round plus who is on it: the responses ARE the inclusion list, so
+      // the panel needs them to know who to tick.
+      supabase
+        .from("meal_rounds")
+        .select("*, responses:meal_responses(*)")
+        .in("call_sheet_id", sheetIds),
     ]);
     entries = (entryRows ?? []) as CallSheetEntry[];
     recipients = (recipientRows ?? []) as CallSheetRecipient[];
+    mealRounds = (mealRows ?? []) as unknown as MealRoundWithResponses[];
   }
 
   return (
@@ -103,6 +113,7 @@ export default async function CallSheetPage({
         sheets={(sheets ?? []) as CS[]}
         entries={entries}
         recipients={recipients}
+        mealRounds={mealRounds}
         contactOptions={contactOptions}
         templates={(templates ?? []) as CallSheetTemplate[]}
         logoUrl={logoUrl}

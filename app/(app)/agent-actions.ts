@@ -34,6 +34,7 @@ import { updateProjectStatus } from "@/app/(app)/projects/actions";
 import { createDeal, updateDealStage, markDealLost } from "@/app/(app)/pipeline/actions";
 import { addProjectContact } from "@/app/(app)/projects/[id]/contact-actions";
 import { addProjectEvent } from "@/app/(app)/projects/[id]/calendar-actions";
+import { saveMealRound, sendMealRound } from "@/app/(app)/projects/[id]/meal-actions";
 import { CRM_MANUAL_ACTIVITY } from "@/lib/status";
 import { loadSuggestions, type Suggestion } from "@/lib/agent/suggestions";
 // The SAME parsers the card builder used on the way out. The payload has
@@ -490,6 +491,44 @@ async function run(kind: CardKind, p: Payload): Promise<ConfirmResult> {
       });
       if (res && "error" in res && res.error) return { error: res.error };
       return { ok: true, message: "Date added." };
+    }
+
+    // The only card that sends anything outside the studio. It saves the round
+    // and sends in one step because a half-saved order nobody was told about is
+    // worse than either outcome on its own.
+    case "send_meal_round": {
+      const projectId = await visibleProject(p.projectId);
+      if (!projectId) return { error: "That project is no longer visible." };
+      const callSheetId = str(p.callSheetId, 40);
+      const orderUrl = str(p.orderUrl, 500);
+      if (!callSheetId) return { error: "The call sheet was lost. Try again." };
+      if (!orderUrl) return { error: "The ordering link was lost. Try again." };
+
+      const ids = Array.isArray(p.recipientIds)
+        ? (p.recipientIds as unknown[])
+            .map((v) => str(v, 40))
+            .filter((v): v is string => Boolean(v))
+        : [];
+      if (ids.length === 0) return { error: "Nobody was on that order." };
+
+      const saved = await saveMealRound(projectId, callSheetId, {
+        meal: str(p.meal, 20) ?? "lunch",
+        orderUrl,
+        instructions: str(p.instructions, 400),
+        cutoffAt: str(p.cutoffAt, 40),
+        budgetPerHead: money(p.budgetPerHead),
+        recipientIds: ids,
+      });
+      if ("error" in saved) return { error: saved.error };
+
+      const sent = await sendMealRound(projectId, saved.id);
+      if ("error" in sent) return { error: sent.error };
+      return {
+        ok: true,
+        message: sent.noEmail
+          ? `Sent to ${sent.sent}. ${sent.noEmail} had no usable email address.`
+          : `Order sent to ${sent.sent}.`,
+      };
     }
   }
 }

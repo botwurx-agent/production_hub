@@ -304,6 +304,26 @@ export const WRITE_TOOLS: ToolSchema[] = [
       ["project_id", "title", "date"]
     ),
   },
+  {
+    name: "propose_send_meal_round",
+    description:
+      "Propose emailing the crew meal ordering link for a shoot day. The producer pastes a group-order link from DoorDash, Uber Eats, ezCater or similar; the crew place their own orders on that platform. This never places an order. It is the ONE action that sends email outside the studio, so the card names how many people would be emailed. " +
+      PROPOSE_NOTE,
+    parameters: obj(
+      {
+        project_id: s("Project the shoot is on."),
+        order_url: s("The group-order link the producer pasted."),
+        call_sheet_id: s(
+          "Call sheet the meal belongs to. Leave out to use the next shoot day."
+        ),
+        meal: s("breakfast, lunch or dinner. Defaults to lunch."),
+        cutoff_at: s("When orders close, as an ISO date and time."),
+        budget_per_head: s("Spend per person, if there is one."),
+        instructions: s("Anything the crew needs to know, in one or two lines."),
+      },
+      ["project_id", "order_url"]
+    ),
+  },
 ];
 
 export const ALL_TOOLS: ToolSchema[] = [...READ_TOOLS, ...WRITE_TOOLS];

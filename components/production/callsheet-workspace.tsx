@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { confirmAction } from "@/components/ui/confirm";
 import { CallSheetBuilder } from "@/components/production/callsheet-builder";
 import { RecipientsPanel, type ContactOption } from "@/components/production/recipients-panel";
+import { MealPanel, type MealRoundWithResponses } from "@/components/production/meal-panel";
 import { shortDate } from "@/lib/format";
 import {
   createCallSheet,
@@ -34,6 +35,7 @@ export function CallSheetWorkspace({
   sheets,
   entries,
   recipients,
+  mealRounds,
   contactOptions,
   templates,
   logoUrl,
@@ -44,6 +46,7 @@ export function CallSheetWorkspace({
   sheets: CS[];
   entries: CallSheetEntry[];
   recipients: CallSheetRecipient[];
+  mealRounds: MealRoundWithResponses[];
   contactOptions: ContactOption[];
   templates: CallSheetTemplate[];
   logoUrl: string | null;
@@ -53,6 +56,7 @@ export function CallSheetWorkspace({
   const [busy, start] = useTransition();
   const [activeId, setActiveId] = useState<string | null>(sheets[0]?.id ?? null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [mealOpen, setMealOpen] = useState(false);
 
   const active = sheets.find((s) => s.id === activeId) ?? sheets[0] ?? null;
   const activeEntries = active
@@ -62,6 +66,9 @@ export function CallSheetWorkspace({
     ? recipients.filter((r) => r.call_sheet_id === active.id)
     : [];
   const confirmedCount = activeRecipients.filter((r) => r.confirmed_at).length;
+  const activeMeals = active
+    ? mealRounds.filter((m) => m.call_sheet_id === active.id)
+    : [];
 
   function newSheet() {
     start(async () => {
@@ -200,6 +207,15 @@ export function CallSheetWorkspace({
                 })}
               </div>
               <button
+                onClick={() => setMealOpen(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] border border-border-strong bg-surface px-3 py-1.5 text-sm font-semibold text-text transition hover:bg-surface-2"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 2v7a3 3 0 0 0 3 3 3 3 0 0 0 3-3V2M6 2v10m0 0v10M18 2c-1.7 1.5-2.5 3.8-2.5 6.5S16.3 13 18 14v8" />
+                </svg>
+                Meals
+              </button>
+              <button
                 onClick={() => setSendOpen(true)}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-accent px-3 py-1.5 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
               >
@@ -235,6 +251,21 @@ export function CallSheetWorkspace({
               templates={templates}
               logoUrl={logoUrl}
             />
+
+            <Modal
+              open={mealOpen}
+              onClose={() => setMealOpen(false)}
+              title={`Crew meals: ${active.title || "Call sheet"}`}
+              size="lg"
+            >
+              <MealPanel
+                projectId={projectId}
+                callSheetId={active.id}
+                recipients={activeRecipients}
+                rounds={activeMeals}
+                emailEnabled={emailEnabled}
+              />
+            </Modal>
 
             <Modal
               open={sendOpen}
