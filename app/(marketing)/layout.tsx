@@ -8,12 +8,12 @@ export const metadata: Metadata = {
 };
 
 /**
- * Outward-facing pages are pinned to the PAPER ground.
+ * Outward-facing pages are pinned to ONE ground so they cannot invert.
  *
- * The brand sheet fixes this: the product offers light, paper and dark and the
- * user chooses, but the marketing surfaces commit to the warm one, because the
- * argument they are making (an interface that does not compete with the work
- * being judged) stops being visible the moment the page can invert.
+ * This was PAPER, on the argument that a warm ground suits a page about not
+ * competing with the work being judged. The operator chose LIGHT instead
+ * (2026-08-20), so that is what ships; the earlier reasoning is kept here
+ * because it is the thing to weigh again if the brand ever revisits it.
  *
  * data-theme is an attribute selector in globals.css rather than an html-only
  * rule, so setting it on this wrapper resolves every token underneath it
@@ -25,7 +25,7 @@ export default function MarketingLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div data-theme="paper" className="min-h-screen bg-bg font-body text-text">
+    <div data-theme="light" className="min-h-screen bg-bg font-body text-text">
       <MarketingNav />
       <main>{children}</main>
       <MarketingFooter />

@@ -15,6 +15,56 @@
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
+   Aurora: the soft gradient field behind the hero.
+
+   Blurred radial orbs in the product's own hue tokens, at low opacity, plus one
+   accent ellipse washing down from the top. Lifted from the Claude Design
+   comp, which was already built on these tokens, so it inherits light/dark and
+   the accent picker for free rather than hardcoding a palette.
+
+   pointer-events:none throughout: this is atmosphere and must never intercept
+   a click meant for the CTA sitting above it.
+   -------------------------------------------------------------------------- */
+
+.sf-aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sf-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(24px);
+}
+
+/* The accent wash falling from the top edge, which is what ties the orbs
+   together into one field rather than four separate blobs. */
+.sf-aurora::after {
+  content: "";
+  position: absolute;
+  inset: -6% -2% 30% -2%;
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    color-mix(in oklch, var(--accent) 24%, transparent),
+    transparent 70%
+  );
+  filter: blur(10px);
+}
+
+/* A section-level wash, softer than the hero's, for bands that need lift
+   without competing with it. */
+.sf-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+/* --------------------------------------------------------------------------
    Hero CTA: a highlight sweeps across the button on a loop, the attention-grab
    Monday gets from their cycling gradient.
 

@@ -8,10 +8,16 @@ import type { ReactNode } from "react";
 export function Section({
   tint = "plain",
   className = "",
+  id,
+  backdrop,
   children,
 }: {
   tint?: "plain" | "tinted" | "accent";
   className?: string;
+  /** Anchor target, so nav links land with the band's padding intact. */
+  id?: string;
+  /** Aurora or wash painted behind the content. */
+  backdrop?: ReactNode;
   children: ReactNode;
 }) {
   // Tinted bands carry a soft vertical gradient rather than one flat fill, so a
@@ -23,10 +29,17 @@ export function Section({
         ? "bg-gradient-to-b from-accent-soft via-accent-soft to-bg"
         : "bg-bg";
   return (
-    <section className={`px-6 py-24 sm:px-10 sm:py-32 ${bg} ${className}`}>
+    <section
+      id={id}
+      className={`relative overflow-hidden px-6 py-24 scroll-mt-20 sm:px-10 sm:py-32 ${bg} ${className}`}
+    >
+      {backdrop}
       {/* 1400px, not 1152px: on a 1920 screen the old container left 40% of the
-          page as dead margin, which is what made every section read as narrow. */}
-      <div className="mx-auto w-full max-w-[1400px]">{children}</div>
+          page as dead margin, which is what made every section read as narrow.
+          Kept above the backdrop so the gradient never eats a click. */}
+      <div className="relative z-10 mx-auto w-full max-w-[1400px]">
+        {children}
+      </div>
     </section>
   );
 }
