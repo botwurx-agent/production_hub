@@ -1,25 +1,29 @@
-import Image from "next/image";
+import { Shot } from "@/components/marketing/shot";
 
 /**
  * The elevated card every product shot sits on. Screenshots are the site's main
  * evidence, so they are never dropped flat onto the background.
  *
- * `src` is optional on purpose: until the staged demo job is captured, the
- * frame renders a labelled placeholder naming the shot that belongs here. That
- * keeps the layout honest (nobody mistakes it for a finished page) and turns
- * the swap into a one-prop change later.
+ * The image itself is delegated to <Shot>, which checks on the server whether
+ * the PNG has been captured yet and renders a labelled placeholder when it has
+ * not. That keeps ONE answer to "is this screenshot taken", shared with
+ * scripts/capture-shots.mjs, instead of this component growing a second copy of
+ * the same check. Run `npm run shots` and every frame fills itself in.
+ *
+ * `children` is for a frame whose contents are live UI rather than an image.
  */
 export function BrowserFrame({
-  src,
+  shot,
   alt,
   caption,
-  width = 1440,
-  height = 900,
+  width = 1600,
+  height = 1000,
   priority = false,
   hue = "indigo",
   children,
 }: {
-  src?: string;
+  /** Basename in public/marketing/shots, without the extension. */
+  shot?: string;
   alt: string;
   caption?: string;
   width?: number;
@@ -27,7 +31,6 @@ export function BrowserFrame({
   priority?: boolean;
   /** Tints the pending-screenshot placeholder to its section's identity hue. */
   hue?: string;
-  /** Live UI rendered inside the frame, used instead of an image. */
   children?: React.ReactNode;
 }) {
   return (
@@ -40,16 +43,17 @@ export function BrowserFrame({
           <span className="ml-3 truncate text-xs text-text-faint">{caption}</span>
         ) : null}
       </div>
+
       {children ? (
         children
-      ) : src ? (
-        <Image
-          src={src}
+      ) : shot ? (
+        <Shot
+          src={`/marketing/shots/${shot}.png`}
           alt={alt}
           width={width}
           height={height}
           priority={priority}
-          className="h-auto w-full"
+          className="border-0"
         />
       ) : (
         <div

@@ -1,420 +1,427 @@
-import Link from "next/link";
-import { Shot } from "@/components/marketing/shot";
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import { Aurora, Wash } from "@/components/marketing/aurora";
+import { BrowserFrame } from "@/components/marketing/browser-frame";
+import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
+import { HeroAnimation } from "@/components/marketing/hero-animation";
+import { PersonaChips } from "@/components/marketing/persona-chips";
+import {
+  FeatureRow,
+  Section,
+  SectionHeader,
+} from "@/components/marketing/section";
 
-/* Small shared pieces. Kept local because they are page furniture, not product
-   components, and pulling them into components/ui would blur that line. */
+/* The page is reachable at /site on the app and preview hosts as well as at "/"
+   on the apex, so it names the apex as canonical and search never has to pick. */
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-3 text-[11.5px] font-medium uppercase tracking-[1.7px] text-accent">
-      {children}
-    </p>
-  );
-}
+/* The four phases, in the order and hues the project hub itself uses, so the
+   site previews the product's mental model rather than inventing one. Each
+   carries a second hue for the gradient tile. */
+const PHASES = [
+  {
+    hue: "indigo",
+    to: "purple",
+    name: "Plan",
+    body: "The brief, the references, and every file for the job in one library.",
+    icon: "M4 3.5h8l3 3v10H4z M12 3.5V7h3",
+  },
+  {
+    hue: "purple",
+    to: "pink",
+    name: "Visualize",
+    body: "Storyboards, shot lists, and moodboards that stay tied to the job.",
+    icon: "M3 4.5h14v11H3z M3 9h14 M8 4.5v11",
+  },
+  {
+    hue: "green",
+    to: "cyan",
+    name: "Review",
+    body: "Client approvals with pinned notes, versions, and a clear yes.",
+    icon: "M4 10.5 8 14l8-8",
+  },
+  {
+    hue: "amber",
+    to: "orange",
+    name: "Produce",
+    body: "Call sheets, crew, budget, and delivery on the same spine.",
+    icon: "M3 6.5h14v10H3z M3 6.5 6 3h8l3 3.5 M7 10h6",
+  },
+];
 
-function H2({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="max-w-[20ch] text-balance font-display text-[clamp(1.75rem,3.6vw,2.75rem)] font-extrabold leading-[1.06] tracking-[-1.4px]">
-      {children}
-    </h2>
-  );
-}
+/* The four places a job actually leaks. Named plainly, because a producer
+   recognises their own week faster than they recognise a feature list. */
+const PROBLEMS = [
+  {
+    hue: "red",
+    title: "The brief is in an email",
+    body: "The real one is the seventh reply down a thread nobody can find on shoot day.",
+  },
+  {
+    hue: "orange",
+    title: "Versions everywhere",
+    body: "v3_FINAL_final2 across Drive, a Figma link, and a WeTransfer from last Tuesday.",
+  },
+  {
+    hue: "amber",
+    title: "Approvals lost in a text",
+    body: "“Approved!” lives in a message thread. Good luck proving which cut it meant.",
+  },
+  {
+    hue: "pink",
+    title: "The money never reconciles",
+    body: "Costs land in an inbox, the budget lives in a sheet, and neither talks to the work.",
+  },
+];
 
-function Lede({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mt-4 max-w-[54ch] text-[17px] leading-relaxed text-text-muted">
-      {children}
-    </p>
-  );
-}
-
-function Tile({ hue, glyph }: { hue: string; glyph: string }) {
+function GradientTile({
+  from,
+  to,
+  path,
+}: {
+  from: string;
+  to: string;
+  path: string;
+}) {
   return (
     <span
-      className="mb-3 grid h-9 w-9 place-items-center rounded-[11px] text-[15px]"
+      className="grid h-12 w-12 shrink-0 place-items-center rounded-[13px] shadow-md"
       style={{
-        backgroundColor: `var(--h-${hue}-bg)`,
-        color: `var(--h-${hue})`,
+        background: `linear-gradient(135deg, var(--h-${from}), var(--h-${to}))`,
+        color: "var(--accent-fg)",
       }}
     >
-      {glyph}
+      <svg width="22" height="22" viewBox="0 0 20 20" aria-hidden="true">
+        <path
+          d={path}
+          stroke="currentColor"
+          strokeWidth="1.6"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     </span>
   );
 }
 
-const SCATTER = [
-  ["Gmail", "the brief"],
-  ["Figma", "the boards"],
-  ["Drive", "the references"],
-  ["Dropbox", "the cut"],
-  ["WeTransfer", "the delivery"],
-  ["Sheets", "the budget"],
-  ["Notes", "the shot list"],
-  ["WhatsApp", "the change"],
-  ["A reply-all thread", "the approval"],
-  ["FreshBooks", "the invoice"],
-  ["Hero_FINAL_v3.mov", "the file"],
-];
+function PhaseCard({
+  hue,
+  to,
+  name,
+  body,
+  icon,
+}: (typeof PHASES)[number]) {
+  return (
+    <div
+      className="group relative overflow-hidden rounded-2xl border border-border bg-surface p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+      style={{ borderTop: `3px solid var(--h-${hue})` }}
+    >
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-28 opacity-60"
+        style={{
+          background: `linear-gradient(to bottom, var(--h-${hue}-bg), transparent)`,
+        }}
+      />
+      <div className="relative">
+        <GradientTile from={hue} to={to} path={icon} />
+        <h3 className="mt-5 font-display text-xl font-bold text-text">{name}</h3>
+        <p className="mt-2.5 text-[15px] leading-relaxed text-text-muted">
+          {body}
+        </p>
+      </div>
+    </div>
+  );
+}
 
-const MODULES = [
-  ["purple", "◉", "Storyboards", "Ordered frames, scene and sound per frame"],
-  ["blue", "▣", "Shot list", "Size, type and movement, per shot"],
-  ["amber", "●", "Call sheets", "Built on the sheet, sent per person, confirmations tracked"],
-  ["green", "▲", "Crew and gear", "Roster by department, with agreed day rates"],
-  ["indigo", "■", "Budget", "Bid against actual, with the invoices behind each line"],
-  ["red", "◆", "Documents", "Permits, insurance and specs, filed from the email they arrived in"],
-];
+function FeatureCopy({
+  eyebrow,
+  title,
+  body,
+  points,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+  points: string[];
+}) {
+  return (
+    <div>
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+        {eyebrow}
+      </p>
+      <h2 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-text sm:text-5xl">
+        {title}
+      </h2>
+      <p className="mt-5 text-lg leading-relaxed text-text-muted sm:text-xl">
+        {body}
+      </p>
+      <ul className="mt-7 space-y-3.5">
+        {points.map((p) => (
+          <li key={p} className="flex gap-3 text-[15px] text-text">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              className="mt-0.5 shrink-0 text-accent"
+              aria-hidden="true"
+            >
+              <path
+                d="M4 10.5 8 14l8-8"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>{p}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export default function MarketingHome() {
   return (
     <>
-      {/* ---------------- hero ---------------- */}
-      <section className="relative overflow-hidden">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-[560px]"
-          style={{
-            background:
-              "radial-gradient(1100px 520px at 78% 0%, oklch(0.976 0.023 78), transparent 70%)",
-          }}
-        />
-        <div className="relative mx-auto max-w-[1180px] px-6 pb-4 pt-16 md:pt-24">
-          <h1 className="max-w-[15ch] text-balance font-display text-[clamp(2.5rem,6.4vw,4.6rem)] font-extrabold leading-[1.02] tracking-[-2.4px]">
-            One home for the whole job
+      {/* Hero */}
+      <Section className="pt-14 sm:pt-20" backdrop={<Aurora />}>
+        <div className="mx-auto max-w-4xl text-center">
+          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+            For production studios of every scale
+          </p>
+          <h1 className="font-display text-5xl font-extrabold leading-[1.02] tracking-[-0.02em] text-text sm:text-7xl lg:text-[5.25rem]">
+            Every job, in one place.
           </h1>
-          <p className="mt-6 max-w-[52ch] text-[clamp(1.0625rem,1.7vw,1.3125rem)] leading-[1.5]">
-            The brief, the boards, the cuts, the client feedback, the call sheet
-            and the budget. In one place, built around how a commercial job
-            actually runs.
+          <p className="mx-auto mt-7 max-w-2xl text-xl leading-relaxed text-text-muted sm:text-2xl">
+            From the first brief to the final invoice. Client approvals that do
+            not get lost, call sheets that confirm themselves, and a budget that
+            tells you what the job actually made.
           </p>
+          <PersonaChips className="mt-7" />
 
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            <Link
-              href="/signup"
-              className="rounded-[11px] bg-accent px-6 py-3.5 font-display text-[15px] font-bold text-accent-fg shadow-md transition hover:opacity-90"
-            >
-              Start free
-            </Link>
-            <a
-              href="#how"
-              className="rounded-[11px] border border-border-strong bg-surface px-6 py-3.5 font-display text-[15px] font-bold transition hover:bg-surface-2"
-            >
-              See how it works
-            </a>
-          </div>
-
-          <p className="mt-5 text-[13px] text-text-faint">
-            Built by a working commercial studio, on live jobs.
-          </p>
-
-          <div className="mt-14 md:mt-16">
-            <Shot
-              src="/marketing/shots/project-hub.png"
-              alt="A project in Studio Flows, everything on one surface"
-              width={1600}
-              height={1000}
-              priority
-              className="shadow-lg"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------- the problem ---------------- */}
-      <section className="mx-auto max-w-[1180px] px-6 py-20 md:py-28">
-        <Eyebrow>The problem</Eyebrow>
-        <H2>A job lives in eleven places</H2>
-        <Lede>And not one of them knows about the other ten.</Lede>
-
-        <ul className="mt-9 flex flex-wrap gap-2.5">
-          {SCATTER.map(([app, what]) => (
-            <li
-              key={app}
-              className="flex items-baseline gap-2 rounded-[10px] border border-border bg-surface px-3.5 py-2.5 shadow-sm"
-            >
-              <span className="text-sm font-medium">{app}</span>
-              <span className="text-[12.5px] text-text-faint">{what}</span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-10 grid gap-8 border-t border-border pt-9 md:grid-cols-3">
-          <div>
-            <h3 className="mb-1.5 font-display text-[15px] font-bold">
-              The approval nobody can find
-            </h3>
-            <p className="text-sm text-text-muted">
-              The client said yes in a reply to a forwarded thread. On Thursday,
-              when it matters, nobody can produce it.
-            </p>
-          </div>
-          <div>
-            <h3 className="mb-1.5 font-display text-[15px] font-bold">
-              The version that went out anyway
-            </h3>
-            <p className="text-sm text-text-muted">
-              v3 was approved. v2 was the one in the folder with the shortest
-              filename, and that is the one that shipped.
-            </p>
-          </div>
-          <div>
-            <h3 className="mb-1.5 font-display text-[15px] font-bold">
-              The balance that aged quietly
-            </h3>
-            <p className="text-sm text-text-muted">
-              The deposit landed, the balance did not, and nothing in the pile
-              was watching for it.
-            </p>
-          </div>
-        </div>
-
-        <p className="mt-9 max-w-[58ch] text-[17px] leading-relaxed text-text-muted">
-          None of this is a discipline problem. Producers are the most organised
-          people on a job. It is a{" "}
-          <strong className="font-medium text-text">filing</strong> problem, and
-          filing is what software is for.
-        </p>
-      </section>
-
-      {/* ---------------- client review ---------------- */}
-      <section id="review" className="border-y border-border bg-surface-2">
-        <div className="mx-auto max-w-[1180px] px-6 py-20 md:py-28">
-          <div className="grid items-center gap-12 lg:grid-cols-[1fr_1.15fr]">
-            <div>
-              <Eyebrow>Client review</Eyebrow>
-              <H2>Send a link. Your client needs no login.</H2>
-              <Lede>
-                No account, no seat to buy for someone who will use it twice.
-                They open the link and they are looking at the cut.
-              </Lede>
-              <ul className="mt-7 grid gap-3">
-                {[
-                  "Comments land on the frame, at the timecode, with markup drawn on it.",
-                  "Approve or request changes in the same place, recorded with a name and a time.",
-                  "Every round is kept, so the third conversation can see the first one.",
-                ].map((line) => (
-                  <li
-                    key={line}
-                    className="relative pl-5 text-[15px] text-text-muted"
-                  >
-                    <span className="absolute left-0 top-[9px] h-[2px] w-2.5 rounded bg-border-strong" />
-                    {line}
-                  </li>
-                ))}
-              </ul>
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <CtaButton shine />
+              <CtaButton variant="quiet" href="/#review" label="See it work" />
             </div>
-            <Shot
-              src="/marketing/shots/client-review-portal.png"
-              alt="The client review portal, comments pinned at a timecode"
-              width={1600}
-              height={1000}
-              className="shadow-lg"
-            />
+            <CtaMicrocopy />
           </div>
         </div>
-      </section>
 
-      {/* ---------------- versions ---------------- */}
-      <section className="mx-auto max-w-[1180px] px-6 py-20 md:py-28">
-        <div className="grid items-center gap-12 lg:grid-cols-[1.15fr_1fr]">
-          <Shot
-            src="/marketing/shots/project-review.png"
-            alt="Review and approvals, grouped by state"
-            width={1600}
-            height={1000}
-            className="shadow-lg lg:order-1"
-          />
-          <div className="lg:order-2">
-            <Eyebrow>Versions</Eyebrow>
-            <H2>One asset. Every version. One thread.</H2>
-            <Lede>
-              A new cut is not a new file with a longer name. It is the next
-              version of the thing you were already talking about, carrying its
-              own history of who said what.
-            </Lede>
-            <p className="mt-5 max-w-[52ch] text-[15px] text-text-muted">
-              The file called{" "}
-              <strong className="font-medium text-text">
-                Hero_FINAL_v3_ACTUAL.mov
-              </strong>{" "}
-              stops existing, because it was only ever a workaround for software
-              that could not hold a history.
-            </p>
-          </div>
+        <div className="mt-16">
+          <BrowserFrame
+            caption="studio-flows.com/r/bright-water-hero-v3"
+            alt="A client review in progress."
+          >
+            <HeroAnimation />
+          </BrowserFrame>
         </div>
-      </section>
+      </Section>
 
-      {/* ---------------- the rest of the job ---------------- */}
-      <section id="how" className="border-y border-border bg-surface-2">
-        <div className="mx-auto max-w-[1180px] px-6 py-20 md:py-28">
-          <Eyebrow>The rest of the job</Eyebrow>
-          <H2>Everything after the brief, and everything after the shoot</H2>
-          <Lede>
-            Most tools stop at the creative. A job does not, and neither does
-            the paperwork it leaves behind.
-          </Lede>
-
-          <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {MODULES.map(([hue, glyph, name, detail]) => (
-              <div
-                key={name}
-                className="rounded-[13px] border border-border bg-surface p-5"
-              >
-                <Tile hue={hue} glyph={glyph} />
-                <h3 className="text-[15px] font-medium">{name}</h3>
-                <p className="mt-1 text-[13px] leading-snug text-text-faint">
-                  {detail}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-12 grid items-center gap-12 lg:grid-cols-[1fr_1.15fr]">
-            <div>
-              <h3 className="max-w-[18ch] text-balance font-display text-[26px] font-extrabold leading-tight tracking-[-0.9px]">
-                A vendor invoice arrives by email
+      {/* The problem. Named before the product, because relief only lands on a
+          wound the reader has already recognised as theirs. */}
+      <Section tint="tinted">
+        <SectionHeader
+          eyebrow="The problem"
+          title="You are the glue holding every job together."
+          sub="A commercial job lives in a dozen places at once, and you are the only person who knows where all of them are. That is the job nobody put on the call sheet."
+        />
+        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {PROBLEMS.map((p) => (
+            <div
+              key={p.title}
+              className="rounded-2xl border border-border bg-surface p-6"
+            >
+              <span
+                className="inline-block h-1.5 w-10 rounded-pill"
+                style={{ backgroundColor: `var(--h-${p.hue})` }}
+              />
+              <h3 className="mt-4 font-display text-lg font-bold text-text">
+                {p.title}
               </h3>
-              <p className="mt-4 max-w-[50ch] text-[15px] leading-relaxed text-text-muted">
-                One click files it as a cost against the right budget line,
-                reads the amount off the PDF, and flags it if it does not match
-                the day rate you agreed. Deposits and balances are tracked
-                separately, because they are paid separately.
+              <p className="mt-2 text-[15px] leading-relaxed text-text-muted">
+                {p.body}
               </p>
             </div>
-            <Shot
-              src="/marketing/shots/project-budget.png"
-              alt="Budget, bid against actual, with the cost ledger"
-              width={1600}
-              height={1000}
-              className="shadow-lg"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------- connections ---------------- */}
-      <section className="mx-auto max-w-[1180px] px-6 py-20 md:py-28">
-        <Eyebrow>Connections</Eyebrow>
-        <H2>Organise, do not replace</H2>
-        <Lede>
-          Nobody is going to abandon Figma because a project tool asked them to.
-          Studio Flows reaches into where the work already lives and files it
-          against the job.
-        </Lede>
-
-        <ul className="mt-8 flex flex-wrap gap-2.5">
-          {[
-            ["Gmail", "threads, replies, attachments"],
-            ["Google Drive", "browse and import"],
-            ["Figma", "frames as assets"],
-            ["Slack", "channels"],
-            ["Google Chat", "spaces"],
-            ["Calendar", "two way"],
-          ].map(([name, detail]) => (
-            <li
-              key={name}
-              className="rounded-pill border border-border bg-surface px-4 py-2 text-sm font-medium"
-            >
-              {name}{" "}
-              <span className="font-normal text-[12.5px] text-text-faint">
-                {detail}
-              </span>
-            </li>
           ))}
-        </ul>
-
-        <p className="mt-8 max-w-[58ch] text-[15px] text-text-muted">
-          The test for any connection is simple: it has to remove a tool switch
-          that happens on every job. Anything else is a logo on a page.
-        </p>
-      </section>
-
-      {/* ---------------- where AI sits ---------------- */}
-      <section className="border-y border-border bg-surface-2">
-        <div className="mx-auto max-w-[1180px] px-6 py-20 md:py-28">
-          <div className="max-w-[62ch]">
-            <Eyebrow>Where AI sits</Eyebrow>
-            <H2>It proposes. You commit.</H2>
-            <Lede>
-              Ask in your own words and it reads the studio and comes back with
-              a card, not a change. Nothing is written until you press Create.
-            </Lede>
-            <p className="mt-5 max-w-[56ch] text-[15px] leading-relaxed text-text-muted">
-              That is not caution for its own sake. A model that files a cost
-              unattended will eventually file the wrong one, and a financial
-              record you did not agree to is worse than no record. The same rule
-              holds everywhere it appears: it drafts the client update, it reads
-              the invoice, it rewrites the reply. You send it.
-            </p>
-          </div>
         </div>
-      </section>
+      </Section>
 
-      {/* ---------------- why it exists ---------------- */}
-      <section id="why" className="mx-auto max-w-[1180px] px-6 py-20 md:py-28">
-        <div className="grid gap-12 lg:grid-cols-[1fr_1fr]">
-          <div>
-            <Eyebrow>Why it exists</Eyebrow>
-            <H2>Every feature came from something that went wrong</H2>
-          </div>
-          <div className="max-w-[54ch] space-y-5 text-[16px] leading-relaxed text-text-muted">
-            <p>
-              Studio Flows is built by a working commercial studio operator, and
-              used on live jobs before it is shown to anyone.
-            </p>
-            <p>
-              There is no roadmap workshop behind it. The backlog is a list of
-              things that got in the way last week: an approval that could not
-              be found, an invoice that arrived as a photograph, a crew rate a
-              freelancer should never have been able to see. When a job runs
-              clean, nothing gets built. That is the rule, and it is why the
-              product does not sprawl.
-            </p>
-            <p>
-              It is also why the interface is warm rather than white. On cold
-              white the software is the brightest thing on screen and the work
-              has to fight it. That matters when the work is the thing being
-              judged.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------- close ---------------- */}
-      <section className="relative overflow-hidden border-t border-border">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(900px 460px at 20% 100%, oklch(0.976 0.024 76), transparent 68%)",
-          }}
+      {/* The shape */}
+      <Section id="product" backdrop={<Wash hue="indigo" />}>
+        <SectionHeader
+          eyebrow="The shape of it"
+          title="Shaped like a production, because it is one."
+          sub="Not a blank board you configure into a studio. The phases of a job are the structure, and every module hangs off the same spine."
         />
-        <div className="relative mx-auto max-w-[1180px] px-6 py-24 md:py-32">
-          <h2 className="max-w-[16ch] text-balance font-display text-[clamp(2rem,5vw,3.4rem)] font-extrabold leading-[1.02] tracking-[-1.8px]">
-            Run a real job through it
-          </h2>
-          <p className="mt-5 max-w-[52ch] text-[17px] leading-relaxed">
-            Not a trial account you poke at for ten minutes. One job, brief to
-            delivery, with your real client and your real deadline. That is the
-            only test that tells either of us anything.
-          </p>
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            <Link
-              href="/signup"
-              className="rounded-[11px] bg-accent px-6 py-3.5 font-display text-[15px] font-bold text-accent-fg shadow-md transition hover:opacity-90"
-            >
-              Start free
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-[11px] border border-border-strong bg-surface px-6 py-3.5 font-display text-[15px] font-bold transition hover:bg-surface-2"
-            >
-              Sign in
-            </Link>
-          </div>
+        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {PHASES.map((p) => (
+            <PhaseCard key={p.name} {...p} />
+          ))}
         </div>
-      </section>
+      </Section>
+
+      {/* Client review: the sharpest thing the product does, so it leads. */}
+      <Section id="review" tint="tinted">
+        <FeatureRow
+          visual={
+            <BrowserFrame
+              caption="studio-flows.com/r/shared-link"
+              shot="client-review-portal"
+              hue="green"
+              alt="The client review portal: a hero frame with numbered comment pins and the comment rail beside it."
+            />
+          }
+        >
+          <FeatureCopy
+            eyebrow="Client review"
+            title="Approvals your clients will actually use."
+            body="Send a link. No login, no account, no explaining. Notes land on the frame they belong to instead of dying in an email thread."
+            points={[
+              "Pin a comment to a spot on a still, or to a moment in a cut",
+              "Draw on the frame when words are slower than a circle",
+              "Every version kept, with the notes that belong to it",
+              "Approve or request changes in one click, on the record",
+            ]}
+          />
+        </FeatureRow>
+      </Section>
+
+      {/* Shoot day. The most concrete proof that this was built on set. */}
+      <Section id="production" backdrop={<Wash hue="amber" />}>
+        <FeatureRow
+          flip
+          visual={
+            <BrowserFrame
+              caption="app.studio-flows.com/projects/bright-water/callsheet"
+              shot="project-callsheet"
+              hue="amber"
+              alt="A call sheet with per-recipient confirmed chips beside the crew roster."
+            />
+          }
+        >
+          <FeatureCopy
+            eyebrow="Shoot day"
+            title="The chasing happens without you."
+            body="Send the call sheet and the app tracks who opened it and who confirmed, then nudges the rest as the day gets close. You read a number instead of a thread."
+            points={[
+              "Per-person call sheet links with view and confirm tracking",
+              "Crew roster with positions, rates, and contacts",
+              "Storyboards and shot lists that feed the sheet, nothing retyped",
+              "Crew lunch: paste the group order link, we chase the stragglers",
+            ]}
+          />
+        </FeatureRow>
+      </Section>
+
+      {/* Money */}
+      <Section id="budget" tint="tinted">
+        <FeatureRow
+          visual={
+            <BrowserFrame
+              caption="app.studio-flows.com/projects/bright-water/budget"
+              shot="project-budget"
+              hue="blue"
+              alt="The budget page: bid against actual, the cost ledger, and the margin band."
+            />
+          }
+        >
+          <FeatureCopy
+            eyebrow="The money"
+            title="Know what the job made."
+            body="Bid against actual, with every cost backed by the invoice it came from. Not a number you typed once and cannot explain three weeks later."
+            points={[
+              "A cost ledger with the invoice attached to each line",
+              "Deposits and payment schedules, so what is owed is exact",
+              "Estimates, proposals, and invoices, signed online",
+              "Margin on the job: what you billed against what it cost",
+            ]}
+          />
+        </FeatureRow>
+      </Section>
+
+      {/* AI pipeline. Shipped, which is the point worth making loudly. */}
+      <Section id="pipeline" tint="accent" backdrop={<Wash hue="purple" />}>
+        <FeatureRow
+          flip
+          visual={
+            <BrowserFrame
+              caption="app.studio-flows.com/projects/bright-water/pipeline"
+              hue="purple"
+              alt="The AI pipeline triage view: a candidate on stage, a filmstrip of takes below, provenance in the sidebar."
+            />
+          }
+        >
+          <FeatureCopy
+            eyebrow="AI pipeline, shipped"
+            title="Made for the AI era of production."
+            body="Generation tools hand you a hundred candidates and no way to judge them. Studio Flows organizes the fan-out so picking a take takes minutes, not an afternoon."
+            points={[
+              "Triage a batch keyboard-first, star a shortlist, pick the take",
+              "Provenance on every clip: platform, model, seed, prompt",
+              "Reusable elements so a character and a look hold across shots",
+              "Send a link and let the client choose between takes",
+            ]}
+          />
+        </FeatureRow>
+      </Section>
+
+      {/* Runner */}
+      <Section>
+        <FeatureRow
+          visual={
+            <BrowserFrame
+              caption="Runner"
+              hue="cyan"
+              alt="The Runner panel proposing a change as a card, with Create and Cancel."
+            />
+          }
+        >
+          <FeatureCopy
+            eyebrow="Runner"
+            title="An assistant that never goes behind your back."
+            body="Ask it anything about the studio and it reads the real data to answer. When it wants to change something it writes a card listing every value, and waits for you to press Create."
+            points={[
+              "“What is still waiting on a client?”, answered from live data",
+              "“Which vendors are we late paying?”, with the amounts",
+              "Proposes a cost, a task, a date. Never writes on its own",
+              "Reads a supplier invoice and fills the form for you to check",
+            ]}
+          />
+        </FeatureRow>
+      </Section>
+
+      {/* Who built it */}
+      <Section tint="tinted" backdrop={<Wash hue="green" />}>
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+            Who is building it
+          </p>
+          <h2 className="font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-text sm:text-5xl">
+            Built by someone carrying the same load.
+          </h2>
+          <p className="mt-6 text-lg leading-relaxed text-text-muted sm:text-xl">
+            Fifteen years running a commercial production company: food,
+            beverage, CPG, and brand work for clients who expect it perfect and
+            yesterday. Every screen here came off a real job, and the product
+            gets used on those jobs before anyone else is offered it.
+          </p>
+        </div>
+      </Section>
+
+      {/* Final CTA */}
+      <Section className="text-center" backdrop={<Wash hue="indigo" />}>
+        <h2 className="mx-auto max-w-2xl font-display text-4xl font-extrabold leading-[1.06] tracking-tight text-text sm:text-5xl">
+          Run your next job in Studio Flows.
+        </h2>
+        <div className="mt-8 flex flex-col items-center gap-4">
+          <CtaButton shine />
+          <CtaMicrocopy />
+        </div>
+      </Section>
     </>
   );
 }
