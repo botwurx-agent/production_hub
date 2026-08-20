@@ -2,6 +2,33 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 
+/**
+ * Is this request for the APP host rather than the marketing site?
+ *
+ * Both `studio-flows.com` and `app.studio-flows.com` are served by the same
+ * deployment, so without this `/` renders the marketing page on both and
+ * somebody typing the app address lands on a sales pitch instead of their
+ * login. The marketing home keeps the apex; the `app.` subdomain is the
+ * product.
+ *
+ * Matched two ways on purpose. The configured site URL is the authoritative
+ * answer, and a leading `app.` label is the fallback so a new domain, or a
+ * deployment with the env var unset, still behaves correctly rather than
+ * quietly serving marketing at the app address.
+ */
+function isAppHost(request: NextRequest): boolean {
+  const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
+  if (!host) return false;
+  try {
+    const configured = process.env.NEXT_PUBLIC_SITE_URL;
+    if (configured && new URL(configured).hostname.toLowerCase() === host)
+      return true;
+  } catch {
+    // A malformed env var must not decide routing; fall through to the label.
+  }
+  return host.startsWith("app.");
+}
+
 const PUBLIC_PATHS = [
   // The marketing home. Safe as an exact match only: the prefix test below
   // compares against `${p}/`, which for "/" is "//" and matches nothing, so
@@ -70,6 +97,16 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+
+  // The app address is the app, not the sales page. Signed in, that is the
+  // dashboard; signed out, it is the login screen, which is what someone
+  // typing this address came for either way.
+  if (pathname === "/" && isAppHost(request)) {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/dashboard" : "/login";
+    return NextResponse.redirect(url);
+  }
+
   const isPublic = PUBLIC_PATHS.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`)
   );

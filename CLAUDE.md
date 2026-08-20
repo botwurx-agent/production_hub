@@ -1165,7 +1165,12 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations (through 0049: project_type; 0048 =
+files in supabase/migrations. THROUGH 0088. Recent: 0088 =
+call_sheet_reminders; 0087 = version_poster_path; 0086 =
+review_comment_pin_page; 0085 = project_binders; 0084 = editor_handoffs; 0083 =
+sequence_review_target; 0082 = flatten_cast_to_references; 0081 = cast_prompts;
+0080 = ai_cast_layer; 0079 = invites_require_confirmed_email; 0078 =
+asset_type_document; 0077 = agent_threads. Older (0049: project_type; 0048 =
 team_invites; 0047 =
 ai_shot_review; 0046 =
 ai_generation_prompt; 0045 =
@@ -2093,6 +2098,324 @@ you type the word "click", you are writing instruction, stop.
 - NOT built: tours that span pages (a step that navigates and resumes), which
   is a large jump in complexity for orientation content that does not need it.
 
+### PDF import: read a document, get a shot list or a storyboard — BUILT
+A client sends a treatment deck or a board as a PDF, and retyping it is the
+work this removes. Reached from the shot list and the storyboard editors.
+Tuned across three runs of the operator's REAL deck and then rebuilt twice
+against a real board, which is the lesson: synthetic pages gave false
+confidence every time.
+- PANELS COME FROM THE DOCUMENT'S OWN PLACED PICTURES, not from slicing the
+  page. lib/pdf-client.ts replays the operator list with a CTM stack to recover
+  each image's placement rectangle; lib/panels.ts turns those into panels
+  (`panelsFromImages`, painter's-order `coveredShare`/`trimAgainst` so an image
+  buried under a later one is not offered twice).
+- FURNITURE IS KEYED ON THE IMAGE OBJECT, never on position. The first version
+  keyed on position and so classified all sixteen frames of a template board as
+  a repeating logo and dropped every one of them. A logo is the SAME PICTURE on
+  most pages; a template slot is a new picture in the same place. An image with
+  no id is never furniture: keeping a logo costs one unticked panel, dropping a
+  frame costs the import.
+- CAPTIONS ARE GEOMETRY, NOT LANGUAGE (lib/captions.ts). A PDF carries a
+  coordinate for every word, so `captionFor` reads the text printed under a
+  panel (`belowRuns`) and, for a two-column board, beside it (`besideRuns`,
+  band bounded HALFWAY to the neighbouring panels so frame two's description
+  does not land in frame one's caption). `splitCaption` breaks it into
+  scene / description / sound using the board's own labels; where a board uses
+  none, the caption stays whole rather than being guessed at. The model's
+  captions remain the FALLBACK for a board whose captions are drawn into the
+  artwork.
+- SHOT-LIST SIDE, two rules that came from the real deck: a cut is identified
+  by a heading naming a DURATION, and only the beats under the longest one are
+  read (told simply to "return every list", the reader counted the :15 as
+  another list and returned three shots twice); and a supers-only script sets
+  on-screen text in CAPITALS and beats in sentence case, so case is the stated
+  separator. Visual-direction pages are asked for by name, since a deck usually
+  describes the look before it lays out the script and each of those lines is a
+  shot someone has to get. The boundary is whether the writing describes
+  something SEEN, which is what keeps strategy slides out.
+- THE CONFIRM STEP had to say what it was doing. It offered thirty-six "panels"
+  for a sixteen-frame board, most of them cropped paragraphs. An automatic
+  band-slicing fallback now keeps only slices that contain a picture (a page
+  with no placed pictures is left alone, since that is a scan where the artwork
+  IS the page; an explicit 3x3 the operator asked for is also left alone).
+  Each tile carries the frame's number and the first line of its description,
+  and the heading says "3 frames read from the file" against "9 cut by grid"
+  rather than the word "detected".
+- Verified end to end on the operator's ZELVARA board: 16 of 16 frames, every
+  shot number, voiceover and shot description in its own field.
+
+### Production documents look related to each other — BUILT
+`components/production/production-cover.tsx` is the SHARED dark cover for the
+shot list and storyboard exports (a second copy would have drifted the moment
+either changed). It reads the project's `shot_boards` row, so filling the job
+block in once on the shot list is what makes the storyboard export arrive
+dressed. Storyboard frames restyled to match how the shot list presents a shot:
+two up rather than three so a description is readable at print size, the frame
+number on the picture, captions labelled Shot / Sound / Motion in the same small
+uppercase. Bug fixed on the way: the storyboard export never forced light, so a
+producer working in dark mode printed white type onto white paper.
+
+### Confirm before an irreversible delete (components/ui/confirm.tsx) — BUILT
+A storyboard, a shot list and a call sheet all sat behind a bare x and all three
+take their children with them, with no undo to recover into (the editors
+snapshot frames WITHIN a board, so there is nothing left once the parent is
+gone). Same module-level pub/sub as the toast, one host in the app shell, so any
+client can `await confirmAction()`. window.confirm stays as the fallback when no
+host is mounted, since failing open on a delete guard is the right failure mode.
+Each prompt names the thing and counts what goes with it; the call sheet one
+says out loud that links already sent to crew will stop working.
+DELIBERATELY NOT on frame, shot and card deletes: those have working undo, and a
+prompt on a reversible action trains people to dismiss prompts.
+
+### AI pipeline: voiceover, sequence review, editor handoff (0083, 0084) — BUILT
+- VOICEOVER is a third STAGE on a shot, beside image and video (no migration:
+  stage and kind were already free text). Filing generated VO as a project asset
+  would have lost the only fact that matters, which read plays over which clip,
+  and handed twenty files against twenty clips to whoever assembles the cut.
+  AudioPanel is deliberately leaner than StagePanel (no references, no prompt
+  library, no start/end roles: a read has a line, a voice and a take you pick)
+  but shares the generation row, so provenance, cost, reject, star and pick
+  needed no second implementation. `kindForStage` replaces a video-else-image
+  ternary that would have filed audio as an image.
+- EDITOR HANDOFF (`editor_handoffs`, 0084): a token page that hands the picked
+  takes to whoever cuts. Deliberately NOT a review_link, because a review link
+  exists to collect a DECISION and carries due dates, reminders and approvals;
+  reusing it would have put handoffs in front of the overdue-review cron. LIVE
+  rather than a snapshot (operator's call), and the page states when the
+  sequence last changed. Files go out as `01_Paris-Cafe.mp4` and
+  `01_Paris-Cafe.mp3`, same stem, so the pair survives a Finder sort by name.
+  Bug caught pre-ship: the handoff found a take with a plain find() on role,
+  correct while every pick was a picture; a VO take carries the same role, so
+  without splitting by `stage !== "audio"` the editor would have been served
+  audio where the clip goes.
+- SEQUENCE REVIEW (0083 adds `sequence` to approval_target): a client who wants
+  shots rearranged is reviewing the ORDER, not any one shot, and the per-shot
+  review could never ask that. target_id is the project, like shot_list.
+- IMAGE STAGE IS ONE POOL called References (operator spotted the doubling and
+  was right): loose references in "Built from" AND candidates below were the
+  same thing, a picture put on this shot, and which becomes a frame is decided
+  by tagging Start or End, not by which box it was added to. THE VIDEO STAGE
+  KEEPS THE SPLIT and this must not be flattened for symmetry: a motion clip
+  driving a v2v generation is an INPUT and a take is an OUTPUT, so merging them
+  would put the driving clip in the running for the cut. The sequence strip now
+  skips only UNTAGGED references when picking a thumbnail, since one tagged
+  Start is exactly what it should show.
+- SCRIPT EDITOR is capped (about twenty lines) with the browser's own drag
+  handle, height remembered per browser. Capped rather than moved into a modal,
+  because the script is READ WHILE the sequence is built.
+
+### Image performance: resized copies everywhere a stored image is drawn small
+The operator reported "images take forever", and the cause was that a grid of
+postage stamps was pulling full generator output (20 to 34MB PNGs). Supabase
+Storage transforms on the fly and caches, so `signThumb` / `signThumbs`
+(lib/asset-storage.ts) sign a resized copy and the caller falls back to the
+original when resizing is unavailable. THE PATH IS LIVE ON THIS PROJECT
+(confirmed on the deployment, it is a Pro-plan feature).
+Covered: the assets library, storyboard frame grid, shot list row thumbnails,
+the asset pickers inside both editors, the moodboard canvas, the public shared
+board, the elements page, the candidate grid, the sequence strip, the triage
+filmstrip, the Start/End frame slots (a pair of 220px boxes that were pulling
+34MB each, not lazily, which was the bulk of it), the 20px element chips in
+Built from, and the loose reference row. Everything lazy.
+Board images take 1200px rather than 640, since a card can be dragged large.
+DELIBERATELY NOT CHANGED: print and export views, and the review surfaces. A
+client approving artwork is JUDGING the image; a compressed copy is the wrong
+trade in exactly those two places.
+Worth remembering: the first sweep was incomplete and the operator had to report
+it twice. When fixing a class, grep for every draw site rather than the ones you
+remember.
+
+### Elements: batch entry and vocabulary (no migration) — BUILT
+Follow-ons from the references rework, all from real use.
+- Add SEVERAL elements at once, and BY LINK in batch, without the
+  save-then-return step the operator called out ("I need to click create and
+  then add my link").
+- A bulk-added element records its handle, which is its name, since Higgsfield
+  derives it the same way.
+- A clashing handle now NAMES the element that already holds it.
+- The toolbar is two buttons instead of five.
+- WARDROBE is its own category. It used to live inside Prop, whose hint read
+  "Wardrobe, a prop, a product", which made the one continuity question the page
+  exists to answer take a hunt.
+- AUTO is retired from the picker. It means "not sorted yet", which is the
+  platform declining to insist; here the category IS the grouping, so an element
+  with no category is one in the wrong place. It stays in the list, first and
+  unpickable, because kindMeta falls back to the first entry for an unknown kind
+  and that fallback has to read as uncategorised rather than mislabel it.
+
+### Client project binder (migration 0085) — BUILT
+From the operator's producer friend: bigger clients ask to "see it all in one
+spot", and assembling that by hand costs four to six hours a job.
+THE FEATURE IS LEAVING THINGS OUT. His two examples were a director's notes
+column and a backup plan for a stunt the client never asked about, both things
+the studio holds and the client should not see. So a binder is a CHECKLIST over
+what the project already contains and the default for anything is OFF: a call
+sheet added on Friday is not in a binder shared on Monday, because nobody said
+it could.
+- Composed from the renderers that already exist (DocSurfaceView for shot list /
+  storyboards / moodboards / sequence, CallSheetDocument for call sheets). A
+  storyboard in a binder has to look like the storyboard the client approved,
+  and using the same component is the only way to guarantee that.
+- ONE renderer serves the client's page, the studio's preview and the PDF, so
+  what prints is what they were sent. Each section starts a page.
+- LIVE rather than a snapshot (same call as the editor handoff); the builder
+  says so.
+- Sharing is a SEPARATE press from creating, so a link leaking from a half-built
+  binder does not open: `loadBinderByToken` treats never-shared exactly like
+  revoked.
+- "Hide notes" BLANKS THE FIELD BEFORE RENDER rather than hiding a column in
+  CSS. A value absent from the payload cannot be recovered from view-source,
+  which is the standard for a document leaving the studio.
+- Contacts carry no day rates (they live in a studio-only side table since
+  0074), and `BinderContact` says so in the type because a binder is precisely
+  where somebody would think to add them back.
+- lib/binder.ts is pure and unit tested (unknown section defaults off, a deleted
+  one drops out instead of rendering empty, a stored order survives).
+- NOT yet run against a real project.
+
+### PDF review with pins, page by page (migration 0086) — BUILT
+A PDF fell into the portal's "everything else" branch: a preview, a flat comment
+list, one text box. Fair when a PDF meant an invoice; not fair once a director's
+storyboard started arriving as one, since a board is the thing a client most
+wants to point at. It was skipped originally because a pin is a position within
+a rendered media box and a browser's own PDF viewer cannot be measured or drawn
+over.
+- components/review/pdf-review.tsx renders each page to a CANVAS with the same
+  pdf.js the importer uses, and hands it to PinCanvas as an ordinary pinnable
+  surface. Everything the image path has (numbered pins, drawn markup, threaded
+  replies, reactions, resolve, edit/delete) comes for free.
+- `review_comments.pin_page` (0086) is the one genuinely new thing, because a
+  PDF is SEVERAL surfaces. The rail shows only the current page's comments; a
+  comment with no page (everything written before this, and anything left
+  without pinning) shows on page one rather than disappearing. Page chips carry
+  their own comment counts. Bounded on insert in both comment actions, so a page
+  number from the public portal cannot be arbitrary.
+- ZOOM RE-RENDERS, it does not stretch (Fit / 1.5x / 2x / 3x). Scaling up a
+  1400px raster gives bigger blur and answers none of the complaint, which was
+  that a client could not read the type. The cache is keyed by page AND zoom,
+  capped at eight entries, and the previous render stays on screen while the
+  sharper one is made.
+- PinCanvas's stage now uses `[justify-content:safe_center]`. A centred flex
+  item wider than its container overflows equally both ways and the left half
+  becomes unreachable, since scrolling cannot go below zero. Every pinnable
+  surface gets that, not just PDFs.
+- Wired into BOTH the client portal and the in-app ReviewModal, so the studio's
+  own review is not the poorer of the two.
+
+### PDF page-one previews in a folder (migration 0087) — BUILT
+Every grid drew a PDF as the same grey document glyph, so a folder of
+storyboards, treatments, permits and delivery specs looked like one tile
+repeated. A storyboard is a picture and should look like one in the folder.
+- NO SERVER-SIDE RASTERIZER, deliberately: one means a native dependency loaded
+  on every cold start to make a thumbnail. Page one is rendered in the BROWSER
+  with the pdf.js already loaded for the importer and the review canvas, then
+  posted back and stored (`versions.poster_path`, 0087; action
+  app/(app)/projects/[id]/poster-actions.ts). It happens ONCE PER VERSION, ever;
+  everyone after is served a ~40KB jpeg down the same path an image thumbnail
+  takes and never downloads the document.
+- The poster hangs off the VERSION, not the asset (v2 of a board has a different
+  first page), and is derived data throughout: no access of its own, never the
+  file anyone opens, clearing it costs a thumbnail rather than a document.
+- Three rules keep the one-off cost from re-creating the slow-grid problem it
+  exists to fix: nothing renders until the tile is on screen, ONE document
+  renders at a time page-wide (a module-level promise chain, or ten boards would
+  be ten simultaneous large downloads), and a file that fails is not retried in
+  that session.
+- components/projects/pdf-thumb.tsx. Its observed box must generate a real rect,
+  never `display: contents`, or it never reports as on screen.
+- Cropped to the TOP, since a page's title block identifies it and centring a
+  tall page in a 4:3 tile cuts exactly that off.
+- Wired into the assets grid and the documents list (which earns it most: a
+  column of filenames tells you nothing about which permit is which).
+
+### The asset viewer is a real window now (no migration) — BUILT
+Opening a file from an asset card used a HAND-ROLLED dialog, so it was the one
+window in the app with no Expand, no resize grip and no memory of its size. On a
+PDF that is the worst place to be missing it.
+It now uses the shared Modal, which needed three additions rather than a second
+implementation: `titleNode` (a heading that is an editable filename plus a meta
+line), `actions` (Open in new tab / Download / Delete, placed before Expand and
+Close), and `bodyClassName` (a viewer wants a stage that centres media on a
+neutral ground, not the default padded scroller). Size is remembered under
+`asset-viewer`.
+Expanding makes the DOCUMENT bigger, not the margins: the stage reads
+`useModalRoomy` and grows the media, same rule the review canvases follow.
+Handled rather than inherited: Escape while renaming cancels the rename, so the
+input stops the key before it reaches the window's Escape-to-close.
+DELIBERATE SPLIT, operator confirmed ("I like it the way it is, it gives you
+both options"): Open serves the browser's own PDF viewer (fast, text selection),
+Review serves the pinnable canvas. Do not collapse them.
+
+### Call sheet confirmations: chased automatically (migration 0088) — BUILT
+Per-recipient view/confirm tracking already existed (0038); acting on the gap was
+left entirely to the producer, on exactly the days they have least attention to
+spare.
+- `call_sheet_recipients.last_reminded_at` + `reminder_count` (0088), and a
+  daily cron at `/api/cron/callsheet-reminders` (lib/callsheet-reminders.ts,
+  second entry in vercel.json, same 15:00 UTC and same CRON_SECRET guard). Its
+  own route rather than folded into the review reminders so a failure in either
+  cannot take the other down.
+- THREE BOUNDS, because chasing crew is the fastest way to turn a helpful
+  product into an annoying one: nothing fires until the shoot is within THREE
+  DAYS (a sheet built three weeks out stays quiet), one a day at most CAPPED AT
+  TWO (after that it is a phone call), and confirming stops it instantly since
+  the query only ever sees unconfirmed rows. A sheet whose date has PASSED is
+  dropped rather than chased. Only `sent`/`confirmed` sheets, never a draft.
+- The email says "tomorrow" or "in 2 days" rather than a bare date.
+- MANUAL COUNTERPART: `remindUnconfirmed` behind a "Remind N unconfirmed" button
+  in the Send panel. It shares the same cap, so a manual chase plus the daily job
+  cannot double up on one person.
+- EMAILING A SHEET NOW MOVES IT Draft -> Sent (`markSheetSent`). Without it the
+  status only moved if someone clicked the chip, which nobody does, and the
+  reminders deliberately skip a draft, so they would silently never have fired.
+  Only ever forwards: a sheet marked Confirmed is not walked back.
+- SEEING IT, which is what breaks down at twenty people. The Send panel leads
+  with three tallies (Confirmed n/total, Viewed but not confirmed, Not opened)
+  plus filter chips, so "who has not answered" is one click. Those three are
+  genuinely different problems: someone who opened it and did not confirm is
+  probably fine, someone who never opened it may not have the link. The project
+  hub's call-sheet card carries the same confirmed count, amber until everyone is
+  in and green when they are.
+- Added the `call_sheet_recipients` foreign keys to lib/database.types.ts, which
+  the hub's embedded count needs (they were `Relationships: []`).
+
+### app.studio-flows.com is the app, studio-flows.com is the marketing site
+Both domains are served by the SAME Vercel project (along with www and the
+.vercel.app hosts), so `/` rendered the marketing page on both and someone
+typing the app address landed on a sales pitch instead of their login.
+`isAppHost` in lib/supabase/middleware.ts decides by host and, on the app host
+only, redirects `/` to `/dashboard` when signed in and `/login` when not. The
+apex and www keep the marketing home unchanged.
+Matched two ways deliberately: the hostname of NEXT_PUBLIC_SITE_URL is the
+authoritative answer, and a leading `app.` label is the fallback so a new domain
+(or a deployment with the env var unset or malformed) still behaves rather than
+quietly serving marketing at the app address. Unit-tested in the scratchpad
+including case, a port suffix, and a lookalike domain that merely CONTAINS the
+site host.
+NOTE the pre-existing inconsistency, left alone on purpose: a signed-in user
+hitting /login is sent to /projects, while the root now sends them to
+/dashboard. The dashboard is the documented home; changing the login
+destination was out of scope for this fix.
+
+### Getting information out of an archived project
+Asked by the operator, and worth recording because the answer is "it already
+works" plus one gap that was closed. Archiving is SOFT: it sets `archived_at`
+and nothing else, no rows removed, no files deleted, and there is no hard delete
+anywhere in the app on purpose. Three routes back in: the Projects page
+"Archived (n)" toggle, the client detail page (which still lists their archived
+projects, usually the fastest months later since you remember the brand before
+the job title), and Runner, whose `search` reaches archived projects and whose
+`get_project` never filtered them.
+CLOSED: `loadAgentContext` listed live projects only, so opening Runner while
+standing ON an archived project silently fell back to studio scope, which is
+exactly backwards for the case that sends someone there. The project you are on
+is now added to the list even when archived. The picker still does not offer
+archived jobs to browse, which is right: it is for the work in front of you.
+CORRECTLY EXCLUDED and not to be "fixed": archived projects stay out of the
+dashboard, the studio slate, the unpaid-invoice widget and `get_attention`.
+Their bills are still owed, they are just not what a producer is being chased
+about this week. Ask about one by name and the money still shows.
+
 ### Crew meals: the separate lunch email, automated (migration 0089) — BUILT
 Came straight off a shoot, which is the signal section 4.5 waits for. On a real
 job the call sheet carries a lunch NOTATION and a SECOND email goes out with a
@@ -2157,11 +2480,30 @@ chasing whoever ignored it. This owns everything either side of that link.
   through the existing cost flow).
 
 ### Next step
-NOTHING IS QUEUED. As of 2026-07-29 the operator has deliberately parked the
+STILL NOTHING QUEUED (reconfirmed by how the 2026-08 session ran: every item in
+it came from the operator hitting something in real use, which is the rule
+working). As of 2026-07-29 the operator has deliberately parked the
 whole proposed backlog: run real jobs, and only build when something actually
 gets in the way. That IS the project rule (section 4.5 / section 8), so do not
 open a session by proposing features off the list below. Ask what got in the
 way, or work on what is asked.
+
+UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
+- The CLIENT BINDER (0085) has never been run against a real project.
+- The SHOT LIST side of the PDF import is unverified against the ZELVARA board;
+  only the storyboard side was checked end to end.
+- The call sheet AUTO-REMINDER has not yet fired on a real shoot. The manual
+  "Remind N unconfirmed" button exercises the identical email path, so that is
+  how to test it without waiting for a shoot date.
+- RUNNER had been opened 8 times ever at last count. The week-two decision the
+  build itself set ("if it is not being opened, it stops") is still unmade. Do
+  not quietly let that lapse: either check usage and decide, or say so.
+- The marketing site is live with four dashed placeholder boxes
+  (public/marketing/shots/ is empty; scripts/capture-shots.mjs exists to fill
+  them).
+- Stewart's (the producer friend's) list still has open items: Wrapbook
+  positioning, insurance bundling, zip-code permit lookup, a mobile on-set mode,
+  a storage plan, a help desk, and Communication always open.
 
 The parked items, so they are findable WHEN friction hits (not before):
 - Review-round edges, all half-built already: due/overdue never surfaces on the
