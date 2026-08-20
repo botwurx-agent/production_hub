@@ -2359,6 +2359,24 @@ spare.
 - Added the `call_sheet_recipients` foreign keys to lib/database.types.ts, which
   the hub's embedded count needs (they were `Relationships: []`).
 
+### app.studio-flows.com is the app, studio-flows.com is the marketing site
+Both domains are served by the SAME Vercel project (along with www and the
+.vercel.app hosts), so `/` rendered the marketing page on both and someone
+typing the app address landed on a sales pitch instead of their login.
+`isAppHost` in lib/supabase/middleware.ts decides by host and, on the app host
+only, redirects `/` to `/dashboard` when signed in and `/login` when not. The
+apex and www keep the marketing home unchanged.
+Matched two ways deliberately: the hostname of NEXT_PUBLIC_SITE_URL is the
+authoritative answer, and a leading `app.` label is the fallback so a new domain
+(or a deployment with the env var unset or malformed) still behaves rather than
+quietly serving marketing at the app address. Unit-tested in the scratchpad
+including case, a port suffix, and a lookalike domain that merely CONTAINS the
+site host.
+NOTE the pre-existing inconsistency, left alone on purpose: a signed-in user
+hitting /login is sent to /projects, while the root now sends them to
+/dashboard. The dashboard is the documented home; changing the login
+destination was out of scope for this fix.
+
 ### Getting information out of an archived project
 Asked by the operator, and worth recording because the answer is "it already
 works" plus one gap that was closed. Archiving is SOFT: it sets `archived_at`
