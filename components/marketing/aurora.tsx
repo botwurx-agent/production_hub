@@ -11,6 +11,10 @@
  *
  * Every colour is a token, so this follows the theme and the accent setting
  * instead of pinning the page to one palette.
+ *
+ * The orbs drift, slowly, on four different cycles that never line up, so the
+ * blend keeps shifting without anything ever appearing to move. See the drift
+ * keyframes in marketing.css for why it is transform-only.
  */
 const ORBS = [
   { hue: "indigo", top: 60, left: 120, size: 460, opacity: 0.22, blur: 20 },
@@ -28,7 +32,7 @@ export function Aurora({ className = "" }: { className?: string }) {
         {ORBS.map((o, i) => (
           <span
             key={i}
-            className="sf-orb"
+            className={`sf-orb sf-orb-${i + 1}`}
             style={{
               top: o.top,
               left: "left" in o ? o.left : undefined,

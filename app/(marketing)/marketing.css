@@ -153,3 +153,89 @@
     opacity: 1;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Orb drift.
+
+   TRANSFORM ONLY, deliberately. These are large elements carrying a 20-24px
+   blur, and animating anything that affects layout or paint (top, left, width,
+   background) would make the browser re-blur them every frame. A transform is
+   composited on the GPU, so the blurred layer is rendered once and then simply
+   moved, which is what makes a full-screen effect affordable on a laptop.
+
+   Four cycles at 28/34/41/47 seconds, chosen to share no common multiple worth
+   noticing, so the four orbs never return to the same arrangement and the field
+   never reads as a loop. Each returns to its own origin at 100%, so there is no
+   jump at the seam.
+
+   Slow enough that nothing appears to be moving: glance away and back and the
+   colour has changed, which is the effect wanted, rather than a background that
+   competes with the headline.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-orb-1 {
+    animation: sf-drift-1 41s ease-in-out infinite;
+  }
+  .sf-orb-2 {
+    animation: sf-drift-2 34s ease-in-out infinite;
+  }
+  .sf-orb-3 {
+    animation: sf-drift-3 47s ease-in-out infinite;
+  }
+  .sf-orb-4 {
+    animation: sf-drift-4 28s ease-in-out infinite;
+  }
+}
+
+@keyframes sf-drift-1 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(46px, 30px, 0) scale(1.07);
+  }
+  66% {
+    transform: translate3d(-28px, 44px, 0) scale(0.96);
+  }
+}
+
+@keyframes sf-drift-2 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  40% {
+    transform: translate3d(-40px, 34px, 0) scale(1.05);
+  }
+  70% {
+    transform: translate3d(26px, 12px, 0) scale(0.98);
+  }
+}
+
+@keyframes sf-drift-3 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  30% {
+    transform: translate3d(34px, -26px, 0) scale(0.95);
+  }
+  65% {
+    transform: translate3d(-44px, 18px, 0) scale(1.08);
+  }
+}
+
+@keyframes sf-drift-4 {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  45% {
+    transform: translate3d(-32px, -22px, 0) scale(1.06);
+  }
+  75% {
+    transform: translate3d(22px, 30px, 0) scale(0.97);
+  }
+}
