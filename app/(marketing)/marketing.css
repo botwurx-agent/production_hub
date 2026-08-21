@@ -15,38 +15,38 @@
    a click meant for the CTA sitting above it.
    -------------------------------------------------------------------------- */
 
-/* Pinned to the top edge and left OPEN at the bottom, so the caller sets the
-   height. `inset: 0` would stretch it to the full page and quietly fight any
-   height class put on it. */
+/* The clipping window. Full width so a narrow viewport never gets a horizontal
+   scrollbar from the fixed-width field inside it, and tall enough that every
+   orb has faded to nothing before the bottom edge, so nothing is cut off with a
+   hard line. */
 .sf-aurora {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 820px;
+  height: 700px;
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
 }
 
+/* The field itself: FIXED size, centred, and pulled above the top edge so the
+   orbs' densest part sits off-screen and what you see is the falloff. Fixed
+   rather than fluid on purpose, so the orbs keep overlapping at any window
+   width; spread them out and the colour disappears. */
+.sf-aurora-field {
+  position: absolute;
+  top: -260px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1500px;
+  height: 900px;
+  opacity: 0.9;
+}
+
 .sf-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(24px);
-}
-
-/* The accent wash falling from the top edge, which is what ties the orbs
-   together into one field rather than four separate blobs. */
-.sf-aurora::after {
-  content: "";
-  position: absolute;
-  inset: -6% -2% 30% -2%;
-  background: radial-gradient(
-    ellipse at 50% 0%,
-    color-mix(in oklch, var(--accent) 24%, transparent),
-    transparent 70%
-  );
-  filter: blur(10px);
 }
 
 /* A section-level wash, softer than the hero's, for bands that need lift

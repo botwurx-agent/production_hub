@@ -57,7 +57,7 @@ export default function MarketingLayout({
           the hero sits on instead of reading as a white strip pasted on top.
           Fixed height: it is the top of the page that glows, not the whole
           scroll. */}
-      <Aurora className="h-[820px]" />
+      <Aurora />
       <SiteNav />
       <main className="relative z-10 flex-1">{children}</main>
       <SiteFooter />

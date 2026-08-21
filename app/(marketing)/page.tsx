@@ -169,7 +169,25 @@ export default function MarketingHome() {
             For production studios of every scale
           </p>
           <h1 className="font-display text-5xl font-extrabold leading-[1.02] tracking-[-0.02em] text-text sm:text-7xl lg:text-[5.25rem]">
-            Every job, in one place.
+            Every job, in{" "}
+            {/* Highlighter swash, from the comp: the phrase goes accent and a
+                rounded accent-soft bar sits behind its lower third. Behind, via
+                a negative z-index, so the type stays crisp instead of being
+                overlaid. nowrap keeps the bar from breaking across two lines. */}
+            <span className="relative whitespace-nowrap text-accent">
+              {/* Bar FIRST in the DOM and the words after it with their own
+                  stacking position, so paint order alone puts the type on top.
+                  A negative z-index would work here today and quietly break the
+                  moment an ancestor gains a stacking context, which the section
+                  wrapper already has. */}
+              <span
+                aria-hidden="true"
+                className="absolute -left-1 -right-1 bottom-[0.12em] h-[0.22em] rounded-[8px]"
+                style={{ backgroundColor: "var(--accent-soft)" }}
+              />
+              <span className="relative">one place</span>
+            </span>
+            .
           </h1>
           <p className="mx-auto mt-7 max-w-2xl text-xl leading-relaxed text-text-muted sm:text-2xl">
             From the first brief to the final invoice. Client approvals that do
