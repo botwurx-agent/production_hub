@@ -132,29 +132,76 @@ function FeatureCopy({
       <p className="mt-5 text-lg leading-relaxed text-text-muted sm:text-xl">
         {body}
       </p>
-      <ul className="mt-7 space-y-3.5">
-        {points.map((p) => (
-          <li key={p} className="flex gap-3 text-[15px] text-text">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              className="mt-0.5 shrink-0 text-accent"
-              aria-hidden="true"
-            >
-              <path
-                d="M4 10.5 8 14l8-8"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span>{p}</span>
-          </li>
-        ))}
-      </ul>
+      <PointList points={points} className="mt-7" />
+    </div>
+  );
+}
+
+/** The ticked claim list, shared by FeatureCopy and ProofColumn. */
+function PointList({
+  points,
+  className = "mt-5",
+}: {
+  points: string[];
+  className?: string;
+}) {
+  return (
+    <ul className={`space-y-3.5 ${className}`}>
+      {points.map((p) => (
+        <li key={p} className="flex gap-3 text-[15px] text-text">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            className="mt-0.5 shrink-0 text-accent"
+            aria-hidden="true"
+          >
+            <path
+              d="M4 10.5 8 14l8-8"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>{p}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * A product shot that carries its own claim, for a section making two separate
+ * promises that one frame cannot hold.
+ *
+ * The heading sits UNDER the shot on purpose: the picture is the evidence and
+ * the words are its caption, which is the opposite of FeatureRow, where the
+ * copy leads and the shot supports it.
+ */
+function ProofColumn({
+  shot,
+  caption,
+  alt,
+  hue,
+  title,
+  points,
+}: {
+  shot: string;
+  caption: string;
+  alt: string;
+  hue: string;
+  title: string;
+  points: string[];
+}) {
+  return (
+    <div>
+      <BrowserFrame shot={shot} caption={caption} alt={alt} hue={hue} />
+      <h3 className="mt-7 font-display text-2xl font-extrabold tracking-tight text-text">
+        {title}
+      </h3>
+      <PointList points={points} />
     </div>
   );
 }
@@ -314,30 +361,44 @@ export default function MarketingHome() {
         </FeatureRow>
       </Section>
 
-      {/* Money */}
+      {/* Money. Two separate promises: what the job COST and what the client is
+          BILLED. They live on different pages and neither one evidences the
+          other, so this band breaks the alternating rhythm and gives each its
+          own frame rather than cramming both into one column. */}
       <Section id="budget" tint="tinted">
-        <FeatureRow
-          visual={
-            <BrowserFrame
-              caption="app.studio-flows.com/projects/bright-water/budget"
-              shot="project-budget"
-              hue="blue"
-              alt="The budget page: bid against actual, the cost ledger, and the margin band."
-            />
-          }
-        >
-          <FeatureCopy
-            eyebrow="The money"
-            title="Know what the job made."
-            body="Bid against actual, with every cost backed by the invoice it came from. Not a number you typed once and cannot explain three weeks later."
+        <SectionHeader
+          eyebrow="The money"
+          title="Know what the job made."
+          sub="Every cost backed by the invoice it came from, every document sent from the same place. Not a number you typed once and cannot explain three weeks later."
+        />
+        <div className="mt-16 grid gap-14 lg:grid-cols-2 lg:gap-12">
+          <ProofColumn
+            shot="project-budget"
+            caption="app.studio-flows.com/projects/bright-water/budget"
+            hue="blue"
+            alt="The budget page: bid against actual, the cost ledger beneath it, and the margin band."
+            title="What it cost"
             points={[
-              "A cost ledger with the invoice attached to each line",
+              "Bid against actual, line by line",
+              "A cost ledger with the invoice attached to each entry",
               "Deposits and payment schedules, so what is owed is exact",
-              "Estimates, proposals, and invoices, signed online",
               "Margin on the job: what you billed against what it cost",
             ]}
           />
-        </FeatureRow>
+          <ProofColumn
+            shot="project-invoices"
+            caption="app.studio-flows.com/projects/bright-water/invoices"
+            hue="green"
+            alt="The document workspace: an estimate, a signed proposal, and an invoice, with the document edited in place beside them."
+            title="What you billed"
+            points={[
+              "Estimates, proposals, and invoices, in your own numbering",
+              "Proposals signed online, with the audit trail behind it",
+              "Sent as a link, an email, or a PDF",
+              "Your layout, your color, your terms",
+            ]}
+          />
+        </div>
       </Section>
 
       {/* AI pipeline. Shipped, which is the point worth making loudly. */}
