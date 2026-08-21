@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { TOOL_LOGOS } from "@/components/marketing/tool-logos";
 
 /**
- * The scattered-tools picture: a job spread across seven places, arrows drawing
+ * The scattered-tools picture: a job spread across eight places, arrows drawing
  * inward to one home.
  *
  * DRAWN AS ONE SVG SCENE rather than positioned divs with an arrow overlay.
@@ -11,48 +12,43 @@ import { useEffect, useRef, useState } from "react";
  * chips are laid out by CSS their positions are only knowable by measuring at
  * runtime. Inside a viewBox the coordinates are literal, so the whole thing
  * scales as one picture and the arrows cannot drift off their targets.
- *
- * The chips carry NAMES, not logos. Redrawing another company's mark from
- * memory produces an inaccurate imitation of a trademark and looks like one;
- * when real logo SVGs exist they slot into the same <g> without moving
- * anything. The colours are for telling seven chips apart, not brand accuracy.
  */
 
-const CX = 450;
-const CY = 236;
+const CX = 460;
+const CY = 250;
+const CHIP_W = 148;
+const CHIP_H = 46;
 
-type Tool = { name: string; hue: string; x: number; y: number };
-
-// Positioned by hand around the mark. Kept clear of the viewBox edges so a chip
-// is never clipped, and off the mark itself so no arrow has to cross a label.
-const TOOLS: Tool[] = [
-  { name: "Gmail", hue: "red", x: 128, y: 62 },
-  { name: "Slack", hue: "purple", x: 96, y: 236 },
-  { name: "Drive", hue: "cyan", x: 128, y: 410 },
-  { name: "Figma", hue: "pink", x: 772, y: 62 },
-  { name: "Dropbox", hue: "blue", x: 804, y: 236 },
-  { name: "Sheets", hue: "green", x: 772, y: 410 },
-  { name: "Notion", hue: "amber", x: 450, y: 46 },
+/** Eight points around the mark: three down each side, one top, one bottom. */
+const SLOTS: { x: number; y: number }[] = [
+  { x: 118, y: 66 },
+  { x: 86, y: 250 },
+  { x: 118, y: 434 },
+  { x: 802, y: 66 },
+  { x: 834, y: 250 },
+  { x: 802, y: 434 },
+  { x: 330, y: 500 },
+  { x: 590, y: 500 },
 ];
 
-const CHIP_W = 132;
-const CHIP_H = 44;
+const TOOLS = TOOL_LOGOS.map((logo, i) => ({ ...logo, ...SLOTS[i] }));
 
 /** Stop the arrow short of the mark so the head is not buried under it. */
-function arrowPath(t: Tool): string {
-  const fromX = t.x + (t.x < CX ? CHIP_W / 2 : t.x > CX ? -CHIP_W / 2 : 0);
-  const fromY = t.x === CX ? t.y + CHIP_H / 2 : t.y;
+function arrowPath(t: { x: number; y: number }): string {
+  const horizontal = Math.abs(t.x - CX) > Math.abs(t.y - CY);
+  const fromX = horizontal ? t.x + (t.x < CX ? CHIP_W / 2 : -CHIP_W / 2) : t.x;
+  const fromY = horizontal ? t.y : t.y + (t.y < CY ? CHIP_H / 2 : -CHIP_H / 2);
 
   const dx = CX - fromX;
   const dy = CY - fromY;
   const len = Math.hypot(dx, dy) || 1;
-  const gap = 92;
+  const gap = 96;
   const toX = CX - (dx / len) * gap;
   const toY = CY - (dy / len) * gap;
 
-  // A gentle bow, so seven straight lines do not read as a starburst.
-  const mx = (fromX + toX) / 2 + dy * 0.1;
-  const my = (fromY + toY) / 2 - dx * 0.1;
+  // A gentle bow, so eight straight lines do not read as a starburst.
+  const mx = (fromX + toX) / 2 + dy * 0.09;
+  const my = (fromY + toY) / 2 - dx * 0.09;
   return `M ${fromX} ${fromY} Q ${mx} ${my} ${toX} ${toY}`;
 }
 
@@ -72,7 +68,7 @@ export function ScatterConverge() {
       },
       // Fires once the section is properly in view rather than as its top edge
       // grazes the fold, so the drawing is not already over when you get there.
-      { threshold: 0.35 },
+      { threshold: 0.3 },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -81,10 +77,10 @@ export function ScatterConverge() {
   return (
     <div ref={ref} className={`sf-draw ${seen ? "is-in" : ""}`}>
       <svg
-        viewBox="0 0 900 472"
+        viewBox="0 0 920 546"
         className="h-auto w-full"
         role="img"
-        aria-label="A job spread across Gmail, Slack, Drive, Figma, Dropbox, Sheets and Notion, all converging on Studio Flows."
+        aria-label="A job spread across Gmail, Figma, Drive, Dropbox, Sheets, Notion, WeTransfer and WhatsApp, all converging on Studio Flows."
       >
         <defs>
           <marker
@@ -102,7 +98,7 @@ export function ScatterConverge() {
 
         {TOOLS.map((t, i) => (
           <path
-            key={`arrow-${t.name}`}
+            key={`arrow-${t.label}`}
             className="sf-arrow"
             d={arrowPath(t)}
             fill="none"
@@ -111,52 +107,63 @@ export function ScatterConverge() {
             strokeLinecap="round"
             markerEnd="url(#sf-arrowhead)"
             // Staggered so the eye follows them inward one at a time instead of
-            // seven lines snapping on together.
-            style={{ animationDelay: `${i * 90}ms` }}
+            // eight lines snapping on together.
+            style={{ animationDelay: `${i * 80}ms` }}
           />
         ))}
 
-        {TOOLS.map((t) => (
-          <g key={t.name}>
-            <rect
-              x={t.x - CHIP_W / 2}
-              y={t.y - CHIP_H / 2}
-              width={CHIP_W}
-              height={CHIP_H}
-              rx="12"
-              fill="var(--surface)"
-              stroke={`var(--h-${t.hue})`}
-              strokeWidth="1.5"
-            />
-            <circle cx={t.x - CHIP_W / 2 + 22} cy={t.y} r="7" fill={`var(--h-${t.hue})`} />
-            <text
-              x={t.x - CHIP_W / 2 + 40}
-              y={t.y + 5}
-              className="font-body"
-              fontSize="15"
-              fontWeight="600"
-              fill="var(--text)"
-            >
-              {t.name}
-            </text>
-          </g>
-        ))}
+        {TOOLS.map((t) => {
+          const left = t.x - CHIP_W / 2;
+          const top = t.y - CHIP_H / 2;
+          // Simple Icons paths are 24x24; 0.85 puts the mark at 20px inside a
+          // 46px chip, optically centred against the label.
+          const s = 0.85;
+          const iconX = left + 16;
+          const iconY = t.y - (24 * s) / 2;
+          return (
+            <g key={t.label}>
+              <rect
+                x={left}
+                y={top}
+                width={CHIP_W}
+                height={CHIP_H}
+                rx="12"
+                fill="var(--surface)"
+                stroke="var(--border-strong)"
+                strokeWidth="1"
+              />
+              <g transform={`translate(${iconX} ${iconY}) scale(${s})`}>
+                <path d={t.path} fill={t.hex} />
+              </g>
+              <text
+                x={left + 46}
+                y={t.y + 5}
+                className="font-body"
+                fontSize="15"
+                fontWeight="600"
+                fill="var(--text)"
+              >
+                {t.label}
+              </text>
+            </g>
+          );
+        })}
 
         {/* The one home everything points at. */}
         <rect
-          x={CX - 62}
-          y={CY - 62}
-          width="124"
-          height="124"
+          x={CX - 64}
+          y={CY - 64}
+          width="128"
+          height="128"
           rx="30"
           fill="var(--accent)"
         />
         <text
           x={CX}
-          y={CY + 15}
+          y={CY + 16}
           textAnchor="middle"
           className="font-display"
-          fontSize="44"
+          fontSize="46"
           fontWeight="800"
           fill="var(--accent-fg)"
         >
