@@ -209,7 +209,15 @@ implemented (out of strict order, driven by the operator's real needs).
   style PINNED comments: click the image to drop a numbered pin + matching
   comment, synced sidebar, resolve toggle (components/review/pin-review.tsx;
   review_comments gained pin_number/pos_x/pos_y/resolved_at in migration 0026;
-  actions submitClientComment(pin) + resolveClientComment). VIDEO assets get
+  actions submitClientComment(pin) + resolveClientComment). TWO COORDINATE
+  CONVENTIONS LIVE IN THE SAME ROW, which is a real trap: pos_x/pos_y are
+  PERCENT 0-100 (placePin stores ((clientX-left)/width)*100 and the pin renders
+  at left:${x}%), while a comment's `drawing` strokes are NORMALIZED 0-1 of the
+  media box (lib/review-drawing.ts clamps to 1). Write a pin as 0-1 and every
+  pin in the review collapses onto the stage's top-left corner, stacked, which
+  reads as a broken component rather than as bad data. The seeded demo comment
+  on the Bright Water pack shot had exactly that and was corrected 2026-08-21.
+  VIDEO assets get
   timecode comments (components/review/video-review.tsx): pause + comment on a
   moment, markers on a timeline, click a comment to seek; review_comments.timecode
   (migration 0027); submitClientComment takes an optional timecode. Other file
