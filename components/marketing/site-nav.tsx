@@ -13,26 +13,22 @@ const LINKS = [
  * a suite; we sell one product, and a mega menu would advertise complexity we
  * do not have.
  *
- * TRANSPARENT, not white. The aurora is rendered behind the whole top of the
- * page (see the marketing layout), so the bar picks up the same gradient the
- * hero sits on, and content scrolling underneath stays visible through the
- * blur.
+ * NO BACKGROUND AND NO BORDER, so the bar is seamless with the gradient behind
+ * it. Any tint at all, even a 62% one, reads as a lighter band across the top
+ * because the aurora underneath is not that colour.
  *
- * The translucency is an INLINE color-mix rather than `bg-surface/70`. Tailwind
+ * The backdrop-blur stays and costs nothing here: blurring a smooth gradient
+ * returns the same smooth gradient, so it is invisible at rest and only shows
+ * itself once real content scrolls underneath, which is exactly when it is
+ * wanted.
+ *
+ * Worth remembering rather than reaching for `bg-surface/70` later: Tailwind
  * compiles its opacity modifier to nothing on a var()-valued colour in this
- * setup, which is exactly how this bar ended up solid white: the /90 that was
- * here before never did anything at all. Same trap as the weekend tinting on
- * the studio slate.
+ * setup, which is how this bar was once solid white while claiming to be 90%.
  */
 export function SiteNav() {
   return (
-    <header
-      className="sticky top-0 z-40 border-b backdrop-blur-md"
-      style={{
-        backgroundColor: "color-mix(in oklch, var(--surface) 62%, transparent)",
-        borderColor: "color-mix(in oklch, var(--border) 70%, transparent)",
-      }}
-    >
+    <header className="sticky top-0 z-40 backdrop-blur-md">
       <nav className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between px-6 sm:px-10">
         <Link href="/" className="flex items-center gap-2.5">
           <span

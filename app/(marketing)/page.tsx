@@ -190,7 +190,7 @@ export default function MarketingHome() {
                 aria-hidden="true"
                 viewBox="0 0 300 60"
                 preserveAspectRatio="none"
-                className="absolute -left-[0.12em] bottom-[0.11em] h-[0.46em] w-[calc(100%+0.24em)] -rotate-[1.1deg]"
+                className="absolute -left-[0.12em] bottom-[0.015em] h-[0.4em] w-[calc(100%+0.24em)] -rotate-[1.1deg]"
                 style={{
                   // Translucent, like a real highlighter laid over type, rather
                   // than a solid block the words sit on top of.
