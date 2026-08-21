@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { Wash } from "@/components/marketing/aurora";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
-import { HeroAnimation } from "@/components/marketing/hero-animation";
 import { PersonaChips } from "@/components/marketing/persona-chips";
 import {
   FeatureRow,
@@ -11,8 +10,9 @@ import {
   SectionHeader,
 } from "@/components/marketing/section";
 
-/* The page is reachable at /site on the app and preview hosts as well as at "/"
-   on the apex, so it names the apex as canonical and search never has to pick. */
+/* The app host redirects "/" to the dashboard or login, so this page is only
+   ever the apex. Naming it canonical keeps any stray preview URL from competing
+   with the real one in search. */
 export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 /* The four phases, in the order and hues the project hub itself uses, so the
@@ -213,11 +213,11 @@ export default function MarketingHome() {
 
         <div className="mt-16">
           <BrowserFrame
-            caption="studio-flows.com/r/bright-water-hero-v3"
-            alt="A client review in progress."
-          >
-            <HeroAnimation />
-          </BrowserFrame>
+            priority
+            caption="app.studio-flows.com/projects"
+            shot="projects-board"
+            alt="The projects board: every job on one board, moving from pre-pro to delivered."
+          />
         </div>
       </Section>
 
