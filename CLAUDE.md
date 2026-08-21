@@ -2456,11 +2456,23 @@ chasing whoever ignored it. This owns everything either side of that link.
   deployment rather than reporting it. IF A PUSH EVER STOPS PRODUCING A
   DEPLOYMENT, CHECK vercel.json FIRST.
   The route (`/api/cron/meal-reminders`) is built, guarded by CRON_SECRET, and
-  works when called. It just has no driver yet. The manual half of the feature
-  is unaffected: "Save and send" and "Chase outstanding" in the panel are
-  ordinary server actions. Options for the unattended half, none chosen yet:
-  upgrade the Vercel plan, a Supabase pg_cron + pg_net job (their DB is already
-  the source of truth), or a scheduled GitHub Action curling the endpoint.
+  works when called. The manual half of the feature was never affected: "Save
+  and send" and "Chase outstanding" in the panel are ordinary server actions.
+- DRIVEN BY pg_cron INSTEAD (migration 0090). `public.run_meal_reminders()`
+  reads the bearer token from Supabase VAULT (never baked into cron.job or the
+  migration) and calls the endpoint via pg_net every 15 minutes. Chosen over a
+  GitHub Action because Actions cron routinely runs 5 to 20 minutes late, which
+  for a 10am cutoff is the difference between useful and pointless. Moving back
+  to Vercel cron after a plan upgrade is deleting the job, not a rewrite.
+  It POLLS on purpose. One exact job per round would fire precisely and idle
+  between, but every edit would have to reschedule, every delete cancel, and a
+  job missed during a deploy would never run. Fifteen minutes late beats
+  silently never, and an idle tick is one query returning no rows.
+  The function returns WITHOUT calling anything when no secret is present, so an
+  unfinished setup cannot generate a failed request every quarter hour.
+  STILL OUTSTANDING: `select vault.create_secret('<CRON_SECRET>', 'cron_secret',
+  '...')` has to be run once with the same value Vercel holds, and the route has
+  to reach production (against main it 404s today, verified through pg_net).
 - The printed call sheet gets a `meals` BLOCK (notation only, never the live
   link: a call sheet is forwarded and photographed far too widely). Existing
   sheets keep their stored layout and can add it from the palette.
