@@ -175,16 +175,30 @@ export default function MarketingHome() {
                 a negative z-index, so the type stays crisp instead of being
                 overlaid. nowrap keeps the bar from breaking across two lines. */}
             <span className="relative whitespace-nowrap text-accent">
-              {/* Bar FIRST in the DOM and the words after it with their own
-                  stacking position, so paint order alone puts the type on top.
-                  A negative z-index would work here today and quietly break the
-                  moment an ancestor gains a stacking context, which the section
-                  wrapper already has. */}
-              <span
+              {/* A marker stroke, not a rounded rectangle. The edges are uneven
+                  and the ends taper, because a highlighter never lays down a
+                  bar of even thickness, and the whole thing tilts under a
+                  degree so it does not sit dead level with the baseline.
+
+                  preserveAspectRatio="none" lets one path stretch to any phrase
+                  width. Drawn FIRST in the DOM with the words after it in their
+                  own positioned span, so paint order alone keeps the type on
+                  top: a negative z-index would work today and break the moment
+                  an ancestor gained a stacking context, and the section wrapper
+                  already has one. */}
+              <svg
                 aria-hidden="true"
-                className="absolute -left-1 -right-1 bottom-[0.12em] h-[0.22em] rounded-[8px]"
-                style={{ backgroundColor: "var(--accent-soft)" }}
-              />
+                viewBox="0 0 300 60"
+                preserveAspectRatio="none"
+                className="absolute -left-[0.12em] bottom-[0.11em] h-[0.46em] w-[calc(100%+0.24em)] -rotate-[1.1deg]"
+                style={{
+                  // Translucent, like a real highlighter laid over type, rather
+                  // than a solid block the words sit on top of.
+                  fill: "color-mix(in oklch, var(--accent) 30%, transparent)",
+                }}
+              >
+                <path d="M4 34 C60 19 102 13 150 13 C199 13 251 18 296 24 L296 43 C250 38 199 36 150 36 C101 36 55 45 4 53 Z" />
+              </svg>
               <span className="relative">one place</span>
             </span>
             .

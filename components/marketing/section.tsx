@@ -22,12 +22,18 @@ export function Section({
 }) {
   // Tinted bands carry a soft vertical gradient rather than one flat fill, so a
   // long scroll has some depth instead of reading as alternating grey slabs.
+  //
+  // A PLAIN section paints NOTHING. It used to fill bg-bg, which is opaque, and
+  // the aurora sits behind the whole top of the page: an opaque hero was
+  // covering the entire gradient field, leaving only the strip visible behind
+  // the translucent nav. The layout wrapper already provides the page ground,
+  // so there is nothing for a plain band to add except a lid.
   const bg =
     tint === "tinted"
       ? "bg-gradient-to-b from-surface-2 via-surface-2 to-bg"
       : tint === "accent"
         ? "bg-gradient-to-b from-accent-soft via-accent-soft to-bg"
-        : "bg-bg";
+        : "";
   return (
     <section
       id={id}
