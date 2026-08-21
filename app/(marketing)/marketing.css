@@ -26,9 +26,15 @@
    a click meant for the CTA sitting above it.
    -------------------------------------------------------------------------- */
 
+/* Pinned to the top edge and left OPEN at the bottom, so the caller sets the
+   height. `inset: 0` would stretch it to the full page and quietly fight any
+   height class put on it. */
 .sf-aurora {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 820px;
   overflow: hidden;
   pointer-events: none;
   z-index: 0;

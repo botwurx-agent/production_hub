@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Aurora, Wash } from "@/components/marketing/aurora";
+import { Wash } from "@/components/marketing/aurora";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
 import { HeroAnimation } from "@/components/marketing/hero-animation";
@@ -187,7 +187,7 @@ export default function MarketingHome() {
   return (
     <>
       {/* Hero */}
-      <Section className="pt-14 sm:pt-20" backdrop={<Aurora />}>
+      <Section className="pt-14 sm:pt-20">
         <div className="mx-auto max-w-4xl text-center">
           <p className="mb-5 text-xs font-semibold uppercase tracking-[0.16em] text-accent">
             For production studios of every scale

@@ -16,9 +16,9 @@ const ORBS = [
   { hue: "orange", top: "34%", right: "4%", size: "26vw", max: 380, opacity: 0.15 },
 ] as const;
 
-export function Aurora() {
+export function Aurora({ className = "" }: { className?: string }) {
   return (
-    <div className="sf-aurora" aria-hidden="true">
+    <div className={`sf-aurora ${className}`} aria-hidden="true">
       {ORBS.map((o, i) => (
         <span
           key={i}

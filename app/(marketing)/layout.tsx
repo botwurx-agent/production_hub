@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Aurora } from "@/components/marketing/aurora";
 import { SiteNav } from "@/components/marketing/site-nav";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import "./marketing.css";
@@ -49,10 +50,16 @@ export default function MarketingLayout({
     <div
       data-theme="light"
       data-accent="indigo"
-      className="flex min-h-screen flex-col bg-bg font-body text-text"
+      className="relative flex min-h-screen flex-col bg-bg font-body text-text"
     >
+      {/* The gradient field lives HERE rather than inside the hero so it spans
+          the nav as well. The bar is translucent, so it picks up the same wash
+          the hero sits on instead of reading as a white strip pasted on top.
+          Fixed height: it is the top of the page that glows, not the whole
+          scroll. */}
+      <Aurora className="h-[820px]" />
       <SiteNav />
-      <main className="flex-1">{children}</main>
+      <main className="relative z-10 flex-1">{children}</main>
       <SiteFooter />
     </div>
   );
