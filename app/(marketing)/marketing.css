@@ -111,3 +111,45 @@
     transform: translateX(340%) skewX(-14deg);
   }
 }
+
+/* --------------------------------------------------------------------------
+   Scattered tools converging on the mark: the arrows draw themselves once, as
+   the section comes into view, then rest.
+
+   The dasharray is a flat 1000 rather than each path's measured length, so the
+   drawing needs no runtime measurement. Every path here is shorter than that,
+   which costs a little evenness in the wipe and buys not having to measure
+   seven curves on the client.
+
+   Base state is FULLY DRAWN, and the animation only exists under
+   no-preference, so a visitor who asked for reduced motion gets the finished
+   picture rather than seven invisible lines.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-draw .sf-arrow {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    /* The head belongs to the line, so it should not sit at the destination
+       before the line has arrived. */
+    opacity: 0;
+  }
+
+  .sf-draw.is-in .sf-arrow {
+    animation: sf-draw 900ms ease-out forwards;
+  }
+}
+
+@keyframes sf-draw {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}

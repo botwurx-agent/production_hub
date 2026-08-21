@@ -4,6 +4,7 @@ import { Wash } from "@/components/marketing/aurora";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
 import { PersonaChips } from "@/components/marketing/persona-chips";
+import { ScatterConverge } from "@/components/marketing/scatter-converge";
 import {
   FeatureRow,
   Section,
@@ -46,31 +47,6 @@ const PHASES = [
     name: "Produce",
     body: "Call sheets, crew, budget, and delivery on the same spine.",
     icon: "M3 6.5h14v10H3z M3 6.5 6 3h8l3 3.5 M7 10h6",
-  },
-];
-
-/* The four places a job actually leaks. Named plainly, because a producer
-   recognises their own week faster than they recognise a feature list. */
-const PROBLEMS = [
-  {
-    hue: "red",
-    title: "The brief is in an email",
-    body: "The real one is the seventh reply down a thread nobody can find on shoot day.",
-  },
-  {
-    hue: "orange",
-    title: "Versions everywhere",
-    body: "v3_FINAL_final2 across Drive, a Figma link, and a WeTransfer from last Tuesday.",
-  },
-  {
-    hue: "amber",
-    title: "Approvals lost in a text",
-    body: "“Approved!” lives in a message thread. Good luck proving which cut it meant.",
-  },
-  {
-    hue: "pink",
-    title: "The money never reconciles",
-    body: "Costs land in an inbox, the budget lives in a sheet, and neither talks to the work.",
   },
 ];
 
@@ -222,32 +198,21 @@ export default function MarketingHome() {
       </Section>
 
       {/* The problem. Named before the product, because relief only lands on a
-          wound the reader has already recognised as theirs. */}
+          wound the reader has already recognised as theirs. The picture does
+          the arguing; the copy just says what you are looking at. */}
       <Section tint="tinted">
         <SectionHeader
           eyebrow="The problem"
-          title="You are the glue holding every job together."
-          sub="A commercial job lives in a dozen places at once, and you are the only person who knows where all of them are. That is the job nobody put on the call sheet."
+          title="A job lives in seven places at once."
+          sub="The brief is in email, the boards are in Figma, the cut is on a link someone sent last Tuesday, and the approval is in a text message. You are the only person who knows where all of it is."
         />
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {PROBLEMS.map((p) => (
-            <div
-              key={p.title}
-              className="rounded-2xl border border-border bg-surface p-6"
-            >
-              <span
-                className="inline-block h-1.5 w-10 rounded-pill"
-                style={{ backgroundColor: `var(--h-${p.hue})` }}
-              />
-              <h3 className="mt-4 font-display text-lg font-bold text-text">
-                {p.title}
-              </h3>
-              <p className="mt-2 text-[15px] leading-relaxed text-text-muted">
-                {p.body}
-              </p>
-            </div>
-          ))}
+        <div className="mx-auto mt-14 max-w-5xl">
+          <ScatterConverge />
         </div>
+        <p className="mx-auto mt-10 max-w-2xl text-center text-lg leading-relaxed text-text-muted">
+          Studio Flows pulls the job into one home, and keeps talking to the
+          tools your team already works in. Nobody has to stop using anything.
+        </p>
       </Section>
 
       {/* The shape */}
