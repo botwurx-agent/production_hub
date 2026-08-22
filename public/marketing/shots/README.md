@@ -15,7 +15,26 @@ missing, so a gap is obvious rather than silent (see components/marketing/shot.t
 | `projects-board.png` | under the hero |
 | `client-review-portal.png` | Client review section |
 | `project-callsheet.png` | Shoot day section |
-| `project-budget.png` | The money section |
+| `project-budget.png` | The money section, left column |
+| `project-invoices.png` | The money section, right column |
+| `project-pipeline.png` | AI pipeline section |
+| `runner-panel.png` | Runner section |
+
+Two of those are not a plain page load, so a capture script cannot get them on
+its own and they are taken by hand:
+
+- `runner-panel.png` needs Runner open with a PROPOSAL CARD on screen, since
+  the section's claim is that it asks before it writes. An answer without a
+  card does not make that argument. Stand on a project so the panel's
+  selector names it, and press Cancel afterwards, or the write lands in the
+  demo and the budget shot above stops matching.
+- `project-pipeline.png` needs a project with real generations in it.
+
+## Size
+
+Do not bother optimizing these. They are served through `next/image`, which
+resizes and re-encodes to AVIF or WebP per request, so a 3000px retina capture
+costs a visitor about 10-30KB. Export at whatever your screen gives you.
 
 ## Capturing them
 
@@ -23,9 +42,9 @@ missing, so a gap is obvious rather than silent (see components/marketing/shot.t
     npm run shots    # another
 
 That signs in as the demo studio and writes every screen in
-scripts/capture-shots.mjs here at 2x, which is more than the four above. Re-run
-it whenever the UI changes: the point of a script rather than hand-taken images
-is that the site cannot drift away from the product.
+scripts/capture-shots.mjs here at 2x. Re-run it whenever the UI changes: the
+point of a script rather than hand-taken images is that the site cannot drift
+away from the product. It does not cover the two hand-taken shots above.
 
 **Capture from the DEMO studio, not a real one.** Northline Studio exists so
 these images carry invented client names; a screenshot of live work publishes
