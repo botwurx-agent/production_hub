@@ -54,10 +54,14 @@ export function BrowserFrame({
         ? "sf-settle-once"
         : "";
   return (
+    // `relative` anchors the light sweep, and `overflow-clip` masks the
+    // screenshot while it is still overscaled. Clip rather than hidden for the
+    // same reason as Section: hidden would make this a scroll container and
+    // strand the inner media's view() timeline.
     <figure
-      className={`overflow-hidden rounded-2xl border border-border bg-surface shadow-lg ${move}`}
+      className={`relative overflow-clip rounded-2xl border border-border bg-surface shadow-lg ${move}`}
     >
-      <div className="flex items-center gap-1.5 border-b border-border bg-surface-2 px-4 py-3">
+      <div className="sf-frame-chrome flex items-center gap-1.5 border-b border-border bg-surface-2 px-4 py-3">
         <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
         <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
         <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
@@ -76,7 +80,7 @@ export function BrowserFrame({
           height={height}
           priority={priority}
           sizes={sizes}
-          className="border-0"
+          className="sf-frame-media border-0"
         />
       ) : (
         <div

@@ -176,7 +176,51 @@
    somewhere TO its resting state. Same for a reader who asked for reduced
    motion. That is the same rule the arrow-draw above follows: never animate
    IN a base state that a fallback cannot reach.
+
+   THREE LAYERS, NOT ONE MOVE, and this is what separates it from a stock
+   fade-up. The parts of a frame arrive at different rates, which is the only
+   way a flat rectangle reads as having depth:
+
+     1. THE WINDOW hinges up and un-tilts.
+     2. THE SCREENSHOT inside it starts overscaled and eases down to 1, over a
+        LONGER range, so it settles INTO the window instead of travelling with
+        it. Two speeds inside one object is the whole trick; it is the same
+        reason a parallax background works.
+     3. THE GLASS catches a light sweep across the middle of the move, sharing
+        its shape with the CTA's shine so the page has one idea about light.
+
+   The chrome bar leads the screenshot by a hair, so the window opens and then
+   paints rather than appearing whole.
+
+   RANGES ARE IN `cover`, NOT `entry`. The entry phase ends the moment an
+   element is fully on screen, which for a big frame is a short scroll and made
+   the first version flash past before you could see it. `cover` spans the
+   element's entire passage through the viewport, so a percentage of it buys
+   real scrolling distance: these now take roughly 40% of that passage, and the
+   shot is still settling as it reaches the middle of the screen.
    -------------------------------------------------------------------------- */
+
+/* The light band itself. Rests at opacity 0 and is only ever revealed by an
+   animation, so where nothing animates it costs a pseudo-element and shows
+   nothing. Clipped to the frame's rounded corners by its overflow-clip. */
+.sf-reveal::after,
+.sf-settle-once::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.55) 50%,
+    transparent 100%
+  );
+}
 
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
@@ -185,19 +229,46 @@
       transform-origin: 50% 100%;
       animation: sf-settle linear both;
       animation-timeline: view();
-      /* Finishes before the shot is fully in view: a reveal still completing
-         once you are reading it draws attention to itself. */
-      animation-range: entry 10% entry 70%;
+      animation-range: cover 6% cover 46%;
+    }
+
+    .sf-reveal .sf-frame-chrome {
+      animation: sf-chrome linear both;
+      animation-timeline: view();
+      animation-range: cover 6% cover 30%;
+    }
+
+    /* Deliberately outlasts the window it sits in. */
+    .sf-reveal .sf-frame-media {
+      animation: sf-media linear both;
+      animation-timeline: view();
+      animation-range: cover 6% cover 62%;
+    }
+
+    .sf-reveal::after {
+      animation: sf-glass linear both;
+      animation-timeline: view();
+      animation-range: cover 18% cover 48%;
     }
   }
 
   /* The hero is already on screen at load, so a scroll timeline would never
-     start it. It gets the same move as a one-shot instead. The long ease is a
+     start it. It gets the same three layers as one-shots instead, with the
+     same stagger expressed as duration and delay. The long ease is a
      decelerate curve: it arrives fast and settles slowly, which is what makes
      it read as weight rather than as a slide. */
   .sf-settle-once {
     transform-origin: 50% 100%;
-    animation: sf-settle 1150ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+    animation: sf-settle 1250ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+  }
+  .sf-settle-once .sf-frame-chrome {
+    animation: sf-chrome 700ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+  }
+  .sf-settle-once .sf-frame-media {
+    animation: sf-media 1700ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+  }
+  .sf-settle-once::after {
+    animation: sf-glass 1100ms ease-in-out 620ms both;
   }
 }
 
@@ -207,12 +278,53 @@
     /* perspective() lives on the element rather than the parent so nothing has
        to know about a 3D context it did not ask for. 1400px is shallow enough
        that the tilt reads as depth and not as a fairground mirror. */
-    transform: perspective(1400px) translate3d(0, 42px, 0) rotateX(7deg)
-      scale(0.972);
+    transform: perspective(1400px) translate3d(0, 54px, 0) rotateX(9deg)
+      scale(0.962);
   }
   to {
     opacity: 1;
     transform: perspective(1400px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+  }
+}
+
+/* The window's title bar, a step ahead of what it contains. */
+@keyframes sf-chrome {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Scale only: any translate here would fight the window's own movement rather
+   than lag behind it. Clipped by the figure, which is why that has to be
+   overflow-clip and not visible. */
+@keyframes sf-media {
+  from {
+    transform: scale(1.085);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Light travelling across the glass. Same skewed band as .sf-shine on the CTA,
+   at a third of the strength, because this crosses a screenshot someone is
+   trying to read rather than a button. */
+@keyframes sf-glass {
+  from {
+    opacity: 0;
+    transform: translateX(-130%) skewX(-14deg);
+  }
+  35% {
+    opacity: 0.28;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(240%) skewX(-14deg);
   }
 }
 
