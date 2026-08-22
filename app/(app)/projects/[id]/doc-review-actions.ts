@@ -21,6 +21,7 @@ const NOUN: Record<DocKind, string> = {
   moodboard: "moodboard",
   ai_shot: "shot",
   sequence: "sequence",
+  props: "props",
 };
 
 // Confirms the target belongs to this project (and, via RLS, this studio).
@@ -30,7 +31,12 @@ async function targetInProject(
   kind: DocKind,
   targetId: string
 ): Promise<boolean> {
-  if (kind === "shot_list") {
+  // Project-scoped surfaces: there is one shot list, one sequence and one prop
+  // list per project, so target_id IS the project id and the check is simply
+  // that the project is reachable. Anything not listed here falls through to
+  // the boards lookup below, which is right for storyboards and moodboards and
+  // wrong for these.
+  if (kind === "shot_list" || kind === "sequence" || kind === "props") {
     if (targetId !== projectId) return false;
     const { data } = await supabase
       .from("projects")

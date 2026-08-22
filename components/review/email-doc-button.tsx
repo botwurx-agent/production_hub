@@ -4,13 +4,14 @@ import { useState } from "react";
 import { SendDocEmailModal } from "@/components/production/send-doc-email-modal";
 import { emailDocReviewLink } from "@/app/(app)/projects/[id]/share-actions";
 
-type DocKind = "shot_list" | "storyboard" | "moodboard" | "ai_shot";
+type DocKind = "shot_list" | "storyboard" | "moodboard" | "props" | "ai_shot";
 
 const NOUN: Record<DocKind, string> = {
   shot_list: "shot list",
   storyboard: "storyboard",
   moodboard: "moodboard",
   ai_shot: "shot",
+  props: "props",
 };
 
 // "Email" delivery for a doc surface: emails the client the /r review link,

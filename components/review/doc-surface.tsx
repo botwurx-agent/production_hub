@@ -14,7 +14,104 @@ export function DocSurfaceView({ surface }: { surface: DocSurface }) {
   if (surface.kind === "storyboard") return <StoryboardSurface surface={surface} />;
   if (surface.kind === "ai_shot") return <AiShotSurface surface={surface} />;
   if (surface.kind === "sequence") return <SequenceSurface surface={surface} />;
+  if (surface.kind === "props") return <PropsSurface surface={surface} />;
   return <MoodboardSurface surface={surface} />;
+}
+
+/**
+ * Props and the options being chosen between.
+ *
+ * Options run ACROSS in a numbered row per prop, because the question is
+ * "which of these", and stacking them would turn a comparison into a scroll.
+ * Each carries its number in the corner so a comment can say "option 2" and
+ * mean something, which is the whole point of sending this.
+ *
+ * The studio's pick is marked and deliberately not privileged in the layout:
+ * the reason to send this out is that somebody else may disagree, and putting
+ * the pick first would ask the leading question.
+ */
+function PropsSurface({
+  surface,
+}: {
+  surface: Extract<DocSurface, { kind: "props" }>;
+}) {
+  return (
+    <div className="space-y-5 bg-surface p-5">
+      {surface.items.map((p) => (
+        <div key={p.id} className="border-b border-border pb-5 last:border-0 last:pb-0">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h3 className="font-display text-base font-bold text-text">{p.name}</h3>
+            {p.category && (
+              <span className={`${shotChip} bg-surface-2 text-text-muted`}>
+                {p.category}
+              </span>
+            )}
+            <span className="text-xs text-text-faint">
+              {p.qty > 1 ? `${p.qty} needed` : "1 needed"}
+            </span>
+          </div>
+          {p.notes && (
+            <p className="mt-1 max-w-2xl text-[13px] leading-snug text-text-muted">
+              {p.notes}
+            </p>
+          )}
+
+          {p.options.length === 0 ? (
+            <p className="mt-2 text-xs text-text-faint">No options yet.</p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {p.options.map((o, i) => (
+                <figure
+                  key={o.id}
+                  className="overflow-hidden rounded-[12px] border"
+                  style={{
+                    borderColor: o.isPicked ? "var(--h-green)" : "var(--border)",
+                  }}
+                >
+                  <div className="relative grid aspect-[4/3] place-items-center bg-surface-2 text-[11px] text-text-faint">
+                    {o.signedUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={o.signedUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      "No photo"
+                    )}
+                    <span className="absolute left-1.5 top-1.5 rounded-pill bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {i + 1}
+                    </span>
+                    {o.isPicked && (
+                      <span
+                        className="absolute right-1.5 top-1.5 rounded-pill px-1.5 py-0.5 text-[10px] font-bold"
+                        style={{ backgroundColor: "var(--h-green)", color: "#fff" }}
+                      >
+                        Our pick
+                      </span>
+                    )}
+                  </div>
+                  <figcaption className="p-2">
+                    <p className="truncate text-[12px] font-semibold text-text">
+                      {o.name || `Option ${i + 1}`}
+                    </p>
+                    {o.source && (
+                      <p className="truncate text-[11px] text-text-faint">{o.source}</p>
+                    )}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      {surface.items.length === 0 && (
+        <p className="py-10 text-center text-sm text-text-faint">
+          No props on this project yet.
+        </p>
+      )}
+    </div>
+  );
 }
 
 /**

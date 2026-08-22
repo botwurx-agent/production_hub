@@ -32,6 +32,7 @@ const KIND_FALLBACK: Record<DocKind, string> = {
   moodboard: "Moodboard",
   ai_shot: "Shot",
   sequence: "Sequence",
+  props: "Props",
 };
 
 // All docs in review for a project, with the counts the Review card shows.

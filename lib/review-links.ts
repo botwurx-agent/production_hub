@@ -212,7 +212,8 @@ export type DocKind =
   | "storyboard"
   | "moodboard"
   | "ai_shot"
-  | "sequence";
+  | "sequence"
+  | "props";
 
 export function isDocKind(v: string | null | undefined): v is DocKind {
   return (
@@ -220,7 +221,8 @@ export function isDocKind(v: string | null | undefined): v is DocKind {
     v === "storyboard" ||
     v === "moodboard" ||
     v === "ai_shot" ||
-    v === "sequence"
+    v === "sequence" ||
+    v === "props"
   );
 }
 
@@ -273,6 +275,26 @@ export type DocShotMedia = {
   model: string | null;
 };
 
+/** One candidate on a prop, as the client sees it. */
+export type DocPropOption = {
+  id: string;
+  name: string | null;
+  source: string | null;
+  notes: string | null;
+  url: string | null;
+  signedUrl: string | null;
+  isPicked: boolean;
+};
+
+export type DocPropItem = {
+  id: string;
+  name: string;
+  category: string | null;
+  qty: number;
+  notes: string | null;
+  options: DocPropOption[];
+};
+
 export type DocSurface =
   | {
       kind: "shot_list";
@@ -297,6 +319,16 @@ export type DocSurface =
        */
       kind: "sequence";
       shots: DocSequenceShot[];
+    }
+  | {
+      /**
+       * Every prop with the options being chosen between, so a client can point
+       * at the third glass rather than describing it. The studio's pick is
+       * marked but not enforced: the whole reason to send this is that somebody
+       * else gets to disagree with it.
+       */
+      kind: "props";
+      items: DocPropItem[];
     };
 
 export type DocSequenceShot = {
@@ -410,6 +442,70 @@ export async function loadDocSurface(
       },
       docTitle: board?.title || "Shot list",
     };
+  }
+
+  if (kind === "props") {
+    // target_id = the project. A project has one prop list, the same way it has
+    // one shot list, so the whole thing goes out for approval in one link
+    // rather than a link per glass.
+    const { data: rows } = await client
+      .from("props")
+      .select(
+        "id, name, category, qty, notes, picked_option_id, options:prop_options(id, name, source, notes, url, storage_path, position)"
+      )
+      .eq("project_id", targetId)
+      .order("position", { ascending: true });
+
+    type RawOption = {
+      id: string;
+      name: string | null;
+      source: string | null;
+      notes: string | null;
+      url: string | null;
+      storage_path: string | null;
+      position: number;
+    };
+    const raw = (rows ?? []) as unknown as {
+      id: string;
+      name: string;
+      category: string | null;
+      qty: number;
+      notes: string | null;
+      picked_option_id: string | null;
+      options: RawOption[];
+    }[];
+
+    const signed = await signPaths(
+      client,
+      raw.flatMap((p) =>
+        (p.options ?? []).map((o) => o.storage_path).filter((x): x is string => Boolean(x))
+      )
+    );
+
+    const items: DocPropItem[] = raw.map((p) => ({
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      qty: p.qty,
+      notes: p.notes,
+      options: [...(p.options ?? [])]
+        // Embedded selects carry no order guarantee, so "Option 2" would
+        // otherwise mean a different glass between two loads. On a surface
+        // whose entire purpose is a client saying "the second one", that is
+        // not cosmetic.
+        .sort((a, b) => a.position - b.position)
+        .map((o) => ({
+          id: o.id,
+          name: o.name,
+          source: o.source,
+          notes: o.notes,
+          url: o.url,
+          signedUrl: o.storage_path ? signed.get(o.storage_path) ?? null : null,
+          isPicked: p.picked_option_id === o.id,
+        })),
+    }));
+
+    return { surface: { kind: "props", items }, docTitle: "Props" };
   }
 
   if (kind === "sequence") {

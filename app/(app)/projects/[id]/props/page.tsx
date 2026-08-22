@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { signThumbs } from "@/lib/asset-storage";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
+import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import {
   PropsWorkspace,
   type OptionUrls,
@@ -26,7 +27,7 @@ export default async function ProjectPropsPage({
 
   // Options come back embedded rather than as a second query, so the page is
   // one round trip however many props there are.
-  const [{ data: rows }, { data: vendorRows }] = await Promise.all([
+  const [{ data: rows }, { data: vendorRows }, { data: docReview }] = await Promise.all([
     supabase
       .from("props")
       .select(
@@ -40,6 +41,15 @@ export default async function ProjectPropsPage({
       .eq("project_id", project.id)
       .eq("type", "vendor")
       .order("name", { ascending: true }),
+    // target_id is the project, like the shot list: one prop list per job, so
+    // the whole thing goes out in one link rather than a link per glass.
+    supabase
+      .from("doc_reviews")
+      .select("id")
+      .eq("project_id", project.id)
+      .eq("target_type", "props")
+      .eq("target_id", project.id)
+      .maybeSingle(),
   ]);
 
   const props: Prop[] = (rows ?? []).map((r) => {
@@ -85,6 +95,14 @@ export default async function ProjectPropsPage({
             <path d="M3 8.5v7L12 20l9-4.5v-7" />
             <path d="M12 13v7" />
           </svg>
+        }
+        action={
+          <SendToReviewButton
+            projectId={project.id}
+            kind="props"
+            targetId={project.id}
+            inReview={Boolean(docReview)}
+          />
         }
       />
       <PropsWorkspace

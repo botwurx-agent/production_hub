@@ -23,6 +23,7 @@ const KIND_LABEL: Record<string, string> = {
   shot_list: "shot list",
   storyboard: "storyboard",
   moodboard: "moodboard",
+  props: "props",
   ai_shot: "shot",
   sequence: "sequence",
 };

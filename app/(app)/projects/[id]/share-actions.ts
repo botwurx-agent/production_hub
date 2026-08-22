@@ -69,14 +69,17 @@ export async function createReviewLink(
 // (target = boards.id). Verifies the target belongs to this project + studio.
 export async function createDocReviewLink(
   projectId: string,
-  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot" | "sequence",
+  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot" | "sequence" | "props",
   targetId: string
 ): Promise<{ token: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
 
-  if (kind === "shot_list" || kind === "sequence") {
-    // Both belong to the project itself: one shot list, one sequence.
+  if (kind === "shot_list" || kind === "sequence" || kind === "props") {
+    // All three belong to the project itself: one shot list, one sequence, one
+    // prop list. Anything not named here falls to the boards lookup at the
+    // bottom, which is right for storyboards and moodboards and silently wrong
+    // for these, since no board row will ever match.
     if (targetId !== projectId) return { error: "Invalid target." };
     const { data: project } = await supabase
       .from("projects")
@@ -133,7 +136,7 @@ export async function createDocReviewLink(
 // creates or reuses the /r/<token> link, then sends it. Gated on emailConfigured().
 export async function emailDocReviewLink(
   projectId: string,
-  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot" | "sequence",
+  kind: "shot_list" | "storyboard" | "moodboard" | "ai_shot" | "sequence" | "props",
   targetId: string,
   input: { to: string; subject: string; message?: string; dueDate?: string }
 ): Promise<{ ok: true } | { error: string }> {

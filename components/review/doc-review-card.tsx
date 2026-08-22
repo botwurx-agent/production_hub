@@ -9,6 +9,19 @@ import { DocReviewModal } from "@/components/review/doc-review-modal";
 import { removeDocFromReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 import type { DocReviewSummary } from "@/lib/doc-review-data";
 
+const PROPS_ENTRY = {
+  label: "Props",
+  hue: "pink",
+  href: (p: string) => `/projects/${p}/props`,
+  icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 8.5 12 4l9 4.5-9 4.5z" />
+      <path d="M3 8.5v7L12 20l9-4.5v-7" />
+      <path d="M12 13v7" />
+    </svg>
+  ),
+};
+
 const KIND: Record<
   DocReviewSummary["kind"],
   { label: string; hue: string; href: (p: string) => string; icon: React.ReactNode }
@@ -71,6 +84,7 @@ const KIND: Record<
       </svg>
     ),
   },
+  props: PROPS_ENTRY,
 };
 
 export function DocReviewCard({

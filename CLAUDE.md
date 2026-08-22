@@ -1173,7 +1173,8 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0091. Recent: 0091 =
+files in supabase/migrations. THROUGH 0092. Recent: 0092 = props
+(+ prop_options, + approval_target 'props'); 0091 =
 contact_profiles (+ contact_files, + call_sheet_recipients.contact_id); 0090 =
 meal_reminder_schedule; 0089 = meal_rounds; 0088 =
 call_sheet_reminders; 0087 = version_poster_path; 0086 =
@@ -2473,6 +2474,49 @@ billed under, which is routinely not the name on the call sheet.
   person's allergies. Matching on email alone was wrong in both directions: a
   typo silently loses the allergies, and two people on one production address
   collide.
+### Props (migration 0092) — BUILT
+From a producer's feedback: props come up on every job, and some of them
+(glassware, linens, furnishings) need client sign-off. It landed somewhere the
+app had no home for. Gear & crew is the closest table structurally, but nobody
+sends a C-stand for approval; assets and review handle approval well, but an
+asset is something you MADE, not something you SOURCE. A prop is the first
+object here that is both, which is exactly why it fell between the two.
+- SHAPE IS THE ONE USED THREE TIMES ALREADY: parent holds the requirement,
+  children hold what happened, one gets picked. assets->versions,
+  budget_lines->project_costs, cost->cost_payments, ai_shot->candidates. A
+  `prop` holds `prop_options`, and `picked_option_id` is the winner.
+- NO PRICE COLUMN, which is 0074's lesson applied BEFORE the leak rather than
+  after. Both tables are project-scoped and so collaborator-readable; a price
+  here would be exactly what that migration closed. What a prop costs is the
+  ledger's business, where it has a vendor, an invoice and studio-only RLS. An
+  option carries where it came from, not what it runs to.
+- `pickedOption()` resolves by LOOKUP, never by trusting picked_option_id: the
+  FK is ON DELETE SET NULL, so deleting a picked option must leave the prop
+  undecided rather than drawing a photo that is gone. `summarizeProps` counts
+  that case separately so a green chip cannot hide a missing pick. Unit tested
+  (10 groups) along with the status fallback and the category grouping.
+- Adding the first option moves a prop off `needed` by itself, and only ever
+  forward, so a prop already booked is not walked back by adding a reference.
+- APPROVAL IS THE EXISTING DOC-REVIEW STACK, not new code. `props` joined
+  approval_target and DocKind, target_id = the PROJECT (one prop list per job,
+  like the shot list and the sequence), so pinned comments, request-changes, the
+  internal Review page and the no-login /r/<token> portal all came for free. The
+  client pins a comment on the third glass.
+- TWO PLACES BRANCH ON KIND AND TYPESCRIPT CANNOT CATCH EITHER: `targetInProject`
+  (doc-review-actions) and `createDocReviewLink` (share-actions) both fall
+  through to a `boards` lookup for any kind not named explicitly, which silently
+  never matches for a project-scoped surface. Both now name shot_list, sequence
+  and props together. Widening the union compiles fine and fails at runtime, so
+  a new project-scoped DocKind MUST be added to those two branches by hand.
+- The embedded `options:prop_options(...)` select needed a `Relationships` entry
+  in database.types.ts, same trap as call_sheet_recipients: with
+  `Relationships: []` the typed client refuses the embed. Options are also
+  SORTED in code, because an embedded select carries no order guarantee and
+  "option 2" changing which glass it means between loads is not cosmetic on a
+  surface whose whole purpose is a client saying "the second one".
+- NOT built: props are not linked to shots (the continuity/usage-map question),
+  and a picked prop does not create a cost. Both are additive.
+
 - NOT built yet: surfacing dietary on the meal round panel and the call sheet
   (the column exists and the data is there, the render is not), and per-contact
   messages, which would need threading that does not exist.

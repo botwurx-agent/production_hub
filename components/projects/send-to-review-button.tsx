@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { sendDocToReview } from "@/app/(app)/projects/[id]/doc-review-actions";
 
-type DocKind = "shot_list" | "storyboard" | "moodboard";
+type DocKind = "shot_list" | "storyboard" | "moodboard" | "props";
 
 // Puts a doc into the internal review cycle so it shows on the Review page.
 // Once in review, becomes a quiet "In review" chip that links there.

@@ -4223,7 +4223,8 @@ export type Database = {
         | "storyboard"
         | "moodboard"
         | "ai_shot"
-        | "sequence";
+        | "sequence"
+        | "props";
       asset_status:
         | "draft"
         | "in_review"
