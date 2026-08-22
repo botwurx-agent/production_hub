@@ -222,7 +222,7 @@ export default function MarketingHome() {
           title="Everything it takes to run the job, on one page."
           sub="A project here is not a folder. It is the whole production: the brief, the boards, the crew, the money and the delivery, each waiting in the phase where the work happens."
         />
-        <div className="mx-auto mt-16 max-w-[1200px]">
+        <div className="mt-16">
           <ModuleMap />
         </div>
       </Section>
