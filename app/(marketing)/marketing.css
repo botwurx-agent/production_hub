@@ -329,6 +329,43 @@
 }
 
 /* --------------------------------------------------------------------------
+   The module map cascades in.
+
+   Same scroll timeline as the product shots, so the page has one idea about
+   how things arrive. Cards in DIFFERENT rows stagger for free, since each
+   carries its own view() timeline and sits at a different height; cards in the
+   SAME row would otherwise land together and read as a block dropping in.
+
+   `animation-delay` is the obvious fix and does nothing here: on a scroll
+   timeline there is no clock to delay against. The offset has to be spatial
+   instead, so each card's --sf-step pushes its RANGE a little later, which
+   means the cascade is driven by how far you have scrolled rather than by
+   time. Scroll fast and it keeps up; scroll slowly and it unfolds slowly.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .sf-mod {
+      animation: sf-mod-in linear both;
+      animation-timeline: view();
+      animation-range: cover calc(10% + var(--sf-step, 0) * 3%) cover
+        calc(38% + var(--sf-step, 0) * 3%);
+    }
+  }
+}
+
+@keyframes sf-mod-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* --------------------------------------------------------------------------
    Orb drift.
 
    TRANSFORM ONLY, deliberately. These are large elements carrying a 20-24px
