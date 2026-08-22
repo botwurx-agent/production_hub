@@ -11,7 +11,18 @@ import { IconTile } from "@/components/ui/icon-tile";
 // Produce) as tabs, each opening a dropdown of the module cards in that band, for
 // quick jumping around a project from anywhere.
 
-type Mod = { seg: string; label: string; sub: string; hue: string; icon: ReactNode; ai?: boolean };
+// `ai` means AI-only; `hideForAi` is its inverse, for modules about physically
+// sourcing something, which a generated job never does. Two flags rather than a
+// tri-state because almost every module wants neither.
+type Mod = {
+  seg: string;
+  label: string;
+  sub: string;
+  hue: string;
+  icon: ReactNode;
+  ai?: boolean;
+  hideForAi?: boolean;
+};
 type Band = { key: string; label: string; hue: string; icon: ReactNode; mods: Mod[] };
 
 const I = (d: ReactNode) => (
@@ -70,6 +81,7 @@ const BANDS: Band[] = [
       { seg: "calendar", label: "Calendar", sub: "Shoot & delivery dates", hue: "blue", icon: Ismall(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>) },
       { seg: "callsheet", label: "Call sheet", sub: "Industry call sheet + PDF", hue: "green", icon: Ismall(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h8M8 18h5" /></>) },
       { seg: "gear", label: "Gear & crew", sub: "Equipment and roster", hue: "cyan", icon: Ismall(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 13h6M9 17h4" /></>) },
+      { seg: "props", label: "Props", sub: "Options, picks, approvals", hue: "pink", hideForAi: true, icon: Ismall(<><path d="M3 8.5 12 4l9 4.5-9 4.5z" /><path d="M3 8.5v7L12 20l9-4.5v-7" /><path d="M12 13v7" /></>) },
       { seg: "budget", label: "Budget", sub: "Bid vs actual", hue: "indigo", icon: Ismall(<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />) },
       { seg: "delivery", label: "Delivery & billing", sub: "Final files and invoices", hue: "green", icon: Ismall(<><path d="M16.5 9.4 7.5 4.2M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.3 7 12 12l8.7-5M12 22V12" /></>) },
       { seg: "agreements", label: "Agreements", sub: "NDAs, SOWs, change orders", hue: "purple", icon: Ismall(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 15l2 2 4-4" /></>) },
@@ -156,7 +168,7 @@ export function ProjectNav({
         </div>
 
         {BANDS.map((b) => {
-          const mods = b.mods.filter((m) => !m.ai || isAi);
+          const mods = b.mods.filter((m) => (!m.ai || isAi) && !(m.hideForAi && isAi));
           const isActive = activeBand === b.key;
           const isOpen = open === b.key;
           return (
@@ -200,7 +212,7 @@ export function ProjectNav({
         (() => {
           const b = BANDS.find((x) => x.key === open);
           if (!b) return null;
-          const mods = b.mods.filter((m) => !m.ai || isAi);
+          const mods = b.mods.filter((m) => (!m.ai || isAi) && !(m.hideForAi && isAi));
           return createPortal(
             <div
               ref={panelRef}
