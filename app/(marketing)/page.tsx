@@ -199,7 +199,7 @@ export default function MarketingHome() {
       <Section tint="tinted">
         <SectionHeader
           eyebrow="The problem"
-          title="A job lives in eight places at once."
+          title="A job lives in too many places at once."
           sub="The brief is in email, the boards are in Figma, the cut is on a link someone sent last Tuesday, and the approval is in a text message. You are the only person who knows where all of it is."
         />
         <div className="mx-auto mt-14 max-w-5xl">
