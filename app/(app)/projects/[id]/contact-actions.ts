@@ -6,7 +6,11 @@ import { setContactRate } from "@/lib/rates";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite } from "@/lib/log";
 
-export type ContactState = { error?: string } | null;
+// `id` is returned on a successful ADD so the caller can write the talent
+// profile against the person it just created, in the same press. Optional
+// rather than a separate return type, so every existing `res?.error` check
+// keeps working untouched.
+export type ContactState = { error?: string; id?: string } | null;
 
 export type ContactInput = {
   name: string;
@@ -82,7 +86,7 @@ export async function addProjectContact(
   if (rateErr) return rateErr;
 
   revalidatePath(`/projects/${projectId}/contacts`);
-  return null;
+  return { id: created.id };
 }
 
 export async function updateProjectContact(

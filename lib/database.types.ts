@@ -2910,6 +2910,7 @@ export type Database = {
           confirmed_at: string | null;
           last_reminded_at: string | null;
           reminder_count: number;
+          contact_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -2923,6 +2924,7 @@ export type Database = {
           confirmed_at?: string | null;
           last_reminded_at?: string | null;
           reminder_count?: number;
+          contact_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -2936,6 +2938,7 @@ export type Database = {
           confirmed_at?: string | null;
           last_reminded_at?: string | null;
           reminder_count?: number;
+          contact_id?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -2954,6 +2957,111 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      contact_profiles: {
+        Row: {
+          id: string;
+          studio_id: string;
+          contact_id: string;
+          credited_as: string | null;
+          pronouns: string | null;
+          website: string | null;
+          agent_name: string | null;
+          agent_email: string | null;
+          agent_phone: string | null;
+          union_status: string | null;
+          dietary_restrictions: string | null;
+          allergies: string | null;
+          dietary_notes: string | null;
+          wardrobe: Json | null;
+          headshot_path: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          contact_id: string;
+          credited_as?: string | null;
+          pronouns?: string | null;
+          website?: string | null;
+          agent_name?: string | null;
+          agent_email?: string | null;
+          agent_phone?: string | null;
+          union_status?: string | null;
+          dietary_restrictions?: string | null;
+          allergies?: string | null;
+          dietary_notes?: string | null;
+          wardrobe?: Json | null;
+          headshot_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          contact_id?: string;
+          credited_as?: string | null;
+          pronouns?: string | null;
+          website?: string | null;
+          agent_name?: string | null;
+          agent_email?: string | null;
+          agent_phone?: string | null;
+          union_status?: string | null;
+          dietary_restrictions?: string | null;
+          allergies?: string | null;
+          dietary_notes?: string | null;
+          wardrobe?: Json | null;
+          headshot_path?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      contact_files: {
+        Row: {
+          id: string;
+          studio_id: string;
+          contact_id: string;
+          kind: string;
+          name: string;
+          storage_path: string;
+          mime_type: string | null;
+          size_bytes: number | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          contact_id: string;
+          kind?: string;
+          name: string;
+          storage_path: string;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          contact_id?: string;
+          kind?: string;
+          name?: string;
+          storage_path?: string;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
       };
       contact_rates: {
         Row: {

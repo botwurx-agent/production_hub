@@ -4,6 +4,11 @@ import { requireStudioContext } from "@/lib/studio";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { loadContactRates } from "@/lib/rates";
 import {
+  loadContactProfiles,
+  loadContactFilesByContact,
+  signHeadshots,
+} from "@/lib/talent-data";
+import {
   ProjectContacts,
   type ContactRow,
 } from "@/components/projects/project-contacts";
@@ -22,6 +27,28 @@ function withRates(
   rates: Map<string, number>
 ): ContactRow[] {
   return rows.map((c) => ({ ...c, rate: rates.get(c.id) ?? null }));
+}
+
+/**
+ * Talent detail, merged onto the roster rows.
+ *
+ * Unlike rates, this is NOT withheld from a collaborator: costume needs the
+ * measurements and craft services needs the allergies, and both reach the job
+ * as collaborators. Migration 0091 says the same thing in the policy, and the
+ * page says it out loud in the catering pane.
+ */
+function withProfiles(
+  rows: ContactRow[],
+  profiles: Map<string, import("@/lib/talent").TalentProfile>,
+  headshots: Map<string, string>,
+  files: Map<string, import("@/lib/talent-data").ContactFile[]>
+): ContactRow[] {
+  return rows.map((c) => ({
+    ...c,
+    profile: profiles.get(c.id) ?? null,
+    headshotUrl: headshots.get(c.id) ?? null,
+    files: files.get(c.id) ?? [],
+  }));
 }
 
 export default async function ProjectContactsPage({
@@ -57,10 +84,21 @@ export default async function ProjectContactsPage({
       : Promise.resolve({ data: [] as ContactRow[] }),
   ]);
 
-  const rates = await loadContactRates(supabase, [
+  const ids = [
     ...(projectRows ?? []).map((c) => c.id),
     ...(clientRows ?? []).map((c) => c.id),
+  ];
+
+  const [rates, profiles, files] = await Promise.all([
+    loadContactRates(supabase, ids),
+    loadContactProfiles(supabase, ids),
+    loadContactFilesByContact(supabase, ids),
   ]);
+  // Signing depends on the profiles, so it cannot join the batch above.
+  const headshots = await signHeadshots(profiles);
+
+  const merge = (rows: ContactRow[]) =>
+    withProfiles(withRates(rows, rates), profiles, headshots, files);
 
   return (
     <div>
@@ -80,8 +118,8 @@ export default async function ProjectContactsPage({
       />
       <ProjectContacts
         projectId={project.id}
-        projectContacts={withRates((projectRows ?? []) as ContactRow[], rates)}
-        clientContacts={withRates((clientRows ?? []) as ContactRow[], rates)}
+        projectContacts={merge((projectRows ?? []) as ContactRow[])}
+        clientContacts={merge((clientRows ?? []) as ContactRow[])}
         clientId={project.client_id}
         clientName={clientName}
         canSeeRates={!ctx.isCollaborator}

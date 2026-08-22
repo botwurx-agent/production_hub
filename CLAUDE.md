@@ -1173,7 +1173,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0088. Recent: 0088 =
+files in supabase/migrations. THROUGH 0091. Recent: 0091 =
+contact_profiles (+ contact_files, + call_sheet_recipients.contact_id); 0090 =
+meal_reminder_schedule; 0089 = meal_rounds; 0088 =
 call_sheet_reminders; 0087 = version_poster_path; 0086 =
 review_comment_pin_page; 0085 = project_binders; 0084 = editor_handoffs; 0083 =
 sequence_review_target; 0082 = flatten_cast_to_references; 0081 = cast_prompts;
@@ -2423,6 +2425,57 @@ CORRECTLY EXCLUDED and not to be "fixed": archived projects stay out of the
 dashboard, the studio slate, the unpaid-invoice widget and `get_attention`.
 Their bills are still owed, they are just not what a producer is being chased
 about this week. Ask about one by name and the money still shows.
+
+### Talent profiles and per-contact files (migration 0091) — BUILT
+The roster was built for crew, where name, position, rate and a phone number is
+genuinely the whole record. An actor is not that, and the operator hit it as
+soon as a job carried talent. Wardrobe needs measurements, catering needs
+allergies, accounts needs the agent, and the credit needs the name they are
+billed under, which is routinely not the name on the call sheet.
+- `contact_profiles` (1:1 with a contact) rather than columns on `contacts`.
+  That table is read from the client page, the lead page, the call sheet
+  recipient picker, the budget's vendor picker and the CRM, and fifteen
+  mostly-null columns would ride along on every one of those.
+- WARDROBE IS jsonb keyed by lib/talent.ts, not a column per measurement. The
+  set that matters differs by garment, we never filter or sum on it, and a new
+  measurement should not cost a migration. Same shape as call_sheets.layout.
+  Values are STRINGS always: a hat is 7 3/4, a shoe is 10.5 or 44, a shirt is
+  15/34. `parseWardrobe` is the trust boundary out of jsonb (whitelists the key
+  against the field list, coerces numbers, caps length) and is unit tested.
+- RLS IS THE ROSTER'S, NOT is_studio_member, and this is the one place the 0074
+  instinct is wrong. Costume needs the measurements and craft services needs the
+  allergies, and both reach the job as collaborators; a studio-only profile
+  would be invisible to exactly the people whose job it is. The RATE stays in
+  contact_rates: what someone is PAID is a different question from what size
+  they wear. Checked rather than assumed: a CLIENT contact has project_id null,
+  can_access_project(null) returns false (both EXISTS clauses miss), so a client
+  contact's profile falls back to studio members alone, which is the safe
+  direction.
+- `dietarySummary` puts ALLERGIES FIRST deliberately. A restriction is a
+  preference and an allergy is a hospital visit, so on a line that may be
+  truncated in a table cell or an email, the allergy is the part that survives.
+  Allergies are also the only profile field with a chip on the roster card.
+- Dietary is asked of EVERY contact (crew eat too, and this is what feeds the
+  meal round); wardrobe and representation only of talent and extras. A form
+  that asks a gaffer for his inseam reads as a company collecting whatever it
+  can rather than what it needs.
+- `contact_files` is its own table, NOT an assets row. Documents became assets
+  (0078) because a permit is superseded constantly and needed version history; a
+  W-9 is replaced, not revised, and routing these through the asset library
+  would mean every caller of loadProjectAssets had to learn to exclude them or a
+  performer's release would surface next to the pack shot.
+- UI: the existing contact modal gained panes (Details / Talent details or
+  Catering / Files) rather than a new route, so there is still one way to open a
+  person. Files only appear once the contact exists, hidden rather than disabled,
+  because "save this first" is a rule about our storage and not a step in the
+  job. The headshot replaces the initials avatar on the roster card.
+- `call_sheet_recipients.contact_id` was added so a meal round can reach a
+  person's allergies. Matching on email alone was wrong in both directions: a
+  typo silently loses the allergies, and two people on one production address
+  collide.
+- NOT built yet: surfacing dietary on the meal round panel and the call sheet
+  (the column exists and the data is there, the render is not), and per-contact
+  messages, which would need threading that does not exist.
 
 ### Crew meals: the separate lunch email, automated (migration 0089) — BUILT
 Came straight off a shoot, which is the signal section 4.5 waits for. On a real

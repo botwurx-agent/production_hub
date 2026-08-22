@@ -20,6 +20,13 @@ import {
   deleteProjectContact,
   type ContactInput,
 } from "@/app/(app)/projects/[id]/contact-actions";
+import {
+  saveContactProfile,
+  type ProfileInput,
+} from "@/app/(app)/projects/[id]/talent-actions";
+import { hasWardrobe, wantsWardrobe, type TalentProfile } from "@/lib/talent";
+import { ProfilePane, FilesPane } from "@/components/projects/talent-profile-panes";
+import type { ContactFile } from "@/lib/talent-data";
 
 export type ContactRow = {
   id: string;
@@ -31,6 +38,10 @@ export type ContactRow = {
   phone: string | null;
   rate: number | null;
   notes: string | null;
+  /** Talent detail (migration 0091). Absent for a contact with no profile row. */
+  profile?: TalentProfile | null;
+  headshotUrl?: string | null;
+  files?: ContactFile[];
 };
 
 const inputCls =
@@ -339,15 +350,32 @@ function ContactCard({
     >
       <div className="flex items-start gap-3">
         <span
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-bold"
+          className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-bold"
           style={{ backgroundColor: `var(--h-${hue}-bg)`, color: `var(--h-${hue})` }}
         >
-          {initials(contact.name)}
+          {contact.headshotUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={contact.headshotUrl}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            initials(contact.name)
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="truncate font-semibold text-text">{contact.name}</p>
           </div>
+          {/* The billing name sits under the legal one rather than replacing
+              it: the call sheet needs the person, the credit needs the name. */}
+          {contact.profile?.creditedAs ? (
+            <p className="truncate text-xs text-text-faint">
+              credited as {contact.profile.creditedAs}
+            </p>
+          ) : null}
           {sub ? (
             <p className="truncate text-xs text-text-muted">{sub}</p>
           ) : (
@@ -379,6 +407,28 @@ function ContactCard({
             {money(contact.rate)}
           </span>
         )}
+        {/* ALLERGIES GET A CHIP OF THEIR OWN, and nothing else on the profile
+            does. A restriction is a preference and an allergy is a hospital
+            visit, so it is the one thing worth seeing without opening anyone. */}
+        {contact.profile?.allergies && (
+          <span
+            className="rounded-pill px-2 py-0.5 text-[11px] font-bold"
+            style={{ backgroundColor: "var(--h-red-bg)", color: "var(--h-red)" }}
+            title={`Allergic to ${contact.profile.allergies}`}
+          >
+            Allergy
+          </span>
+        )}
+        {contact.profile && hasWardrobe(contact.profile.wardrobe) && (
+          <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text-muted">
+            Sizes
+          </span>
+        )}
+        {contact.files?.length ? (
+          <span className="rounded-pill bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text-muted">
+            {contact.files.length} file{contact.files.length === 1 ? "" : "s"}
+          </span>
+        ) : null}
       </div>
 
       {(contact.email || contact.phone) && (
@@ -452,6 +502,38 @@ function ContactModal({
         }
       : (prefill ?? empty(defaultCategory))
   );
+  const p = contact?.profile ?? null;
+  const emptyProfile = (): ProfileInput => ({
+    creditedAs: "",
+    pronouns: "",
+    website: "",
+    agentName: "",
+    agentEmail: "",
+    agentPhone: "",
+    unionStatus: "",
+    dietaryRestrictions: "",
+    allergies: "",
+    dietaryNotes: "",
+    wardrobe: {},
+  });
+  const [profile, setProfile] = useState<ProfileInput>(
+    p
+      ? {
+          creditedAs: p.creditedAs ?? "",
+          pronouns: p.pronouns ?? "",
+          website: p.website ?? "",
+          agentName: p.agentName ?? "",
+          agentEmail: p.agentEmail ?? "",
+          agentPhone: p.agentPhone ?? "",
+          unionStatus: p.unionStatus ?? "",
+          dietaryRestrictions: p.dietaryRestrictions ?? "",
+          allergies: p.allergies ?? "",
+          dietaryNotes: p.dietaryNotes ?? "",
+          wardrobe: p.wardrobe,
+        }
+      : emptyProfile()
+  );
+  const [pane, setPane] = useState<"details" | "profile" | "files">("details");
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
 
@@ -461,6 +543,11 @@ function ContactModal({
 
   const cat = normalizeCategory(form.type);
   const hue = CATEGORY_HUE[cat];
+  // Everyone gets the second pane, because everyone eats. Only the people the
+  // production dresses get wardrobe and representation in it, so the tab is
+  // named for what it actually holds rather than promising talent fields to a
+  // gaffer.
+  const showsProfileTab = wantsWardrobe(cat);
 
   function save(addAnother: boolean) {
     if (!form.name.trim()) return setError("Add a name.");
@@ -470,10 +557,22 @@ function ContactModal({
         ? await updateProjectContact(projectId, contact.id, form)
         : await addProjectContact(projectId, form);
       if (res?.error) return setError(res.error);
+
+      // The contact and its profile are two rows and one person. Saving both
+      // behind a single press is why addProjectContact hands back the id: on a
+      // new contact there is nothing to attach the profile to until it exists.
+      const id = contact?.id ?? res?.id;
+      if (id) {
+        const pres = await saveContactProfile(projectId, id, profile);
+        if (pres?.error) return setError(pres.error);
+      }
+
       router.refresh();
       if (addAnother && !contact) {
         // Keep the category, clear the person, stay open to add the next.
         setForm(empty(cat));
+        setProfile(emptyProfile());
+        setPane("details");
       } else {
         onClose();
       }
@@ -492,6 +591,41 @@ function ContactModal({
   return (
     <Modal open onClose={onClose} title={contact ? "Edit contact" : "Add contact"} size="md">
       <div className="space-y-4">
+        {/* Panes, in the order a person is filled in: who they are, then the
+            detail a booking needs, then their paperwork.
+
+            FILES ONLY EXIST ONCE THE CONTACT DOES, since a file has to hang off
+            an id. Hidden rather than shown disabled while adding, because "save
+            this first" is a rule about our storage, not a step in the job. The
+            profile tab has no such problem: it is held in state and written
+            with the contact on the same press. */}
+        <div className="flex gap-1 border-b border-border">
+          {(
+            [
+              ["details", "Details"],
+              ["profile", showsProfileTab ? "Talent details" : "Catering"],
+              ...(contact ? ([["files", "Files"]] as const) : []),
+            ] as [typeof pane, string][]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setPane(key)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-semibold transition ${
+                pane === key
+                  ? "border-accent text-text"
+                  : "border-transparent text-text-muted hover:text-text"
+              }`}
+            >
+              {label}
+              {key === "files" && contact?.files?.length ? (
+                <span className="ml-1.5 text-xs text-text-faint">{contact.files.length}</span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={pane === "details" ? "mt-4 space-y-4" : "hidden"}>
         {/* Category picker (the "folder" this contact goes in) */}
         <div>
           <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-text-faint">
@@ -605,7 +739,31 @@ function ContactModal({
             className={`${inputCls} min-h-[60px]`}
           />
         </Field>
+      </div>
 
+      {/* Kept MOUNTED and hidden rather than unmounted, so switching panes
+          never discards what has been typed into the other one. Both are saved
+          by the same press. */}
+      <div className={pane === "profile" ? "mt-4" : "hidden"}>
+        <ProfilePane
+          category={cat}
+          value={profile}
+          onChange={(patch) => setProfile((v) => ({ ...v, ...patch }))}
+        />
+      </div>
+
+      {contact && (
+        <div className={pane === "files" ? "mt-4" : "hidden"}>
+          <FilesPane
+            projectId={projectId}
+            contactId={contact.id}
+            headshotUrl={contact.headshotUrl ?? null}
+            files={contact.files ?? []}
+          />
+        </div>
+      )}
+
+      <div className="mt-4 space-y-4">
         {error && (
           <p className="rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">
             {error}
