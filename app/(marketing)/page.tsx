@@ -410,9 +410,13 @@ export default function MarketingHome() {
           flip
           visual={
             <BrowserFrame
-              caption="app.studio-flows.com/projects/bright-water/pipeline"
+              // Bright Water is a live-action commercial in the demo, so the
+              // pipeline does not exist on it. Pointing the caption at the
+              // ai_video project keeps the URL honest.
+              caption="app.studio-flows.com/projects/lumen-concept-reel/pipeline"
+              shot="project-pipeline"
               hue="purple"
-              alt="The AI pipeline triage view: a candidate on stage, a filmstrip of takes below, provenance in the sidebar."
+              alt="The AI pipeline: generated candidates for a shot, with provenance on every clip."
             />
           }
         >
