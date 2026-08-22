@@ -218,9 +218,9 @@ export default function MarketingHome() {
           leads and the four phases become its key. */}
       <Section id="product" backdrop={<Wash hue="indigo" />}>
         <SectionHeader
-          eyebrow="The shape of it"
-          title="Shaped like a production, because it is one."
-          sub="Every job opens on the same page: the phase it is in, and every module that phase needs. Not a blank board you configure into a studio."
+          eyebrow="Inside a project"
+          title="Everything it takes to run the job, on one page."
+          sub="A project here is not a folder. It is the whole production: the brief, the boards, the crew, the money and the delivery, each waiting in the phase where the work happens."
         />
         <div className="mx-auto mt-16 max-w-[1200px]">
           <ModuleMap />
