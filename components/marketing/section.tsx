@@ -34,10 +34,17 @@ export function Section({
       : tint === "accent"
         ? "bg-gradient-to-b from-accent-soft via-accent-soft to-bg"
         : "";
+  // `overflow-clip`, NOT `overflow-hidden`, and the difference is load-bearing.
+  // Both clip the aurora and wash backdrops identically, but `hidden` also makes
+  // the element a SCROLL CONTAINER, and a `view()` timeline resolves against the
+  // nearest one. That measured every product shot against its own section,
+  // inside which it is always fully visible, so all six reveals sat pinned at
+  // 100% progress and never moved. `clip` creates no scroll container, so the
+  // timeline reaches the viewport where it belongs.
   return (
     <section
       id={id}
-      className={`relative overflow-hidden px-6 py-24 scroll-mt-20 sm:px-10 sm:py-32 ${bg} ${className}`}
+      className={`relative overflow-clip px-6 py-24 scroll-mt-20 sm:px-10 sm:py-32 ${bg} ${className}`}
     >
       {backdrop}
       {/* 1400px, not 1152px: on a 1920 screen the old container left 40% of the
