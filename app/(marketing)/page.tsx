@@ -273,6 +273,8 @@ export default function MarketingHome() {
         <div className="mx-auto mt-16 max-w-[1200px]">
           <BrowserFrame
             priority
+            // Already on screen at load, so a scroll timeline would never fire.
+            motion="settle"
             // Wider than the frames that share a row with copy, so it has to
             // say so. 1280 is where the container stops growing: below that it
             // is the viewport minus the section's 40px of side padding.

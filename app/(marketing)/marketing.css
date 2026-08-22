@@ -155,6 +155,68 @@
 }
 
 /* --------------------------------------------------------------------------
+   Product shots settle into place.
+
+   ONE IDEA, TWO SPEEDS. Every screenshot on this page hinges up from its
+   bottom edge, as though the frame is being stood upright in front of you: the
+   hero does it once on load, and the shots further down do it as they arrive.
+   Same transform, same origin, so a long scroll reads as one behaviour rather
+   than a catalogue of effects.
+
+   THE REVEAL IS SCROLL-LINKED, NOT FIRE-ONCE, and that is the part worth
+   keeping. `animation-timeline: view()` ties the animation's progress to where
+   the element sits in the viewport, so it tracks the reader's own scrolling and
+   reverses if they go back up. It also needs no IntersectionObserver, no
+   requestAnimationFrame and no state: the whole thing runs off the compositor
+   with zero JavaScript, which is why it is affordable on seven large images.
+
+   TWO GATES, both failing to the finished picture. Where `view()` is
+   unsupported the @supports block never applies and the shot simply renders,
+   already in its final position, because the keyframes only ever move it FROM
+   somewhere TO its resting state. Same for a reader who asked for reduced
+   motion. That is the same rule the arrow-draw above follows: never animate
+   IN a base state that a fallback cannot reach.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .sf-reveal {
+      /* Hinges from the bottom edge, so it stands up rather than sliding. */
+      transform-origin: 50% 100%;
+      animation: sf-settle linear both;
+      animation-timeline: view();
+      /* Finishes before the shot is fully in view: a reveal still completing
+         once you are reading it draws attention to itself. */
+      animation-range: entry 10% entry 70%;
+    }
+  }
+
+  /* The hero is already on screen at load, so a scroll timeline would never
+     start it. It gets the same move as a one-shot instead. The long ease is a
+     decelerate curve: it arrives fast and settles slowly, which is what makes
+     it read as weight rather than as a slide. */
+  .sf-settle-once {
+    transform-origin: 50% 100%;
+    animation: sf-settle 1150ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+  }
+}
+
+@keyframes sf-settle {
+  from {
+    opacity: 0;
+    /* perspective() lives on the element rather than the parent so nothing has
+       to know about a 3D context it did not ask for. 1400px is shallow enough
+       that the tilt reads as depth and not as a fairground mirror. */
+    transform: perspective(1400px) translate3d(0, 42px, 0) rotateX(7deg)
+      scale(0.972);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(1400px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+  }
+}
+
+/* --------------------------------------------------------------------------
    Orb drift.
 
    TRANSFORM ONLY, deliberately. These are large elements carrying a 20-24px

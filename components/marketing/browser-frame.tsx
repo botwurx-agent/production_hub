@@ -20,6 +20,7 @@ export function BrowserFrame({
   height = 1000,
   priority = false,
   sizes,
+  motion = "reveal",
   hue = "indigo",
   children,
 }: {
@@ -36,12 +37,26 @@ export function BrowserFrame({
    * sized for half the page and it looks soft.
    */
   sizes?: string;
+  /**
+   * How the frame arrives. "reveal" settles it as it scrolls into view;
+   * "settle" plays the same move once on load, for a frame already on screen
+   * when the page opens; "none" opts out. See marketing.css.
+   */
+  motion?: "reveal" | "settle" | "none";
   /** Tints the pending-screenshot placeholder to its section's identity hue. */
   hue?: string;
   children?: React.ReactNode;
 }) {
+  const move =
+    motion === "reveal"
+      ? "sf-reveal"
+      : motion === "settle"
+        ? "sf-settle-once"
+        : "";
   return (
-    <figure className="overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
+    <figure
+      className={`overflow-hidden rounded-2xl border border-border bg-surface shadow-lg ${move}`}
+    >
       <div className="flex items-center gap-1.5 border-b border-border bg-surface-2 px-4 py-3">
         <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
         <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
