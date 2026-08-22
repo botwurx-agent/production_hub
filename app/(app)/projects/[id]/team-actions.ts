@@ -52,9 +52,21 @@ async function sendProjectInviteEmail(opts: {
 // Also returns the invite token so the caller can copy the
 // /project-invite/<token> link. Only studio staff can invite (RLS also
 // enforces: project_invites is is_studio_member-gated).
+/**
+ * Two tiers on a project (migration 0093). An EDITOR works the job; a REVIEWER
+ * reads it and leaves notes. Only the literal string 'reviewer' restricts, so
+ * anything unexpected lands as an editor, matching can_edit_project.
+ */
+export type ProjectRole = "editor" | "reviewer";
+
+function cleanRole(v: string | null | undefined): ProjectRole {
+  return v === "reviewer" ? "reviewer" : "editor";
+}
+
 export async function inviteToProject(
   projectId: string,
-  email: string
+  email: string,
+  role: ProjectRole = "editor"
 ): Promise<ProjTeamState> {
   const ctx = await requireStudioContext();
   if (ctx.isCollaborator)
@@ -99,7 +111,7 @@ export async function inviteToProject(
     studio_id: project.studio_id,
     project_id: projectId,
     email: clean,
-    role: "collaborator",
+    role: cleanRole(role),
     token,
     invited_by: ctx.userId,
   });

@@ -13,6 +13,13 @@ export type StudioContext = {
   isCollaborator: boolean;
   // Projects a collaborator may access; null for full studio members (all).
   projectIds: string[] | null;
+  /**
+   * Project ids this person may only READ, because they were invited as a
+   * reviewer (migration 0093). Always empty for a studio member. Presentation
+   * only: RLS is the boundary, and this exists so the UI can stop offering
+   * buttons that would be refused.
+   */
+  reviewerProjectIds: string[];
   // Every studio the user belongs to, oldest membership first. Drives the
   // studio switcher; a single-studio user has exactly one entry.
   studios: { studio: Studio; role: MembershipRole }[];
@@ -69,6 +76,7 @@ export const getStudioContext = cache(
         role: active.role,
         isCollaborator: false,
         projectIds: null,
+        reviewerProjectIds: [],
         studios: rows.map((r) => ({ studio: r.studio, role: r.role })),
       };
     }
@@ -77,10 +85,11 @@ export const getStudioContext = cache(
     // Resolve the studio from those projects (v1 assumes a single studio).
     const { data: pmRows } = await supabase
       .from("project_members")
-      .select("project_id, projects(studio_id)")
+      .select("project_id, role, projects(studio_id)")
       .order("created_at", { ascending: true });
     const members = (pmRows ?? []) as {
       project_id: string;
+      role: string | null;
       projects: { studio_id: string } | null;
     }[];
     const studioId = members.find((m) => m.projects)?.projects?.studio_id;
@@ -93,8 +102,13 @@ export const getStudioContext = cache(
       .maybeSingle();
     if (!studio) return null;
 
-    const projectIds = members
-      .filter((m) => m.projects?.studio_id === studioId)
+    const mine = members.filter((m) => m.projects?.studio_id === studioId);
+    const projectIds = mine.map((m) => m.project_id);
+    // Only the literal 'reviewer' restricts. Every pre-0093 row says
+    // 'collaborator', so anything else stays an editor and nobody already
+    // using the app is demoted by this landing.
+    const reviewerProjectIds = mine
+      .filter((m) => m.role === "reviewer")
       .map((m) => m.project_id);
 
     return {
@@ -104,6 +118,7 @@ export const getStudioContext = cache(
       role: "member",
       isCollaborator: true,
       projectIds,
+      reviewerProjectIds,
       studios: [{ studio, role: "member" }],
     };
   }
@@ -114,4 +129,18 @@ export async function requireStudioContext(): Promise<StudioContext> {
   const ctx = await getStudioContext();
   if (!ctx) redirect("/login");
   return ctx;
+}
+
+/**
+ * Can this person change things on the project, as opposed to only read and
+ * comment on it?
+ *
+ * The mirror of can_edit_project in the database (migration 0093), and it is
+ * ONLY for presentation: RLS refuses the write regardless. Use it to stop
+ * offering an Add button that would fail, never as the thing standing between a
+ * reviewer and an edit.
+ */
+export function canEditProject(ctx: StudioContext, projectId: string): boolean {
+  if (!ctx.isCollaborator) return true;
+  return !ctx.reviewerProjectIds.includes(projectId);
 }

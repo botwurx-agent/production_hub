@@ -4176,6 +4176,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      can_edit_project: { Args: { p_project_id: string }; Returns: boolean };
       is_studio_admin: { Args: { p_studio: string }; Returns: boolean };
       is_studio_member: { Args: { p_studio: string }; Returns: boolean };
       claim_pending_invites: { Args: Record<string, never>; Returns: number };

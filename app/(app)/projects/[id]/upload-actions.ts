@@ -29,14 +29,34 @@ export async function createAssetUploadUrl(
   const supabase = createClient();
 
   // The projects table is readable when is_studio_member OR
-  // can_access_project (migration 0056), so a successful read IS the
-  // authorization check, for members and collaborators alike.
+  // can_access_project (migration 0056), so a successful read proves the caller
+  // can SEE this project.
   const { data: project } = await supabase
     .from("projects")
     .select("id, studio_id")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return { error: "You do not have access to this project." };
+
+  // Seeing it is no longer enough. Since migration 0093 a project person can be
+  // a REVIEWER, who reads and comments but does not change the job, and reading
+  // the row above is something they can do.
+  //
+  // This is the one place RLS cannot finish the job on its own: the upload goes
+  // straight to Storage under a service-role ticket, so nothing downstream would
+  // stop a reviewer writing bytes. The `versions` insert that follows would be
+  // refused, which means the file would land in the bucket with no row pointing
+  // at it and no way to find it again.
+  //
+  // Asked of the DATABASE rather than re-derived from the session, so the answer
+  // is the same one every RLS policy uses instead of a second rule that can
+  // drift away from it.
+  const { data: canEdit } = await supabase.rpc("can_edit_project", {
+    p_project_id: projectId,
+  });
+  if (!canEdit) {
+    return { error: "You have review access to this project, so you cannot upload files." };
+  }
 
   const safe = fileName.replace(/[^\w.\-]+/g, "_").slice(-120) || "file";
   const path = `${project.studio_id}/${project.id}/${crypto.randomUUID()}-${safe}`;
