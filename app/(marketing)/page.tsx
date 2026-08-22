@@ -19,34 +19,48 @@ export const metadata: Metadata = { alternates: { canonical: "/" } };
 /* The four phases, in the order and hues the project hub itself uses, so the
    site previews the product's mental model rather than inventing one. Each
    carries a second hue for the gradient tile. */
+// The four phase bands of a project hub, and what actually hangs off each one.
+// Named rather than summarised on purpose: four abstractions ("storyboards,
+// shot lists and moodboards that stay tied to the job") hid the fact that there
+// are fourteen real modules here, and the list is the argument. These match the
+// hub's own bands, so the key reads as a legend for the screenshot above it
+// rather than as marketing invented alongside it.
 const PHASES = [
   {
     hue: "indigo",
     to: "purple",
     name: "Plan",
-    body: "The brief, the references, and every file for the job in one library.",
     icon: "M4 3.5h8l3 3v10H4z M12 3.5V7h3",
+    modules: ["Brief", "Assets"],
   },
   {
     hue: "purple",
     to: "pink",
     name: "Visualize",
-    body: "Storyboards, shot lists, and moodboards that stay tied to the job.",
     icon: "M3 4.5h14v11H3z M3 9h14 M8 4.5v11",
+    modules: ["Storyboards", "Shot list", "Moodboard"],
   },
   {
     hue: "green",
     to: "cyan",
     name: "Review",
-    body: "Client approvals with pinned notes, versions, and a clear yes.",
     icon: "M4 10.5 8 14l8-8",
+    modules: ["Approvals", "Communication"],
   },
   {
     hue: "amber",
     to: "orange",
     name: "Produce",
-    body: "Call sheets, crew, budget, and delivery on the same spine.",
     icon: "M3 6.5h14v10H3z M3 6.5 6 3h8l3 3.5 M7 10h6",
+    modules: [
+      "Contacts",
+      "Calendar",
+      "Call sheet",
+      "Budget",
+      "Documents",
+      "Agreements",
+      "Delivery",
+    ],
   },
 ];
 
@@ -81,31 +95,33 @@ function GradientTile({
   );
 }
 
-function PhaseCard({
-  hue,
-  to,
-  name,
-  body,
-  icon,
-}: (typeof PHASES)[number]) {
+/**
+ * One phase, and the modules under it. This is a KEY to the screenshot above
+ * it, not a card competing with it: no border, no panel, no hover lift, so the
+ * eye reads the hub first and comes here to find out what it is looking at.
+ *
+ * The modules are listed rather than described because the count is the point.
+ * Produce carries seven of them, which says more about how far this goes than
+ * any sentence about call sheets would.
+ */
+function PhaseKey({ hue, to, name, icon, modules }: (typeof PHASES)[number]) {
   return (
-    <div
-      className="group relative overflow-hidden rounded-2xl border border-border bg-surface p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-      style={{ borderTop: `3px solid var(--h-${hue})` }}
-    >
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-28 opacity-60"
-        style={{
-          background: `linear-gradient(to bottom, var(--h-${hue}-bg), transparent)`,
-        }}
-      />
-      <div className="relative">
+    <div>
+      <div className="flex items-center gap-3">
         <GradientTile from={hue} to={to} path={icon} />
-        <h3 className="mt-5 font-display text-xl font-bold text-text">{name}</h3>
-        <p className="mt-2.5 text-[15px] leading-relaxed text-text-muted">
-          {body}
-        </p>
+        <h3 className="font-display text-xl font-bold text-text">{name}</h3>
       </div>
+      <ul className="mt-4 space-y-2">
+        {modules.map((m) => (
+          <li key={m} className="flex items-center gap-2.5 text-[15px] text-text-muted">
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: `var(--h-${hue})` }}
+            />
+            {m}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -305,15 +321,28 @@ export default function MarketingHome() {
       </Section>
 
       {/* The shape */}
+      {/* The shape. This was four abstract tiles and no product, which made it
+          the one section asserting something the page never showed. The hub IS
+          the claim: the phases are literally how a job opens. So the shot
+          leads and the four phases become its key. */}
       <Section id="product" backdrop={<Wash hue="indigo" />}>
         <SectionHeader
           eyebrow="The shape of it"
           title="Shaped like a production, because it is one."
-          sub="Not a blank board you configure into a studio. The phases of a job are the structure, and every module hangs off the same spine."
+          sub="Every job opens on the same page: the phase it is in, and every module that phase needs. Not a blank board you configure into a studio."
         />
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mx-auto mt-14 max-w-[1200px]">
+          <BrowserFrame
+            caption="app.studio-flows.com/projects/bright-water"
+            shot="project-hub"
+            hue="indigo"
+            sizes="(min-width: 1280px) 1200px, 100vw"
+            alt="A project hub: the lifecycle stepper across the top, then module cards grouped into Plan, Visualize, Review and Produce bands."
+          />
+        </div>
+        <div className="mx-auto mt-14 grid max-w-[1200px] gap-10 sm:grid-cols-2 lg:grid-cols-4">
           {PHASES.map((p) => (
-            <PhaseCard key={p.name} {...p} />
+            <PhaseKey key={p.name} {...p} />
           ))}
         </div>
       </Section>
