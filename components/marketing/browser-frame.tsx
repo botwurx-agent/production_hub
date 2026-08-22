@@ -19,6 +19,7 @@ export function BrowserFrame({
   width = 1600,
   height = 1000,
   priority = false,
+  sizes,
   hue = "indigo",
   children,
 }: {
@@ -29,6 +30,12 @@ export function BrowserFrame({
   width?: number;
   height?: number;
   priority?: boolean;
+  /**
+   * How wide the shot renders. The default suits a frame sharing a row with
+   * copy; a full-width frame has to say so or the browser fetches a candidate
+   * sized for half the page and it looks soft.
+   */
+  sizes?: string;
   /** Tints the pending-screenshot placeholder to its section's identity hue. */
   hue?: string;
   children?: React.ReactNode;
@@ -53,6 +60,7 @@ export function BrowserFrame({
           width={width}
           height={height}
           priority={priority}
+          sizes={sizes}
           className="border-0"
         />
       ) : (

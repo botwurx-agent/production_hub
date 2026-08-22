@@ -269,6 +269,9 @@ export default function MarketingHome() {
         <div className="mt-16">
           <BrowserFrame
             priority
+            // The one frame that spans the whole container rather than sharing
+            // a row, so it needs roughly double the default candidate width.
+            sizes="(min-width: 1400px) 1320px, 100vw"
             caption="app.studio-flows.com/projects"
             shot="projects-board"
             alt="The projects board: every job on one board, moving from pre-pro to delivered."

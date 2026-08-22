@@ -13,6 +13,14 @@ const nextConfig = {
       { source: "/site/:path*", destination: "/", permanent: true },
     ];
   },
+  images: {
+    // Next serves WebP only by default. The marketing screenshots are large flat
+    // areas of UI, which is exactly what AVIF compresses best, and they are the
+    // first bytes a stranger downloads. AVIF is listed first because the browser
+    // takes the first format it accepts; anything that cannot decode it falls
+    // through to WebP and then to the original.
+    formats: ["image/avif", "image/webp"],
+  },
   experimental: {
     // Reply attachments (device files) post through a Server Action as FormData;
     // raise the default 1MB cap to allow real files (Gmail caps sends at ~5MB).
