@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/app-shell/user-menu";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
+import { InviteButton } from "@/components/app-shell/invite-button";
 import { openAgent } from "@/components/agent/agent-open";
 import { RunnerIcon } from "@/components/app-shell/nav-icons";
 import type { StudioOption } from "@/components/app-shell/studio-switcher";
@@ -84,6 +85,9 @@ export function Topbar({
               <RunnerIcon />
             </button>
           ) : null}
+          {/* Hidden from collaborators, who cannot invite anyone: the server
+              actions refuse them, so a button here would only be a dead end. */}
+          {!collaborator && <InviteButton />}
           <span data-tour="notifications">
             <NotificationBell needsYouCount={needsYouCount} />
           </span>

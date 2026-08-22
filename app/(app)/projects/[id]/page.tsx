@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireStudioContext } from "@/lib/studio";
+import { requireStudioContext, canEditProject } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { LifecycleStepper } from "@/components/projects/lifecycle-stepper";
 import { TourTrigger } from "@/components/tour/tour-trigger";
@@ -219,11 +219,11 @@ export default async function ProjectDetailPage({
   const [{ data: pmembers }, { data: pinvites }] = await Promise.all([
     supabase
       .from("project_members")
-      .select("id, user_id")
+      .select("id, user_id, role")
       .eq("project_id", params.id),
     supabase
       .from("project_invites")
-      .select("id, email, token, accepted_by, accepted_at, revoked")
+      .select("id, email, token, role, accepted_by, accepted_at, revoked")
       .eq("project_id", params.id),
   ]);
   const inviteEmailByUser = new Map<string, string>();
@@ -232,10 +232,11 @@ export default async function ProjectDetailPage({
   const projectMembers = (pmembers ?? []).map((m) => ({
     memberId: m.id,
     email: inviteEmailByUser.get(m.user_id) ?? "Collaborator",
+    role: m.role,
   }));
   const projectPending = (pinvites ?? [])
     .filter((i) => !i.accepted_at && !i.revoked)
-    .map((i) => ({ id: i.id, email: i.email, token: i.token }));
+    .map((i) => ({ id: i.id, email: i.email, token: i.token, role: i.role }));
 
   // Shot count needs group ids.
   const groupIds = (shotGroups ?? []).map((g) => g.id);
@@ -437,6 +438,19 @@ export default async function ProjectDetailPage({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* A reviewer needs to know they are one. Without this they meet
+                  the boundary as a string of refusals from buttons that looked
+                  available, which reads as the app being broken rather than as
+                  the access they were given. */}
+              {!canEditProject(ctx, project.id) && (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide"
+                  style={{ backgroundColor: "var(--h-amber-bg)", color: "var(--h-amber)" }}
+                  title="You can read this project, comment and approve. Editing is not open to you."
+                >
+                  Review access
+                </span>
+              )}
               {!ctx.isCollaborator && (
                 <>
                   <ProjectPeople

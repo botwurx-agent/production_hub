@@ -943,6 +943,60 @@ membership). We only OPEN the project-scoped tables to them.
   tightening, the fix is a per-page ctx.isCollaborator check on those four routes
   returning the branded not-found instead of an empty shell.
 
+### Project reviewer role + one invite affordance (migration 0093) — BUILT
+Came from a StudioBinder access table the operator shared, and from a real
+concern that inviting somebody worked differently depending on where you were
+standing.
+- TWO TIERS ON A PROJECT. 0056 opened 41 project-scoped policies as FOR ALL,
+  making project access binary: anyone on a project could change anything on it.
+  `can_edit_project` joins `can_access_project`; a project member whose role is
+  the literal string 'reviewer' can read, comment and approve but not edit.
+- ONLY 'reviewer' RESTRICTS, deliberately fail-OPEN on anything else. Every
+  pre-0093 row says 'collaborator', so nothing demotes silently when this lands,
+  and the restrictive tier is one somebody has to choose on purpose.
+- The 41 policies were rewritten BY A DO BLOCK reading pg_policies, not
+  transcribed by hand, because that is the kind of list where one missed table
+  is a silent hole. Each keeps its FOR ALL policy with can_edit_project swapped
+  in and GAINS a FOR SELECT policy carrying the original expression; permissive
+  policies OR together, so reads stay open and writes narrow. Verified after
+  applying: 37 write-gated, 37 read, 4 untouched. Reversing it is dropping the
+  *_read policies and putting can_access_project back.
+- FOUR TABLES STAY REVIEWER-WRITABLE or "view and comment" is just "view":
+  review_comments, approvals, doc_reviews (approving moves its status) and
+  project_tasks. The last one matches how review tools behave and was in the
+  reference the operator endorsed.
+- `createAssetUploadUrl` NEEDED A REAL GATE and is the one place RLS cannot
+  finish the job. Its comment claimed the project read WAS the authorization
+  check, which stopped being true the moment reviewers could read: the upload
+  goes straight to Storage under a service-role ticket, so nothing downstream
+  would stop a reviewer writing bytes, and the versions insert afterwards is
+  refused, leaving a file in the bucket with no row pointing at it. It now asks
+  the database via the can_edit_project RPC rather than re-deriving the rule.
+- `claim_pending_project_invites` already copies inv.role onto the membership
+  (checked, not assumed), so a reviewer invite stays a reviewer with no change.
+- StudioContext gained `reviewerProjectIds` + a `canEditProject(ctx, id)` helper.
+  PRESENTATION ONLY: RLS is the boundary, and the helper exists to stop offering
+  buttons that would be refused.
+- ONE INVITE AFFORDANCE (components/app-shell/invite-button.tsx) in the topbar,
+  so it is on every page. It reads the PROJECT FROM THE URL rather than taking a
+  prop, since the topbar renders above every route and threading an id down
+  would mean every page remembering to pass one. Scope is re-derived on each
+  open, never held from last time, so walking from a project to the dashboard
+  and inviting cannot grant access to the job you just left. Hidden from
+  collaborators, whose invite actions refuse them anyway.
+- It does NOT replace the share-for-review buttons on assets and docs. Those are
+  correct where they are: sharing one specific cut belongs on that cut, not in a
+  global menu that would then have to ask which cut.
+- NOT done: suppressing edit affordances across all 21 project pages for a
+  reviewer. RLS refuses the write, and the hub hero carries a "Review access"
+  chip so the tier is stated rather than discovered through refusals, but a
+  reviewer can still click Add on a sub-page and get an error. Worth tightening
+  per page as each is next touched, not in one sweep.
+- NOT built: presence avatars (who is on this page now). There is no realtime
+  infrastructure in the app at all. Supabase Realtime Presence would do it, but
+  be clear what it buys: nothing merges concurrent edits here, so presence would
+  make a collision VISIBLE rather than prevent it.
+
 ### Team invites / multi-user (migration 0048) — BUILT
 Multiple people can now share one studio (the paid multi-user lever). The tenancy
 plumbing (studios/memberships/roles owner|admin|member + RLS is_studio_member)
@@ -1173,7 +1227,8 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0092. Recent: 0092 = props
+files in supabase/migrations. THROUGH 0093. Recent: 0093 =
+project_reviewer_role (can_edit_project + 41 policies split); 0092 = props
 (+ prop_options, + approval_target 'props'); 0091 =
 contact_profiles (+ contact_files, + call_sheet_recipients.contact_id); 0090 =
 meal_reminder_schedule; 0089 = meal_rounds; 0088 =
