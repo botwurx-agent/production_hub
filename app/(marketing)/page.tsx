@@ -266,12 +266,17 @@ export default function MarketingHome() {
           </div>
         </div>
 
-        <div className="mt-16">
+        {/* Held in from the 1400px container to 1200. At full width the shot
+            filled the fold on a laptop and pushed the sections below out of
+            sight, so it read as the page rather than as evidence for the
+            headline above it. */}
+        <div className="mx-auto mt-16 max-w-[1200px]">
           <BrowserFrame
             priority
-            // The one frame that spans the whole container rather than sharing
-            // a row, so it needs roughly double the default candidate width.
-            sizes="(min-width: 1400px) 1320px, 100vw"
+            // Wider than the frames that share a row with copy, so it has to
+            // say so. 1280 is where the container stops growing: below that it
+            // is the viewport minus the section's 40px of side padding.
+            sizes="(min-width: 1280px) 1200px, 100vw"
             caption="app.studio-flows.com/projects"
             shot="projects-board"
             alt="The projects board: every job on one board, moving from pre-pro to delivered."
