@@ -130,6 +130,7 @@ export default async function ProjectDetailPage({
     { data: taskRows },
     { data: billingDocs },
     { data: binderRows },
+    { data: propRows },
   ] = await Promise.all([
     supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
     supabase
@@ -190,6 +191,13 @@ export default async function ProjectDetailPage({
       supabase
       .from("project_binders")
       .select("shared_at, revoked_at")
+      .eq("project_id", params.id),
+    // Only what the card needs: how many, and how many are still waiting on a
+    // decision. The options come along because "awaiting a pick" cannot be
+    // answered without knowing whether any exist.
+    supabase
+      .from("props")
+      .select("id, status, picked_option_id, options:prop_options(id)")
       .eq("project_id", params.id),
   ]);
 
@@ -339,6 +347,16 @@ export default async function ProjectDetailPage({
   const agreementsSigned = agreements.filter(
     (a) => a.our_signed_at && a.their_signed_at
   ).length;
+
+  // Props, for the Produce band card. `undecided` is the number that have
+  // options gathered but nothing chosen, which is the pile waiting on somebody
+  // else and therefore the one worth putting on the card.
+  const propCount = (propRows ?? []).length;
+  const propsUndecided = (propRows ?? []).filter((p) => {
+    const opts = (p as { options?: { id: string }[] }).options ?? [];
+    const picked = (p as { picked_option_id: string | null }).picked_option_id;
+    return opts.length > 0 && !opts.some((o) => o.id === picked);
+  }).length;
 
   // Produce derivations.
   const deliveredCount = (deliverables ?? []).filter((d) => d.status === "delivered").length;
@@ -931,6 +949,39 @@ export default async function ProjectDetailPage({
               >
                 <p className="text-[13px] text-text-muted">
                   List camera, lighting, grip, and crew needs for the shoot.
+                </p>
+              </HubCard>
+            )}
+
+            {/* Props sit beside gear rather than inside it: a C-stand is
+                logistics only, a hero glass is logistics AND a thing the client
+                signs off on. Hidden on generated jobs for the same reason gear
+                is, since nothing is physically sourced. */}
+            {!isAiVideo && (
+              <HubCard
+                href={`/projects/${project.id}/props`}
+                hue="pink"
+                title="Props"
+                sub={
+                  propCount > 0
+                    ? `${propCount} prop${propCount === 1 ? "" : "s"}${
+                        propsUndecided > 0 ? ` · ${propsUndecided} awaiting a pick` : ""
+                      }`
+                    : "Glassware, linens, dressing"
+                }
+                footer={propCount > 0 ? "Open props" : "Add props"}
+                icon={
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 8.5 12 4l9 4.5-9 4.5z" />
+                    <path d="M3 8.5v7L12 20l9-4.5v-7" />
+                    <path d="M12 13v7" />
+                  </svg>
+                }
+              >
+                <p className="text-[13px] text-text-muted">
+                  {propCount > 0
+                    ? "Options against each prop, and which one the client picked."
+                    : "Track what the job needs on the table, and get the options approved."}
                 </p>
               </HubCard>
             )}

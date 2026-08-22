@@ -2958,6 +2958,113 @@ export type Database = {
           },
         ];
       };
+      props: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          position: number;
+          name: string;
+          category: string | null;
+          qty: number;
+          notes: string | null;
+          source: string | null;
+          contact_id: string | null;
+          status: string;
+          picked_option_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          position?: number;
+          name: string;
+          category?: string | null;
+          qty?: number;
+          notes?: string | null;
+          source?: string | null;
+          contact_id?: string | null;
+          status?: string;
+          picked_option_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          position?: number;
+          name?: string;
+          category?: string | null;
+          qty?: number;
+          notes?: string | null;
+          source?: string | null;
+          contact_id?: string | null;
+          status?: string;
+          picked_option_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      prop_options: {
+        Row: {
+          id: string;
+          studio_id: string;
+          prop_id: string;
+          position: number;
+          name: string | null;
+          storage_path: string | null;
+          mime_type: string | null;
+          url: string | null;
+          source: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          prop_id: string;
+          position?: number;
+          name?: string | null;
+          storage_path?: string | null;
+          mime_type?: string | null;
+          url?: string | null;
+          source?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          prop_id?: string;
+          position?: number;
+          name?: string | null;
+          storage_path?: string | null;
+          mime_type?: string | null;
+          url?: string | null;
+          source?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "prop_options_prop_id_fkey";
+            columns: ["prop_id"];
+            isOneToOne: false;
+            referencedRelation: "props";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       contact_profiles: {
         Row: {
           id: string;
