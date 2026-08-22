@@ -439,9 +439,13 @@ export default function MarketingHome() {
         <FeatureRow
           visual={
             <BrowserFrame
+              // No URL in the caption on purpose: Runner is a panel that opens
+              // over whatever you are reading, not a page you navigate to, and
+              // a fake path would say the opposite.
               caption="Runner"
+              shot="runner-panel"
               hue="cyan"
-              alt="The Runner panel proposing a change as a card, with Create and Cancel."
+              alt="The Runner panel proposing a cost as a card, every value listed, with Create and Cancel."
             />
           }
         >
