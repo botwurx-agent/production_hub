@@ -9,6 +9,10 @@ import {
   moveTask,
   setTaskChecklist,
   setTaskAssignees,
+  addTaskFile,
+  deleteTaskFile,
+  addTaskComment,
+  deleteTaskComment,
   deleteProjectTask,
 } from "@/app/(app)/projects/[id]/task-actions";
 import { Input } from "@/components/ui/input";
@@ -168,6 +172,27 @@ function TaskCard({
         </span>
       </div>
 
+      {/* Images preview on the face of the card. The whole reason to put a
+          wardrobe snap or a location photo on a task is to see it without
+          opening anything. Non-images stay as a count below. */}
+      {task.files.some((f) => f.thumbUrl) && (
+        <div className="mt-2 flex gap-1 pl-[24px]">
+          {task.files
+            .filter((f) => f.thumbUrl)
+            .slice(0, 3)
+            .map((f) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={f.id}
+                src={f.thumbUrl as string}
+                alt=""
+                loading="lazy"
+                className="h-11 w-11 rounded-[7px] border border-border object-cover"
+              />
+            ))}
+        </div>
+      )}
+
       {progress.total > 0 && (
         <div className="mt-2 pl-[24px]">
           <div className="flex items-center gap-1.5">
@@ -189,7 +214,7 @@ function TaskCard({
         </div>
       )}
 
-      {(task.due_date || on.length > 0) && (
+      {(task.due_date || on.length > 0 || task.files.length > 0 || task.comments.length > 0) && (
         <div className="mt-2 flex items-center gap-2 pl-[24px]">
           {task.due_date && (
             <span
@@ -203,6 +228,24 @@ function TaskCard({
               }
             >
               {state === "due" ? "Today" : shortDate(task.due_date)}
+            </span>
+          )}
+          {/* Counts, not contents: a card says there is a reference and a
+              conversation, and opening it is how you read either. */}
+          {task.files.length > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-[10.5px] font-semibold text-text-faint" title={`${task.files.length} attached`}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.49" />
+              </svg>
+              {task.files.length}
+            </span>
+          )}
+          {task.comments.length > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-[10.5px] font-semibold text-text-faint" title={`${task.comments.length} notes`}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              {task.comments.length}
             </span>
           )}
           <span className="ml-auto">
@@ -400,7 +443,7 @@ export function ProjectTasks({
           Waiting gets noticed. So the board always renders and an empty one
           just gets a line of context above it. */}
       {tasks.length === 0 && (
-        <p className="mb-4 rounded-[12px] border border-dashed border-border bg-surface-2/40 px-3.5 py-3 text-[13px] text-text-muted">
+        <p className="mb-4 rounded-[12px] border border-dashed border-border bg-surface-2 px-3.5 py-3 text-[13px] text-text-muted">
           <span className="font-semibold text-text">Nothing on the board yet.</span>{" "}
           Add what this job still needs to a column, then drag a card as the
           work moves. Waiting is its own column, because a lot of production is
@@ -463,7 +506,7 @@ export function ProjectTasks({
 
                 <div
                   className={`flex min-h-[120px] flex-1 flex-col gap-2 rounded-[16px] border-t-2 p-2 transition ${
-                    over ? "bg-accent-soft" : "bg-surface-2/50"
+                    over ? "bg-accent-soft" : "bg-surface-2"
                   }`}
                   style={{ borderColor: `var(--h-${col.hue})` }}
                 >
@@ -555,6 +598,14 @@ export function ProjectTasks({
         }
         onAssignees={(ids: string[]) =>
           run(() => setTaskAssignees(projectId, open!.id, ids))
+        }
+        onAddFile={(fd: FormData) => run(() => addTaskFile(projectId, open!.id, fd))}
+        onRemoveFile={(fileId: string) => run(() => deleteTaskFile(projectId, fileId))}
+        onComment={(body: string) =>
+          run(() => addTaskComment(projectId, open!.id, body))
+        }
+        onDeleteComment={(id: string) =>
+          run(() => deleteTaskComment(projectId, id))
         }
         onDelete={() => {
           const id = open!.id;

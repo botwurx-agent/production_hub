@@ -1227,7 +1227,8 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0096. Recent: 0096 =
+files in supabase/migrations. THROUGH 0097. Recent: 0097 =
+task_files_and_comments (project_task_files + project_task_comments); 0096 =
 task_assignees (project_task_assignees, drops project_tasks.assignee_id);
 0095 =
 task_board_status (project_tasks.status + .sort, `done` becomes generated);
@@ -2752,6 +2753,31 @@ written, because nothing could answer "who is on this job".
 - NO canEdit GATE on this page, deliberately: project_tasks is one of the four
   tables migration 0093 kept reviewer-writable, so hiding the controls would
   take back what that migration granted.
+- FILES AND NOTES ON A CARD (migration 0097). `project_task_files` and
+  `project_task_comments`, both carrying the parent's RLS through the task, the
+  same parent-subquery shape as the assignees.
+  NEITHER REUSES AN EXISTING TABLE, and both decisions are worth keeping.
+  Files are NOT `assets`: 0078 routed project DOCUMENTS into the asset library
+  precisely because a permit is superseded constantly and needed version
+  history, whereas a reference dropped on a card is thrown away with the card,
+  and routing it through assets would mean every caller of loadProjectAssets
+  learning to exclude it, plus a wardrobe snap next to the pack shot. Comments
+  are NOT `review_comments`: that table is built around a POSITION (a pin, a
+  timecode, a page) and carries drawings, reactions, threads and a public
+  reviewer key; a note on a task is a line of text and who wrote it, so reusing
+  it would mean six nullable columns that never apply.
+  IMAGES PREVIEW ON THE CARD FACE (three, via signThumb), because the whole
+  reason to put a location photo on a task is to see it without opening
+  anything; everything else is a paperclip count. loadTaskExtras
+  (lib/people-load.ts) loads both for the WHOLE board in two queries and groups
+  in memory, rather than an embedded select per card. Uploads cross a Server
+  Action so MAX_UPLOAD_BYTES is the real ceiling, and the picker copies the
+  FileList BEFORE clearing the input (the bug the email composer shipped once).
+  Deleting a comment is `.eq("author_id", ctx.userId)`, admins deliberately not
+  special-cased, the same rule review comments follow.
+  Worth remembering: `bg-surface-2/50` on these new surfaces rendered NOTHING,
+  since a Tailwind opacity modifier compiles away on a var()-valued colour in
+  this setup. The comment rows and file tiles use the unmodified token.
 - INVITING FROM INSIDE THE WORK. The topbar has had an invite button on every
   page since 0093, and the operator still could not find a way to add someone,
   because the moment you realise you need a colleague is while staring at a
@@ -2772,10 +2798,10 @@ written, because nothing could answer "who is on this job".
 - NOT built: the dashboard Tasks widget still reads crm_tasks only, so there is
   still no studio-wide "what do I owe across every job today". That is the
   strongest next slice, and project_task_assignees is indexed on
-  (studio_id, user_id) for exactly that query. Also not built: task comments,
-  attachments, several named checklists per card, and a list view alongside the
-  board (the grouped list 0094 shipped was replaced by the board rather than
-  kept as a second view).
+  (studio_id, user_id) for exactly that query. Also not built: several NAMED
+  checklists per card (ours is one flat list of steps), and a list view
+  alongside the board (the grouped list 0094 shipped was replaced by the board
+  rather than kept as a second view).
 
 ### Next step
 STILL NOTHING QUEUED (reconfirmed by how the 2026-08 session ran: every item in

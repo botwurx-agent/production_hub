@@ -38,7 +38,32 @@ export type ChecklistItem = { id: string; text: string; done: boolean };
  * gaffer). The page flattens the embedded rows to user ids, so nothing below
  * this line has to know how they are stored.
  */
-export type BoardTask = ProjectTask & { assignees: string[] };
+export type TaskFile = {
+  id: string;
+  name: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  /** Signed for an hour. Absent if signing failed. */
+  url: string | null;
+  /** A resized copy, images only, so a card of snaps is not full-size bytes. */
+  thumbUrl: string | null;
+};
+
+export type TaskComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  /** Best available identity for the author, resolved the same way as people. */
+  author: string;
+  /** Whether the viewer wrote it: only your own can be removed. */
+  mine: boolean;
+};
+
+export type BoardTask = ProjectTask & {
+  assignees: string[];
+  files: TaskFile[];
+  comments: TaskComment[];
+};
 
 /** Ordered lanes: the four production phases, then the unphased catch-all. */
 export const TASK_PHASE_ORDER: TaskPhase[] = [

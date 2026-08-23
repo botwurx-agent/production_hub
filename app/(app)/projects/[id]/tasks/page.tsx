@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { loadProjectPeople, loadPendingInvites } from "@/lib/people-load";
+import {
+  loadProjectPeople,
+  loadPendingInvites,
+  loadTaskExtras,
+} from "@/lib/people-load";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { ProjectTasks } from "@/components/projects/project-tasks";
@@ -47,13 +51,27 @@ export default async function TasksPage({
   // and hydration is a bug you only see intermittently.
   const todayIso = new Date().toISOString().slice(0, 10);
 
+  // Files and notes for every card in two queries, rather than two per card or
+  // a fetch when one is opened.
+  const extras = await loadTaskExtras(
+    supabase,
+    ctx,
+    (tasks ?? []).map((t) => t.id),
+    people
+  );
+
   // Flatten the embedded rows to plain user ids, so nothing past this point has
   // to know assignees live in their own table.
   const board: BoardTask[] = (tasks ?? []).map((t) => {
     const { assignees, ...row } = t as typeof t & {
       assignees: { user_id: string }[] | null;
     };
-    return { ...row, assignees: (assignees ?? []).map((a) => a.user_id) };
+    return {
+      ...row,
+      assignees: (assignees ?? []).map((a) => a.user_id),
+      files: extras.files.get(t.id) ?? [],
+      comments: extras.comments.get(t.id) ?? [],
+    };
   });
 
   return (

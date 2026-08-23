@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
+import { assetStorage } from "@/lib/asset-storage";
+import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import {
   parseChecklist,
   taskPhase,
@@ -323,6 +325,174 @@ export async function deleteProjectTask(
   if (error) {
     reportError("deleteProjectTask", error);
     return { error: "Could not delete the task. Try again." };
+  }
+  refresh(projectId);
+  return null;
+}
+
+
+/* ------------------------------------------------------- files ------------ */
+
+/**
+ * A file dropped on a card.
+ *
+ * The bytes cross a Server Action, so the ~4.5MB serverless request body
+ * applies and MAX_UPLOAD_BYTES is the only cap that can actually fire: over the
+ * platform ceiling the request dies at the edge with nothing for us to report.
+ * The composer mirrors the check so it is caught before the upload rather than
+ * appearing to do nothing.
+ *
+ * Stored through assetStorage() rather than the caller's client, because the
+ * bucket policy is scoped to a studio FOLDER which a project collaborator does
+ * not satisfy. The access gate is one layer up: the task read below is
+ * RLS-gated, so reaching this point already proves access.
+ */
+export async function addTaskFile(
+  projectId: string,
+  taskId: string,
+  formData: FormData
+): Promise<TaskResult> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: task } = await supabase
+    .from("project_tasks")
+    .select("studio_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!task) return { error: "Task not found." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "No file selected." };
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      error: `That file is ${formatBytes(file.size)}, over the ${formatBytes(
+        MAX_UPLOAD_BYTES
+      )} limit for an upload.`,
+    };
+  }
+
+  const safe = file.name.replace(/[^\w.\-]+/g, "_").slice(-120) || "file";
+  const path = `${task.studio_id}/tasks/${taskId}/${crypto.randomUUID()}-${safe}`;
+  const { error: upErr } = await assetStorage().upload(
+    path,
+    Buffer.from(await file.arrayBuffer()),
+    { contentType: file.type || "application/octet-stream", upsert: false }
+  );
+  if (upErr) {
+    reportError("addTaskFile:upload", upErr);
+    return { error: "Could not upload that file. Try again." };
+  }
+
+  const { error } = await supabase.from("project_task_files").insert({
+    studio_id: task.studio_id,
+    task_id: taskId,
+    name: file.name.slice(0, 200),
+    storage_path: path,
+    mime_type: file.type || null,
+    size_bytes: file.size,
+    created_by: ctx.userId,
+  });
+  if (error) {
+    reportError("addTaskFile", error);
+    return { error: "Could not attach that file. Try again." };
+  }
+  refresh(projectId);
+  return null;
+}
+
+/**
+ * Removes the row AND the blob, in that order.
+ *
+ * The row first, because it is the RLS-gated half: if it is refused, nothing
+ * was deleted. A storage failure afterwards leaves an orphaned blob nobody can
+ * reach, which is waste rather than a leak, so it is reported and swallowed.
+ */
+export async function deleteTaskFile(
+  projectId: string,
+  fileId: string
+): Promise<TaskResult> {
+  await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: file } = await supabase
+    .from("project_task_files")
+    .select("storage_path")
+    .eq("id", fileId)
+    .maybeSingle();
+  if (!file) return { error: "File not found." };
+
+  const { error } = await supabase
+    .from("project_task_files")
+    .delete()
+    .eq("id", fileId);
+  if (error) {
+    reportError("deleteTaskFile", error);
+    return { error: "Could not remove that file. Try again." };
+  }
+  const { error: rmErr } = await assetStorage().remove([file.storage_path]);
+  if (rmErr) reportError("deleteTaskFile:storage", rmErr);
+
+  refresh(projectId);
+  return null;
+}
+
+/* ---------------------------------------------------- comments ------------ */
+
+const MAX_COMMENT = 4000;
+
+export async function addTaskComment(
+  projectId: string,
+  taskId: string,
+  body: string
+): Promise<TaskResult> {
+  const ctx = await requireStudioContext();
+  const clean = body.trim().slice(0, MAX_COMMENT);
+  if (!clean) return { error: "Write something first." };
+
+  const supabase = createClient();
+  const { data: task } = await supabase
+    .from("project_tasks")
+    .select("studio_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!task) return { error: "Task not found." };
+
+  const { error } = await supabase.from("project_task_comments").insert({
+    studio_id: task.studio_id,
+    task_id: taskId,
+    author_id: ctx.userId,
+    body: clean,
+  });
+  if (error) {
+    reportError("addTaskComment", error);
+    return { error: "Could not post that. Try again." };
+  }
+  refresh(projectId);
+  return null;
+}
+
+/**
+ * Only your own, and admins are deliberately NOT special-cased, matching the
+ * rule review comments already follow: silently rewriting or removing a
+ * colleague's note is worse than asking them to.
+ */
+export async function deleteTaskComment(
+  projectId: string,
+  commentId: string
+): Promise<TaskResult> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("project_task_comments")
+    .delete()
+    .eq("id", commentId)
+    .eq("author_id", ctx.userId);
+  if (error) {
+    reportError("deleteTaskComment", error);
+    return { error: "Could not remove that. Try again." };
   }
   refresh(projectId);
   return null;

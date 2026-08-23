@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { longDate } from "@/lib/format";
+import { longDate, shortDate } from "@/lib/format";
+import { formatBytes, MAX_UPLOAD_BYTES } from "@/lib/attachment-limits";
 import { personInitials, type Person } from "@/lib/people";
 import { openInvite } from "@/components/app-shell/invite-open";
 import {
@@ -47,6 +48,10 @@ export function TaskDetailModal({
   onPatch,
   onChecklist,
   onAssignees,
+  onAddFile,
+  onRemoveFile,
+  onComment,
+  onDeleteComment,
   onDelete,
   busy,
   canInvite = false,
@@ -68,12 +73,18 @@ export function TaskDetailModal({
   onPatch: (patch: Record<string, string | null>) => void;
   onChecklist: (items: ChecklistItem[]) => void;
   onAssignees: (userIds: string[]) => void;
+  onAddFile: (formData: FormData) => void;
+  onRemoveFile: (fileId: string) => void;
+  onComment: (body: string) => void;
+  onDeleteComment: (id: string) => void;
   onDelete: () => void;
   busy: boolean;
 }) {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [stepText, setStepText] = useState("");
+  const [comment, setComment] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // Re-seed when a DIFFERENT card is opened, not on every render of the same
   // one: keying on the id means a background refresh cannot wipe what is
@@ -83,6 +94,7 @@ export function TaskDetailModal({
     setTitle(task.title);
     setNotes(task.notes ?? "");
     setStepText("");
+    setComment("");
   }, [task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = useMemo(
@@ -353,6 +365,159 @@ export function TaskDetailModal({
             }}
             placeholder="Anything the person doing this needs to know."
             className="min-h-[80px] text-[13px]"
+          />
+        </div>
+
+        <div>
+          <div className="mb-1.5 flex items-baseline gap-2">
+            <span className="text-[11px] font-semibold text-text-muted">
+              Files
+            </span>
+            <span className="text-[11px] text-text-faint">
+              References for whoever picks this up. Up to{" "}
+              {formatBytes(MAX_UPLOAD_BYTES)} each.
+            </span>
+          </div>
+          {task.files.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {task.files.map((f) => (
+                <div
+                  key={f.id}
+                  className="group/file relative w-[104px] overflow-hidden rounded-[9px] border border-border bg-surface-2"
+                >
+                  {f.thumbUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={f.thumbUrl}
+                      alt={f.name}
+                      loading="lazy"
+                      className="h-[72px] w-full object-cover"
+                    />
+                  ) : (
+                    <div className="grid h-[72px] w-full place-items-center text-text-faint">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <path d="M14 2v6h6" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="px-1.5 py-1">
+                    {f.url ? (
+                      <a
+                        href={f.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate text-[10.5px] font-semibold text-text hover:text-accent"
+                        title={f.name}
+                      >
+                        {f.name}
+                      </a>
+                    ) : (
+                      <span className="block truncate text-[10.5px] font-semibold text-text-faint">
+                        {f.name}
+                      </span>
+                    )}
+                    {f.sizeBytes != null && (
+                      <span className="block text-[9.5px] text-text-faint">
+                        {formatBytes(f.sizeBytes)}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => onRemoveFile(f.id)}
+                    disabled={busy}
+                    aria-label={`Remove ${f.name}`}
+                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-pill bg-surface/90 text-text-faint opacity-0 transition hover:text-red group-hover/file:opacity-100"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              // Copy the FileList BEFORE clearing the input: it is a live view
+              // of the selection, and resetting value empties it. The email
+              // composer shipped this bug once already.
+              const picked = e.target.files ? Array.from(e.target.files) : [];
+              if (fileRef.current) fileRef.current.value = "";
+              for (const file of picked) {
+                if (file.size > MAX_UPLOAD_BYTES) continue;
+                const fd = new FormData();
+                fd.append("file", file);
+                onAddFile(fd);
+              }
+            }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-[9px] border border-dashed border-border px-2.5 py-1.5 text-[12px] font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.49" />
+            </svg>
+            Attach a file
+          </button>
+        </div>
+
+        <div>
+          <span className={label}>
+            Notes to the team {task.comments.length > 0 ? `(${task.comments.length})` : ""}
+          </span>
+          {task.comments.length > 0 && (
+            <ul className="mb-2 space-y-2">
+              {task.comments.map((c) => (
+                <li key={c.id} className="group/c rounded-[9px] bg-surface-2 p-2.5">
+                  <div className="mb-0.5 flex items-baseline gap-2">
+                    <span className="text-[11.5px] font-bold text-text">
+                      {c.author}
+                    </span>
+                    <span className="text-[10.5px] text-text-faint">
+                      {shortDate(c.createdAt)}
+                    </span>
+                    {/* Only your own. Admins are deliberately not special-cased,
+                        the same rule review comments follow. */}
+                    {c.mine && (
+                      <button
+                        onClick={() => onDeleteComment(c.id)}
+                        disabled={busy}
+                        className="ml-auto text-[10.5px] font-semibold text-text-faint opacity-0 transition hover:text-red group-hover/c:opacity-100"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                  <p className="whitespace-pre-wrap break-words text-[12.5px] text-text-muted">
+                    {c.body}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Textarea
+            value={comment}
+            disabled={busy}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter posts, Shift+Enter breaks the line: a note here is
+              // usually one sentence.
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                const t = comment.trim();
+                if (!t) return;
+                setComment("");
+                onComment(t);
+              }
+            }}
+            placeholder="Leave a note. Enter to post, Shift+Enter for a new line."
+            className="min-h-[56px] text-[13px]"
           />
         </div>
 

@@ -3,6 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import type { StudioContext } from "@/lib/studio";
 import type { Person } from "@/lib/people";
+import { signThumbs } from "@/lib/asset-storage";
+import { assetStorage } from "@/lib/asset-storage";
+import type { TaskComment, TaskFile } from "@/lib/tasks";
 
 /**
  * Who can be given a task on this project.
@@ -137,4 +140,89 @@ export async function loadPendingInvites(
       ...(project ?? []).map((i) => i.email),
     ]),
   ];
+}
+
+
+/**
+ * Files and notes for every task on a project, in two queries rather than two
+ * per card.
+ *
+ * A project has tens of tasks and each has a handful of either, so loading the
+ * lot and grouping in memory is cheaper than an embedded select per task and
+ * far cheaper than fetching on open. Signed URLs last an hour, which outlives
+ * any single sitting with the board.
+ *
+ * Comment authors resolve through the same invite walk as loadProjectPeople,
+ * for the same reason: auth.users is not readable under RLS and we never
+ * collected a display name. An author we cannot name reads as "Someone" rather
+ * than as a raw uuid.
+ */
+export async function loadTaskExtras(
+  supabase: SupabaseClient<Database>,
+  ctx: StudioContext,
+  taskIds: string[],
+  people: Person[]
+): Promise<{
+  files: Map<string, TaskFile[]>;
+  comments: Map<string, TaskComment[]>;
+}> {
+  const files = new Map<string, TaskFile[]>();
+  const comments = new Map<string, TaskComment[]>();
+  if (taskIds.length === 0) return { files, comments };
+
+  const [{ data: fileRows }, { data: commentRows }] = await Promise.all([
+    supabase
+      .from("project_task_files")
+      .select("id, task_id, name, storage_path, mime_type, size_bytes")
+      .in("task_id", taskIds)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("project_task_comments")
+      .select("id, task_id, author_id, body, created_at")
+      .in("task_id", taskIds)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  const rows = fileRows ?? [];
+  const paths = rows.map((r) => r.storage_path);
+  const [signed, thumbs] = await Promise.all([
+    paths.length
+      ? assetStorage().createSignedUrls(paths, 60 * 60)
+      : Promise.resolve({ data: null }),
+    signThumbs(
+      rows.filter((r) => r.mime_type?.startsWith("image/")).map((r) => r.storage_path)
+    ),
+  ]);
+  const urlByPath = new Map<string, string>();
+  for (const item of signed.data ?? []) {
+    if (item.path && item.signedUrl) urlByPath.set(item.path, item.signedUrl);
+  }
+
+  for (const r of rows) {
+    const list = files.get(r.task_id) ?? [];
+    list.push({
+      id: r.id,
+      name: r.name,
+      mimeType: r.mime_type,
+      sizeBytes: r.size_bytes,
+      url: urlByPath.get(r.storage_path) ?? null,
+      thumbUrl: thumbs.get(r.storage_path) ?? null,
+    });
+    files.set(r.task_id, list);
+  }
+
+  const labelByUser = new Map(people.map((p) => [p.userId, p.isSelf ? "You" : p.label]));
+  for (const c of commentRows ?? []) {
+    const list = comments.get(c.task_id) ?? [];
+    list.push({
+      id: c.id,
+      body: c.body,
+      createdAt: c.created_at,
+      author: (c.author_id && labelByUser.get(c.author_id)) || "Someone",
+      mine: c.author_id === ctx.userId,
+    });
+    comments.set(c.task_id, list);
+  }
+
+  return { files, comments };
 }

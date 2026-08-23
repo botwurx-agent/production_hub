@@ -2651,6 +2651,72 @@ export type Database = {
           },
         ];
       };
+      project_task_files: {
+        Row: {
+          id: string;
+          studio_id: string;
+          task_id: string;
+          name: string;
+          storage_path: string;
+          mime_type: string | null;
+          size_bytes: number | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          task_id: string;
+          name: string;
+          storage_path: string;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          task_id?: string;
+          name?: string;
+          storage_path?: string;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      project_task_comments: {
+        Row: {
+          id: string;
+          studio_id: string;
+          task_id: string;
+          author_id: string | null;
+          body: string;
+          edited_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          task_id: string;
+          author_id?: string | null;
+          body: string;
+          edited_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          task_id?: string;
+          author_id?: string | null;
+          body?: string;
+          edited_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       project_task_assignees: {
         Row: {
           id: string;
@@ -4342,6 +4408,8 @@ export type CrmActivity = Tables<"crm_activities">;
 export type CrmTask = Tables<"crm_tasks">;
 export type ProjectTask = Tables<"project_tasks">;
 export type ProjectTaskAssignee = Tables<"project_task_assignees">;
+export type ProjectTaskFile = Tables<"project_task_files">;
+export type ProjectTaskComment = Tables<"project_task_comments">;
 export type Lead = Tables<"leads">;
 export type Contact = Tables<"contacts">;
 export type Project = Tables<"projects">;
