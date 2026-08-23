@@ -43,6 +43,17 @@ demo studio's seeded `email_accounts` rows make the closed state render, and
 nothing further: opening a thread calls the real API with an invented token and
 fails.
 
+It is also the one shot that is not a crop. Every image here is 3006x1704
+because they all render at the same width on the marketing page, so the aspect
+ratio alone decides how tall a section is: a full-page capture of this screen
+came out 3200x3446 and drew a section twice the height of every other one. The
+others reach that shape by cropping the top of a page that continues below the
+fold, which does not work here, since cropping the Communication page at 852 CSS
+pixels gets as far as the Slack panel's header and stops. So the script takes
+the same 1.764 shape from a wider window (2250x1276 at 1.336x) and the whole
+page fits inside it. The UI sits about a third smaller in frame than in its
+neighbours, which is the price of not losing the thing being shown.
+
 So the script shoots `/dev/comms`, a fixture that renders the real Sidebar,
 ProjectSubhead and Card on the real tokens with an invented conversation in the
 same Bright Water fiction the demo already uses. Read that file's header for

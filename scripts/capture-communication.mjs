@@ -17,9 +17,26 @@
 // conversation in the Bright Water fiction the demo studio already uses. Read
 // that file's header for what is real and what is drawn.
 //
-// Same viewport and deviceScaleFactor as capture-shots.mjs on purpose: a shot
-// at a different scale to the others is what makes a page look assembled
-// rather than designed.
+// SIZE MATTERS MORE HERE THAN ANYWHERE. Every shot on the marketing page renders
+// at the same WIDTH, so its aspect ratio alone decides how tall its section is.
+// The other images are all 3006x1704, so this must be too: a fullPage capture
+// came out 3200x3446 and drew a section twice the height of every other one,
+// which read as a different site.
+//
+// The others get that shape by CROPPING the top of a page that carries on below
+// the fold. That does not work here. Cropping this page at 852 CSS pixels gets
+// as far as the Slack panel's header and stops, and a Communication shot with
+// no Slack message in it is not making the argument. The three panels stack, so
+// the height is the content, not a choice.
+//
+// So it takes the same SHAPE from a wider window instead: 2250x1276 is the same
+// 1.764 ratio, and the whole page fits inside it. The trade is that the UI sits
+// about a third smaller in frame than in its neighbours. Worth it, because the
+// alternative loses the thing being shown, and because these are viewed at
+// around 760px wide where everything is small anyway.
+//
+// If you add to the fixture, widen this to match (keep width / height at 1.764)
+// or trim the fixture back. Do not switch it to fullPage.
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,9 +51,11 @@ const browser = await chromium.launch(
     ? { executablePath: process.env.CHROMIUM_PATH }
     : undefined,
 );
+// 1.336 rather than 2, so the file lands at 3006x1705 and matches the other
+// shots pixel for pixel rather than merely in proportion.
 const ctx = await browser.newContext({
-  viewport: { width: 1600, height: 1000 },
-  deviceScaleFactor: 2,
+  viewport: { width: 2250, height: 1276 },
+  deviceScaleFactor: 1.336,
 });
 const page = await ctx.newPage();
 
@@ -49,13 +68,7 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(1500);
 
-// The fixture is taller than the viewport (three panels, one thread open), and
-// the argument is that all three channels sit on one page, so a viewport-height
-// crop would cut off the half that makes the point.
-await page.screenshot({
-  path: join(OUT, "project-communication.png"),
-  fullPage: true,
-});
+await page.screenshot({ path: join(OUT, "project-communication.png") });
 console.log("shot  project-communication");
 
 await browser.close();

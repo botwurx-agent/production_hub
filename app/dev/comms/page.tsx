@@ -37,21 +37,23 @@ import { EnvelopeIcon, HashIcon, PlusIcon } from "@/components/app-shell/nav-ico
 
 const PROJECT = "b1000000-0000-4000-a000-000000000001";
 
-const EMAILS = [
+type FixtureEmail = {
+  from: string;
+  date: string;
+  body: string;
+  attachment: { name: string; meta: string } | null;
+};
+
+const EMAILS: FixtureEmail[] = [
   {
     from: "Dana Whitfield <dana@brightwater.example>",
     date: "August 21, 2026 at 9:41 AM",
-    body: `Watched v2 with the brand team, we are close. The pour at 0:06 still reads slow against the music, can it come in six frames earlier?
-
-Legal also came back on the on-screen line, it needs to say "naturally sourced" not "natural". Everything else is signed off our end.`,
-    attachment: { name: "BrightWater_legal_wording_v3.pdf", meta: "PDF · 84 KB" },
-  },
-  {
-    from: "Sean Ellis <sean@northlinestudio.example>",
-    date: "August 21, 2026 at 10:12 AM",
-    body: `Wording is quick, that one is done. I have pulled the pour forward eight frames and it sits better on the downbeat now.
-
-New cut is on the review link, same URL as before so your notes carry across.`,
+    body: `Watched v2 with the brand team, we are close. The pour at 0:06 still reads slow against the music, can it come in six frames earlier? Legal also came back on the on-screen line, it needs to say "naturally sourced" not "natural".`,
+    // No attachment card in the frame. It is a good detail (the import buttons
+    // are one of the section's bullets) and it costs about ninety pixels, which
+    // at this crop is the difference between the Slack panel showing messages
+    // and showing an empty header. Two apps talking is the argument; the
+    // attachment is a nice-to-have.
     attachment: null,
   },
 ];
@@ -65,18 +67,10 @@ const THREADS = [
     unread: 2,
     open: true,
   },
-  {
-    sender: "Marcus Bell",
-    subject: "Re: Shoot dates and the studio hold",
-    snippet: "Confirming the 4th and 5th, stage 2 is held from 7am both days.",
-    date: "Aug 17",
-    unread: 0,
-    open: false,
-  },
 ];
 
 const SLACK = [
-  { author: "Priya Raman", time: "9:58 AM", text: "Legal wording came in on the client thread, grabbing it now. The pdf is on the email if you want the exact line." },
+  { author: "Priya Raman", time: "9:58 AM", text: "Legal wording just came in on the client thread, grabbing it now." },
   { author: "Sean Ellis", time: "10:14 AM", text: "Got it. v3 rendering, should be on the review link in about ten minutes." },
 ];
 
@@ -169,24 +163,19 @@ function ThreadRow({ t }: { t: (typeof THREADS)[number] }) {
               </li>
             ))}
           </ol>
-          <div className="mt-3 border-t border-border pt-3">
-            <div className="min-h-[62px] w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text-faint">
-              Reply to Dana Whitfield...
-            </div>
-            <div className="mt-2 flex items-center justify-end gap-3">
-              <span className="mr-auto inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
-                </svg>
-                Polish
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted">
-                Attach
-              </span>
-              <span className="inline-flex items-center rounded-[9px] bg-accent px-3 py-1.5 text-xs font-bold text-accent-fg">
-                Send reply
-              </span>
-            </div>
+          <div className="mt-3 flex items-center justify-end gap-3 border-t border-border pt-3">
+            <span className="mr-auto inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+              </svg>
+              Polish
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted">
+              Attach
+            </span>
+            <span className="inline-flex items-center rounded-[9px] bg-accent px-3 py-1.5 text-xs font-bold text-accent-fg">
+              Send reply
+            </span>
           </div>
         </div>
       )}

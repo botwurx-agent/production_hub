@@ -2684,10 +2684,22 @@ UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
   Water fiction the demo studio already uses, and the thread/channel markup
   copied from what ThreadReader and SlackReader render when open. Restyle
   either and the fixture needs re-copying (a drift shows the moment the shot is
-  retaken beside the others). `npm run shots:comms` captures it at the same
-  1600px / 2x as every other shot. It is the only page in the repo that draws a
+  retaken beside the others). It is the only page in the repo that draws a
   screen instead of being one, which is why both it and the script say so at
-  length. If a throwaway inbox is ever connected to the demo, delete both and
+  length.
+  SIZING IS NOT COSMETIC HERE, and the first attempt got it wrong: every shot
+  renders at the same WIDTH on the marketing page, so its aspect ratio alone
+  decides how tall its section is. A fullPage capture came out 3200x3446 and
+  drew a section twice the height of every other one. The siblings are all
+  3006x1704 because they CROP the top of a page that continues below the fold,
+  and that does not work here: cropping this page at 852 CSS pixels reaches the
+  Slack panel's header and stops, and a Communication shot with no Slack message
+  in it is not making the argument (the three panels stack, so height is content
+  rather than a choice). `npm run shots:comms` therefore takes the same 1.764
+  shape from a WIDER window, 2250x1276 at 1.336x, so the whole page fits and the
+  file matches the others pixel for pixel. Cost: the UI sits about a third
+  smaller in frame than in its neighbours. Add to the fixture and you must widen
+  the capture to match or trim it back. If a throwaway inbox is ever connected to the demo, delete both and
   add the real page to capture-shots.mjs, which is strictly better.
   Middleware gained ONE line for it: `/dev/*` is public when NODE_ENV is not
   production, so a capture script can reach it without a session, and stays
