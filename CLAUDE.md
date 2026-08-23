@@ -1227,8 +1227,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0094. Recent: 0094 =
-task_phase_and_checklist (project_tasks.phase + .checklist); 0093 =
+files in supabase/migrations. THROUGH 0095. Recent: 0095 =
+task_board_status (project_tasks.status + .sort, `done` becomes generated);
+0094 = task_phase_and_checklist (project_tasks.phase + .checklist); 0093 =
 project_reviewer_role (can_edit_project + 41 policies split); 0092 = props
 (+ prop_options, + approval_target 'props'); 0091 =
 contact_profiles (+ contact_files, + call_sheet_recipients.contact_id); 0090 =
@@ -2652,42 +2653,63 @@ chasing whoever ignored it. This owns everything either side of that link.
   order contents, and any spend reconciliation (the receipt still goes in
   through the existing cost flow).
 
-### Tasks, grouped by the phase of the job (migration 0094) — BUILT
+### Task board (migrations 0094, 0095) — BUILT
 Came from the operator reading a competitor's project-management page and
 deciding ours was thin. It was: a flat checklist of title + due date, with
 `assignee_id` and `notes` sitting in the table since 0059 and never once
 written, because nothing could answer "who is on this job".
-- THE COLUMNS ARE THE PRODUCTION'S PHASES, and refusing the obvious kanban is
-  the whole design. To do / Doing / Done are the same three words on every board
-  in every industry and mean nothing until each team invents a meaning; Pre-pro
-  / Production / Post / Delivery already mean something exact to a producer, the
-  app already speaks in them (lifecycle stepper, project board, slate), and they
-  RENAME THEMSELVES per project type through the existing stageLabel(), so an AI
-  job's lanes read Concept and Generation. A competitor's board cannot do that.
-- It is also what stops it looking copied. A grouped list is what this app
-  already does three times over (the Review page's status buckets, the contacts
-  roster's folder tabs, the hub's phase bands), so reusing our own idiom is a
-  stronger anti-copy argument than restyling theirs.
-- `project_tasks.phase` reuses the `project_status` ENUM rather than inventing a
-  parallel vocabulary, and is NULLABLE: a fifth "Anytime" lane holds work that
-  genuinely belongs to no phase ("chase the insurance certificate"), and every
-  pre-existing task keeps working with no backfill guessing where it belongs.
-  Labels are never stored, since a stored one goes stale the moment a project's
-  type changes.
-- DONE STAYS A CHECKBOX, not a fifth lane. Finishing a task does not move it to
-  a different part of the production, and a Done column is where a board goes to
-  accumulate. Filters (Open / Mine / Overdue / Done) do that job instead.
+- IT IS A KANBAN, AND THE FIRST ATTEMPT WRONGLY REFUSED TO BE ONE. 0094 shipped
+  a grouped LIST on the reasoning that To do / Doing / Done is a generic pattern
+  and phases are the domain's own vocabulary. The operator overruled it, and was
+  right for a reason worth keeping: this app ALREADY ships kanban on the
+  Projects board and the deal pipeline, so a task board is our own idiom rather
+  than a borrowed one, and dragging a card is the motion people actually want.
+  "Does it look like the competitor" is answered by what the columns MEAN, not
+  by refusing the shape.
+- TWO AXES, and the board groups by either (`tasks.groupBy` in localStorage).
+  STATUS (0095) is progress and the default: To do / In progress / WAITING /
+  Done. Waiting is the one that earns its place, because on a real job a large
+  share of tasks are not blocked by the studio at all, they are sitting with a
+  client, an agency, a vendor or a location owner; a board without it pushes all
+  of that into "in progress" and misreports where the job is.
+  PHASE (0094) re-columns the same cards into pre-pro / production / post /
+  delivery, reusing the `project_status` ENUM rather than a parallel vocabulary,
+  so the columns RENAME THEMSELVES per project type via the existing
+  stageLabel() (an AI job reads Concept and Generation). Nullable, so a fifth
+  "Anytime" column holds work belonging to no phase and every pre-existing task
+  keeps working with no backfill guessing. Labels are never stored; a stored one
+  goes stale the moment a project's type changes.
+- `done` IS NOW A GENERATED COLUMN (`status = 'done'`). Every existing reader
+  (hub counts, dashboard, Runner, outstanding) selects `done` and needed no
+  change, and it can no longer drift out of step with the card's column. The
+  consequence to remember: Postgres REFUSES a write to it, so toggling a task
+  writes `status`. Dropping the old column took its index with it, rebuilt in
+  the same migration.
+- `sort` is a float and a drop computes the MIDPOINT between its new
+  neighbours, so one row is written rather than renumbering a column. Repeated
+  drops into the same gap eventually exhaust float precision (about fifty from a
+  gap of 1); two cards then share a key and fall through to the due date, which
+  is an unintended order rather than lost work. Not worth a renumbering pass.
+- DRAG IS NATIVE HTML5, the same as the call sheet's block reordering, so no
+  drag library is in the bundle. Verified end to end in headless Chromium
+  (dragstart -> dragover -> drop -> dragend all fire).
+- A card opens in a MODAL, not an inline expander: on a board an expanding card
+  reflows the column under the cursor you just dropped with.
+- `amber` was added to the `Hue` union in components/status-tag.tsx. The
+  --h-amber tokens have existed from the start and are used directly all over
+  (every "someone owes us something" signal); the union had just never named it.
 - `checklist` is jsonb for the same reason call_sheets.layout and
   contact_profiles.wardrobe are: never filtered, sorted or joined on, only ever
   read with its parent, and a shape change should not cost a migration.
   parseChecklist (lib/tasks.ts) is the trust boundary out of it.
-- lib/tasks.ts is pure and unit-tested in the scratchpad (44 assertions),
+- lib/tasks.ts is pure and unit-tested in the scratchpad (68 assertions),
   including that UNDATED TASKS SORT LAST (nulls-first would put every vague
-  intention above tomorrow's delivery), that "Mine" excludes UNASSIGNED work
-  (otherwise it means "Open" on a solo studio, which is no filter at all), that
-  a lane's open count ignores the active filter, and that `todayIso` is passed
-  in from the SERVER like the slate and the payment schedule so an overdue chip
-  cannot differ after hydration.
+  intention above tomorrow's delivery), that a hand-placed sort key beats the
+  due date but equal keys fall through to it, that twenty successive drops into
+  one gap stay strictly ordered, that every card appears in exactly one column
+  under both groupings, and that `todayIso` is passed in from the SERVER like
+  the slate and the payment schedule so an overdue chip cannot differ after
+  hydration.
 - ASSIGNEES FINALLY WORK, and the reason they never did is worth knowing: we
   never collected a display name at signup, and `auth.users` is not readable
   under RLS, so identity has to be walked out of the INVITE each person accepted
@@ -2704,13 +2726,14 @@ written, because nothing could answer "who is on this job".
 - NO canEdit GATE on this page, deliberately: project_tasks is one of the four
   tables migration 0093 kept reviewer-writable, so hiding the controls would
   take back what that migration granted.
-- Runner's create_task passes no phase (it is never told one, and guessing files
-  work in the wrong lane), so its tasks land in Anytime.
+- Runner's create_task passes no phase or status (it is never told one, and
+  guessing files work in the wrong column), so its tasks land in To do /
+  Anytime.
 - NOT built: the dashboard Tasks widget still reads crm_tasks only, so there is
   still no studio-wide "what do I owe across every job today". That is the
-  strongest next slice. Also not built: drag to reorder (moving a phase is a
-  menu, which works on a phone and needs no drag library), task comments, and
-  attachments.
+  strongest next slice. Also not built: several assignees per card, task
+  comments, attachments, and a list view alongside the board (the grouped list
+  0094 shipped was replaced by the board rather than kept as a second view).
 
 ### Next step
 STILL NOTHING QUEUED (reconfirmed by how the 2026-08 session ran: every item in

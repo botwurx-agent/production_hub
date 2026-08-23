@@ -1,67 +1,60 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   addProjectTask,
   toggleProjectTask,
   updateProjectTask,
+  moveTask,
   setTaskChecklist,
   deleteProjectTask,
 } from "@/app/(app)/projects/[id]/task-actions";
-import { Button } from "@/components/ui/button";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
+import { TaskDetailModal } from "@/components/projects/task-detail-modal";
 import { shortDate } from "@/lib/format";
 import { personInitials, type Person } from "@/lib/people";
 import {
   NO_PHASE,
-  TASK_PHASE_ORDER,
+  TASK_STATUS,
+  boardColumns,
   checklistProgress,
-  groupTasks,
   parseChecklist,
-  phaseMeta,
+  sortKeyFor,
   summarizeTasks,
   taskState,
+  taskStatus,
   type ChecklistItem,
-  type TaskFilter,
-  type TaskPhase,
+  type GroupBy,
 } from "@/lib/tasks";
 import type { ProjectStatus, ProjectTask } from "@/lib/database.types";
 
 /**
- * The project's task list, grouped by the phase of the production.
+ * The project's task board.
  *
- * DELIBERATELY NOT A BOARD. The reference for this was a competitor's kanban:
- * drag cards between columns you name yourself. Two reasons not to copy it.
- * First, To do / Doing / Done are the same three words on every board in every
- * industry and carry no meaning until each team invents one, which fails the
- * bar in section 4.1 about modelling production rather than generic software.
- * Second, this app already groups work this way in three places (the Review
- * page's status buckets, the contacts roster's folder tabs, the hub's phase
- * bands), so a grouped list is what Studio Flows looks like and a kanban board
- * is what everything else looks like.
+ * COLUMNS ARE PROGRESS BY DEFAULT and you drag cards across them, the motion
+ * the rest of this app already uses on the Projects board and the deal
+ * pipeline. What makes it ours rather than a generic kanban is two things.
  *
- * Moving a task between phases is a menu on the row, not a drag. Slower by a
- * fraction of a second, works on a phone and with a keyboard, and needs no
- * drag library.
+ * WAITING is a first-class column. On a real job a large share of tasks are not
+ * blocked by the studio: they are sitting with a client, an agency, a vendor or
+ * a location owner. A board without that column pushes all of it into "in
+ * progress" and misreports where the job is.
+ *
+ * GROUP BY PHASE re-columns the same board into the production's own phases,
+ * which rename themselves per job type (an AI project reads Concept and
+ * Generation). Same cards, same drag, a different question answered.
+ *
+ * Drag is native HTML5, the same as the call sheet's block reordering, so there
+ * is no drag library in the bundle. Dropping computes a MIDPOINT sort key, so
+ * one row is written rather than renumbering a column.
  */
 
-const FILTERS: { key: TaskFilter; label: string }[] = [
-  { key: "open", label: "Open" },
-  { key: "mine", label: "Mine" },
-  { key: "overdue", label: "Overdue" },
-  { key: "done", label: "Done" },
-];
+const VIEW_KEY = "tasks.groupBy";
 
-function newId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `i${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function AssigneeChip({ person }: { person: Person | undefined }) {
+function Avatar({ person }: { person: Person | undefined }) {
   if (!person) return null;
   return (
     <span
@@ -77,83 +70,55 @@ function AssigneeChip({ person }: { person: Person | undefined }) {
   );
 }
 
-function PeopleOptions({ people }: { people: Person[] }) {
-  return (
-    <>
-      <option value="">Unassigned</option>
-      {people.map((p) => (
-        <option key={p.userId} value={p.userId}>
-          {p.isSelf ? `${p.label} (you)` : p.label}
-        </option>
-      ))}
-    </>
-  );
-}
-
-function PhaseOptions({ projectType }: { projectType: string | null }) {
-  return (
-    <>
-      {TASK_PHASE_ORDER.map((p) => (
-        <option key={p} value={p === NO_PHASE ? "" : p}>
-          {phaseMeta(p, projectType).label}
-        </option>
-      ))}
-    </>
-  );
-}
-
-function TaskRow({
+function TaskCard({
   task,
-  projectId,
-  projectType,
   people,
   todayIso,
-  canEdit,
-  busy,
-  run,
+  dragging,
+  onOpen,
+  onToggle,
+  onDragStart,
+  onDragEnd,
 }: {
   task: ProjectTask;
-  projectId: string;
-  projectType: string | null;
   people: Person[];
   todayIso: string;
-  canEdit: boolean;
-  busy: boolean;
-  run: (fn: () => Promise<{ error?: string } | null | void>) => void;
+  dragging: boolean;
+  onOpen: () => void;
+  onToggle: () => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [notes, setNotes] = useState(task.notes ?? "");
-  const [stepText, setStepText] = useState("");
-
-  const items = useMemo(() => parseChecklist(task.checklist), [task.checklist]);
+  const items = parseChecklist(task.checklist);
   const progress = checklistProgress(items);
   const state = taskState(task, todayIso);
   const assignee = people.find((p) => p.userId === task.assignee_id);
-
-  function saveSteps(next: ChecklistItem[]) {
-    run(() => setTaskChecklist(projectId, task.id, next));
-  }
-
-  const dueStyle =
-    state === "overdue"
-      ? { backgroundColor: "var(--h-red-bg)", color: "var(--h-red)" }
-      : state === "due"
-        ? { backgroundColor: "var(--h-amber-bg)", color: "var(--h-amber)" }
-        : { color: "var(--text-faint)" };
+  const pct = progress.total
+    ? Math.round((progress.done / progress.total) * 100)
+    : 0;
 
   return (
-    <li
-      className={`rounded-[11px] border transition ${
-        open
-          ? "border-border bg-surface shadow-sm"
-          : "border-transparent hover:border-border hover:bg-surface-2/50"
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        // Some browsers refuse to start a drag with an empty payload.
+        e.dataTransfer.setData("text/plain", task.id);
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      onClick={onOpen}
+      className={`cursor-grab rounded-[11px] border border-border bg-surface p-2.5 text-left shadow-sm transition hover:-translate-y-px hover:border-border-strong hover:shadow active:cursor-grabbing ${
+        dragging ? "opacity-40" : ""
       }`}
     >
-      <div className="group flex items-center gap-2.5 px-2.5 py-2">
+      <div className="flex items-start gap-2">
         <button
-          onClick={() => run(() => toggleProjectTask(projectId, task.id, !task.done))}
-          disabled={busy || !canEdit}
-          className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border transition"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          className="mt-[3px] grid h-[16px] w-[16px] shrink-0 place-items-center rounded-[5px] border transition"
           style={{
             borderColor: task.done ? "var(--h-green)" : "var(--border-strong)",
             backgroundColor: task.done ? "var(--h-green)" : "transparent",
@@ -161,230 +126,63 @@ function TaskRow({
           aria-label={task.done ? "Mark not done" : "Mark done"}
         >
           {task.done && (
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 6 9 17l-5-5" />
             </svg>
           )}
         </button>
-
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="min-w-0 flex-1 text-left"
-          aria-expanded={open}
+        <span
+          className={`min-w-0 flex-1 text-[13px] font-semibold leading-snug ${
+            task.done ? "text-text-faint line-through" : "text-text"
+          }`}
         >
-          <span
-            className={`block truncate text-sm ${
-              task.done ? "text-text-faint line-through" : "text-text"
-            }`}
-          >
-            {task.title}
-          </span>
-          {!open && (task.notes || progress.total > 0) && (
-            <span className="mt-0.5 flex items-center gap-2 text-[11px] text-text-faint">
-              {progress.total > 0 && (
-                <span className="font-semibold">
-                  {progress.done}/{progress.total} steps
-                </span>
-              )}
-              {task.notes && <span className="truncate">{task.notes}</span>}
-            </span>
-          )}
-        </button>
-
-        <AssigneeChip person={assignee} />
-
-        {task.due_date && (
-          <span
-            className="shrink-0 rounded-pill px-2 py-0.5 text-[11px] font-semibold"
-            style={dueStyle}
-          >
-            {state === "due" ? "Today" : shortDate(task.due_date)}
-          </span>
-        )}
-
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="shrink-0 rounded-[7px] p-1 text-text-faint transition hover:text-text"
-          aria-label={open ? "Collapse" : "Expand"}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ transform: open ? "rotate(180deg)" : undefined }}
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        </button>
+          {task.title}
+        </span>
       </div>
 
-      {open && (
-        <div className="space-y-3 border-t border-border px-2.5 py-3">
-          <div className="grid gap-2 sm:grid-cols-3">
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold text-text-muted">
-                Phase
-              </span>
-              <Select
-                value={task.phase ?? ""}
-                disabled={busy || !canEdit}
-                onChange={(e) =>
-                  run(() =>
-                    updateProjectTask(projectId, task.id, {
-                      phase: e.target.value || null,
-                    })
-                  )
-                }
-                className="py-1.5 text-[13px]"
-              >
-                <PhaseOptions projectType={projectType} />
-              </Select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold text-text-muted">
-                Owner
-              </span>
-              <Select
-                value={task.assignee_id ?? ""}
-                disabled={busy || !canEdit}
-                onChange={(e) =>
-                  run(() =>
-                    updateProjectTask(projectId, task.id, {
-                      assignee_id: e.target.value || null,
-                    })
-                  )
-                }
-                className="py-1.5 text-[13px]"
-              >
-                <PeopleOptions people={people} />
-              </Select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-semibold text-text-muted">
-                Due
-              </span>
-              <Input
-                type="date"
-                value={task.due_date ?? ""}
-                disabled={busy || !canEdit}
-                onChange={(e) =>
-                  run(() =>
-                    updateProjectTask(projectId, task.id, {
-                      due_date: e.target.value || null,
-                    })
-                  )
-                }
-                className="py-1.5 text-[13px]"
-              />
-            </label>
-          </div>
-
-          <div>
-            <span className="mb-1 block text-[11px] font-semibold text-text-muted">
-              Steps
+      {progress.total > 0 && (
+        <div className="mt-2 pl-[24px]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10.5px] font-bold text-text-faint">
+              {progress.done}/{progress.total}
             </span>
-            {items.length > 0 && (
-              <ul className="mb-1.5 space-y-0.5">
-                {items.map((it) => (
-                  <li key={it.id} className="group/step flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        saveSteps(
-                          items.map((x) =>
-                            x.id === it.id ? { ...x, done: !x.done } : x
-                          )
-                        )
-                      }
-                      disabled={busy || !canEdit}
-                      className="grid h-[15px] w-[15px] shrink-0 place-items-center rounded-[4px] border transition"
-                      style={{
-                        borderColor: it.done ? "var(--h-green)" : "var(--border-strong)",
-                        backgroundColor: it.done ? "var(--h-green)" : "transparent",
-                      }}
-                      aria-label={it.done ? "Mark step not done" : "Mark step done"}
-                    >
-                      {it.done && (
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
-                      )}
-                    </button>
-                    <span
-                      className={`min-w-0 flex-1 truncate text-[13px] ${
-                        it.done ? "text-text-faint line-through" : "text-text-muted"
-                      }`}
-                    >
-                      {it.text}
-                    </span>
-                    <button
-                      onClick={() => saveSteps(items.filter((x) => x.id !== it.id))}
-                      disabled={busy || !canEdit}
-                      className="shrink-0 text-text-faint opacity-0 transition hover:text-red group-hover/step:opacity-100"
-                      aria-label="Remove step"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {canEdit && (
-              <Input
-                value={stepText}
-                onChange={(e) => setStepText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  const t = stepText.trim();
-                  if (!t) return;
-                  setStepText("");
-                  saveSteps([...items, { id: newId(), text: t, done: false }]);
-                }}
-                placeholder="Add a step, then Enter"
-                className="py-1.5 text-[13px]"
-              />
-            )}
+            <span className="text-[10.5px] text-text-faint">{pct}%</span>
           </div>
-
-          <div>
-            <span className="mb-1 block text-[11px] font-semibold text-text-muted">
-              Notes
-            </span>
-            <Textarea
-              value={notes}
-              disabled={busy || !canEdit}
-              onChange={(e) => setNotes(e.target.value)}
-              // Saved on blur, not on every keystroke, so a paragraph is one
-              // write and one revalidate rather than two hundred.
-              onBlur={() => {
-                if ((task.notes ?? "") === notes.trim()) return;
-                run(() => updateProjectTask(projectId, task.id, { notes }));
+          <div className="mt-1 h-1 w-full overflow-hidden rounded-pill bg-surface-2">
+            <div
+              className="h-full rounded-pill"
+              style={{
+                width: `${pct}%`,
+                backgroundColor:
+                  pct === 100 ? "var(--h-green)" : "var(--h-amber)",
               }}
-              placeholder="Anything the person doing this needs to know."
-              className="min-h-[64px] text-[13px]"
             />
           </div>
-
-          {canEdit && (
-            <div className="flex justify-end">
-              <button
-                onClick={() => run(() => deleteProjectTask(projectId, task.id))}
-                disabled={busy}
-                className="text-[11.5px] font-semibold text-text-faint transition hover:text-red"
-              >
-                Delete task
-              </button>
-            </div>
-          )}
         </div>
       )}
-    </li>
+
+      {(task.due_date || assignee) && (
+        <div className="mt-2 flex items-center gap-2 pl-[24px]">
+          {task.due_date && (
+            <span
+              className="rounded-pill px-1.5 py-0.5 text-[10.5px] font-semibold"
+              style={
+                state === "overdue"
+                  ? { backgroundColor: "var(--h-red-bg)", color: "var(--h-red)" }
+                  : state === "due"
+                    ? { backgroundColor: "var(--h-amber-bg)", color: "var(--h-amber)" }
+                    : { color: "var(--text-faint)" }
+              }
+            >
+              {state === "due" ? "Today" : shortDate(task.due_date)}
+            </span>
+          )}
+          <span className="ml-auto">
+            <Avatar person={assignee} />
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -396,30 +194,42 @@ export function ProjectTasks({
   people,
   todayIso,
   viewerId,
-  canEdit = true,
 }: {
   projectId: string;
   projectType: string | null;
-  /** The stage the job is in, which seeds the composer's phase. */
+  /** The stage the job is in, which seeds a new task's phase. */
   projectStatus: ProjectStatus;
   tasks: ProjectTask[];
   people: Person[];
   /** Resolved on the server, so an overdue chip cannot differ after hydration. */
   todayIso: string;
   viewerId: string | null;
-  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
-  const [filter, setFilter] = useState<TaskFilter>("open");
 
-  const [title, setTitle] = useState("");
-  const [due, setDue] = useState("");
-  // Seeded from where the job actually is. Most tasks somebody types during
-  // pre-pro are pre-pro tasks, so this is right more often than empty is, and
-  // it is one menu to correct when it is not.
-  const [phase, setPhase] = useState<string>(projectStatus);
-  const [assignee, setAssignee] = useState<string>("");
+  const [groupBy, setGroupBy] = useState<GroupBy>("status");
+  const [mineOnly, setMineOnly] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropCol, setDropCol] = useState<string | null>(null);
+  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState("");
+
+  // Which axis the board is grouped by is a per-person view preference, the
+  // same call as the slate's week count: a browser value, not a migration.
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(VIEW_KEY);
+      if (v === "status" || v === "phase") setGroupBy(v);
+    } catch {}
+  }, []);
+  function pickGroupBy(v: GroupBy) {
+    setGroupBy(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {}
+  }
 
   function run(fn: () => Promise<{ error?: string } | null | void>) {
     start(async () => {
@@ -432,287 +242,299 @@ export function ProjectTasks({
     });
   }
 
-  function add() {
-    const t = title.trim();
-    if (!t) return;
+  const visible = useMemo(
+    () =>
+      mineOnly && viewerId
+        ? tasks.filter((t) => t.assignee_id === viewerId)
+        : tasks,
+    [tasks, mineOnly, viewerId]
+  );
+
+  const columns = useMemo(
+    () => boardColumns(visible, groupBy, projectType),
+    [visible, groupBy, projectType]
+  );
+  const summary = useMemo(
+    () => summarizeTasks(tasks, todayIso),
+    [tasks, todayIso]
+  );
+  const mineCount = tasks.filter(
+    (t) => !t.done && t.assignee_id === viewerId
+  ).length;
+
+  const open = tasks.find((t) => t.id === openId) ?? null;
+
+  /**
+   * A card dropped on a column, at `index` within it.
+   *
+   * The dragged card is removed from the target column BEFORE the midpoint is
+   * computed, otherwise dropping a card back next to itself would average its
+   * own key with a neighbour's and it would appear not to move.
+   */
+  function drop(columnKey: string, index: number) {
+    const id = dragId;
+    setDragId(null);
+    setDropCol(null);
+    if (!id) return;
+    const col = columns.find((c) => c.key === columnKey);
+    if (!col) return;
+    const without = col.tasks.filter((t) => t.id !== id);
+    const at = Math.min(index, without.length);
+    const key = sortKeyFor(without, at);
+    const value = columnKey === NO_PHASE ? null : columnKey;
+    run(() => moveTask(projectId, id, groupBy, value, key));
+  }
+
+  function addTo(columnKey: string) {
+    const t = newTitle.trim();
+    if (!t) {
+      setAddingTo(null);
+      return;
+    }
+    setNewTitle("");
     start(async () => {
       const res = await addProjectTask(projectId, {
         title: t,
-        dueDate: due || null,
-        phase: phase || null,
-        assigneeId: assignee || null,
+        // The column you typed into decides one axis; the other takes its
+        // sensible default, which for a phase is where the job actually is.
+        status: groupBy === "status" ? columnKey : "todo",
+        phase:
+          groupBy === "phase"
+            ? columnKey === NO_PHASE
+              ? null
+              : columnKey
+            : projectStatus,
       });
       if ("error" in res) {
         toast(res.error, "error");
         return;
       }
-      setTitle("");
-      setDue("");
-      // Phase and owner deliberately persist between adds. Tasks arrive in
-      // runs ("three more things for the shoot"), so clearing them would make
-      // the second and third add cost two extra choices each.
       router.refresh();
     });
   }
 
-  const summary = useMemo(
-    () => summarizeTasks(tasks, todayIso),
-    [tasks, todayIso]
-  );
-  const groups = useMemo(
-    () => groupTasks(tasks, todayIso, filter, viewerId),
-    [tasks, todayIso, filter, viewerId]
-  );
-
-  const counts: Record<TaskFilter, number> = {
-    open: summary.open,
-    mine: tasks.filter((t) => !t.done && t.assignee_id === viewerId).length,
-    overdue: summary.overdue,
-    done: summary.done,
-  };
-
-  const shown = groups.reduce((n, g) => n + g.tasks.length, 0);
-
-  if (tasks.length === 0) {
-    return (
-      <>
-        {canEdit && (
-          <Composer
-            title={title}
-            setTitle={setTitle}
-            due={due}
-            setDue={setDue}
-            phase={phase}
-            setPhase={setPhase}
-            assignee={assignee}
-            setAssignee={setAssignee}
-            people={people}
-            projectType={projectType}
-            busy={busy}
-            add={add}
-          />
-        )}
-        <div className="mt-5">
-          <EmptyState
-            hue="purple"
-            title="Nothing on the list yet"
-            description="Everything this job still needs, sorted into the phase it belongs to."
-            steps={[
-              {
-                title: "Put it in a phase",
-                text: "Pre-pro, production, post or delivery, the same phases the job runs on.",
-              },
-              {
-                title: "Give it an owner",
-                text: "Anyone on the studio or on this project. Filter to Mine to see only yours.",
-              },
-              {
-                title: "Break it down",
-                text: "Open a task to add steps and notes for whoever picks it up.",
-              },
-            ]}
-          />
-        </div>
-      </>
-    );
-  }
+  const toggleClass = (on: boolean) =>
+    `rounded-pill px-2.5 py-1 text-xs font-semibold transition ${
+      on
+        ? "bg-surface text-text shadow-sm"
+        : "text-text-muted hover:text-text"
+    }`;
 
   return (
     <div>
-      {canEdit && (
-        <Composer
-          title={title}
-          setTitle={setTitle}
-          due={due}
-          setDue={setDue}
-          phase={phase}
-          setPhase={setPhase}
-          assignee={assignee}
-          setAssignee={setAssignee}
-          people={people}
-          projectType={projectType}
-          busy={busy}
-          add={add}
-        />
-      )}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 rounded-pill bg-surface-2 p-1">
+          <button onClick={() => pickGroupBy("status")} className={toggleClass(groupBy === "status")}>
+            By status
+          </button>
+          <button onClick={() => pickGroupBy("phase")} className={toggleClass(groupBy === "phase")}>
+            By phase
+          </button>
+        </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-1.5">
-        {FILTERS.map((f) => {
-          const on = filter === f.key;
-          return (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold transition ${
-                on
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-text-muted hover:border-border-strong hover:text-text"
-              }`}
-            >
-              {f.label}
-              <span
-                className={`text-[11px] font-bold ${
-                  on ? "text-accent" : "text-text-faint"
-                }`}
-              >
-                {counts[f.key]}
-              </span>
+        {people.length > 1 && (
+          <div className="flex items-center gap-1 rounded-pill bg-surface-2 p-1">
+            <button onClick={() => setMineOnly(false)} className={toggleClass(!mineOnly)}>
+              Everyone
             </button>
-          );
-        })}
+            <button onClick={() => setMineOnly(true)} className={toggleClass(mineOnly)}>
+              Mine {mineCount > 0 ? mineCount : ""}
+            </button>
+          </div>
+        )}
+
+        <span className="ml-auto text-xs font-medium text-text-faint">
+          {summary.open} open
+          {summary.overdue > 0 && (
+            <>
+              {" · "}
+              <span style={{ color: "var(--h-red)" }} className="font-bold">
+                {summary.overdue} overdue
+              </span>
+            </>
+          )}
+        </span>
       </div>
 
-      {shown === 0 ? (
-        <p className="mt-5 rounded-[12px] border border-dashed border-border py-8 text-center text-sm text-text-faint">
-          Nothing here under this filter.
-        </p>
+      {tasks.length === 0 ? (
+        <EmptyState
+          hue="purple"
+          title="Nothing on the board yet"
+          description="Everything this job still needs, on a board you drag across as it moves."
+          steps={[
+            {
+              title: "Add it to a column",
+              text: "To do, in progress, waiting on someone, done.",
+            },
+            {
+              title: "Drag it as it moves",
+              text: "Waiting is its own column, because half of production is waiting on somebody.",
+            },
+            {
+              title: "Or group by phase",
+              text: "Same cards, re-columned into pre-pro, production, post and delivery.",
+            },
+          ]}
+          action={
+            <button
+              onClick={() => setAddingTo("todo")}
+              className="rounded-[10px] bg-accent px-3.5 py-2 text-sm font-bold text-accent-fg"
+            >
+              Add the first task
+            </button>
+          }
+        />
       ) : (
-        <div className="mt-4 space-y-5">
-          {groups.map((g) => {
-            // A lane with nothing in it under the current filter is hidden, but
-            // a lane that is genuinely empty for the whole job still shows, so
-            // the list reads as the shape of the production rather than only
-            // the parts somebody has got to.
-            if (g.tasks.length === 0 && g.open > 0) return null;
-            if (g.tasks.length === 0 && filter !== "open") return null;
-            const meta = phaseMeta(g.phase as TaskPhase, projectType);
+        // Columns FILL the width when they fit and scroll when they do not,
+        // which matters because grouping by phase adds a fifth. min-w keeps a
+        // card readable rather than letting five columns squeeze to nothing.
+        <div className="-mx-1 flex items-stretch gap-3 overflow-x-auto px-1 pb-2">
+          {columns.map((col) => {
+            const over = dropCol === col.key;
             return (
-              <section key={g.phase}>
-                <div className="mb-1.5 flex items-center gap-2">
+              <div
+                key={col.key}
+                className="flex min-w-[236px] flex-1 flex-col"
+                onDragOver={(e) => {
+                  if (!dragId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDropCol(col.key);
+                }}
+                onDragLeave={(e) => {
+                  // Only clear when the pointer actually left the column, not
+                  // when it crossed onto a card inside it.
+                  if (!e.currentTarget.contains(e.relatedTarget as Node))
+                    setDropCol((c) => (c === col.key ? null : c));
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  drop(col.key, col.tasks.length);
+                }}
+              >
+                <div
+                  className="mb-2 flex items-center gap-2 rounded-[11px] px-3 py-2"
+                  style={{ backgroundColor: `var(--h-${col.hue}-bg)` }}
+                >
                   <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: `var(--h-${meta.hue})` }}
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: `var(--h-${col.hue})` }}
+                    aria-hidden="true"
                   />
-                  <h3 className="text-[12.5px] font-bold uppercase tracking-wide text-text-muted">
-                    {meta.label}
-                  </h3>
-                  <span className="text-[11.5px] font-semibold text-text-faint">
-                    {g.open > 0 ? `${g.open} open` : "clear"}
+                  <span
+                    className="truncate text-sm font-extrabold"
+                    style={{ color: `var(--h-${col.hue})` }}
+                  >
+                    {col.label}
                   </span>
-                  {g.overdue > 0 && (
-                    <span
-                      className="rounded-pill px-1.5 py-0.5 text-[10.5px] font-bold"
-                      style={{ backgroundColor: "var(--h-red-bg)", color: "var(--h-red)" }}
-                    >
-                      {g.overdue} overdue
-                    </span>
-                  )}
+                  <span
+                    className="ml-auto rounded-pill px-2 py-0.5 text-xs font-bold"
+                    style={{
+                      backgroundColor: "var(--surface)",
+                      color: `var(--h-${col.hue})`,
+                    }}
+                  >
+                    {col.tasks.length}
+                  </span>
                 </div>
-                {g.tasks.length === 0 ? (
-                  <p className="rounded-[10px] border border-dashed border-border px-3 py-2.5 text-[12.5px] text-text-faint">
-                    Nothing planned here yet.
-                  </p>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {g.tasks.map((t) => (
-                      <TaskRow
-                        key={t.id}
+
+                <div
+                  className={`flex min-h-[120px] flex-1 flex-col gap-2 rounded-[16px] border-t-2 p-2 transition ${
+                    over ? "bg-accent-soft" : "bg-surface-2/50"
+                  }`}
+                  style={{ borderColor: `var(--h-${col.hue})` }}
+                >
+                  {col.tasks.map((t, i) => (
+                    <div
+                      key={t.id}
+                      onDragOver={(e) => {
+                        if (!dragId || dragId === t.id) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDropCol(col.key);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        drop(col.key, i);
+                      }}
+                    >
+                      <TaskCard
                         task={t}
-                        projectId={projectId}
-                        projectType={projectType}
                         people={people}
                         todayIso={todayIso}
-                        canEdit={canEdit}
-                        busy={busy}
-                        run={run}
+                        dragging={dragId === t.id}
+                        onOpen={() => setOpenId(t.id)}
+                        onToggle={() =>
+                          run(() => toggleProjectTask(projectId, t.id, !t.done))
+                        }
+                        onDragStart={() => setDragId(t.id)}
+                        onDragEnd={() => {
+                          setDragId(null);
+                          setDropCol(null);
+                        }}
                       />
-                    ))}
-                  </ul>
-                )}
-              </section>
+                    </div>
+                  ))}
+
+                  {col.tasks.length === 0 && !over && (
+                    <p className="px-2 py-5 text-center text-[11.5px] text-text-faint">
+                      {col.hint || "Nothing here"}
+                    </p>
+                  )}
+
+                  {addingTo === col.key ? (
+                    <Input
+                      autoFocus
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      onBlur={() => addTo(col.key)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addTo(col.key);
+                        if (e.key === "Escape") {
+                          setNewTitle("");
+                          setAddingTo(null);
+                        }
+                      }}
+                      placeholder="What needs doing?"
+                      className="py-1.5 text-[13px]"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setNewTitle("");
+                        setAddingTo(col.key);
+                      }}
+                      className="rounded-[9px] px-2 py-1.5 text-left text-[12.5px] font-semibold text-text-faint transition hover:bg-surface hover:text-text"
+                    >
+                      + Add task
+                    </button>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
       )}
-    </div>
-  );
-}
 
-function Composer({
-  title,
-  setTitle,
-  due,
-  setDue,
-  phase,
-  setPhase,
-  assignee,
-  setAssignee,
-  people,
-  projectType,
-  busy,
-  add,
-}: {
-  title: string;
-  setTitle: (v: string) => void;
-  due: string;
-  setDue: (v: string) => void;
-  phase: string;
-  setPhase: (v: string) => void;
-  assignee: string;
-  setAssignee: (v: string) => void;
-  people: Person[];
-  projectType: string | null;
-  busy: boolean;
-  add: () => void;
-}) {
-  return (
-    <div className="rounded-[13px] border border-border bg-surface-2/40 p-2.5">
-      <Input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") add();
+      <TaskDetailModal
+        task={open}
+        people={people}
+        projectType={projectType}
+        busy={busy}
+        onClose={() => setOpenId(null)}
+        onPatch={(patch) =>
+          run(() => updateProjectTask(projectId, open!.id, patch))
+        }
+        onChecklist={(items: ChecklistItem[]) =>
+          run(() => setTaskChecklist(projectId, open!.id, items))
+        }
+        onDelete={() => {
+          const id = open!.id;
+          setOpenId(null);
+          run(() => deleteProjectTask(projectId, id));
         }}
-        placeholder="Add a task, e.g. Send the treatment to Dana"
       />
-      {/* Widths live on WRAPPERS, not on the controls. The shared field style
-          sets w-full, and a w-auto passed through className does not reliably
-          beat it: which wins is decided by the order the two rules end up in
-          the built stylesheet, not by the order of the class string. */}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <div className="w-[140px]">
-          <Select
-            value={phase}
-            onChange={(e) => setPhase(e.target.value)}
-            aria-label="Phase"
-            className="py-1.5 text-[13px]"
-          >
-            <PhaseOptions projectType={projectType} />
-          </Select>
-        </div>
-        {/* Only offered when there is somebody else to offer. On a solo studio
-            a picker with one name in it is a control that cannot be wrong, so
-            it is only noise. */}
-        {people.length > 1 && (
-          <div className="w-[190px]">
-            <Select
-              value={assignee}
-              onChange={(e) => setAssignee(e.target.value)}
-              aria-label="Owner"
-              className="py-1.5 text-[13px]"
-            >
-              <PeopleOptions people={people} />
-            </Select>
-          </div>
-        )}
-        <div className="w-[150px]">
-          <Input
-            type="date"
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
-            aria-label="Due date"
-            className="py-1.5 text-[13px]"
-          />
-        </div>
-        <Button
-          size="sm"
-          onClick={add}
-          disabled={busy || !title.trim()}
-          className="ml-auto"
-        >
-          Add task
-        </Button>
-      </div>
     </div>
   );
 }

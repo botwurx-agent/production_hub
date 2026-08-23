@@ -6,18 +6,21 @@ import type { Hue } from "@/components/status-tag";
 /**
  * What a project's task list is made of.
  *
- * The organising idea, and the reason this is not a kanban board: a task's
- * COLUMN is the phase of the production it belongs to, not a status somebody
- * invented. To do / Doing / Done are the same three words on every board in
- * every industry and mean whatever each person decides they mean. Pre-pro /
- * Shoot / Post / Delivery already mean something precise to a producer, this
- * app already speaks in them (the lifecycle stepper, the project board, the
- * slate), and they rename themselves per job type: an AI project's middle phase
- * is Generation, a live-action one's is Shoot.
+ * A task carries TWO independent axes, and the board can be grouped by either.
  *
- * Done stays a checkbox rather than a fifth column, because finishing a task
- * does not move it to a different part of the production, and because a Done
- * column is where a board goes to accumulate.
+ * STATUS is progress, and it is what you drag across: To do, In progress,
+ * Waiting, Done. Waiting is the one worth having and the reason this is not a
+ * generic kanban: on a real job a large share of tasks are not blocked by the
+ * studio at all, they are sitting with a client, an agency, a vendor or a
+ * location owner. A board without that column pushes all of it into "in
+ * progress" and misreports where the job actually is.
+ *
+ * PHASE is which part of the production a task belongs to: pre-pro, production,
+ * post, delivery. It reuses the project_status values the lifecycle stepper and
+ * the project board already use, so it renames itself per job type (an AI
+ * project's middle phase is Generation, a live-action one's is Shoot). Grouping
+ * the board by phase answers a different question than grouping by status, and
+ * no competitor's board can relabel itself to the job.
  */
 
 /** A task with no phase set. Not a phase, and deliberately last. */
@@ -209,4 +212,115 @@ export function summarizeTasks(
     }
   }
   return { open, overdue, done, total: tasks.length };
+}
+
+/* ---------------------------------------------------------------- status --
+ * The board's default columns: what is happening to a task right now.
+ */
+
+export const TASK_STATUS_ORDER = ["todo", "doing", "waiting", "done"] as const;
+export type TaskStatus = (typeof TASK_STATUS_ORDER)[number];
+
+export const TASK_STATUS: Record<
+  TaskStatus,
+  { label: string; hue: Hue; hint: string }
+> = {
+  todo: { label: "To do", hue: "cyan", hint: "Not started" },
+  doing: { label: "In progress", hue: "blue", hint: "Being worked on now" },
+  // Amber, matching every other "someone else owes us something" signal in the
+  // app, because that is exactly what this column is.
+  waiting: {
+    label: "Waiting",
+    hue: "amber",
+    hint: "Sitting with a client, a vendor or the crew",
+  },
+  done: { label: "Done", hue: "green", hint: "Finished" },
+};
+
+/** Narrow an untrusted value to a column. Anything unknown is unstarted. */
+export function taskStatus(v: string | null | undefined): TaskStatus {
+  return (TASK_STATUS_ORDER as readonly string[]).includes(v ?? "")
+    ? (v as TaskStatus)
+    : "todo";
+}
+
+/* ----------------------------------------------------------- the board ---- */
+
+export type GroupBy = "status" | "phase";
+
+export type BoardColumn = {
+  /** The value written when a card is dropped here. Null is the Anytime lane. */
+  key: string;
+  label: string;
+  hue: Hue;
+  hint: string;
+  tasks: ProjectTask[];
+};
+
+/**
+ * Columns for whichever axis is being grouped by, every column always present.
+ *
+ * An empty column is information on a board in a way it is not in a list: it
+ * says nothing is waiting on anyone, or that nobody has planned post yet.
+ */
+export function boardColumns(
+  tasks: ProjectTask[],
+  groupBy: GroupBy,
+  projectType: string | null | undefined
+): BoardColumn[] {
+  const inColumn = (key: string) =>
+    tasks
+      .filter((t) =>
+        groupBy === "status"
+          ? taskStatus(t.status) === key
+          : (t.phase ?? NO_PHASE) === key
+      )
+      .sort(compareForBoard);
+
+  if (groupBy === "status") {
+    return TASK_STATUS_ORDER.map((key) => ({
+      key,
+      ...TASK_STATUS[key],
+      tasks: inColumn(key),
+    }));
+  }
+  return TASK_PHASE_ORDER.map((key) => {
+    const meta = phaseMeta(key, projectType);
+    return { key, label: meta.label, hue: meta.hue, hint: meta.hint, tasks: inColumn(key) };
+  });
+}
+
+/**
+ * Order inside a column: the hand-placed position first, then the due date.
+ *
+ * `sort` starts at 0 for every task that existed before the board did, so a
+ * column nobody has dragged in still reads soonest-first rather than in
+ * whatever order Postgres returned.
+ */
+export function compareForBoard(a: ProjectTask, b: ProjectTask): number {
+  if (a.sort !== b.sort) return a.sort - b.sort;
+  return compareTasks(a, b);
+}
+
+/**
+ * The sort key for a card dropped at `index` within `column`.
+ *
+ * Midpoint insertion: only the dragged card is written, so a drop is one row
+ * update rather than renumbering the column. `column` must NOT include the card
+ * being moved, or dropping a card next to itself computes a midpoint against
+ * its own key and it does not move.
+ *
+ * Floats do run out of precision if you drop repeatedly into the same gap
+ * (about fifty times from a gap of 1), at which point two cards share a key and
+ * compareForBoard falls through to the due date. Worth knowing, not worth a
+ * renumbering pass: the failure is a pair of cards in a stable but unintended
+ * order, not lost work.
+ */
+export function sortKeyFor(column: ProjectTask[], index: number): number {
+  const before = index > 0 ? column[index - 1]?.sort : undefined;
+  const after = column[index]?.sort;
+  if (before === undefined && after === undefined) return 0;
+  if (before === undefined) return (after as number) - 1;
+  if (after === undefined) return before + 1;
+  return (before + after) / 2;
 }

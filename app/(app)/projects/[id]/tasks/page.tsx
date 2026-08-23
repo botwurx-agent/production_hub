@@ -27,7 +27,9 @@ export default async function TasksPage({
       .from("project_tasks")
       .select("*")
       .eq("project_id", params.id)
-      .order("due_date", { ascending: true, nullsFirst: false })
+      // The board sorts within a column itself (hand-placed position, then due
+      // date), so this only needs to be stable.
+      .order("sort", { ascending: true })
       .order("created_at", { ascending: true }),
     loadProjectPeople(supabase, ctx, params.id),
   ]);
@@ -44,7 +46,7 @@ export default async function TasksPage({
         projectTitle={project.title}
         section="Tasks"
         hue="purple"
-        subtitle="Everything this job still needs, in the phase it belongs to."
+        subtitle="Drag a card as the work moves. Group by status, or by the phase of the job."
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 11l3 3L22 4" />

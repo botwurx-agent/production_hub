@@ -13,6 +13,10 @@ export type Hue =
   | "green"
   | "yellow"
   | "orange"
+  // amber has had --h-amber tokens since the start and is used directly all
+  // over (every "someone owes us something" signal), it had just never been
+  // named in this union.
+  | "amber"
   | "pink"
   | "red";
 
@@ -24,6 +28,7 @@ const hueStyles: Record<Hue, { bg: string; fg: string }> = {
   green: { bg: "var(--h-green-bg)", fg: "var(--h-green)" },
   yellow: { bg: "var(--h-yellow-bg)", fg: "var(--h-yellow)" },
   orange: { bg: "var(--h-orange-bg)", fg: "var(--h-orange)" },
+  amber: { bg: "var(--h-amber-bg)", fg: "var(--h-amber)" },
   pink: { bg: "var(--h-pink-bg)", fg: "var(--h-pink)" },
   red: { bg: "var(--h-red-bg)", fg: "var(--h-red)" },
 };

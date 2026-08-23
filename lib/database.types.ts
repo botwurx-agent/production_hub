@@ -2604,6 +2604,8 @@ export type Database = {
           assignee_id: string | null;
           phase: ProjectStatus | null;
           checklist: Json;
+          status: string;
+          sort: number;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -2615,11 +2617,12 @@ export type Database = {
           title: string;
           notes?: string | null;
           due_date?: string | null;
-          done?: boolean;
           done_at?: string | null;
           assignee_id?: string | null;
           phase?: ProjectStatus | null;
           checklist?: Json;
+          status?: string;
+          sort?: number;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -2631,11 +2634,12 @@ export type Database = {
           title?: string;
           notes?: string | null;
           due_date?: string | null;
-          done?: boolean;
           done_at?: string | null;
           assignee_id?: string | null;
           phase?: ProjectStatus | null;
           checklist?: Json;
+          status?: string;
+          sort?: number;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;

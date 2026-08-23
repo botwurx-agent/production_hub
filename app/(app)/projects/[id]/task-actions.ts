@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
-import { parseChecklist, taskPhase, type ChecklistItem } from "@/lib/tasks";
+import {
+  parseChecklist,
+  taskPhase,
+  taskStatus,
+  type ChecklistItem,
+} from "@/lib/tasks";
 import type { ProjectStatus } from "@/lib/database.types";
 
 export type TaskResult = { error?: string } | null;
@@ -20,6 +25,9 @@ export type NewTask = {
   dueDate?: string | null;
   phase?: string | null;
   assigneeId?: string | null;
+  /** Which board column it is being added to. Defaults to To do. */
+  status?: string | null;
+  sort?: number;
 };
 
 export async function addProjectTask(
@@ -51,6 +59,11 @@ export async function addProjectTask(
       // an unknown value should land the task in Anytime rather than be
       // refused by the enum with an error nobody can act on.
       phase: taskPhase(input.phase),
+      status: taskStatus(input.status),
+      // New cards land at the top of their column. A task you just typed is the
+      // one you are thinking about, and burying it under a month of older work
+      // is how a board stops being looked at.
+      sort: input.sort ?? -Date.now() / 1e6,
       assignee_id: input.assigneeId || null,
       created_by: ctx.userId,
     })
@@ -64,6 +77,17 @@ export async function addProjectTask(
   return { id: data.id };
 }
 
+/**
+ * Tick or untick a task.
+ *
+ * Writes STATUS, not `done`: since migration 0095 `done` is a generated column
+ * derived from the status, and Postgres refuses a write to one. That is the
+ * point, since it makes it impossible to tick a task without moving its card.
+ *
+ * Unticking returns it to To do rather than to whatever column it was in
+ * before, because we do not keep a previous column and guessing would be worse
+ * than the honest default.
+ */
 export async function toggleProjectTask(
   projectId: string,
   id: string,
@@ -73,7 +97,10 @@ export async function toggleProjectTask(
   const supabase = createClient();
   const { error } = await supabase
     .from("project_tasks")
-    .update({ done, done_at: done ? new Date().toISOString() : null })
+    .update({
+      status: done ? "done" : "todo",
+      done_at: done ? new Date().toISOString() : null,
+    })
     .eq("id", id);
   if (error) {
     reportError("toggleProjectTask", error);
@@ -92,6 +119,7 @@ export async function updateProjectTask(
     notes?: string | null;
     phase?: string | null;
     assignee_id?: string | null;
+    status?: string | null;
   }
 ): Promise<TaskResult> {
   await requireStudioContext();
@@ -102,6 +130,8 @@ export async function updateProjectTask(
     notes?: string | null;
     phase?: ProjectStatus | null;
     assignee_id?: string | null;
+    status?: string;
+    done_at?: string | null;
     updated_at: string;
   } = { updated_at: new Date().toISOString() };
 
@@ -115,6 +145,12 @@ export async function updateProjectTask(
   if (patch.phase !== undefined) write.phase = taskPhase(patch.phase);
   if (patch.assignee_id !== undefined)
     write.assignee_id = patch.assignee_id || null;
+  if (patch.status !== undefined) {
+    const next = taskStatus(patch.status);
+    write.status = next;
+    // done_at is a plain column, so it is stamped here rather than derived.
+    write.done_at = next === "done" ? new Date().toISOString() : null;
+  }
 
   const supabase = createClient();
   const { error } = await supabase
@@ -124,6 +160,55 @@ export async function updateProjectTask(
   if (error) {
     reportError("updateProjectTask", error);
     return { error: "Could not save the task. Try again." };
+  }
+  refresh(projectId);
+  return null;
+}
+
+/**
+ * A card dropped somewhere: which column it landed in, and where in it.
+ *
+ * One row is written, because the caller computed a midpoint sort key rather
+ * than a position, so the rest of the column is untouched. `groupBy` decides
+ * which axis the drop meant: on a board grouped by status, dragging across
+ * changes what is happening to the task; grouped by phase, it changes which
+ * part of the production it belongs to. Sending the axis rather than inferring
+ * it keeps the server from having to guess what the board was showing.
+ */
+export async function moveTask(
+  projectId: string,
+  id: string,
+  groupBy: "status" | "phase",
+  column: string | null,
+  sort: number
+): Promise<TaskResult> {
+  await requireStudioContext();
+  if (!Number.isFinite(sort)) return { error: "Could not place that card." };
+
+  const write: {
+    sort: number;
+    status?: string;
+    done_at?: string | null;
+    phase?: ProjectStatus | null;
+    updated_at: string;
+  } = { sort, updated_at: new Date().toISOString() };
+
+  if (groupBy === "status") {
+    const next = taskStatus(column);
+    write.status = next;
+    write.done_at = next === "done" ? new Date().toISOString() : null;
+  } else {
+    write.phase = taskPhase(column);
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("project_tasks")
+    .update(write)
+    .eq("id", id);
+  if (error) {
+    reportError("moveTask", error);
+    return { error: "Could not move the task. Try again." };
   }
   refresh(projectId);
   return null;
