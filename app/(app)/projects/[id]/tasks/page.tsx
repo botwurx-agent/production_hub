@@ -5,7 +5,7 @@ import { loadProjectPeople } from "@/lib/people-load";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { ProjectTasks } from "@/components/projects/project-tasks";
-import type { ProjectTask } from "@/lib/database.types";
+import type { BoardTask } from "@/lib/tasks";
 
 export default async function TasksPage({
   params,
@@ -25,7 +25,10 @@ export default async function TasksPage({
   const [{ data: tasks }, people] = await Promise.all([
     supabase
       .from("project_tasks")
-      .select("*")
+      // Assignees ride along as an embedded select. The typed client refuses
+      // the embed without a Relationships entry in database.types.ts, which is
+      // the same trap prop_options and call_sheet_recipients hit.
+      .select("*, assignees:project_task_assignees(user_id)")
       .eq("project_id", params.id)
       // The board sorts within a column itself (hand-placed position, then due
       // date), so this only needs to be stable.
@@ -38,6 +41,15 @@ export default async function TasksPage({
   // payment schedule: an overdue chip that disagrees between the server render
   // and hydration is a bug you only see intermittently.
   const todayIso = new Date().toISOString().slice(0, 10);
+
+  // Flatten the embedded rows to plain user ids, so nothing past this point has
+  // to know assignees live in their own table.
+  const board: BoardTask[] = (tasks ?? []).map((t) => {
+    const { assignees, ...row } = t as typeof t & {
+      assignees: { user_id: string }[] | null;
+    };
+    return { ...row, assignees: (assignees ?? []).map((a) => a.user_id) };
+  });
 
   return (
     <div>
@@ -59,7 +71,7 @@ export default async function TasksPage({
           projectId={project.id}
           projectType={project.project_type}
           projectStatus={project.status}
-          tasks={(tasks ?? []) as ProjectTask[]}
+          tasks={board}
           people={people}
           todayIso={todayIso}
           viewerId={ctx.userId}

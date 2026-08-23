@@ -2601,7 +2601,6 @@ export type Database = {
           due_date: string | null;
           done: boolean;
           done_at: string | null;
-          assignee_id: string | null;
           phase: ProjectStatus | null;
           checklist: Json;
           status: string;
@@ -2618,7 +2617,6 @@ export type Database = {
           notes?: string | null;
           due_date?: string | null;
           done_at?: string | null;
-          assignee_id?: string | null;
           phase?: ProjectStatus | null;
           checklist?: Json;
           status?: string;
@@ -2635,7 +2633,6 @@ export type Database = {
           notes?: string | null;
           due_date?: string | null;
           done_at?: string | null;
-          assignee_id?: string | null;
           phase?: ProjectStatus | null;
           checklist?: Json;
           status?: string;
@@ -2643,6 +2640,38 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_task_assignees_task_id_fkey";
+            columns: ["id"];
+            isOneToOne: false;
+            referencedRelation: "project_task_assignees";
+            referencedColumns: ["task_id"];
+          },
+        ];
+      };
+      project_task_assignees: {
+        Row: {
+          id: string;
+          studio_id: string;
+          task_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          task_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          task_id?: string;
+          user_id?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -4312,6 +4341,7 @@ export type Deal = Tables<"deals">;
 export type CrmActivity = Tables<"crm_activities">;
 export type CrmTask = Tables<"crm_tasks">;
 export type ProjectTask = Tables<"project_tasks">;
+export type ProjectTaskAssignee = Tables<"project_task_assignees">;
 export type Lead = Tables<"leads">;
 export type Contact = Tables<"contacts">;
 export type Project = Tables<"projects">;

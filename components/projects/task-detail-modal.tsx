@@ -14,9 +14,9 @@ import {
   parseChecklist,
   phaseMeta,
   taskStatus,
+  type BoardTask,
   type ChecklistItem,
 } from "@/lib/tasks";
-import type { ProjectTask } from "@/lib/database.types";
 
 /**
  * A card opened up.
@@ -45,15 +45,17 @@ export function TaskDetailModal({
   onClose,
   onPatch,
   onChecklist,
+  onAssignees,
   onDelete,
   busy,
 }: {
-  task: ProjectTask | null;
+  task: BoardTask | null;
   people: Person[];
   projectType: string | null;
   onClose: () => void;
   onPatch: (patch: Record<string, string | null>) => void;
   onChecklist: (items: ChecklistItem[]) => void;
+  onAssignees: (userIds: string[]) => void;
   onDelete: () => void;
   busy: boolean;
 }) {
@@ -119,7 +121,7 @@ export function TaskDetailModal({
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3">
           <label className="block">
             <span className={label}>Column</span>
             <Select
@@ -151,22 +153,6 @@ export function TaskDetailModal({
             </Select>
           </label>
           <label className="block">
-            <span className={label}>Owner</span>
-            <Select
-              value={task.assignee_id ?? ""}
-              disabled={busy}
-              onChange={(e) => onPatch({ assignee_id: e.target.value || null })}
-              className="py-1.5 text-[13px]"
-            >
-              <option value="">Unassigned</option>
-              {people.map((p) => (
-                <option key={p.userId} value={p.userId}>
-                  {p.isSelf ? `${p.label} (you)` : p.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="block">
             <span className={label}>Due</span>
             <Input
               type="date"
@@ -176,6 +162,55 @@ export function TaskDetailModal({
               className="py-1.5 text-[13px]"
             />
           </label>
+        </div>
+
+        <div>
+          <span className={label}>On this task</span>
+          {/* Everyone at once rather than a dropdown you reopen per person:
+              assigning two people is the common case this exists for, and a
+              select would make the second name cost as much as the first. */}
+          <div className="flex flex-wrap gap-1.5">
+            {people.map((p) => {
+              const on = task.assignees.includes(p.userId);
+              return (
+                <button
+                  key={p.userId}
+                  disabled={busy}
+                  onClick={() =>
+                    onAssignees(
+                      on
+                        ? task.assignees.filter((id) => id !== p.userId)
+                        : [...task.assignees, p.userId]
+                    )
+                  }
+                  className={`inline-flex items-center gap-1.5 rounded-pill border py-1 pl-1 pr-2.5 text-[12px] font-semibold transition ${
+                    on
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border text-text-muted hover:border-border-strong hover:text-text"
+                  }`}
+                  title={p.scope === "project" ? "On this project only" : "Studio member"}
+                >
+                  <span
+                    className="grid h-[20px] w-[20px] place-items-center rounded-pill text-[9.5px] font-bold"
+                    style={{
+                      backgroundColor: on ? "var(--surface)" : "var(--surface-2)",
+                      color: on ? "var(--accent)" : "var(--text-muted)",
+                    }}
+                  >
+                    {personInitials(p.label)}
+                  </span>
+                  <span className="max-w-[150px] truncate">
+                    {p.isSelf ? "You" : p.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {task.assignees.length === 0 && (
+            <p className="mt-1.5 text-[11.5px] text-text-faint">
+              Nobody on it yet.
+            </p>
+          )}
         </div>
 
         <div>
@@ -285,15 +320,6 @@ export function TaskDetailModal({
         <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
           <span className="text-[11px] text-text-faint">
             Added {longDate(task.created_at)}
-            {task.assignee_id &&
-              people.find((p) => p.userId === task.assignee_id) && (
-                <>
-                  {" · "}
-                  {personInitials(
-                    people.find((p) => p.userId === task.assignee_id)!.label
-                  )}
-                </>
-              )}
           </span>
           <button
             onClick={onDelete}

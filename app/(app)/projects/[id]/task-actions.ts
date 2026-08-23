@@ -24,7 +24,8 @@ export type NewTask = {
   title: string;
   dueDate?: string | null;
   phase?: string | null;
-  assigneeId?: string | null;
+  /** Everyone on the card. Empty means unassigned. */
+  assignees?: string[];
   /** Which board column it is being added to. Defaults to To do. */
   status?: string | null;
   sort?: number;
@@ -64,7 +65,6 @@ export async function addProjectTask(
       // one you are thinking about, and burying it under a month of older work
       // is how a board stops being looked at.
       sort: input.sort ?? -Date.now() / 1e6,
-      assignee_id: input.assigneeId || null,
       created_by: ctx.userId,
     })
     .select("id")
@@ -73,6 +73,24 @@ export async function addProjectTask(
     reportError("addProjectTask", error);
     return { error: "Could not add the task. Try again." };
   }
+
+  // Assignees are their own rows, so they go in after the task exists. A
+  // failure here leaves the task without names rather than losing the task,
+  // which is the right way round: the title is the thing being captured.
+  const people = (input.assignees ?? []).filter(Boolean);
+  if (people.length > 0) {
+    const { error: aErr } = await supabase
+      .from("project_task_assignees")
+      .insert(
+        people.map((user_id) => ({
+          studio_id: project.studio_id,
+          task_id: data.id,
+          user_id,
+        }))
+      );
+    if (aErr) reportError("addProjectTask:assignees", aErr);
+  }
+
   refresh(projectId);
   return { id: data.id };
 }
@@ -118,7 +136,6 @@ export async function updateProjectTask(
     due_date?: string | null;
     notes?: string | null;
     phase?: string | null;
-    assignee_id?: string | null;
     status?: string | null;
   }
 ): Promise<TaskResult> {
@@ -129,7 +146,6 @@ export async function updateProjectTask(
     due_date?: string | null;
     notes?: string | null;
     phase?: ProjectStatus | null;
-    assignee_id?: string | null;
     status?: string;
     done_at?: string | null;
     updated_at: string;
@@ -143,8 +159,6 @@ export async function updateProjectTask(
   if (patch.due_date !== undefined) write.due_date = patch.due_date || null;
   if (patch.notes !== undefined) write.notes = patch.notes?.trim() || null;
   if (patch.phase !== undefined) write.phase = taskPhase(patch.phase);
-  if (patch.assignee_id !== undefined)
-    write.assignee_id = patch.assignee_id || null;
   if (patch.status !== undefined) {
     const next = taskStatus(patch.status);
     write.status = next;
@@ -210,6 +224,60 @@ export async function moveTask(
     reportError("moveTask", error);
     return { error: "Could not move the task. Try again." };
   }
+  refresh(projectId);
+  return null;
+}
+
+/**
+ * Who is on a card, written as the whole set.
+ *
+ * Same reasoning as the checklist: the list is small, always read with its
+ * task, and only ever edited by one person looking at one card, so replacing it
+ * is simpler than diffing and cannot leave a half-applied change. The delete
+ * and the insert are two statements rather than one transaction, so a failure
+ * between them would clear the card; the insert error is reported and the page
+ * refreshes either way, which shows the truth rather than an optimistic lie.
+ */
+export async function setTaskAssignees(
+  projectId: string,
+  taskId: string,
+  userIds: string[]
+): Promise<TaskResult> {
+  await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: task } = await supabase
+    .from("project_tasks")
+    .select("studio_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!task) return { error: "Task not found." };
+
+  const { error: delErr } = await supabase
+    .from("project_task_assignees")
+    .delete()
+    .eq("task_id", taskId);
+  if (delErr) {
+    reportError("setTaskAssignees:clear", delErr);
+    return { error: "Could not update who is on this. Try again." };
+  }
+
+  const wanted = [...new Set(userIds.filter(Boolean))];
+  if (wanted.length > 0) {
+    const { error } = await supabase.from("project_task_assignees").insert(
+      wanted.map((user_id) => ({
+        studio_id: task.studio_id,
+        task_id: taskId,
+        user_id,
+      }))
+    );
+    if (error) {
+      reportError("setTaskAssignees", error);
+      refresh(projectId);
+      return { error: "Could not update who is on this. Try again." };
+    }
+  }
+
   refresh(projectId);
   return null;
 }

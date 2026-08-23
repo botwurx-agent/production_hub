@@ -30,6 +30,16 @@ export type TaskPhase = ProjectStatus | typeof NO_PHASE;
 
 export type ChecklistItem = { id: string; text: string; done: boolean };
 
+/**
+ * A task as the board reads it: the row plus who is on it.
+ *
+ * Assignees live in their own table since migration 0096, because a card
+ * routinely has more than one name on it (a shoot-day setup is the DP and the
+ * gaffer). The page flattens the embedded rows to user ids, so nothing below
+ * this line has to know how they are stored.
+ */
+export type BoardTask = ProjectTask & { assignees: string[] };
+
 /** Ordered lanes: the four production phases, then the unphased catch-all. */
 export const TASK_PHASE_ORDER: TaskPhase[] = [
   ...PROJECT_STATUS_ORDER,
@@ -126,7 +136,7 @@ export function taskState(
 export type TaskFilter = "open" | "mine" | "overdue" | "done";
 
 export function matchesFilter(
-  task: Pick<ProjectTask, "done" | "due_date" | "assignee_id">,
+  task: Pick<BoardTask, "done" | "due_date" | "assignees">,
   filter: TaskFilter,
   todayIso: string,
   viewerId: string | null
@@ -139,7 +149,7 @@ export function matchesFilter(
     case "mine":
       // Unassigned work is nobody's "mine". Showing it here would make the
       // filter mean "open" on a solo studio, which is no filter at all.
-      return !task.done && !!viewerId && task.assignee_id === viewerId;
+      return !task.done && !!viewerId && task.assignees.includes(viewerId);
     case "open":
     default:
       return !task.done;
@@ -153,7 +163,7 @@ export function matchesFilter(
  * virtue of having no date, and sorting nulls first would put every vague
  * intention above tomorrow's delivery.
  */
-export function compareTasks(a: ProjectTask, b: ProjectTask): number {
+export function compareTasks(a: BoardTask, b: BoardTask): number {
   if (a.done !== b.done) return a.done ? 1 : -1;
   if (a.due_date && b.due_date && a.due_date !== b.due_date)
     return a.due_date < b.due_date ? -1 : 1;
@@ -164,7 +174,7 @@ export function compareTasks(a: ProjectTask, b: ProjectTask): number {
 
 export type TaskGroup = {
   phase: TaskPhase;
-  tasks: ProjectTask[];
+  tasks: BoardTask[];
   /** Open tasks in this lane BEFORE the filter ran, so the count is stable. */
   open: number;
   overdue: number;
@@ -176,7 +186,7 @@ export type TaskGroup = {
  * Post lane is information: nobody has planned post yet.
  */
 export function groupTasks(
-  tasks: ProjectTask[],
+  tasks: BoardTask[],
   todayIso: string,
   filter: TaskFilter,
   viewerId: string | null
@@ -198,7 +208,7 @@ export function groupTasks(
 }
 
 export function summarizeTasks(
-  tasks: ProjectTask[],
+  tasks: BoardTask[],
   todayIso: string
 ): { open: number; overdue: number; done: number; total: number } {
   let open = 0;
@@ -254,7 +264,7 @@ export type BoardColumn = {
   label: string;
   hue: Hue;
   hint: string;
-  tasks: ProjectTask[];
+  tasks: BoardTask[];
 };
 
 /**
@@ -264,7 +274,7 @@ export type BoardColumn = {
  * says nothing is waiting on anyone, or that nobody has planned post yet.
  */
 export function boardColumns(
-  tasks: ProjectTask[],
+  tasks: BoardTask[],
   groupBy: GroupBy,
   projectType: string | null | undefined
 ): BoardColumn[] {
@@ -297,7 +307,7 @@ export function boardColumns(
  * column nobody has dragged in still reads soonest-first rather than in
  * whatever order Postgres returned.
  */
-export function compareForBoard(a: ProjectTask, b: ProjectTask): number {
+export function compareForBoard(a: BoardTask, b: BoardTask): number {
   if (a.sort !== b.sort) return a.sort - b.sort;
   return compareTasks(a, b);
 }
@@ -316,7 +326,7 @@ export function compareForBoard(a: ProjectTask, b: ProjectTask): number {
  * renumbering pass: the failure is a pair of cards in a stable but unintended
  * order, not lost work.
  */
-export function sortKeyFor(column: ProjectTask[], index: number): number {
+export function sortKeyFor(column: BoardTask[], index: number): number {
   const before = index > 0 ? column[index - 1]?.sort : undefined;
   const after = column[index]?.sort;
   if (before === undefined && after === undefined) return 0;

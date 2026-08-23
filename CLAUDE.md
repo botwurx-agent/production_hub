@@ -1227,7 +1227,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0095. Recent: 0095 =
+files in supabase/migrations. THROUGH 0096. Recent: 0096 =
+task_assignees (project_task_assignees, drops project_tasks.assignee_id);
+0095 =
 task_board_status (project_tasks.status + .sort, `done` becomes generated);
 0094 = task_phase_and_checklist (project_tasks.phase + .checklist); 0093 =
 project_reviewer_role (can_edit_project + 41 policies split); 0092 = props
@@ -2702,7 +2704,7 @@ written, because nothing could answer "who is on this job".
   contact_profiles.wardrobe are: never filtered, sorted or joined on, only ever
   read with its parent, and a shape change should not cost a migration.
   parseChecklist (lib/tasks.ts) is the trust boundary out of it.
-- lib/tasks.ts is pure and unit-tested in the scratchpad (68 assertions),
+- lib/tasks.ts is pure and unit-tested in the scratchpad (70 assertions),
   including that UNDATED TASKS SORT LAST (nulls-first would put every vague
   intention above tomorrow's delivery), that a hand-placed sort key beats the
   due date but equal keys fall through to it, that twenty successive drops into
@@ -2710,6 +2712,22 @@ written, because nothing could answer "who is on this job".
   under both groupings, and that `todayIso` is passed in from the SERVER like
   the slate and the payment schedule so an overdue chip cannot differ after
   hydration.
+- SEVERAL PEOPLE PER CARD (migration 0096). `assignee_id` held exactly one,
+  which misrepresents how a job splits: a shoot-day setup is the DP and the
+  gaffer, a delivery is the editor and the producer. `project_task_assignees`
+  is the join table and the single column was DROPPED rather than kept as "the
+  main one", since that would be a second source of truth for the same fact,
+  which is what 0095 had just removed for `done`. Its RLS is the parent's
+  policy reached through the task (the parent-subquery shape 0056 used for
+  every indirect table), FOR ALL because project_tasks is reviewer-writable.
+  The page reads them with an embedded select, which needed a `Relationships`
+  entry in database.types.ts (same trap as prop_options) and is flattened to
+  plain user ids in the page so nothing downstream knows where they live.
+  setTaskAssignees writes the WHOLE set, same reasoning as the checklist.
+  CARD AVATARS ARE SPACED, NOT OVERLAPPED, and that is not a style preference:
+  an avatar stack overlaps because it holds photographs, which stay
+  recognisable with a third hidden. These hold two letters, and a 7px overlap
+  ate the first one (PR rendered as R). Capped at three plus a +N.
 - ASSIGNEES FINALLY WORK, and the reason they never did is worth knowing: we
   never collected a display name at signup, and `auth.users` is not readable
   under RLS, so identity has to be walked out of the INVITE each person accepted
@@ -2731,9 +2749,11 @@ written, because nothing could answer "who is on this job".
   Anytime.
 - NOT built: the dashboard Tasks widget still reads crm_tasks only, so there is
   still no studio-wide "what do I owe across every job today". That is the
-  strongest next slice. Also not built: several assignees per card, task
-  comments, attachments, and a list view alongside the board (the grouped list
-  0094 shipped was replaced by the board rather than kept as a second view).
+  strongest next slice, and project_task_assignees is indexed on
+  (studio_id, user_id) for exactly that query. Also not built: task comments,
+  attachments, several named checklists per card, and a list view alongside the
+  board (the grouped list 0094 shipped was replaced by the board rather than
+  kept as a second view).
 
 ### Next step
 STILL NOTHING QUEUED (reconfirmed by how the 2026-08 session ran: every item in

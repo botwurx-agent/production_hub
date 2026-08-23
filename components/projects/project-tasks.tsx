@@ -8,6 +8,7 @@ import {
   updateProjectTask,
   moveTask,
   setTaskChecklist,
+  setTaskAssignees,
   deleteProjectTask,
 } from "@/app/(app)/projects/[id]/task-actions";
 import { Input } from "@/components/ui/input";
@@ -26,10 +27,11 @@ import {
   summarizeTasks,
   taskState,
   taskStatus,
+  type BoardTask,
   type ChecklistItem,
   type GroupBy,
 } from "@/lib/tasks";
-import type { ProjectStatus, ProjectTask } from "@/lib/database.types";
+import type { ProjectStatus } from "@/lib/database.types";
 
 /**
  * The project's task board.
@@ -54,18 +56,45 @@ import type { ProjectStatus, ProjectTask } from "@/lib/database.types";
 
 const VIEW_KEY = "tasks.groupBy";
 
-function Avatar({ person }: { person: Person | undefined }) {
-  if (!person) return null;
+/**
+ * Who is on a card.
+ *
+ * SPACED, NOT OVERLAPPED, which is worth saying because overlapping is what
+ * every avatar stack does and it is wrong here. Stacks overlap because they
+ * hold photographs, which stay recognisable with a third hidden. These hold two
+ * letters, and a 7px overlap ate the first one: PR rendered as R. Initials need
+ * their whole width.
+ *
+ * Capped at three plus a +N. A card is a glance; past three you are counting
+ * rather than recognising, and the full list is one click away.
+ */
+function Assignees({ people }: { people: Person[] }) {
+  if (people.length === 0) return null;
+  const shown = people.slice(0, 3);
+  const rest = people.length - shown.length;
   return (
-    <span
-      className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-pill text-[10px] font-bold"
-      style={{
-        backgroundColor: person.isSelf ? "var(--accent-soft)" : "var(--surface-2)",
-        color: person.isSelf ? "var(--accent)" : "var(--text-muted)",
-      }}
-      title={person.isSelf ? `${person.label} (you)` : person.label}
-    >
-      {personInitials(person.label)}
+    <span className="flex shrink-0 items-center gap-[3px]">
+      {shown.map((p) => (
+        <span
+          key={p.userId}
+          className="grid h-[22px] w-[22px] place-items-center rounded-pill text-[10px] font-bold"
+          style={{
+            backgroundColor: p.isSelf ? "var(--accent-soft)" : "var(--surface-2)",
+            color: p.isSelf ? "var(--accent)" : "var(--text-muted)",
+          }}
+          title={p.isSelf ? `${p.label} (you)` : p.label}
+        >
+          {personInitials(p.label)}
+        </span>
+      ))}
+      {rest > 0 && (
+        <span
+          className="text-[10.5px] font-bold text-text-faint"
+          title={people.slice(3).map((p) => p.label).join(", ")}
+        >
+          +{rest}
+        </span>
+      )}
     </span>
   );
 }
@@ -80,7 +109,7 @@ function TaskCard({
   onDragStart,
   onDragEnd,
 }: {
-  task: ProjectTask;
+  task: BoardTask;
   people: Person[];
   todayIso: string;
   dragging: boolean;
@@ -92,7 +121,7 @@ function TaskCard({
   const items = parseChecklist(task.checklist);
   const progress = checklistProgress(items);
   const state = taskState(task, todayIso);
-  const assignee = people.find((p) => p.userId === task.assignee_id);
+  const on = people.filter((p) => task.assignees.includes(p.userId));
   const pct = progress.total
     ? Math.round((progress.done / progress.total) * 100)
     : 0;
@@ -161,7 +190,7 @@ function TaskCard({
         </div>
       )}
 
-      {(task.due_date || assignee) && (
+      {(task.due_date || on.length > 0) && (
         <div className="mt-2 flex items-center gap-2 pl-[24px]">
           {task.due_date && (
             <span
@@ -178,7 +207,7 @@ function TaskCard({
             </span>
           )}
           <span className="ml-auto">
-            <Avatar person={assignee} />
+            <Assignees people={on} />
           </span>
         </div>
       )}
@@ -199,7 +228,7 @@ export function ProjectTasks({
   projectType: string | null;
   /** The stage the job is in, which seeds a new task's phase. */
   projectStatus: ProjectStatus;
-  tasks: ProjectTask[];
+  tasks: BoardTask[];
   people: Person[];
   /** Resolved on the server, so an overdue chip cannot differ after hydration. */
   todayIso: string;
@@ -245,7 +274,7 @@ export function ProjectTasks({
   const visible = useMemo(
     () =>
       mineOnly && viewerId
-        ? tasks.filter((t) => t.assignee_id === viewerId)
+        ? tasks.filter((t) => t.assignees.includes(viewerId))
         : tasks,
     [tasks, mineOnly, viewerId]
   );
@@ -259,7 +288,7 @@ export function ProjectTasks({
     [tasks, todayIso]
   );
   const mineCount = tasks.filter(
-    (t) => !t.done && t.assignee_id === viewerId
+    (t) => !t.done && viewerId !== null && t.assignees.includes(viewerId)
   ).length;
 
   const open = tasks.find((t) => t.id === openId) ?? null;
@@ -528,6 +557,9 @@ export function ProjectTasks({
         }
         onChecklist={(items: ChecklistItem[]) =>
           run(() => setTaskChecklist(projectId, open!.id, items))
+        }
+        onAssignees={(ids: string[]) =>
+          run(() => setTaskAssignees(projectId, open!.id, ids))
         }
         onDelete={() => {
           const id = open!.id;
