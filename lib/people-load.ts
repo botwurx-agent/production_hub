@@ -103,3 +103,38 @@ export async function loadProjectPeople(
     return a.label.localeCompare(b.label);
   });
 }
+
+/**
+ * Addresses invited to this project or studio that nobody has accepted yet.
+ *
+ * Surfaced next to the assignee picker for one reason: an invite creates no
+ * user, so an invited person CANNOT be assigned until they accept. Without
+ * saying so, inviting a colleague and finding the picker unchanged reads as the
+ * invite having failed.
+ */
+export async function loadPendingInvites(
+  supabase: SupabaseClient<Database>,
+  ctx: StudioContext,
+  projectId: string
+): Promise<string[]> {
+  const [{ data: studio }, { data: project }] = await Promise.all([
+    supabase
+      .from("studio_invites")
+      .select("email")
+      .eq("studio_id", ctx.studio.id)
+      .is("accepted_at", null)
+      .eq("revoked", false),
+    supabase
+      .from("project_invites")
+      .select("email")
+      .eq("project_id", projectId)
+      .is("accepted_at", null)
+      .eq("revoked", false),
+  ]);
+  return [
+    ...new Set([
+      ...(studio ?? []).map((i) => i.email),
+      ...(project ?? []).map((i) => i.email),
+    ]),
+  ];
+}

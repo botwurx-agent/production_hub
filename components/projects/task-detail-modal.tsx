@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { longDate } from "@/lib/format";
 import { personInitials, type Person } from "@/lib/people";
+import { openInvite } from "@/components/app-shell/invite-open";
 import {
   NO_PHASE,
   TASK_PHASE_ORDER,
@@ -48,10 +49,21 @@ export function TaskDetailModal({
   onAssignees,
   onDelete,
   busy,
+  canInvite = false,
+  pendingInvites = [],
 }: {
   task: BoardTask | null;
   people: Person[];
   projectType: string | null;
+  /**
+   * Whether to offer an invite. Decided on the server: a collaborator cannot
+   * invite anyone, the panel is not mounted for them, and offering it would be
+   * a button that does nothing.
+   */
+  canInvite?: boolean;
+  /** Invited but not yet accepted. Shown, never assignable: an invite creates
+   *  no user until it is accepted, so there is nothing to assign to. */
+  pendingInvites?: string[];
   onClose: () => void;
   onPatch: (patch: Record<string, string | null>) => void;
   onChecklist: (items: ChecklistItem[]) => void;
@@ -205,10 +217,37 @@ export function TaskDetailModal({
                 </button>
               );
             })}
+            {/* The invite lives HERE, not only in the topbar, because "there is
+                nobody else to put on this" is realised while looking at this
+                list. There is a button for it on every page, and nobody hunting
+                for a way to add a colleague looks in the utility tray. */}
+            {canInvite && (
+              <button
+                onClick={openInvite}
+                className="inline-flex items-center gap-1.5 rounded-pill border border-dashed border-border px-2.5 py-1 text-[12px] font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M19 8v6M22 11h-6" />
+                </svg>
+                Invite someone
+              </button>
+            )}
           </div>
           {task.assignees.length === 0 && (
             <p className="mt-1.5 text-[11.5px] text-text-faint">
               Nobody on it yet.
+              {people.length <= 1 && canInvite
+                ? " Invite a teammate or crew member to put a name on it."
+                : ""}
+            </p>
+          )}
+          {pendingInvites.length > 0 && (
+            <p className="mt-1.5 text-[11.5px] text-text-faint">
+              Waiting to accept:{" "}
+              <span className="font-medium">{pendingInvites.join(", ")}</span>.
+              They can be put on a task once they are in.
             </p>
           )}
         </div>

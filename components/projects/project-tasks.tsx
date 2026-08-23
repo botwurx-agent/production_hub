@@ -222,6 +222,8 @@ export function ProjectTasks({
   people,
   todayIso,
   viewerId,
+  canInvite = false,
+  pendingInvites = [],
 }: {
   projectId: string;
   projectType: string | null;
@@ -232,6 +234,10 @@ export function ProjectTasks({
   /** Resolved on the server, so an overdue chip cannot differ after hydration. */
   todayIso: string;
   viewerId: string | null;
+  /** Staff only: a collaborator cannot invite anyone. */
+  canInvite?: boolean;
+  /** Invited but not yet accepted, so not assignable yet. */
+  pendingInvites?: string[];
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -537,6 +543,8 @@ export function ProjectTasks({
         task={open}
         people={people}
         projectType={projectType}
+        canInvite={canInvite}
+        pendingInvites={pendingInvites}
         busy={busy}
         onClose={() => setOpenId(null)}
         onPatch={(patch) =>

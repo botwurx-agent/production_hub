@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { loadProjectPeople } from "@/lib/people-load";
+import { loadProjectPeople, loadPendingInvites } from "@/lib/people-load";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { ProjectTasks } from "@/components/projects/project-tasks";
@@ -36,6 +36,11 @@ export default async function TasksPage({
       .order("created_at", { ascending: true }),
     loadProjectPeople(supabase, ctx, params.id),
   ]);
+
+  // Only worth asking for when there is somebody to invite in the first place.
+  const pendingInvites = ctx.isCollaborator
+    ? []
+    : await loadPendingInvites(supabase, ctx, params.id);
 
   // Today is resolved HERE, not in the browser, matching the slate and the
   // payment schedule: an overdue chip that disagrees between the server render
@@ -75,6 +80,10 @@ export default async function TasksPage({
           people={people}
           todayIso={todayIso}
           viewerId={ctx.userId}
+          // The invite panel is only mounted for staff, so offering the button
+          // to a collaborator would be a dead end rather than a refusal.
+          canInvite={!ctx.isCollaborator}
+          pendingInvites={pendingInvites}
           // No canEdit gate here, deliberately. project_tasks is one of the
           // four tables migration 0093 kept REVIEWER-WRITABLE, on the grounds
           // that "view and comment" is just "view" otherwise: someone reviewing

@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { inviteMember } from "@/app/(app)/settings/team-actions";
 import { inviteToProject } from "@/app/(app)/projects/[id]/team-actions";
+import { onOpenInvite } from "@/components/app-shell/invite-open";
 
 /**
  * One place to add a person, on every page.
@@ -66,6 +67,11 @@ export function InviteButton() {
     setErr(null);
     setSent(null);
   }
+
+  // Anything in the app can ask for this panel (the task board's people picker
+  // does), because "I need to add somebody" is realised inside the work, not in
+  // the topbar. Mounted once here, so there is exactly one panel.
+  useEffect(() => onOpenInvite(() => openPanel()));
 
   function openPanel() {
     // The scope is re-derived on every open rather than held from last time, so

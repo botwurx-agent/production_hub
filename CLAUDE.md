@@ -2752,6 +2752,20 @@ written, because nothing could answer "who is on this job".
 - NO canEdit GATE on this page, deliberately: project_tasks is one of the four
   tables migration 0093 kept reviewer-writable, so hiding the controls would
   take back what that migration granted.
+- INVITING FROM INSIDE THE WORK. The topbar has had an invite button on every
+  page since 0093, and the operator still could not find a way to add someone,
+  because the moment you realise you need a colleague is while staring at a
+  card's people list, and nobody hunting for that looks in the utility tray at
+  the top right. The picker now carries its own "Invite someone", opening the
+  SAME panel via components/app-shell/invite-open.ts (module-level pub/sub, the
+  toast/Runner shape) so there is still exactly one invite panel, mounted once
+  in the topbar. A caller MUST check it can invite first: the panel is not
+  mounted for collaborators, so an unchecked caller would be a button that does
+  nothing, which is the bug that had just been fixed on the empty board.
+- PENDING INVITES ARE NAMED under the picker (loadPendingInvites in
+  lib/people-load.ts), because an invite creates no user until it is accepted,
+  so an invited person cannot be assigned. Without saying so, inviting someone
+  and finding the picker unchanged reads as the invite having failed.
 - Runner's create_task passes no phase or status (it is never told one, and
   guessing files work in the wrong column), so its tasks land in To do /
   Anytime.
