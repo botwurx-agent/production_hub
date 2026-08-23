@@ -1227,7 +1227,8 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0093. Recent: 0093 =
+files in supabase/migrations. THROUGH 0094. Recent: 0094 =
+task_phase_and_checklist (project_tasks.phase + .checklist); 0093 =
 project_reviewer_role (can_edit_project + 41 policies split); 0092 = props
 (+ prop_options, + approval_target 'props'); 0091 =
 contact_profiles (+ contact_files, + call_sheet_recipients.contact_id); 0090 =
@@ -2650,6 +2651,66 @@ chasing whoever ignored it. This owns everything either side of that link.
   per-message cost and opt-out handling), dietary flags on contacts, per-person
   order contents, and any spend reconciliation (the receipt still goes in
   through the existing cost flow).
+
+### Tasks, grouped by the phase of the job (migration 0094) — BUILT
+Came from the operator reading a competitor's project-management page and
+deciding ours was thin. It was: a flat checklist of title + due date, with
+`assignee_id` and `notes` sitting in the table since 0059 and never once
+written, because nothing could answer "who is on this job".
+- THE COLUMNS ARE THE PRODUCTION'S PHASES, and refusing the obvious kanban is
+  the whole design. To do / Doing / Done are the same three words on every board
+  in every industry and mean nothing until each team invents a meaning; Pre-pro
+  / Production / Post / Delivery already mean something exact to a producer, the
+  app already speaks in them (lifecycle stepper, project board, slate), and they
+  RENAME THEMSELVES per project type through the existing stageLabel(), so an AI
+  job's lanes read Concept and Generation. A competitor's board cannot do that.
+- It is also what stops it looking copied. A grouped list is what this app
+  already does three times over (the Review page's status buckets, the contacts
+  roster's folder tabs, the hub's phase bands), so reusing our own idiom is a
+  stronger anti-copy argument than restyling theirs.
+- `project_tasks.phase` reuses the `project_status` ENUM rather than inventing a
+  parallel vocabulary, and is NULLABLE: a fifth "Anytime" lane holds work that
+  genuinely belongs to no phase ("chase the insurance certificate"), and every
+  pre-existing task keeps working with no backfill guessing where it belongs.
+  Labels are never stored, since a stored one goes stale the moment a project's
+  type changes.
+- DONE STAYS A CHECKBOX, not a fifth lane. Finishing a task does not move it to
+  a different part of the production, and a Done column is where a board goes to
+  accumulate. Filters (Open / Mine / Overdue / Done) do that job instead.
+- `checklist` is jsonb for the same reason call_sheets.layout and
+  contact_profiles.wardrobe are: never filtered, sorted or joined on, only ever
+  read with its parent, and a shape change should not cost a migration.
+  parseChecklist (lib/tasks.ts) is the trust boundary out of it.
+- lib/tasks.ts is pure and unit-tested in the scratchpad (44 assertions),
+  including that UNDATED TASKS SORT LAST (nulls-first would put every vague
+  intention above tomorrow's delivery), that "Mine" excludes UNASSIGNED work
+  (otherwise it means "Open" on a solo studio, which is no filter at all), that
+  a lane's open count ignores the active filter, and that `todayIso` is passed
+  in from the SERVER like the slate and the payment schedule so an overdue chip
+  cannot differ after hydration.
+- ASSIGNEES FINALLY WORK, and the reason they never did is worth knowing: we
+  never collected a display name at signup, and `auth.users` is not readable
+  under RLS, so identity has to be walked out of the INVITE each person accepted
+  (`studio_invites.accepted_by` / `project_invites.accepted_by` carry the address
+  somebody typed). lib/people-load.ts does that once instead of the fourth
+  hand-rolled copy. THE GAP IT LEAVES: a studio's OWNER never accepted an invite
+  (the signup trigger creates them), so from anyone else's session they show as
+  "Studio owner". Display limit, not an access one; the honest fix is asking for
+  a name at signup, not widening what this can read.
+- lib/people.ts (type + initials, client-safe) is SPLIT from lib/people-load.ts
+  (`server-only`), the same split as review-reactions vs review-reactions-load.
+  Found by rendering it: a client component importing a `server-only` module
+  fails the build, and tsc does not catch it.
+- NO canEdit GATE on this page, deliberately: project_tasks is one of the four
+  tables migration 0093 kept reviewer-writable, so hiding the controls would
+  take back what that migration granted.
+- Runner's create_task passes no phase (it is never told one, and guessing files
+  work in the wrong lane), so its tasks land in Anytime.
+- NOT built: the dashboard Tasks widget still reads crm_tasks only, so there is
+  still no studio-wide "what do I owe across every job today". That is the
+  strongest next slice. Also not built: drag to reorder (moving a phase is a
+  menu, which works on a phone and needs no drag library), task comments, and
+  attachments.
 
 ### Next step
 STILL NOTHING QUEUED (reconfirmed by how the 2026-08 session ran: every item in

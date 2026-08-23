@@ -339,7 +339,10 @@ async function run(kind: CardKind, p: Payload): Promise<ConfirmResult> {
       if (p.scope === "project") {
         const projectId = await visibleProject(p.projectId);
         if (!projectId) return { error: "That project is no longer visible." };
-        const res = await addProjectTask(projectId, title, due);
+        // No phase: Runner is not told which part of the production a task
+        // belongs to, and guessing would file work in the wrong lane. It lands
+        // in Anytime, which is the honest answer, and moving it is one menu.
+        const res = await addProjectTask(projectId, { title, dueDate: due });
         if ("error" in res) return { error: res.error };
         return { ok: true, message: "Task added to the project." };
       }

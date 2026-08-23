@@ -1,0 +1,105 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
+import type { StudioContext } from "@/lib/studio";
+import type { Person } from "@/lib/people";
+
+/**
+ * Who can be given a task on this project.
+ *
+ * `project_tasks.assignee_id` and `crm_tasks.assignee_id` have both existed
+ * since their first migration and neither has ever been set, for one reason:
+ * there was no way to ask "who is on this job". Every people surface in the app
+ * resolves names by hand at the point of use (settings/page.tsx still does it
+ * inline), so a second copy was going to appear the moment anything else needed
+ * it.
+ *
+ * WHY EMAILS AND NOT NAMES. Supabase Auth holds the account, and we never
+ * collected a display name at signup, so the address IS the identity here. It
+ * is also not readable from `auth.users` under RLS, which is why this walks the
+ * INVITE that each person accepted: `studio_invites.accepted_by` and
+ * `project_invites.accepted_by` point back at the user, and the invite carries
+ * the address someone typed. The signed-in caller is the one person we can
+ * always name, from their own session.
+ *
+ * The gap that leaves is real and worth knowing: a studio's OWNER never
+ * accepted an invite (they are created by the signup trigger), so from anyone
+ * else's session they have no resolvable address and show as "Studio owner".
+ * That is a display limit, not an access one, and the honest fix is asking for
+ * a name at signup rather than widening what this can read.
+ *
+ * Split from lib/people.ts because that half is imported by a client component
+ * and this half carries `server-only`, the same split as
+ * lib/review-reactions-load.ts against lib/review-reactions.ts.
+ */
+
+export async function loadProjectPeople(
+  supabase: SupabaseClient<Database>,
+  ctx: StudioContext,
+  projectId: string
+): Promise<Person[]> {
+  const [{ data: members }, { data: studioInvites }, { data: projectMembers }, { data: projectInvites }] =
+    await Promise.all([
+      supabase
+        .from("memberships")
+        .select("user_id, role")
+        .eq("studio_id", ctx.studio.id)
+        .order("created_at"),
+      supabase
+        .from("studio_invites")
+        .select("email, accepted_by")
+        .eq("studio_id", ctx.studio.id)
+        .not("accepted_by", "is", null),
+      supabase
+        .from("project_members")
+        .select("user_id, role")
+        .eq("project_id", projectId),
+      supabase
+        .from("project_invites")
+        .select("email, accepted_by")
+        .eq("project_id", projectId)
+        .not("accepted_by", "is", null),
+    ]);
+
+  const emailByUser = new Map<string, string>();
+  for (const inv of studioInvites ?? [])
+    if (inv.accepted_by) emailByUser.set(inv.accepted_by, inv.email);
+  for (const inv of projectInvites ?? [])
+    if (inv.accepted_by) emailByUser.set(inv.accepted_by, inv.email);
+  if (ctx.userId && ctx.email) emailByUser.set(ctx.userId, ctx.email);
+
+  // A Map keyed by user id, so somebody who is both a studio member and a
+  // project member appears once, as the wider of the two.
+  const people = new Map<string, Person>();
+
+  for (const m of members ?? []) {
+    people.set(m.user_id, {
+      userId: m.user_id,
+      label:
+        emailByUser.get(m.user_id) ??
+        (m.role === "owner" ? "Studio owner" : "Studio member"),
+      isSelf: m.user_id === ctx.userId,
+      scope: "studio",
+    });
+  }
+  for (const pm of projectMembers ?? []) {
+    if (people.has(pm.user_id)) continue;
+    people.set(pm.user_id, {
+      userId: pm.user_id,
+      label:
+        emailByUser.get(pm.user_id) ??
+        (pm.role === "reviewer" ? "Reviewer" : "On this project"),
+      isSelf: pm.user_id === ctx.userId,
+      scope: "project",
+    });
+  }
+
+  // Self first, then studio before project, then alphabetically. Self first
+  // because assigning yourself is much the commonest case, especially on the
+  // solo studios this ships to.
+  return [...people.values()].sort((a, b) => {
+    if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1;
+    if (a.scope !== b.scope) return a.scope === "studio" ? -1 : 1;
+    return a.label.localeCompare(b.label);
+  });
+}
