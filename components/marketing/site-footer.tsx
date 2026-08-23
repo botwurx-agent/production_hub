@@ -6,6 +6,7 @@ const COLUMNS = [
     title: "Product",
     links: [
       { href: "/#product", label: "Project hub" },
+      { href: "/#communication", label: "Communication" },
       { href: "/#review", label: "Client review" },
       { href: "/#production", label: "Shot lists and call sheets" },
       { href: "/#budget", label: "Budget and delivery" },

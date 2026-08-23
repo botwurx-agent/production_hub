@@ -227,8 +227,38 @@ export default function MarketingHome() {
         </div>
       </Section>
 
+      {/* Communication sits directly above client review because the two are one
+          argument read in order: this is where the conversation lives, and that
+          is where the decision gets made. It also states the connect-don't-
+          replace principle out loud, which nothing else on the page does. */}
+      <Section id="communication" tint="tinted">
+        <FeatureRow
+          flip
+          visual={
+            <BrowserFrame
+              caption="app.studio-flows.com/projects/bright-water/communication"
+              shot="project-communication"
+              hue="cyan"
+              alt="The Communication page: linked Gmail threads, Slack channels and a Google Chat space, all on one project."
+            />
+          }
+        >
+          <FeatureCopy
+            eyebrow="Communication"
+            title="The thread about the job, filed with the job."
+            body="Nobody is going to move their client onto a new chat app, so we do not ask. Link the Gmail thread, the Slack channel, the Chat space, and read and reply to all of it from the project it belongs to."
+            points={[
+              "Gmail, Slack and Google Chat, side by side on one page",
+              "Reply without leaving the job, attachments and all",
+              "Pull an attachment straight into the assets, documents or the budget",
+              "The whole conversation still lives where it always did",
+            ]}
+          />
+        </FeatureRow>
+      </Section>
+
       {/* Client review: the sharpest thing the product does, so it leads. */}
-      <Section id="review" tint="tinted">
+      <Section id="review" backdrop={<Wash hue="green" />}>
         <FeatureRow
           visual={
             <BrowserFrame
@@ -255,7 +285,7 @@ export default function MarketingHome() {
       </Section>
 
       {/* Shoot day. The most concrete proof that this was built on set. */}
-      <Section id="production" backdrop={<Wash hue="amber" />}>
+      <Section id="production" tint="tinted" backdrop={<Wash hue="amber" />}>
         <FeatureRow
           flip
           visual={
@@ -285,7 +315,7 @@ export default function MarketingHome() {
           BILLED. They live on different pages and neither one evidences the
           other, so this band breaks the alternating rhythm and gives each its
           own frame rather than cramming both into one column. */}
-      <Section id="budget" tint="tinted">
+      <Section id="budget" backdrop={<Wash hue="blue" />}>
         <SectionHeader
           eyebrow="The money"
           title="Know what the job made."

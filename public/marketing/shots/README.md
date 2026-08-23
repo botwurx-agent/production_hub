@@ -13,6 +13,7 @@ missing, so a gap is obvious rather than silent (see components/marketing/shot.t
 | File | Where it appears |
 | --- | --- |
 | `projects-board.png` | under the hero |
+| `project-communication.png` | Communication section |
 | `client-review-portal.png` | Client review section |
 | `project-callsheet.png` | Shoot day section |
 | `project-budget.png` | The money section, left column |
@@ -29,6 +30,18 @@ its own and they are taken by hand:
   selector names it, and press Cancel afterwards, or the write lands in the
   demo and the budget shot above stops matching.
 - `project-pipeline.png` needs a project with real generations in it.
+- `project-communication.png` needs a LIVE connector, because the panel reads
+  messages from Gmail and Slack at render time and there is nothing to fake.
+  The demo studio was seeded with `email_accounts` rows in July 2026 that
+  carried invented tokens; the app read those as connected, skipped its
+  "Connect Gmail in Settings" prompt, and then failed with a red error the
+  moment a thread was opened. Those rows (and the threads, channels and space
+  that pointed at ids no inbox has) were deleted on 2026-08-23, so the demo now
+  shows the honest connect prompt. To take the shot, sign in as
+  demo@studio-flows.com, connect a THROWAWAY Google account under Settings →
+  Connections, send that inbox three or four emails in the Bright Water
+  fiction, then link them on the project. Never connect a real client inbox: a
+  screenshot of live mail publishes a client list.
 
 ## Size
 

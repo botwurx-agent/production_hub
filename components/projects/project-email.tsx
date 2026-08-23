@@ -386,7 +386,19 @@ export function ThreadReader({
           {loading && messages === null ? (
             <p className="text-xs text-text-faint">Loading thread...</p>
           ) : error ? (
-            <p className="text-xs font-medium text-red">{error}</p>
+            /* A dead or revoked token fails here rather than on page load, so
+               this used to be the one place the app said something was wrong
+               without saying what to do about it. The way back is always the
+               same, so name it. */
+            <p className="text-xs font-medium text-red">
+              {error}{" "}
+              <Link
+                href="/settings"
+                className="font-semibold text-red underline underline-offset-2"
+              >
+                Reconnect in Settings
+              </Link>
+            </p>
           ) : (
             <>
             {!expanded && hiddenCount > 0 && (
