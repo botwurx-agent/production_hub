@@ -2670,9 +2670,30 @@ UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
 - RUNNER had been opened 8 times ever at last count. The week-two decision the
   build itself set ("if it is not being opened, it stops") is still unmade. Do
   not quietly let that lapse: either check usage and decide, or say so.
-- The marketing site is live with four dashed placeholder boxes
-  (public/marketing/shots/ is empty; scripts/capture-shots.mjs exists to fill
-  them).
+- The marketing site now carries seven real screenshots. ONE dashed placeholder
+  is left, `project-communication.png` in the new Communication section (which
+  sits directly above Client review and states the connect-don't-replace
+  principle, the only place on the site that does). It cannot be captured by
+  the script: the Communication panel reads messages from Gmail and Slack at
+  render time, so it needs a LIVE connector.
+  WHY THE DEMO SHOWED A RED ERROR THERE, since the same trap would catch any
+  future seeded connector: the demo studio (Northline, demo@studio-flows.com)
+  had `email_accounts` rows for google and slack seeded in July 2026 with
+  invented tokens. The panels gate on "is there an account row", so the app
+  read that as CONNECTED, skipped its dashed "Connect Gmail in Settings"
+  prompt, and then failed at the first real API call. A fake credential is
+  worse than none: it turns an honest empty state into a broken one. Those two
+  rows were deleted 2026-08-23, along with the 4 email_threads, 2 slack_channels
+  and 1 chat_space that pointed at ids no real inbox or workspace has. The demo
+  now shows the connect prompt. To get the shot, connect a THROWAWAY Google
+  account as demo@studio-flows.com and link a few threads; never a real inbox,
+  since a screenshot of live mail publishes a client list (the standing rule in
+  public/marketing/shots/README.md).
+  Also fixed while there: the thread-open error rendered as a bare red line, the
+  one place the app said something was wrong without saying what to do. A dead
+  or revoked token fails on OPEN rather than on page load, which is why it had
+  escaped the graceful "connect in Settings" states everywhere else. It now
+  names Settings.
 - Stewart's (the producer friend's) list still has open items: Wrapbook
   positioning, insurance bundling, zip-code permit lookup, a mobile on-set mode,
   a storage plan, a help desk, and Communication always open.
