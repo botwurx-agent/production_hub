@@ -31,6 +31,17 @@ export type TaskPhase = ProjectStatus | typeof NO_PHASE;
 export type ChecklistItem = { id: string; text: string; done: boolean };
 
 /**
+ * A NAMED list of steps. A card routinely carries more than one: "Write the
+ * script" and "Deliver the cutdowns" are separate runs of work on the same
+ * task, and one flat list makes them read as a single sequence.
+ */
+export type ChecklistGroup = {
+  id: string;
+  name: string;
+  items: ChecklistItem[];
+};
+
+/**
  * A task as the board reads it: the row plus who is on it.
  *
  * Assignees live in their own table since migration 0096, because a card
@@ -110,10 +121,15 @@ export function taskPhase(v: string | null | undefined): ProjectStatus | null {
  * an older shape of this code, so nothing here may assume a field exists. Caps
  * are there so one bad row cannot render a thousand checkboxes.
  */
-const MAX_CHECKLIST = 40;
+const MAX_GROUPS = 12;
+const MAX_ITEMS = 60;
 const MAX_ITEM_CHARS = 200;
+const MAX_NAME_CHARS = 80;
 
-export function parseChecklist(v: unknown): ChecklistItem[] {
+/** The name a flat list gets when it is read forward into a group. */
+export const DEFAULT_CHECKLIST_NAME = "Steps";
+
+function parseItems(v: unknown): ChecklistItem[] {
   if (!Array.isArray(v)) return [];
   const out: ChecklistItem[] = [];
   for (const raw of v) {
@@ -128,16 +144,73 @@ export function parseChecklist(v: unknown): ChecklistItem[] {
       text: text.slice(0, MAX_ITEM_CHARS),
       done: item.done === true,
     });
-    if (out.length >= MAX_CHECKLIST) break;
+    if (out.length >= MAX_ITEMS) break;
   }
   return out;
 }
 
-export function checklistProgress(items: ChecklistItem[]): {
+/**
+ * Reads the column into NAMED groups, accepting both shapes it has ever had.
+ *
+ * A flat `[{id, text, done}]` is everything written before checklists got
+ * names, and it comes back as one group called Steps. That is why there is no
+ * migration for this: the old shape is not wrong, it is a group nobody named,
+ * and a backfill would have had to guess at a name anyway.
+ *
+ * Same trust-boundary job as parseWardrobe. Nothing may assume a field exists,
+ * and the caps stop one bad row rendering a thousand checkboxes.
+ */
+export function parseChecklist(v: unknown): ChecklistGroup[] {
+  if (!Array.isArray(v) || v.length === 0) return [];
+
+  // The old shape: an array of items rather than of groups. Detected by the
+  // presence of `text`, since a group has `items` and never has text.
+  const looksFlat = v.some(
+    (raw) => raw && typeof raw === "object" && "text" in (raw as object)
+  );
+  if (looksFlat) {
+    const items = parseItems(v);
+    return items.length
+      ? [{ id: "g0", name: DEFAULT_CHECKLIST_NAME, items }]
+      : [];
+  }
+
+  const out: ChecklistGroup[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") continue;
+    const g = raw as Record<string, unknown>;
+    const items = parseItems(g.items);
+    const name =
+      typeof g.name === "string" && g.name.trim()
+        ? g.name.trim().slice(0, MAX_NAME_CHARS)
+        : DEFAULT_CHECKLIST_NAME;
+    // An EMPTY group is kept, unlike an empty item: somebody named it and is
+    // about to fill it, and dropping it on the round trip would delete a list
+    // the moment it was created.
+    out.push({
+      id: typeof g.id === "string" && g.id ? g.id : `g${out.length}`,
+      name,
+      items,
+    });
+    if (out.length >= MAX_GROUPS) break;
+  }
+  return out;
+}
+
+/** Across every group, since the card shows one bar for the whole task. */
+export function checklistProgress(groups: ChecklistGroup[]): {
   done: number;
   total: number;
 } {
-  return { done: items.filter((i) => i.done).length, total: items.length };
+  let done = 0;
+  let total = 0;
+  for (const g of groups) {
+    for (const i of g.items) {
+      total++;
+      if (i.done) done++;
+    }
+  }
+  return { done, total };
 }
 
 export type TaskState = "done" | "overdue" | "due" | "open";

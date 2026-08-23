@@ -16,8 +16,9 @@ import {
   parseChecklist,
   phaseMeta,
   taskStatus,
+  DEFAULT_CHECKLIST_NAME,
   type BoardTask,
-  type ChecklistItem,
+  type ChecklistGroup,
 } from "@/lib/tasks";
 
 /**
@@ -71,7 +72,7 @@ export function TaskDetailModal({
   pendingInvites?: string[];
   onClose: () => void;
   onPatch: (patch: Record<string, string | null>) => void;
-  onChecklist: (items: ChecklistItem[]) => void;
+  onChecklist: (groups: ChecklistGroup[]) => void;
   onAssignees: (userIds: string[]) => void;
   onAddFile: (formData: FormData) => void;
   onRemoveFile: (fileId: string) => void;
@@ -82,7 +83,8 @@ export function TaskDetailModal({
 }) {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
-  const [stepText, setStepText] = useState("");
+  // Keyed by checklist, so typing in one does not clear another.
+  const [stepText, setStepText] = useState<Record<string, string>>({});
   const [comment, setComment] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -93,15 +95,15 @@ export function TaskDetailModal({
     if (!task) return;
     setTitle(task.title);
     setNotes(task.notes ?? "");
-    setStepText("");
+    setStepText({});
     setComment("");
   }, [task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const items = useMemo(
+  const groups = useMemo(
     () => parseChecklist(task?.checklist ?? []),
     [task?.checklist]
   );
-  const progress = checklistProgress(items);
+  const progress = checklistProgress(groups);
   const status = taskStatus(task?.status);
   const meta = TASK_STATUS[status];
 
@@ -267,16 +269,16 @@ export function TaskDetailModal({
         <div>
           <div className="mb-1.5 flex items-baseline gap-2">
             <span className="text-[11px] font-semibold text-text-muted">
-              Steps
+              Checklists {groups.length > 0 ? groups.length : ""}
             </span>
             {progress.total > 0 && (
               <span className="text-[11px] font-bold text-text-faint">
-                {progress.done}/{progress.total}
+                {progress.done}/{progress.total} done
               </span>
             )}
           </div>
           {progress.total > 0 && (
-            <div className="mb-2 h-1.5 w-full overflow-hidden rounded-pill bg-surface-2">
+            <div className="mb-3 h-1.5 w-full overflow-hidden rounded-pill bg-surface-2">
               <div
                 className="h-full rounded-pill transition-all"
                 style={{
@@ -289,68 +291,170 @@ export function TaskDetailModal({
               />
             </div>
           )}
-          {items.length > 0 && (
-            <ul className="mb-1.5 space-y-0.5">
-              {items.map((it) => (
-                <li key={it.id} className="group/step flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      onChecklist(
-                        items.map((x) =>
-                          x.id === it.id ? { ...x, done: !x.done } : x
-                        )
-                      )
-                    }
-                    disabled={busy}
-                    className="grid h-[15px] w-[15px] shrink-0 place-items-center rounded-[4px] border transition"
-                    style={{
-                      borderColor: it.done
-                        ? "var(--h-green)"
-                        : "var(--border-strong)",
-                      backgroundColor: it.done ? "var(--h-green)" : "transparent",
-                    }}
-                    aria-label={it.done ? "Mark step not done" : "Mark step done"}
-                  >
-                    {it.done && (
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 6 9 17l-5-5" />
+
+          <div className="space-y-3">
+            {groups.map((g) => {
+              const gp = g.items.filter((i) => i.done).length;
+              return (
+                <div key={g.id} className="rounded-[10px] border border-border p-2.5">
+                  <div className="group/g mb-1.5 flex items-center gap-2">
+                    {/* The name is edited in place: a list called "Write the
+                        script" is only useful if renaming it costs nothing. */}
+                    <input
+                      defaultValue={g.name}
+                      disabled={busy}
+                      onBlur={(e) => {
+                        const n = e.target.value.trim();
+                        if (!n || n === g.name) {
+                          e.target.value = g.name;
+                          return;
+                        }
+                        onChecklist(
+                          groups.map((x) => (x.id === g.id ? { ...x, name: n } : x))
+                        );
+                      }}
+                      className="min-w-0 flex-1 rounded-[7px] border border-transparent bg-transparent px-1.5 py-0.5 text-[13px] font-bold text-text outline-none transition hover:border-border focus:border-accent"
+                      aria-label="Checklist name"
+                    />
+                    <span className="shrink-0 text-[10.5px] font-semibold text-text-faint">
+                      {gp}/{g.items.length}
+                    </span>
+                    <button
+                      onClick={() =>
+                        onChecklist(groups.filter((x) => x.id !== g.id))
+                      }
+                      disabled={busy}
+                      aria-label={`Remove ${g.name}`}
+                      className="shrink-0 text-text-faint opacity-0 transition hover:text-red group-hover/g:opacity-100"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M18 6 6 18M6 6l12 12" />
                       </svg>
-                    )}
-                  </button>
-                  <span
-                    className={`min-w-0 flex-1 text-[13px] ${
-                      it.done ? "text-text-faint line-through" : "text-text-muted"
-                    }`}
-                  >
-                    {it.text}
-                  </span>
-                  <button
-                    onClick={() => onChecklist(items.filter((x) => x.id !== it.id))}
-                    disabled={busy}
-                    className="shrink-0 text-text-faint opacity-0 transition hover:text-red group-hover/step:opacity-100"
-                    aria-label="Remove step"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Input
-            value={stepText}
-            onChange={(e) => setStepText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
-              const t = stepText.trim();
-              if (!t) return;
-              setStepText("");
-              onChecklist([...items, { id: newId(), text: t, done: false }]);
-            }}
-            placeholder="Add a step, then Enter"
-            className="py-1.5 text-[13px]"
-          />
+                    </button>
+                  </div>
+
+                  {g.items.length > 0 && (
+                    <ul className="mb-1.5 space-y-0.5">
+                      {g.items.map((it) => (
+                        <li key={it.id} className="group/step flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              onChecklist(
+                                groups.map((x) =>
+                                  x.id === g.id
+                                    ? {
+                                        ...x,
+                                        items: x.items.map((y) =>
+                                          y.id === it.id
+                                            ? { ...y, done: !y.done }
+                                            : y
+                                        ),
+                                      }
+                                    : x
+                                )
+                              )
+                            }
+                            disabled={busy}
+                            className="grid h-[15px] w-[15px] shrink-0 place-items-center rounded-[4px] border transition"
+                            style={{
+                              borderColor: it.done
+                                ? "var(--h-green)"
+                                : "var(--border-strong)",
+                              backgroundColor: it.done
+                                ? "var(--h-green)"
+                                : "transparent",
+                            }}
+                            aria-label={it.done ? "Mark step not done" : "Mark step done"}
+                          >
+                            {it.done && (
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 6 9 17l-5-5" />
+                              </svg>
+                            )}
+                          </button>
+                          <span
+                            className={`min-w-0 flex-1 text-[13px] ${
+                              it.done
+                                ? "text-text-faint line-through"
+                                : "text-text-muted"
+                            }`}
+                          >
+                            {it.text}
+                          </span>
+                          <button
+                            onClick={() =>
+                              onChecklist(
+                                groups.map((x) =>
+                                  x.id === g.id
+                                    ? {
+                                        ...x,
+                                        items: x.items.filter((y) => y.id !== it.id),
+                                      }
+                                    : x
+                                )
+                              )
+                            }
+                            disabled={busy}
+                            className="shrink-0 text-text-faint opacity-0 transition hover:text-red group-hover/step:opacity-100"
+                            aria-label="Remove step"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="M18 6 6 18M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <Input
+                    value={stepText[g.id] ?? ""}
+                    onChange={(e) =>
+                      setStepText((prev) => ({ ...prev, [g.id]: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      const t = (stepText[g.id] ?? "").trim();
+                      if (!t) return;
+                      setStepText((prev) => ({ ...prev, [g.id]: "" }));
+                      onChecklist(
+                        groups.map((x) =>
+                          x.id === g.id
+                            ? {
+                                ...x,
+                                items: [
+                                  ...x.items,
+                                  { id: newId(), text: t, done: false },
+                                ],
+                              }
+                            : x
+                        )
+                      );
+                    }}
+                    placeholder="Add a step, then Enter"
+                    className="py-1 text-[12.5px]"
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() =>
+              onChecklist([
+                ...groups,
+                {
+                  id: newId(),
+                  name: groups.length === 0 ? DEFAULT_CHECKLIST_NAME : "New checklist",
+                  items: [],
+                },
+              ])
+            }
+            disabled={busy}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-[9px] border border-dashed border-border px-2.5 py-1.5 text-[12px] font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+          >
+            + Add a checklist
+          </button>
         </div>
 
         <div>

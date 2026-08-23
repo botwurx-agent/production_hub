@@ -10,7 +10,7 @@ import {
   parseChecklist,
   taskPhase,
   taskStatus,
-  type ChecklistItem,
+  type ChecklistGroup,
 } from "@/lib/tasks";
 import type { ProjectStatus } from "@/lib/database.types";
 
@@ -296,14 +296,14 @@ export async function setTaskAssignees(
 export async function setTaskChecklist(
   projectId: string,
   id: string,
-  items: ChecklistItem[]
+  groups: ChecklistGroup[]
 ): Promise<TaskResult> {
   await requireStudioContext();
   const supabase = createClient();
   const { error } = await supabase
     .from("project_tasks")
     .update({
-      checklist: parseChecklist(items),
+      checklist: parseChecklist(groups),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);

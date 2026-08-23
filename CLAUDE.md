@@ -2713,7 +2713,22 @@ written, because nothing could answer "who is on this job".
   contact_profiles.wardrobe are: never filtered, sorted or joined on, only ever
   read with its parent, and a shape change should not cost a migration.
   parseChecklist (lib/tasks.ts) is the trust boundary out of it.
-- lib/tasks.ts is pure and unit-tested in the scratchpad (70 assertions),
+  SEVERAL NAMED CHECKLISTS per card, and NO MIGRATION FOR IT, which is the
+  point of having chosen jsonb. The shape is now `[{id, name, items}]` and
+  parseChecklist accepts BOTH: a flat `[{id, text, done}]` (everything written
+  before names existed) is detected by an item carrying `text` and comes back as
+  one group called Steps. The old shape is not wrong, it is a group nobody
+  named, and a backfill would have had to invent a name anyway. Caps are 12
+  groups x 60 items. An EMPTY group is kept where an empty item is dropped:
+  somebody just created it and is about to fill it.
+- BOARD | LIST, persisted in localStorage next to the grouping. The list is not
+  a second way to WORK, it is a second way to READ: a board answers "where is
+  everything", a list answers "what is next", and on forty tasks or on a phone
+  the second question is the one being asked. Both layouts share `boardColumns`,
+  so switching changes how the work looks and never what it is grouped by,
+  which would make one toggle into two settings. The status chip on a row is
+  dropped when the sections already ARE the statuses.
+- lib/tasks.ts is pure and unit-tested in the scratchpad (77 assertions),
   including that UNDATED TASKS SORT LAST (nulls-first would put every vague
   intention above tomorrow's delivery), that a hand-placed sort key beats the
   due date but equal keys fall through to it, that twenty successive drops into
@@ -2798,10 +2813,7 @@ written, because nothing could answer "who is on this job".
 - NOT built: the dashboard Tasks widget still reads crm_tasks only, so there is
   still no studio-wide "what do I owe across every job today". That is the
   strongest next slice, and project_task_assignees is indexed on
-  (studio_id, user_id) for exactly that query. Also not built: several NAMED
-  checklists per card (ours is one flat list of steps), and a list view
-  alongside the board (the grouped list 0094 shipped was replaced by the board
-  rather than kept as a second view).
+  (studio_id, user_id) for exactly that query.
 
 ### Next step
 STILL NOTHING QUEUED (reconfirmed by how the 2026-08 session ran: every item in

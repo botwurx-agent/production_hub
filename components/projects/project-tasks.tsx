@@ -31,7 +31,7 @@ import {
   taskState,
   taskStatus,
   type BoardTask,
-  type ChecklistItem,
+  type ChecklistGroup,
   type GroupBy,
 } from "@/lib/tasks";
 import type { ProjectStatus } from "@/lib/database.types";
@@ -58,6 +58,9 @@ import type { ProjectStatus } from "@/lib/database.types";
  */
 
 const VIEW_KEY = "tasks.groupBy";
+const LAYOUT_KEY = "tasks.layout";
+
+type Layout = "board" | "list";
 
 /**
  * Who is on a card.
@@ -99,6 +102,110 @@ function Assignees({ people }: { people: Person[] }) {
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * One task as a ROW.
+ *
+ * The list is not a second way to work, it is a second way to READ: a board
+ * answers "where is everything", a list answers "what is next", and on a job
+ * with forty tasks the second question is the one you ask on a phone. Same
+ * cards, same modal, same grouping, so nothing has to be kept in step.
+ */
+function TaskRow({
+  task,
+  people,
+  todayIso,
+  onOpen,
+  onToggle,
+  busy,
+  showStatus,
+}: {
+  task: BoardTask;
+  people: Person[];
+  todayIso: string;
+  onOpen: () => void;
+  onToggle: () => void;
+  busy: boolean;
+  /** Only when the sections are NOT already the statuses, or it repeats the
+   *  heading on every row. */
+  showStatus: boolean;
+}) {
+  const progress = checklistProgress(parseChecklist(task.checklist));
+  const state = taskState(task, todayIso);
+  const on = people.filter((p) => task.assignees.includes(p.userId));
+  const st = TASK_STATUS[taskStatus(task.status)];
+
+  return (
+    <li className="flex items-center gap-2.5 rounded-[10px] border border-transparent px-2.5 py-2 transition hover:border-border hover:bg-surface-2">
+      <button
+        onClick={onToggle}
+        disabled={busy}
+        className="grid h-[17px] w-[17px] shrink-0 place-items-center rounded-[5px] border transition"
+        style={{
+          borderColor: task.done ? "var(--h-green)" : "var(--border-strong)",
+          backgroundColor: task.done ? "var(--h-green)" : "transparent",
+        }}
+        aria-label={task.done ? "Mark not done" : "Mark done"}
+      >
+        {task.done && (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        )}
+      </button>
+
+      <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <span
+          className={`block truncate text-[13.5px] ${
+            task.done ? "text-text-faint line-through" : "text-text"
+          }`}
+        >
+          {task.title}
+        </span>
+      </button>
+
+      {/* The column becomes a chip here, since a row has no column to sit in.
+          Dropped when the sections already are the columns. */}
+      {showStatus && (
+        <span
+          className="hidden shrink-0 rounded-pill px-2 py-0.5 text-[10.5px] font-bold sm:inline"
+          style={{
+            backgroundColor: `var(--h-${st.hue}-bg)`,
+            color: `var(--h-${st.hue})`,
+          }}
+        >
+          {st.label}
+        </span>
+      )}
+
+      {progress.total > 0 && (
+        <span className="hidden shrink-0 text-[10.5px] font-semibold text-text-faint sm:inline">
+          {progress.done}/{progress.total}
+        </span>
+      )}
+      {task.files.length > 0 && (
+        <span className="shrink-0 text-[10.5px] font-semibold text-text-faint" title={`${task.files.length} attached`}>
+          {task.files.length} file{task.files.length === 1 ? "" : "s"}
+        </span>
+      )}
+      {task.due_date && (
+        <span
+          className="shrink-0 rounded-pill px-2 py-0.5 text-[10.5px] font-semibold"
+          style={
+            state === "overdue"
+              ? { backgroundColor: "var(--h-red-bg)", color: "var(--h-red)" }
+              : state === "due"
+                ? { backgroundColor: "var(--h-amber-bg)", color: "var(--h-amber)" }
+                : { color: "var(--text-faint)" }
+          }
+        >
+          {state === "due" ? "Today" : shortDate(task.due_date)}
+        </span>
+      )}
+      <Assignees people={on} />
+    </li>
   );
 }
 
@@ -286,6 +393,7 @@ export function ProjectTasks({
   const [busy, start] = useTransition();
 
   const [groupBy, setGroupBy] = useState<GroupBy>("status");
+  const [layout, setLayout] = useState<Layout>("board");
   const [mineOnly, setMineOnly] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -299,8 +407,16 @@ export function ProjectTasks({
     try {
       const v = localStorage.getItem(VIEW_KEY);
       if (v === "status" || v === "phase") setGroupBy(v);
+      const l = localStorage.getItem(LAYOUT_KEY);
+      if (l === "board" || l === "list") setLayout(l);
     } catch {}
   }, []);
+  function pickLayout(v: Layout) {
+    setLayout(v);
+    try {
+      localStorage.setItem(LAYOUT_KEY, v);
+    } catch {}
+  }
   function pickGroupBy(v: GroupBy) {
     setGroupBy(v);
     try {
@@ -401,6 +517,15 @@ export function ProjectTasks({
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-pill bg-surface-2 p-1">
+          <button onClick={() => pickLayout("board")} className={toggleClass(layout === "board")}>
+            Board
+          </button>
+          <button onClick={() => pickLayout("list")} className={toggleClass(layout === "list")}>
+            List
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1 rounded-pill bg-surface-2 p-1">
           <button onClick={() => pickGroupBy("status")} className={toggleClass(groupBy === "status")}>
             By status
           </button>
@@ -451,9 +576,80 @@ export function ProjectTasks({
         </p>
       )}
 
-      {/* Columns FILL the width when they fit and scroll when they do not,
-          which matters because grouping by phase adds a fifth. min-w keeps a
-          card readable rather than letting five columns squeeze to nothing. */}
+      {layout === "list" ? (
+        // The SAME columns, read as sections. Grouping is shared with the
+        // board on purpose: switching layout should change how the work looks,
+        // never what it is grouped by, or the toggle becomes two settings.
+        <div className="space-y-5">
+          {columns.map((col) => (
+            <section key={col.key}>
+              <div className="mb-1 flex items-center gap-2">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: `var(--h-${col.hue})` }}
+                />
+                <h3 className="text-[12.5px] font-bold uppercase tracking-wide text-text-muted">
+                  {col.label}
+                </h3>
+                <span className="text-[11.5px] font-semibold text-text-faint">
+                  {col.tasks.length}
+                </span>
+                <button
+                  onClick={() => {
+                    setNewTitle("");
+                    setAddingTo(col.key);
+                  }}
+                  className="ml-auto text-[11.5px] font-semibold text-text-faint transition hover:text-accent"
+                >
+                  + Add task
+                </button>
+              </div>
+              {addingTo === col.key && (
+                <Input
+                  autoFocus
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  onBlur={() => addTo(col.key)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addTo(col.key);
+                    if (e.key === "Escape") {
+                      setNewTitle("");
+                      setAddingTo(null);
+                    }
+                  }}
+                  placeholder="What needs doing?"
+                  className="mb-1 py-1.5 text-[13px]"
+                />
+              )}
+              {col.tasks.length === 0 ? (
+                <p className="rounded-[10px] border border-dashed border-border px-3 py-2.5 text-[12.5px] text-text-faint">
+                  {col.hint || "Nothing here"}
+                </p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {col.tasks.map((t) => (
+                    <TaskRow
+                      key={t.id}
+                      task={t}
+                      people={people}
+                      todayIso={todayIso}
+                      busy={busy}
+                      showStatus={groupBy !== "status"}
+                      onOpen={() => setOpenId(t.id)}
+                      onToggle={() =>
+                        run(() => toggleProjectTask(projectId, t.id, !t.done))
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
+      ) : (
+      /* Columns FILL the width when they fit and scroll when they do not,
+         which matters because grouping by phase adds a fifth. min-w keeps a
+         card readable rather than letting five columns squeeze to nothing. */
       <div className="-mx-1 flex items-stretch gap-3 overflow-x-auto px-1 pb-2">
           {columns.map((col) => {
             const over = dropCol === col.key;
@@ -581,6 +777,7 @@ export function ProjectTasks({
             );
           })}
       </div>
+      )}
 
       <TaskDetailModal
         task={open}
@@ -593,8 +790,8 @@ export function ProjectTasks({
         onPatch={(patch) =>
           run(() => updateProjectTask(projectId, open!.id, patch))
         }
-        onChecklist={(items: ChecklistItem[]) =>
-          run(() => setTaskChecklist(projectId, open!.id, items))
+        onChecklist={(groups: ChecklistGroup[]) =>
+          run(() => setTaskChecklist(projectId, open!.id, groups))
         }
         onAssignees={(ids: string[]) =>
           run(() => setTaskAssignees(projectId, open!.id, ids))
