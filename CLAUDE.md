@@ -2697,6 +2697,14 @@ written, because nothing could answer "who is on this job".
   (dragstart -> dragover -> drop -> dragend all fire).
 - A card opens in a MODAL, not an inline expander: on a board an expanding card
   reflows the column under the cursor you just dropped with.
+- AN EMPTY BOARD IS STILL THE BOARD. The first version replaced it with a rich
+  EmptyState whose "Add the first task" button set the add-a-card state on a
+  column that branch had not rendered, so pressing it did nothing at all. The
+  general lesson: never put the only way in behind a branch that hides the
+  thing it acts on. The board now always renders; an empty one gets a line of
+  context above it, and four labelled columns with their own add buttons
+  explain themselves better than a blank slate would (it is also where Waiting
+  gets noticed).
 - `amber` was added to the `Hue` union in components/status-tag.tsx. The
   --h-amber tokens have existed from the start and are used directly all over
   (every "someone owes us something" signal); the union had just never named it.

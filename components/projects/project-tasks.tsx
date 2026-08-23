@@ -12,7 +12,6 @@ import {
   deleteProjectTask,
 } from "@/app/(app)/projects/[id]/task-actions";
 import { Input } from "@/components/ui/input";
-import { EmptyState } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
 import { TaskDetailModal } from "@/components/projects/task-detail-modal";
 import { shortDate } from "@/lib/format";
@@ -385,39 +384,28 @@ export function ProjectTasks({
         </span>
       </div>
 
-      {tasks.length === 0 ? (
-        <EmptyState
-          hue="purple"
-          title="Nothing on the board yet"
-          description="Everything this job still needs, on a board you drag across as it moves."
-          steps={[
-            {
-              title: "Add it to a column",
-              text: "To do, in progress, waiting on someone, done.",
-            },
-            {
-              title: "Drag it as it moves",
-              text: "Waiting is its own column, because half of production is waiting on somebody.",
-            },
-            {
-              title: "Or group by phase",
-              text: "Same cards, re-columned into pre-pro, production, post and delivery.",
-            },
-          ]}
-          action={
-            <button
-              onClick={() => setAddingTo("todo")}
-              className="rounded-[10px] bg-accent px-3.5 py-2 text-sm font-bold text-accent-fg"
-            >
-              Add the first task
-            </button>
-          }
-        />
-      ) : (
-        // Columns FILL the width when they fit and scroll when they do not,
-        // which matters because grouping by phase adds a fifth. min-w keeps a
-        // card readable rather than letting five columns squeeze to nothing.
-        <div className="-mx-1 flex items-stretch gap-3 overflow-x-auto px-1 pb-2">
+      {/* An EMPTY BOARD IS STILL THE BOARD, and it used to be replaced by a
+          rich empty state whose "Add the first task" button set the
+          add-a-card state on a column that was not rendered, so pressing it
+          did nothing at all. The lesson is the general one: never put the only
+          way in behind a branch that hides the thing it acts on.
+          Four labelled columns with their own add buttons explain themselves
+          better than a blank slate with an explainer would, and this is where
+          Waiting gets noticed. So the board always renders and an empty one
+          just gets a line of context above it. */}
+      {tasks.length === 0 && (
+        <p className="mb-4 rounded-[12px] border border-dashed border-border bg-surface-2/40 px-3.5 py-3 text-[13px] text-text-muted">
+          <span className="font-semibold text-text">Nothing on the board yet.</span>{" "}
+          Add what this job still needs to a column, then drag a card as the
+          work moves. Waiting is its own column, because a lot of production is
+          waiting on somebody else.
+        </p>
+      )}
+
+      {/* Columns FILL the width when they fit and scroll when they do not,
+          which matters because grouping by phase adds a fifth. min-w keeps a
+          card readable rather than letting five columns squeeze to nothing. */}
+      <div className="-mx-1 flex items-stretch gap-3 overflow-x-auto px-1 pb-2">
           {columns.map((col) => {
             const over = dropCol === col.key;
             return (
@@ -543,8 +531,7 @@ export function ProjectTasks({
               </div>
             );
           })}
-        </div>
-      )}
+      </div>
 
       <TaskDetailModal
         task={open}
