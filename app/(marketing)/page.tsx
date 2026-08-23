@@ -247,6 +247,7 @@ export default function MarketingHome() {
               "Pin a comment to a spot on a still, or to a moment in a cut",
               "Draw on the frame when words are slower than a circle",
               "Every version kept, with the notes that belong to it",
+              "Switch between versions on the same page, a click apart",
               "Approve or request changes in one click, on the record",
             ]}
           />
