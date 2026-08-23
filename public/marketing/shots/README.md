@@ -30,18 +30,26 @@ its own and they are taken by hand:
   selector names it, and press Cancel afterwards, or the write lands in the
   demo and the budget shot above stops matching.
 - `project-pipeline.png` needs a project with real generations in it.
-- `project-communication.png` needs a LIVE connector, because the panel reads
-  messages from Gmail and Slack at render time and there is nothing to fake.
-  The demo studio was seeded with `email_accounts` rows in July 2026 that
-  carried invented tokens; the app read those as connected, skipped its
-  "Connect Gmail in Settings" prompt, and then failed with a red error the
-  moment a thread was opened. Those rows (and the threads, channels and space
-  that pointed at ids no inbox has) were deleted on 2026-08-23, so the demo now
-  shows the honest connect prompt. To take the shot, sign in as
-  demo@studio-flows.com, connect a THROWAWAY Google account under Settings →
-  Connections, send that inbox three or four emails in the Bright Water
-  fiction, then link them on the project. Never connect a real client inbox: a
-  screenshot of live mail publishes a client list.
+
+`project-communication.png` has its own script:
+
+    npm run dev
+    npm run shots:comms
+
+It cannot come from the demo studio like the rest. The Communication page holds
+the LINK to a conversation and reads the messages from Gmail and Slack at render
+time, so without a live connector the panels can only be photographed shut. The
+demo studio's seeded `email_accounts` rows make the closed state render, and
+nothing further: opening a thread calls the real API with an invented token and
+fails.
+
+So the script shoots `/dev/comms`, a fixture that renders the real Sidebar,
+ProjectSubhead and Card on the real tokens with an invented conversation in the
+same Bright Water fiction the demo already uses. Read that file's header for
+exactly what is real and what is drawn. If a throwaway inbox is ever connected
+to the demo studio, delete the fixture and the script and add the real page to
+capture-shots.mjs, which is strictly better. Never connect a real client inbox:
+a screenshot of live mail publishes a client list.
 
 ## Size
 

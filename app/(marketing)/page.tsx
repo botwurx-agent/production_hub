@@ -250,6 +250,7 @@ export default function MarketingHome() {
             points={[
               "Gmail, Slack and Google Chat, side by side on one page",
               "Reply without leaving the job, attachments and all",
+              "An unread count per conversation, so nothing sits unseen",
               "Pull an attachment straight into the assets, documents or the budget",
               "The whole conversation still lives where it always did",
             ]}

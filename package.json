@@ -9,6 +9,7 @@
     "lint": "next lint",
     "types": "tsc --noEmit",
     "shots": "node scripts/capture-shots.mjs",
+    "shots:comms": "node scripts/capture-communication.mjs",
     "demo:media": "node scripts/demo-media.mjs",
     "prebuild": "node scripts/copy-pdf-worker.mjs"
   },

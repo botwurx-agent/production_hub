@@ -107,9 +107,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const isPublic = PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  );
+  const isPublic =
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    // /dev is the local-only namespace (the token reference, the screenshot
+    // fixture). Open it without a session in development so a capture script
+    // can reach it, and never in production, where it stays behind auth like
+    // any other page. Written as a runtime check on NODE_ENV rather than as an
+    // entry in the list above, because an entry in that list would be one
+    // review away from shipping.
+    (process.env.NODE_ENV !== "production" && pathname.startsWith("/dev/"));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

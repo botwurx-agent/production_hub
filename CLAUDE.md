@@ -2670,25 +2670,41 @@ UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
 - RUNNER had been opened 8 times ever at last count. The week-two decision the
   build itself set ("if it is not being opened, it stops") is still unmade. Do
   not quietly let that lapse: either check usage and decide, or say so.
-- The marketing site now carries seven real screenshots. ONE dashed placeholder
-  is left, `project-communication.png` in the new Communication section (which
-  sits directly above Client review and states the connect-don't-replace
-  principle, the only place on the site that does). It cannot be captured by
-  the script: the Communication panel reads messages from Gmail and Slack at
-  render time, so it needs a LIVE connector.
-  WHY THE DEMO SHOWED A RED ERROR THERE, since the same trap would catch any
-  future seeded connector: the demo studio (Northline, demo@studio-flows.com)
-  had `email_accounts` rows for google and slack seeded in July 2026 with
-  invented tokens. The panels gate on "is there an account row", so the app
-  read that as CONNECTED, skipped its dashed "Connect Gmail in Settings"
-  prompt, and then failed at the first real API call. A fake credential is
-  worse than none: it turns an honest empty state into a broken one. Those two
-  rows were deleted 2026-08-23, along with the 4 email_threads, 2 slack_channels
-  and 1 chat_space that pointed at ids no real inbox or workspace has. The demo
-  now shows the connect prompt. To get the shot, connect a THROWAWAY Google
-  account as demo@studio-flows.com and link a few threads; never a real inbox,
-  since a screenshot of live mail publishes a client list (the standing rule in
-  public/marketing/shots/README.md).
+- The marketing site now carries EIGHT real screenshots and no placeholders. The
+  eighth is the new Communication section (directly above Client review, and
+  the only place on the site that states the connect-don't-replace principle).
+  IT IS THE ONE SHOT THAT CANNOT COME FROM THE DEMO STUDIO, and the reason is
+  structural rather than a gap to be closed later: the Communication page holds
+  the LINK to a conversation and reads the messages from Gmail and Slack at
+  render time. There is nothing seedable about a Gmail thread, and there never
+  will be, since the feature's whole point is that the mail stays in the mail.
+  Without a live connector the panels can only be photographed shut.
+  So `app/dev/comms` is a FIXTURE: it renders the real Sidebar, ProjectSubhead
+  and Card on the real tokens, with an invented conversation in the same Bright
+  Water fiction the demo studio already uses, and the thread/channel markup
+  copied from what ThreadReader and SlackReader render when open. Restyle
+  either and the fixture needs re-copying (a drift shows the moment the shot is
+  retaken beside the others). `npm run shots:comms` captures it at the same
+  1600px / 2x as every other shot. It is the only page in the repo that draws a
+  screen instead of being one, which is why both it and the script say so at
+  length. If a throwaway inbox is ever connected to the demo, delete both and
+  add the real page to capture-shots.mjs, which is strictly better.
+  Middleware gained ONE line for it: `/dev/*` is public when NODE_ENV is not
+  production, so a capture script can reach it without a session, and stays
+  auth-gated in production. Written as a runtime check rather than an entry in
+  PUBLIC_PATHS, because an entry in that list would be one review away from
+  shipping.
+  THE DEMO'S FAKE CONNECTOR, worth knowing since the same trap catches any
+  future seeded credential: Northline had `email_accounts` rows for google and
+  slack seeded in July 2026 with invented tokens. The panels gate on "is there
+  an account row", so the app read that as CONNECTED, skipped its dashed
+  "Connect Gmail in Settings" prompt, and then failed at the first real API
+  call. That is why opening a thread showed a red error rather than a prompt.
+  The rows were briefly deleted 2026-08-23 and then RESTORED on the operator's
+  call: with them the demo shows its linked threads, channels and space, which
+  is worth more than an honest empty state on a studio that exists to be
+  photographed. Keep them; just never treat a seeded credential as evidence a
+  connector works.
   Also fixed while there: the thread-open error rendered as a bare red line, the
   one place the app said something was wrong without saying what to do. A dead
   or revoked token fails on OPEN rather than on page load, which is why it had
