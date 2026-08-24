@@ -3,7 +3,20 @@ import Link from "next/link";
 import { Wash } from "@/components/marketing/aurora";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
 import { Section, SectionHeader } from "@/components/marketing/section";
-import { FEATURES } from "@/lib/marketing/features";
+import {
+  FEATURES,
+  MODULES,
+  MODULE_BANDS,
+  moduleHref,
+} from "@/lib/marketing/features";
+
+/** Identity hue per band, matching the app's own hub bands. */
+const BAND_HUES: Record<string, string> = {
+  plan: "indigo",
+  visualize: "purple",
+  review: "green",
+  produce: "amber",
+};
 
 export const metadata: Metadata = {
   title: "Features",
@@ -72,9 +85,48 @@ export default function FeaturesIndex() {
         </div>
       </Section>
 
-      <Section className="text-center" tint="tinted">
+      {/* The full inventory: every project module by name, grouped by the
+          app's own hub bands. The grouping IS the pitch: the marketing page
+          mirrors how a real project actually opens. Each name links to the
+          module's anchored showcase on its feature page. */}
+      <Section tint="tinted">
+        <SectionHeader
+          eyebrow="The full inventory"
+          title={`${MODULES.length} modules, one project.`}
+          sub="Everything a job carries, grouped the way the app itself groups them: the four phases a production moves through. Every one of these is a page inside the project."
+        />
+        <div className="mx-auto mt-14 grid max-w-6xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          {MODULE_BANDS.map((band) => (
+            <div key={band.key}>
+              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-text-faint">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: `var(--h-${BAND_HUES[band.key]})` }}
+                />
+                {band.label}
+              </p>
+              <ul className="mt-4 space-y-4">
+                {MODULES.filter((m) => m.band === band.key).map((m) => (
+                  <li key={m.key}>
+                    <Link href={moduleHref(m)} className="group block">
+                      <span className="text-[15px] font-semibold text-text transition group-hover:text-accent">
+                        {m.name}
+                      </span>
+                      <span className="mt-0.5 block text-[13px] leading-snug text-text-muted">
+                        {m.blurb}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section className="text-center">
         <h2 className="mx-auto max-w-2xl font-display text-4xl font-extrabold leading-[1.06] tracking-tight text-text sm:text-5xl">
-          One product, not seven subscriptions.
+          One product, not {MODULES.length} subscriptions.
         </h2>
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-text-muted">
           Every plan includes all of it. The tiers buy room, not permission.

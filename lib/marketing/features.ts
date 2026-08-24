@@ -390,3 +390,369 @@ export const FEATURES: FeatureDef[] = [
 export function featureBySlug(slug: string): FeatureDef | undefined {
   return FEATURES.find((f) => f.slug === slug);
 }
+
+/**
+ * THE MODULE LAYER (operator, 2026-08-24): the ~two dozen project features,
+ * each with its own named, linkable showcase. The seven pages above are the
+ * shelves; every module lives on one of them as an anchored block, is listed
+ * by name in the nav dropdown, and appears in the /features inventory grouped
+ * by the app's own hub bands (Plan / Visualize / Review / Produce), which is
+ * itself the pitch: the marketing site mirrors the product's real structure.
+ *
+ * Anchored blocks rather than 24 standalone pages, deliberately: a module page
+ * with no screenshot of its own reads as padding, and the site's standing rule
+ * is real shots only. A module that later earns its own landing page graduates
+ * by adding a FeatureDef; its link here just changes target.
+ */
+
+export type ModuleBand = "plan" | "visualize" | "review" | "produce";
+
+export const MODULE_BANDS: { key: ModuleBand; label: string }[] = [
+  { key: "plan", label: "Plan" },
+  { key: "visualize", label: "Visualize" },
+  { key: "review", label: "Review" },
+  { key: "produce", label: "Produce" },
+];
+
+export type ModuleDef = {
+  /** Anchor id on its page, and the stable key. */
+  key: string;
+  name: string;
+  band: ModuleBand;
+  /** Slug of the feature page the module's showcase lives on. */
+  page: string;
+  hue: string;
+  /** One-line pitch, shown in the inventory and under the block title. */
+  blurb: string;
+  points: string[];
+};
+
+export function moduleHref(m: ModuleDef): string {
+  return `/features/${m.page}#${m.key}`;
+}
+
+export function modulesForPage(slug: string): ModuleDef[] {
+  return MODULES.filter((m) => m.page === slug);
+}
+
+export const MODULES: ModuleDef[] = [
+  // ---- Plan ----
+  {
+    key: "brief",
+    name: "Brief",
+    band: "plan",
+    page: "project-hub",
+    hue: "indigo",
+    blurb: "The creative direction, attached to the job it directs.",
+    points: [
+      "The brief and its attachments live on the project, not in a search",
+      "The first thing anyone joining the job reads",
+      "Its opening lines show on the hub card, so the job introduces itself",
+    ],
+  },
+  {
+    key: "assets",
+    name: "Assets & versions",
+    band: "plan",
+    page: "project-hub",
+    hue: "blue",
+    blurb: "The project's full library, where nothing is named FINAL_v2.",
+    points: [
+      "Upload from the device, or import from Drive and Figma",
+      "Every file keeps its version history, with the notes per version",
+      "Statuses move a file into the review cycle when it is ready",
+    ],
+  },
+  {
+    key: "documents",
+    name: "Documents",
+    band: "plan",
+    page: "project-hub",
+    hue: "cyan",
+    blurb: "Permits, certificates and specs, filed with their provenance.",
+    points: [
+      "One click files a PDF straight out of the linked email",
+      "Each document remembers who sent it, when, and in which thread",
+      "Page-one previews, so a folder of PDFs reads at a glance",
+    ],
+  },
+  {
+    key: "tasks",
+    name: "Tasks",
+    band: "plan",
+    page: "project-hub",
+    hue: "green",
+    blurb: "A drag-and-drop board for everything the job owes.",
+    points: [
+      "Columns by status or by phase, and a Waiting column for work sitting with others",
+      "Several assignees, named checklists, files and notes per card",
+      "A list view for the days when the question is what is next",
+    ],
+  },
+  {
+    key: "contacts",
+    name: "Project contacts",
+    band: "plan",
+    page: "project-hub",
+    hue: "amber",
+    blurb: "One roster per job: crew, talent, clients and vendors.",
+    points: [
+      "Positions, day rates, and notes per person",
+      "Talent profiles carry wardrobe sizes, dietary needs and representation",
+      "Pull people in from the client's contacts without retyping",
+    ],
+  },
+  {
+    key: "calendar",
+    name: "Project calendar",
+    band: "plan",
+    page: "project-hub",
+    hue: "purple",
+    blurb: "The job's own dates, month and agenda.",
+    points: [
+      "Pre-pro, shoot, review and delivery events, color coded",
+      "Shoot and due dates appear as milestones on their own",
+      "Multi-day events span the range, the way a shoot actually does",
+    ],
+  },
+  {
+    key: "people",
+    name: "People & access",
+    band: "plan",
+    page: "project-hub",
+    hue: "pink",
+    blurb: "Studio members, project collaborators, and review-only access.",
+    points: [
+      "Invite a freelancer to one job, not the whole studio",
+      "Collaborators never see rates, budgets, or other clients",
+      "A reviewer tier that can comment and approve but not edit",
+    ],
+  },
+
+  // ---- Visualize ----
+  {
+    key: "storyboards",
+    name: "Storyboards",
+    band: "visualize",
+    page: "production",
+    hue: "purple",
+    blurb: "Structured frame grids with scene, description and sound.",
+    points: [
+      "Frames from upload, project assets, or a client's PDF deck",
+      "Several boards per job, each its own ordered grid",
+      "Print and share views dressed to match the shot list",
+    ],
+  },
+  {
+    key: "shot-list",
+    name: "Shot lists",
+    band: "visualize",
+    page: "production",
+    hue: "amber",
+    blurb: "Shot rows a producer can sort a day by.",
+    points: [
+      "Size, type and movement per shot, free text welcome",
+      "Duplicate, reorder, and move shots between lists",
+      "Read out of a treatment PDF instead of retyped",
+    ],
+  },
+  {
+    key: "moodboard",
+    name: "Moodboards",
+    band: "visualize",
+    page: "production",
+    hue: "pink",
+    blurb: "A freeform canvas for the look.",
+    points: [
+      "Images, notes, shapes, arrows, columns, links and video",
+      "Import from Drive and Figma, or paste from anywhere",
+      "Share a view-only link, or send it for pinned review",
+    ],
+  },
+  {
+    key: "pipeline",
+    name: "AI pipeline",
+    band: "visualize",
+    page: "ai-pipeline",
+    hue: "purple",
+    blurb: "Script to shots to takes, with provenance on everything.",
+    points: [
+      "Per-shot image and video stages, references attached where used",
+      "Keyboard-first triage of a generation batch",
+      "Platform, model, seed and prompt kept on every clip",
+    ],
+  },
+  {
+    key: "elements",
+    name: "Elements",
+    band: "visualize",
+    page: "ai-pipeline",
+    hue: "indigo",
+    blurb: "Reusable characters, locations and looks, with handles.",
+    points: [
+      "A library of named elements with the handle the platform uses",
+      "A usage map: which shots each element appears in",
+      "Prompt checks that catch a handle no reference owns",
+    ],
+  },
+
+  // ---- Review ----
+  {
+    key: "review",
+    name: "Review & approvals",
+    band: "review",
+    page: "client-review",
+    hue: "green",
+    blurb: "Pins, timecodes and sign-off, on every version.",
+    points: [
+      "Internal review and client review, kept separate",
+      "Pinned comments on stills, timecoded notes on cuts, pages on PDFs",
+      "Approve or request changes on the record",
+    ],
+  },
+  {
+    key: "binder",
+    name: "Client binder",
+    band: "review",
+    page: "client-review",
+    hue: "indigo",
+    blurb: "Everything the client asked to see, on one link.",
+    points: [
+      "A checklist over the project: everything is off until you say so",
+      "Boards, shot lists, call sheets and contacts, rendered as approved",
+      "One link for the client, one PDF when they want paper",
+    ],
+  },
+  {
+    key: "batch-review",
+    name: "Batch review",
+    band: "review",
+    page: "ai-pipeline",
+    hue: "pink",
+    blurb: "Send a set of candidates, collect stars and a pick.",
+    points: [
+      "Curate which candidates go out, keep the rest private",
+      "The reviewer stars a shortlist and marks one pick, no login",
+      "Their feedback lands back on the shot, yours to act on",
+    ],
+  },
+  {
+    key: "master-cut",
+    name: "Master cut",
+    band: "review",
+    page: "ai-pipeline",
+    hue: "blue",
+    blurb: "The assembled cut, versioned and reviewed like everything else.",
+    points: [
+      "Upload each cut as a version, from a file or a link",
+      "Timecoded feedback on the same player the client uses",
+      "Round by round, until the sign-off",
+    ],
+  },
+  {
+    key: "communication",
+    name: "Communication",
+    band: "review",
+    page: "communication",
+    hue: "cyan",
+    blurb: "Gmail, Slack and Google Chat, linked to the job.",
+    points: [
+      "Read and reply without leaving the project",
+      "Attachments filed into assets, documents or the budget in one click",
+      "The conversation stays where it always lived",
+    ],
+  },
+
+  // ---- Produce ----
+  {
+    key: "callsheet",
+    name: "Call sheets",
+    band: "produce",
+    page: "production",
+    hue: "amber",
+    blurb: "Industry-layout sheets that chase their own confirmations.",
+    points: [
+      "Edited in place, in the layout crew expect",
+      "Per-person links with viewed and confirmed tracking",
+      "Automatic nudges as the shoot gets close, bounded so nobody is nagged",
+    ],
+  },
+  {
+    key: "gear",
+    name: "Gear & crew",
+    band: "produce",
+    page: "production",
+    hue: "blue",
+    blurb: "The checklist of kit and people, with day rates.",
+    points: [
+      "Confirmed counts at a glance",
+      "Day rates per line, visible to the studio only",
+      "Feeds the budget, where the day count lives",
+    ],
+  },
+  {
+    key: "props",
+    name: "Props",
+    band: "produce",
+    page: "production",
+    hue: "green",
+    blurb: "Sourcing options per prop, and a client pick.",
+    points: [
+      "Each prop holds its options; picking one settles it",
+      "Client sign-off through the same review portal",
+      "The pinned comment lands on the third glass, not on an email",
+    ],
+  },
+  {
+    key: "budget",
+    name: "Budget",
+    band: "produce",
+    page: "budget",
+    hue: "blue",
+    blurb: "Bid against actual, backed by a cost ledger.",
+    points: [
+      "Every cost carries its invoice",
+      "Deposits and payment schedules, tracked to the day",
+      "Margin on the job once billing is in",
+    ],
+  },
+  {
+    key: "invoices",
+    name: "Invoices & estimates",
+    band: "produce",
+    page: "budget",
+    hue: "green",
+    blurb: "Estimates, proposals and invoices, signed online.",
+    points: [
+      "Your numbering, your template, your accent",
+      "Proposals signed in the browser, with the audit trail",
+      "Delivered as a link, an email, or a PDF",
+    ],
+  },
+  {
+    key: "delivery",
+    name: "Delivery & billing",
+    band: "produce",
+    page: "budget",
+    hue: "cyan",
+    blurb: "Deliverables and billing status, through handoff.",
+    points: [
+      "Deliverables with quantities and due dates",
+      "Read out of a signed SOW instead of retyped",
+      "Billing status beside the work it bills for",
+    ],
+  },
+  {
+    key: "agreements",
+    name: "Agreements",
+    band: "produce",
+    page: "budget",
+    hue: "amber",
+    blurb: "NDAs, MSAs, SOWs and change orders, both signatures tracked.",
+    points: [
+      "Masters on the client, SOWs on the job, linked",
+      "Which side has signed, stated instead of hunted for",
+      "Expiry flagged before a lapsed NDA surprises anyone",
+    ],
+  },
+];

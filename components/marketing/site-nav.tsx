@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { CtaButton } from "./cta";
 import { LOGIN_URL } from "@/lib/marketing/hosts";
-import { FEATURES } from "@/lib/marketing/features";
+import {
+  FEATURES,
+  MODULES,
+  MODULE_BANDS,
+  moduleHref,
+} from "@/lib/marketing/features";
 
 /**
  * Two top-level items still, but "Product" became a FEATURES DROPDOWN
@@ -52,39 +57,76 @@ function FeaturesMenu() {
       </Link>
 
       {/* pt-2 bridges the hover gap between the trigger and the card, so the
-          menu does not vanish while the cursor crosses it. */}
-      <div className="invisible absolute left-1/2 top-full z-50 -translate-x-1/2 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-        <div className="w-[300px] rounded-2xl border border-border bg-surface p-2 shadow-xl">
-          {FEATURES.map((f) => (
+          menu does not vanish while the cursor crosses it. Anchored to the
+          RIGHT edge of the trigger: the panel is wide and the trigger sits
+          near the right of the bar, so centering it would run off-screen.
+
+          Two panes (operator, 2026-08-24): the seven sections, AND every
+          project module by name, because "does it do call sheets" should be
+          answerable from the nav without a treasure hunt. Module links land on
+          anchored blocks inside the section pages. */}
+      <div className="invisible absolute -right-24 top-full z-50 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+        <div className="w-[660px] rounded-2xl border border-border bg-surface p-4 shadow-xl">
+          <div className="grid grid-cols-[236px_1fr] gap-5">
+            <div className="border-r border-border pr-4">
+              {FEATURES.map((f) => (
+                <Link
+                  key={f.slug}
+                  href={`/features/${f.slug}`}
+                  className="flex items-start gap-2.5 rounded-xl px-2.5 py-2 transition hover:bg-surface-2"
+                >
+                  <span
+                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: `var(--h-${f.hue})` }}
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-text">
+                      {f.nav}
+                    </span>
+                    <span className="block text-[12px] leading-snug text-text-muted">
+                      {f.hint}
+                    </span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+
+            <div>
+              <p className="px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-text-faint">
+                In every project
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-x-4">
+                {MODULE_BANDS.map((band) => (
+                  <div key={band.key} className="mb-2">
+                    <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-text-faint">
+                      {band.label}
+                    </p>
+                    {MODULES.filter((m) => m.band === band.key).map((m) => (
+                      <Link
+                        key={m.key}
+                        href={moduleHref(m)}
+                        className="block rounded-[8px] px-1 py-[3px] text-[13px] font-medium text-text-muted transition hover:bg-surface-2 hover:text-text"
+                      >
+                        {m.name}
+                      </Link>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-2 border-t border-border pt-2">
             <Link
-              key={f.slug}
-              href={`/features/${f.slug}`}
-              className="flex items-start gap-3 rounded-xl px-3 py-2.5 transition hover:bg-surface-2"
+              href="/features"
+              className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-accent transition hover:bg-surface-2"
             >
-              <span
-                className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: `var(--h-${f.hue})` }}
-              />
-              <span>
-                <span className="block text-sm font-semibold text-text">
-                  {f.nav}
-                </span>
-                <span className="block text-[13px] leading-snug text-text-muted">
-                  {f.hint}
-                </span>
-              </span>
+              All features
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </Link>
-          ))}
-          <div className="mx-3 my-1.5 h-px bg-border" />
-          <Link
-            href="/features"
-            className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold text-accent transition hover:bg-surface-2"
-          >
-            All features
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Link>
+          </div>
         </div>
       </div>
     </div>

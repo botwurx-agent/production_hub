@@ -4,8 +4,12 @@ import { notFound } from "next/navigation";
 import { Wash } from "@/components/marketing/aurora";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
-import { PointList, Section } from "@/components/marketing/section";
-import { FEATURES, featureBySlug } from "@/lib/marketing/features";
+import { PointList, Section, SectionHeader } from "@/components/marketing/section";
+import {
+  FEATURES,
+  featureBySlug,
+  modulesForPage,
+} from "@/lib/marketing/features";
 
 /**
  * One template for every feature page, fed by lib/marketing/features.ts. Shape:
@@ -39,6 +43,7 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
   const related = f.related
     .map((slug) => featureBySlug(slug))
     .filter((r): r is NonNullable<typeof r> => Boolean(r));
+  const mods = modulesForPage(f.slug);
 
   return (
     <>
@@ -107,6 +112,48 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
           ))}
         </div>
       </Section>
+
+      {/* The modules: every project feature that lives on this page, each an
+          ANCHORED block so the nav dropdown and the /features inventory can
+          link straight to it. This is the layer the operator asked for: all of
+          the project's features, each named and showable, without twenty thin
+          pages that would outrun the screenshots we can honestly take. */}
+      {mods.length > 0 && (
+        <Section>
+          <SectionHeader
+            eyebrow="The modules"
+            title="Every piece, by name."
+            sub="Each of these is a page inside the project, not a bullet point. They share the same spine, so nothing is retyped between them."
+          />
+          <div
+            className={
+              mods.length > 1
+                ? "mx-auto mt-14 grid max-w-5xl gap-5 sm:grid-cols-2"
+                : "mx-auto mt-14 grid max-w-2xl gap-5"
+            }
+          >
+            {mods.map((m) => (
+              <div
+                key={m.key}
+                id={m.key}
+                className="relative scroll-mt-24 overflow-clip rounded-2xl border border-border bg-surface p-7 shadow-sm"
+              >
+                <span
+                  className="absolute inset-x-0 top-0 h-1"
+                  style={{ backgroundColor: `var(--h-${m.hue})` }}
+                />
+                <h3 className="font-display text-xl font-extrabold tracking-tight text-text">
+                  {m.name}
+                </h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-text-muted">
+                  {m.blurb}
+                </p>
+                <PointList points={m.points} className="mt-4" />
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* Related features: the spine is the product's argument, so every page
           points at the two neighbours it works with. */}
