@@ -33,6 +33,7 @@ import {
   updateItemHue,
   updateItemName,
   deleteItem,
+  duplicateItem,
   getBoardShare,
   createBoardShare,
   revokeBoardShare,
@@ -263,6 +264,59 @@ export function BoardsWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, reload]);
 
+  // Copy / paste / duplicate for board objects.
+  //
+  // The buffer holds the source item's ID, not a copy of its values: the server
+  // action reads the stored row and copies it there, so a card the browser
+  // never had the right to write cannot be conjured by pasting. Consequence to
+  // know: copy, delete the original, then paste reports that the card is gone,
+  // which is the honest answer rather than a silent empty card.
+  const clipRef = useRef<string | null>(null);
+
+  const pasteCopy = useCallback(
+    (sourceId: string) => {
+      if (!activeId) return;
+      pushHistory();
+      startBusy(async () => {
+        const res = await duplicateItem(sourceId);
+        if ("error" in res) {
+          showNotice(res.error);
+          return;
+        }
+        reload(activeId);
+        setSelectedId(res.id);
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeId, items, connections, reload]
+  );
+
+  // Cmd/Ctrl+C copies the selected card, Cmd/Ctrl+D duplicates it on the spot.
+  // Both are ignored while typing so the browser's own copy still works in a
+  // note, a title field, or a caption.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (key !== "c" && key !== "d") return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+        return;
+      // A text selection means the user is copying words, not the card.
+      if (key === "c" && (window.getSelection()?.toString() ?? "")) return;
+      if (!selectedId) return;
+      e.preventDefault();
+      if (key === "c") {
+        clipRef.current = selectedId;
+        toast("Copied");
+      } else {
+        pasteCopy(selectedId);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, pasteCopy]);
+
   // Paste an image straight onto the board (e.g. copied from an email or the web).
   // Ignored while typing in a field or a card's editor so normal paste still works.
   useEffect(() => {
@@ -285,14 +339,23 @@ export function BoardsWorkspace({
           if (f.type.startsWith("image/")) files.push(f);
         }
       }
-      if (files.length === 0) return;
+      if (files.length === 0) {
+        // Nothing image-shaped on the system clipboard, so this is a paste of a
+        // card copied inside the app. Handled HERE rather than in the keydown
+        // above so Cmd+V has exactly one owner and the two cannot both fire.
+        if (clipRef.current) {
+          e.preventDefault();
+          pasteCopy(clipRef.current);
+        }
+        return;
+      }
       e.preventDefault();
       uploadImageFiles(files, spot());
     }
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId]);
+  }, [activeId, pasteCopy]);
 
   function newBoard() {
     startBusy(async () => {
@@ -811,6 +874,7 @@ export function BoardsWorkspace({
                 note={selectedNote}
                 onHue={setCardHue}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedTodo ? (
@@ -820,6 +884,7 @@ export function BoardsWorkspace({
                 onHue={setCardHue}
                 onMutate={mutateSelectedTodo}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedColumn ? (
@@ -828,6 +893,7 @@ export function BoardsWorkspace({
                 column={selectedColumn}
                 onHue={setCardHue}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedLink ? (
@@ -836,6 +902,7 @@ export function BoardsWorkspace({
                 link={selectedLink}
                 onTitle={setSelectedName}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedVideo ? (
@@ -843,6 +910,7 @@ export function BoardsWorkspace({
                 key={selectedVideo.id}
                 video={selectedVideo}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedImage ? (
@@ -851,6 +919,7 @@ export function BoardsWorkspace({
                 image={selectedImage}
                 onFit={setSelectedText}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedColor ? (
@@ -859,6 +928,7 @@ export function BoardsWorkspace({
                 color={selectedColor}
                 onHex={setSelectedText}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedShape ? (
@@ -869,6 +939,7 @@ export function BoardsWorkspace({
                 onHue={setCardHue}
                 onLabel={setSelectedName}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedHeading ? (
@@ -877,6 +948,7 @@ export function BoardsWorkspace({
                 heading={selectedHeading}
                 onHue={setCardHue}
                 onDelete={deleteSelectedCard}
+                onDuplicate={() => selectedId && pasteCopy(selectedId)}
                 onClose={() => setSelectedId(null)}
               />
             ) : selectedLine ? (
@@ -885,6 +957,7 @@ export function BoardsWorkspace({
                 line={selectedLine}
                 onChange={updateLineStyle}
                 onDelete={deleteLine}
+                onDuplicate={() => selectedLineId && pasteCopy(selectedLineId)}
                 onClose={() => setSelectedLineId(null)}
               />
             ) : (
@@ -1134,11 +1207,13 @@ function NotePanel({
   note,
   onHue,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   note: BoardItemView;
   onHue: (hue: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"text" | "box">("text");
@@ -1358,9 +1433,11 @@ function NotePanel({
         <BoxOptions rawHue={note.hue} onHue={onHue} />
       )}
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -1376,12 +1453,14 @@ function TodoPanel({
   onHue,
   onMutate,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   todo: BoardItemView;
   onHue: (hue: string) => void;
   onMutate: (fn: (rows: TodoRow[]) => TodoRow[]) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   const rows = parseTodo(todo.text);
@@ -1469,9 +1548,11 @@ function TodoPanel({
         </div>
       </div>
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -1479,6 +1560,25 @@ function TodoPanel({
         Delete checklist
       </button>
     </div>
+  );
+}
+
+// The Duplicate row every card panel carries. Keyboard users get Cmd/Ctrl+D,
+// but a canvas feature that exists only as a shortcut is a feature most people
+// never find, so it is also a button.
+function DuplicateButton({ onDuplicate }: { onDuplicate: () => void }) {
+  return (
+    <button
+      onClick={onDuplicate}
+      title="Duplicate (Cmd/Ctrl+D)"
+      className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="9" y="9" width="12" height="12" rx="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      </svg>
+      Duplicate
+    </button>
   );
 }
 
@@ -1602,11 +1702,13 @@ function ColumnPanel({
   column,
   onHue,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   column: BoardItemView;
   onHue: (hue: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   return (
@@ -1620,9 +1722,11 @@ function ColumnPanel({
 
       <BoxOptions rawHue={column.hue} onHue={onHue} />
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -1637,11 +1741,13 @@ function LinkPanel({
   link,
   onTitle,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   link: BoardItemView;
   onTitle: (name: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   return (
@@ -1682,9 +1788,11 @@ function LinkPanel({
         </div>
       )}
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -1699,11 +1807,13 @@ function ImagePanel({
   image,
   onFit,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   image: BoardItemView;
   onFit: (fit: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   const isImg =
@@ -1753,9 +1863,11 @@ function ImagePanel({
         </a>
       )}
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -1816,10 +1928,12 @@ function CaptionTools({ itemId }: { itemId: string }) {
 function VideoPanel({
   video,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   video: BoardItemView;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   const emb = videoEmbed(video.url);
@@ -1859,9 +1973,11 @@ function VideoPanel({
         </div>
       )}
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -1876,11 +1992,13 @@ function ColorPanel({
   color,
   onHex,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   color: BoardItemView;
   onHex: (hex: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   const hex = /^#?[0-9a-fA-F]{3,8}$/.test((color.text ?? "").trim())
@@ -1936,9 +2054,11 @@ function ColorPanel({
         </div>
       </div>
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -1955,6 +2075,7 @@ function ShapePanel({
   onHue,
   onLabel,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   item: BoardItemView;
@@ -1962,6 +2083,7 @@ function ShapePanel({
   onHue: (hue: string) => void;
   onLabel: (label: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   const current = parseShapeData(item.text).shape;
@@ -2041,9 +2163,11 @@ function ShapePanel({
         />
       </div>
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -2058,11 +2182,13 @@ function HeadingPanel({
   heading,
   onHue,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   heading: BoardItemView;
   onHue: (hue: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   // A heading's whole look lives in its hue string (lib/board-heading), so
@@ -2176,9 +2302,11 @@ function HeadingPanel({
         </div>
       </div>
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -2193,11 +2321,13 @@ function LineStylePanel({
   line,
   onChange,
   onDelete,
+  onDuplicate,
   onClose,
 }: {
   line: BoardItemView;
   onChange: (patch: Partial<LineData>) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onClose: () => void;
 }) {
   const d = parseLineData(line.text);
@@ -2300,9 +2430,11 @@ function LineStylePanel({
         </button>
       )}
 
+      <DuplicateButton onDuplicate={onDuplicate} />
+
       <button
         onClick={onDelete}
-        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />

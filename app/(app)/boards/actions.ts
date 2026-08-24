@@ -890,6 +890,100 @@ export async function addHeadingItem(
   return { id: data.id };
 }
 
+// Duplicate an item (copy/paste and Cmd+D). Copied SERVER-SIDE from the stored
+// row rather than from client-supplied values, so every card kind is handled by
+// the same code and nothing the browser sends can become a row's contents.
+//
+// A copied image points at the SAME storage_path: the bytes are identical, and
+// deleting a board item has never purged its blob, so sharing the path costs
+// nothing and avoids duplicating a 30MB file to move a card 24px.
+//
+// A COLUMN takes its children with it. Copying one without them would hand back
+// an empty column, which reads as a bug rather than as a copy.
+export async function duplicateItem(
+  itemId: string,
+  dx = 24,
+  dy = 24
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: src, error: readErr } = await supabase
+    .from("board_items")
+    .select("*")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (readErr) return { error: readErr.message };
+  if (!src) return { error: "That card is no longer on the board." };
+
+  const z = await nextZ(supabase, src.board_id);
+  // A child keeps its column and lands at the end of it; a top-level card is
+  // offset so the copy is visibly its own object rather than hidden underneath.
+  const isChild = Boolean(src.parent_id);
+  const sort = isChild ? await nextSort(supabase, src.parent_id as string) : 0;
+
+  const copy = {
+    studio_id: ctx.studio.id,
+    board_id: src.board_id,
+    kind: src.kind,
+    name: src.name,
+    mime_type: src.mime_type,
+    storage_path: src.storage_path,
+    url: src.url,
+    text: src.text,
+    hue: src.hue,
+    x: isChild ? src.x : Math.max(0, src.x + dx),
+    y: isChild ? src.y : Math.max(0, src.y + dy),
+    w: src.w,
+    h: src.h,
+    z,
+    parent_id: src.parent_id,
+    sort,
+    created_by: ctx.userId,
+  };
+
+  const { data: made, error } = await supabase
+    .from("board_items")
+    .insert(copy)
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+
+  if (src.kind === "column") {
+    const { data: kids } = await supabase
+      .from("board_items")
+      .select("*")
+      .eq("parent_id", itemId)
+      .order("sort", { ascending: true });
+    if (kids && kids.length > 0) {
+      const rows = kids.map((k, i) => ({
+        studio_id: ctx.studio.id,
+        board_id: k.board_id,
+        kind: k.kind,
+        name: k.name,
+        mime_type: k.mime_type,
+        storage_path: k.storage_path,
+        url: k.url,
+        text: k.text,
+        hue: k.hue,
+        x: k.x,
+        y: k.y,
+        w: k.w,
+        h: k.h,
+        z: k.z,
+        parent_id: made.id,
+        sort: i,
+        created_by: ctx.userId,
+      }));
+      const { error: kidErr } = await supabase.from("board_items").insert(rows);
+      if (kidErr) return { error: kidErr.message };
+    }
+  }
+
+  revalidatePath("/boards");
+  return { id: made.id };
+}
+
 // Move an existing top-level item into a column (drag-in), appended at the end.
 export async function attachToColumn(
   itemId: string,
