@@ -25,6 +25,7 @@ import {
   addLine,
   addColorItem,
   addHeadingItem,
+  addShapeItem,
   addVideoItem,
   addLinkItem,
   addDriveItems,
@@ -57,6 +58,13 @@ import {
   serializeHeadingStyle,
   type HeadingStyle,
 } from "@/lib/board-heading";
+import {
+  SHAPES,
+  shapePaths,
+  shapeFill,
+  parseShapeData,
+  serializeShapeData,
+} from "@/lib/board-shape";
 import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 
@@ -112,6 +120,7 @@ export function BoardsWorkspace({
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
+  const [shapesOpen, setShapesOpen] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -416,9 +425,28 @@ export function BoardsWorkspace({
     });
   }
 
+  function addShapeToBoard(shape: string, at = spot()) {
+    if (!activeId) return;
+    pushHistory();
+    startBusy(async () => {
+      const res = await addShapeItem(activeId, shape, at.x, at.y);
+      reload(activeId);
+      if ("id" in res) {
+        setSelectedId(res.id);
+        maybeHint("shape", res.id);
+      }
+    });
+  }
+
   // Dropped a rail tool onto the canvas: create it at the drop point.
   function onDropTool(kind: string, x: number, y: number) {
     if (!activeId) return;
+    // Shape tiles carry which shape they are ("shape:star").
+    if (kind.startsWith("shape:")) {
+      setShapesOpen(false);
+      addShapeToBoard(kind.slice("shape:".length), { x, y });
+      return;
+    }
     pushHistory();
     startBusy(async () => {
       if (kind === "note") {
@@ -491,6 +519,7 @@ export function BoardsWorkspace({
   const selectedLink = selectedItem?.kind === "link" ? selectedItem : null;
   const selectedImage = selectedItem?.kind === "image" ? selectedItem : null;
   const selectedColor = selectedItem?.kind === "color" ? selectedItem : null;
+  const selectedShape = selectedItem?.kind === "shape" ? selectedItem : null;
   const selectedHeading = selectedItem?.kind === "heading" ? selectedItem : null;
   const selectedVideo = selectedItem?.kind === "video" ? selectedItem : null;
 
@@ -831,6 +860,16 @@ export function BoardsWorkspace({
                 onDelete={deleteSelectedCard}
                 onClose={() => setSelectedId(null)}
               />
+            ) : selectedShape ? (
+              <ShapePanel
+                key={selectedShape.id}
+                item={selectedShape}
+                onShape={(k) => setSelectedText(serializeShapeData({ shape: k }))}
+                onHue={setCardHue}
+                onLabel={setSelectedName}
+                onDelete={deleteSelectedCard}
+                onClose={() => setSelectedId(null)}
+              />
             ) : selectedHeading ? (
               <HeadingPanel
                 key={selectedHeading.id}
@@ -848,7 +887,7 @@ export function BoardsWorkspace({
                 onClose={() => setSelectedLineId(null)}
               />
             ) : (
-              <div className="flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
+              <div className="relative flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
                 <RailBtn label="Note" disabled={busy} dragKind="note" onClick={addNoteToBoard}>
                   <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
                 </RailBtn>
@@ -860,6 +899,9 @@ export function BoardsWorkspace({
                 </RailBtn>
                 <RailBtn label="Column" disabled={busy} dragKind="column" onClick={addColumnToBoard}>
                   <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" />
+                </RailBtn>
+                <RailBtn label="Shape" disabled={busy} dragKind="shape:rect" onClick={() => setShapesOpen((o) => !o)}>
+                  <rect x="3" y="9" width="12" height="12" rx="2" /><circle cx="16.5" cy="8.5" r="5" />
                 </RailBtn>
                 <RailBtn label="Line / arrow" disabled={busy} dragKind="line" onClick={addLineToBoard}>
                   <path d="M5 19 19 5" /><path d="M11 5h8v8" />
@@ -891,6 +933,48 @@ export function BoardsWorkspace({
                   <RailBtn label="Figma" onClick={() => setFigmaOpen(true)}>
                     <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 4v16" />
                   </RailBtn>
+                )}
+
+                {/* Shape picker (Freeform-style): click a tile to add it at the
+                    viewport center, or drag it to a spot on the board. */}
+                {shapesOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setShapesOpen(false)} />
+                    <div className="absolute left-full top-0 z-30 ml-2 w-[248px] rounded-[14px] border border-border bg-surface p-2.5 shadow-lg">
+                      <p className="mb-1.5 px-0.5 text-[10px] font-bold uppercase tracking-wide text-text-faint">
+                        Shapes · click or drag onto the board
+                      </p>
+                      <div className="grid grid-cols-4 gap-1">
+                        {SHAPES.map((s) => (
+                          <button
+                            key={s.key}
+                            title={s.label}
+                            aria-label={s.label}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("application/x-board-tool", `shape:${s.key}`);
+                              e.dataTransfer.effectAllowed = "copy";
+                            }}
+                            onClick={() => {
+                              setShapesOpen(false);
+                              addShapeToBoard(s.key);
+                            }}
+                            className="grid h-12 cursor-grab place-items-center rounded-[9px] transition hover:bg-surface-2 active:cursor-grabbing"
+                          >
+                            <svg width="34" height="26" viewBox="0 0 34 26" aria-hidden>
+                              {shapePaths(s.key, 34, 26).map((p, i) => (
+                                <path
+                                  key={i}
+                                  d={p.d}
+                                  fill={p.overlay ? "rgba(255,255,255,0.35)" : "var(--h-blue)"}
+                                />
+                              ))}
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -1804,6 +1888,129 @@ function ColorPanel({
           <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
         </svg>
         Delete swatch
+      </button>
+    </div>
+  );
+}
+
+function ShapePanel({
+  item,
+  onShape,
+  onHue,
+  onLabel,
+  onDelete,
+  onClose,
+}: {
+  item: BoardItemView;
+  onShape: (key: string) => void;
+  onHue: (hue: string) => void;
+  onLabel: (label: string) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const current = parseShapeData(item.text).shape;
+  const hue = item.hue ?? "blue";
+  const isCustom = hue.startsWith("#");
+  return (
+    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Shape</span>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+
+      {/* Swap the shape in place; size, color, label, and connections stay. */}
+      <div className="grid grid-cols-4 gap-1">
+        {SHAPES.map((s) => (
+          <button
+            key={s.key}
+            title={s.label}
+            aria-label={s.label}
+            onClick={() => onShape(s.key)}
+            className={`grid h-9 place-items-center rounded-[8px] transition hover:bg-surface-2 ${
+              current === s.key ? "bg-accent-soft ring-1 ring-accent" : ""
+            }`}
+          >
+            <svg width="26" height="20" viewBox="0 0 26 20" aria-hidden>
+              {shapePaths(s.key, 26, 20).map((p, i) => (
+                <path
+                  key={i}
+                  d={p.d}
+                  fill={
+                    p.overlay
+                      ? "rgba(255,255,255,0.35)"
+                      : current === s.key
+                      ? "var(--accent)"
+                      : "var(--text-faint)"
+                  }
+                />
+              ))}
+            </svg>
+          </button>
+        ))}
+      </div>
+
+      <div>
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Fill</p>
+        <div className="flex flex-wrap gap-1.5">
+          {NOTE_COLORS.map((h) => (
+            <button
+              key={h}
+              onClick={() => onHue(h)}
+              aria-label={h}
+              className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+              style={{
+                backgroundColor: `var(--h-${h})`,
+                boxShadow: hue === h ? "0 0 0 2px var(--accent)" : undefined,
+              }}
+            />
+          ))}
+        </div>
+        <label
+          className={`mt-1.5 flex cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-xs font-semibold transition hover:bg-surface-2 ${
+            isCustom ? "border-accent text-accent" : "border-border text-text-muted"
+          }`}
+        >
+          <span
+            className="h-4 w-4 rounded-full ring-1 ring-black/10"
+            style={{
+              background: isCustom
+                ? hue
+                : "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
+            }}
+          />
+          Custom color
+          <input
+            type="color"
+            className="sr-only"
+            defaultValue={isCustom && hue.length === 7 ? hue : "#5b8def"}
+            onChange={(e) => onHue(e.target.value)}
+          />
+        </label>
+      </div>
+
+      <div>
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Label</p>
+        <input
+          defaultValue={item.name ?? ""}
+          onBlur={(e) => onLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          placeholder="Text on the shape"
+          className="w-full rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-border-strong"
+        />
+      </div>
+
+      <button
+        onClick={onDelete}
+        className="mt-0.5 flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        </svg>
+        Delete shape
       </button>
     </div>
   );

@@ -16,6 +16,12 @@ import {
   headingCss,
   HEADING_FONT_SIZE,
 } from "@/lib/board-heading";
+import {
+  parseShapeData,
+  shapePaths,
+  shapeFill,
+  shapeLabelColor,
+} from "@/lib/board-shape";
 import { parseTodo, type TodoRow } from "@/lib/board-todo";
 import { videoEmbed } from "@/lib/video-embed";
 import { parseMediaMeta, serializeMediaMeta } from "@/lib/board-media";
@@ -48,6 +54,7 @@ const HINT_TEXT: Record<string, { title: string; body: string }> = {
   image: { title: "Image", body: "Drop images anywhere, or import from assets, Drive, or Figma." },
   color: { title: "Color", body: "A palette swatch. Pick any hex in the panel on the left." },
   heading: { title: "Heading", body: "A big section label to organize areas of the board. Just type." },
+  shape: { title: "Shape", body: "Drag to move, pull the corner to resize. Swap the shape, color, and label in the left panel." },
   video: { title: "Video", body: "Plays inline from a YouTube, Vimeo, or Loom link." },
 };
 
@@ -896,6 +903,25 @@ export function BoardCanvas({
           </span>
         </div>
       );
+    } else if (child.kind === "shape") {
+      const sd = parseShapeData(child.text);
+      const paths = shapePaths(sd.shape, 200, 100);
+      body = (
+        <div className="relative px-2 py-2">
+          <svg width="100%" viewBox="0 0 200 100" style={{ display: "block" }}>
+            {paths.map((p, i) => (
+              <path key={i} d={p.d} fill={p.overlay ? "rgba(255,255,255,0.35)" : shapeFill(child.hue)} />
+            ))}
+          </svg>
+          {child.name && (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center px-3">
+              <span className="text-[12px] font-bold" style={{ color: shapeLabelColor(child.hue) }}>
+                {child.name}
+              </span>
+            </div>
+          )}
+        </div>
+      );
     } else {
       const isImg =
         child.signedUrl &&
@@ -1478,6 +1504,62 @@ export function BoardCanvas({
                         {hex}
                       </span>
                     </div>
+                    <span
+                      data-resize="1"
+                      onPointerDown={(e) => startResize(e, it)}
+                      className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize"
+                      style={{ touchAction: "none" }}
+                    />
+                  </div>
+                );
+              }
+
+              if (it.kind === "shape") {
+                const sd = parseShapeData(it.text);
+                const fill = shapeFill(it.hue);
+                const paths = shapePaths(sd.shape, it.w, it.h);
+                return (
+                  <div
+                    key={it.id}
+                    data-item-id={it.id}
+                    style={{
+                      ...common,
+                      // No box: the SVG silhouette IS the card, so the resting
+                      // drop shadow the boxed cards use would draw a floating
+                      // rectangle around nothing. Selection is an outline.
+                      outline: isSel ? "2px solid var(--accent)" : undefined,
+                      outlineOffset: 3,
+                      borderRadius: 6,
+                      touchAction: "none",
+                    }}
+                    className="group cursor-move"
+                    onPointerDown={(e) => startMove(e, it)}
+                  >
+                    <svg
+                      width="100%"
+                      height="100%"
+                      viewBox={`0 0 ${it.w} ${it.h}`}
+                      style={{ display: "block" }}
+                      aria-label={it.name || "Shape"}
+                    >
+                      {paths.map((p, i) => (
+                        <path
+                          key={i}
+                          d={p.d}
+                          fill={p.overlay ? "rgba(255,255,255,0.35)" : fill}
+                        />
+                      ))}
+                    </svg>
+                    {it.name && (
+                      <div className="pointer-events-none absolute inset-0 grid place-items-center px-3">
+                        <span
+                          className="max-w-full break-words text-center text-[13px] font-bold leading-snug"
+                          style={{ color: shapeLabelColor(it.hue) }}
+                        >
+                          {it.name}
+                        </span>
+                      </div>
+                    )}
                     <span
                       data-resize="1"
                       onPointerDown={(e) => startResize(e, it)}

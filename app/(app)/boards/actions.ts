@@ -13,6 +13,7 @@ import {
   fetchImageBytes,
 } from "@/lib/figma";
 import { unfurl, isFetchableUrl, safeFetch, BROWSER_UA } from "@/lib/unfurl";
+import { shapeDef, serializeShapeData } from "@/lib/board-shape";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Board } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
@@ -813,6 +814,42 @@ export async function addVideoItem(
       y,
       w: 360,
       h: 222,
+      z,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/boards");
+  return { id: data.id };
+}
+
+// A shape card (Freeform-style). Which shape lives as JSON in `text`, the fill
+// color in `hue`, an optional centered label in `name`.
+export async function addShapeItem(
+  boardId: string,
+  shape: string,
+  x: number,
+  y: number
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const z = await nextZ(supabase, boardId);
+  // Validate against the shape catalog; an unknown key becomes a rectangle
+  // rather than an error or an invisible card.
+  const def = shapeDef(shape);
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({
+      studio_id: ctx.studio.id,
+      board_id: boardId,
+      kind: "shape",
+      text: serializeShapeData({ shape: def.key }),
+      hue: "blue",
+      x,
+      y,
+      w: def.w,
+      h: def.h,
       z,
       created_by: ctx.userId,
     })
