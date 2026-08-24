@@ -4,14 +4,18 @@ import { LOGIN_URL } from "@/lib/marketing/hosts";
 
 const LINKS = [
   { href: "/#product", label: "Product" },
-  { href: "/#how", label: "How it works" },
   { href: "/pricing", label: "Pricing" },
 ];
 
 /**
- * Three top-level items, deliberately. Monday runs mega menus because it sells
- * a suite; we sell one product, and a mega menu would advertise complexity we
- * do not have.
+ * Two top-level items, deliberately. Monday runs mega menus because it sells a
+ * suite; we sell one product, and a mega menu would advertise complexity we do
+ * not have.
+ *
+ * "How it works" was removed rather than pointed somewhere new: it had been
+ * linking to /#how, an anchor that does not exist on the home page, so it
+ * scrolled nowhere. The product band already answers the same question with a
+ * screenshot, which is a better answer than a heading would have been.
  *
  * NO BACKGROUND AND NO BORDER, so the bar is seamless with the gradient behind
  * it. Any tint at all, even a 62% one, reads as a lighter band across the top

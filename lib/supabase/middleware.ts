@@ -34,6 +34,11 @@ const PUBLIC_PATHS = [
   // compares against `${p}/`, which for "/" is "//" and matches nothing, so
   // this does not open the rest of the app.
   "/",
+  // Every marketing page needs its own entry. "/" is matched exactly (see
+  // above), so it does NOT cover the rest of the site: a new marketing route
+  // that is not listed here silently redirects a logged-out visitor to /login,
+  // which is the one audience the page exists for.
+  "/pricing",
   "/login",
   "/signup",
   "/forgot-password",
