@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { APP_ORIGIN } from "@/lib/marketing/hosts";
+import { FEATURES } from "@/lib/marketing/features";
 
 const COLUMNS = [
   {
-    title: "Product",
+    title: "Features",
+    // Built from the same data as the nav dropdown and the pages, so the
+    // footer cannot link a page that does not exist (the /#how lesson).
     links: [
-      { href: "/#product", label: "Project hub" },
-      { href: "/#communication", label: "Communication" },
-      { href: "/#review", label: "Client review" },
-      { href: "/#production", label: "Shot lists and call sheets" },
-      { href: "/#budget", label: "Budget and delivery" },
-      { href: "/#pipeline", label: "AI pipeline" },
+      ...FEATURES.map((f) => ({
+        href: `/features/${f.slug}`,
+        label: f.nav,
+      })),
+      { href: "/features", label: "All features" },
     ],
   },
   {

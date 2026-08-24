@@ -57,6 +57,42 @@ export function Section({
   );
 }
 
+/** The ticked claim list, shared by the home page's feature rows and the
+ * /features pages, so a claim reads the same wherever it appears. */
+export function PointList({
+  points,
+  className = "mt-5",
+}: {
+  points: string[];
+  className?: string;
+}) {
+  return (
+    <ul className={`space-y-3.5 ${className}`}>
+      {points.map((p) => (
+        <li key={p} className="flex gap-3 text-[15px] text-text">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            className="mt-0.5 shrink-0 text-accent"
+            aria-hidden="true"
+          >
+            <path
+              d="M4 10.5 8 14l8-8"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>{p}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Centered section heading: eyebrow, title, one supporting line. */
 export function SectionHeader({
   eyebrow,
