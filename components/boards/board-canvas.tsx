@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BoardItemView } from "@/app/(app)/boards/actions";
 import type { BoardSnapshot } from "@/lib/use-board-history";
 import {
@@ -11,6 +11,11 @@ import {
   type LineData,
 } from "@/lib/board-line";
 import { parseNoteStyle, noteColorVars } from "@/lib/board-note-style";
+import {
+  parseHeadingStyle,
+  headingCss,
+  HEADING_FONT_SIZE,
+} from "@/lib/board-heading";
 import { parseTodo, type TodoRow } from "@/lib/board-todo";
 import { videoEmbed } from "@/lib/video-embed";
 import { parseMediaMeta, serializeMediaMeta } from "@/lib/board-media";
@@ -237,7 +242,12 @@ export function BoardCanvas({
   });
 
   useEffect(() => {
-    function onMove(e: PointerEvent) {
+    // Pointer events can fire at 120-240Hz on a fast mouse, far above the
+    // display's frame rate. Coalesce them through requestAnimationFrame so a
+    // drag re-renders once per frame, not once per input event.
+    let raf = 0;
+    let lastEvent: PointerEvent | null = null;
+    function applyMove(e: PointerEvent) {
       const d = drag.current;
       if (!d) return;
       const s = scaleRef.current;
@@ -257,9 +267,25 @@ export function BoardCanvas({
         })
       );
     }
+    function onMove(e: PointerEvent) {
+      if (!drag.current) return;
+      lastEvent = e;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (lastEvent) applyMove(lastEvent);
+      });
+    }
     function onUp(e: PointerEvent) {
       const d = drag.current;
       if (!d) return;
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      // Apply the release point exactly, so the persisted position can never
+      // trail the cursor by a coalesced frame.
+      applyMove(e);
       drag.current = null;
       // Did the pointer actually travel? A plain click (select) must not persist
       // a no-op or record a junk history step that undo can't visibly reverse.
@@ -314,6 +340,7 @@ export function BoardCanvas({
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
@@ -369,9 +396,11 @@ export function BoardCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, selectedConn, items, readOnly]);
 
-  // Dragging a line's endpoint or whole body.
+  // Dragging a line's endpoint or whole body (rAF-coalesced like card drags).
   useEffect(() => {
-    function move(e: PointerEvent) {
+    let raf = 0;
+    let lastEvent: PointerEvent | null = null;
+    function applyLine(e: PointerEvent) {
       const d = lineDrag.current;
       if (!d) return;
       const p = canvasCoords(e.clientX, e.clientY);
@@ -403,9 +432,23 @@ export function BoardCanvas({
         })
       );
     }
-    function up() {
+    function move(e: PointerEvent) {
+      if (!lineDrag.current) return;
+      lastEvent = e;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (lastEvent) applyLine(lastEvent);
+      });
+    }
+    function up(e: PointerEvent) {
       const d = lineDrag.current;
       if (!d) return;
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      applyLine(e);
       lineDrag.current = null;
       if (beforeRef.current) {
         onBeforeChange?.(beforeRef.current);
@@ -420,6 +463,7 @@ export function BoardCanvas({
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
@@ -428,9 +472,63 @@ export function BoardCanvas({
   function zoomBy(delta: number) {
     setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(s + delta).toFixed(2))));
   }
+  // Zoom anchored to a point: remember which canvas point sat under (sx, sy) in
+  // the scroller, then restore it there after the scale is applied. Without
+  // this every zoom is toward the canvas origin and the view jumps.
+  const zoomAnchor = useRef<{ sx: number; sy: number; wx: number; wy: number } | null>(null);
+  function anchorAt(clientX: number, clientY: number) {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    const r = sc.getBoundingClientRect();
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    const s = scaleRef.current;
+    zoomAnchor.current = {
+      sx,
+      sy,
+      wx: (sc.scrollLeft + sx) / s,
+      wy: (sc.scrollTop + sy) / s,
+    };
+  }
+  function anchorCenter() {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    const r = sc.getBoundingClientRect();
+    anchorAt(r.left + sc.clientWidth / 2, r.top + sc.clientHeight / 2);
+  }
+  function zoomAtCenter(delta: number) {
+    anchorCenter();
+    zoomBy(delta);
+  }
   function setZoom(pct: number) {
+    anchorCenter();
     setScale(Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(pct / 100).toFixed(2))));
   }
+  useLayoutEffect(() => {
+    const a = zoomAnchor.current;
+    const sc = scrollRef.current;
+    if (!a || !sc) return;
+    zoomAnchor.current = null;
+    sc.scrollLeft = a.wx * scale - a.sx;
+    sc.scrollTop = a.wy * scale - a.sy;
+  }, [scale]);
+
+  // Ctrl/Cmd + wheel zooms at the cursor. A NATIVE non-passive listener, not
+  // React's onWheel: React attaches wheel passively, so preventDefault there is
+  // ignored and the browser's own page zoom fights the canvas zoom.
+  useEffect(() => {
+    const sc = scrollRef.current;
+    if (!sc) return;
+    function onWheelNative(e: WheelEvent) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      anchorAt(e.clientX, e.clientY);
+      zoomBy(e.deltaY > 0 ? -0.1 : 0.1);
+    }
+    sc.addEventListener("wheel", onWheelNative, { passive: false });
+    return () => sc.removeEventListener("wheel", onWheelNative);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fit every top-level item into the viewport and center it.
   function scaleToFit() {
@@ -491,12 +589,6 @@ export function BoardCanvas({
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
-
-  function onWheel(e: React.WheelEvent) {
-    if (!(e.ctrlKey || e.metaKey)) return;
-    e.preventDefault();
-    zoomBy(e.deltaY > 0 ? -0.1 : 0.1);
-  }
 
   function canvasCoords(clientX: number, clientY: number) {
     const rect = contentRef.current?.getBoundingClientRect();
@@ -562,11 +654,18 @@ export function BoardCanvas({
       origW: it.w,
       origH: it.h,
     };
-    setItems((prev) => {
-      const maxZ = Math.max(0, ...prev.map((p) => p.z));
-      return prev.map((p) => (p.id === it.id ? { ...p, z: maxZ + 1 } : p));
-    });
-    void bringToFront(it.id, boardId);
+    // Already the sole top card? Skip the z bump: it would be a DB write and a
+    // full re-render on every plain click of the same card.
+    const maxZ = Math.max(0, ...items.map((p) => p.z));
+    const alreadyTop =
+      it.z === maxZ && items.every((p) => p.id === it.id || p.z < maxZ);
+    if (!alreadyTop) {
+      setItems((prev) => {
+        const mz = Math.max(0, ...prev.map((p) => p.z));
+        return prev.map((p) => (p.id === it.id ? { ...p, z: mz + 1 } : p));
+      });
+      void bringToFront(it.id, boardId);
+    }
   }
 
   function startResize(e: React.PointerEvent, it: BoardItemView) {
@@ -773,6 +872,30 @@ export function BoardCanvas({
           </div>
         </div>
       );
+    } else if (child.kind === "heading") {
+      // A heading dragged into a column keeps its styling, capped so it reads
+      // as a section label within the column rather than a banner.
+      const hs = parseHeadingStyle(child.hue);
+      body = (
+        <div
+          className="px-2 py-1.5 font-extrabold leading-tight tracking-tight"
+          style={{ ...headingCss(hs), fontSize: Math.min(HEADING_FONT_SIZE[hs.size], 20) }}
+        >
+          {child.text || <span className="font-semibold text-text-faint">Heading</span>}
+        </div>
+      );
+    } else if (child.kind === "color") {
+      const hex = normalizeHex(child.text);
+      body = (
+        <div className="flex h-12 items-end px-2 py-1.5" style={{ backgroundColor: hex }}>
+          <span
+            className="text-[11px] font-bold uppercase tracking-wide"
+            style={{ color: isLightHex(hex) ? "rgba(0,0,0,0.72)" : "rgba(255,255,255,0.94)" }}
+          >
+            {hex}
+          </span>
+        </div>
+      );
     } else {
       const isImg =
         child.signedUrl &&
@@ -807,37 +930,48 @@ export function BoardCanvas({
     "grid h-5 w-5 place-items-center rounded-[5px] transition hover:bg-surface-2 hover:text-text disabled:opacity-30";
 
   // Split into top-level (absolutely placed) items and column children (flowed
-  // inside their column, ordered by sort).
-  const childrenByParent = new Map<string, BoardItemView[]>();
-  for (const it of items) {
-    if (it.parentId) {
-      const arr = childrenByParent.get(it.parentId) ?? [];
-      arr.push(it);
-      childrenByParent.set(it.parentId, arr);
+  // inside their column, ordered by sort). Memoized: these run on every drag
+  // frame otherwise.
+  const { childrenByParent, cardItems, lineItems, byId } = useMemo(() => {
+    const kidMap = new Map<string, BoardItemView[]>();
+    for (const it of items) {
+      if (it.parentId) {
+        const arr = kidMap.get(it.parentId) ?? [];
+        arr.push(it);
+        kidMap.set(it.parentId, arr);
+      }
     }
-  }
-  for (const arr of childrenByParent.values()) arr.sort((a, b) => a.sort - b.sort);
-  const topItems = items.filter((i) => !i.parentId);
-  const cardItems = topItems.filter((i) => i.kind !== "line");
-  const lineItems = topItems.filter((i) => i.kind === "line");
-  const byId = new Map(cardItems.map((i) => [i.id, i]));
+    for (const arr of kidMap.values()) arr.sort((a, b) => a.sort - b.sort);
+    const top = items.filter((i) => !i.parentId);
+    const cards = top.filter((i) => i.kind !== "line");
+    return {
+      childrenByParent: kidMap,
+      cardItems: cards,
+      lineItems: top.filter((i) => i.kind === "line"),
+      byId: new Map(cards.map((i) => [i.id, i])),
+    };
+  }, [items]);
 
   // Connection segments: edge-to-edge, so arrows meet card borders. Skips a
   // connection whose endpoints aren't both top-level items on this board.
-  const connSegments = connections
-    .map((c) => {
-      const a = byId.get(c.fromItemId);
-      const b = byId.get(c.toItemId);
-      if (!a || !b) return null;
-      const acx = a.x + a.w / 2;
-      const acy = a.y + a.h / 2;
-      const bcx = b.x + b.w / 2;
-      const bcy = b.y + b.h / 2;
-      const p1 = edgePoint(acx, acy, a.w / 2, a.h / 2, bcx, bcy);
-      const p2 = edgePoint(bcx, bcy, b.w / 2, b.h / 2, acx, acy);
-      return { id: c.id, p1, p2, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
-    })
-    .filter((s): s is NonNullable<typeof s> => Boolean(s));
+  const connSegments = useMemo(
+    () =>
+      connections
+        .map((c) => {
+          const a = byId.get(c.fromItemId);
+          const b = byId.get(c.toItemId);
+          if (!a || !b) return null;
+          const acx = a.x + a.w / 2;
+          const acy = a.y + a.h / 2;
+          const bcx = b.x + b.w / 2;
+          const bcy = b.y + b.h / 2;
+          const p1 = edgePoint(acx, acy, a.w / 2, a.h / 2, bcx, bcy);
+          const p2 = edgePoint(bcx, bcy, b.w / 2, b.h / 2, acx, acy);
+          return { id: c.id, p1, p2, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
+        })
+        .filter((s): s is NonNullable<typeof s> => Boolean(s)),
+    [connections, byId]
+  );
   const connFromItem = connectFrom ? byId.get(connectFrom) : null;
 
   return (
@@ -847,7 +981,6 @@ export function BoardCanvas({
         className={`h-full w-full overflow-auto border bg-surface transition-colors ${
           presenting ? "rounded-none" : "rounded-[14px]"
         } ${dropActive ? "border-accent" : "border-border"}`}
-        onWheel={onWheel}
         onDragOver={(e) => {
           e.preventDefault();
           if (!dropActive) setDropActive(true);
@@ -879,7 +1012,12 @@ export function BoardCanvas({
             }}
             onPointerMove={(e) => {
               if (readOnly || drag.current || connectFrom) return;
-              setHovered(itemAtPoint(e.clientX, e.clientY, ""));
+              // The browser already hit-tested for us: the event target is the
+              // topmost element under the cursor. Walking up to the owning card
+              // is O(depth); scanning every card's DOM rect per mouse move was
+              // an O(items) forced-layout pass and lagged big boards.
+              const el = (e.target as HTMLElement).closest?.("[data-item-id]");
+              setHovered(el ? el.getAttribute("data-item-id") : null);
             }}
             onPointerLeave={() => setHovered(null)}
           >
@@ -1351,7 +1489,7 @@ export function BoardCanvas({
               }
 
               if (it.kind === "heading") {
-                const hcolor = it.hue ? `var(--h-${it.hue})` : "var(--text)";
+                const hstyle = parseHeadingStyle(it.hue);
                 return (
                   <div
                     key={it.id}
@@ -1381,7 +1519,7 @@ export function BoardCanvas({
                     <HeadingBody
                       itemId={it.id}
                       initial={it.text ?? ""}
-                      color={hcolor}
+                      css={headingCss(hstyle)}
                       editable={!readOnly}
                       onFocus={() => setSelected(it.id)}
                       onSave={(html) => {
@@ -1711,7 +1849,7 @@ export function BoardCanvas({
                 Tip: hold ⌘ / Ctrl and use the mouse wheel to zoom.
               </p>
               <div className="mt-2.5 flex items-center gap-2">
-                <button className={zoomBtn} onClick={() => zoomBy(-0.1)} aria-label="Zoom out">
+                <button className={zoomBtn} onClick={() => zoomAtCenter(-0.1)} aria-label="Zoom out">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14" /></svg>
                 </button>
                 <input
@@ -1722,7 +1860,7 @@ export function BoardCanvas({
                   onChange={(e) => setZoom(Number(e.target.value))}
                   className="h-1 flex-1 cursor-pointer accent-accent"
                 />
-                <button className={zoomBtn} onClick={() => zoomBy(0.1)} aria-label="Zoom in">
+                <button className={zoomBtn} onClick={() => zoomAtCenter(0.1)} aria-label="Zoom in">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                 </button>
               </div>
@@ -1747,7 +1885,7 @@ export function BoardCanvas({
           </>
         )}
         <div className="flex items-center gap-0.5 rounded-[10px] border border-border bg-surface/95 p-1 shadow-sm backdrop-blur">
-          <button className={zoomBtn} onClick={() => zoomBy(-0.1)} aria-label="Zoom out">
+          <button className={zoomBtn} onClick={() => zoomAtCenter(-0.1)} aria-label="Zoom out">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14" /></svg>
           </button>
           <button
@@ -1757,7 +1895,7 @@ export function BoardCanvas({
           >
             {Math.round(scale * 100)}%
           </button>
-          <button className={zoomBtn} onClick={() => zoomBy(0.1)} aria-label="Zoom in">
+          <button className={zoomBtn} onClick={() => zoomAtCenter(0.1)} aria-label="Zoom in">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           </button>
         </div>
@@ -1821,18 +1959,20 @@ function NoteBody({
   );
 }
 
-// Large section-heading text (contentEditable, plain text). Transparent, no box.
+// Large section-heading text (contentEditable, plain text). Transparent, no
+// box. Size / alignment / italic / underline / color arrive as concrete CSS
+// from lib/board-heading's headingCss, driven by the Heading panel.
 function HeadingBody({
   itemId,
   initial,
-  color,
+  css,
   onFocus,
   onSave,
   editable = true,
 }: {
   itemId: string;
   initial: string;
-  color: string;
+  css: React.CSSProperties;
   onFocus: () => void;
   onSave: (text: string) => void;
   editable?: boolean;
@@ -1851,8 +1991,8 @@ function HeadingBody({
       onPointerDown={(e) => e.stopPropagation()}
       onBlur={() => onSave(ref.current?.textContent ?? "")}
       data-placeholder="Heading"
-      className={`ce-ph w-full text-[26px] font-extrabold leading-tight tracking-tight outline-none ${editable ? "cursor-text" : ""}`}
-      style={{ color }}
+      className={`ce-ph w-full font-extrabold leading-tight tracking-tight outline-none ${editable ? "cursor-text" : ""}`}
+      style={css}
     />
   );
 }

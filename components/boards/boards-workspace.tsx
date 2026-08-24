@@ -52,6 +52,11 @@ import {
   serializeNoteStyle,
   NOTE_COLORS,
 } from "@/lib/board-note-style";
+import {
+  parseHeadingStyle,
+  serializeHeadingStyle,
+  type HeadingStyle,
+} from "@/lib/board-heading";
 import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 
@@ -160,16 +165,46 @@ export function BoardsWorkspace({
 
   const active = boards.find((b) => b.id === activeId) ?? null;
 
-  const reload = useCallback((id: string) => {
-    startLoad(async () => {
-      const [res, conns] = await Promise.all([
-        getBoardItems(id),
-        getBoardConnections(id),
-      ]);
-      if (!("error" in res)) setItems(res.items);
-      if (!("error" in conns)) setConnections(conns.connections);
+  // Every reload re-signs storage URLs server-side, and a fresh token makes the
+  // browser treat each image as a brand-new resource: after every small
+  // mutation (add a note, tick a to-do) the whole board's images refetched and
+  // flashed. Reuse the URL a path already has while it is comfortably inside
+  // the 1h signature TTL; take the fresh one only when the cached one is old.
+  const URL_REUSE_MS = 45 * 60 * 1000;
+  const urlCache = useRef(
+    new Map<string, { signedUrl: string | null; thumbUrl: string | null; at: number }>()
+  );
+  const withStableUrls = useCallback((list: BoardItemView[]) => {
+    const now = Date.now();
+    if (urlCache.current.size > 800) urlCache.current.clear();
+    return list.map((it) => {
+      if (!it.storagePath) return it;
+      const c = urlCache.current.get(it.storagePath);
+      if (c && now - c.at < URL_REUSE_MS) {
+        return { ...it, signedUrl: c.signedUrl, thumbUrl: c.thumbUrl };
+      }
+      urlCache.current.set(it.storagePath, {
+        signedUrl: it.signedUrl,
+        thumbUrl: it.thumbUrl,
+        at: now,
+      });
+      return it;
     });
-  }, []);
+  }, [URL_REUSE_MS]);
+
+  const reload = useCallback(
+    (id: string) => {
+      startLoad(async () => {
+        const [res, conns] = await Promise.all([
+          getBoardItems(id),
+          getBoardConnections(id),
+        ]);
+        if (!("error" in res)) setItems(withStableUrls(res.items));
+        if (!("error" in conns)) setConnections(conns.connections);
+      });
+    },
+    [withStableUrls]
+  );
 
   // Record the pre-edit board state so it can be undone. Called at the top of
   // every mutation entry point in this component; the canvas captures its own
@@ -1785,6 +1820,22 @@ function HeadingPanel({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  // A heading's whole look lives in its hue string (lib/board-heading), so
+  // every control below is a patch-and-reserialize through onHue.
+  const style = parseHeadingStyle(heading.hue);
+  const patch = (p: Partial<HeadingStyle>) =>
+    onHue(serializeHeadingStyle({ ...style, ...p }));
+  const seg = (active: boolean) =>
+    `flex-1 rounded-[7px] px-1 py-1 text-xs font-bold transition ${
+      active ? "bg-surface text-text shadow-sm" : "text-text-muted hover:text-text"
+    }`;
+  const fmt = (active: boolean) =>
+    `grid h-8 flex-1 place-items-center rounded-[8px] border text-[13px] font-semibold transition ${
+      active
+        ? "border-accent bg-accent-soft text-accent"
+        : "border-border text-text-muted hover:bg-surface-2 hover:text-text"
+    }`;
+
   return (
     <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
       <div className="flex items-center justify-between">
@@ -1795,16 +1846,63 @@ function HeadingPanel({
       </div>
 
       <div>
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Size</p>
+        <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
+          <button className={seg(style.size === "sm")} onClick={() => patch({ size: "sm" })} title="Small">
+            <span className="text-[11px]">S</span>
+          </button>
+          <button className={seg(style.size === "md")} onClick={() => patch({ size: "md" })} title="Medium">
+            <span className="text-[13px]">M</span>
+          </button>
+          <button className={seg(style.size === "lg")} onClick={() => patch({ size: "lg" })} title="Large">
+            <span className="text-[15px]">L</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-1.5">
+        <button
+          className={`${fmt(style.italic)} italic`}
+          title="Italic"
+          onClick={() => patch({ italic: !style.italic })}
+        >
+          I
+        </button>
+        <button
+          className={`${fmt(style.underline)} underline`}
+          title="Underline"
+          onClick={() => patch({ underline: !style.underline })}
+        >
+          U
+        </button>
+      </div>
+
+      <div>
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Align</p>
+        <div className="flex gap-1.5">
+          <button className={fmt(style.align === "left")} title="Align left" onClick={() => patch({ align: "left" })}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h10M4 18h13" /></svg>
+          </button>
+          <button className={fmt(style.align === "center")} title="Align center" onClick={() => patch({ align: "center" })}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M7 12h10M6 18h12" /></svg>
+          </button>
+          <button className={fmt(style.align === "right")} title="Align right" onClick={() => patch({ align: "right" })}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M10 12h10M7 18h13" /></svg>
+          </button>
+        </div>
+      </div>
+
+      <div>
         <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Text color</p>
         <div className="flex flex-wrap gap-1.5">
           <button
-            onClick={() => onHue("")}
+            onClick={() => patch({ color: null })}
             aria-label="Default"
             title="Default"
             className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
             style={{
               backgroundColor: "var(--surface-2)",
-              boxShadow: !heading.hue ? "0 0 0 2px var(--accent)" : undefined,
+              boxShadow: !style.color ? "0 0 0 2px var(--accent)" : undefined,
             }}
           >
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--text)" }} />
@@ -1812,12 +1910,12 @@ function HeadingPanel({
           {NOTE_COLORS.map((h) => (
             <button
               key={h}
-              onClick={() => onHue(h)}
+              onClick={() => patch({ color: h })}
               aria-label={h}
               className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
               style={{
                 backgroundColor: `var(--h-${h}-bg)`,
-                boxShadow: heading.hue === h ? "0 0 0 2px var(--accent)" : undefined,
+                boxShadow: style.color === h ? "0 0 0 2px var(--accent)" : undefined,
               }}
             >
               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(--h-${h})` }} />
