@@ -98,9 +98,12 @@ export default function FeaturesIndex() {
         <div className="mx-auto mt-14 grid max-w-6xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
           {MODULE_BANDS.map((band) => (
             <div key={band.key}>
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-text-faint">
+              {/* Full-strength text, matching the nav dropdown: a band label
+                  that is lighter than the module names under it stops reading
+                  as a header at all. */}
+              <p className="flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.14em] text-text">
                 <span
-                  className="h-2 w-2 rounded-full"
+                  className="h-2.5 w-2.5 rounded-full"
                   style={{ backgroundColor: `var(--h-${BAND_HUES[band.key]})` }}
                 />
                 {band.label}

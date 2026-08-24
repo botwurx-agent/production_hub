@@ -98,7 +98,11 @@ function FeaturesMenu() {
               <div className="mt-2 grid grid-cols-2 gap-x-4">
                 {MODULE_BANDS.map((band) => (
                   <div key={band.key} className="mb-2">
-                    <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-text-faint">
+                    {/* A band label has to outrank the module names under it.
+                        It used to be SMALLER (10px) and LIGHTER (faint) than
+                        its own items (13px, muted), so the header read as
+                        sub-text and the four groups ran together. */}
+                    <p className="px-1 pb-1 pt-1 text-[12px] font-bold uppercase tracking-[0.1em] text-text">
                       {band.label}
                     </p>
                     {MODULES.filter((m) => m.band === band.key).map((m) => (
