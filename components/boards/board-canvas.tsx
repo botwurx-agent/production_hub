@@ -29,7 +29,6 @@ import {
   moveItem,
   resizeItem,
   bringToFront,
-  updateNote,
   updateItemText,
   updateItemName,
   addNote,
@@ -699,12 +698,6 @@ export function BoardCanvas({
     setSelected(null);
     void deleteItem(id);
   }
-  function editNote(id: string, text: string) {
-    setItems((prev) => prev.map((p) => (p.id === id ? { ...p, text } : p)));
-  }
-  function persistNote(it: BoardItemView) {
-    void updateNote(it.id, it.text ?? "", it.hue ?? "yellow");
-  }
   // Checklist edits. persist=false for keystrokes (persisted on blur); true for
   // discrete actions (toggle / add / remove).
   function mutateTodo(
@@ -817,15 +810,33 @@ export function BoardCanvas({
 
     let body: React.ReactNode;
     if (child.kind === "note") {
-      const hue = child.hue ?? "yellow";
+      // Parse the full note style: hue can be "strip:blue", "none", or a
+      // custom hex, and interpolating it raw produced an invalid CSS var
+      // (a styled note dropped into a column silently lost its color).
+      const cns = parseNoteStyle(child.hue);
+      const cnc = noteColorVars(cns.color);
+      // ContentEditable, not a textarea: note text is HTML (rich text), and a
+      // textarea here showed the raw markup and flattened it to plain text on
+      // save, destroying the note's formatting.
       body = (
-        <textarea
-          value={child.text ?? ""}
-          onChange={(e) => editNote(child.id, e.target.value)}
-          onBlur={() => persistNote(child)}
-          placeholder="Note…"
-          className="min-h-[56px] w-full resize-none px-2 py-1.5 text-[13px] outline-none"
-          style={{ backgroundColor: `var(--h-${hue}-bg)`, color: `var(--h-${hue})` }}
+        <div
+          contentEditable={!readOnly}
+          suppressContentEditableWarning
+          data-placeholder="Note…"
+          onBlur={(e) => {
+            const html = e.currentTarget.innerHTML;
+            if (html === (child.text ?? "")) return;
+            setItems((prev) =>
+              prev.map((p) => (p.id === child.id ? { ...p, text: html } : p))
+            );
+            void updateItemText(child.id, html);
+          }}
+          dangerouslySetInnerHTML={{ __html: child.text ?? "" }}
+          className="rte min-h-[56px] w-full px-2 py-1.5 text-[13px] outline-none"
+          style={{
+            backgroundColor: cns.mode === "fill" ? cnc.bg : "transparent",
+            color: cns.mode === "fill" ? cnc.accent : "var(--text)",
+          }}
         />
       );
     } else if (child.kind === "todo") {
@@ -1320,7 +1331,9 @@ export function BoardCanvas({
 
               if (it.kind === "todo") {
                 const rows = parseTodo(it.text);
-                const hue = it.hue ?? "blue";
+                // Resolves a hue token OR a custom #hex (noteColorVars handles
+                // both), so the header can go off-palette.
+                const tc = noteColorVars(it.hue ?? "blue");
                 return (
                   <div
                     key={it.id}
@@ -1330,7 +1343,7 @@ export function BoardCanvas({
                   >
                     <div
                       className="flex h-7 shrink-0 cursor-move items-center justify-between px-2"
-                      style={{ backgroundColor: `var(--h-${hue}-bg)`, color: `var(--h-${hue})`, touchAction: "none" }}
+                      style={{ backgroundColor: tc.bg, color: tc.accent, touchAction: "none" }}
                       onPointerDown={(e) => startMove(e, it)}
                     >
                       <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide">

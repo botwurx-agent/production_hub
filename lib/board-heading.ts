@@ -69,7 +69,12 @@ export const HEADING_FONT_SIZE: Record<HeadingSize, number> = {
 // in-column render so the two can never drift.
 export function headingCss(s: HeadingStyle): CSSProperties {
   return {
-    color: s.color ? `var(--h-${s.color})` : "var(--text)",
+    // A hue token key resolves to its theme var; a raw #hex is a custom color.
+    color: !s.color
+      ? "var(--text)"
+      : s.color.startsWith("#")
+      ? s.color
+      : `var(--h-${s.color})`,
     fontSize: HEADING_FONT_SIZE[s.size],
     textAlign: s.align,
     fontStyle: s.italic ? "italic" : undefined,

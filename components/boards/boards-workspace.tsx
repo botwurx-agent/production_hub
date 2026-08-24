@@ -51,6 +51,7 @@ import {
 import {
   parseNoteStyle,
   serializeNoteStyle,
+  noteColorVars,
   NOTE_COLORS,
 } from "@/lib/board-note-style";
 import {
@@ -1178,6 +1179,25 @@ function NotePanel({
     document.execCommand("styleWithCSS", false, "true");
     document.execCommand("foreColor", false, resolved);
   }
+  // The custom text-color picker opens a native dialog, which blurs the note
+  // and can drop the selection the color was meant for. Capture the range on
+  // mousedown (before the dialog opens) and restore it before applying.
+  const savedRange = useRef<Range | null>(null);
+  function rememberSelection() {
+    const sel = window.getSelection();
+    savedRange.current =
+      sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+  }
+  function applyCustomTextColor(hex: string) {
+    focusNote();
+    const sel = window.getSelection();
+    if (sel && savedRange.current) {
+      sel.removeAllRanges();
+      sel.addRange(savedRange.current);
+    }
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand("foreColor", false, hex);
+  }
   function applyHighlight(cssVar: string | null) {
     focusNote();
     document.execCommand("styleWithCSS", false, "true");
@@ -1289,6 +1309,21 @@ function NotePanel({
                   style={{ backgroundColor: cv }}
                 />
               ))}
+              <label
+                title="Custom color"
+                onMouseDown={rememberSelection}
+                className="h-6 w-6 cursor-pointer rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                style={{
+                  background:
+                    "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
+                }}
+              >
+                <input
+                  type="color"
+                  className="sr-only"
+                  onChange={(e) => applyCustomTextColor(e.target.value)}
+                />
+              </label>
             </div>
           </div>
           <div>
@@ -1355,6 +1390,7 @@ function TodoPanel({
   const pct = total ? Math.round((done / total) * 100) : 0;
   const allDone = total > 0 && done === total;
   const hue = todo.hue ?? "blue";
+  const hueIsCustom = hue.startsWith("#");
 
   const row =
     "flex w-full items-center gap-2 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:pointer-events-none disabled:opacity-40";
@@ -1377,7 +1413,7 @@ function TodoPanel({
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
           <div
             className="h-full rounded-full transition-all"
-            style={{ width: `${pct}%`, backgroundColor: `var(--h-${hue})` }}
+            style={{ width: `${pct}%`, backgroundColor: noteColorVars(hue).accent }}
           />
         </div>
       </div>
@@ -1428,6 +1464,9 @@ function TodoPanel({
             </button>
           ))}
         </div>
+        <div className="mt-1.5">
+          <CustomColorButton active={hueIsCustom} value={hue} onPick={onHue} />
+        </div>
       </div>
 
       <button
@@ -1440,6 +1479,44 @@ function TodoPanel({
         Delete checklist
       </button>
     </div>
+  );
+}
+
+// "Custom color" row: a native color input behind a labelled swatch. Shared by
+// every panel that offers a palette, so any of them can go off-palette.
+function CustomColorButton({
+  active,
+  value,
+  onPick,
+}: {
+  // Whether the current color IS a custom hex (highlights the row + seeds the input).
+  active: boolean;
+  value: string | null;
+  onPick: (hex: string) => void;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-xs font-semibold transition hover:bg-surface-2 ${
+        active ? "border-accent text-accent" : "border-border text-text-muted"
+      }`}
+    >
+      <span
+        className="h-4 w-4 rounded-full ring-1 ring-black/10"
+        style={{
+          background:
+            active && value
+              ? value
+              : "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
+        }}
+      />
+      Custom color
+      <input
+        type="color"
+        className="sr-only"
+        defaultValue={active && value && value.length === 7 ? value : "#5b8def"}
+        onChange={(e) => onPick(e.target.value)}
+      />
+    </label>
   );
 }
 
@@ -1516,28 +1593,7 @@ function BoxOptions({
         })}
       </div>
 
-      {/* Custom color */}
-      <label
-        className={`flex cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-xs font-semibold transition hover:bg-surface-2 ${
-          isCustom ? "border-accent text-accent" : "border-border text-text-muted"
-        }`}
-      >
-        <span
-          className="h-4 w-4 rounded-full ring-1 ring-black/10"
-          style={{
-            background: isCustom
-              ? (ns.color as string)
-              : "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
-          }}
-        />
-        Custom color
-        <input
-          type="color"
-          className="sr-only"
-          defaultValue={isCustom ? (ns.color as string) : "#5b8def"}
-          onChange={(e) => pickColor(e.target.value)}
-        />
-      </label>
+      <CustomColorButton active={isCustom} value={ns.color} onPick={pickColor} />
     </div>
   );
 }
@@ -1967,27 +2023,9 @@ function ShapePanel({
             />
           ))}
         </div>
-        <label
-          className={`mt-1.5 flex cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-xs font-semibold transition hover:bg-surface-2 ${
-            isCustom ? "border-accent text-accent" : "border-border text-text-muted"
-          }`}
-        >
-          <span
-            className="h-4 w-4 rounded-full ring-1 ring-black/10"
-            style={{
-              background: isCustom
-                ? hue
-                : "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
-            }}
-          />
-          Custom color
-          <input
-            type="color"
-            className="sr-only"
-            defaultValue={isCustom && hue.length === 7 ? hue : "#5b8def"}
-            onChange={(e) => onHue(e.target.value)}
-          />
-        </label>
+        <div className="mt-1.5">
+          <CustomColorButton active={isCustom} value={hue} onPick={onHue} />
+        </div>
       </div>
 
       <div>
@@ -2129,6 +2167,13 @@ function HeadingPanel({
             </button>
           ))}
         </div>
+        <div className="mt-1.5">
+          <CustomColorButton
+            active={Boolean(style.color?.startsWith("#"))}
+            value={style.color}
+            onPick={(hex) => patch({ color: hex })}
+          />
+        </div>
       </div>
 
       <button
@@ -2191,6 +2236,13 @@ function LineStylePanel({
               }}
             />
           ))}
+        </div>
+        <div className="mt-1.5">
+          <CustomColorButton
+            active={d.color.startsWith("#")}
+            value={d.color}
+            onPick={(hex) => onChange({ color: hex })}
+          />
         </div>
       </div>
 

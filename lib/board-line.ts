@@ -78,6 +78,8 @@ export const LINE_COLORS: { key: string; var: string }[] = [
 ];
 
 export function lineColorVar(key: string): string {
+  // A raw #hex is a custom color and passes through as-is.
+  if (key.startsWith("#")) return key;
   return LINE_COLORS.find((c) => c.key === key)?.var ?? "var(--text-muted)";
 }
 
