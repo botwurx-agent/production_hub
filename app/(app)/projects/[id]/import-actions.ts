@@ -138,6 +138,8 @@ export async function importStoryboard(
     caption: string | null;
     /** The line spoken over the frame, where the board labels one. */
     sound?: string | null;
+    /** What the camera does, and anything the board filed under notes. */
+    notes?: string | null;
   }[]
 ): Promise<{ boardId: string } | { error: string }> {
   const ctx = await requireStudioContext();
@@ -179,6 +181,7 @@ export async function importStoryboard(
       scene: f.scene?.slice(0, 120) || null,
       description: f.caption,
       sound: f.sound?.slice(0, 2000) || null,
+      notes: f.notes?.slice(0, 2000) || null,
       created_by: ctx.userId,
     }))
   );

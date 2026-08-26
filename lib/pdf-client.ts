@@ -123,6 +123,17 @@ async function pdfjs(): Promise<PdfjsModule> {
   return pdfjsPromise;
 }
 
+/** Drop runs that repeat the same text in the same place (a double-drawn layer). */
+function dedupeRuns(runs: TextRun[]): TextRun[] {
+  const seen = new Set<string>();
+  return runs.filter((r) => {
+    const key = `${r.text}@${Math.round(r.x)},${Math.round(r.y)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Enough resolution to crop a usable frame out of, without melting a laptop. */
 const TARGET_WIDTH = 1600;
 /** A board longer than this is almost certainly not what the operator meant. */
@@ -168,14 +179,9 @@ export async function readPdf(
     }
 
     let text = "";
-    const runs: TextRun[] = [];
+    let runs: TextRun[] = [];
     try {
       const content = await page.getTextContent();
-      text = content.items
-        .map((i) => ("str" in i ? i.str : ""))
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
 
       const scale = viewport.scale;
       for (const item of content.items) {
@@ -194,6 +200,24 @@ export async function readPdf(
           h,
         });
       }
+
+      // SOME EXPORTERS DRAW EVERY PARAGRAPH TWICE, one copy exactly on top of
+      // the other. It is invisible on screen and doubles every sentence the
+      // moment the text layer is read, so a caption arrives saying everything
+      // twice and the model reads the whole document twice over.
+      //
+      // Keyed on the text AND its position, because only an exact double is a
+      // double: the same word legitimately appears many times on a page, and
+      // dropping repeats by text alone would gut a real caption.
+      runs = dedupeRuns(runs);
+
+      // Built from the DEDUPED runs rather than from the raw items, so the
+      // copy sent to the model matches what the captions were read from.
+      text = runs
+        .map((r) => r.text)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
     } catch {
       // A page with no text layer is normal, not an error.
     }

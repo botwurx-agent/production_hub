@@ -163,75 +163,204 @@ function besideRuns(panel: Rect, runs: TextRun[], others: Rect[]): TextRun[] {
 /** A leading shot number, the way a board prints it above its caption. */
 const LEADING_CODE = /^(?:SHOT\s+|SH\.?\s+)?(\d{1,3}[A-Za-z]?)\s*[.):-]?\s+(?=\S)/i;
 
-/** How a board labels the line that is spoken over a frame. */
-const VOICE_MARKER = /\b(?:VOICE\s?OVER|VOICEOVER|NARRATION|VO)\b[:.\s]*/i;
-/** How it labels what the camera does. */
-const SHOT_MARKER = /\b(?:SHOT|ACTION|CAMERA|VISUAL)\b[:.\s]*/i;
+/** Which of a frame's fields a given section label feeds. */
+type Field = "description" | "sound" | "notes";
+
+/**
+ * The labels a board prints above each part of a caption.
+ *
+ * Order matters inside the alternation: the longer word has to come first or
+ * "VOICE OVER" is matched as a bare "VO" with a stray "ICE OVER" after it.
+ */
+const LABEL_RE =
+  /\b(ACTION|VISUALS?|DESCRIPTION|SHOT|CAMERA|MOVEMENT|NOTES?|VOICE\s?OVER|NARRATION|DIALOGUE|AUDIO|MUSIC|SFX|VO)\b(\s*:)?[.\s]+/gi;
+
+function fieldFor(word: string): Field {
+  switch (word) {
+    case "CAMERA":
+    case "MOVEMENT":
+    case "NOTE":
+    case "NOTES":
+      return "notes";
+    case "VOICEOVER":
+    case "VOICE OVER":
+    case "NARRATION":
+    case "DIALOGUE":
+    case "AUDIO":
+    case "MUSIC":
+    case "SFX":
+    case "VO":
+      return "sound";
+    default:
+      return "description";
+  }
+}
 
 /**
  * Split a caption into the fields a frame actually has.
  *
  * A board does not caption a frame with one sentence. A real one reads
  *
- *   1  0:00-0:04  Bedroom - night
- *   VOICEOVER  You know the itch.
- *   SHOT  Low, mattress height, looking lengthwise across the bed.
+ *   SHOT 1A  Cloud Reveal / Opening Frame
+ *   ACTION   We open closed. A dense wall of pink cloud fills the frame.
+ *   CAMERA   Locked, or a very slow creep in.
+ *   NOTES    Cloud passes in front of the bottles, never around them.
  *
- * and a frame here holds a scene, a description and a sound field, so dropping
- * all of that into one box would mean the producer separating it again by
- * hand, which is the work this import exists to remove.
+ * and a frame here holds a scene, a description, a sound field and notes, so
+ * dropping all of that into one box would mean the producer separating it
+ * again by hand, which is the work this import exists to remove.
  *
- * The labels themselves are the split. Where a board uses none, the whole
- * caption stays as the description rather than being guessed at.
+ * TWO RULES KEEP THIS OFF PROSE, both learned from a real board:
+ *
+ * A label must be UPPERCASE, or be followed by a colon. Without that, "running
+ * away from camera" splits a sentence in half, and every board writes that
+ * sentence. A board that prints "Camera: push in" still works, because of the
+ * colon.
+ *
+ * And SHOT followed by a number is the frame's own code, not a section called
+ * SHOT. "SHOT 1A Cloud Reveal" is a heading; "SHOT  Low, mattress height" is a
+ * camera note. Without that distinction the most common way in the industry to
+ * label a frame swallowed its own title, and every frame came in unnamed.
+ *
+ * Where a board uses no labels at all, the whole caption stays as the
+ * description rather than being guessed at.
  */
 export function splitCaption(caption: string | null): {
   scene: string | null;
   description: string | null;
   sound: string | null;
+  notes: string | null;
 } {
-  if (!caption) return { scene: null, description: null, sound: null };
+  const empty = { scene: null, description: null, sound: null, notes: null };
+  if (!caption) return empty;
 
-  const voice = caption.match(VOICE_MARKER);
-  const shot = caption.match(SHOT_MARKER);
-  const voiceAt = voice?.index ?? -1;
-  const shotAt = shot?.index ?? -1;
+  const marks: { at: number; end: number; word: string; field: Field }[] = [];
+  LABEL_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = LABEL_RE.exec(caption)) !== null) {
+    const raw = m[1];
+    const word = raw.replace(/\s+/g, " ").toUpperCase();
+    const hasColon = Boolean(m[2]);
+    if (raw !== raw.toUpperCase() && !hasColon) continue;
+    // The frame's own number, printed the way most boards print it.
+    if (word === "SHOT" && /^\d/.test(caption.slice(m.index + m[0].length))) {
+      continue;
+    }
+    marks.push({ at: m.index, end: m.index + m[0].length, word, field: fieldFor(word) });
+  }
 
-  // Where the labelled part starts is where the heading ends.
-  const marks = [voiceAt, shotAt].filter((i) => i >= 0);
-  const headEnd = marks.length ? Math.min(...marks) : caption.length;
-  let head = caption.slice(0, headEnd).trim();
+  const parts: Record<Field, string[]> = { description: [], sound: [], notes: [] };
+  for (let i = 0; i < marks.length; i++) {
+    const to = marks[i + 1]?.at ?? caption.length;
+    const body = caption.slice(marks[i].end, to).trim();
+    if (!body) continue;
+    // A note keeps the word it was printed under, since CAMERA and NOTES both
+    // land in the same box and a producer needs to know which is which.
+    const isPlainNote = marks[i].word === "NOTE" || marks[i].word === "NOTES";
+    parts[marks[i].field].push(
+      marks[i].field === "notes" && !isPlainNote
+        ? `${marks[i].word}: ${body}`
+        : body
+    );
+  }
 
-  const section = (start: number, match: RegExpMatchArray | null) => {
-    if (start < 0 || !match) return null;
-    const from = start + match[0].length;
-    // Runs until the OTHER label, whichever order the board printed them in.
-    const others = [voiceAt, shotAt].filter((i) => i > start);
-    const to = others.length ? Math.min(...others) : caption.length;
-    return caption.slice(from, to).trim() || null;
-  };
-
-  const sound = section(voiceAt, voice);
-  const shotText = section(shotAt, shot);
+  // Whatever comes before the first label is the heading.
+  let head = caption.slice(0, marks[0]?.at ?? caption.length).trim();
 
   // The leading number is the frame's own code and belongs at the front of the
   // scene, not buried in it.
-  const m = head.match(LEADING_CODE);
+  const code = head.match(LEADING_CODE);
   let scene: string | null = null;
-  if (m) {
-    const rest = head.slice(m[0].length).trim();
-    scene = rest ? `${m[1].toUpperCase()} · ${rest}` : m[1].toUpperCase();
+  if (code) {
+    const rest = head.slice(code[0].length).trim();
+    scene = rest ? `${code[1].toUpperCase()} · ${rest}` : code[1].toUpperCase();
     head = rest;
   } else if (head) {
     scene = head;
   }
 
+  const joined = (field: Field, sep: string) =>
+    parts[field].length ? parts[field].join(sep) : null;
+
   return {
     scene: scene ? scene.slice(0, 120) : null,
-    // With no SHOT label there is nothing to separate, so the caption stands
-    // as the description, minus a heading already captured as the scene.
-    description: shotText ?? (marks.length ? null : stripCode(caption)),
-    sound,
+    // With no labels there is nothing to separate, so the caption stands as
+    // the description, minus a heading already captured as the scene.
+    description: joined("description", " ") ?? (marks.length ? null : stripCode(caption)),
+    sound: joined("sound", " "),
+    notes: joined("notes", "\n\n"),
   };
+}
+
+/** A run has to sit this far into a page's top or bottom to be furniture. */
+const MARGIN_SHARE = 0.1;
+/** And repeat on this share of the pages. */
+const REPEAT_SHARE = 0.6;
+/** Positions are bucketed this coarsely, so a pixel of drift is still a match. */
+const BUCKET = 6;
+
+/**
+ * Strip the running header, the footer rule and the page number.
+ *
+ * They were landing at the end of every caption ("... cloud backdrop behind.
+ * HINT / Treat Yourself / Botwurx 3"), because a panel with no neighbour above
+ * or below reaches a little past itself looking for its text, and on a page
+ * with one big frame that reach gets all the way to the footer.
+ *
+ * THREE CONDITIONS TOGETHER, and each one is load-bearing:
+ *
+ * In the page MARGIN, because that is what makes furniture furniture. Position
+ * alone is not enough: this deck is templated, so the word "ACTION" sits at
+ * exactly the same y on all ten pages, and a repeat-by-position rule would
+ * have deleted the label that makes the whole caption parseable.
+ *
+ * REPEATING across pages, so a caption that happens to be printed low on one
+ * page is safe.
+ *
+ * And carrying the SAME TEXT, so a per-frame caption typeset in the same place
+ * on every page survives. A page NUMBER is the one exception, since its whole
+ * job is to differ; a short run of digits in a repeating margin slot is one.
+ */
+export function stripFurniture(
+  pages: { width: number; height: number; runs: TextRun[] }[]
+): TextRun[][] {
+  if (pages.length < 3) return pages.map((p) => p.runs);
+
+  const slot = (r: TextRun) =>
+    `${Math.round(r.x / BUCKET)}:${Math.round(r.y / BUCKET)}`;
+  const isNumber = (t: string) => /^\d{1,4}$/.test(t.trim());
+  const inMargin = (r: TextRun, height: number) => {
+    const cy = r.y + r.h / 2;
+    return cy <= height * MARGIN_SHARE || cy >= height * (1 - MARGIN_SHARE);
+  };
+
+  // Counted once per page, so a word used twice on one page does not look like
+  // it repeats across the document.
+  const bySlot = new Map<string, { pages: Set<number>; texts: Set<string> }>();
+  pages.forEach((page, i) => {
+    for (const run of page.runs) {
+      if (!inMargin(run, page.height)) continue;
+      const key = slot(run);
+      const entry = bySlot.get(key) ?? { pages: new Set(), texts: new Set() };
+      entry.pages.add(i);
+      entry.texts.add(run.text.trim());
+      bySlot.set(key, entry);
+    }
+  });
+
+  const need = pages.length * REPEAT_SHARE;
+  return pages.map((page) =>
+    page.runs.filter((run) => {
+      if (!inMargin(run, page.height)) return true;
+      const entry = bySlot.get(slot(run));
+      if (!entry || entry.pages.size < need) return true;
+      // One text repeating in one slot is a footer. Several different texts in
+      // one slot are only furniture when they are page numbers.
+      const repeats = entry.texts.size === 1;
+      const numbered = [...entry.texts].every(isNumber);
+      return !(repeats || numbered);
+    })
+  );
 }
 
 function stripCode(caption: string): string {

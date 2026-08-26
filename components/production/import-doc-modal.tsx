@@ -21,7 +21,7 @@ import {
   toGray,
   type PdfPage,
 } from "@/lib/pdf-client";
-import { captionFor, splitCaption } from "@/lib/captions";
+import { captionFor, splitCaption, stripFurniture, type TextRun } from "@/lib/captions";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import {
   fileSourceDocument,
@@ -33,6 +33,14 @@ import type { ShotDocDraft, ShotDocRow } from "@/lib/shot-doc";
 
 type PagePlan = {
   page: PdfPage;
+  /**
+   * The page's text, minus the running header, footer and page number.
+   *
+   * Held on the plan rather than read off `page.runs` at each call site,
+   * because furniture can only be spotted by looking at every page at once and
+   * the three places that build captions each see one page.
+   */
+  runs: TextRun[];
   rects: Rect[];
   /** The detector found gutters it believed in. */
   auto: boolean;
@@ -117,6 +125,7 @@ export function ImportDocModal({
       // there is no gutter to find). Gutter detection then covers the other
       // family: a drawn or printed board that arrives as one scan per page.
       const byImage = panelsFromImages(pages);
+      const bodyRuns = stripFurniture(pages);
       const found: PagePlan[] = pages.map((p, i) => {
         const rects = byImage[i].length
           ? byImage[i]
@@ -130,6 +139,7 @@ export function ImportDocModal({
             })();
         return {
           page: p,
+          runs: bodyRuns[i],
           rects,
           auto: rects.length > 0,
           // Read off the page rather than asked for. The words printed under a
@@ -140,7 +150,7 @@ export function ImportDocModal({
             (r, ri) =>
               captionFor(
                 r,
-                p.runs,
+                bodyRuns[i],
                 rects.filter((_, other) => other !== ri)
               ) ?? ""
           ),
@@ -195,7 +205,7 @@ export function ImportDocModal({
             (r, ri) =>
               captionFor(
                 r,
-                plan.page.runs,
+                plan.runs,
                 rects.filter((_, other) => other !== ri)
               ) ?? ""
           );
@@ -238,7 +248,7 @@ export function ImportDocModal({
             (r, ri) =>
               captionFor(
                 r,
-                p.page.runs,
+                p.runs,
                 rects.filter((_, other) => other !== ri)
               ) ?? ""
           ),
@@ -267,6 +277,7 @@ export function ImportDocModal({
           scene: string | null;
           caption: string | null;
           sound: string | null;
+          notes: string | null;
         }[] = [];
         let done = 0;
         for (let pi = 0; pi < plans.length; pi++) {
@@ -282,7 +293,7 @@ export function ImportDocModal({
             const up = await uploadAssetFile({ studioId, projectId, file: asFile });
             // A board's caption is several fields, not one: a shot number, a
             // scene, what is said over it and what the camera does.
-            const { scene, description, sound } = splitCaption(
+            const { scene, description, sound, notes } = splitCaption(
               plan.captions[ri]?.trim() || null
             );
             frames.push({
@@ -291,6 +302,7 @@ export function ImportDocModal({
               scene,
               caption: description,
               sound,
+              notes,
             });
             done++;
             setNote(`Uploading panel ${done} of ${panelCount}...`);
