@@ -2250,6 +2250,32 @@ READING IT (lib/captions.ts, lib/pdf-client.ts). Three causes, one symptom.
   deck is templated, so "ACTION" sits at the same y on all ten pages, and a
   repeat-by-position rule would have deleted the label the parse depends on.
 
+MATCHING THE TWO HALVES (lib/shot-doc.ts matchShotsToPanels). One import
+produces a storyboard AND a shot list when the document holds both, which is
+deliberate, but the shot rows arrived with no picture even though the matching
+frame had just been cropped off the same page. Nothing connected them. Now a
+panel is cropped and uploaded ONCE and pointed at by both, written onto
+`shot_cards.storage_path` (that column already existed, so no asset row is
+created: sixteen crops do not belong in the project's asset library).
+THREE PASSES, strongest evidence first, and each only claims what it can prove:
+the printed number (a row reading "1B" and a panel captioned "SHOT 1B" are the
+document asserting the link, used only where the number is unique on BOTH
+sides), then the page (equal counts of leftover rows and panels on one page
+pair in reading order), then whole-document order ONLY if the first two matched
+nothing at all and the counts are equal. That last is blocked when both sides
+printed numbers and they did not agree, since that is the document saying the
+lists are not parallel. An unmatched row simply arrives with no picture.
+splitCaption now also returns `code` on its own, which is what the match runs
+on. The confirm step shows each row's matched frame as a thumbnail and says how
+many matched, so it is checkable before anything is written. 13 assertions in
+the scratchpad.
+
+MIDDLEWARE BUG FOUND WHILE TESTING, unrelated to the import and worse: the
+matcher only exempts image extensions, so `/pdf.worker.min.mjs` was redirected
+to /login for anyone without a session. The CLIENT REVIEW PORTAL renders a PDF
+with pins for people who have no account, so a client sent a storyboard PDF got
+a broken canvas and no explanation. Added to PUBLIC_PATHS.
+
 DRAWING IT WHOLE (migration 0098 = boards.frame_aspect, lib/frame-aspect.ts).
 Every frame grid was a hardcoded landscape box, so a 4:5 board showed a
 horizontal strip through the middle of each panel. The import was never at

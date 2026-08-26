@@ -29,8 +29,13 @@ import {
   importShotList,
   importStoryboard,
   readProductionDoc,
+  type ImportShotRow,
 } from "@/app/(app)/projects/[id]/import-actions";
-import type { ShotDocDraft, ShotDocRow } from "@/lib/shot-doc";
+import {
+  matchShotsToPanels,
+  type ShotDocDraft,
+  type ShotDocRow,
+} from "@/lib/shot-doc";
 
 type PagePlan = {
   page: PdfPage;
@@ -265,13 +270,89 @@ export function ImportDocModal({
     0
   );
 
+  /**
+   * Every panel on the page, flat, with what is needed to match it to a shot
+   * row: the page it came from, its reading order there, and the number its
+   * caption printed.
+   */
+  const panels = useMemo(
+    () =>
+      plans.flatMap((plan, pi) =>
+        plan.rects.map((rect, ri) => ({
+          pi,
+          ri,
+          rect,
+          page: plan.page.page,
+          index: ri,
+          code: splitCaption(plan.captions[ri]?.trim() || null).code,
+        }))
+      ),
+    [plans]
+  );
+
+  /**
+   * Which panel goes with which shot row.
+   *
+   * Computed over ALL rows and ALL panels rather than the kept ones, so ticking
+   * a row on and off does not shuffle every other row's picture underneath the
+   * producer while they are reading the list. A pairing whose panel is later
+   * unticked simply drops its image at save time.
+   */
+  const pairing = useMemo(
+    () => matchShotsToPanels(shots, panels),
+    [shots, panels]
+  );
+  const matchedCount = pairing.filter((p) => p !== null).length;
+
   async function save() {
     if (!file) return;
     setStage("saving");
     try {
+      // A panel is cropped and uploaded once, whichever half of the import
+      // wants it. Before this, the shot rows arrived with no picture even
+      // though the matching frame had just been cut off the same page, which
+      // is the thing the operator noticed: the two halves of one import were
+      // not speaking to each other.
+      const wantsPanel = (i: number) => {
+        const p = panels[i];
+        if (skipPanels.has(`${p.pi}:${p.ri}`)) return false;
+        if (takeBoards) return true;
+        // No storyboard wanted, so a panel earns its upload only by being on a
+        // shot row that is actually being imported.
+        return (
+          takeShots &&
+          pairing.some((m, si) => m === i && !skipRows.has(si))
+        );
+      };
+      const wanted = panels.map((_, i) => wantsPanel(i));
+      const total = wanted.filter(Boolean).length;
+      const uploads = new Map<
+        number,
+        { storagePath: string; mimeType: string | null; name: string }
+      >();
+
+      if (total > 0) {
+        setNote("Uploading panels...");
+        let done = 0;
+        for (let i = 0; i < panels.length; i++) {
+          if (!wanted[i]) continue;
+          const p = panels[i];
+          const blob = await cropToBlob(plans[p.pi].page.canvas, p.rect);
+          const name = `${file.name.replace(/\.pdf$/i, "")}-p${p.page}-${p.ri + 1}.jpg`;
+          const asFile = new File([blob], name, { type: "image/jpeg" });
+          const up = await uploadAssetFile({ studioId, projectId, file: asFile });
+          uploads.set(i, {
+            storagePath: up.storagePath,
+            mimeType: up.mimeType || "image/jpeg",
+            name,
+          });
+          done++;
+          setNote(`Uploading panel ${done} of ${total}...`);
+        }
+      }
+
       let boards = 0;
       if (takeBoards && panelCount > 0) {
-        setNote("Uploading panels...");
         const frames: {
           storagePath: string;
           mimeType: string | null;
@@ -280,37 +361,25 @@ export function ImportDocModal({
           sound: string | null;
           notes: string | null;
         }[] = [];
-        let done = 0;
         const chosenRects: Rect[] = [];
-        for (let pi = 0; pi < plans.length; pi++) {
-          const plan = plans[pi];
-          for (let ri = 0; ri < plan.rects.length; ri++) {
-            if (skipPanels.has(`${pi}:${ri}`)) continue;
-            chosenRects.push(plan.rects[ri]);
-            const blob = await cropToBlob(plan.page.canvas, plan.rects[ri]);
-            const asFile = new File(
-              [blob],
-              `${file.name.replace(/\.pdf$/i, "")}-p${plan.page.page}-${ri + 1}.jpg`,
-              { type: "image/jpeg" }
-            );
-            const up = await uploadAssetFile({ studioId, projectId, file: asFile });
-            // A board's caption is several fields, not one: a shot number, a
-            // scene, what is said over it and what the camera does.
-            const { scene, description, sound, notes } = splitCaption(
-              plan.captions[ri]?.trim() || null
-            );
-            frames.push({
-              storagePath: up.storagePath,
-              mimeType: up.mimeType || "image/jpeg",
-              scene,
-              caption: description,
-              sound,
-              notes,
-            });
-            done++;
-            setNote(`Uploading panel ${done} of ${panelCount}...`);
-          }
-        }
+        panels.forEach((p, i) => {
+          const up = uploads.get(i);
+          if (!up) return;
+          chosenRects.push(p.rect);
+          // A board's caption is several fields, not one: a shot number, a
+          // scene, what is said over it and what the camera does.
+          const { scene, description, sound, notes } = splitCaption(
+            plans[p.pi].captions[p.ri]?.trim() || null
+          );
+          frames.push({
+            storagePath: up.storagePath,
+            mimeType: up.mimeType,
+            scene,
+            caption: description,
+            sound,
+            notes,
+          });
+        });
         const res = await importStoryboard(
           projectId,
           draft?.title || file.name.replace(/\.pdf$/i, ""),
@@ -332,10 +401,22 @@ export function ImportDocModal({
       let rows = 0;
       if (takeShots && chosenShots.length) {
         setNote("Building the shot list...");
+        const withImages: ImportShotRow[] = shots
+          .map((row, si) => {
+            const m = pairing[si];
+            return {
+              ...row,
+              // Only when the panel survived the confirm step too: a picture
+              // the producer unticked must not come back in through the side
+              // door of the shot list.
+              image: m === null ? null : uploads.get(m) ?? null,
+            };
+          })
+          .filter((_, si) => !skipRows.has(si));
         const res = await importShotList(
           projectId,
           draft?.title || file.name.replace(/\.pdf$/i, ""),
-          chosenShots
+          withImages
         );
         if ("error" in res) {
           toast(res.error, "error");
@@ -474,6 +555,14 @@ export function ImportDocModal({
                         {chosenShots.length === 1 ? "" : "s"}
                       </strong>{" "}
                       with size, movement and description
+                      {/* Said out loud, because a producer who cannot see it
+                          has to import first to find out whether the frames
+                          came across. */}
+                      {matchedCount > 0
+                        ? `, ${matchedCount} matched to a frame`
+                        : plans.some((p) => p.rects.length)
+                          ? ", none could be matched to a frame"
+                          : ""}
                     </span>
                   </label>
                 </li>
@@ -571,6 +660,8 @@ export function ImportDocModal({
                   <tbody>
                     {shots.map((r, i) => {
                       const off = skipRows.has(i);
+                      const m = pairing[i];
+                      const panel = m === null ? null : panels[m];
                       return (
                         <tr key={i} className={off ? "opacity-40" : ""}>
                           <td className="border-b border-border px-2 py-1.5">
@@ -587,6 +678,23 @@ export function ImportDocModal({
                               }
                               className="h-4 w-4 accent-[var(--accent)]"
                             />
+                          </td>
+                          {/* The frame this row will carry. A blank cell is
+                              the honest answer where nothing matched, rather
+                              than the row quietly arriving without one. */}
+                          <td className="border-b border-border px-2 py-1.5">
+                            {panel ? (
+                              <span className="block w-14">
+                                <PanelThumb
+                                  page={plans[panel.pi].page}
+                                  rect={panel.rect}
+                                />
+                              </span>
+                            ) : (
+                              <span className="block w-14 text-center text-[10.5px] text-text-faint">
+                                no frame
+                              </span>
+                            )}
                           </td>
                           <td className="border-b border-border px-2 py-1.5 font-mono text-[11.5px] text-text-muted">
                             {r.code || "-"}

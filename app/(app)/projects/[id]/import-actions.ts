@@ -8,6 +8,23 @@ import { aiConfigured, extractShotDoc, type AiDocument } from "@/lib/ai";
 import type { ShotDocDraft, ShotDocRow } from "@/lib/shot-doc";
 import { isFrameAspect } from "@/lib/frame-aspect";
 
+/**
+ * A shot row, plus the panel it was matched to.
+ *
+ * The picture rides on the CARD (shot_cards carries storage_path directly), not
+ * as an asset row: the crop already lives in storage from the storyboard half
+ * of the same import, so this points at the bytes that are there rather than
+ * uploading them twice or filling the project's asset library with sixteen
+ * crops nobody asked for.
+ */
+export type ImportShotRow = ShotDocRow & {
+  image?: {
+    storagePath: string;
+    mimeType: string | null;
+    name: string | null;
+  } | null;
+};
+
 function rp(projectId: string) {
   revalidatePath(`/projects/${projectId}/shot-list`);
   revalidatePath(`/projects/${projectId}/storyboards`);
@@ -65,7 +82,7 @@ export async function readProductionDoc(input: {
 export async function importShotList(
   projectId: string,
   title: string,
-  rows: ShotDocRow[]
+  rows: ImportShotRow[]
 ): Promise<{ groupId: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -108,6 +125,9 @@ export async function importShotList(
       movement: r.movement,
       day: r.day,
       vo: r.notes,
+      storage_path: r.image?.storagePath ?? null,
+      mime_type: r.image?.mimeType ?? null,
+      image_name: r.image?.name ?? null,
       tags: [],
       created_by: ctx.userId,
     }))

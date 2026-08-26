@@ -60,6 +60,14 @@ const PUBLIC_PATHS = [
   "/invite",
   "/project-invite",
   "/api/cron",
+  // pdf.js loads its worker as a plain file from here, and the CLIENT REVIEW
+  // PORTAL renders a PDF with pins for somebody who has no account at all.
+  // The middleware matcher only exempts image extensions, so this was being
+  // redirected to /login and the review canvas failed to start: a client sent
+  // a storyboard PDF saw a broken viewer with nothing explaining why. Serving
+  // one static script to anonymous visitors is exactly what the portal needs
+  // and gives away nothing.
+  "/pdf.worker.min.mjs",
 ];
 
 /**

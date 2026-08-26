@@ -144,3 +144,130 @@ export function parseShotDocDraft(raw: string): ShotDocDraft {
 
   return { kind, title: tag(obj.title, 120), shots, pages, unreadable };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Matching shot rows to storyboard panels                                     */
+/* -------------------------------------------------------------------------- */
+
+/** A cropped panel, as far as matching is concerned. */
+export type PanelRef = {
+  /** 1-based page it was cropped from. */
+  page: number;
+  /** Its reading-order position within that page, from 0. */
+  index: number;
+  /** The number printed with it, where the caption had one. */
+  code: string | null;
+};
+
+/** Codes are compared as identity, so punctuation and case cannot separate them. */
+function codeKey(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const s = v.replace(/[^0-9a-z]/gi, "").toUpperCase();
+  return s || null;
+}
+
+/**
+ * Which panel belongs to which shot row.
+ *
+ * One import produces both a storyboard and a shot list when the document
+ * holds both, and until now the shot rows arrived with no picture even though
+ * the matching frame had just been cropped from the same page. Not a decision,
+ * a gap: nothing connected the two halves.
+ *
+ * Returns a panel index per shot, or null where nothing can be said. THREE
+ * PASSES, strongest evidence first, and each one only claims what it can
+ * actually prove:
+ *
+ * 1. THE PRINTED NUMBER. A row reading "1B" and a panel captioned "SHOT 1B The
+ *    Reveal" are the same beat, and that is the document asserting it rather
+ *    than us inferring it. Only used where the number is unique on BOTH sides,
+ *    since a code appearing twice identifies nothing.
+ *
+ * 2. THE PAGE. The reader records which page each row came off, and a panel
+ *    knows the page it was cut from. Where a page's leftover rows and leftover
+ *    panels come to the same count, they pair in reading order.
+ *
+ * 3. WHOLE-DOCUMENT ORDER, and only when the first two passes matched NOTHING
+ *    AT ALL and the two counts are equal. A document where some rows matched
+ *    and some did not is telling us the two lists are not parallel, so pairing
+ *    the remainder by position would be inventing a link rather than reading
+ *    one. An unmatched row simply arrives without a picture, which is what it
+ *    does today and is easy to fix by hand.
+ */
+export function matchShotsToPanels(
+  shots: ShotDocRow[],
+  panels: PanelRef[]
+): (number | null)[] {
+  const out: (number | null)[] = shots.map(() => null);
+  const takenPanel = new Set<number>();
+
+  // 1. By printed number.
+  const panelByCode = new Map<string, number | "many">();
+  panels.forEach((p, i) => {
+    const key = codeKey(p.code);
+    if (!key) return;
+    panelByCode.set(key, panelByCode.has(key) ? "many" : i);
+  });
+  const shotCodeCount = new Map<string, number>();
+  for (const s of shots) {
+    const key = codeKey(s.code);
+    if (key) shotCodeCount.set(key, (shotCodeCount.get(key) ?? 0) + 1);
+  }
+  shots.forEach((s, si) => {
+    const key = codeKey(s.code);
+    if (!key || shotCodeCount.get(key) !== 1) return;
+    const hit = panelByCode.get(key);
+    if (typeof hit !== "number" || takenPanel.has(hit)) return;
+    out[si] = hit;
+    takenPanel.add(hit);
+  });
+  const matchedByCode = takenPanel.size;
+
+  // 2. By page, in reading order, where the counts on that page agree.
+  const pages = new Set<number>();
+  for (const s of shots) if (s.page !== null) pages.add(s.page);
+  for (const page of pages) {
+    const rows = shots
+      .map((s, si) => ({ s, si }))
+      .filter(({ s, si }) => s.page === page && out[si] === null)
+      .map(({ si }) => si);
+    const free = panels
+      .map((p, i) => ({ p, i }))
+      .filter(({ p, i }) => p.page === page && !takenPanel.has(i))
+      .sort((a, b) => a.p.index - b.p.index)
+      .map(({ i }) => i);
+    if (!rows.length || rows.length !== free.length) continue;
+    rows.forEach((si, n) => {
+      out[si] = free[n];
+      takenPanel.add(free[n]);
+    });
+  }
+
+  // 3. Whole-document order, only when nothing else spoke and the two lists
+  //    are the same length.
+  //
+  //    Blocked when BOTH sides printed numbers, because then numbering was the
+  //    identity mechanism and it did not agree, which is the document saying
+  //    these two lists are not parallel. Where only one side numbers its
+  //    entries, no assertion was made or broken, so position is all there is
+  //    and using it is reasonable.
+  const numberedBothSides =
+    shots.some((s) => codeKey(s.code)) && panels.some((p) => codeKey(p.code));
+  if (
+    !numberedBothSides &&
+    takenPanel.size === 0 &&
+    matchedByCode === 0 &&
+    shots.length > 0 &&
+    shots.length === panels.length
+  ) {
+    const order = panels
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => a.p.page - b.p.page || a.p.index - b.p.index)
+      .map(({ i }) => i);
+    shots.forEach((_, si) => {
+      out[si] = order[si];
+    });
+  }
+
+  return out;
+}

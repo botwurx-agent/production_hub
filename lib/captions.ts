@@ -227,11 +227,26 @@ function fieldFor(word: string): Field {
  */
 export function splitCaption(caption: string | null): {
   scene: string | null;
+  /**
+   * Just the frame's own number, on its own.
+   *
+   * Carried out separately as well as inside `scene`, because it is what a
+   * shot row can be matched against: a shot list saying "1B" and a panel
+   * captioned "SHOT 1B The Reveal" are the same beat, and that is the only
+   * assertion in the document that says so.
+   */
+  code: string | null;
   description: string | null;
   sound: string | null;
   notes: string | null;
 } {
-  const empty = { scene: null, description: null, sound: null, notes: null };
+  const empty = {
+    scene: null,
+    code: null,
+    description: null,
+    sound: null,
+    notes: null,
+  };
   if (!caption) return empty;
 
   const marks: { at: number; end: number; word: string; field: Field }[] = [];
@@ -269,11 +284,13 @@ export function splitCaption(caption: string | null): {
 
   // The leading number is the frame's own code and belongs at the front of the
   // scene, not buried in it.
-  const code = head.match(LEADING_CODE);
+  const found = head.match(LEADING_CODE);
   let scene: string | null = null;
-  if (code) {
-    const rest = head.slice(code[0].length).trim();
-    scene = rest ? `${code[1].toUpperCase()} · ${rest}` : code[1].toUpperCase();
+  let code: string | null = null;
+  if (found) {
+    code = found[1].toUpperCase();
+    const rest = head.slice(found[0].length).trim();
+    scene = rest ? `${code} · ${rest}` : code;
     head = rest;
   } else if (head) {
     scene = head;
@@ -284,6 +301,7 @@ export function splitCaption(caption: string | null): {
 
   return {
     scene: scene ? scene.slice(0, 120) : null,
+    code,
     // With no labels there is nothing to separate, so the caption stands as
     // the description, minus a heading already captured as the scene.
     description: joined("description", " ") ?? (marks.length ? null : stripCode(caption)),
