@@ -301,7 +301,7 @@ export type DocSurface =
       cover: { title: string | null; subtitle: string | null } | null;
       groups: DocShotGroup[];
     }
-  | { kind: "storyboard"; frames: DocFrame[] }
+  | { kind: "storyboard"; frameAspect?: string | null; frames: DocFrame[] }
   | { kind: "moodboard"; items: DocMoodItem[] }
   | {
       kind: "ai_shot";
@@ -634,7 +634,7 @@ export async function loadDocSurface(
   // storyboard | moodboard: target_id = boards.id
   const { data: boardRow } = await client
     .from("boards")
-    .select("id, name")
+    .select("id, name, frame_aspect")
     .eq("id", targetId)
     .maybeSingle();
   if (!boardRow) return null;
@@ -654,6 +654,9 @@ export async function loadDocSurface(
     return {
       surface: {
         kind: "storyboard",
+        // Carried through so the client sees the board in the shape it was
+        // drawn in, not cropped into a landscape box.
+        frameAspect: boardRow.frame_aspect,
         frames: (frameRows ?? []).map((f) => ({
           id: f.id,
           scene: f.scene,

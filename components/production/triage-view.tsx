@@ -346,9 +346,13 @@ export function TriageView({
                   focused.kind === "video" ? (
                     <ScrubVideo key={focused.id} src={srcOf(focused) as string} keyboard={false} maxHeightClass="max-h-[56vh]" />
                   ) : (
-                    <div className="grid place-items-center overflow-hidden rounded-[12px] bg-black" style={{ aspectRatio: "16/9" }}>
+                    <div className="relative max-h-[56vh] overflow-hidden rounded-[12px] bg-black" style={{ aspectRatio: "16/9" }}>
+                      {/* absolute, not a centered grid item: a grid item sized
+                          to the image grows the row past the box and the box
+                          clips it, so a portrait candidate was being cropped
+                          in the one place the whole point is judging it. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={srcOf(focused) as string} alt="" className="max-h-[56vh] w-full object-contain" />
+                      <img src={srcOf(focused) as string} alt="" className="absolute inset-0 h-full w-full object-contain" />
                     </div>
                   )
                 ) : (

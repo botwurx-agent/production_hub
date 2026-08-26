@@ -31,7 +31,7 @@ export default async function ProjectStoryboardsPage({
 
   const { data: boardRows } = await supabase
     .from("boards")
-    .select("id, name")
+    .select("id, name, frame_aspect")
     .eq("project_id", params.id)
     .eq("kind", "storyboard")
     .order("position", { ascending: true });

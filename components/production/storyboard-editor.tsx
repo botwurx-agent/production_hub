@@ -17,7 +17,13 @@ import {
   setFrameAsset,
   clearFrameImage,
   restoreStoryboard,
+  setStoryboardAspect,
 } from "@/app/(app)/projects/[id]/storyboard-actions";
+import {
+  FRAME_ASPECTS,
+  aspectKey,
+  aspectStyle,
+} from "@/lib/frame-aspect";
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
 import { confirmAction } from "@/components/ui/confirm";
@@ -29,7 +35,12 @@ import { ShareDocButton } from "@/components/review/share-doc-button";
 import { EmailDocButton } from "@/components/review/email-doc-button";
 import { DocReviewButton } from "@/components/review/doc-review-button";
 
-export type StoryboardBoard = { id: string; name: string };
+export type StoryboardBoard = {
+  id: string;
+  name: string;
+  /** The shape its frames are drawn in. Null uses the app default. */
+  frame_aspect?: string | null;
+};
 export type FrameView = {
   id: string;
   board_id: string;
@@ -260,6 +271,7 @@ export function StoryboardEditor({
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" /></svg>
               </button>
+              <AspectPicker projectId={projectId} board={active} />
               <DocReviewButton
                 projectId={projectId}
                 kind="storyboard"
@@ -331,6 +343,7 @@ export function StoryboardEditor({
                   key={f.id}
                   projectId={projectId}
                   frame={f}
+                  board={active}
                   number={i + 1}
                   first={i === 0}
                   last={i === activeFrames.length - 1}
@@ -365,9 +378,64 @@ export function StoryboardEditor({
   );
 }
 
+/**
+ * The board's frame shape.
+ *
+ * A plain select, not a menu: there are nine options, it is a setting rather
+ * than an action, and a native control is the one thing on this toolbar that
+ * already works on a phone.
+ *
+ * It exists because detection can only speak when the panels agree. A board
+ * built by hand has no panels to measure, and a mixed import deliberately
+ * returns nothing rather than claiming a shape, so both need somewhere to say
+ * it. Nothing is ever cropped either way; this decides how much empty box sits
+ * around the artwork.
+ */
+function AspectPicker({
+  projectId,
+  board,
+}: {
+  projectId: string;
+  board: StoryboardBoard;
+}) {
+  const [value, setValue] = useState(() => aspectKey(board.frame_aspect));
+
+  // Keyed on the board, so switching boards shows that board's own shape
+  // rather than the last one's.
+  useEffect(() => {
+    setValue(aspectKey(board.frame_aspect));
+  }, [board.id, board.frame_aspect]);
+
+  return (
+    <label className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-text-faint">
+      <span className="hidden sm:inline">Frame</span>
+      <select
+        value={value}
+        onChange={(e) => {
+          // Applied straight away rather than after the round trip: the grid
+          // is the preview, and waiting on the server to see a shape change
+          // makes choosing one feel broken.
+          setValue(e.target.value as ReturnType<typeof aspectKey>);
+          void setStoryboardAspect(projectId, board.id, e.target.value).catch(
+            () => toast("That shape could not be saved.", "error")
+          );
+        }}
+        className="rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs font-semibold text-text-muted outline-none transition hover:text-text focus:border-border-strong"
+      >
+        {FRAME_ASPECTS.map((a) => (
+          <option key={a.key} value={a.key}>
+            {a.key}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function FrameCard({
   projectId,
   frame,
+  board,
   number,
   first,
   last,
@@ -381,6 +449,8 @@ function FrameCard({
 }: {
   projectId: string;
   frame: FrameView;
+  /** The board this frame belongs to, for its frame shape. */
+  board: StoryboardBoard | null;
   number: number;
   first: boolean;
   last: boolean;
@@ -448,10 +518,14 @@ function FrameCard({
         <input
           defaultValue={frame.scene ?? ""}
           onBlur={(e) => { if ((e.target.value || null) !== (frame.scene ?? null)) onCapture(); updateFrame(projectId, frame.id, { scene: e.target.value }); }}
-          placeholder="Sc."
-          className="w-12 rounded-[6px] border border-transparent bg-transparent px-1.5 py-0.5 text-xs font-semibold text-text-muted outline-none hover:border-border focus:border-border-strong"
+          placeholder="Scene"
+          // Was a 12-character box next to a full-width "Frame N", from when a
+          // scene was only ever a code. An imported board names its frames
+          // ("1A · Cloud Reveal / Opening Frame"), so the name gets the room
+          // and the number shrinks to the numeral it always was.
+          className="min-w-0 flex-1 rounded-[6px] border border-transparent bg-transparent px-1.5 py-0.5 text-xs font-semibold text-text-muted outline-none hover:border-border focus:border-border-strong"
         />
-        <span className="text-sm font-extrabold text-text">Frame {number}</span>
+        <span className="shrink-0 text-sm font-extrabold text-text">{number}</span>
         <div className="ml-auto flex items-center gap-0.5">
           <button
             onClick={() =>
@@ -501,12 +575,21 @@ function FrameCard({
 
       {/* Image */}
       <div className="relative">
-        <div className="grid aspect-[16/10] place-items-center overflow-hidden bg-surface-2/60">
+        {/* Sized to the BOARD's own shape, and object-CONTAIN inside it.
+            This was a hardcoded 16:10 box filled with object-cover, which
+            quietly threw away most of the artwork on any board not drawn in
+            that shape: a portrait 4:5 board rendered as a horizontal strip
+            through the middle of each panel. Contain also means a single odd
+            frame letterboxes instead of being cut. */}
+        <div
+          style={{ aspectRatio: aspectStyle(board?.frame_aspect) }}
+          className="relative overflow-hidden bg-surface-2/60"
+        >
           {frame.signedUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={frame.thumbUrl ?? frame.signedUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+            <img src={frame.thumbUrl ?? frame.signedUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-contain" />
           ) : (
-            <span className="text-xs font-semibold text-text-faint">No image</span>
+            <span className="absolute inset-0 grid place-items-center text-xs font-semibold text-text-faint">No image</span>
           )}
         </div>
         <div className="absolute bottom-1.5 right-1.5 flex gap-1.5">

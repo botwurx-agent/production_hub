@@ -1,6 +1,7 @@
 "use client";
 
 import type { DocSurface } from "@/lib/review-links";
+import { aspectStyle } from "@/lib/frame-aspect";
 
 // Read-only renders of the doc surfaces the client reviews. These are the
 // pinnable "stage" inside PinCanvas, so they must lay out deterministically
@@ -258,12 +259,16 @@ function AiShotSurface({
                   </a>
                 )}
               </div>
-              <div className="relative grid aspect-[16/9] place-items-center overflow-hidden bg-black">
+              {/* absolute inset-0 rather than a centered grid item: a grid
+                  item sized h-full inside an auto row grows to the image's own
+                  height and the box clips it, so object-contain was quietly
+                  cropping a portrait still despite saying otherwise. */}
+              <div className="relative aspect-[16/9] overflow-hidden bg-black">
                 {m.isVideo ? (
                   <>
                     {m.signedUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.signedUrl} alt="" className="h-full w-full object-contain" />
+                      <img src={m.signedUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
                     ) : null}
                     <span className="absolute inset-0 grid place-items-center">
                       <span className="grid h-12 w-12 place-items-center rounded-full bg-white/85 text-lg text-black">
@@ -273,9 +278,9 @@ function AiShotSurface({
                   </>
                 ) : m.signedUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.signedUrl} alt="" className="h-full w-full object-contain" />
+                  <img src={m.signedUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
                 ) : (
-                  <span className="text-xs font-semibold text-white/60">No preview</span>
+                  <span className="absolute inset-0 grid place-items-center text-xs font-semibold text-white/60">No preview</span>
                 )}
               </div>
             </div>
@@ -423,12 +428,18 @@ function StoryboardSurface({
             )}
             <span className="text-sm font-extrabold">Frame {i + 1}</span>
           </div>
-          <div className="grid aspect-[16/10] place-items-center overflow-hidden bg-surface-2/60">
+          {/* The board's own shape, and contain rather than cover. A fixed
+              landscape box with object-cover cut a portrait board down to a
+              strip, which is the last thing a client review should do. */}
+          <div
+            style={{ aspectRatio: aspectStyle(surface.frameAspect) }}
+            className="relative overflow-hidden bg-surface-2/60"
+          >
             {f.signedUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={f.signedUrl} alt="" className="h-full w-full object-cover" />
+              <img src={f.signedUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
             ) : (
-              <span className="text-xs font-semibold text-text-faint">No image</span>
+              <span className="absolute inset-0 grid place-items-center text-xs font-semibold text-text-faint">No image</span>
             )}
           </div>
           <div className="space-y-1.5 p-3">

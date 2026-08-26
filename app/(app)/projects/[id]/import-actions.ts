@@ -6,6 +6,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
 import { aiConfigured, extractShotDoc, type AiDocument } from "@/lib/ai";
 import type { ShotDocDraft, ShotDocRow } from "@/lib/shot-doc";
+import { isFrameAspect } from "@/lib/frame-aspect";
 
 function rp(projectId: string) {
   revalidatePath(`/projects/${projectId}/shot-list`);
@@ -140,7 +141,15 @@ export async function importStoryboard(
     sound?: string | null;
     /** What the camera does, and anything the board filed under notes. */
     notes?: string | null;
-  }[]
+  }[],
+  /**
+   * The shape the panels were drawn in, measured at import.
+   *
+   * Stored on the board so the grid can be sized to the artwork instead of
+   * cropping it into a landscape box. Null when the panels did not agree on a
+   * shape, which leaves the board on the app default.
+   */
+  frameAspect?: string | null
 ): Promise<{ boardId: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -161,6 +170,9 @@ export async function importStoryboard(
       project_id: projectId,
       kind: "storyboard",
       name: name.trim().slice(0, 120) || "Imported storyboard",
+      // Validated rather than trusted: this arrives from the browser and goes
+      // straight into a CSS aspect-ratio.
+      frame_aspect: isFrameAspect(frameAspect) ? frameAspect : null,
       position: (last?.position ?? -1) + 1,
       created_by: ctx.userId,
     })

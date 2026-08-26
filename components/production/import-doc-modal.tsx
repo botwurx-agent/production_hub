@@ -22,6 +22,7 @@ import {
   type PdfPage,
 } from "@/lib/pdf-client";
 import { captionFor, splitCaption, stripFurniture, type TextRun } from "@/lib/captions";
+import { detectFrameAspect } from "@/lib/frame-aspect";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import {
   fileSourceDocument,
@@ -280,10 +281,12 @@ export function ImportDocModal({
           notes: string | null;
         }[] = [];
         let done = 0;
+        const chosenRects: Rect[] = [];
         for (let pi = 0; pi < plans.length; pi++) {
           const plan = plans[pi];
           for (let ri = 0; ri < plan.rects.length; ri++) {
             if (skipPanels.has(`${pi}:${ri}`)) continue;
+            chosenRects.push(plan.rects[ri]);
             const blob = await cropToBlob(plan.page.canvas, plan.rects[ri]);
             const asFile = new File(
               [blob],
@@ -311,7 +314,12 @@ export function ImportDocModal({
         const res = await importStoryboard(
           projectId,
           draft?.title || file.name.replace(/\.pdf$/i, ""),
-          frames
+          frames,
+          // Measured from the panels the producer actually kept, not from every
+          // one detected: a panel they unticked has no say in the shape of the
+          // board. The grid is then sized to the artwork instead of cropping it
+          // into a landscape box.
+          detectFrameAspect(chosenRects)
         );
         if ("error" in res) {
           toast(res.error, "error");

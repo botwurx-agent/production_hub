@@ -278,6 +278,7 @@ export type Database = {
           position: number;
           background: string;
           kind: string;
+          frame_aspect: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -290,6 +291,7 @@ export type Database = {
           position?: number;
           background?: string;
           kind?: string;
+          frame_aspect?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -302,6 +304,7 @@ export type Database = {
           position?: number;
           background?: string;
           kind?: string;
+          frame_aspect?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -335,6 +338,7 @@ export type Database = {
           studio_id: string;
           board_id: string;
           kind?: string;
+          frame_aspect?: string | null;
           name?: string | null;
           mime_type?: string | null;
           storage_path?: string | null;
@@ -356,6 +360,7 @@ export type Database = {
           studio_id?: string;
           board_id?: string;
           kind?: string;
+          frame_aspect?: string | null;
           name?: string | null;
           mime_type?: string | null;
           storage_path?: string | null;

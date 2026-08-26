@@ -9,6 +9,7 @@ import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { signedLogoUrl } from "@/lib/branding";
 import { ProductionCover } from "@/components/production/production-cover";
 import type { ShotBoard } from "@/lib/database.types";
+import { aspectStyle } from "@/lib/frame-aspect";
 
 const SIGNED_TTL = 60 * 60;
 const printExact = {
@@ -69,11 +70,15 @@ export default async function StoryboardPresentPage({
 
   const { data: boardRows } = await supabase
     .from("boards")
-    .select("id, name")
+    .select("id, name, frame_aspect")
     .eq("project_id", params.id)
     .eq("kind", "storyboard")
     .order("position", { ascending: true });
-  const boards = (boardRows ?? []) as { id: string; name: string }[];
+  const boards = (boardRows ?? []) as {
+    id: string;
+    name: string;
+    frame_aspect: string | null;
+  }[];
   const boardIds = boards.map((b) => b.id);
 
   let frames: Frame[] = [];
@@ -202,15 +207,22 @@ export default async function StoryboardPresentPage({
                       className="flex flex-col overflow-hidden rounded-[12px] border border-border bg-surface print:break-inside-avoid"
                     >
                       <div className="relative">
+                        {/* The board's own shape, and contain rather than
+                            cover, so what prints is the whole drawing. This
+                            was a fixed 16:9 box filled with object-cover,
+                            which cut a portrait board down to a strip. */}
                         <div
-                          style={printExact}
-                          className="grid aspect-video place-items-center overflow-hidden bg-surface-2"
+                          style={{
+                            ...printExact,
+                            aspectRatio: aspectStyle(board.frame_aspect),
+                          }}
+                          className="relative overflow-hidden bg-surface-2"
                         >
                           {f.signedUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={f.signedUrl} alt="" className="h-full w-full object-cover" />
+                            <img src={f.signedUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
                           ) : (
-                            <span className="text-xs font-semibold text-text-faint">No image</span>
+                            <span className="absolute inset-0 grid place-items-center text-xs font-semibold text-text-faint">No image</span>
                           )}
                         </div>
                         {/* The frame number sits ON the picture, the way a

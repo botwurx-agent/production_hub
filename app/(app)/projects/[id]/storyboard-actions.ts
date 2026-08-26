@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import type { Board } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
+import { isFrameAspect } from "@/lib/frame-aspect";
 
 export type StoryboardState = { error?: string } | null;
 
@@ -67,6 +68,31 @@ export async function renameStoryboard(
     supabase
       .from("boards")
       .update({ name: name.trim() || "Storyboard", updated_at: new Date().toISOString() })
+      .eq("id", boardId)
+  );
+  rp(projectId);
+}
+
+/**
+ * The shape this board's frames are drawn in.
+ *
+ * Detection sets it at import; this is the override for a board built by hand,
+ * or one whose panels the detector could not agree on. Only a shape the app
+ * knows is stored, since the value ends up in a CSS aspect-ratio.
+ */
+export async function setStoryboardAspect(
+  projectId: string,
+  boardId: string,
+  aspect: string
+): Promise<void> {
+  await requireStudioContext();
+  if (!isFrameAspect(aspect)) return;
+  const supabase = createClient();
+  await logWrite(
+    "setStoryboardAspect/boards",
+    supabase
+      .from("boards")
+      .update({ frame_aspect: aspect, updated_at: new Date().toISOString() })
       .eq("id", boardId)
   );
   rp(projectId);

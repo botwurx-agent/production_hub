@@ -1227,7 +1227,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0097. Recent: 0097 =
+files in supabase/migrations. THROUGH 0098. Recent: 0098 =
+board_frame_aspect (boards.frame_aspect, the shape a storyboard's frames are
+drawn in); 0097 =
 task_files_and_comments (project_task_files + project_task_comments); 0096 =
 task_assignees (project_task_assignees, drops project_tasks.assignee_id);
 0095 =
@@ -2214,6 +2216,66 @@ confidence every time.
   rather than the word "detected".
 - Verified end to end on the operator's ZELVARA board: 16 of 16 frames, every
   shot number, voiceover and shot description in its own field.
+
+### Storyboard import: reading a real board, and drawing it whole
+Two passes on one operator PDF (HINT / Treat Yourself: ten frames, one per
+page, artwork left and a text column right). Panel detection was already
+correct; everything either side of it was not.
+
+READING IT (lib/captions.ts, lib/pdf-client.ts). Three causes, one symptom.
+- EVERY PARAGRAPH WAS DOUBLED. The exporter draws each body paragraph twice,
+  one copy exactly over the other. Invisible on screen, present in the text
+  layer, so every caption said everything twice and the model read the whole
+  document twice as well. Deduped in readPdf on text AND position, since only
+  an exact double is a double; `text` is now built from the deduped runs so the
+  model sees what the captions were read from.
+- "SHOT 1A" SWALLOWED ITS OWN HEADING. The old SHOT_MARKER matched the literal
+  word SHOT at index 0, so the heading was empty, every frame arrived with no
+  scene, and number, title, action, camera and notes landed in the description
+  as one blob. SHOT followed by a NUMBER is now the frame's own code; SHOT
+  followed by prose is still a camera note, which is what the earlier board
+  used. splitCaption is now a labelled-section parser (ACTION / CAMERA /
+  NOTES / VOICEOVER and friends) and finally fills `notes`, a column
+  storyboard_frames has had since 0029 and never received.
+- TWO RULES KEEP IT OFF PROSE, both load-bearing: a label must be UPPERCASE or
+  followed by a colon (otherwise "running away from camera" splits a sentence,
+  and every board writes that sentence), and a board writing "Camera: push in"
+  still works. The old markers were case-insensitive with no colon rule, a
+  latent bug on any caption mentioning a shot or a camera.
+- THE FOOTER LANDED IN EVERY CAPTION, because a panel with no neighbour reaches
+  a little past itself for its text and on a one-frame page that reach hits the
+  running footer. stripFurniture drops a run only when THREE things hold: it is
+  in the page margin, it repeats across most pages, and it carries the same
+  text (or is a page number, whose job is to differ). All three matter: this
+  deck is templated, so "ACTION" sits at the same y on all ten pages, and a
+  repeat-by-position rule would have deleted the label the parse depends on.
+
+DRAWING IT WHOLE (migration 0098 = boards.frame_aspect, lib/frame-aspect.ts).
+Every frame grid was a hardcoded landscape box, so a 4:5 board showed a
+horizontal strip through the middle of each panel. The import was never at
+fault: it crops the artwork out of the page exactly.
+- `boards.frame_aspect` (nullable, null = 16:9) sits ON THE BOARD, not the
+  frame: a director draws one job in one shape, and per-frame boxes make a
+  ragged grid. detectFrameAspect reads it off the panels at import (median,
+  snapped in LOG space so 1:1 does not swallow every portrait shape) and
+  returns NULL when the panels disagree rather than claiming a shape a
+  minority of frames have. AspectPicker in the editor is the override, for a
+  board built by hand or a mixed import.
+- THE REAL CAUSE WAS NOT object-cover, and swapping it for contain would NOT
+  have fixed it. `grid place-items-center overflow-hidden` + `h-full w-full`
+  lets the item size the auto row to the IMAGE, so the row grows past the
+  aspect box and the box clips it: measured in Chromium, a 792x983 image in a
+  169px-tall 16:9 box rendered 372px tall and got cut. Every such box now uses
+  `relative` + `absolute inset-0 h-full w-full object-contain`. RULE: an
+  aspect-ratio box holding a full-size image must position it absolutely, never
+  centre it as a grid item.
+- Fixed at all five sites: the editor grid, the doc-review/portal storyboard
+  surface, the present/PDF view, the AI shot review media, and the triage
+  stage. Deliberately left on object-cover: the shot-list row thumbnail and the
+  prop card hero, which are small deliberate crops.
+- lib/frame-aspect.ts and the caption splitter are unit tested in the
+  scratchpad (17 and 8 assertions), including the real board detecting as 4:5,
+  a mixed board returning null, and the previously shipped board's format.
 
 ### Production documents look related to each other — BUILT
 `components/production/production-cover.tsx` is the SHARED dark cover for the
