@@ -25,6 +25,7 @@ import { toast } from "@/components/ui/toast";
 import { confirmAction } from "@/components/ui/confirm";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import { ImportDocModal } from "@/components/production/import-doc-modal";
+import { CoverPanel } from "@/components/production/cover-panel";
 import { DocReviewButton } from "@/components/review/doc-review-button";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
@@ -252,7 +253,6 @@ export function ShotBoardEditor({
 
   const [activeId, setActiveId] = useState<string | null>(groups[0]?.id ?? null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [coverOpen, setCoverOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
 
   const active = groups.find((g) => g.id === activeId) ?? groups[0] ?? null;
@@ -293,18 +293,6 @@ export function ShotBoardEditor({
     });
   }
 
-  const headerFields: [keyof ShotBoard, string][] = [
-    ["client", "Client"],
-    ["agency", "Agency"],
-    ["production_co", "Production Co."],
-    ["deliverables", "Deliverables"],
-    ["director", "Director"],
-    ["dp", "DP"],
-    ["location", "Location"],
-    ["job_no", "Job No."],
-    ["shoot_days", "Shoot days"],
-    ["rev_date", "Revision"],
-  ];
 
   return (
     <div className="space-y-5">
@@ -318,21 +306,18 @@ export function ShotBoardEditor({
         {MOVEMENTS.map((s) => <option key={s} value={s} />)}
       </datalist>
 
+      {/* Its own full-width block above the toolbar, not a control inside it:
+          the panel opens into a twelve-field form, and a form nested in a flex
+          row is squeezed into whatever the row leaves it. */}
+      <CoverPanel
+        projectId={projectId}
+        board={board}
+        projectTitle={projectTitle}
+        onSaved={refresh}
+      />
+
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCoverOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted transition hover:text-text"
-          >
-            <svg
-              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-              className={`transition-transform ${coverOpen ? "rotate-90" : ""}`}
-            >
-              <path d="m9 18 6-6-6-6" />
-            </svg>
-            Cover
-          </button>
           <div className="flex items-center gap-1">
             <button
               onClick={doUndo}
@@ -394,40 +379,6 @@ export function ShotBoardEditor({
       </div>
 
       {/* Cover header (collapsible) */}
-      {coverOpen && (
-        <div className="space-y-3 rounded-[14px] border border-border p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Labeled label="Title">
-              <input
-                defaultValue={board?.title ?? ""}
-                onBlur={(e) => { if ((e.target.value || null) !== (board?.title ?? null)) history.capture({ groups, cards }); saveBoard(projectId, { title: e.target.value || null }); }}
-                placeholder={projectTitle}
-                className={field}
-              />
-            </Labeled>
-            <Labeled label="Subtitle">
-              <input
-                defaultValue={board?.subtitle ?? ""}
-                onBlur={(e) => { if ((e.target.value || null) !== (board?.subtitle ?? null)) history.capture({ groups, cards }); saveBoard(projectId, { subtitle: e.target.value || null }); }}
-                placeholder="Shot list & visual reference"
-                className={field}
-              />
-            </Labeled>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {headerFields.map(([key, label]) => (
-              <Labeled key={key} label={label}>
-                <input
-                  defaultValue={(board?.[key] as string) ?? ""}
-                  onBlur={(e) => { if ((e.target.value || null) !== ((board?.[key] as string | null | undefined) ?? null)) history.capture({ groups, cards }); saveBoard(projectId, { [key]: e.target.value || null }); }}
-                  className={field}
-                />
-              </Labeled>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Two-pane: lists sidebar + active list rows */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[232px_1fr]">
         {/* Lists sidebar */}

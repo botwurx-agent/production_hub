@@ -34,6 +34,8 @@ import { SendToReviewButton } from "@/components/projects/send-to-review-button"
 import { ShareDocButton } from "@/components/review/share-doc-button";
 import { EmailDocButton } from "@/components/review/email-doc-button";
 import { DocReviewButton } from "@/components/review/doc-review-button";
+import { CoverPanel } from "@/components/production/cover-panel";
+import type { ShotBoard } from "@/lib/database.types";
 
 export type StoryboardBoard = {
   id: string;
@@ -66,6 +68,8 @@ export function StoryboardEditor({
   boards,
   frames,
   assets,
+  cover = null,
+  projectTitle = "",
   reviewedIds = [],
   commentCounts = {},
   emailEnabled = false,
@@ -75,6 +79,9 @@ export function StoryboardEditor({
   boards: StoryboardBoard[];
   frames: FrameView[];
   assets: PickableAsset[];
+  /** The project's job block, printed at the top of this board's export. */
+  cover?: ShotBoard | null;
+  projectTitle?: string;
   reviewedIds?: string[];
   commentCounts?: Record<string, number>;
   emailEnabled?: boolean;
@@ -154,7 +161,16 @@ export function StoryboardEditor({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]">
+    <div className="space-y-5">
+      {/* The same job block the shot list carries, because the storyboard
+          export prints it too and this page could not reach it. */}
+      <CoverPanel
+        projectId={projectId}
+        board={cover}
+        projectTitle={projectTitle}
+        onSaved={refresh}
+      />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]">
       {/* Storyboards sidebar */}
       <aside className="space-y-2">
         <div className="flex items-center justify-between px-1">
@@ -366,6 +382,7 @@ export function StoryboardEditor({
             </div>
           </div>
         )}
+        </div>
       </div>
 
       <ImportDocModal

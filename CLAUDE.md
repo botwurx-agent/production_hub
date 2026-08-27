@@ -2331,6 +2331,30 @@ number on the picture, captions labelled Shot / Sound / Motion in the same small
 uppercase. Bug fixed on the way: the storyboard export never forced light, so a
 producer working in dark mode printed white type onto white paper.
 
+### The job block on an export (components/production/cover-panel.tsx) — BUILT
+The operator opened Present on the shot list, saw the client / director / job
+number block at the top, and asked where anybody fills it in. It already
+existed: a collapsed text button reading "Cover", next to undo and redo, on the
+shot list page only. That is a section 4.1 failure of the plainest kind, since
+the person who specified the app could not find it.
+- ONE set of facts per job on `shot_boards`, printed by ProductionCover at the
+  top of the shot list export, the storyboard export and the binder. The form
+  is now shared the same way the renderer already was; a second copy would have
+  drifted the moment either changed.
+- IT IS ON THE STORYBOARD EDITOR TOO, which is the real gap: that page prints
+  the block and never loaded `shot_boards` at all, so somebody working in
+  storyboards could see the facts on their PDF with nowhere to enter them.
+- IT ANNOUNCES ITSELF NOW. The trigger says what is inside ("client, director,
+  job number"), and an unfilled block carries an amber "Not filled in" chip
+  while a partial one reads "4 of 12". The moment it matters is exactly when it
+  is empty, which is when it now speaks up.
+- FULL-WIDTH BLOCK, not a control in the toolbar row: it opens into a
+  twelve-field form, and nested in a flex row it was squeezed to half the page.
+- DELIBERATELY NOT in either editor's undo history. The shot list's snapshot
+  restores groups and cards and the storyboard's restores frames, so neither
+  could ever put a cover field back; capturing there only added an undo step
+  that appears to do nothing.
+
 ### Confirm before an irreversible delete (components/ui/confirm.tsx) — BUILT
 A storyboard, a shot list and a call sheet all sat behind a bare x and all three
 take their children with them, with no undo to recover into (the editors

@@ -11,6 +11,7 @@ import {
 } from "@/components/production/storyboard-editor";
 import type { PickableAsset } from "@/components/production/shot-board-editor";
 import { loadProjectAssets } from "@/lib/project-data";
+import type { ShotBoard } from "@/lib/database.types";
 
 const SIGNED_TTL = 60 * 60;
 
@@ -28,6 +29,15 @@ export default async function ProjectStoryboardsPage({
     .eq("id", params.id)
     .maybeSingle();
   if (!project) notFound();
+
+  // The job block the storyboard EXPORT prints. It lives on shot_boards, which
+  // this page never loaded, so the facts appeared on the PDF with nowhere in
+  // the storyboard to enter them.
+  const { data: cover } = await supabase
+    .from("shot_boards")
+    .select("*")
+    .eq("project_id", params.id)
+    .maybeSingle();
 
   const { data: boardRows } = await supabase
     .from("boards")
@@ -131,6 +141,8 @@ export default async function ProjectStoryboardsPage({
         boards={boards}
         frames={frames}
         assets={pickable}
+        cover={(cover as ShotBoard | null) ?? null}
+        projectTitle={project.title}
         reviewedIds={reviewedIds}
         commentCounts={commentCounts}
         emailEnabled={emailConfigured()}
