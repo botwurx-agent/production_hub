@@ -712,6 +712,35 @@ implemented (out of strict order, driven by the operator's real needs).
   colored top border. Status stays as chips (StatusTag); module/section/nav color
   is identity, kept separate so the two never compete.
 
+### Communication page: familiarity is the design (comms-ui.tsx) — BUILT
+The operator said it plainly: the page worked but they did not trust it enough
+to use it, because every message from every service rendered as the same grey
+box and the whole thing read as a log viewer. Their prescription was right and
+is now the standing rule for these surfaces: CONFIDENCE COMES FROM
+FAMILIARITY. Each service's reader borrows the visual idiom of the tool it
+connects to, so the producer recognises where they are.
+- components/communication/comms-ui.tsx is the shared vocabulary: senderHue
+  (deterministic hue per name), SenderAvatar (initials; CIRCLE for Gmail/Chat,
+  ROUNDED SQUARE for Slack, because the shape is part of the familiarity), the
+  real brand marks drawn inline (GmailGlyph/SlackGlyph/ChatGlyph, standard
+  nominative use), ServiceTile and ServiceHeader (each card opens "Gmail
+  connected · N conversations linked" with a live dot).
+- EMAIL reads like Gmail: sender avatar leads the thread row; earlier messages
+  collapse to one-line rows (avatar, name, snippet, date) that expand on
+  click; an open message is avatar + bold name + address + body on hairlines,
+  not a grey box; the reply is a compose CARD ("Reply to {sender}" header, a
+  quiet borderless writing area, Send leading the toolbar, "sends from your
+  Gmail, stays in this thread" stated in the header).
+- SLACK and CHAT read like Slack/Chat: FLAT rows on the surface (no bubbles),
+  name + timestamp on one baseline, hover row tint, square vs round avatars.
+- ThreadReader and SlackReader gained `initialMessages` (seed for fixtures and
+  previews, skips the fetch). /dev/comms2 is a seeded fixture of the new look;
+  the OLD marketing fixture (/dev/comms) and its screenshot now show the
+  previous design and need re-copying before that shot is retaken.
+- Layouts are borrowed; colors stay tokens (avatars use the h-* hues). The
+  brand marks are the only fixed colors, on bordered surface tiles, fine in
+  both themes.
+
 ### Email reply attachments: TWO separate bugs (both FIXED)
 They produced the same symptom (attach a file, the email sends without it) but
 hit different paths, and the first one masked the second.

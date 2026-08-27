@@ -17,7 +17,8 @@ import {
   DrivePickerModal,
   type PickedDriveFile,
 } from "@/components/projects/drive-browser";
-import { PlusIcon, EnvelopeIcon } from "@/components/app-shell/nav-icons";
+import { PlusIcon } from "@/components/app-shell/nav-icons";
+import { GmailGlyph, SenderAvatar } from "@/components/communication/comms-ui";
 import { longDate, shortDate } from "@/lib/format";
 import {
   MAX_EMAIL_BYTES,
@@ -167,16 +168,19 @@ export function ThreadReader({
   canSend = false,
   projectId,
   revalidate,
+  initialMessages = null,
 }: {
   thread: LinkedThread;
   canSend?: boolean;
   projectId?: string;
   revalidate: string;
+  /** Seed for fixtures and previews: skips the Gmail fetch when provided. */
+  initialMessages?: ThreadMessage[] | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [messages, setMessages] = useState<ThreadMessage[] | null>(null);
+  const [messages, setMessages] = useState<ThreadMessage[] | null>(initialMessages);
   const [error, setError] = useState<string | null>(null);
   const [loading, start] = useTransition();
   const [reply, setReply] = useState("");
@@ -321,17 +325,13 @@ export function ThreadReader({
   const hiddenCount = sorted.length - shownMessages.length;
 
   return (
-    <div
-      className="overflow-hidden rounded-[12px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm"
-      style={{ borderLeft: "3px solid var(--h-blue)" }}
-    >
+    <div className="overflow-hidden rounded-[14px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm">
       <div className="flex items-start justify-between gap-2.5 px-3.5 py-3">
         <button onClick={toggle} className="flex min-w-0 flex-1 items-start gap-3 text-left">
-          <span
-            className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
-            style={{ backgroundColor: "var(--h-blue-bg)", color: "var(--h-blue)" }}
-          >
-            <EnvelopeIcon />
+          {/* The PERSON leads the row, the way an inbox reads: who wrote, then
+              what about. The generic envelope tile said "database row". */}
+          <span className="mt-0.5">
+            <SenderAvatar name={sender || thread.subject || "Email"} size={36} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline justify-between gap-2">
@@ -340,9 +340,12 @@ export function ThreadReader({
               >
                 {sender || "Email"}
               </span>
-              {dateLabel && (
-                <span className="shrink-0 text-xs text-text-faint">{dateLabel}</span>
-              )}
+              <span className="flex shrink-0 items-center gap-1.5">
+                <GmailGlyph size={12} />
+                {dateLabel && (
+                  <span className="text-xs text-text-faint">{dateLabel}</span>
+                )}
+              </span>
             </span>
             <span
               className={`block truncate text-[13px] ${unread > 0 ? "font-semibold text-text" : "font-medium text-text-muted"}`}
@@ -401,18 +404,40 @@ export function ThreadReader({
             </p>
           ) : (
             <>
+            {/* Earlier messages collapse to one-line rows, the way Gmail
+                stacks a thread: sender, a snippet, the date. One click opens
+                the whole conversation. */}
             {!expanded && hiddenCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                className="mb-3 inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface-2/60 px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:border-border-strong hover:text-text"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
-                </svg>
-                Show full thread ({hiddenCount} earlier message
-                {hiddenCount === 1 ? "" : "s"})
-              </button>
+              <ol className="mb-1">
+                {sorted.slice(0, -1).map((m) => {
+                  const who = senderName(m.from);
+                  const snippet = m.bodyText
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .slice(0, 90);
+                  return (
+                    <li key={m.id}>
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(true)}
+                        className="flex w-full items-center gap-2.5 border-b border-border px-1 py-2 text-left transition hover:bg-surface-2/60"
+                        title="Show full thread"
+                      >
+                        <SenderAvatar name={who} size={24} />
+                        <span className="w-28 shrink-0 truncate text-[13px] font-semibold text-text">
+                          {who}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[12.5px] text-text-faint">
+                          {snippet}
+                        </span>
+                        <span className="shrink-0 text-[11.5px] text-text-faint">
+                          {m.dateMs ? shortDate(new Date(m.dateMs).toISOString()) : ""}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
             )}
             {expanded && sorted.length > 1 && (
               <button
@@ -426,18 +451,26 @@ export function ThreadReader({
                 Collapse to latest message
               </button>
             )}
-            <ol className="space-y-3">
-              {shownMessages.map((m) => (
-                <li key={m.id} className="rounded-[10px] bg-surface-2/50 p-3.5">
-                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold text-text">
-                      {m.from}
-                    </span>
-                    <span className="text-xs text-text-muted">
-                      {m.dateMs ? longDate(new Date(m.dateMs).toISOString()) : m.date}
-                    </span>
-                  </div>
-                  <MessageBody text={m.bodyText} />
+            <ol className="divide-y divide-border">
+              {shownMessages.map((m) => {
+                const who = senderName(m.from);
+                return (
+                <li key={m.id} className="py-3.5 first:pt-1 last:pb-1">
+                  <div className="flex items-start gap-3">
+                    <SenderAvatar name={who} size={34} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="text-sm font-bold text-text">
+                          {who}
+                        </span>
+                        <span className="text-xs text-text-faint">
+                          {m.dateMs ? longDate(new Date(m.dateMs).toISOString()) : m.date}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-text-faint">{m.from}</p>
+                      <div className="mt-2">
+                        <MessageBody text={m.bodyText} />
+                      </div>
                   {m.attachments.length > 0 && (
                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3">
                       {m.attachments.map((att) => {
@@ -490,20 +523,37 @@ export function ThreadReader({
                       })}
                     </div>
                   )}
+                    </div>
+                  </div>
                 </li>
-              ))}
+                );
+              })}
             </ol>
             </>
           )}
 
           {messages !== null &&
             (canSend ? (
-              <div className="mt-3 border-t border-border pt-3">
+              <div className="mt-4 rounded-[16px] border border-border bg-surface shadow-sm">
+                <div className="flex items-center gap-2 border-b border-border px-3.5 py-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-faint">
+                    <path d="M9 14 4 9l5-5" />
+                    <path d="M4 9h10.5A5.5 5.5 0 0 1 20 14.5V20" />
+                  </svg>
+                  <span className="text-xs font-semibold text-text-muted">
+                    Reply to {sender || "this thread"}
+                  </span>
+                  <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-text-faint">
+                    <GmailGlyph size={11} />
+                    sends from your Gmail, stays in this thread
+                  </span>
+                </div>
+                <div className="px-3.5 pt-2">
                 <Textarea
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
-                  placeholder="Write a reply... (sends from your connected Gmail, stays in this thread)"
-                  className="min-h-[72px]"
+                  placeholder="Write a reply..."
+                  className="min-h-[88px] resize-y border-transparent bg-transparent px-0 shadow-none focus:border-transparent focus:ring-0"
                 />
                 {replyError && (
                   <p className="mt-1 text-xs font-medium text-red">
@@ -512,7 +562,7 @@ export function ThreadReader({
                 )}
                 {/* Polish sits with the text it rewrites; the three attach
                     actions are grouped together in the toolbar below. */}
-                <div className="mt-2">
+                <div className="mt-1 pb-2">
                   <PolishButton value={reply} onChange={setReply} channel="email" />
                 </div>
                 {projectId && (
@@ -629,8 +679,16 @@ export function ThreadReader({
                   className="hidden"
                   onChange={(e) => addFiles(e.target.files)}
                 />
-                <div className="mt-2 flex items-center justify-between gap-2">
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-border px-3.5 py-2.5">
                   <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    size="sm"
+                    onClick={send}
+                    disabled={sending || !reply.trim() || tooBig}
+                  >
+                    {sending ? "Sending..." : "Send"}
+                  </Button>
                     {projectId && (
                       <button
                         type="button"
@@ -671,17 +729,10 @@ export function ThreadReader({
                       Attach from Drive
                     </button>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={send}
-                    disabled={sending || !reply.trim() || tooBig}
-                  >
-                    {sending ? "Sending..." : "Send reply"}
-                  </Button>
                 </div>
                 {/* Opens directly under the button that toggles it. */}
                 {projectId && attachOpen && (
-                  <div className="mt-2 max-h-32 overflow-y-auto rounded-[10px] border border-border p-1">
+                  <div className="mx-3.5 mb-3 max-h-32 overflow-y-auto rounded-[10px] border border-border p-1">
                     {assetOpts === null ? (
                       <p className="px-2 py-1 text-xs text-text-faint">
                         Loading assets...

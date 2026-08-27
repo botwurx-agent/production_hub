@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { PolishButton } from "@/components/communication/polish-button";
 import { PlusIcon, ChatIcon } from "@/components/app-shell/nav-icons";
+import { ChatGlyph, SenderAvatar } from "@/components/communication/comms-ui";
 import { longDate } from "@/lib/format";
 import {
   searchChatSpaces,
@@ -90,17 +91,11 @@ export function ChatReader({
   }
 
   return (
-    <div
-      className="overflow-hidden rounded-[12px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm"
-      style={{ borderLeft: "3px solid var(--h-cyan)" }}
-    >
-      <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+    <div className="overflow-hidden rounded-[14px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm">
+      <div className="flex items-center justify-between gap-3 px-3.5 py-3">
         <button onClick={toggle} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-          <span
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
-            style={{ backgroundColor: "var(--h-cyan-bg)", color: "var(--h-cyan)" }}
-          >
-            <ChatIcon />
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border border-border bg-surface shadow-sm">
+            <ChatGlyph size={18} />
           </span>
           <span className="min-w-0">
             <span
@@ -108,11 +103,8 @@ export function ChatReader({
             >
               {space.space_display_name || "Google Chat space"}
             </span>
-            <span
-              className="block text-xs font-medium"
-              style={{ color: "var(--h-cyan)" }}
-            >
-              Google Chat
+            <span className="block text-xs font-medium text-text-faint">
+              Google Chat space
             </span>
           </span>
         </button>
@@ -148,20 +140,28 @@ export function ChatReader({
           ) : error ? (
             <p className="text-xs font-medium text-red">{error}</p>
           ) : (
-            <ol className="space-y-3">
+            /* Same flat-row idiom as the Slack reader, with the round avatars
+               Chat itself draws. */
+            <ol>
               {(messages ?? []).map((m) => (
-                <li key={m.name} className="rounded-[10px] bg-surface-2/50 p-3">
-                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-xs font-semibold text-text">
-                      {m.author}
-                    </span>
-                    <span className="text-xs text-text-faint">
-                      {m.createTime ? longDate(m.createTime) : ""}
-                    </span>
+                <li
+                  key={m.name}
+                  className="-mx-1.5 flex items-start gap-2.5 rounded-[8px] px-1.5 py-2 transition hover:bg-surface-2/60"
+                >
+                  <SenderAvatar name={m.author} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-[13.5px] font-bold text-text">
+                        {m.author}
+                      </span>
+                      <span className="text-[11.5px] text-text-faint">
+                        {m.createTime ? longDate(m.createTime) : ""}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-text">
+                      {m.text}
+                    </p>
                   </div>
-                  <p className="whitespace-pre-wrap break-words text-sm text-text-muted">
-                    {m.text}
-                  </p>
                 </li>
               ))}
             </ol>

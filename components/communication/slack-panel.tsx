@@ -9,6 +9,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { PolishButton } from "@/components/communication/polish-button";
 import { AttachmentCard } from "@/components/attachments/attachment-card";
 import { PlusIcon, HashIcon } from "@/components/app-shell/nav-icons";
+import { SenderAvatar, SlackGlyph } from "@/components/communication/comms-ui";
 import { longDate } from "@/lib/format";
 import {
   searchSlackConversations,
@@ -138,16 +139,19 @@ export function SlackReader({
   canSend = false,
   revalidate,
   unread = 0,
+  initialMessages = null,
 }: {
   channel: LinkedSlackChannel;
   projectId?: string;
   canSend?: boolean;
   revalidate: string;
   unread?: number;
+  /** Seed for fixtures and previews: skips the Slack fetch when provided. */
+  initialMessages?: SlackMessage[] | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<SlackMessage[] | null>(null);
+  const [messages, setMessages] = useState<SlackMessage[] | null>(initialMessages);
   const [error, setError] = useState<string | null>(null);
   const [loading, start] = useTransition();
   const [draft, setDraft] = useState("");
@@ -193,17 +197,13 @@ export function SlackReader({
   }
 
   return (
-    <div
-      className="overflow-hidden rounded-[12px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm"
-      style={{ borderLeft: "3px solid var(--h-purple)" }}
-    >
-      <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+    <div className="overflow-hidden rounded-[14px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm">
+      <div className="flex items-center justify-between gap-3 px-3.5 py-3">
         <button onClick={toggle} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-          <span
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
-            style={{ backgroundColor: "var(--h-purple-bg)", color: "var(--h-purple)" }}
-          >
-            <HashIcon />
+          {/* The channel wears Slack's own mark: the fastest possible answer
+              to "where does this conversation actually live". */}
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border border-border bg-surface shadow-sm">
+            <SlackGlyph size={18} />
           </span>
           <span className="min-w-0">
             <span
@@ -211,11 +211,8 @@ export function SlackReader({
             >
               #{channel.channel_name || channel.slack_channel_id}
             </span>
-            <span
-              className="block text-xs font-medium"
-              style={{ color: "var(--h-purple)" }}
-            >
-              Slack
+            <span className="block text-xs font-medium text-text-faint">
+              Slack channel
             </span>
           </span>
         </button>
@@ -253,32 +250,41 @@ export function SlackReader({
           ) : error ? (
             <p className="text-xs font-medium text-red">{error}</p>
           ) : (
-            <ol className="space-y-3">
+            /* Flat rows, not bubbles: Slack messages sit on the surface with a
+               square avatar and the name and time on one line, and that shape
+               is the familiarity. */
+            <ol>
               {(messages ?? []).map((m) => (
-                <li key={m.ts} className="rounded-[10px] bg-surface-2/50 p-3">
-                  <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-xs font-semibold text-text">
-                      {m.author}
-                    </span>
-                    <span className="text-xs text-text-faint">
-                      {slackTime(m.ts)}
-                    </span>
-                  </div>
-                  <p className="whitespace-pre-wrap break-words text-sm text-text-muted">
-                    {m.text}
-                  </p>
-                  {m.files.length > 0 && (
-                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3">
-                      {m.files.map((f) => (
-                        <FileRow
-                          key={f.id}
-                          projectId={projectId}
-                          channelId={channel.slack_channel_id}
-                          file={f}
-                        />
-                      ))}
+                <li
+                  key={m.ts}
+                  className="-mx-1.5 flex items-start gap-2.5 rounded-[8px] px-1.5 py-2 transition hover:bg-surface-2/60"
+                >
+                  <SenderAvatar name={m.author} shape="square" size={32} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-[13.5px] font-bold text-text">
+                        {m.author}
+                      </span>
+                      <span className="text-[11.5px] text-text-faint">
+                        {slackTime(m.ts)}
+                      </span>
                     </div>
-                  )}
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-text">
+                      {m.text}
+                    </p>
+                    {m.files.length > 0 && (
+                      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {m.files.map((f) => (
+                          <FileRow
+                            key={f.id}
+                            projectId={projectId}
+                            channelId={channel.slack_channel_id}
+                            file={f}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </li>
               ))}
             </ol>
