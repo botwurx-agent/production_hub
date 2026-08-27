@@ -342,17 +342,24 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
         </div>
 
         <div className="mx-auto mt-24 max-w-6xl">
-          <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-faint">
-                The whole toolkit
-              </p>
-              <h2 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-text sm:text-4xl">
-                One product. Every price.
-              </h2>
-            </div>
-            <p className="max-w-sm text-[15px] leading-relaxed text-text-muted">
-              Every plan carries all of it. The tiers buy room, not permission.
+          {/* The convert line: the reader arrived searching for ONE tool, and
+              this is where they learn the rest is already in the box. That is
+              the pitch against every point solution they are comparing us to,
+              so it gets headline scale, not a sitemap label. */}
+          <div className="mb-10 max-w-3xl">
+            <p
+              className="text-xs font-semibold uppercase tracking-[0.16em]"
+              style={{ color: `var(--h-${f.hue})` }}
+            >
+              The whole toolkit
+            </p>
+            <h2 className="mt-3 font-display text-4xl font-extrabold leading-[1.06] tracking-tight text-text sm:text-5xl">
+              You just read about one of thirteen.
+            </h2>
+            <p className="mt-4 text-lg leading-relaxed text-text-muted">
+              The rest is already in the box: every plan carries the whole
+              toolkit, and the tiers buy room, never permission. This is the
+              part a point solution cannot say.
             </p>
           </div>
           <FeatureMesh current={f.slug} />
