@@ -6,6 +6,7 @@
 import { ThreadReader } from "@/components/projects/project-email";
 import { SlackReader } from "@/components/communication/slack-panel";
 import { ServiceHeader } from "@/components/communication/comms-ui";
+import { CommsFilter } from "@/components/communication/comms-filter";
 import { Card } from "@/components/ui/card";
 
 const now = Date.now();
@@ -41,7 +42,13 @@ const slackMsgs = [
 
 export default function Dev() {
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-8">
+    <div className="mx-auto max-w-3xl p-8">
+      <CommsFilter
+        emailCount={1}
+        slackCount={1}
+        chatCount={0}
+        chat={null}
+        email={
       <Card className="p-5">
         <ServiceHeader service="gmail" title="Email" connected detail="1 conversation linked" />
         <ThreadReader
@@ -56,6 +63,8 @@ export default function Dev() {
           initialMessages={emails}
         />
       </Card>
+        }
+        slack={
       <Card className="p-5">
         <ServiceHeader service="slack" title="Slack" connected detail="1 channel linked" />
         <SlackReader
@@ -66,6 +75,8 @@ export default function Dev() {
           initialMessages={slackMsgs}
         />
       </Card>
+        }
+      />
     </div>
   );
 }

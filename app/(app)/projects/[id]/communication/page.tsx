@@ -7,6 +7,7 @@ import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
 import { ServiceHeader } from "@/components/communication/comms-ui";
+import { CommsFilter } from "@/components/communication/comms-filter";
 // NOTE: the AI "Client update" card is archived for now (removed from this page,
 // component + draftClientUpdate action left intact so it can be brought back).
 import { chatConnected, chatCanSend } from "@/lib/googlechat";
@@ -114,70 +115,77 @@ export default async function CommunicationPage({
         }
       />
 
-      <div className="grid grid-cols-1 gap-6">
-        <Card className="p-5">
-          <ServiceHeader
-            service="gmail"
-            title="Email"
-            connected={Boolean(emailAccount)}
-            detail={
-              threadList.length
-                ? `${threadList.length} conversation${threadList.length === 1 ? "" : "s"} linked`
-                : null
-            }
-          />
-          <EmailPanel
-            ownerType="project"
-            ownerId={project.id}
-            projectId={project.id}
-            connected={Boolean(emailAccount)}
-            canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
-            defaultQuery={clientName ?? ""}
-            threads={emailThreadsWithPreview}
-          />
-        </Card>
-
-        <Card className="p-5">
-          <ServiceHeader
-            service="slack"
-            title="Slack"
-            connected={Boolean(slackAccount)}
-            detail={
-              (slackChannels ?? []).length
-                ? `${(slackChannels ?? []).length} channel${(slackChannels ?? []).length === 1 ? "" : "s"} linked`
-                : null
-            }
-          />
-          <SlackPanel
-            ownerType="project"
-            ownerId={project.id}
-            projectId={project.id}
-            connected={Boolean(slackAccount)}
-            canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
-            channels={slackChannels ?? []}
-          />
-        </Card>
-
-        <Card className="p-5">
-          <ServiceHeader
-            service="gchat"
-            title="Google Chat"
-            connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
-            detail={
-              (chatSpaces ?? []).length
-                ? `${(chatSpaces ?? []).length} space${(chatSpaces ?? []).length === 1 ? "" : "s"} linked`
-                : null
-            }
-          />
-          <ChatPanel
-            ownerType="project"
-            ownerId={project.id}
-            connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
-            canSend={chatCanSend(emailAccount?.scope)}
-            spaces={chatSpaces ?? []}
-          />
-        </Card>
-      </div>
+      <CommsFilter
+        emailCount={threadList.length}
+        slackCount={(slackChannels ?? []).length}
+        chatCount={(chatSpaces ?? []).length}
+        email={
+          <Card className="p-5">
+            <ServiceHeader
+              service="gmail"
+              title="Email"
+              connected={Boolean(emailAccount)}
+              detail={
+                threadList.length
+                  ? `${threadList.length} conversation${threadList.length === 1 ? "" : "s"} linked`
+                  : null
+              }
+            />
+            <EmailPanel
+              ownerType="project"
+              ownerId={project.id}
+              projectId={project.id}
+              connected={Boolean(emailAccount)}
+              canSend={Boolean(emailAccount?.scope?.includes("gmail.send"))}
+              defaultQuery={clientName ?? ""}
+              threads={emailThreadsWithPreview}
+            />
+          </Card>
+        }
+        slack={
+          <Card className="p-5">
+            <ServiceHeader
+              service="slack"
+              title="Slack"
+              connected={Boolean(slackAccount)}
+              detail={
+                (slackChannels ?? []).length
+                  ? `${(slackChannels ?? []).length} channel${(slackChannels ?? []).length === 1 ? "" : "s"} linked`
+                  : null
+              }
+            />
+            <SlackPanel
+              ownerType="project"
+              ownerId={project.id}
+              projectId={project.id}
+              connected={Boolean(slackAccount)}
+              canSend={Boolean(slackAccount?.scope?.includes("chat:write"))}
+              channels={slackChannels ?? []}
+            />
+          </Card>
+        }
+        chat={
+          <Card className="p-5">
+            <ServiceHeader
+              service="gchat"
+              title="Google Chat"
+              connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
+              detail={
+                (chatSpaces ?? []).length
+                  ? `${(chatSpaces ?? []).length} space${(chatSpaces ?? []).length === 1 ? "" : "s"} linked`
+                  : null
+              }
+            />
+            <ChatPanel
+              ownerType="project"
+              ownerId={project.id}
+              connected={Boolean(emailAccount) && chatConnected(emailAccount?.scope)}
+              canSend={chatCanSend(emailAccount?.scope)}
+              spaces={chatSpaces ?? []}
+            />
+          </Card>
+        }
+      />
     </div>
   );
 }

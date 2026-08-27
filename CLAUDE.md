@@ -733,6 +733,11 @@ connects to, so the producer recognises where they are.
   Gmail, stays in this thread" stated in the header).
 - SLACK and CHAT read like Slack/Chat: FLAT rows on the surface (no bubbles),
   name + timestamp on one baseline, hover row tint, square vs round avatars.
+- PLATFORM FILTER CHIPS (comms-filter.tsx) across the top of the project page:
+  All / Email / Slack / Google Chat, each wearing its glyph and linked count.
+  Selecting the active chip returns to All; filtered-out sections are HIDDEN
+  not unmounted, so an open thread survives a glance at another platform; the
+  choice persists in localStorage ("comms.filter"), same call as tasks.groupBy.
 - ThreadReader and SlackReader gained `initialMessages` (seed for fixtures and
   previews, skips the fetch). /dev/comms2 is a seeded fixture of the new look;
   the OLD marketing fixture (/dev/comms) and its screenshot now show the
