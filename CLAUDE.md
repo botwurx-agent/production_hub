@@ -88,6 +88,35 @@ Critical sequencing: this is the long-term architecture, not the v1 build. Live 
 ### 4.5 Ship the foundation, then layer (no two-year cave)
 Build the foundation to a genuinely usable state, run a real job through it, then add the next layer. Each phase should be usable on a real job before moving to the next. One finished useful feature beats four half-built ones. Friction noticed during real use is the feature backlog.
 
+### 4.6 Marketing site design standard (operator, 2026-08-27)
+Added after the first pass at the feature pages shipped technically correct and
+visually flat. The operator compared them against Monday's industry pages and
+was right. These rules bind every marketing page built or rebuilt from now on;
+the feature-page template (app/(marketing)/[slug]/page.tsx) is the reference
+implementation.
+- NOTHING IMPORTANT IS CENTER-STACKED. Heroes are two-column spreads: words
+  left, evidence right, filling the fold. A page where every element sits on
+  the center axis reads as a template. Centered is allowed only for short
+  connective bands (a section header, a pull quote), never for the fold.
+- EVERY SECTION HAS A VISUAL ANCHOR. Product visuals sit on large rounded
+  COLOR CANVASES (the page hue's -bg token, gradient to surface). This does
+  not violate color-as-signal: a canvas holding a product visual is STAGING
+  (the gallery wall exists for the painting); a full-bleed painted section is
+  the decorative wash we refuse. Text-only sections earn structure from
+  panels, watermark numerals, and hairline grids instead of floating in
+  whitespace.
+- TYPE CARRIES THE STRUCTURE. Marketing body never below 15px, claim body
+  16px+, section titles 4xl-5xl, hero h1 up to ~68px with leading around 1.02.
+  Small text reads as a spec sheet, and a spec sheet is what "boring" looks
+  like up close.
+- DENSITY OVER EMPTINESS. Bullets become cards, lists become bordered grids
+  with internal hairlines, CTAs are destination panels (a tinted rounded
+  block), not floating sentences. Whitespace separates composed groups; it is
+  not the composition.
+- Screenshots stay real (demo studio only) and live in browser frames; motifs
+  (components/marketing/motifs.tsx) are token-drawn illustrations that never
+  imitate a screenshot. No stock photography, no invented testimonials.
+
 ## 5. Data model (the spine)
 
 The spine runs from first contact to final delivery: Lead becomes Client, Client has Projects, a Project holds Briefs, Assets, Versions, Approvals, and Communication.
