@@ -1212,6 +1212,31 @@ source of truth for the snapshot: lib/billing-doc.ts buildDocSnapshot(doc, lines
 profile, attachments) is used by BOTH sendBillingDoc and the print route, so the
 PDF always matches what the client is sent.
 
+IMPORT AN EXPORTED PDF (FreshBooks -> a draft here) — BUILT. Straight from
+real use: the operator had already written the Hint estimate and invoice in
+FreshBooks and refused to retype them ("export a PDF from there and import it
+into our app"). "Import a PDF" in the invoice workspace's left rail (below the
+three create buttons, AI-gated via useAiEnabled) reads an exported estimate /
+invoice / proposal PDF and creates it as a DRAFT document with lines, bill-to,
+dates, discount, notes and terms filled in; sending stays the human commit,
+same contract as the cost extractor and the SOW reader. lib/billing-import.ts
+is the pure trust boundary (parseBillingDocDraft + totalsMismatch, NO
+"server-only" so it is scratchpad-testable, 32 assertions: fences, "n/a" never
+becomes $0.00, impossible dates rejected, 60-line cap, quote -> estimate,
+negative CREDIT lines kept while a negative stated total is rejected, currency
+must be a real 3-letter code); lib/ai.ts extractBillingDoc reuses the
+multimodal AiDocument path; importBillingDocFromPdf
+(native-invoice-actions.ts) guards aiConfigured + MAX_UPLOAD_BYTES (the file
+crosses a Server Action) and inserts via the ordinary rows. Three deliberate
+calls: the document KEEPS ITS PRINTED NUMBER verbatim and does not bump our
+numbering series (it has an identity in the other tool already); the source
+PDF is NOT attached (attachments travel with the snapshot onto the client
+link, and the client should see the re-created document, not the FreshBooks
+original beside it); a lines-vs-stated-total mismatch over $1 surfaces as a
+toast warning naming both figures rather than being silently accepted. When
+the printed title is unreadable the kind defaults to invoice and the toast
+names what was created. NOT yet run against a real FreshBooks export.
+
 DELIVERY ROLLED TO OTHER DOCS (call sheet + shot list + storyboard). Shared
 pieces: components/production/auto-print.tsx (fires window.print() when a print
 view is opened with ?auto=1) + the reusable SendDocEmailModal. (1) CALL SHEET:

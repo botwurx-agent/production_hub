@@ -19,7 +19,9 @@ import {
   saveDefaultDocStyle,
   addDocAttachment,
   deleteDocAttachment,
+  importBillingDocFromPdf,
 } from "@/app/(app)/projects/[id]/native-invoice-actions";
+import { useAiEnabled } from "@/components/ai/ai-availability";
 import { SendDocEmailModal } from "@/components/production/send-doc-email-modal";
 import { toast } from "@/components/ui/toast";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
@@ -99,6 +101,9 @@ export function InvoiceWorkspace({
   const [styleOpen, setStyleOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const importRef = useRef<HTMLInputElement | null>(null);
+  const [importing, setImporting] = useState(false);
+  const aiEnabled = useAiEnabled();
 
   const siteOrigin = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
   const origin =
@@ -128,6 +133,48 @@ export function InvoiceWorkspace({
       const res = await createBillingDocument(projectId, kind);
       if (res?.id) setActiveId(res.id);
       router.refresh();
+    });
+  }
+
+  // Import an exported FreshBooks (or similar) estimate/invoice PDF: the model
+  // reads it and a draft document is created with the lines filled in. It stays
+  // a draft the producer checks; sending remains the commit.
+  function onPickImport(e: React.ChangeEvent<HTMLInputElement>) {
+    // Copy before clearing: a FileList is a live view of the input.
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast(
+        `That file is ${formatBytes(file.size)}, over the ${formatBytes(
+          MAX_UPLOAD_BYTES
+        )} limit for an upload.`,
+        "error"
+      );
+      return;
+    }
+    const fd = new FormData();
+    fd.set("file", file);
+    setImporting(true);
+    start(async () => {
+      try {
+        const res = await importBillingDocFromPdf(projectId, fd);
+        if ("error" in res) {
+          toast(res.error, "error");
+          return;
+        }
+        setActiveId(res.id);
+        toast(
+          `Imported as ${res.kind === "invoice" ? "an" : "a"} ${kindLabel(
+            res.kind
+          ).toLowerCase()} draft. Check the amounts against the PDF before sending.`,
+          "success"
+        );
+        if (res.warning) toast(res.warning, "info");
+        router.refresh();
+      } finally {
+        setImporting(false);
+      }
     });
   }
 
@@ -281,6 +328,33 @@ export function InvoiceWorkspace({
         <p className="text-[11px] leading-relaxed text-text-faint">
           Estimate to scope, proposal to sign, invoice to bill.
         </p>
+        {aiEnabled && (
+          <div>
+            <button
+              onClick={() => importRef.current?.click()}
+              disabled={busy || importing}
+              className="flex w-full items-center justify-center gap-1.5 rounded-[11px] border border-dashed border-border px-3 py-2 text-xs font-semibold text-text-muted transition hover:border-border-strong hover:text-text disabled:opacity-60"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6" />
+                <path d="M12 18v-6m0 0-2.5 2.5M12 12l2.5 2.5" />
+              </svg>
+              {importing ? "Reading the PDF..." : "Import a PDF"}
+            </button>
+            <p className="mt-1 text-[11px] leading-relaxed text-text-faint">
+              Already made in FreshBooks? Import the exported PDF and it
+              becomes a draft here, lines and all.
+            </p>
+            <input
+              ref={importRef}
+              type="file"
+              accept="application/pdf,image/*"
+              className="hidden"
+              onChange={onPickImport}
+            />
+          </div>
+        )}
         {documents.length === 0 ? (
           <p className="rounded-[12px] border border-dashed border-border p-4 text-center text-xs text-text-faint">
             Nothing here yet. Create a document to start.

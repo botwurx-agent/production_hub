@@ -22,6 +22,8 @@ import {
   buildDocSnapshot,
   type DocKind,
 } from "@/lib/billing-doc";
+import { aiConfigured, extractBillingDoc, type BillingDocDraft } from "@/lib/ai";
+import { totalsMismatch } from "@/lib/billing-import";
 import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
 import { siteOrigin } from "@/lib/site-url";
@@ -126,6 +128,144 @@ export async function createBillingDocument(
 
   rp(projectId);
   return { id: doc.id };
+}
+
+/**
+ * Import an exported estimate/invoice PDF (FreshBooks or similar) as a new
+ * document, so a document that already exists elsewhere is never retyped.
+ *
+ * The model reads the PDF; parseBillingDocDraft (lib/billing-import.ts) is the
+ * trust boundary; and the document is created as a DRAFT with the workspace's
+ * ordinary rows, so the producer reviews it exactly like one they typed.
+ * Sending stays the human commit, same contract as the cost extractor and the
+ * SOW reader.
+ *
+ * Two deliberate calls:
+ * - The document keeps its own printed number verbatim and does NOT bump our
+ *   numbering series. It already has an identity in the other tool, and
+ *   burning one of ours would leave a gap in the series for a number nobody
+ *   uses.
+ * - The source PDF is NOT attached to the document. Attachments travel with
+ *   the snapshot onto the client link, and the client should see the
+ *   re-created document, not the FreshBooks original beside it.
+ */
+export async function importBillingDocFromPdf(
+  projectId: string,
+  formData: FormData
+): Promise<
+  { error: string } | { id: string; kind: DocKind; warning: string | null }
+> {
+  const ctx = await requireStudioContext();
+  if (!aiConfigured()) {
+    return { error: "No AI provider is configured, so PDFs cannot be read here." };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "No file selected." };
+  }
+  // The file crosses a Server Action, so the ~4.5MB serverless request body is
+  // the real ceiling; over it the request dies at the platform edge before
+  // this code runs. Mirrored client-side so the failure is explainable.
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      error: `That file is ${formatBytes(file.size)}, over the ${formatBytes(
+        MAX_UPLOAD_BYTES
+      )} limit for an upload.`,
+    };
+  }
+  const type = file.type || "";
+  if (type !== "application/pdf" && !type.startsWith("image/")) {
+    return { error: "Import a PDF (or an image of the document)." };
+  }
+
+  let draft: BillingDocDraft;
+  try {
+    draft = await extractBillingDoc({
+      base64: Buffer.from(await file.arrayBuffer()).toString("base64"),
+      mediaType: type,
+      fileName: file.name,
+    });
+  } catch (e) {
+    reportError("importBillingDocFromPdf/ai", e);
+    return { error: "Could not read that PDF. Create the document by hand." };
+  }
+  if (draft.unreadable) {
+    return {
+      error: "That did not look like an estimate or invoice. Create it by hand.",
+    };
+  }
+
+  const supabase = createClient();
+  const profile = await ensureProfile(supabase, ctx.studio.id);
+  // The printed title decides the kind; when it is unreadable, an invoice is
+  // the likelier import and the toast names what was created either way.
+  const kind: DocKind = draft.kind ?? "invoice";
+
+  const { data: doc, error } = await supabase
+    .from("billing_documents")
+    .insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      kind,
+      number: draft.number,
+      status: "draft",
+      ...(draft.issueDate ? { issue_date: draft.issueDate } : {}),
+      due_date: draft.dueDate,
+      bill_to_name: draft.billToName,
+      bill_to_company: draft.billToCompany,
+      bill_to_email: draft.billToEmail,
+      reference: draft.reference,
+      ...(draft.currency ? { currency: draft.currency } : {}),
+      discount: draft.discount,
+      notes: draft.notes ?? profile.default_notes,
+      terms: draft.terms ?? profile.default_terms,
+      template: profile.default_doc_template,
+      accent_color: profile.default_doc_accent,
+      font: profile.default_doc_font,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error || !doc) {
+    reportError("importBillingDocFromPdf/insert", error);
+    return { error: "Could not create the document. Try again." };
+  }
+
+  let warning = totalsMismatch(draft);
+  if (draft.lines.length > 0) {
+    const { error: lineErr } = await supabase
+      .from("billing_document_lines")
+      .insert(
+        draft.lines.map((l, i) => ({
+          document_id: doc.id,
+          studio_id: ctx.studio.id,
+          position: i,
+          description: l.description,
+          qty: l.qty,
+          rate: l.rate,
+          tax_rate: l.taxRate,
+        }))
+      );
+    if (lineErr) {
+      reportError("importBillingDocFromPdf/lines", lineErr);
+      warning = "The line items could not all be saved. Check them against the PDF.";
+    }
+  } else {
+    // No readable lines: seed one empty row so the editor is not blank.
+    await logWrite(
+      "importBillingDocFromPdf/seed_line",
+      supabase.from("billing_document_lines").insert({
+        document_id: doc.id,
+        studio_id: ctx.studio.id,
+        position: 0,
+      })
+    );
+    warning = "No line items could be read from the PDF. Add them by hand.";
+  }
+
+  rp(projectId);
+  return { id: doc.id, kind, warning };
 }
 
 // Freeze the document into a snapshot and share it: generates the share token

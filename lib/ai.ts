@@ -6,7 +6,9 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { parseShotDocDraft, type ShotDocDraft } from "@/lib/shot-doc";
+import { parseBillingDocDraft, type BillingDocDraft } from "@/lib/billing-import";
 export type { ShotDocDraft, ShotDocRow, ShotDocPage } from "@/lib/shot-doc";
+export type { BillingDocDraft, BillingDocLineDraft } from "@/lib/billing-import";
 
 export const ANTHROPIC_MODEL = "claude-opus-4-8";
 // Short, cheap rewrites (the composer's Polish button) run on the small model.
@@ -741,6 +743,80 @@ export async function extractSow(doc: AiDocument): Promise<SowDraft> {
           })();
 
   return parseSowDraft(raw);
+}
+
+// --- Billing document import (a FreshBooks estimate/invoice PDF) -------------
+// The operator already writes estimates and invoices in FreshBooks; retyping
+// one into the app's own document maker is exactly the double work this
+// removes. The extraction returns a DRAFT and the parser lives in
+// lib/billing-import.ts (pure, unit-tested); the action creates the document
+// as a draft, so nothing goes to a client from a model reading a PDF
+// unattended.
+
+const BILLING_DOC_SYSTEM = `You read an estimate, quote, proposal, or invoice that a commercial production studio exported from its billing tool (for example FreshBooks), and you return only the facts printed on it, so the same document can be re-created in another system.
+
+The studio ITSELF issued this document: the "from" party is the studio, and the "bill to" party is its client.
+
+A producer will check every field before anything is sent, so accuracy matters far more than completeness. A field you are unsure about must be null. A plausible guess is worse than nothing, because the producer may not catch it.
+
+Return ONLY a JSON object, no prose, no code fences, with exactly these keys:
+{
+  "kind": "estimate" | "invoice" | "proposal" | null,  // what the document calls itself; a quote is an estimate
+  "number": string or null,          // the document's own printed number, exactly as shown, e.g. "0000241"
+  "issueDate": string or null,       // YYYY-MM-DD, the date of issue
+  "dueDate": string or null,         // YYYY-MM-DD; an invoice's due date, or an estimate's valid-until date if shown
+  "billToName": string or null,      // the first line of the bill-to block (person or company it is addressed to)
+  "billToCompany": string or null,   // the company line, only when it is a separate line from the name
+  "billToEmail": string or null,
+  "reference": string or null,       // a PO or reference number if shown
+  "currency": string or null,        // 3-letter code if determinable
+  "lines": [                         // one entry per billed line item, in printed order
+    {
+      "description": string,
+      "qty": number,                 // quantity; 1 if none is printed
+      "rate": number,                // unit rate as a plain number; if only a line total is printed, that total with qty 1
+      "taxRate": number              // tax percentage applied to THIS line, 0 if none
+    }
+  ],
+  "discount": number or null,        // a discount as a flat currency amount subtracted from the total; convert a percentage discount into its amount
+  "notes": string or null,           // the document's notes block, verbatim if reasonably short
+  "terms": string or null,           // the document's terms block, verbatim if reasonably short
+  "statedTotal": number or null,     // the grand TOTAL the document itself prints, used to cross-check the lines
+  "unreadable": boolean              // true if this is not a readable estimate, proposal, or invoice
+}
+
+Rules:
+- All money values are plain numbers: no currency symbols, no thousands separators.
+- statedTotal is the full total including tax and after any discount. Ignore "amount paid", "deposit received", and "balance due" rows: the total is the full document total, and a payment already received belongs in notes ("Deposit of $X received"), never as a line.
+- If tax is shown once for the whole document rather than per line, put that percentage on every line the tax applies to; if the taxable lines cannot be told apart, put it on every line.
+- Never invent a line, a rate, or a date that is not printed.
+- An ambiguous date format (03/04/2026) should be resolved from other clues on the document; if it stays ambiguous, return null.
+- If the document is not a billing document at all (a contract, a call sheet, a photo of something else), set unreadable to true and every other field to null or empty.
+- Do not use em dashes in any text you return.`;
+
+/**
+ * Reads an exported estimate/invoice PDF into a DRAFT. Nothing here writes
+ * anything; the caller creates a draft document the producer reviews before
+ * sending.
+ */
+export async function extractBillingDoc(doc: AiDocument): Promise<BillingDocDraft> {
+  const provider = aiProvider();
+  const user =
+    "Read this billing document and return the JSON object described in the instructions.";
+  // A long line-item table produces a lot of JSON, and on a reasoning model
+  // this budget also covers the reasoning tokens.
+  const maxTokens = 8000;
+
+  const raw =
+    provider === "openai"
+      ? await openaiReadDocument(BILLING_DOC_SYSTEM, user, doc, maxTokens)
+      : provider === "anthropic"
+        ? await anthropicReadDocument(BILLING_DOC_SYSTEM, user, doc, maxTokens)
+        : (() => {
+            throw new Error("No AI provider configured.");
+          })();
+
+  return parseBillingDocDraft(raw);
 }
 
 // ------------------------------------------------ shot list / storyboard in --
