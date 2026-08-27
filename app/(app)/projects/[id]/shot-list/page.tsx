@@ -53,6 +53,40 @@ export default async function ShotListPage({
     .eq("target_id", params.id)
     .is("author_id", null);
 
+  // Storyboards in this project, for filling a list's blank rows from a board
+  // that was imported separately (or built before the board arrived).
+  const { data: sbRows } = await supabase
+    .from("boards")
+    .select("id, name")
+    .eq("project_id", params.id)
+    .eq("kind", "storyboard")
+    .order("position", { ascending: true });
+  // Counted with a second query rather than an embedded select: storyboard_frames
+  // carries `Relationships: []` in the hand-maintained types, which is the trap
+  // prop_options and call_sheet_recipients both hit, and two plain queries have
+  // nothing to get wrong.
+  let storyboards: { id: string; name: string; frames: number }[] = [];
+  if ((sbRows ?? []).length > 0) {
+    const { data: frameRows } = await supabase
+      .from("storyboard_frames")
+      .select("board_id, storage_path")
+      .in("board_id", (sbRows ?? []).map((b) => b.id));
+    const counts = new Map<string, number>();
+    for (const f of frameRows ?? []) {
+      // Only a frame with a picture is worth offering: the whole point is
+      // filling a blank row.
+      if (!f.storage_path) continue;
+      counts.set(f.board_id, (counts.get(f.board_id) ?? 0) + 1);
+    }
+    storyboards = (sbRows ?? [])
+      .map((b) => ({
+        id: b.id,
+        name: b.name || "Storyboard",
+        frames: counts.get(b.id) ?? 0,
+      }))
+      .filter((b) => b.frames > 0);
+  }
+
   const groupIds = (groups ?? []).map((g) => g.id);
   let cards: CardView[] = [];
   if (groupIds.length > 0) {
@@ -137,6 +171,7 @@ export default async function ShotListPage({
         groups={(groups ?? []) as ShotGroup[]}
         cards={cards}
         assets={pickable}
+        storyboards={storyboards}
         emailEnabled={emailConfigured()}
         studioName={ctx.studio.name}
       />

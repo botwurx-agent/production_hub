@@ -163,6 +163,19 @@ function besideRuns(panel: Rect, runs: TextRun[], others: Rect[]): TextRun[] {
 /** A leading shot number, the way a board prints it above its caption. */
 const LEADING_CODE = /^(?:SHOT\s+|SH\.?\s+)?(\d{1,3}[A-Za-z]?)\s*[.):-]?\s+(?=\S)/i;
 
+/**
+ * The number a line starts with, where it starts with one.
+ *
+ * Exported because a frame's stored scene ("1B · The Reveal") is the only place
+ * its number survives once the caption has been split up, and matching a shot
+ * row to a frame after the fact has nothing else to go on.
+ */
+export function leadingCode(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const m = text.trim().match(LEADING_CODE);
+  return m ? m[1].toUpperCase() : null;
+}
+
 /** Which of a frame's fields a given section label feeds. */
 type Field = "description" | "sound" | "notes";
 

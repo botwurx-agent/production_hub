@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite } from "@/lib/log";
+import { leadingCode } from "@/lib/captions";
+import { matchShotsToPanels } from "@/lib/shot-doc";
 
 export type BoardActionState = { error?: string } | null;
 
@@ -570,4 +572,91 @@ export async function setCardImage(
   if (error) return { error: "Could not attach that image." };
   rp(projectId);
   return null;
+}
+
+/**
+ * Fill a shot list's empty rows with frames from a storyboard.
+ *
+ * The import wires the two together now, but only at import time, and that
+ * leaves two real cases stranded: a list imported before that existed, and a
+ * list somebody typed out by hand before the board arrived. Both are the same
+ * job, and re-importing to fix either would mean deleting work to get it back.
+ *
+ * ONLY EVER FILLS A BLANK. A row that already carries a picture is left alone,
+ * so this can be run twice, or run after a few rows have been set by hand,
+ * without overwriting anything a person chose.
+ *
+ * Matching is the same function the import uses, so the two cannot drift: the
+ * printed number first, then position where the counts agree. A frame's number
+ * lives in its scene ("1B · The Reveal"), which is the only place it survives
+ * once the caption has been split into fields.
+ */
+export async function pullFramesFromStoryboard(
+  projectId: string,
+  groupId: string,
+  boardId: string
+): Promise<{ filled: number; blanks: number } | { error: string }> {
+  await requireStudioContext();
+  const supabase = createClient();
+
+  const [{ data: cardRows }, { data: frameRows }] = await Promise.all([
+    supabase
+      .from("shot_cards")
+      .select("id, position, code, storage_path")
+      .eq("group_id", groupId)
+      .order("position", { ascending: true }),
+    supabase
+      .from("storyboard_frames")
+      .select("position, scene, storage_path, mime_type, image_name")
+      .eq("board_id", boardId)
+      .order("position", { ascending: true }),
+  ]);
+
+  const cards = cardRows ?? [];
+  const frames = (frameRows ?? []).filter((f) => f.storage_path);
+  if (!cards.length) return { error: "That shot list has no rows." };
+  if (!frames.length) return { error: "That storyboard has no frames with a picture." };
+
+  // Shaped as the import's own inputs. Page is null on both sides because
+  // neither a stored card nor a stored frame remembers the page it came off,
+  // so the match runs on the printed number and then on position.
+  const shots = cards.map((c) => ({
+    code: c.code,
+    description: null,
+    size: null,
+    type: null,
+    movement: null,
+    day: null,
+    notes: null,
+    page: null,
+  }));
+  const panels = frames.map((f, i) => ({
+    page: 1,
+    index: i,
+    code: leadingCode(f.scene),
+  }));
+
+  const pairing = matchShotsToPanels(shots, panels);
+  const blanks = cards.filter((c) => !c.storage_path).length;
+
+  const updates = cards
+    .map((card, i) => ({ card, frame: pairing[i] === null ? null : frames[pairing[i] as number] }))
+    .filter(({ card, frame }) => frame && !card.storage_path);
+
+  for (const { card, frame } of updates) {
+    await logWrite(
+      "pullFramesFromStoryboard/shot_cards",
+      supabase
+        .from("shot_cards")
+        .update({
+          storage_path: frame!.storage_path,
+          mime_type: frame!.mime_type,
+          image_name: frame!.image_name,
+        })
+        .eq("id", card.id)
+    );
+  }
+
+  rp(projectId);
+  return { filled: updates.length, blanks };
 }

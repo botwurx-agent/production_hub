@@ -2270,6 +2270,23 @@ on. The confirm step shows each row's matched frame as a thumbnail and says how
 many matched, so it is checkable before anything is written. 13 assertions in
 the scratchpad.
 
+FILLING A LIST THAT ALREADY EXISTS (pullFramesFromStoryboard, board-actions).
+The matching above only runs AT IMPORT, which strands two real cases: a list
+imported before the two halves were wired together, and one typed by hand
+before the board arrived. Both are the same job, and re-importing to fix either
+means deleting work to get it back. An "Add frames to N rows" button on the
+shot list runs the SAME matcher against a chosen storyboard's frames. It only
+ever fills a BLANK, so it is safe to run twice or after some rows were set by
+hand; it is hidden unless the project has a board with pictures AND the list
+has rows without one; a frame's number is read back out of its stored scene
+("1B · The Reveal") with leadingCode, which is the only place it survives once
+the caption has been split into fields. Verified against the operator's real
+ZELVARA list (16 rows, 16 frames, all matched by number).
+WORTH KNOWING WHEN SOMEONE SAYS "STILL NO IMAGES": check the row's created_at
+first. Both fixes run at import time only, so a list imported earlier keeps
+what it had, and the ZELVARA list that prompted this was two weeks older than
+the fix.
+
 MIDDLEWARE BUG FOUND WHILE TESTING, unrelated to the import and worse: the
 matcher only exempts image extensions, so `/pdf.worker.min.mjs` was redirected
 to /login for anyone without a session. The CLIENT REVIEW PORTAL renders a PDF

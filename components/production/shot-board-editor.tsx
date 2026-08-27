@@ -18,6 +18,7 @@ import {
   setCardAsset,
   clearCardAsset,
   restoreShotBoard,
+  pullFramesFromStoryboard,
 } from "@/app/(app)/projects/[id]/production/board-actions";
 import { useHistory } from "@/lib/use-history";
 import { toast } from "@/components/ui/toast";
@@ -55,6 +56,9 @@ export type CardView = {
 };
 
 export type PickableAsset = { id: string; name: string; signedUrl: string | null };
+
+/** A storyboard in this project that a list could take its pictures from. */
+export type PullableBoard = { id: string; name: string; frames: number };
 
 const field =
   "w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus:border-border-strong";
@@ -105,6 +109,78 @@ function Labeled({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
+/**
+ * Fill this list's empty rows from a storyboard.
+ *
+ * A menu only when there is a choice to make. With one board there is nothing
+ * to pick, so pressing the button does the thing rather than opening a list of
+ * one, which is the section 4.1 bar: the common path is a single press.
+ */
+function PullFramesButton({
+  projectId,
+  groupId,
+  boards,
+  blanks,
+  onDone,
+}: {
+  projectId: string;
+  groupId: string;
+  boards: PullableBoard[];
+  blanks: number;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, start] = useTransition();
+
+  function run(boardId: string) {
+    setOpen(false);
+    start(async () => {
+      const res = await pullFramesFromStoryboard(projectId, groupId, boardId);
+      if ("error" in res) {
+        toast(res.error, "error");
+        return;
+      }
+      // Says what happened either way. "Nothing matched" is information; a
+      // button that silently does nothing reads as broken.
+      toast(
+        res.filled
+          ? `Added ${res.filled} frame${res.filled === 1 ? "" : "s"}.`
+          : "No frame could be matched to a row without one.",
+        res.filled ? "success" : "error"
+      );
+      onDone();
+    });
+  }
+
+  return (
+    <div className="relative mt-1.5">
+      <button
+        onClick={() => (boards.length === 1 ? run(boards[0].id) : setOpen((v) => !v))}
+        disabled={busy}
+        className="flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-border py-2 text-sm font-semibold text-text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
+      >
+        {busy ? "Matching..." : `Add frames to ${blanks} row${blanks === 1 ? "" : "s"}`}
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-[10px] border border-border bg-surface shadow-lg">
+          {boards.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => run(b.id)}
+              className="block w-full px-3 py-2 text-left text-sm text-text transition hover:bg-surface-2"
+            >
+              <span className="block truncate font-semibold">{b.name}</span>
+              <span className="block text-[11.5px] text-text-faint">
+                {b.frames} frame{b.frames === 1 ? "" : "s"}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ShotBoardEditor({
   projectId,
   projectTitle,
@@ -112,6 +188,7 @@ export function ShotBoardEditor({
   groups,
   cards,
   assets,
+  storyboards = [],
   commentCount = 0,
   inReview = false,
   emailEnabled = false,
@@ -123,6 +200,7 @@ export function ShotBoardEditor({
   groups: ShotGroup[];
   cards: CardView[];
   assets: PickableAsset[];
+  storyboards?: PullableBoard[];
   commentCount?: number;
   inReview?: boolean;
   emailEnabled?: boolean;
@@ -179,6 +257,7 @@ export function ShotBoardEditor({
 
   const active = groups.find((g) => g.id === activeId) ?? groups[0] ?? null;
   const activeCards = active ? cards.filter((c) => c.group_id === active.id) : [];
+  const blankRows = activeCards.filter((c) => !c.storagePath).length;
 
   function selectList(id: string) {
     setActiveId(id);
@@ -403,6 +482,20 @@ export function ShotBoardEditor({
           >
             Import from a PDF
           </button>
+          {/* Shown only when there is a board to take pictures from AND rows
+              that have none, so it is absent on a list that is already fine.
+              This is the repair path for two real cases: a list imported
+              before the two halves were wired together, and one typed out by
+              hand before the board turned up. */}
+          {active && storyboards.length > 0 && blankRows > 0 && (
+            <PullFramesButton
+              projectId={projectId}
+              groupId={active.id}
+              boards={storyboards}
+              blanks={blankRows}
+              onDone={refresh}
+            />
+          )}
         </aside>
 
         {/* Active list */}
