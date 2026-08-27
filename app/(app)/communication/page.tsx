@@ -3,20 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/ui/card";
-import { StatusTag } from "@/components/status-tag";
 import { CommunicationIcon } from "@/components/app-shell/nav-icons";
+import type { LinkedThread } from "@/components/projects/project-email";
+import type { LinkedSlackChannel } from "@/components/communication/slack-panel";
+import type { LinkedChatSpace } from "@/components/communication/gchat-panel";
 import {
-  ThreadReader,
-  type LinkedThread,
-} from "@/components/projects/project-email";
-import {
-  SlackReader,
-  type LinkedSlackChannel,
-} from "@/components/communication/slack-panel";
-import {
-  ChatReader,
-  type LinkedChatSpace,
-} from "@/components/communication/gchat-panel";
+  StudioComms,
+  type StudioCommsGroup,
+} from "@/components/communication/comms-groups";
 import { chatCanSend, countNewIncoming as countNewChat } from "@/lib/googlechat";
 import { getAccessToken, getThreadPreview } from "@/lib/gmail";
 import { countNewIncoming as countNewSlack } from "@/lib/slack";
@@ -42,12 +36,6 @@ type Group = {
   slack: SlackRow[];
   chat: ChatRow[];
 };
-
-const CHANNELS: { key: string; label: string; live: boolean; hue: Hue }[] = [
-  { key: "email", label: "Email", live: true, hue: "blue" },
-  { key: "slack", label: "Slack", live: true, hue: "purple" },
-  { key: "gchat", label: "Google Chat", live: true, hue: "cyan" },
-];
 
 function classify(
   r: OwnerJoins
@@ -226,35 +214,6 @@ export default async function CommunicationPage() {
         hue="blue"
       />
 
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        {CHANNELS.map((c) => (
-          <span
-            key={c.key}
-            className="inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 text-xs font-semibold"
-            style={
-              c.live
-                ? {
-                    backgroundColor: `var(--h-${c.hue}-bg)`,
-                    color: `var(--h-${c.hue})`,
-                    borderColor: "transparent",
-                  }
-                : undefined
-            }
-          >
-            <span className={c.live ? "" : "flex items-center gap-1.5 text-text-faint"}>
-              {!c.live && (
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: "var(--border-strong)" }}
-                />
-              )}
-              {c.label}
-              {!c.live && <span className="text-text-faint"> · soon</span>}
-            </span>
-          </span>
-        ))}
-      </div>
-
       {!anyConnection ? (
         <EmptyState
           icon={<CommunicationIcon className="h-7 w-7" />}
@@ -270,63 +229,32 @@ export default async function CommunicationPage() {
           }
         />
       ) : (
-        <div className="space-y-8">
-          {[...groups.values()].map((g) => (
-            <section key={g.key}>
-              <div className="mb-3 flex items-center gap-3">
-                <span
-                  className="h-6 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: `var(--h-${g.hue})` }}
-                />
-                <Link
-                  href={g.href}
-                  className="font-display text-lg font-extrabold tracking-tight text-text transition hover:text-accent"
-                >
-                  {g.label}
-                </Link>
-                <StatusTag hue={g.hue} dot={false}>
-                  {g.kind}
-                </StatusTag>
-                <span className="text-xs font-medium text-text-faint">
-                  {g.email.length + g.slack.length + g.chat.length}{" "}
-                  {g.email.length + g.slack.length + g.chat.length === 1
-                    ? "conversation"
-                    : "conversations"}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {g.email.map((t) => (
-                  <ThreadReader
-                    key={t.id}
-                    thread={t}
-                    canSend={canSend}
-                    projectId={g.projectId}
-                    revalidate="/communication"
-                  />
-                ))}
-                {g.slack.map((c) => (
-                  <SlackReader
-                    key={c.id}
-                    channel={c}
-                    projectId={g.projectId}
-                    canSend={slackCanSend}
-                    revalidate="/communication"
-                    unread={slackUnread.get(c.id) ?? 0}
-                  />
-                ))}
-                {g.chat.map((s) => (
-                  <ChatReader
-                    key={s.id}
-                    space={s}
-                    canSend={chatCanSendMsg}
-                    revalidate="/communication"
-                    unread={chatUnread.get(s.id) ?? 0}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+        <StudioComms
+          groups={[...groups.values()].map(
+            (g): StudioCommsGroup => ({
+              key: g.key,
+              label: g.label,
+              href: g.href,
+              kind: g.kind,
+              hue: g.hue,
+              projectId: g.projectId,
+              // Stripped to the reader props: the owner joins are server-side
+              // grouping detail, and the unread counts ride on their rows.
+              email: g.email.map(({ project, lead, client, ...t }) => t),
+              slack: g.slack.map(({ project, lead, client, ...c }) => ({
+                ...c,
+                unread: slackUnread.get(c.id) ?? 0,
+              })),
+              chat: g.chat.map(({ project, lead, client, ...c }) => ({
+                ...c,
+                unread: chatUnread.get(c.id) ?? 0,
+              })),
+            })
+          )}
+          canSend={canSend}
+          slackCanSend={slackCanSend}
+          chatCanSend={chatCanSendMsg}
+        />
       )}
     </div>
   );

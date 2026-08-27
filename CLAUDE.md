@@ -733,8 +733,13 @@ connects to, so the producer recognises where they are.
   Gmail, stays in this thread" stated in the header).
 - SLACK and CHAT read like Slack/Chat: FLAT rows on the surface (no bubbles),
   name + timestamp on one baseline, hover row tint, square vs round avatars.
-- PLATFORM FILTER CHIPS (comms-filter.tsx) across the top of the project page:
-  All / Email / Slack / Google Chat, each wearing its glyph and linked count.
+- PLATFORM FILTER CHIPS (comms-filter.tsx) across the top of BOTH pages, the
+  project page AND the studio-wide /communication (comms-groups.tsx StudioComms,
+  which replaced that page's decorative channel chips and its server-rendered
+  group list): All / Email / Slack / Google Chat, each wearing its glyph and
+  linked count. The two pages share useCommsFilter + CommsChips and ONE
+  localStorage key, so the preference follows the person between them. On the
+  studio page a group whose every conversation is filtered out hides whole.
   Selecting the active chip returns to All; filtered-out sections are HIDDEN
   not unmounted, so an open thread survives a glance at another platform; the
   choice persists in localStorage ("comms.filter"), same call as tasks.groupBy.

@@ -22,28 +22,19 @@ import {
  * never mismatches.
  */
 
-type FilterKey = "all" | "gmail" | "slack" | "gchat";
+export type FilterKey = "all" | "gmail" | "slack" | "gchat";
 const STORE_KEY = "comms.filter";
 
 function isFilterKey(v: string | null): v is FilterKey {
   return v === "all" || v === "gmail" || v === "slack" || v === "gchat";
 }
 
-export function CommsFilter({
-  email,
-  slack,
-  chat,
-  emailCount,
-  slackCount,
-  chatCount,
-}: {
-  email: ReactNode;
-  slack: ReactNode;
-  chat: ReactNode;
-  emailCount: number;
-  slackCount: number;
-  chatCount: number;
-}) {
+/**
+ * The filter state, shared by the project page and the studio-wide page. One
+ * localStorage key on purpose: "show me Slack" is a preference about how this
+ * person reads communication, not about which page they said it on.
+ */
+export function useCommsFilter() {
   const [filter, setFilter] = useState<FilterKey>("all");
 
   useEffect(() => {
@@ -65,6 +56,23 @@ export function CommsFilter({
     }
   }
 
+  return { filter, pick };
+}
+
+/** The chip row alone: service marks, labels, counts, one active at a time. */
+export function CommsChips({
+  filter,
+  onPick,
+  emailCount,
+  slackCount,
+  chatCount,
+}: {
+  filter: FilterKey;
+  onPick: (key: FilterKey) => void;
+  emailCount: number;
+  slackCount: number;
+  chatCount: number;
+}) {
   const chips: {
     key: FilterKey;
     label: string;
@@ -78,41 +86,69 @@ export function CommsFilter({
   ];
 
   return (
+    <div
+      role="tablist"
+      aria-label="Filter by platform"
+      className="mb-5 flex flex-wrap items-center gap-2"
+    >
+      {chips.map((c) => {
+        const active = filter === c.key;
+        return (
+          <button
+            key={c.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onPick(c.key)}
+            className={`inline-flex items-center gap-2 rounded-pill border px-3.5 py-2 text-sm font-semibold transition ${
+              active
+                ? "border-accent bg-accent-soft text-accent shadow-sm"
+                : "border-border bg-surface text-text-muted hover:border-border-strong hover:text-text"
+            }`}
+          >
+            {c.glyph}
+            {c.label}
+            {c.count !== null && (
+              <span
+                className={`rounded-pill px-1.5 py-0.5 text-[11px] font-bold leading-none ${
+                  active ? "bg-surface text-accent" : "bg-surface-2 text-text-faint"
+                }`}
+              >
+                {c.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function CommsFilter({
+  email,
+  slack,
+  chat,
+  emailCount,
+  slackCount,
+  chatCount,
+}: {
+  email: ReactNode;
+  slack: ReactNode;
+  chat: ReactNode;
+  emailCount: number;
+  slackCount: number;
+  chatCount: number;
+}) {
+  const { filter, pick } = useCommsFilter();
+
+  return (
     <div>
-      <div
-        role="tablist"
-        aria-label="Filter by platform"
-        className="mb-5 flex flex-wrap items-center gap-2"
-      >
-        {chips.map((c) => {
-          const active = filter === c.key;
-          return (
-            <button
-              key={c.key}
-              role="tab"
-              aria-selected={active}
-              onClick={() => pick(c.key)}
-              className={`inline-flex items-center gap-2 rounded-pill border px-3.5 py-2 text-sm font-semibold transition ${
-                active
-                  ? "border-accent bg-accent-soft text-accent shadow-sm"
-                  : "border-border bg-surface text-text-muted hover:border-border-strong hover:text-text"
-              }`}
-            >
-              {c.glyph}
-              {c.label}
-              {c.count !== null && (
-                <span
-                  className={`rounded-pill px-1.5 py-0.5 text-[11px] font-bold leading-none ${
-                    active ? "bg-surface text-accent" : "bg-surface-2 text-text-faint"
-                  }`}
-                >
-                  {c.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <CommsChips
+        filter={filter}
+        onPick={pick}
+        emailCount={emailCount}
+        slackCount={slackCount}
+        chatCount={chatCount}
+      />
 
       <div className="grid grid-cols-1 gap-6">
         <div className={filter === "all" || filter === "gmail" ? "" : "hidden"}>
