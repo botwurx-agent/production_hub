@@ -226,7 +226,7 @@ export default function MarketingHome() {
           <ModuleMap />
         </div>
         <div className="mt-12 text-center">
-          <MoreLink href="/features/project-hub" label="More about the project hub" />
+          <MoreLink href="/production-hub" label="More about the project hub" />
         </div>
       </Section>
 
@@ -250,7 +250,7 @@ export default function MarketingHome() {
             eyebrow="Communication"
             title="The thread about the job, filed with the job."
             body="Nobody is going to move their client onto a new chat app, so we do not ask. Link the Gmail thread, the Slack channel, the Chat space, and read and reply to all of it from the project it belongs to."
-            more={{ href: "/features/communication", label: "More about Communication" }}
+            more={{ href: "/production-communication", label: "More about Communication" }}
             points={[
               "Gmail, Slack and Google Chat, side by side on one page",
               "Reply without leaving the job, attachments and all",
@@ -278,7 +278,7 @@ export default function MarketingHome() {
             eyebrow="Client review"
             title="Approvals your clients will actually use."
             body="Send a link. No login, no account, no explaining. Notes land on the frame they belong to instead of dying in an email thread."
-            more={{ href: "/features/client-review", label: "More about Client review" }}
+            more={{ href: "/video-review-software", label: "More about Client review" }}
             points={[
               "Pin a comment to a spot on a still, or to a moment in a cut",
               "Draw on the frame when words are slower than a circle",
@@ -307,7 +307,7 @@ export default function MarketingHome() {
             eyebrow="Shoot day"
             title="The chasing happens without you."
             body="Send the call sheet and the app tracks who opened it and who confirmed, then nudges the rest as the day gets close. You read a number instead of a thread."
-            more={{ href: "/features/production", label: "More about Call sheets & shot lists" }}
+            more={{ href: "/call-sheet-software", label: "More about Call sheets & shot lists" }}
             points={[
               "Per-person call sheet links with view and confirm tracking",
               "Crew roster with positions, rates, and contacts",
@@ -357,7 +357,7 @@ export default function MarketingHome() {
           />
         </div>
         <div className="mt-12 text-center">
-          <MoreLink href="/features/budget" label="More about budget & invoicing" />
+          <MoreLink href="/production-budgeting-software" label="More about budget & invoicing" />
         </div>
       </Section>
 
@@ -381,7 +381,7 @@ export default function MarketingHome() {
             eyebrow="AI pipeline, shipped"
             title="Made for the AI era of production."
             body="Generation tools hand you a hundred candidates and no way to judge them. Studio Flows organizes the fan-out so picking a take takes minutes, not an afternoon."
-            more={{ href: "/features/ai-pipeline", label: "More about the AI pipeline" }}
+            more={{ href: "/ai-video-production", label: "More about the AI pipeline" }}
             points={[
               "Triage a batch keyboard-first, star a shortlist, pick the take",
               "Provenance on every clip: platform, model, seed, prompt",
@@ -411,7 +411,7 @@ export default function MarketingHome() {
             eyebrow="Runner"
             title="An assistant that never goes behind your back."
             body="Ask it anything about the studio and it reads the real data to answer. When it wants to change something it writes a card listing every value, and waits for you to press Create."
-            more={{ href: "/features/runner", label: "More about Runner" }}
+            more={{ href: "/runner", label: "More about Runner" }}
             points={[
               "“What is still waiting on a client?”, answered from live data",
               "“Which vendors are we late paying?”, with the amounts",

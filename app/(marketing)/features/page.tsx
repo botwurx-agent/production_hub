@@ -7,6 +7,7 @@ import {
   FEATURES,
   MODULES,
   MODULE_BANDS,
+  featureHref,
   moduleHref,
 } from "@/lib/marketing/features";
 
@@ -21,14 +22,14 @@ const BAND_HUES: Record<string, string> = {
 export const metadata: Metadata = {
   title: "Features",
   description:
-    "Everything Studio Flows does, one page per argument: the project hub, client review, communication, call sheets, budgets and invoicing, the AI pipeline, and Runner.",
+    "Everything Studio Flows does, one page per feature: call sheets, shot lists, storyboards, client review, budgets, invoicing, the AI pipeline and more.",
   alternates: { canonical: "/features" },
 };
 
 /**
  * The features overview: where the nav's "Features" lands on a click or a tap,
  * and the fallback for anyone the hover dropdown does not serve. A grid of the
- * seven arguments, each opening its dedicated page.
+ * thirteen feature pages, each at its own keyword URL.
  */
 export default function FeaturesIndex() {
   return (
@@ -37,14 +38,14 @@ export default function FeaturesIndex() {
         <SectionHeader
           eyebrow="Features"
           title="Everything it takes to run the job."
-          sub="Seven pieces, one spine. Each one stands on its own, and every one gets stronger because the others are in the same place."
+          sub="One spine, thirteen pieces. Each stands on its own, and every one gets stronger because the others are in the same place."
         />
 
-        <div className="mx-auto mt-16 grid max-w-5xl gap-5 sm:grid-cols-2">
+        <div className="mx-auto mt-16 grid max-w-6xl gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
             <Link
               key={f.slug}
-              href={`/features/${f.slug}`}
+              href={featureHref(f)}
               className="group relative overflow-clip rounded-2xl border border-border bg-surface p-7 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
             >
               {/* Identity accent: a hue bar on the top edge, the same color-as-

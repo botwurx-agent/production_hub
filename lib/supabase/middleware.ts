@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
+import { FEATURE_SLUGS } from "@/lib/marketing/feature-slugs";
 
 /**
  * Is this request for the APP host rather than the marketing site?
@@ -39,9 +40,14 @@ const PUBLIC_PATHS = [
   // that is not listed here silently redirects a logged-out visitor to /login,
   // which is the one audience the page exists for.
   "/pricing",
-  // Prefix-matched (see the test below), so this covers /features and every
-  // /features/[slug] page in one entry.
+  // Prefix-matched (see the test below), so this covers the /features
+  // overview in one entry.
   "/features",
+  // Every feature page lives at a root-level keyword slug. Spread from the
+  // same module the routes build from, so adding a page cannot forget the
+  // middleware: a missing entry here silently sends the logged-out visitor,
+  // the one audience a marketing page exists for, to /login.
+  ...FEATURE_SLUGS.map((s) => `/${s}`),
   "/login",
   "/signup",
   "/forgot-password",

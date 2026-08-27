@@ -3015,6 +3015,37 @@ UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
   or revoked token fails on OPEN rather than on page load, which is why it had
   escaped the graceful "connect in Settings" states everywhere else. It now
   names Settings.
+- MARKETING FEATURE PAGES, RESTRUCTURED (2026-08-27, operator's call): a page
+  per FUNCTIONALITY at a ROOT-LEVEL KEYWORD SLUG, thirteen of them
+  (call-sheet-software, shot-list-software, storyboard-software,
+  moodboard-maker, video-review-software, production-communication,
+  production-budgeting-software, production-invoicing,
+  production-task-management, crew-management-software, ai-video-production,
+  runner, production-hub). The URL is the search term, which is where the SEO
+  of page-per-functionality lives; the old /features/<argument> pages 301 in
+  next.config.mjs and /features stays as the overview index.
+  lib/marketing/feature-slugs.ts is the SINGLE SOURCE for the slugs, imported
+  by the data file, the route's static params, the middleware PUBLIC_PATHS and
+  app/sitemap.ts, so adding a page cannot forget any of them (the /pricing
+  lesson: an unlisted marketing route silently /logins its only audience).
+  Page shape swiped from the category leader's call-sheet page (read off a
+  screen recording, since studiobinder.com is egress-blocked here): keyword
+  EYEBROW over a creative h1, problem band, claim blocks, a tick grid for
+  long-tail depth, ONE differentiator band, anchored-module blocks, and a
+  closing MESH (components/marketing/feature-mesh.tsx) where every page links
+  every other page grouped by phase band, which is what makes the pages
+  compound instead of orphan. Refused from that template: color washes, fake
+  testimonials/logos, illustrated fake screenshots. Pages without a real demo
+  shot lead with a MOTIF instead (components/marketing/motifs.tsx): one
+  bespoke token-drawn illustration per page built from the product's own
+  vocabulary (recipient chips ticking, a triage filmstrip, the Runner card),
+  clearly illustration, never a fake screenshot. Every tick names something
+  built today, same rule as pricing: no SMS, no auto-weather.
+  MODULES survive as the inventory; eleven graduated to their own page
+  (own: true, moduleHref links the page root, no anchored block renders) and
+  the rest anchor on the page whose argument they join. Shots still to stage
+  in the demo studio: shot list, storyboard, moodboard, tasks, crew/contacts
+  (their heroes run on motifs until then).
 - Stewart's (the producer friend's) list still has open items: Wrapbook
   positioning, insurance bundling, zip-code permit lookup, a mobile on-set mode,
   a storage plan, a help desk, and Communication always open.

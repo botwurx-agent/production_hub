@@ -11,6 +11,17 @@ const nextConfig = {
       // that is no longer a route falls through to the app's auth gate.
       { source: "/site", destination: "/", permanent: true },
       { source: "/site/:path*", destination: "/", permanent: true },
+      // The feature pages moved from /features/<argument> to root-level
+      // keyword slugs (2026-08-27). Permanent, so any link equity the old
+      // URLs earned follows the content. /features itself stays: it is the
+      // overview index.
+      { source: "/features/project-hub", destination: "/production-hub", permanent: true },
+      { source: "/features/client-review", destination: "/video-review-software", permanent: true },
+      { source: "/features/communication", destination: "/production-communication", permanent: true },
+      { source: "/features/production", destination: "/call-sheet-software", permanent: true },
+      { source: "/features/budget", destination: "/production-budgeting-software", permanent: true },
+      { source: "/features/ai-pipeline", destination: "/ai-video-production", permanent: true },
+      { source: "/features/runner", destination: "/runner", permanent: true },
     ];
   },
   images: {

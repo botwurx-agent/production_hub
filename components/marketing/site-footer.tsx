@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { APP_ORIGIN } from "@/lib/marketing/hosts";
-import { FEATURES } from "@/lib/marketing/features";
+import { FEATURES, featureHref } from "@/lib/marketing/features";
 
 const COLUMNS = [
   {
@@ -9,7 +9,7 @@ const COLUMNS = [
     // footer cannot link a page that does not exist (the /#how lesson).
     links: [
       ...FEATURES.map((f) => ({
-        href: `/features/${f.slug}`,
+        href: featureHref(f),
         label: f.nav,
       })),
       { href: "/features", label: "All features" },

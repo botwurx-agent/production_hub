@@ -3,17 +3,17 @@ import { CtaButton } from "./cta";
 import { LOGIN_URL } from "@/lib/marketing/hosts";
 import {
   FEATURES,
-  MODULES,
-  MODULE_BANDS,
-  moduleHref,
+  PAGE_BANDS,
+  featureHref,
 } from "@/lib/marketing/features";
 
 /**
  * Two top-level items still, but "Product" became a FEATURES DROPDOWN
- * (operator's call, 2026-08-24): the feature set outgrew a single anchor link,
- * and each feature now has a dedicated page under /features. The dropdown is
- * built from lib/marketing/features.ts, the same data that builds the pages,
- * so the menu cannot list a page that does not exist.
+ * (operator's call, 2026-08-24) and then a page-per-functionality menu
+ * (2026-08-27): thirteen dedicated pages at root-level keyword slugs, grouped
+ * by the app's own phase bands. Built from lib/marketing/features.ts, the same
+ * data that builds the pages, so the menu cannot list a page that does not
+ * exist.
  *
  * CSS-only on purpose: group-hover + focus-within open it, so the nav stays a
  * server component with no client JS. The trigger itself LINKS to /features
@@ -59,68 +59,47 @@ function FeaturesMenu() {
       {/* pt-2 bridges the hover gap between the trigger and the card, so the
           menu does not vanish while the cursor crosses it. Anchored to the
           RIGHT edge of the trigger: the panel is wide and the trigger sits
-          near the right of the bar, so centering it would run off-screen.
-
-          Two panes (operator, 2026-08-24): the seven sections, AND every
-          project module by name, because "does it do call sheets" should be
-          answerable from the nav without a treasure hunt. Module links land on
-          anchored blocks inside the section pages. */}
+          near the right of the bar, so centering it would run off-screen. */}
       <div className="invisible absolute -right-24 top-full z-50 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-        <div className="w-[660px] rounded-2xl border border-border bg-surface p-4 shadow-xl">
-          <div className="grid grid-cols-[236px_1fr] gap-5">
-            <div className="border-r border-border pr-4">
-              {FEATURES.map((f) => (
-                <Link
-                  key={f.slug}
-                  href={`/features/${f.slug}`}
-                  className="flex items-start gap-2.5 rounded-xl px-2.5 py-2 transition hover:bg-surface-2"
-                >
-                  <span
-                    className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                    style={{ backgroundColor: `var(--h-${f.hue})` }}
-                  />
-                  <span>
-                    <span className="block text-sm font-semibold text-text">
-                      {f.nav}
-                    </span>
-                    <span className="block text-[12px] leading-snug text-text-muted">
-                      {f.hint}
-                    </span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-
-            <div>
-              <p className="px-1 text-[10px] font-bold uppercase tracking-[0.14em] text-text-faint">
-                In every project
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-x-4">
-                {MODULE_BANDS.map((band) => (
-                  <div key={band.key} className="mb-2">
-                    {/* A band label has to outrank the module names under it.
-                        It used to be SMALLER (10px) and LIGHTER (faint) than
-                        its own items (13px, muted), so the header read as
-                        sub-text and the four groups ran together. */}
-                    <p className="px-1 pb-1 pt-1 text-[12px] font-bold uppercase tracking-[0.1em] text-text">
-                      {band.label}
-                    </p>
-                    {MODULES.filter((m) => m.band === band.key).map((m) => (
-                      <Link
-                        key={m.key}
-                        href={moduleHref(m)}
-                        className="block rounded-[8px] px-1 py-[3px] text-[13px] font-medium text-text-muted transition hover:bg-surface-2 hover:text-text"
-                      >
-                        {m.name}
-                      </Link>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div className="w-[640px] rounded-2xl border border-border bg-surface p-5 shadow-xl">
+          {/* Thirteen pages, one per functionality, grouped by the app's own
+              phase bands. "Does it do call sheets" is answerable by name, and
+              every name is a dedicated page rather than an anchor. */}
+          <div className="grid grid-cols-3 gap-x-6 gap-y-5">
+            {PAGE_BANDS.map((band) => {
+              const pages = FEATURES.filter((f) => f.band === band.key);
+              if (!pages.length) return null;
+              return (
+                <div key={band.key}>
+                  <p className="px-1 pb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-text">
+                    {band.label}
+                  </p>
+                  {pages.map((f) => (
+                    <Link
+                      key={f.slug}
+                      href={featureHref(f)}
+                      className="flex items-start gap-2 rounded-[10px] px-1.5 py-1.5 transition hover:bg-surface-2"
+                    >
+                      <span
+                        className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: `var(--h-${f.hue})` }}
+                      />
+                      <span>
+                        <span className="block text-[13.5px] font-semibold leading-tight text-text">
+                          {f.nav}
+                        </span>
+                        <span className="block text-[11.5px] leading-snug text-text-faint">
+                          {f.hint}
+                        </span>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              );
+            })}
           </div>
 
-          <div className="mt-2 border-t border-border pt-2">
+          <div className="mt-3 border-t border-border pt-2">
             <Link
               href="/features"
               className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-accent transition hover:bg-surface-2"
