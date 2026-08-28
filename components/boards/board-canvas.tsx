@@ -88,7 +88,9 @@ function domainOf(url: string | null): string {
 const CANVAS_W = 2400;
 const CANVAS_H = 1600;
 const MIN_SCALE = 0.25;
-const MAX_SCALE = 2;
+// 300%, matching Milanote: close enough to read a caption or place a pin on a
+// dense board. Zoom is multiplicative, so a wider range costs no extra travel.
+const MAX_SCALE = 3;
 
 /** Which corner a resize is being dragged from. */
 type ResizeCorner = "nw" | "ne" | "sw" | "se";
@@ -639,7 +641,11 @@ export function BoardCanvas({
     const bh = maxY - minY + pad * 2;
     const vw = sc.clientWidth;
     const vh = sc.clientHeight;
-    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, +Math.min(vw / bw, vh / bh).toFixed(2)));
+    // Fit never zooms PAST 100%, even though the ceiling is now 300%: on a
+    // board holding one card, filling the screen with it is not "fit", and
+    // getting closer than life size is a decision for the person, not the
+    // button.
+    const s = Math.min(1, Math.max(MIN_SCALE, +Math.min(vw / bw, vh / bh).toFixed(2)));
     setScale(s);
     requestAnimationFrame(() => {
       const sc2 = scrollRef.current;
