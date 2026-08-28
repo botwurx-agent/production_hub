@@ -9,6 +9,10 @@ import { AddContactForm } from "@/components/contacts/add-contact-form";
 import { NewProjectButton } from "@/components/projects/new-project-button";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { addClientContact } from "@/app/(app)/clients/actions";
+import {
+  AccountStatusMenu,
+  DeleteClientButton,
+} from "@/components/clients/client-header-actions";
 import { EmailPanel } from "@/components/projects/project-email";
 import { SlackPanel } from "@/components/communication/slack-panel";
 import { ChatPanel } from "@/components/communication/gchat-panel";
@@ -17,7 +21,7 @@ import { RelationshipFeed } from "@/components/crm/relationship-feed";
 import { TaskList } from "@/components/crm/task-list";
 import { AgreementList } from "@/components/agreements/agreement-list";
 import { loadAccountFeed } from "@/lib/crm-feed";
-import { PROJECT_STATUS, ACCOUNT_STATUS, DEAL_STAGE } from "@/lib/status";
+import { PROJECT_STATUS, DEAL_STAGE } from "@/lib/status";
 import { shortDate, money, timeAgo } from "@/lib/format";
 import type { Agreement, Contact } from "@/lib/database.types";
 
@@ -126,9 +130,10 @@ export default async function ClientDetailPage({
             <h1 className="font-display text-3xl font-extrabold tracking-tight text-text">
               {client.name}
             </h1>
-            <StatusTag hue={ACCOUNT_STATUS[client.account_status].hue}>
-              {ACCOUNT_STATUS[client.account_status].label}
-            </StatusTag>
+            <AccountStatusMenu
+              clientId={client.id}
+              status={client.account_status}
+            />
             <StatusTag hue={client.type === "agency" ? "purple" : "blue"}>
               {client.type === "agency" ? "Agency" : "Brand"}
             </StatusTag>
@@ -144,11 +149,21 @@ export default async function ClientDetailPage({
             </p>
           )}
         </div>
-        <NewProjectButton
-          clients={[{ id: client.id, name: client.name }]}
-          defaultClientId={client.id}
-          label="Start a project"
-        />
+        <div className="flex flex-col items-end gap-2">
+          <NewProjectButton
+            clients={[{ id: client.id, name: client.name }]}
+            defaultClientId={client.id}
+            label="Start a project"
+          />
+          <DeleteClientButton
+            clientId={client.id}
+            clientName={client.name}
+            projectCount={(projects ?? []).length}
+            contactCount={(contacts ?? []).length}
+            dealCount={(deals ?? []).length}
+            agreementCount={(agreements ?? []).length}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
