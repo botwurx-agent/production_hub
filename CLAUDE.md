@@ -522,6 +522,20 @@ implemented (out of strict order, driven by the operator's real needs).
     every switch takes two clicks). RailTool buttons preventDefault on
     mousedown so a note or caption keeps its selection while its formatting
     tools are used (execCommand acts on the selection).
+  - PINCH ZOOM IS PROPORTIONAL AND MULTIPLICATIVE (the operator: ours was
+    "extremely aggressive... jumping all over the place" next to Milanote).
+    The handler applied a FLAT 0.1 step per wheel EVENT and ignored deltaY
+    entirely, but a trackpad pinch is a stream of dozens of events per second,
+    so the gentlest pinch raced across the whole 0.25-2.0 range. Now a big
+    delta (>=50) is read as a discrete mouse-wheel notch worth a fixed 1.2x,
+    and a small one as a continuous pinch worth exp(-dy * 0.01), so pinching
+    twice as far zooms twice as much. Multiplicative, not additive, because
+    +0.1 is a 40% jump at 25% zoom and a 5% nudge at 200%. deltaMode is
+    honoured (lines/pages, not just pixels), and a zoom already against a
+    limit returns without re-anchoring, which is what made the board twitch at
+    the ends. Measured in headless Chromium: five gentle events move 100% ->
+    111% (was 150%), and a point under the cursor drifts 1px while zooming to
+    143%.
   - CREATION TOOLS ARE DRAG-ONLY (also Milanote): clicking Note / Heading /
     To-do / Column / Line / Color used to drop the card at a default spot,
     which routinely landed on top of something else and then had to be dug out

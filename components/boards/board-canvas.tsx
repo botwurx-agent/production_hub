@@ -501,8 +501,27 @@ export function BoardCanvas({
     };
   }, [setItems]);
 
-  function zoomBy(delta: number) {
-    setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, +(s + delta).toFixed(2))));
+  /**
+   * Zoom is MULTIPLICATIVE, not additive.
+   *
+   * A fixed +/-0.1 step is not the same change at both ends of the range: it is
+   * a 40% jump at 25% zoom and a 5% nudge at 200%, so the view accelerates as
+   * you zoom out. A factor moves the view by the same PROPORTION wherever you
+   * are, which is what makes it feel steady under the hand.
+   */
+  function zoomByFactor(factor: number) {
+    const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scaleRef.current * factor));
+    // Already against a limit: do nothing rather than re-anchor the view on
+    // every event of a pinch that cannot go further, which is what made the
+    // board twitch at the ends of the range.
+    if (Math.abs(next - scaleRef.current) < 0.0005) {
+      zoomAnchor.current = null;
+      return;
+    }
+    // Kept in step immediately, so a second wheel event arriving before React
+    // has re-rendered measures from the scale we are actually going to.
+    scaleRef.current = next;
+    setScale(next);
   }
   // Zoom anchored to a point: remember which canvas point sat under (sx, sy) in
   // the scroller, then restore it there after the scale is applied. Without
@@ -528,9 +547,10 @@ export function BoardCanvas({
     const r = sc.getBoundingClientRect();
     anchorAt(r.left + sc.clientWidth / 2, r.top + sc.clientHeight / 2);
   }
-  function zoomAtCenter(delta: number) {
+  /** The +/- buttons: one comfortable step, anchored to the middle of the view. */
+  function zoomAtCenter(direction: 1 | -1) {
     anchorCenter();
-    zoomBy(delta);
+    zoomByFactor(direction > 0 ? 1.2 : 1 / 1.2);
   }
   function setZoom(pct: number) {
     anchorCenter();
@@ -545,17 +565,45 @@ export function BoardCanvas({
     sc.scrollTop = a.wy * scale - a.sy;
   }, [scale]);
 
-  // Ctrl/Cmd + wheel zooms at the cursor. A NATIVE non-passive listener, not
-  // React's onWheel: React attaches wheel passively, so preventDefault there is
-  // ignored and the browser's own page zoom fights the canvas zoom.
+  /**
+   * Pinch (and Ctrl/Cmd + wheel) zooms at the cursor.
+   *
+   * A NATIVE non-passive listener, not React's onWheel: React attaches wheel
+   * passively, so preventDefault there is ignored and the browser's own page
+   * zoom fights the canvas zoom.
+   *
+   * THE SIZE OF THE GESTURE HAS TO MATTER, which is what was wrong before: the
+   * handler applied a flat 0.1 step per EVENT and ignored deltaY entirely. A
+   * trackpad pinch is not one event, it is a stream of dozens per second, each
+   * carrying a small delta, so the tiniest pinch raced across the whole
+   * 0.25-2.0 range and the board appeared to jump around. A mouse wheel is the
+   * opposite: a few big notches. So the two are read differently rather than
+   * averaged into one wrong middle:
+   *  - a large delta is a discrete wheel notch, worth a fixed comfortable step
+   *  - a small delta is a continuous pinch, worth a factor proportional to it,
+   *    exponential so that pinching twice as far zooms twice as much
+   */
   useEffect(() => {
     const sc = scrollRef.current;
     if (!sc) return;
     function onWheelNative(e: WheelEvent) {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
+
+      // deltaMode: 0 = pixels, 1 = lines, 2 = pages.
+      const dy =
+        e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 100 : e.deltaY;
+      if (!dy) return;
+
+      const factor =
+        Math.abs(dy) >= 50
+          ? dy > 0
+            ? 1 / 1.2
+            : 1.2
+          : Math.exp(-dy * 0.01);
+
       anchorAt(e.clientX, e.clientY);
-      zoomBy(e.deltaY > 0 ? -0.1 : 0.1);
+      zoomByFactor(factor);
     }
     sc.addEventListener("wheel", onWheelNative, { passive: false });
     return () => sc.removeEventListener("wheel", onWheelNative);
@@ -2049,7 +2097,7 @@ export function BoardCanvas({
                 Tip: hold ⌘ / Ctrl and use the mouse wheel to zoom.
               </p>
               <div className="mt-2.5 flex items-center gap-2">
-                <button className={zoomBtn} onClick={() => zoomAtCenter(-0.1)} aria-label="Zoom out">
+                <button className={zoomBtn} onClick={() => zoomAtCenter(-1)} aria-label="Zoom out">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14" /></svg>
                 </button>
                 <input
@@ -2060,7 +2108,7 @@ export function BoardCanvas({
                   onChange={(e) => setZoom(Number(e.target.value))}
                   className="h-1 flex-1 cursor-pointer accent-accent"
                 />
-                <button className={zoomBtn} onClick={() => zoomAtCenter(0.1)} aria-label="Zoom in">
+                <button className={zoomBtn} onClick={() => zoomAtCenter(1)} aria-label="Zoom in">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                 </button>
               </div>
@@ -2085,7 +2133,7 @@ export function BoardCanvas({
           </>
         )}
         <div className="flex items-center gap-0.5 rounded-[10px] border border-border bg-surface/95 p-1 shadow-sm backdrop-blur">
-          <button className={zoomBtn} onClick={() => zoomAtCenter(-0.1)} aria-label="Zoom out">
+          <button className={zoomBtn} onClick={() => zoomAtCenter(-1)} aria-label="Zoom out">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14" /></svg>
           </button>
           <button
@@ -2095,7 +2143,7 @@ export function BoardCanvas({
           >
             {Math.round(scale * 100)}%
           </button>
-          <button className={zoomBtn} onClick={() => zoomAtCenter(0.1)} aria-label="Zoom in">
+          <button className={zoomBtn} onClick={() => zoomAtCenter(1)} aria-label="Zoom in">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
           </button>
         </div>
