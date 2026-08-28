@@ -1873,27 +1873,54 @@ export function BoardCanvas({
                 { c: "sw", x: it.x, y: it.y + it.h, cursor: "nesw-resize" },
                 { c: "se", x: it.x + it.w, y: it.y + it.h, cursor: "nwse-resize" },
               ];
-              return corners.map((k) => (
-                <span
-                  key={k.c}
-                  data-resize="1"
-                  title="Drag to resize"
-                  onPointerDown={(e) => startResize(e, it, k.c)}
-                  onPointerMove={(e) => e.stopPropagation()}
-                  // Keeps the handle alive while the pointer crosses from the
-                  // card onto the handle itself (the card's leave fires first).
-                  onPointerEnter={() => setHovered(it.id)}
-                  style={{
-                    position: "absolute",
-                    left: k.x - 6,
-                    top: k.y - 6,
-                    zIndex: 9999,
-                    touchAction: "none",
-                    cursor: k.cursor,
-                  }}
-                  className="h-3 w-3 rounded-[3px] border-2 border-accent bg-surface shadow-sm"
-                />
-              ));
+              return (
+                <span key="handles">
+                  {/* A hairline box joining the four handles, so they read as
+                      one resizable frame rather than four loose dots. A
+                      SELECTED card already carries its own accent ring, so
+                      this only draws on hover. */}
+                  {id !== selected && (
+                    <span
+                      className="pointer-events-none absolute rounded-[10px]"
+                      style={{
+                        left: it.x,
+                        top: it.y,
+                        width: it.w,
+                        height: it.h,
+                        zIndex: 9998,
+                        boxShadow: "0 0 0 1.5px var(--accent)",
+                        opacity: 0.55,
+                      }}
+                    />
+                  )}
+                  {corners.map((k) => (
+                    <span
+                      key={k.c}
+                      data-resize="1"
+                      title="Drag to resize"
+                      onPointerDown={(e) => startResize(e, it, k.c)}
+                      onPointerMove={(e) => e.stopPropagation()}
+                      // Keeps the handle alive while the pointer crosses from
+                      // the card onto the handle itself (the card's leave
+                      // fires first).
+                      onPointerEnter={() => setHovered(it.id)}
+                      style={{
+                        position: "absolute",
+                        left: k.x - 8,
+                        top: k.y - 8,
+                        zIndex: 9999,
+                        touchAction: "none",
+                        cursor: k.cursor,
+                      }}
+                      // Filled accent on a white collar, the same treatment the
+                      // connect anchor already uses: an outlined handle in the
+                      // card's own colours was too easy to miss, which is how
+                      // resizing stayed hidden in the first place.
+                      className="h-4 w-4 rounded-[5px] border-2 border-white bg-accent shadow-md transition hover:scale-125"
+                    />
+                  ))}
+                </span>
+              );
             })()}
 
             {/* Connect handle: appears on the hovered or selected card; drag it
