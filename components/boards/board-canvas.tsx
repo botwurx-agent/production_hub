@@ -90,10 +90,14 @@ const CANVAS_H = 1600;
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 2;
 
+/** Which corner a resize is being dragged from. */
+type ResizeCorner = "nw" | "ne" | "sw" | "se";
+
 type DragRef = {
   id: string;
   kind: string;
   mode: "move" | "resize";
+  corner?: ResizeCorner;
   startX: number;
   startY: number;
   origX: number;
@@ -265,10 +269,25 @@ export function BoardCanvas({
           if (d.mode === "move") {
             return { ...it, x: Math.max(0, d.origX + dx), y: Math.max(0, d.origY + dy) };
           }
+          // Corner-aware resize: a west corner moves x and shrinks w, a north
+          // corner moves y and shrinks h, so the OPPOSITE corner stays pinned.
+          // Sizes clamp first and the position is derived from the clamped
+          // size, so hitting the minimum cannot make the card creep.
+          const c = d.corner ?? "se";
+          const fromW = c === "nw" || c === "sw";
+          const fromN = c === "nw" || c === "ne";
+          const w = Math.max(80, fromW ? d.origW - dx : d.origW + dx);
+          const h = Math.max(60, fromN ? d.origH - dy : d.origH + dy);
+          const x = fromW ? Math.max(0, d.origX + (d.origW - w)) : d.origX;
+          const y = fromN ? Math.max(0, d.origY + (d.origH - h)) : d.origY;
           return {
             ...it,
-            w: Math.max(80, d.origW + dx),
-            h: Math.max(60, d.origH + dy),
+            x,
+            y,
+            // At the canvas edge the position clamps, so the size is re-derived
+            // from it to keep the pinned edge pinned.
+            w: fromW ? d.origX + d.origW - x : w,
+            h: fromN ? d.origY + d.origH - y : h,
           };
         })
       );
@@ -311,7 +330,14 @@ export function BoardCanvas({
         }
         setItems((prev) => {
           const cur = prev.find((x) => x.id === d.id);
-          if (cur) void resizeItem(cur.id, cur.w, cur.h);
+          if (cur) {
+            void resizeItem(cur.id, cur.w, cur.h);
+            // A north or west corner moved the card while resizing it, so the
+            // position persists too or a reload snaps it back.
+            if (cur.x !== d.origX || cur.y !== d.origY) {
+              void moveItem(cur.id, cur.x, cur.y);
+            }
+          }
           return prev;
         });
         return;
@@ -674,7 +700,11 @@ export function BoardCanvas({
     }
   }
 
-  function startResize(e: React.PointerEvent, it: BoardItemView) {
+  function startResize(
+    e: React.PointerEvent,
+    it: BoardItemView,
+    corner: ResizeCorner = "se"
+  ) {
     if (readOnly) return;
     e.stopPropagation();
     setSelected(it.id);
@@ -683,6 +713,7 @@ export function BoardCanvas({
       id: it.id,
       kind: it.kind,
       mode: "resize",
+      corner,
       startX: e.clientX,
       startY: e.clientY,
       origX: it.x,
@@ -1817,6 +1848,53 @@ export function BoardCanvas({
                 })}
               </svg>
             )}
+
+            {/* Resize handles: VISIBLE squares on all four corners of the
+                hovered or selected card. The old affordance was one invisible
+                16px hotspot in the bottom-right, which the operator called
+                "almost impossible to find" (and the connect anchor sat right
+                next to it on a short card). The invisible per-card hotspot
+                stays as an extra hit area; these are the discoverable ones. */}
+            {(() => {
+              if (readOnly || connectFrom) return null;
+              const id = hovered ?? selected;
+              const it = id ? byId.get(id) : null;
+              // Lines drag by their endpoints, and a column child is not
+              // absolutely positioned, so neither gets corner handles.
+              if (!it || it.kind === "line" || it.parentId) return null;
+              const corners: {
+                c: ResizeCorner;
+                x: number;
+                y: number;
+                cursor: string;
+              }[] = [
+                { c: "nw", x: it.x, y: it.y, cursor: "nwse-resize" },
+                { c: "ne", x: it.x + it.w, y: it.y, cursor: "nesw-resize" },
+                { c: "sw", x: it.x, y: it.y + it.h, cursor: "nesw-resize" },
+                { c: "se", x: it.x + it.w, y: it.y + it.h, cursor: "nwse-resize" },
+              ];
+              return corners.map((k) => (
+                <span
+                  key={k.c}
+                  data-resize="1"
+                  title="Drag to resize"
+                  onPointerDown={(e) => startResize(e, it, k.c)}
+                  onPointerMove={(e) => e.stopPropagation()}
+                  // Keeps the handle alive while the pointer crosses from the
+                  // card onto the handle itself (the card's leave fires first).
+                  onPointerEnter={() => setHovered(it.id)}
+                  style={{
+                    position: "absolute",
+                    left: k.x - 6,
+                    top: k.y - 6,
+                    zIndex: 9999,
+                    touchAction: "none",
+                    cursor: k.cursor,
+                  }}
+                  className="h-3 w-3 rounded-[3px] border-2 border-accent bg-surface shadow-sm"
+                />
+              ));
+            })()}
 
             {/* Connect handle: appears on the hovered or selected card; drag it
                 onto another card to draw an arrow. */}
