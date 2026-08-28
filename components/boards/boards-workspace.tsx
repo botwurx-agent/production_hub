@@ -865,10 +865,15 @@ export function BoardsWorkspace({
             />
           </div>
 
-          {/* Left tool rail (Milanote-style) + canvas. When a line is selected,
-              a style panel slides over the rail. */}
-          <div className="flex min-h-0 min-w-0 flex-1 gap-3">
-            {selectedNote ? (
+          {/* Left tool rail (Milanote-style) + canvas. A selected card's style
+              panel FLOATS over the rail and canvas rather than sitting in the
+              flex row: the panels are wider than the rail, so an in-flow panel
+              used to push the whole canvas sideways on every select and snap
+              it back on deselect, which read as cards jumping position. The
+              canvas never moves now; only the panel appears. */}
+          <div className="relative flex min-h-0 min-w-0 flex-1 gap-3">
+            {(() => {
+              const panel = selectedNote ? (
               <NotePanel
                 key={selectedNote.id}
                 note={selectedNote}
@@ -960,8 +965,16 @@ export function BoardsWorkspace({
                 onDuplicate={() => selectedLineId && pasteCopy(selectedLineId)}
                 onClose={() => setSelectedLineId(null)}
               />
-            ) : (
-              <div className="relative flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
+            ) : null;
+              if (!panel) return null;
+              return (
+                <div className="absolute left-0 top-0 z-40 max-h-full overflow-y-auto overscroll-contain rounded-[14px] shadow-xl">
+                  {panel}
+                </div>
+              );
+            })()}
+
+            <div className="relative flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
                 <RailBtn label="Note" disabled={busy} dragKind="note" onClick={addNoteToBoard}>
                   <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
                 </RailBtn>
@@ -1051,7 +1064,6 @@ export function BoardsWorkspace({
                   </>
                 )}
               </div>
-            )}
 
             <div className="min-h-0 min-w-0 flex-1">
               <BoardCanvas
