@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { confirmAction } from "@/components/ui/confirm";
+import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import {
   PROP_CATEGORIES,
   PROP_STATUS,
@@ -508,6 +509,75 @@ function PropModal({
   const set = <K extends keyof PropInput>(k: K, v: PropInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
+  // Photos and links staged in the modal become the prop's OPTIONS on save.
+  // The card's Options panel could always do this, but the moment somebody
+  // has the picture in hand is while they are creating the prop, and a window
+  // with no way to attach it reads as "images not supported". Same
+  // discoverability lesson as the export cover panel.
+  const stageFileRef = useRef<HTMLInputElement>(null);
+  const [pendingFiles, setPendingFiles] = useState<
+    { file: File; preview: string }[]
+  >([]);
+  const [pendingLinks, setPendingLinks] = useState<string[]>([]);
+  const [linkUrl, setLinkUrl] = useState("");
+
+  function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    // Copy the FileList BEFORE clearing the input: it is a live view.
+    const list = e.target.files;
+    const files = list ? Array.from(list) : [];
+    e.target.value = "";
+    const ok: { file: File; preview: string }[] = [];
+    for (const f of files) {
+      if (f.size > MAX_UPLOAD_BYTES) {
+        toast(
+          `${f.name} is ${formatBytes(f.size)}, over the ${formatBytes(
+            MAX_UPLOAD_BYTES
+          )} limit for an upload.`,
+          "error"
+        );
+        continue;
+      }
+      ok.push({ file: f, preview: URL.createObjectURL(f) });
+    }
+    if (ok.length) setPendingFiles((p) => [...p, ...ok]);
+  }
+
+  function removePendingFile(i: number) {
+    setPendingFiles((p) => {
+      URL.revokeObjectURL(p[i]?.preview ?? "");
+      return p.filter((_, j) => j !== i);
+    });
+  }
+
+  function stageLink() {
+    const u = linkUrl.trim();
+    if (!u) return;
+    setPendingLinks((p) => [...p, u]);
+    setLinkUrl("");
+  }
+
+  function clearStaged() {
+    pendingFiles.forEach((f) => URL.revokeObjectURL(f.preview));
+    setPendingFiles([]);
+    setPendingLinks([]);
+    setLinkUrl("");
+  }
+
+  /** Returns the first failure, or null; the prop itself is already saved. */
+  async function applyStaged(propId: string): Promise<string | null> {
+    for (const { file } of pendingFiles) {
+      const fd = new FormData();
+      fd.set("file", file);
+      const res = await addPropOptionFile(projectId, propId, fd);
+      if (res?.error) return res.error;
+    }
+    for (const url of pendingLinks) {
+      const res = await addPropOptionLink(projectId, propId, { url });
+      if (res?.error) return res.error;
+    }
+    return null;
+  }
+
   function save(again: boolean) {
     if (!form.name.trim()) return setError("Give the prop a name.");
     setError(null);
@@ -516,6 +586,13 @@ function PropModal({
         ? await updateProp(projectId, prop.id, form)
         : await addProp(projectId, form);
       if (res?.error) return setError(res.error);
+      const propId = prop ? prop.id : res?.id;
+      if (propId && (pendingFiles.length || pendingLinks.length)) {
+        const optErr = await applyStaged(propId);
+        // The prop saved; a failed option is named rather than failing the lot.
+        if (optErr) toast(optErr, "error");
+      }
+      clearStaged();
       router.refresh();
       if (again && !prop) {
         // Keep the category, which is almost always the same for a run of
@@ -637,6 +714,105 @@ function PropModal({
             onChange={(e) => set("notes", e.target.value)}
             placeholder="Must be unbranded. Needs to hold 12oz without looking oversized."
             className={`${inputCls} min-h-[60px]`}
+          />
+        </div>
+
+        {/* Photos and links, staged here, saved as the prop's options. */}
+        <div>
+          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-text-faint">
+            Photos &amp; links
+          </label>
+
+          {(pendingFiles.length > 0 || pendingLinks.length > 0) && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {pendingFiles.map((f, i) => (
+                <span
+                  key={f.preview}
+                  className="relative h-14 w-14 overflow-hidden rounded-[9px] border border-border"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={f.preview}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    onClick={() => removePendingFile(i)}
+                    className="absolute right-0.5 top-0.5 grid h-[18px] w-[18px] place-items-center rounded-full bg-black/60 text-white"
+                    aria-label={`Remove ${f.file.name}`}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
+              ))}
+              {pendingLinks.map((u, i) => (
+                <span
+                  key={`${u}-${i}`}
+                  className="inline-flex max-w-[220px] items-center gap-1.5 rounded-pill border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-muted"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+                    <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+                  </svg>
+                  <span className="truncate">{u.replace(/^https?:\/\//, "")}</span>
+                  <button
+                    onClick={() =>
+                      setPendingLinks((p) => p.filter((_, j) => j !== i))
+                    }
+                    className="shrink-0 text-text-faint hover:text-red"
+                    aria-label="Remove link"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => stageFileRef.current?.click()}
+            >
+              + Photos
+            </Button>
+            <input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  stageLink();
+                }
+              }}
+              placeholder="Paste a link (prop house, shop)"
+              className={`${inputCls} min-w-0 flex-1 text-[13px]`}
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy || !linkUrl.trim()}
+              onClick={stageLink}
+            >
+              Add
+            </Button>
+          </div>
+          <p className="mt-1 text-[11px] text-text-faint">
+            Saved as this prop&apos;s options, ready to compare and pick from.
+          </p>
+          <input
+            ref={stageFileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={pickFiles}
           />
         </div>
 
