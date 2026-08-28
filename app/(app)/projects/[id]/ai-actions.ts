@@ -24,6 +24,10 @@ export async function summarizeProject(
   projectId: string
 ): Promise<SummaryResult> {
   const ctx = await requireStudioContext();
+  // Staff only: the summary reads studio-wide data (budget, billing) and its
+  // row is studio-only RLS (migration 0099), so a collaborator's call would
+  // spend a model read only to have the write refused.
+  if (ctx.isCollaborator) return { error: "Summaries are for studio members." };
   if (!aiConfigured()) {
     return {
       error:

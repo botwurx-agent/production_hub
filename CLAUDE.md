@@ -1320,7 +1320,13 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0098. Recent: 0098 =
+files in supabase/migrations. THROUGH 0099. Recent: 0099 =
+summary_studio_only (project_summaries RLS back to is_studio_member ONLY,
+dropping the 0056/0093 collaborator-readable pair: the AI summary is generated
+from budget/billing context and money talk lands in the stored prose, which
+RLS cannot strip out of a paragraph. The hub hides the card for collaborators
+and summarizeProject refuses them. Found when the operator went to invite two
+stylists onto a project whose summary discussed money); 0098 =
 board_frame_aspect (boards.frame_aspect, the shape a storyboard's frames are
 drawn in); 0097 =
 task_files_and_comments (project_task_files + project_task_comments); 0096 =

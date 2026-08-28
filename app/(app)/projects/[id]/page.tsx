@@ -507,24 +507,30 @@ export default async function ProjectDetailPage({
         />
       </div>
 
-      {/* AI summary */}
-      <Card className="mb-6 p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <h2 className="font-display text-base font-bold">Project summary</h2>
-          <span
-            className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
-            style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
-          >
-            AI
-          </span>
-        </div>
-        <ProjectSummary
-          projectId={project.id}
-          connected={aiConfigured()}
-          initialContent={summary?.content ?? null}
-          initialAt={summary?.created_at ?? null}
-        />
-      </Card>
+      {/* AI summary. Staff only: the summary is generated from studio-wide
+          data (budget, billing, pipeline) and money talk lands in the prose,
+          so a collaborator never sees the card. RLS (migration 0099) is the
+          real boundary; hiding it here just keeps the hub from showing them
+          an empty box. */}
+      {!ctx.isCollaborator && (
+        <Card className="mb-6 p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <h2 className="font-display text-base font-bold">Project summary</h2>
+            <span
+              className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
+              style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+            >
+              AI
+            </span>
+          </div>
+          <ProjectSummary
+            projectId={project.id}
+            connected={aiConfigured()}
+            initialContent={summary?.content ?? null}
+            initialAt={summary?.created_at ?? null}
+          />
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Module hub */}
