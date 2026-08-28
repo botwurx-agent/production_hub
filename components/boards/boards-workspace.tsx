@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -123,6 +131,8 @@ export function BoardsWorkspace({
   const [linkOpen, setLinkOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
   const [shapesOpen, setShapesOpen] = useState(false);
+  // Flashes the picker's "drag a shape" heading when a tile is clicked.
+  const [shapeNudge, setShapeNudge] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -865,15 +875,12 @@ export function BoardsWorkspace({
             />
           </div>
 
-          {/* Left tool rail (Milanote-style) + canvas. A selected card's style
-              panel FLOATS over the rail and canvas rather than sitting in the
-              flex row: the panels are wider than the rail, so an in-flow panel
-              used to push the whole canvas sideways on every select and snap
-              it back on deselect, which read as cards jumping position. The
-              canvas never moves now; only the panel appears. */}
-          <div className="relative flex min-h-0 min-w-0 flex-1 gap-3">
-            {(() => {
-              const panel = selectedNote ? (
+          {/* Left tool rail (Milanote-style) + canvas. Selecting a card swaps
+              the rail's CONTENTS for that card's tools, in the same 52px
+              footprint, so the canvas never shifts and nothing is covered;
+              each tool's options open in a flyout beside the rail. */}
+          <div className="flex min-h-0 min-w-0 flex-1 gap-3">
+            {selectedNote ? (
               <NotePanel
                 key={selectedNote.id}
                 note={selectedNote}
@@ -965,32 +972,24 @@ export function BoardsWorkspace({
                 onDuplicate={() => selectedLineId && pasteCopy(selectedLineId)}
                 onClose={() => setSelectedLineId(null)}
               />
-            ) : null;
-              if (!panel) return null;
-              return (
-                <div className="absolute left-0 top-0 z-40 max-h-full overflow-y-auto overscroll-contain rounded-[14px] shadow-xl">
-                  {panel}
-                </div>
-              );
-            })()}
-
-            <div className="relative flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
-                <RailBtn label="Note" disabled={busy} dragKind="note" onClick={addNoteToBoard}>
+            ) : (
+              <div className="relative flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
+                <RailBtn label="Note" disabled={busy} dragKind="note" dragOnly onClick={addNoteToBoard}>
                   <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
                 </RailBtn>
-                <RailBtn label="Heading" disabled={busy} dragKind="heading" onClick={addHeadingToBoard}>
+                <RailBtn label="Heading" disabled={busy} dragKind="heading" dragOnly onClick={addHeadingToBoard}>
                   <path d="M6 4v16M18 4v16M6 12h12" />
                 </RailBtn>
-                <RailBtn label="To-do list" disabled={busy} dragKind="todo" onClick={addTodoToBoard}>
+                <RailBtn label="To-do list" disabled={busy} dragKind="todo" dragOnly onClick={addTodoToBoard}>
                   <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
                 </RailBtn>
-                <RailBtn label="Column" disabled={busy} dragKind="column" onClick={addColumnToBoard}>
+                <RailBtn label="Column" disabled={busy} dragKind="column" dragOnly onClick={addColumnToBoard}>
                   <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" />
                 </RailBtn>
                 <RailBtn label="Shape" disabled={busy} dragKind="shape:rect" onClick={() => setShapesOpen((o) => !o)}>
                   <rect x="3" y="9" width="12" height="12" rx="2" /><circle cx="16.5" cy="8.5" r="5" />
                 </RailBtn>
-                <RailBtn label="Line / arrow" disabled={busy} dragKind="line" onClick={addLineToBoard}>
+                <RailBtn label="Line / arrow" disabled={busy} dragKind="line" dragOnly onClick={addLineToBoard}>
                   <path d="M5 19 19 5" /><path d="M11 5h8v8" />
                 </RailBtn>
                 <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
@@ -1002,7 +1001,7 @@ export function BoardsWorkspace({
                 <RailBtn label="Upload image" disabled={busy} onClick={() => fileRef.current?.click()}>
                   <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
                 </RailBtn>
-                <RailBtn label="Color swatch" disabled={busy} dragKind="color" onClick={addColorToBoard}>
+                <RailBtn label="Color swatch" disabled={busy} dragKind="color" dragOnly onClick={addColorToBoard}>
                   <circle cx="13.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="10.5" r="2.5" /><circle cx="8.5" cy="7.5" r="2.5" /><path d="M12 22a10 10 0 1 1 0-20 8 8 0 0 1 0 16h-1.5a1.5 1.5 0 0 0 0 3z" />
                 </RailBtn>
 
@@ -1022,29 +1021,36 @@ export function BoardsWorkspace({
                   </RailBtn>
                 )}
 
-                {/* Shape picker (Freeform-style): click a tile to add it at the
-                    viewport center, or drag it to a spot on the board. */}
+                {/* Shape picker: drag a tile onto the board to place it, the
+                    same rule the creation tools follow. */}
                 {shapesOpen && (
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setShapesOpen(false)} />
                     <div className="absolute left-full top-0 z-30 ml-2 w-[248px] rounded-[14px] border border-border bg-surface p-2.5 shadow-lg">
-                      <p className="mb-1.5 px-0.5 text-[10px] font-bold uppercase tracking-wide text-text-faint">
-                        Shapes · click or drag onto the board
+                      <p
+                        className={`mb-1.5 px-0.5 text-[10px] font-bold uppercase tracking-wide transition ${
+                          shapeNudge ? "text-accent" : "text-text-faint"
+                        }`}
+                      >
+                        Drag a shape onto the board
                       </p>
                       <div className="grid grid-cols-4 gap-1">
                         {SHAPES.map((s) => (
                           <button
                             key={s.key}
-                            title={s.label}
+                            title={`Drag "${s.label}" onto the board`}
                             aria-label={s.label}
                             draggable
                             onDragStart={(e) => {
                               e.dataTransfer.setData("application/x-board-tool", `shape:${s.key}`);
                               e.dataTransfer.effectAllowed = "copy";
+                              setShapeNudge(false);
                             }}
                             onClick={() => {
-                              setShapesOpen(false);
-                              addShapeToBoard(s.key);
+                              // Drag-only, like the rail's creation tools: a
+                              // click just points at the heading above.
+                              setShapeNudge(true);
+                              window.setTimeout(() => setShapeNudge(false), 1900);
                             }}
                             className="grid h-12 cursor-grab place-items-center rounded-[9px] transition hover:bg-surface-2 active:cursor-grabbing"
                           >
@@ -1064,6 +1070,7 @@ export function BoardsWorkspace({
                   </>
                 )}
               </div>
+            )}
 
             <div className="min-h-0 min-w-0 flex-1">
               <BoardCanvas
@@ -1228,7 +1235,6 @@ function NotePanel({
   onDuplicate: () => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"text" | "box">("text");
   // The note's color key for the "match note" first text-color swatch. Falls
   // back to a token hue (never a raw hex or "none", which aren't valid --h vars).
   const noteHueKey = (() => {
@@ -1324,139 +1330,103 @@ function NotePanel({
   };
   const fmt =
     "grid h-8 flex-1 place-items-center rounded-[8px] border border-border text-[13px] font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text";
-  const tabBtn = (active: boolean) =>
-    `flex-1 rounded-[7px] px-2 py-1 text-xs font-bold transition ${
-      active ? "bg-surface text-text shadow-sm" : "text-text-muted"
-    }`;
 
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Note</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+    <CardRail label="Note" onClose={onClose}>
+      <RailTool id="style" label="Text style" icon={ICON.textStyle}>
+        <div className="flex flex-col gap-1">
+          {styles.map((s) => (
+            <button
+              key={s.label}
+              title={s.label}
+              onMouseDown={hold(s.run)}
+              className="rounded-[8px] border border-border px-2 py-1.5 text-left text-[12px] font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </RailTool>
+
+      <RailTool id="format" label="Formatting" icon={ICON.bold}>
+        <div className="flex gap-1.5">
+          <button className={fmt} style={{ fontWeight: 800 }} title="Bold" onMouseDown={hold(() => exec("bold"))}>B</button>
+          <button className={`${fmt} italic`} title="Italic" onMouseDown={hold(() => exec("italic"))}>I</button>
+          <button className={`${fmt} underline`} title="Underline" onMouseDown={hold(() => exec("underline"))}>U</button>
+          <button className={`${fmt} line-through`} title="Strikethrough" onMouseDown={hold(() => exec("strikeThrough"))}>S</button>
+        </div>
+        <div className="flex gap-1.5">
+          <button className={fmt} title="Bulleted list" onMouseDown={hold(() => exec("insertUnorderedList"))}>List</button>
+          <button className={fmt} title="Numbered list" onMouseDown={hold(() => exec("insertOrderedList"))}>1. List</button>
+        </div>
+        <button
+          className={`${fmt} w-full`}
+          title="Add link"
+          onMouseDown={hold(() => {
+            const url = window.prompt("Link URL (https://...)");
+            if (url) exec("createLink", /^https?:\/\//i.test(url) ? url : `https://${url}`);
+          })}
+        >
+          Add a link
         </button>
-      </div>
+        <button className={`${fmt} w-full`} title="Clear formatting" onMouseDown={hold(() => exec("removeFormat"))}>
+          Clear formatting
+        </button>
+      </RailTool>
 
-      <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
-        <button className={tabBtn(tab === "text")} onClick={() => setTab("text")}>Text</button>
-        <button className={tabBtn(tab === "box")} onClick={() => setTab("box")}>Box</button>
-      </div>
-
-      {tab === "text" ? (
-        <>
-          <div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">
-              Text style
-            </p>
-            <div className="flex flex-col gap-1">
-              {styles.map((s) => (
-                <button
-                  key={s.label}
-                  title={s.label}
-                  onMouseDown={hold(s.run)}
-                  className="rounded-[8px] border border-border px-2 py-1.5 text-left text-[12px] font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex gap-1.5">
-            <button className={fmt} style={{ fontWeight: 800 }} title="Bold" onMouseDown={hold(() => exec("bold"))}>B</button>
-            <button className={`${fmt} italic`} title="Italic" onMouseDown={hold(() => exec("italic"))}>I</button>
-            <button className={`${fmt} underline`} title="Underline" onMouseDown={hold(() => exec("underline"))}>U</button>
-            <button className={`${fmt} line-through`} title="Strikethrough" onMouseDown={hold(() => exec("strikeThrough"))}>S</button>
-          </div>
-          <div className="flex gap-1.5">
-            <button className={fmt} title="Bulleted list" onMouseDown={hold(() => exec("insertUnorderedList"))}>• List</button>
-            <button className={fmt} title="Numbered list" onMouseDown={hold(() => exec("insertOrderedList"))}>1. List</button>
-          </div>
-          <button
-            className={`${fmt} w-full`}
-            title="Add link"
-            onMouseDown={hold(() => {
-              const url = window.prompt("Link URL (https://…)");
-              if (url) exec("createLink", /^https?:\/\//i.test(url) ? url : `https://${url}`);
-            })}
-          >
-            🔗 Link
-          </button>
-          <div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">
-              Text color
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {textColors.map((cv, i) => (
-                <button
-                  key={i}
-                  title={i === 0 ? "Default" : "Text color"}
-                  onMouseDown={hold(() => applyTextColor(cv))}
-                  className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
-                  style={{ backgroundColor: cv }}
-                />
-              ))}
-              <label
-                title="Custom color"
-                onMouseDown={rememberSelection}
-                className="h-6 w-6 cursor-pointer rounded-full ring-1 ring-black/10 transition hover:scale-110"
-                style={{
-                  background:
-                    "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)",
-                }}
-              >
-                <input
-                  type="color"
-                  className="sr-only"
-                  onChange={(e) => applyCustomTextColor(e.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-          <div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">
-              Highlight
-            </p>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {highlights.map((cv, i) => (
-                <button
-                  key={i}
-                  title="Highlight"
-                  onMouseDown={hold(() => applyHighlight(cv))}
-                  className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
-                  style={{ backgroundColor: cv }}
-                />
-              ))}
+      <RailTool id="textcolor" label="Text color" icon={ICON.textColor}>
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Color</p>
+          <div className="flex flex-wrap gap-1.5">
+            {textColors.map((cv, i) => (
               <button
-                title="No highlight"
-                onMouseDown={hold(() => applyHighlight(null))}
-                className="grid h-6 w-6 place-items-center rounded-full ring-1 ring-black/10 transition hover:scale-110"
-                style={{ backgroundColor: "var(--surface)" }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="text-text-faint"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
+                key={i}
+                title={i === 0 ? "Default" : "Text color"}
+                onMouseDown={hold(() => applyTextColor(cv))}
+                className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                style={{ backgroundColor: cv }}
+              />
+            ))}
+            <label
+              title="Custom color"
+              onMouseDown={rememberSelection}
+              className="h-6 w-6 cursor-pointer rounded-full ring-1 ring-black/10 transition hover:scale-110"
+              style={{ background: "conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)" }}
+            >
+              <input type="color" className="sr-only" onChange={(e) => applyCustomTextColor(e.target.value)} />
+            </label>
           </div>
-          <button className={`${fmt} w-full`} title="Clear formatting" onMouseDown={hold(() => exec("removeFormat"))}>
-            Clear formatting
-          </button>
-        </>
-      ) : (
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Highlight</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {highlights.map((cv, i) => (
+              <button
+                key={i}
+                title="Highlight"
+                onMouseDown={hold(() => applyHighlight(cv))}
+                className="h-6 w-6 rounded-full ring-1 ring-black/10 transition hover:scale-110"
+                style={{ backgroundColor: cv }}
+              />
+            ))}
+            <button
+              title="No highlight"
+              onMouseDown={hold(() => applyHighlight(null))}
+              className="grid h-6 w-6 place-items-center rounded-full ring-1 ring-black/10 transition hover:scale-110"
+              style={{ backgroundColor: "var(--surface)" }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="text-text-faint"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
+      </RailTool>
+
+      <RailTool id="box" label="Note color" icon={ICON.palette}>
         <BoxOptions rawHue={note.hue} onHue={onHue} />
-      )}
+      </RailTool>
 
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete note
-      </button>
-    </div>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete note" />
+    </CardRail>
   );
 }
 
@@ -1487,58 +1457,48 @@ function TodoPanel({
     "flex w-full items-center gap-2 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:pointer-events-none disabled:opacity-40";
 
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">To-do</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
-      {/* Progress */}
-      <div>
-        <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-text-muted">
-          <span>Progress</span>
-          <span>{done}/{total}</span>
+    <CardRail label="To-do" onClose={onClose}>
+      <RailTool id="items" label="Items" icon={ICON.checklist}>
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-text-muted">
+            <span>Progress</span>
+            <span>{done}/{total}</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${pct}%`, backgroundColor: noteColorVars(hue).accent }}
+            />
+          </div>
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-          <div
-            className="h-full rounded-full transition-all"
-            style={{ width: `${pct}%`, backgroundColor: noteColorVars(hue).accent }}
-          />
+        <div className="flex flex-col gap-1.5">
+          <button
+            className={row}
+            onClick={() => onMutate((rs) => [...rs, { id: crypto.randomUUID(), text: "", done: false }])}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            Add item
+          </button>
+          <button
+            className={row}
+            disabled={total === 0}
+            onClick={() => onMutate((rs) => rs.map((r) => ({ ...r, done: !allDone })))}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></svg>
+            {allDone ? "Uncheck all" : "Check all"}
+          </button>
+          <button
+            className={row}
+            disabled={done === 0}
+            onClick={() => onMutate((rs) => rs.filter((r) => !r.done))}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" /></svg>
+            Clear completed
+          </button>
         </div>
-      </div>
+      </RailTool>
 
-      {/* Row actions */}
-      <div className="flex flex-col gap-1.5">
-        <button
-          className={row}
-          onClick={() => onMutate((rs) => [...rs, { id: crypto.randomUUID(), text: "", done: false }])}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          Add item
-        </button>
-        <button
-          className={row}
-          disabled={total === 0}
-          onClick={() => onMutate((rs) => rs.map((r) => ({ ...r, done: !allDone })))}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></svg>
-          {allDone ? "Uncheck all" : "Check all"}
-        </button>
-        <button
-          className={row}
-          disabled={done === 0}
-          onClick={() => onMutate((rs) => rs.filter((r) => !r.done))}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" /></svg>
-          Clear completed
-        </button>
-      </div>
-
-      {/* Header color */}
-      <div>
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Header color</p>
+      <RailTool id="color" label="Header color" icon={ICON.palette}>
         <div className="flex flex-wrap gap-1.5">
           {NOTE_COLORS.map((h) => (
             <button
@@ -1555,23 +1515,11 @@ function TodoPanel({
             </button>
           ))}
         </div>
-        <div className="mt-1.5">
-          <CustomColorButton active={hueIsCustom} value={hue} onPick={onHue} />
-        </div>
-      </div>
+        <CustomColorButton active={hueIsCustom} value={hue} onPick={onHue} />
+      </RailTool>
 
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete checklist
-      </button>
-    </div>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete checklist" />
+    </CardRail>
   );
 }
 
@@ -1724,28 +1672,12 @@ function ColumnPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Column</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
-      <BoxOptions rawHue={column.hue} onHue={onHue} />
-
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete column
-      </button>
-    </div>
+    <CardRail label="Column" onClose={onClose}>
+      <RailTool id="color" label="Column color" icon={ICON.palette}>
+        <BoxOptions rawHue={column.hue} onHue={onHue} />
+      </RailTool>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete column" />
+    </CardRail>
   );
 }
 
@@ -1763,55 +1695,33 @@ function LinkPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Link</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
+    <CardRail label="Link" onClose={onClose}>
       {link.url && (
-        <a
-          href={link.url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-1.5 rounded-[9px] border border-accent bg-accent-soft px-2 py-1.5 text-xs font-bold text-accent transition hover:brightness-95"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6M10 14 21 3" /></svg>
-          Open link
-        </a>
-      )}
-
-      <div>
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Title</p>
-        <input
-          defaultValue={link.name ?? ""}
-          onBlur={(e) => onTitle(e.target.value)}
-          placeholder="Link title"
-          className="w-full rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-border-strong"
+        <RailTool
+          label="Open link"
+          icon={ICON.open}
+          onClick={() => window.open(link.url as string, "_blank", "noopener,noreferrer")}
         />
-      </div>
-
-      {link.url && (
-        <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Destination</p>
-          <p className="break-all rounded-[8px] bg-surface-2 px-2 py-1.5 text-[11px] text-text-muted">{link.url}</p>
-        </div>
       )}
-
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete link
-      </button>
-    </div>
+      <RailTool id="title" label="Title" icon={ICON.textStyle}>
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Title</p>
+          <input
+            defaultValue={link.name ?? ""}
+            onBlur={(e) => onTitle(e.target.value)}
+            placeholder="Link title"
+            className="w-full rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-border-strong"
+          />
+        </div>
+        {link.url && (
+          <div>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Destination</p>
+            <p className="break-all rounded-[8px] bg-surface-2 px-2 py-1.5 text-[11px] text-text-muted">{link.url}</p>
+          </div>
+        )}
+      </RailTool>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete link" />
+    </CardRail>
   );
 }
 
@@ -1843,50 +1753,27 @@ function ImagePanel({
       active ? "border-accent bg-accent-soft text-accent" : "border-border text-text-muted hover:text-text"
     }`;
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">{label}</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
+    <CardRail label={label} onClose={onClose}>
       {(isImg || isVid) && (
-        <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Fit</p>
+        <RailTool id="fit" label="Fit" icon={ICON.fit}>
           <div className="flex gap-1.5">
             <button className={chip(meta.fit === "cover")} onClick={() => onFit(serializeMediaMeta({ ...meta, fit: "cover" }))} title="Crop to fill the frame">Fill</button>
             <button className={chip(meta.fit === "contain")} onClick={() => onFit(serializeMediaMeta({ ...meta, fit: "contain" }))} title="Show the whole image">Fit</button>
           </div>
-        </div>
+        </RailTool>
       )}
-
-      <CaptionTools itemId={image.id} />
-
+      <RailTool id="caption" label="Caption" icon={ICON.caption}>
+        <CaptionTools itemId={image.id} />
+      </RailTool>
       {image.signedUrl && (
-        <a
-          href={image.signedUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
-          Open full size
-        </a>
+        <RailTool
+          label="Open full size"
+          icon={ICON.open}
+          onClick={() => window.open(image.signedUrl as string, "_blank", "noopener,noreferrer")}
+        />
       )}
-
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete
-      </button>
-    </div>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete" />
+    </CardRail>
   );
 }
 
@@ -1950,53 +1837,29 @@ function VideoPanel({
 }) {
   const emb = videoEmbed(video.url);
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Video</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
-      {emb && (
-        <p className="rounded-[8px] bg-surface-2 px-2 py-1.5 text-[11px] font-semibold text-text-muted">
-          {emb.title}
-        </p>
-      )}
-
-      <CaptionTools itemId={video.id} />
-
+    <CardRail label="Video" onClose={onClose}>
+      <RailTool id="caption" label="Caption" icon={ICON.caption}>
+        <CaptionTools itemId={video.id} />
+      </RailTool>
       {video.url && (
-        <a
-          href={video.url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-1.5 rounded-[9px] border border-accent bg-accent-soft px-2 py-1.5 text-xs font-bold text-accent transition hover:brightness-95"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
-          Open original
-        </a>
+        <RailTool
+          label="Open original"
+          icon={ICON.open}
+          onClick={() => window.open(video.url as string, "_blank", "noopener,noreferrer")}
+        />
       )}
-
       {video.url && (
-        <div>
-          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Link</p>
+        <RailTool id="link" label="Link" icon={ICON.link}>
+          {emb && (
+            <p className="rounded-[8px] bg-surface-2 px-2 py-1.5 text-[11px] font-semibold text-text-muted">
+              {emb.title}
+            </p>
+          )}
           <p className="break-all rounded-[8px] bg-surface-2 px-2 py-1.5 text-[11px] text-text-muted">{video.url}</p>
-        </div>
+        </RailTool>
       )}
-
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete video
-      </button>
-    </div>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete video" />
+    </CardRail>
   );
 }
 
@@ -2023,61 +1886,43 @@ function ColorPanel({
     "#10B981", "#06B6D4", "#3B82F6", "#6366F1", "#EC4899",
   ];
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Color</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
-      <div className="h-14 w-full rounded-[9px] ring-1 ring-black/10" style={{ backgroundColor: hex }} />
-
-      <div className="flex flex-wrap gap-1.5">
-        {swatches.map((s) => (
-          <button
-            key={s}
-            onClick={() => onHex(s)}
-            aria-label={s}
-            className="h-7 w-7 rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
-            style={{
-              backgroundColor: s,
-              boxShadow: hex.toUpperCase() === s.toUpperCase() ? "0 0 0 2px var(--accent)" : undefined,
-            }}
-          />
-        ))}
-      </div>
-
-      <div>
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Hex</p>
-        <div className="flex items-center gap-1.5">
-          <label className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-[8px] ring-1 ring-black/10" style={{ backgroundColor: hex }}>
-            <input type="color" value={hex.length === 7 ? hex : "#6366F1"} onChange={(e) => onHex(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
-          </label>
-          <input
-            key={hex}
-            defaultValue={hex}
-            onBlur={(e) => {
-              const v = e.target.value.trim();
-              if (/^#?[0-9a-fA-F]{3,8}$/.test(v)) onHex(v.startsWith("#") ? v : `#${v}`);
-            }}
-            className="min-w-0 flex-1 rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs uppercase text-text outline-none focus:border-border-strong"
-          />
+    <CardRail label="Color" onClose={onClose}>
+      <RailTool id="color" label="Color" icon={ICON.palette}>
+        <div className="h-14 w-full rounded-[9px] ring-1 ring-black/10" style={{ backgroundColor: hex }} />
+        <div className="flex flex-wrap gap-1.5">
+          {swatches.map((s) => (
+            <button
+              key={s}
+              onClick={() => onHex(s)}
+              aria-label={s}
+              className="h-7 w-7 rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+              style={{
+                backgroundColor: s,
+                boxShadow: hex.toUpperCase() === s.toUpperCase() ? "0 0 0 2px var(--accent)" : undefined,
+              }}
+            />
+          ))}
         </div>
-      </div>
-
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete swatch
-      </button>
-    </div>
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Hex</p>
+          <div className="flex items-center gap-1.5">
+            <label className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-[8px] ring-1 ring-black/10" style={{ backgroundColor: hex }}>
+              <input type="color" value={hex.length === 7 ? hex : "#6366F1"} onChange={(e) => onHex(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
+            </label>
+            <input
+              key={hex}
+              defaultValue={hex}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (/^#?[0-9a-fA-F]{3,8}$/.test(v)) onHex(v.startsWith("#") ? v : `#${v}`);
+              }}
+              className="min-w-0 flex-1 rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs uppercase text-text outline-none focus:border-border-strong"
+            />
+          </div>
+        </div>
+      </RailTool>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete swatch" />
+    </CardRail>
   );
 }
 
@@ -2102,47 +1947,41 @@ function ShapePanel({
   const hue = item.hue ?? "blue";
   const isCustom = hue.startsWith("#");
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Shape</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
+    <CardRail label="Shape" onClose={onClose}>
       {/* Swap the shape in place; size, color, label, and connections stay. */}
-      <div className="grid grid-cols-4 gap-1">
-        {SHAPES.map((s) => (
-          <button
-            key={s.key}
-            title={s.label}
-            aria-label={s.label}
-            onClick={() => onShape(s.key)}
-            className={`grid h-9 place-items-center rounded-[8px] transition hover:bg-surface-2 ${
-              current === s.key ? "bg-accent-soft ring-1 ring-accent" : ""
-            }`}
-          >
-            <svg width="26" height="20" viewBox="0 0 26 20" aria-hidden>
-              {shapePaths(s.key, 26, 20).map((p, i) => (
-                <path
-                  key={i}
-                  d={p.d}
-                  fill={
-                    p.overlay
-                      ? "rgba(255,255,255,0.35)"
-                      : current === s.key
-                      ? "var(--accent)"
-                      : "var(--text-faint)"
-                  }
-                />
-              ))}
-            </svg>
-          </button>
-        ))}
-      </div>
+      <RailTool id="shape" label="Shape" icon={ICON.shape} wide>
+        <div className="grid grid-cols-4 gap-1">
+          {SHAPES.map((s) => (
+            <button
+              key={s.key}
+              title={s.label}
+              aria-label={s.label}
+              onClick={() => onShape(s.key)}
+              className={`grid h-9 place-items-center rounded-[8px] transition hover:bg-surface-2 ${
+                current === s.key ? "bg-accent-soft ring-1 ring-accent" : ""
+              }`}
+            >
+              <svg width="26" height="20" viewBox="0 0 26 20" aria-hidden>
+                {shapePaths(s.key, 26, 20).map((p, i) => (
+                  <path
+                    key={i}
+                    d={p.d}
+                    fill={
+                      p.overlay
+                        ? "rgba(255,255,255,0.35)"
+                        : current === s.key
+                        ? "var(--accent)"
+                        : "var(--text-faint)"
+                    }
+                  />
+                ))}
+              </svg>
+            </button>
+          ))}
+        </div>
+      </RailTool>
 
-      <div>
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Fill</p>
+      <RailTool id="fill" label="Fill" icon={ICON.palette}>
         <div className="flex flex-wrap gap-1.5">
           {NOTE_COLORS.map((h) => (
             <button
@@ -2157,13 +1996,10 @@ function ShapePanel({
             />
           ))}
         </div>
-        <div className="mt-1.5">
-          <CustomColorButton active={isCustom} value={hue} onPick={onHue} />
-        </div>
-      </div>
+        <CustomColorButton active={isCustom} value={hue} onPick={onHue} />
+      </RailTool>
 
-      <div>
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Label</p>
+      <RailTool id="label" label="Label" icon={ICON.label}>
         <input
           defaultValue={item.name ?? ""}
           onBlur={(e) => onLabel(e.target.value)}
@@ -2173,20 +2009,10 @@ function ShapePanel({
           placeholder="Text on the shape"
           className="w-full rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-border-strong"
         />
-      </div>
+      </RailTool>
 
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete shape
-      </button>
-    </div>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete shape" />
+    </CardRail>
   );
 }
 
@@ -2220,48 +2046,41 @@ function HeadingPanel({
     }`;
 
   return (
-    <div className="flex w-[184px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">Heading</span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
-      <div>
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Size</p>
-        <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
-          <button className={seg(style.size === "sm")} onClick={() => patch({ size: "sm" })} title="Small">
-            <span className="text-[11px]">S</span>
+    <CardRail label="Heading" onClose={onClose}>
+      <RailTool id="text" label="Size and style" icon={ICON.size}>
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Size</p>
+          <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
+            <button className={seg(style.size === "sm")} onClick={() => patch({ size: "sm" })} title="Small">
+              <span className="text-[11px]">S</span>
+            </button>
+            <button className={seg(style.size === "md")} onClick={() => patch({ size: "md" })} title="Medium">
+              <span className="text-[13px]">M</span>
+            </button>
+            <button className={seg(style.size === "lg")} onClick={() => patch({ size: "lg" })} title="Large">
+              <span className="text-[15px]">L</span>
+            </button>
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          <button
+            className={`${fmt(style.italic)} italic`}
+            title="Italic"
+            onClick={() => patch({ italic: !style.italic })}
+          >
+            I
           </button>
-          <button className={seg(style.size === "md")} onClick={() => patch({ size: "md" })} title="Medium">
-            <span className="text-[13px]">M</span>
-          </button>
-          <button className={seg(style.size === "lg")} onClick={() => patch({ size: "lg" })} title="Large">
-            <span className="text-[15px]">L</span>
+          <button
+            className={`${fmt(style.underline)} underline`}
+            title="Underline"
+            onClick={() => patch({ underline: !style.underline })}
+          >
+            U
           </button>
         </div>
-      </div>
+      </RailTool>
 
-      <div className="flex gap-1.5">
-        <button
-          className={`${fmt(style.italic)} italic`}
-          title="Italic"
-          onClick={() => patch({ italic: !style.italic })}
-        >
-          I
-        </button>
-        <button
-          className={`${fmt(style.underline)} underline`}
-          title="Underline"
-          onClick={() => patch({ underline: !style.underline })}
-        >
-          U
-        </button>
-      </div>
-
-      <div>
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Align</p>
+      <RailTool id="align" label="Align" icon={ICON.align}>
         <div className="flex gap-1.5">
           <button className={fmt(style.align === "left")} title="Align left" onClick={() => patch({ align: "left" })}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h10M4 18h13" /></svg>
@@ -2273,10 +2092,9 @@ function HeadingPanel({
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M10 12h10M7 18h13" /></svg>
           </button>
         </div>
-      </div>
+      </RailTool>
 
-      <div>
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Text color</p>
+      <RailTool id="color" label="Text color" icon={ICON.palette}>
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => patch({ color: null })}
@@ -2305,27 +2123,15 @@ function HeadingPanel({
             </button>
           ))}
         </div>
-        <div className="mt-1.5">
-          <CustomColorButton
-            active={Boolean(style.color?.startsWith("#"))}
-            value={style.color}
-            onPick={(hex) => patch({ color: hex })}
-          />
-        </div>
-      </div>
+        <CustomColorButton
+          active={Boolean(style.color?.startsWith("#"))}
+          value={style.color}
+          onPick={(hex) => patch({ color: hex })}
+        />
+      </RailTool>
 
-      <DuplicateButton onDuplicate={onDuplicate} />
-
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
-        </svg>
-        Delete heading
-      </button>
-    </div>
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete heading" />
+    </CardRail>
   );
 }
 
@@ -2353,18 +2159,8 @@ function LineStylePanel({
     }`;
 
   return (
-    <div className="flex w-[176px] shrink-0 flex-col gap-3 self-start rounded-[14px] border border-border bg-surface p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-text-faint">
-          Line
-        </span>
-        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-        </button>
-      </div>
-
-      <div>
-        <p className={label}>Color</p>
+    <CardRail label="Line" onClose={onClose}>
+      <RailTool id="color" label="Color" icon={ICON.palette}>
         <div className="flex flex-wrap gap-1.5">
           {LINE_COLORS.map((c) => (
             <button
@@ -2379,81 +2175,323 @@ function LineStylePanel({
             />
           ))}
         </div>
-        <div className="mt-1.5">
-          <CustomColorButton
-            active={d.color.startsWith("#")}
-            value={d.color}
-            onPick={(hex) => onChange({ color: hex })}
-          />
-        </div>
-      </div>
+        <CustomColorButton
+          active={d.color.startsWith("#")}
+          value={d.color}
+          onPick={(hex) => onChange({ color: hex })}
+        />
+      </RailTool>
 
-      <div>
-        <p className={label}>Arrowheads</p>
-        <div className="flex gap-1.5">
-          <button className={chip(d.startArrow)} onClick={() => onChange({ startArrow: !d.startArrow })}>
-            Start
-          </button>
-          <button className={chip(d.endArrow)} onClick={() => onChange({ endArrow: !d.endArrow })}>
-            End
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <p className={label}>Style</p>
-        <button className={`w-full ${chip(d.dashed)}`} onClick={() => onChange({ dashed: !d.dashed })}>
-          {d.dashed ? "Dashed" : "Solid"}
-        </button>
-      </div>
-
-      <div>
-        <p className={label}>Weight</p>
-        <div className="flex gap-1.5">
-          {LINE_WEIGHTS.map((w) => (
-            <button
-              key={w}
-              onClick={() => onChange({ weight: w })}
-              className="flex h-8 flex-1 items-center justify-center rounded-[8px] border transition"
-              style={{ borderColor: d.weight === w ? "var(--accent)" : "var(--border)" }}
-            >
-              <span style={{ height: w, width: 20, background: "var(--text-muted)", borderRadius: 3 }} />
+      <RailTool id="style" label="Style" icon={ICON.line}>
+        <div>
+          <p className={label}>Arrowheads</p>
+          <div className="flex gap-1.5">
+            <button className={chip(d.startArrow)} onClick={() => onChange({ startArrow: !d.startArrow })}>
+              Start
             </button>
-          ))}
+            <button className={chip(d.endArrow)} onClick={() => onChange({ endArrow: !d.endArrow })}>
+              End
+            </button>
+          </div>
         </div>
-      </div>
+        <div>
+          <p className={label}>Line</p>
+          <button className={`w-full ${chip(d.dashed)}`} onClick={() => onChange({ dashed: !d.dashed })}>
+            {d.dashed ? "Dashed" : "Solid"}
+          </button>
+        </div>
+        <div>
+          <p className={label}>Weight</p>
+          <div className="flex gap-1.5">
+            {LINE_WEIGHTS.map((w) => (
+              <button
+                key={w}
+                onClick={() => onChange({ weight: w })}
+                className="flex h-8 flex-1 items-center justify-center rounded-[8px] border transition"
+                style={{ borderColor: d.weight === w ? "var(--accent)" : "var(--border)" }}
+              >
+                <span style={{ height: w, width: 20, background: "var(--text-muted)", borderRadius: 3 }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      </RailTool>
 
-      <div>
-        <p className={label}>Label</p>
+      <RailTool id="label" label="Label" icon={ICON.label}>
         <input
           defaultValue={d.label}
           onBlur={(e) => onChange({ label: e.target.value })}
           placeholder="Optional"
           className="w-full rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text outline-none focus:border-border-strong"
         />
-      </div>
+        {(d.bendX !== 0 || d.bendY !== 0) && (
+          <button
+            onClick={() => onChange({ bendX: 0, bendY: 0 })}
+            className="text-[11px] font-semibold text-accent hover:underline"
+          >
+            Straighten
+          </button>
+        )}
+      </RailTool>
 
-      {(d.bendX !== 0 || d.bendY !== 0) && (
-        <button
-          onClick={() => onChange({ bendX: 0, bendY: 0 })}
-          className="text-[11px] font-semibold text-accent hover:underline"
-        >
-          Straighten
-        </button>
-      )}
+      <CardTools onDuplicate={onDuplicate} onDelete={onDelete} deleteLabel="Delete line" />
+    </CardRail>
+  );
+}
 
-      <DuplicateButton onDuplicate={onDuplicate} />
+/* -------------------------------------------------------------------------
+   The contextual card rail.
 
-      <button
-        onClick={onDelete}
-        className="flex items-center justify-center gap-1.5 rounded-[9px] border border-border px-2 py-1.5 text-xs font-semibold text-red transition hover:bg-red-bg"
+   Selecting a card swaps what the RAIL holds, in the same 52px footprint,
+   rather than opening a wider panel beside it. Two earlier layouts were both
+   wrong in ways worth remembering: a wider in-flow panel pushed the whole
+   canvas sideways on every select (cards appeared to jump), and floating that
+   same panel over the canvas covered the work you were trying to edit. Milanote
+   gets this right: the rail keeps its footprint, its contents change, and each
+   tool's options open in a small flyout beside it, on demand.
+   ------------------------------------------------------------------------- */
+
+const ICON = {
+  back: <path d="M15 18l-6-6 6-6" />,
+  textStyle: (
+    <>
+      <path d="M4 7V5h16v2" />
+      <path d="M12 5v14" />
+      <path d="M9 19h6" />
+    </>
+  ),
+  bold: (
+    <>
+      <path d="M7 5h6a3.5 3.5 0 0 1 0 7H7z" />
+      <path d="M7 12h7a3.5 3.5 0 0 1 0 7H7z" />
+    </>
+  ),
+  textColor: (
+    <>
+      <path d="M5 20h14" />
+      <path d="m8 16 4-11 4 11" />
+      <path d="M9.5 13h5" />
+    </>
+  ),
+  palette: (
+    <>
+      <circle cx="13.5" cy="6.5" r="1.6" />
+      <circle cx="17.5" cy="10.5" r="1.6" />
+      <circle cx="8.5" cy="7.5" r="1.6" />
+      <path d="M12 22a10 10 0 1 1 0-20 8 8 0 0 1 0 16h-1.5a1.5 1.5 0 0 0 0 3z" />
+    </>
+  ),
+  checklist: (
+    <>
+      <path d="M9 11l3 3 8-8" />
+      <path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
+    </>
+  ),
+  caption: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M7 15h7" />
+    </>
+  ),
+  fit: (
+    <>
+      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+      <path d="M2 6h14a2 2 0 0 1 2 2v14" />
+    </>
+  ),
+  shape: (
+    <>
+      <rect x="3" y="9" width="12" height="12" rx="2" />
+      <circle cx="16.5" cy="8.5" r="5" />
+    </>
+  ),
+  label: (
+    <>
+      <path d="M20.6 13.4 12 22l-9-9V3h10z" />
+      <circle cx="7.5" cy="7.5" r="1.2" />
+    </>
+  ),
+  align: <path d="M4 6h16M4 12h10M4 18h13" />,
+  size: (
+    <>
+      <path d="M3 8V6h8v2" />
+      <path d="M7 6v12" />
+      <path d="M5 18h4" />
+      <path d="M13 12v-1h8v1" />
+      <path d="M17 11v7" />
+      <path d="M15 18h4" />
+    </>
+  ),
+  line: (
+    <>
+      <path d="M5 19 19 5" />
+      <path d="M11 5h8v8" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" />
+      <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
+    </>
+  ),
+  open: (
+    <>
+      <path d="M15 3h6v6M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </>
+  ),
+  duplicate: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ),
+  trash: (
+    <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+  ),
+};
+
+// Which tool's flyout is open. Held by the rail so opening one closes the last,
+// and so switching cards (the rail is keyed by item id) starts closed.
+const RailFlyoutCtx = createContext<{
+  open: string | null;
+  setOpen: (key: string | null) => void;
+}>({ open: null, setOpen: () => {} });
+
+function CardRail({
+  label,
+  onClose,
+  children,
+}: {
+  label: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on a click anywhere outside the rail (including on the canvas), so a
+  // flyout never sits over the board once you have moved on. A listener rather
+  // than a backdrop element: a backdrop would swallow the click that opens the
+  // NEXT tool, making every switch take two clicks.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: PointerEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(null);
+    }
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open]);
+
+  return (
+    <RailFlyoutCtx.Provider value={{ open, setOpen }}>
+      <div
+        ref={ref}
+        className="relative z-30 flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2"
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+        <button
+          onClick={onClose}
+          aria-label="Back to tools"
+          className="group relative grid h-10 w-10 place-items-center rounded-[10px] text-text-muted transition hover:bg-surface-2 hover:text-text"
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            {ICON.back}
+          </svg>
+          <span className="pointer-events-none absolute left-full z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
+            Back to tools
+          </span>
+        </button>
+        <span className="px-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-text-faint">
+          {label}
+        </span>
+        <div className="my-1 h-px w-6 bg-border" />
+        {children}
+      </div>
+    </RailFlyoutCtx.Provider>
+  );
+}
+
+function RailTool({
+  id,
+  label,
+  icon,
+  onClick,
+  danger,
+  wide,
+  children,
+}: {
+  /** Set when the tool opens a flyout; omit for a plain action. */
+  id?: string;
+  label: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+  danger?: boolean;
+  /** A wider flyout, for the shape grid. */
+  wide?: boolean;
+  children?: React.ReactNode;
+}) {
+  const { open, setOpen } = useContext(RailFlyoutCtx);
+  const isOpen = Boolean(id) && open === id;
+  return (
+    <div className="relative">
+      <button
+        // Keeps focus (and the text selection) inside a note or caption while
+        // its formatting tools are used: execCommand acts on whatever is
+        // selected, and focusing the button first would throw that away.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => (id && children ? setOpen(isOpen ? null : id) : onClick?.())}
+        aria-label={label}
+        aria-expanded={id ? isOpen : undefined}
+        className={`group relative grid h-10 w-10 place-items-center rounded-[10px] transition ${
+          danger
+            ? "text-text-faint hover:bg-red-bg hover:text-red"
+            : isOpen
+              ? "bg-accent-soft text-accent"
+              : "text-text-muted hover:bg-surface-2 hover:text-text"
+        }`}
+      >
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          {icon}
         </svg>
-        Delete line
+        {!isOpen && (
+          <span className="pointer-events-none absolute left-full z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
+            {label}
+          </span>
+        )}
       </button>
+
+      {isOpen && (
+        <div
+          className={`absolute left-full top-0 z-40 ml-2 rounded-[14px] border border-border bg-surface p-3 shadow-lg ${
+            wide ? "w-[248px]" : "w-[210px]"
+          }`}
+        >
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-text-faint">
+            {label}
+          </p>
+          <div className="flex flex-col gap-3">{children}</div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Duplicate and delete, which every card panel ends with. */
+function CardTools({
+  onDuplicate,
+  onDelete,
+  deleteLabel,
+}: {
+  onDuplicate: () => void;
+  onDelete: () => void;
+  deleteLabel: string;
+}) {
+  return (
+    <>
+      <div className="my-1 h-px w-6 bg-border" />
+      <RailTool label="Duplicate (Cmd/Ctrl+D)" icon={ICON.duplicate} onClick={onDuplicate} />
+      <RailTool label={deleteLabel} icon={ICON.trash} onClick={onDelete} danger />
+    </>
   );
 }
 
@@ -2462,19 +2500,44 @@ function RailBtn({
   onClick,
   disabled,
   dragKind,
+  dragOnly,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
-  // When set, the tool can also be dragged onto the board to place it at the
-  // drop point (in addition to click-to-add).
+  // When set, the tool can be dragged onto the board to place it at the drop
+  // point.
   dragKind?: string;
+  // Creation tools are DRAG-ONLY (Milanote's rule). Clicking one used to drop
+  // the card at a default spot, which routinely landed on top of whatever was
+  // already there and then had to be dug out and moved. Dragging puts it
+  // exactly where it belongs, so a click just says so.
+  dragOnly?: boolean;
   children: React.ReactNode;
 }) {
+  const [nudge, setNudge] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    []
+  );
+
+  function press() {
+    if (dragOnly) {
+      setNudge(true);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setNudge(false), 1900);
+      return;
+    }
+    onClick();
+  }
+
   return (
     <button
-      onClick={onClick}
+      onClick={press}
       disabled={disabled}
       aria-label={label}
       draggable={Boolean(dragKind)}
@@ -2483,6 +2546,7 @@ function RailBtn({
           ? (e) => {
               e.dataTransfer.setData("application/x-board-tool", dragKind);
               e.dataTransfer.effectAllowed = "copy";
+              setNudge(false);
             }
           : undefined
       }
@@ -2493,8 +2557,14 @@ function RailBtn({
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
         {children}
       </svg>
-      <span className="pointer-events-none absolute left-full z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
-        {label}
+      <span
+        className={`pointer-events-none absolute left-full z-40 ml-2 whitespace-nowrap rounded-[7px] px-2 py-1 text-[11px] font-semibold shadow-md ${
+          nudge
+            ? "block bg-accent text-accent-fg"
+            : "hidden bg-text text-bg group-hover:block"
+        }`}
+      >
+        {nudge ? `Drag "${label}" onto the board` : label}
       </span>
     </button>
   );

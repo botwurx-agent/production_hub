@@ -506,6 +506,31 @@ implemented (out of strict order, driven by the operator's real needs).
     reset (one board/project); storyboard resets history on active-board switch
     (per-board frame snapshots). Wiring done via subagents against a precise spec,
     reviewed + build-verified.
+  - THE CONTEXTUAL PANEL IS THE RAIL, not a panel beside it (Milanote's shape,
+    arrived at after two wrong layouts the operator caught). A selected card
+    swaps what the 52px TOOL RAIL HOLDS: a back arrow, the card type, then one
+    icon per capability (CardRail + RailTool + CardTools + ICON in
+    boards-workspace), and each tool's options open in a small flyout to the
+    right ON DEMAND. The two rejected layouts are the reason: an in-flow
+    184px panel pushed the whole canvas sideways on every select and snapped
+    it back on deselect (cards appeared to jump to a different position, and
+    a card near the right edge looked like it moved to the wall), and floating
+    that same panel over the canvas then COVERED the card being edited so it
+    could not be moved. Same footprint in both states is the fix; the flyout
+    closes on any outside click (a document pointerdown listener, NOT a
+    backdrop element, or the click that opens the next tool gets swallowed and
+    every switch takes two clicks). RailTool buttons preventDefault on
+    mousedown so a note or caption keeps its selection while its formatting
+    tools are used (execCommand acts on the selection).
+  - CREATION TOOLS ARE DRAG-ONLY (also Milanote): clicking Note / Heading /
+    To-do / Column / Line / Color used to drop the card at a default spot,
+    which routinely landed on top of something else and then had to be dug out
+    and moved. A click now flashes an accent bubble reading `Drag "Note" onto
+    the board` (the same tooltip element, restyled) and creates nothing; the
+    drag places it exactly where it is dropped. The shape picker's tiles
+    follow the same rule and flash its heading. Tools that open a PICKER or a
+    modal (Link, Video, Upload, Project assets, Drive, Figma, and the Shape
+    button itself) keep their click, since they have nowhere to be dropped.
   - Card selection is LIFTED to the workspace (selected/onSelect props on
     BoardCanvas) so it can render contextual panels over the tool rail, same as
     the line panel. NOTE cards are now rich text (contentEditable storing HTML;
