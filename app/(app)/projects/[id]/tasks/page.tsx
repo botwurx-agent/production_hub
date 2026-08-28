@@ -101,6 +101,10 @@ export default async function TasksPage({
           // The invite panel is only mounted for staff, so offering the button
           // to a collaborator would be a dead end rather than a refusal.
           canInvite={!ctx.isCollaborator}
+          // Since migration 0100 a collaborator sees only tasks assigned to
+          // them and can only add/remove themselves, so the picker is
+          // read-only for them.
+          canAssign={!ctx.isCollaborator}
           pendingInvites={pendingInvites}
           // No canEdit gate here, deliberately. project_tasks is one of the
           // four tables migration 0093 kept REVIEWER-WRITABLE, on the grounds

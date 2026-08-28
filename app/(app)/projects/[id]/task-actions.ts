@@ -79,7 +79,17 @@ export async function addProjectTask(
   // Assignees are their own rows, so they go in after the task exists. A
   // failure here leaves the task without names rather than losing the task,
   // which is the right way round: the title is the thing being captured.
-  const people = (input.assignees ?? []).filter(Boolean);
+  //
+  // A collaborator is ALWAYS put on a task they create: since migration 0100
+  // they only see tasks assigned to them, so without this their own task
+  // would vanish the moment it was saved. (Their RLS also only lets them
+  // insert their own assignee row, which is exactly this one.)
+  const people = [
+    ...new Set([
+      ...(input.assignees ?? []),
+      ...(ctx.isCollaborator ? [ctx.userId] : []),
+    ]),
+  ].filter(Boolean);
   if (people.length > 0) {
     const { error: aErr } = await supabase
       .from("project_task_assignees")

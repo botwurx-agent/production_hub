@@ -56,6 +56,7 @@ export function TaskDetailModal({
   onDelete,
   busy,
   canInvite = false,
+  canAssign = true,
   pendingInvites = [],
 }: {
   task: BoardTask | null;
@@ -67,6 +68,12 @@ export function TaskDetailModal({
    * a button that does nothing.
    */
   canInvite?: boolean;
+  /**
+   * Whether the people row is a picker or a read-only roster. A collaborator's
+   * RLS (migration 0100) only lets them add or remove themselves, so offering
+   * toggles for other people would be a row of buttons that get refused.
+   */
+  canAssign?: boolean;
   /** Invited but not yet accepted. Shown, never assignable: an invite creates
    *  no user until it is accepted, so there is nothing to assign to. */
   pendingInvites?: string[];
@@ -196,13 +203,19 @@ export function TaskDetailModal({
               assigning two people is the common case this exists for, and a
               select would make the second name cost as much as the first. */}
           <div className="flex flex-wrap gap-1.5">
-            {people.map((p) => {
+            {/* Read-only mode shows only who IS on it; a picker of people you
+                cannot actually toggle would read as broken. */}
+            {(canAssign
+              ? people
+              : people.filter((p) => task.assignees.includes(p.userId))
+            ).map((p) => {
               const on = task.assignees.includes(p.userId);
               return (
                 <button
                   key={p.userId}
-                  disabled={busy}
+                  disabled={busy || !canAssign}
                   onClick={() =>
+                    canAssign &&
                     onAssignees(
                       on
                         ? task.assignees.filter((id) => id !== p.userId)

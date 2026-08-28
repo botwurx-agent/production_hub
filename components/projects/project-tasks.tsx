@@ -373,6 +373,7 @@ export function ProjectTasks({
   todayIso,
   viewerId,
   canInvite = false,
+  canAssign = true,
   pendingInvites = [],
 }: {
   projectId: string;
@@ -386,6 +387,10 @@ export function ProjectTasks({
   viewerId: string | null;
   /** Staff only: a collaborator cannot invite anyone. */
   canInvite?: boolean;
+  /** Staff only: since migration 0100 a collaborator's RLS only lets them
+   *  add or remove THEMSELVES, so the picker is read-only for them rather
+   *  than a row of toggles that would be refused. */
+  canAssign?: boolean;
   /** Invited but not yet accepted, so not assignable yet. */
   pendingInvites?: string[];
 }) {
@@ -784,6 +789,7 @@ export function ProjectTasks({
         people={people}
         projectType={projectType}
         canInvite={canInvite}
+        canAssign={canAssign}
         pendingInvites={pendingInvites}
         busy={busy}
         onClose={() => setOpenId(null)}

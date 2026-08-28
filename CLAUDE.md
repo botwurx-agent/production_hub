@@ -1320,7 +1320,22 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0099. Recent: 0099 =
+files in supabase/migrations. THROUGH 0100. Recent: 0100 =
+collab_tasks_assigned_only (a project collaborator sees ONLY tasks assigned to
+them: the task board is the producer's own running list and 0056 had made all
+of it collaborator-readable. Splits the four task tables member/collab;
+collaborator INSERT stays open (0093 kept tasks reviewer-writable) and
+addProjectTask now auto-assigns a collaborator to any task they create so it
+does not vanish from their own view; a collaborator may only ever add/remove
+THEMSELVES on the assignees table, so the picker renders read-only for them
+(canAssign prop). TWO SECURITY DEFINER helpers, is_task_assignee +
+task_project, exist because the tasks policy checks assignees and the
+assignees policy checks tasks: as plain subqueries those recurse at query
+time. Verified live by simulating collaborator JWTs: unassigned same-project 0
+rows, assigned 1 row + roster, other-project 0. GOTCHA hit while verifying:
+the Supabase MCP execute_sql wraps the whole batch in ONE transaction, so a
+begin/rollback inside it rolls back the batch's own earlier setup inserts;
+split setup, simulated reads, and cleanup into separate calls); 0099 =
 summary_studio_only (project_summaries RLS back to is_studio_member ONLY,
 dropping the 0056/0093 collaborator-readable pair: the AI summary is generated
 from budget/billing context and money talk lands in the stored prose, which
