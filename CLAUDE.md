@@ -3238,6 +3238,25 @@ UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
 - Stewart's (the producer friend's) list still has open items: Wrapbook
   positioning, insurance bundling, zip-code permit lookup, a mobile on-set mode,
   a storage plan, a help desk, and Communication always open.
+- SECURITY AND COMPLIANCE, all of it, is written up in
+  docs/launch/security-and-compliance.md (2026-08-29). Read that before touching
+  anything in this area. The headlines: the operator wants a StudioBinder-style
+  SECURITY SECTION on the pricing page and it is PARKED UNTIL 2FA EXISTS, on
+  their call, because publishing one invites the first question it cannot
+  answer. It must make OUR argument, never theirs: their panel promises a
+  dedicated database and a dedicated cloud per customer, which is false for us
+  (shared Postgres + RLS, one private bucket with per-studio folders), so
+  copying it would put four false claims on the page a client's legal reviewer
+  is most likely to test. The doc holds the claims we CAN make with where each
+  is enforced, the ones we must never make, the security work in order (2FA,
+  backup restore proof, shared-store rate limiting, revoking the `anon` grants
+  0056 handed six SECURITY DEFINER helpers, a studio-level audit log), and the
+  legal side. TWO GAPS THERE ARE REAL BUILD WORK, not policy text: account
+  DELETION that actually deletes (there is no hard delete anywhere today, only
+  archiving) and data EXPORT, both of which GDPR and CCPA require. And the
+  likeliest deal-breaker nobody has raised yet: we send customer documents to a
+  third-party model, which some brand contracts forbid, so the privacy policy
+  has to say so and a studio-level AI off switch is the honest escape hatch.
 
 The parked items, so they are findable WHEN friction hits (not before):
 - Review-round edges, all half-built already: due/overdue never surfaces on the
