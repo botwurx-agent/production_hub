@@ -15,7 +15,7 @@
  * entry point that works.
  */
 
-export type PlanId = "solo" | "studio" | "production";
+export type PlanId = "free" | "solo" | "studio" | "production";
 
 export type Plan = {
   id: PlanId;
@@ -43,36 +43,59 @@ export type Plan = {
  * shape every buyer in this category already reads. The discount is stated as
  * TWO MONTHS FREE rather than a percentage: a count of months is concrete and
  * 16.7% is arithmetic. The numbers below are exactly that, so the claim needs
- * no asterisk (35 x 10 / 12 = 29.17, and so on down).
+ * no asterisk (23 x 10 / 12 = 19.17, and so on down).
+ *
+ * PRICED FOR ENTERING THE MARKET, not for the product we think this is worth.
+ * Nobody has heard of us, and the category leader opens with a free plan, so
+ * the first number a stranger meets is zero and the paid ladder undercuts them
+ * at every comparable seat count. Storage came down with the prices rather than
+ * the prices coming down alone: video is the real cost per customer here, and
+ * promising terabytes at the bottom of the market is how a cheap plan quietly
+ * loses money. Every tier still holds more than the leader gives at the same
+ * step.
  */
 export const PLANS: Plan[] = [
+  {
+    id: "free",
+    name: "Free",
+    tagline: "Run one real job, start to finish.",
+    monthly: 0,
+    annual: 0,
+    builds: null,
+    points: [
+      "1 seat",
+      "1 active project, archived jobs do not count",
+      "5GB storage",
+      "The whole craft: brief, boards, shot lists, call sheets, client review",
+      "No card, and no expiry",
+    ],
+  },
   {
     id: "solo",
     name: "Solo",
     tagline: "One producer running their own jobs.",
-    monthly: 35,
-    annual: 29,
-    builds: null,
+    monthly: 23,
+    annual: 19,
+    builds: "Free",
     points: [
       "1 seat",
-      "3 active projects, archived jobs do not count",
-      "250GB storage",
+      "Unlimited active projects",
+      "100GB storage",
       "150 Runner turns a month",
-      "The whole production toolkit, nothing held back",
+      "Delivery, binders and document exports",
     ],
   },
   {
     id: "studio",
     name: "Studio",
     tagline: "A team running several jobs at once.",
-    monthly: 95,
-    annual: 79,
+    monthly: 71,
+    annual: 59,
     builds: "Solo",
     featured: true,
     points: [
       "5 seats, then $18 each",
-      "Unlimited active projects",
-      "1TB storage",
+      "500GB storage",
       "600 Runner turns a month",
       "Budget, cost ledger and margin",
       "Clients, deals and the CRM timeline",
@@ -82,12 +105,12 @@ export const PLANS: Plan[] = [
     id: "production",
     name: "Production",
     tagline: "A full production company, several teams deep.",
-    monthly: 215,
-    annual: 179,
+    monthly: 143,
+    annual: 119,
     builds: "Studio",
     points: [
       "15 seats, then $14 each",
-      "5TB storage",
+      "2TB storage",
       "2,500 Runner turns a month",
       "Onboarding and setup session",
       "Priority support",
@@ -113,7 +136,7 @@ export type Cell = boolean | string;
 export type CompareRow = {
   label: string;
   /** Order matches PLANS. */
-  cells: [Cell, Cell, Cell];
+  cells: [Cell, Cell, Cell, Cell];
 };
 
 export type CompareBand = {
@@ -130,9 +153,13 @@ export type CompareBand = {
   rows: CompareRow[];
 };
 
-const ALL: [Cell, Cell, Cell] = [true, true, true];
-const PAID: [Cell, Cell, Cell] = [false, true, true];
-const TOP: [Cell, Cell, Cell] = [false, false, true];
+/** On every plan, the free one included: this is the craft of the job. */
+const ALL: [Cell, Cell, Cell, Cell] = [true, true, true, true];
+/** Free cannot: a project has to be able to leave the free plan behind. */
+const PAID: [Cell, Cell, Cell, Cell] = [false, true, true, true];
+/** The money and the pipeline, which is what a studio pays a studio price for. */
+const TEAM: [Cell, Cell, Cell, Cell] = [false, false, true, true];
+const TOP: [Cell, Cell, Cell, Cell] = [false, false, false, true];
 
 /**
  * Ordered so the argument lands in sequence: four bands of solid ticks first
@@ -146,7 +173,7 @@ export const COMPARE: CompareBand[] = [
     hue: "indigo",
     icon: "M5 3h7l3 3v11H5z M12 3v3h3 M7.5 10h5 M7.5 13h4",
     rows: [
-      { label: "Active projects", cells: ["3", "Unlimited", "Unlimited"] },
+      { label: "Active projects", cells: ["1", "Unlimited", "Unlimited", "Unlimited"] },
       { label: "Brief and creative direction", cells: ALL },
       { label: "Asset library with version history", cells: ALL },
       { label: "Documents: permits, specs, insurance", cells: ALL },
@@ -213,14 +240,14 @@ export const COMPARE: CompareBand[] = [
     hue: "blue",
     icon: "M10 3.6v12.8 M12.9 6.6c-.5-.9-1.6-1.4-2.9-1.4-1.7 0-3 .9-3 2.1 0 2.9 6 1.6 6 4.5 0 1.2-1.3 2.1-3 2.1-1.4 0-2.6-.6-3-1.5",
     rows: [
-      { label: "Budget: bid against actual, line by line", cells: PAID },
-      { label: "Cost ledger with the invoice attached to each entry", cells: PAID },
-      { label: "Read a supplier invoice and fill the cost for you", cells: PAID },
-      { label: "Deposits and payment schedules", cells: PAID },
-      { label: "Margin on the job", cells: PAID },
-      { label: "Estimates, proposals and invoices in your own numbering", cells: PAID },
-      { label: "Proposals signed online, with the audit trail", cells: PAID },
-      { label: "Agreements: NDAs, SOWs, change orders", cells: PAID },
+      { label: "Budget: bid against actual, line by line", cells: TEAM },
+      { label: "Cost ledger with the invoice attached to each entry", cells: TEAM },
+      { label: "Read a supplier invoice and fill the cost for you", cells: TEAM },
+      { label: "Deposits and payment schedules", cells: TEAM },
+      { label: "Margin on the job", cells: TEAM },
+      { label: "Estimates, proposals and invoices in your own numbering", cells: TEAM },
+      { label: "Proposals signed online, with the audit trail", cells: TEAM },
+      { label: "Agreements: NDAs, SOWs, change orders", cells: TEAM },
     ],
   },
   {
@@ -230,10 +257,10 @@ export const COMPARE: CompareBand[] = [
     icon: "M12.5 16v-1.4a2.8 2.8 0 00-2.8-2.8H6.3a2.8 2.8 0 00-2.8 2.8V16 M8 9.4a2.6 2.6 0 100-5.2 2.6 2.6 0 000 5.2 M16.5 16v-1.4a2.8 2.8 0 00-2.1-2.7",
     rows: [
       { label: "Clients and contacts", cells: ALL },
-      { label: "Deal pipeline board", cells: PAID },
-      { label: "Relationship timeline with email logged automatically", cells: PAID },
-      { label: "Follow-up tasks and reminders", cells: PAID },
-      { label: "AI-drafted outreach", cells: PAID },
+      { label: "Deal pipeline board", cells: TEAM },
+      { label: "Relationship timeline with email logged automatically", cells: TEAM },
+      { label: "Follow-up tasks and reminders", cells: TEAM },
+      { label: "AI-drafted outreach", cells: TEAM },
     ],
   },
   {
@@ -242,10 +269,10 @@ export const COMPARE: CompareBand[] = [
     hue: "cyan",
     icon: "M4 6.5h12v8H4z M10 3v3.5 M7 10v1.5 M13 10v1.5 M2 8.5v4 M18 8.5v4",
     rows: [
-      { label: "Ask anything about the studio, answered from live data", cells: ALL },
-      { label: "Proposes a change as a card you confirm", cells: ALL },
-      { label: "Turns a month", cells: ["150", "600", "2,500"] },
-      { label: "Conversation history, private to you", cells: ALL },
+      { label: "Ask anything about the studio, answered from live data", cells: PAID },
+      { label: "Proposes a change as a card you confirm", cells: PAID },
+      { label: "Turns a month", cells: [false, "150", "600", "2,500"] },
+      { label: "Conversation history, private to you", cells: PAID },
     ],
   },
   {
@@ -268,11 +295,11 @@ export const COMPARE: CompareBand[] = [
     hue: "indigo",
     icon: "M3 16.5V8l7-4.5L17 8v8.5z M8 16.5v-5h4v5",
     rows: [
-      { label: "Seats included", cells: ["1", "5", "15"] },
-      { label: "Additional seats", cells: [false, "$18 each", "$14 each"] },
-      { label: "Crew and reviewers on a project", cells: ["Unlimited", "Unlimited", "Unlimited"] },
-      { label: "Clients reviewing work", cells: ["Unlimited", "Unlimited", "Unlimited"] },
-      { label: "Storage", cells: ["250GB", "1TB", "5TB"] },
+      { label: "Seats included", cells: ["1", "1", "5", "15"] },
+      { label: "Additional seats", cells: [false, false, "$18 each", "$14 each"] },
+      { label: "Crew and reviewers on a project", cells: ["Unlimited", "Unlimited", "Unlimited", "Unlimited"] },
+      { label: "Clients reviewing work", cells: ["Unlimited", "Unlimited", "Unlimited", "Unlimited"] },
+      { label: "Storage", cells: ["5GB", "100GB", "500GB", "2TB"] },
       { label: "Roles: owner, admin, member, reviewer", cells: ALL },
       { label: "Your logo on the app and every document", cells: ALL },
       { label: "Light, paper and dark themes", cells: ALL },
@@ -298,12 +325,16 @@ export const FAQS: { q: string; a: string }[] = [
     a: "A seat is someone in your studio: a producer, a coordinator, anyone working across your jobs. People you bring onto a single job, a DP or an editor or an AD, get access to that job only and use no seat. Clients reviewing work need no account at all. Both are unlimited on every plan.",
   },
   {
-    q: "What happens when I hit the project limit on Solo?",
-    a: "Nothing locks and nothing is deleted. Archiving a finished job takes it out of the count, so three active projects means three at once rather than three ever. If you are genuinely running four jobs at the same time, that is the moment Studio starts paying for itself.",
+    q: "Is the free plan really free, or is it a trial?",
+    a: "Free forever, and no card to start. It is one seat and one active project, which is enough to run a real job from the brief through client sign-off and delivery. It is deliberately a whole job rather than a crippled version of one, because the only way to know whether this fits your studio is to put a live job through it.",
+  },
+  {
+    q: "What happens when I finish my one free project?",
+    a: "Archive it and start the next one. Archiving takes a job out of the count without deleting anything, and an archived project still opens, so a year of finished work stays readable on the free plan. Solo lifts the cap entirely when you need two jobs open at once.",
   },
   {
     q: "What is a Runner turn?",
-    a: "One question and the answer to it. Runner reading four things across the studio and coming back with a number is a single turn, not four. Everything else that uses AI here is unmetered: reading a supplier invoice, pulling deliverables out of a signed SOW, and polishing a message before you send it are all included on every plan.",
+    a: "One question and the answer to it. Runner reading four things across the studio and coming back with a number is a single turn, not four. Runner starts on Solo. Everything else that uses AI here is unmetered on every paid plan: reading a supplier invoice or estimate, pulling deliverables out of a signed SOW, reading a treatment into a shot list, and polishing a message before you send it.",
   },
   {
     q: "What counts toward storage?",
@@ -319,7 +350,7 @@ export const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "What happens to my work if I stop paying?",
-    a: "Your studio goes read-only rather than dark. Every project still opens and every file still downloads for 90 days, and nothing is deleted inside that window. Holding a client's masters hostage to a renewal is not a business we want to be in.",
+    a: "You drop to the free plan rather than going dark. Every project still opens and every file still downloads, and nothing is deleted. Holding a client's masters hostage to a renewal is not a business we want to be in.",
   },
   {
     q: "Do you offer a student or education rate?",

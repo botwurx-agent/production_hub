@@ -34,7 +34,7 @@ import { useBilling } from "./billing";
 
 /** Column widths, kept in one place so a header cell cannot drift from a row. */
 const GRID =
-  "grid grid-cols-[minmax(0,1fr)_66px_66px_66px] sm:grid-cols-[minmax(0,1fr)_repeat(3,110px)] lg:grid-cols-[minmax(0,1fr)_repeat(3,180px)]";
+  "grid grid-cols-[minmax(0,1fr)_54px_54px_54px_54px] sm:grid-cols-[minmax(0,1fr)_repeat(4,92px)] lg:grid-cols-[minmax(0,1fr)_repeat(4,150px)]";
 
 /** The featured plan's column is tinted top to bottom, like its card. */
 function colTint(i: number) {
@@ -183,8 +183,16 @@ export function CompareTable() {
                 {plan.name}
               </p>
               <p className="text-[10.5px] font-semibold text-text-muted sm:text-[13px]">
-                ${planPrice(plan, annual)}
-                <span className="font-normal text-text-faint">/mo</span>
+                {planPrice(plan, annual) === 0 ? (
+                  // "$0" rather than the word, which under a column already
+                  // headed "Free" would just say it twice.
+                  "$0"
+                ) : (
+                  <>
+                    ${planPrice(plan, annual)}
+                    <span className="font-normal text-text-faint">/mo</span>
+                  </>
+                )}
               </p>
               {/* The button is the reason to pin this row at all, so it only
                   disappears where there is genuinely no width for it. */}

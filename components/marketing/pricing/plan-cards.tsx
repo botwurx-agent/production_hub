@@ -28,6 +28,7 @@ function Tick() {
 function PlanCard({ plan, annual }: { plan: Plan; annual: boolean }) {
   const price = planPrice(plan, annual);
   const featured = plan.featured === true;
+  const isFree = price === 0;
 
   return (
     <div
@@ -36,8 +37,8 @@ function PlanCard({ plan, annual }: { plan: Plan; annual: boolean }) {
           ? // Raised, ringed and badged. The badge is the highest-leverage
             // element on a pricing page: most people do not want to choose, and
             // it chooses for them. Exactly one card may carry it.
-            "relative flex flex-col rounded-[22px] border-2 border-accent bg-surface p-7 shadow-xl lg:-my-4 lg:p-8"
-          : "relative flex flex-col rounded-[22px] border border-border bg-surface p-7 shadow-md"
+            "relative flex flex-col rounded-[22px] border-2 border-accent bg-surface p-6 shadow-xl lg:-my-4 lg:p-7"
+          : "relative flex flex-col rounded-[22px] border border-border bg-surface p-6 shadow-md"
       }
     >
       {featured ? (
@@ -65,16 +66,20 @@ function PlanCard({ plan, annual }: { plan: Plan; annual: boolean }) {
         <span className="font-display text-[52px] font-extrabold leading-[0.9] tracking-tight text-text">
           ${price}
         </span>
-        <span className="pb-1 text-[15px] font-medium text-text-muted">
-          /month
-        </span>
+        {!isFree && (
+          <span className="pb-1 text-[15px] font-medium text-text-muted">
+            /month
+          </span>
+        )}
       </div>
       {/* The yearly total spelled out, because "per month billed annually" is
           the one line on a pricing page people suspect of hiding something. */}
       <p className="mt-2 text-[13px] text-text-faint">
-        {annual
-          ? `Billed annually, $${(price * 12).toLocaleString()} a year`
-          : "Billed monthly"}
+        {isFree
+          ? "Free forever, not a trial"
+          : annual
+            ? `Billed annually, $${(price * 12).toLocaleString()} a year`
+            : "Billed monthly"}
       </p>
 
       <a
@@ -85,10 +90,12 @@ function PlanCard({ plan, annual }: { plan: Plan; annual: boolean }) {
             : "border border-border-strong bg-surface text-text hover:bg-surface-2"
         }`}
       >
-        Start free
+        {isFree ? "Start free" : `Start with ${plan.name}`}
       </a>
       <p className="mt-2.5 text-center text-[12.5px] text-text-faint">
-        Your first project is free. No card.
+        {isFree
+          ? "No card, and no expiry."
+          : "Begin on Free and move up when you outgrow it."}
       </p>
 
       {plan.builds ? (
@@ -118,7 +125,7 @@ export function PlanCards() {
     <div>
       {/* items-start, so the featured card's negative margin lifts it rather
           than stretching its neighbours to match. */}
-      <div className="grid items-start gap-6 lg:grid-cols-3 lg:gap-7">
+      <div className="grid items-start gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
         {PLANS.map((plan) => (
           <PlanCard key={plan.id} plan={plan} annual={annual} />
         ))}

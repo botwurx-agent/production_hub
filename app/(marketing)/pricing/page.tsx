@@ -19,8 +19,9 @@ export const metadata: Metadata = {
  * The pricing page.
  *
  * The argument it makes, in order: the entry plan is the WHOLE product rather
- * than a demo with a price on it, the extra tiers are room and money tooling
- * rather than permission, and the people who cost you nothing (crew, clients)
+ * than a demo with a price on it, the free plan runs a whole job rather than a
+ * hobbled one, the extra tiers are room and money tooling rather than
+ * permission, and the people who cost you nothing (crew, clients)
  * are named before anyone has to ask.
  *
  * NO free-forever tier and NO "contact sales", both on purpose. A free tier in
@@ -43,7 +44,7 @@ export default function PricingPage() {
           <SectionHeader
             eyebrow="Pricing"
             title="The whole toolkit, at every price."
-            sub="No plan here is a demo. The cheapest one runs a job from the first brief to the final invoice, and the ones above it buy room, not permission."
+            sub="Nothing here is a demo. The free plan runs a whole job, from the first brief through client sign-off and delivery. The ones above it buy room and the money side, not permission."
           />
           <BillingToggle className="mt-10" />
           <div className="mt-12">
