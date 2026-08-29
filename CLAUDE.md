@@ -391,6 +391,12 @@ implemented (out of strict order, driven by the operator's real needs).
     bidding -> awarded(won) / lost (stage doubles as status: awarded=won,
     lost=lost, rest open). Constants in lib/status.ts (DEAL_STAGE/_ORDER,
     DEAL_OPEN_STAGES, ACCOUNT_STATUS); money() formatter in lib/format.ts.
+  - The deal stage chip is a MENU (components/deals/deal-stage-menu.tsx) and it
+    portals out via AnchoredPopover, not absolutely inside the card: on the
+    board the card sits in a scrolling column, so an in-card menu was clipped
+    at the card's edge and read as broken rather than as cut off. Same bug and
+    same fix as the project board's StatusMenu. Used by the board card, the
+    list rows and the deal detail page, so all three inherit it.
   - UI: /pipeline (deal board by stage w/ per-column count + summed value; list
     view; Mine/Everyone owner filter; open-pipeline value) + /pipeline/[id]
     (deal detail: editable fields, stage menu, mark lost w/ reason, delete,
@@ -404,6 +410,19 @@ implemented (out of strict order, driven by the operator's real needs).
     contacts) and PRESERVES the leads table for rollback. leads-followup.ts /
     lead-context.ts / leads/actions.ts remain but are dormant (unused by the
     dashboard now).
+  - DELETE A CLIENT, and SET ACCOUNT STATUS from the header (2026-08-29). There
+    was no delete anywhere, and the Prospect/Client/Past chip on the account
+    page was a static label, so a relationship could never be marked Past
+    either. The two shipped together because one is the answer to the other:
+    the chip is now a menu (components/clients/client-header-actions.tsx, the
+    same chip-as-control move as the project and deal stages), and "Delete
+    client" sits quietly under Start a project. Delete is for a MISTAKE (a
+    typo, a duplicate, a test entry): a client with ANY project is refused
+    server-side, because deleting would orphan that history (projects.client_id
+    is ON DELETE SET NULL) and throw away the deals and activity that explain
+    the jobs, and the refusal points at Past instead. A clean delete confirms
+    first, naming the contacts, deals and agreements that go by FK cascade.
+    Actions setAccountStatus / deleteClientAccount in clients/actions.ts.
   - CRM Phase 2 (BUILT, migration 0055): relationship activity timeline +
     tasks/reminders, both hanging off Account + Deal. crm_activities
     (studio/account_id/deal_id/kind/body/author_id/occurred_at; kind enum
@@ -546,6 +565,21 @@ implemented (out of strict order, driven by the operator's real needs).
     every switch takes two clicks). RailTool buttons preventDefault on
     mousedown so a note or caption keeps its selection while its formatting
     tools are used (execCommand acts on the selection).
+  - RESIZE HANDLES ON ALL FOUR CORNERS, and visible. Resizing a card meant
+    finding an INVISIBLE 16px hotspot in the bottom-right, which the operator
+    called almost impossible, and on a short card the connect anchor sat right
+    beside it. The hovered or selected card now shows four handles in the same
+    treatment as the connect anchor nobody has trouble finding (16px, filled
+    accent, white collar, shadow, grow on hover), joined by a hairline accent
+    frame on hover so they read as one resizable box rather than four loose
+    dots (a selected card already draws its own ring, so the frame is skipped
+    there). Resizing is CORNER-AWARE: a west corner moves x and shrinks w, a
+    north corner moves y and shrinks h, so the opposite corner stays pinned;
+    sizes clamp first and the position is derived from the clamped size, so
+    hitting the 80x60 minimum or the canvas edge cannot make the card creep. A
+    north/west resize persists the moved position too, or a reload snaps it
+    back. Lines keep their endpoint drags and column children are not
+    absolutely positioned, so neither grows handles.
   - PINCH ZOOM IS PROPORTIONAL AND MULTIPLICATIVE (the operator: ours was
     "extremely aggressive... jumping all over the place" next to Milanote).
     The handler applied a FLAT 0.1 step per wheel EVENT and ignored deltaY
@@ -2916,6 +2950,16 @@ object here that is both, which is exactly why it fell between the two.
   SORTED in code, because an embedded select carries no order guarantee and
   "option 2" changing which glass it means between loads is not cosmetic on a
   surface whose whole purpose is a client saying "the second one".
+- PHOTOS AND LINKS ATTACH IN THE ADD/EDIT MODAL, not only on the card. The
+  capability always existed (expand a prop's Options, then + Photos / + Link)
+  but it was in the wrong place: the moment somebody has the picture or the
+  prop-house link in hand is while they are CREATING the prop, so a window with
+  no way to attach one read as "images not supported". The modal now stages
+  photos (thumbnail chips, client-side MAX_UPLOAD_BYTES check, FileList copied
+  before the input is cleared) and pasted links, and writes them as the prop's
+  options after the prop row exists. A failed option is named in a toast rather
+  than failing the saved prop, and Save & add another clears the staging with
+  the form. Same discoverability lesson as the export cover panel.
 - NOT built: props are not linked to shots (the continuity/usage-map question),
   and a picked prop does not create a cost. Both are additive.
 
@@ -3157,14 +3201,81 @@ written, because nothing could answer "who is on this job".
   strongest next slice, and project_task_assignees is indexed on
   (studio_id, user_id) for exactly that query.
 
+### Pricing page, and the reset for entering the market (2026-08-29)
+
+/pricing is plan cards + a monthly/annual toggle + a full comparison table +
+eight FAQs, all reading from lib/marketing/pricing.ts so the cards, the sticky
+compare header and the table cannot drift apart (they used to say $79 in one
+place and $89 in another). THE RULE IN THAT FILE: a row is only listed if the
+thing it names is built and reachable today. A checkmark next to something that
+does not exist is not optimism, it is a refund. The featured card says "Best
+value", never "Most popular", because there are no customers yet and invented
+social proof on the most scrutinised page of the site is the worst place to
+start.
+
+THE RESET, on the operator's call after seeing StudioBinder's page side by
+side. Four tiers now, not three:
+
+| | Free | Solo | Studio | Production |
+| annual | 0 | 19 | 59 | 119 |
+| monthly | 0 | 23 | 71 | 143 |
+| seats | 1 | 1 | 5 (+$18) | 15 (+$14) |
+| projects | 1 active | unlimited | unlimited | unlimited |
+| storage | 5GB | 100GB | 500GB | 2TB |
+| Runner | none | 150 | 600 | 2,500 |
+
+- A FREE FOREVER PLAN is the headline move, and it matters more than any price
+  cut: StudioBinder's free tier is their top of funnel and we had no way in at
+  all. It runs a WHOLE job (brief through client sign-off and delivery) rather
+  than a hobbled one, because the only way to know whether this fits a studio
+  is to put a live job through it. Archiving takes a job out of the count, so
+  years of finished work stay readable on it.
+- Per seat we were already cheaper than them; the problem was the first number
+  a stranger meets. Monthly figures are odd on purpose ($23/$71/$143) so that
+  "two months free" stays literally true against the annual numbers.
+- STORAGE CAME DOWN WITH THE PRICES rather than the prices coming down alone.
+  Video is the real cost per customer: 5TB at $179 was roughly $105/month of
+  Supabase storage on a $179 plan. Every tier still holds more than the leader
+  gives at the same step (they give 50GB/75GB/100GB small, 200GB/400GB org).
+- The 3-active-project cap on Solo is GONE. It was the harshest limit we had
+  and the one least connected to what a customer costs us.
+- The money band and the CRM pipeline moved to Studio and up (a new TEAM column
+  set in COMPARE); Runner starts on Solo.
+- REFUSED from their page: the Small Teams / Organizations segment toggle. It
+  earns its complexity when there is an enterprise motion with a Custom tier at
+  the end; with four tiers on one row and no sales team it would just hide half
+  the page behind a switch. Revisit the day an Enterprise tier exists.
+- NONE OF THIS IS ENFORCED IN THE PRODUCT. There is no plan column on
+  `studios`, no billing, and no limit anywhere. The page is a promise that has
+  to be made real before the first paid signup, and the table above is its
+  spec.
+
 ### Next step
-STILL NOTHING QUEUED (reconfirmed by how the 2026-08 session ran: every item in
-it came from the operator hitting something in real use, which is the rule
-working). As of 2026-07-29 the operator has deliberately parked the
-whole proposed backlog: run real jobs, and only build when something actually
-gets in the way. That IS the project rule (section 4.5 / section 8), so do not
-open a session by proposing features off the list below. Ask what got in the
-way, or work on what is asked.
+NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
+2026-08 sessions came from the operator hitting something in real use. As of
+2026-07-29 they deliberately parked the whole proposed backlog: run real jobs,
+and only build when something actually gets in the way (section 4.5 / section
+8). Do not open a session by proposing features off the list below. Ask what
+got in the way, or work on what is asked.
+
+TWO THINGS ARE GENUINELY WAITING ON THE OPERATOR, though, and both are theirs
+to answer rather than ours to start:
+- WHERE THE SHOT CLUSTER GOES. components/marketing/shot-cluster.tsx is built
+  and verified and deliberately NOT placed (see section 4.6). They asked for
+  the pattern to be noted and confirmed, and a first pass that shipped it to
+  the home hero was reverted. Three open questions when they pick a section:
+  where, whether these three tiles tell the right story there, and whether it
+  needs a column of words beside it.
+- They were partway through showing StudioBinder sections they liked. The
+  SECURITY one is parked on 2FA (docs/launch/security-and-compliance.md); the
+  cluster was the second. There may be more coming.
+
+A LESSON FROM THIS SESSION, worth keeping: the operator's pattern is to show a
+reference and ask to CONFIRM THE DESIGN FIRST. Twice in one session ("I want to
+confirm with you first", then "I just wanted to make note of that design layout
+so it can be applied to a specific section after confirming"), and the second
+time the cluster was shipped to the home hero without being asked, which had to
+be reverted. Build the piece, show it, and let them place it.
 
 UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
 - The CLIENT BINDER (0085) has never been run against a real project.
