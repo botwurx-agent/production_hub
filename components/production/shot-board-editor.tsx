@@ -587,24 +587,40 @@ export function ShotBoardEditor({
                 </div>
               )}
 
-              {/* Column header */}
+              {/* The header MIRRORS ShotRow's geometry rather than
+                  declaring one of its own, and that is the whole point.
+                  It used to lay out as eight columns (image, #, description,
+                  then three 144px pickers) while a row puts the description
+                  on one line and the three pickers on the line BELOW it,
+                  inside a single flex-1 block. So the labels pointed at
+                  nothing: measured at 1680px, "Shot size" sat 368px to the
+                  right of the shot-size input and "Movement" sat over empty
+                  space. It was also what made the page itself scroll
+                  sideways on an iPad in landscape, because those fixed
+                  columns wanted 758px in a 590px box and nothing contained
+                  them.
+                  Keep the two halves in step: the widths and the wrapper
+                  classes here are the same ones ShotRow uses, and `pl-4`
+                  is the row card's 4px left rule plus its p-3. */}
               {activeCards.length > 0 && (
-                <div className="mb-1 hidden items-center gap-3 border-b border-border px-1 pb-1.5 text-[11px] font-bold uppercase tracking-wide text-text-faint lg:flex">
-                  <span className="w-5 shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={selected.size === activeCards.length && activeCards.length > 0}
-                      onChange={toggleAll}
-                      className="h-3.5 w-3.5 accent-[var(--accent)]"
-                    />
-                  </span>
+                <div className="mb-1 hidden items-start gap-3 border-b border-border pb-1.5 pl-4 pr-3 text-[11px] font-bold uppercase tracking-wide text-text-faint lg:flex">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === activeCards.length && activeCards.length > 0}
+                    onChange={toggleAll}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                    aria-label="Select every shot"
+                  />
                   <span className="w-[130px] shrink-0">Image</span>
                   <span className="w-7 shrink-0 text-center">#</span>
-                  <span className="flex-1">Description</span>
-                  <span className="w-36 shrink-0" style={{ color: `var(--h-${COL.size})` }}>Shot size</span>
-                  <span className="w-36 shrink-0" style={{ color: `var(--h-${COL.type})` }}>Shot type</span>
-                  <span className="w-36 shrink-0" style={{ color: `var(--h-${COL.move})` }}>Movement</span>
-                  <span className="w-6 shrink-0" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <span className="block">Description</span>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <span style={{ color: `var(--h-${COL.size})` }}>Shot size</span>
+                      <span style={{ color: `var(--h-${COL.type})` }}>Shot type</span>
+                      <span style={{ color: `var(--h-${COL.move})` }}>Movement</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -870,13 +886,18 @@ function ShotRow({
             defaultValue={card.code ?? ""}
             onBlur={(e) => { if ((e.target.value || null) !== (card.code ?? null)) onCapture(); updateCard(projectId, card.id, { code: e.target.value }); }}
             placeholder="Code (1A)"
-            className={`${cell} w-20 border-border`}
+            /* `!` because the shared `cell` constant already sets w-full,
+               and Tailwind emits w-20 BEFORE w-full, so the plain class lost:
+               Code and Day rendered at the full width of the description
+               column (851px at 1680) and stacked on separate lines instead of
+               sitting side by side at 80px. */
+            className={`${cell} !w-20 border-border`}
           />
           <input
             defaultValue={card.day ?? ""}
             onBlur={(e) => { if ((e.target.value || null) !== (card.day ?? null)) onCapture(); updateCard(projectId, card.id, { day: e.target.value }); }}
             placeholder="Day"
-            className={`${cell} w-20 border-border`}
+            className={`${cell} !w-20 border-border`}
           />
           <button
             onClick={() => onStructural(() => deleteCard(projectId, card.id))}

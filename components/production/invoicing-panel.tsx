@@ -202,7 +202,7 @@ function CreateModal({
                   value={l.qty}
                   onChange={(e) => setLine(i, { qty: e.target.value })}
                   placeholder="Qty"
-                  className={`${field} w-16 text-center`}
+                  className={`${field} !w-16 text-center`}
                   title="Quantity"
                 />
                 <div className="flex w-28 items-center rounded-[10px] border border-border bg-surface px-2 focus-within:border-border-strong">
