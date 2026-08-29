@@ -26,6 +26,15 @@ const money = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+/**
+ * These editable tables carry fixed columns for the numbers and `1fr` for the
+ * text. Below about 600px the fixed ones eat the row and the `1fr` tracks
+ * collapse to nothing, so the phone showed quantities and prices with no item
+ * name and no notes: not a squeeze, a silent loss of the only columns that say
+ * what the row IS. They scroll inside their own box instead, the same answer
+ * the elements usage map and the binder already use. `min-w` is the width the
+ * text columns stop being readable at, not the width the row happens to be.
+ */
 const cell =
   "w-full rounded-[8px] border border-transparent bg-transparent px-2 py-1 text-sm text-text outline-none transition hover:border-border focus:border-border-strong focus:bg-surface";
 
@@ -192,6 +201,9 @@ export function GearList({
                   {done}/{gItems.length}
                 </span>
               </div>
+              {/* Wide row: see the note at the top of this file. */}
+              <div className="overflow-x-auto">
+              <div className="min-w-[600px] md:min-w-0">
               {gItems.map((r) => (
                 <div
                   key={r.id}
@@ -273,6 +285,8 @@ export function GearList({
                   </button>
                 </div>
               ))}
+              </div>
+              </div>
               <button
                 onClick={() => addLine(category)}
                 disabled={busy}
