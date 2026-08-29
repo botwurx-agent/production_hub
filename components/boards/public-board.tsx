@@ -27,7 +27,7 @@ export function PublicBoard({
   const [items, setItems] = useState<BoardItemView[]>(initialItems);
 
   return (
-    <div className="flex h-screen flex-col bg-bg">
+    <div className="flex h-[100dvh] flex-col bg-bg">
       <header className="flex shrink-0 items-center justify-between border-b border-border bg-surface px-4 py-2.5">
         <div className="min-w-0">
           <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-text-faint">

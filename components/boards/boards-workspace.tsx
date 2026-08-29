@@ -733,7 +733,7 @@ export function BoardsWorkspace({
     "inline-flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-50";
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] min-w-0 flex-col overflow-hidden">
+    <div className="flex h-[calc(100dvh-8rem)] min-w-0 flex-col overflow-hidden">
       {/* Tabs */}
       <div className="mb-3 flex items-center gap-1 overflow-x-auto border-b border-border pb-2">
         {boards.map((b) => {

@@ -22,6 +22,13 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      screens: {
+        /* A short viewport is a phone held sideways, whatever its width. The
+           shell reads both dimensions rather than width alone, because at
+           844x390 the width says "desktop" and the height says there is no
+           room for a full-height sidebar. */
+        short: { raw: "(max-height: 500px)" },
+      },
       colors: {
         bg: "var(--bg)",
         surface: "var(--surface)",

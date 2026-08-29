@@ -323,7 +323,7 @@ export function VideoReview({
             seekTo(c?.timecode ?? null, id);
           }}
           onTime={setCurrentTime}
-          maxHeightClass={roomy ? "max-h-[78vh]" : "max-h-[58vh]"}
+          maxHeightClass={roomy ? "max-h-[78dvh]" : "max-h-[58dvh]"}
           drawing={shownDrawing}
           drawActive={drawMode}
           drawTool={tool}
@@ -365,7 +365,7 @@ export function VideoReview({
           it. */}
       <div
         className={`flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm ${
-          roomy ? "lg:max-h-[78vh]" : "lg:max-h-[58vh]"
+          roomy ? "lg:max-h-[78dvh]" : "lg:max-h-[58dvh]"
         }`}
       >
         <div className="border-b border-border px-3 py-2.5">

@@ -3,32 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  DashboardIcon,
-  ProjectsIcon,
-  BoardsIcon,
-  ClientsIcon,
-  LeadsIcon,
-  SettingsIcon,
-  CommunicationIcon,
-  RunnerIcon,
-} from "@/components/app-shell/nav-icons";
+import { RunnerIcon } from "@/components/app-shell/nav-icons";
+import { navFor, isActive } from "@/components/app-shell/nav-items";
 import { CommunicationBadge } from "@/components/app-shell/communication-badge";
 import { openAgent } from "@/components/agent/agent-open";
 import {
   StudioSwitcher,
   type StudioOption,
 } from "@/components/app-shell/studio-switcher";
-
-const nav = [
-  { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
-  { href: "/projects", label: "Projects", Icon: ProjectsIcon },
-  { href: "/boards", label: "Boards", Icon: BoardsIcon },
-  { href: "/communication", label: "Communication", Icon: CommunicationIcon },
-  { href: "/clients", label: "Clients", Icon: ClientsIcon },
-  { href: "/pipeline", label: "Pipeline", Icon: LeadsIcon },
-  { href: "/settings", label: "Settings", Icon: SettingsIcon },
-];
 
 const STORAGE_KEY = "sidebar.collapsed";
 
@@ -50,10 +32,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  // A project collaborator only ever sees their project(s).
-  const items = collaborator
-    ? nav.filter((n) => n.href === "/projects")
-    : nav;
+  const items = navFor(collaborator);
 
   // Restore the last collapse state (client-only to avoid a hydration mismatch).
   useEffect(() => {
@@ -73,8 +52,23 @@ export function Sidebar({
   }
 
   return (
+    // Sticky and exactly one viewport tall. It used to stretch to the height
+    // of the DOCUMENT (the parent is a stretching flex row), so on any page
+    // longer than the screen the nav stretched with it and the Collapse
+    // control sat at the bottom of the page rather than the bottom of the
+    // window: measured at 1307px on a 390px-tall viewport.
+    //
+    // It appears at `lg`, not `md`. At 768 it spent 240px of an 820px tablet on
+    // navigation and left the page 516px, which is LESS room than the same
+    // phone gets held sideways (780px). Below lg the drawer carries the nav
+    // instead, and it carries it better: labelled rows rather than an icon
+    // rail whose title tooltips a touch device never shows.
+    //
+    // Hidden on a SHORT viewport at any width, which is a phone held sideways.
+    // 844x390 passes even `lg` on width alone, and there is no room for a
+    // full-height sidebar in 390px of height.
     <aside
-      className={`hidden shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 ease-out print:!hidden md:flex ${
+      className={`sticky top-0 hidden h-[100dvh] shrink-0 flex-col self-start border-r border-border bg-surface transition-[width] duration-200 ease-out print:!hidden lg:flex short:!hidden ${
         collapsed ? "w-[68px]" : "w-60"
       }`}
     >
@@ -92,7 +86,9 @@ export function Sidebar({
         />
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
+      {/* min-h-0 so the nav can actually shrink inside the flex column, and
+          scroll its own overflow rather than pushing the footer off. */}
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
         {/* Runner opens the panel rather than navigating, so it is a button
             wearing a nav row's clothes. Deliberate: the panel slides over
             whatever you are reading and picks up the project you are already
@@ -130,7 +126,7 @@ export function Sidebar({
             its middle can be a thousand pixels below the links it contains. */}
         <div className="space-y-1" data-tour="nav">
           {items.map(({ href, label, Icon }) => {
-            const active = pathname === href || pathname.startsWith(`${href}/`);
+            const active = isActive(pathname, href);
             return (
               <Link
                 key={href}
@@ -157,7 +153,7 @@ export function Sidebar({
         </div>
       </nav>
 
-      <div className="border-t border-border p-3">
+      <div className="shrink-0 border-t border-border p-3">
         <button
           onClick={toggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}

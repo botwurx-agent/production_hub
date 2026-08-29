@@ -50,7 +50,7 @@ export default async function AppLayout({
 
   return (
     <AiAvailabilityProvider enabled={aiConfigured()}>
-      <div className="flex min-h-screen bg-bg">
+      <div className="flex min-h-[100dvh] bg-bg">
         <Sidebar
           studioName={ctx.studio.name}
           logoUrl={logoUrl}
@@ -67,6 +67,8 @@ export default async function AppLayout({
             studios={studios}
             activeStudioId={ctx.studio.id}
             assistant={assistant}
+            studioName={ctx.studio.name}
+            logoUrl={logoUrl}
           />
           <main className="flex-1 px-4 py-6 print:p-0 md:px-8 md:py-8">
             {children}

@@ -238,7 +238,7 @@ export function PinCanvas({
           out of view. */}
       <div
         className={`flex min-h-[320px] flex-col overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm ${
-          roomy ? "lg:max-h-[78vh]" : "lg:max-h-[58vh]"
+          roomy ? "lg:max-h-[78dvh]" : "lg:max-h-[58dvh]"
         }`}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">

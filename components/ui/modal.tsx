@@ -33,11 +33,19 @@ const MIN_H = 320;
 /** Leave a strip of backdrop, so it still reads as a window over the page. */
 const EDGE = 24;
 
+/**
+ * The floor has to yield to the viewport, or it is not a floor, it is an
+ * overflow. A phone is 390px wide, so a flat 420px minimum made every modal
+ * carrying a remembered size wider than the screen and scrolled the whole PAGE
+ * sideways behind the backdrop. Take the smaller of the two, never the larger.
+ */
 function clamp(size: Size): Size {
   if (typeof window === "undefined") return size;
+  const maxW = window.innerWidth - EDGE;
+  const maxH = window.innerHeight - EDGE;
   return {
-    w: Math.max(MIN_W, Math.min(size.w, window.innerWidth - EDGE)),
-    h: Math.max(MIN_H, Math.min(size.h, window.innerHeight - EDGE)),
+    w: Math.max(Math.min(MIN_W, maxW), Math.min(size.w, maxW)),
+    h: Math.max(Math.min(MIN_H, maxH), Math.min(size.h, maxH)),
   };
 }
 
@@ -186,9 +194,14 @@ export function Modal({
   // Roomy once the operator has asked for space, whichever way they asked.
   const roomy = full || (custom?.h ?? 0) > window.innerHeight * 0.75;
 
+  // Below `sm` a remembered size is ignored outright and the panel goes back
+  // to its responsive width. A size dragged out on a desktop says nothing
+  // useful about a phone, and honouring it there only ever makes the window
+  // worse than the default would have been.
+  const narrow = window.innerWidth < 640;
   const panelStyle: React.CSSProperties = full
-    ? { width: `calc(100vw - ${EDGE}px)`, height: `calc(100vh - ${EDGE}px)` }
-    : custom
+    ? { width: `calc(100vw - ${EDGE}px)`, height: `calc(100dvh - ${EDGE}px)` }
+    : custom && !narrow
       ? { width: custom.w, height: custom.h }
       : {};
 
@@ -206,8 +219,8 @@ export function Modal({
       <div
         ref={panelRef}
         style={panelStyle}
-        className={`relative z-10 flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden ${
-          full || custom ? "" : maxW
+        className={`relative z-10 flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden ${
+          full || (custom && !narrow) ? "" : maxW
         } rounded-[18px] border border-border bg-surface shadow-lg`}
         role="dialog"
         aria-modal="true"
@@ -281,7 +294,9 @@ export function Modal({
           <div className={bodyClassName}>{children}</div>
         </ModalRoom.Provider>
 
-        {canResize && !full && (
+        {/* No grip on a phone: a dragged size is ignored at that width, so the
+            handle would be a control that visibly does nothing. */}
+        {canResize && !full && !narrow && (
           <div
             onPointerDown={startResize}
             onPointerMove={onResize}

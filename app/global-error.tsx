@@ -23,7 +23,7 @@ export default function GlobalError({
         <style>{`
           :root { color-scheme: light dark; }
           .ge-wrap {
-            min-height: 100vh; display: flex; align-items: center;
+            min-height: 100dvh; display: flex; align-items: center;
             justify-content: center; padding: 3rem 1.25rem;
             font-family: system-ui, -apple-system, sans-serif;
             background: #f6f7f9; color: #1a1c1f;

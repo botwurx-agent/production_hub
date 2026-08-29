@@ -260,8 +260,8 @@ function Stage({
   const roomy = useModalRoomy();
   // Chrome above and below the stage is fixed, so the media is sized against
   // the viewport rather than against a parent whose height is content-driven.
-  const tall = roomy ? "h-[calc(100vh-10rem)]" : "h-[78vh]";
-  const capped = roomy ? "max-h-[calc(100vh-10rem)]" : "max-h-[78vh]";
+  const tall = roomy ? "h-[calc(100dvh-10rem)]" : "h-[78dvh]";
+  const capped = roomy ? "max-h-[calc(100dvh-10rem)]" : "max-h-[78dvh]";
 
   return (
     <>
@@ -281,7 +281,7 @@ function Stage({
           <ScrubVideo
             src={link}
             maxHeightClass={
-              roomy ? "max-h-[calc(100vh-13rem)]" : "max-h-[72vh]"
+              roomy ? "max-h-[calc(100dvh-13rem)]" : "max-h-[72dvh]"
             }
           />
         </div>
