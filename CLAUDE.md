@@ -3250,6 +3250,86 @@ side. Four tiers now, not three:
   to be made real before the first paid signup, and the table above is its
   spec.
 
+### Phone and tablet layout (2026-08-29): BUILT
+
+Measured at 390x844, 844x390, 820x1180 and 1180x820 by driving the real
+components in a browser, not read off the source. Four shell bugs and three
+page ones.
+
+- THE SHELL READS BOTH DIMENSIONS NOW, not width alone. A new `short` screen
+  in tailwind.config.ts (max-height 500px) exists because 844x390, a phone held
+  sideways, passes every width breakpoint and used to draw the full 240px
+  sidebar in 390px of height. A short viewport gets the phone's chrome at any
+  width.
+- THE SIDEBAR WAS AS TALL AS THE DOCUMENT. It is a stretching flex child, so on
+  a page longer than the screen the nav stretched with it and the Collapse
+  control went with the page: measured at y=1307 in a 390px viewport, and 147px
+  below the fold on an iPad. It is sticky, one viewport tall, and its nav
+  scrolls its own overflow. That was a desktop bug too.
+- IT APPEARS AT `lg`, NOT `md`. At 768 it spent 240px of an 820px tablet and
+  left the page 516px, less room than the same phone gets held sideways (780px).
+- THE PHONE NAV IS A DRAWER (components/app-shell/mobile-nav.tsx). Six
+  destinations used to share a 390px bar with the brand, Runner, Invite, the
+  bell, the theme toggle and the avatar, leaving about 110px of scroller, and
+  the list omitted /dashboard while the brand went to /projects, so the app's
+  documented home was UNREACHABLE on a phone. One shared array now feeds both
+  the drawer and the sidebar (components/app-shell/nav-items.ts) so they cannot
+  drift apart again. A drawer rather than a bottom tab bar because seven
+  destinations plus Runner is more than a tab bar holds.
+- 100vh IS NOW 100dvh wherever it bounds a window or a review stage, so a mobile
+  browser's collapsing chrome cannot hide the bottom of a modal. The modal's
+  420px minimum width yields to the viewport (it exceeded a 390px phone and
+  scrolled the whole page sideways behind the backdrop), a size dragged out on a
+  desktop is ignored below `sm`, and its grip is hidden there.
+- BUDGET AND GEAR ROWS were silently dropping their text columns. Fixed tracks
+  for the numbers and `1fr` for the text; below about 600px the fixed ones ate
+  the row and the gear list rendered as a checkbox, a quantity and two prices
+  with NO item name and NO notes. Worse than an overflow, because there was
+  nothing to scroll to. They scroll inside their own box now. NOT applied to the
+  invoice editor's lines, which carry an absolutely positioned tax popover a
+  scroll container would trap, nor to billing-document, whose description is a
+  `<span>` that wraps and which feeds the print route.
+
+### The shot list is a real table again (2026-08-29): BUILT
+
+Section 6 of this file has always specified this surface as "the active list's
+shots as ROWS ... Description + Shot Size + Shot Type + Camera Movement", and
+the column header was written to that spec. The ROW was the drift: it put the
+description on one line and the three pickers on the line below, inside one
+flex-1 block. So the header pointed at nothing, at every width including
+desktop (measured at 1680: "Shot size" sat 368px to the right of its input,
+"Movement" over empty space), and its fixed columns wanting 758px in a 590px
+box are what made the PAGE scroll sideways on an iPad in landscape.
+
+- A new `wide` screen (1440px) is where the row becomes the table. Measured, not
+  chosen: the row costs 646px in fixed columns and the sidebar plus the list
+  rail take 556px of the viewport before it starts, so below 1440 the
+  Description column is under 200px. 1440 rather than 1536 because the common
+  MacBook widths (1470, 1512) sit between the two.
+- `wide:contents` dissolves the fields wrapper so its children become cells of
+  the row. Below `wide` they stay a stacked card, unchanged. Code and Day ride
+  in the Description cell rather than earning columns, which would cost about
+  150px and push the table past where it fits.
+- THE HEADER FOLLOWS THE ROW THROUGH BOTH SHAPES rather than declaring its own.
+  Two details are load-bearing and were found by measuring, not by eye: the
+  header needs `pr-[13px]` (the row card's p-3 plus its 1px right border) and
+  the three labels need a TRANSPARENT BORDER, because `flex-basis: 0` still
+  counts padding and border and the row's pickers are inputs WITH one. Without
+  either, the 1px and the 6px redistribute across the flexible columns into 3px
+  of visible drift. Verified pixel-exact at 1180, 1280, 1440, 1680 and 1920.
+- Row pitch drops from 218px to 175px, so a 16-shot list is about a screen less
+  scrolling, and the columns are scannable, which is the point of a shot list.
+- KNOWN AND ACCEPTED: at 1440 to 1600 the longest shot-size value ("Extreme
+  Close-up") clips by a few characters. It fits from 1680, and it fits at 1440
+  with the sidebar collapsed (measured: picker 117px expanded, 151px collapsed).
+  It is an input, so the value is one focus away, and it is not the gear-list
+  case where data vanished.
+- Found on the way and fixed: `${cell} w-20` did nothing, because the shared
+  `cell` constant sets `w-full` and Tailwind emits `w-20` BEFORE it, so Code and
+  Day rendered full width and stacked. Marked important at the live sites.
+  components/production/shot-list.tsx has the same bug twice and is UNUSED (the
+  old production tab strip's editor); nothing imports it.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of

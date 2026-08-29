@@ -601,9 +601,20 @@ export function ShotBoardEditor({
                   them.
                   Keep the two halves in step: the widths and the wrapper
                   classes here are the same ones ShotRow uses, and `pl-4`
-                  is the row card's 4px left rule plus its p-3. */}
+                  is the row card's 4px left rule plus its p-3, and `pr-[13px]`
+                  is its p-3 plus the 1px right border. That last pixel is not
+                  fussiness: the columns are flexible, so a content box 1px
+                  narrower than the header's spread out into 3px of visible
+                  drift by the Movement column. The transparent border on
+                  the three labels is the same story: `flex-basis: 0` still
+                  counts padding and border, and the row's pickers are inputs
+                  WITH a border while these are plain spans, so without it the
+                  6px difference redistributes across the flexible columns. That includes
+                  the `wide:contents` switch, so the header follows the row
+                  from the stacked card into the real table rather than
+                  describing only one of them. */}
               {activeCards.length > 0 && (
-                <div className="mb-1 hidden items-start gap-3 border-b border-border pb-1.5 pl-4 pr-3 text-[11px] font-bold uppercase tracking-wide text-text-faint lg:flex">
+                <div className="mb-1 hidden items-start gap-3 border-b border-border pb-1.5 pl-4 pr-[13px] text-[11px] font-bold uppercase tracking-wide text-text-faint lg:flex">
                   <input
                     type="checkbox"
                     checked={selected.size === activeCards.length && activeCards.length > 0}
@@ -613,13 +624,15 @@ export function ShotBoardEditor({
                   />
                   <span className="w-[130px] shrink-0">Image</span>
                   <span className="w-7 shrink-0 text-center">#</span>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <span className="block">Description</span>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      <span style={{ color: `var(--h-${COL.size})` }}>Shot size</span>
-                      <span style={{ color: `var(--h-${COL.type})` }}>Shot type</span>
-                      <span style={{ color: `var(--h-${COL.move})` }}>Movement</span>
+                  <div className="min-w-0 flex-1 space-y-2 wide:contents">
+                    <span className="block wide:flex-[2]">Description</span>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 wide:contents">
+                      <span className="wide:min-w-0 wide:flex-1 wide:border wide:border-transparent wide:px-2" style={{ color: `var(--h-${COL.size})` }}>Shot size</span>
+                      <span className="wide:min-w-0 wide:flex-1 wide:border wide:border-transparent wide:px-2" style={{ color: `var(--h-${COL.type})` }}>Shot type</span>
+                      <span className="wide:min-w-0 wide:flex-1 wide:border wide:border-transparent wide:px-2" style={{ color: `var(--h-${COL.move})` }}>Movement</span>
                     </div>
+                    {/* Matches the row's trailing delete cell. */}
+                    <span className="hidden wide:block wide:w-[15px] wide:shrink-0" />
                   </div>
                 </div>
               )}
@@ -838,49 +851,37 @@ function ShotRow({
         </div>
       </div>
 
-      {/* Fields */}
-      <div className="min-w-0 flex-1 space-y-2">
+      {/* Fields.
+          `wide:contents` dissolves this wrapper so its children become cells of
+          the row itself. Below that they stay a stacked block, which is the
+          card. CLAUDE.md specifies this surface as "the active list's shots as
+          ROWS ... Description + Shot Size + Shot Type + Camera Movement", and
+          the column header has always been written to that spec; the stack is
+          the drift. It is restored only at `wide` because that is where the
+          Description column is still readable once the sidebar and the list
+          rail have taken their 556px. */}
+      <div className="min-w-0 flex-1 space-y-2 wide:contents">
         <div
           className="text-xs font-bold lg:hidden"
           style={{ color: `var(--h-${rowHue})` }}
         >
           Shot {number}
         </div>
+        {/* Description cell: the writing, plus the two identifiers that name
+            the shot. Code and Day ride with it rather than earning columns of
+            their own, which would cost about 150px and push the table past
+            where it fits. */}
+        <div className="min-w-0 space-y-2 wide:flex-[2]">
         <textarea
           defaultValue={card.description ?? ""}
           onBlur={(e) => { if ((e.target.value || null) !== (card.description ?? null)) onCapture(); updateCard(projectId, card.id, { description: e.target.value }); }}
           placeholder="Description..."
-          className={`${field} min-h-[52px]`}
+          /* Taller in the table, where the column is narrower and the same
+             sentence wraps to three lines. The row's height is set by the
+             image column (~125px) and this still comes in under it, so the
+             extra room is space the row already had. */
+          className={`${field} min-h-[52px] wide:min-h-[84px]`}
         />
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <input
-            list="shot-sizes"
-            value={size}
-            onChange={(e) => setSize(e.target.value)}
-            onBlur={(e) => { if ((e.target.value || null) !== (card.shot_size ?? null)) onCapture(); updateCard(projectId, card.id, { shot_size: e.target.value }); }}
-            placeholder="Shot size..."
-            className={field}
-            style={chipStyle(size, COL.size)}
-          />
-          <input
-            list="shot-types"
-            value={stype}
-            onChange={(e) => setSType(e.target.value)}
-            onBlur={(e) => { if ((e.target.value || null) !== (card.shot_type ?? null)) onCapture(); updateCard(projectId, card.id, { shot_type: e.target.value }); }}
-            placeholder="Shot type..."
-            className={field}
-            style={chipStyle(stype, COL.type)}
-          />
-          <input
-            list="shot-movements"
-            value={move}
-            onChange={(e) => setMove(e.target.value)}
-            onBlur={(e) => { if ((e.target.value || null) !== (card.movement ?? null)) onCapture(); updateCard(projectId, card.id, { movement: e.target.value }); }}
-            placeholder="Camera movement..."
-            className={field}
-            style={chipStyle(move, COL.move)}
-          />
-        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             defaultValue={card.code ?? ""}
@@ -899,9 +900,45 @@ function ShotRow({
             placeholder="Day"
             className={`${cell} !w-20 border-border`}
           />
+        </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 wide:contents">
+          <input
+            list="shot-sizes"
+            value={size}
+            onChange={(e) => setSize(e.target.value)}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.shot_size ?? null)) onCapture(); updateCard(projectId, card.id, { shot_size: e.target.value }); }}
+            placeholder="Shot size..."
+            className={`${field} wide:min-w-0 wide:flex-1 wide:px-2`}
+            style={chipStyle(size, COL.size)}
+          />
+          <input
+            list="shot-types"
+            value={stype}
+            onChange={(e) => setSType(e.target.value)}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.shot_type ?? null)) onCapture(); updateCard(projectId, card.id, { shot_type: e.target.value }); }}
+            placeholder="Shot type..."
+            className={`${field} wide:min-w-0 wide:flex-1 wide:px-2`}
+            style={chipStyle(stype, COL.type)}
+          />
+          <input
+            list="shot-movements"
+            value={move}
+            onChange={(e) => setMove(e.target.value)}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.movement ?? null)) onCapture(); updateCard(projectId, card.id, { movement: e.target.value }); }}
+            placeholder="Camera movement..."
+            className={`${field} wide:min-w-0 wide:flex-1 wide:px-2`}
+            style={chipStyle(move, COL.move)}
+          />
+        </div>
+
+        {/* Trailing cell. Right-aligned on its own line in the card,
+            the row's last column in the table. */}
+        <div className="flex justify-end wide:contents">
           <button
             onClick={() => onStructural(() => deleteCard(projectId, card.id))}
-            className="ml-auto text-text-faint hover:text-red"
+            className="text-text-faint hover:text-red wide:mt-1.5 wide:shrink-0"
             aria-label="Delete shot"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">

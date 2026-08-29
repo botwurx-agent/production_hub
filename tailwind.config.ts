@@ -28,6 +28,13 @@ const config: Config = {
            844x390 the width says "desktop" and the height says there is no
            room for a full-height sidebar. */
         short: { raw: "(max-height: 500px)" },
+        /* The width at which a data row can show its columns side by side.
+           1440 rather than a round 1280 because it is measured, not chosen:
+           the shot list's row costs 646px in fixed columns, the sidebar and
+           the list rail take 556px of the viewport before the row starts, and
+           below 1440 the Description column (the one the page exists for) is
+           squeezed under 200px. Below this the same rows stack as cards. */
+        wide: "1440px",
       },
       colors: {
         bg: "var(--bg)",
