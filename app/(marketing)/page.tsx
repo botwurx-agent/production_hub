@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Wash } from "@/components/marketing/aurora";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
+import { ShotCluster } from "@/components/marketing/shot-cluster";
 import { ModuleMap } from "@/components/marketing/module-map";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
 import { PersonaChips } from "@/components/marketing/persona-chips";
@@ -116,9 +117,15 @@ function ProofColumn({
 export default function MarketingHome() {
   return (
     <>
-      {/* Hero */}
+      {/* Hero. A TWO-COLUMN SPREAD, words left and evidence right, which is
+          what the marketing design standard asks of every hero (CLAUDE.md 4.6)
+          and which the home page was the last thing on the site still ignoring.
+          It was a centred stack with one full-width screenshot beneath it: the
+          screenshot filled the fold on its own and the fold said one thing.
+          Now the words and the proof share it. */}
       <Section className="pt-14 sm:pt-20">
-        <div className="mx-auto max-w-4xl text-center">
+        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-14">
+        <div className="max-w-2xl text-center lg:text-left">
           <p className="mb-5 text-xs font-semibold uppercase tracking-[0.16em] text-accent">
             For production studios of every scale
           </p>
@@ -157,15 +164,15 @@ export default function MarketingHome() {
             </span>
             .
           </h1>
-          <p className="mx-auto mt-7 max-w-2xl text-xl leading-relaxed text-text-muted sm:text-2xl">
+          <p className="mt-7 max-w-xl text-xl leading-relaxed text-text-muted sm:text-[22px]">
             From the first brief to the final invoice. Client approvals that do
             not get lost, call sheets that confirm themselves, and a budget that
             tells you what the job actually made.
           </p>
-          <PersonaChips className="mt-7" />
+          <PersonaChips className="mt-7 justify-center lg:justify-start" />
 
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <div className="flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-8 flex flex-col items-center gap-4 lg:items-start">
+            <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
               <CtaButton shine />
               <CtaButton variant="quiet" href="/#review" label="See it work" />
             </div>
@@ -173,23 +180,10 @@ export default function MarketingHome() {
           </div>
         </div>
 
-        {/* Held in from the 1400px container to 1200. At full width the shot
-            filled the fold on a laptop and pushed the sections below out of
-            sight, so it read as the page rather than as evidence for the
-            headline above it. */}
-        <div className="mx-auto mt-16 max-w-[1200px]">
-          <BrowserFrame
-            priority
-            // Already on screen at load, so a scroll timeline would never fire.
-            motion="settle"
-            // Wider than the frames that share a row with copy, so it has to
-            // say so. 1280 is where the container stops growing: below that it
-            // is the viewport minus the section's 40px of side padding.
-            sizes="(min-width: 1280px) 1200px, 100vw"
-            caption="app.studio-flows.com/projects"
-            shot="projects-board"
-            alt="The projects board: every job on one board, moving from pre-pro to delivered."
-          />
+        {/* The evidence half of the fold. Closeups rather than one screenshot,
+            because a whole app screen is illegible at this width; see
+            components/marketing/shot-cluster.tsx. */}
+        <ShotCluster className="mt-4 lg:mt-0" />
         </div>
       </Section>
 

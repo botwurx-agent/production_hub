@@ -116,6 +116,22 @@ implementation.
 - Screenshots stay real (demo studio only) and live in browser frames; motifs
   (components/marketing/motifs.tsx) are token-drawn illustrations that never
   imitate a screenshot. No stock photography, no invented testimonials.
+- A HERO'S EVIDENCE IS A CLUSTER OF CLOSEUPS, not one screenshot (added
+  2026-08-29 from a StudioBinder layout the operator liked). A hero gives its
+  picture about 700 CSS pixels and a whole app screen at that width is a grey
+  mosaic: you can tell it is software and nothing else. components/marketing/
+  shot-cluster.tsx is the home hero's: one anchor that survives being small
+  (the review canvas, a photograph with numbered pins rather than a page of
+  13px type) with three closeups floating over its corners, each from a
+  different end of the job, because the headline claims one place for all of
+  it. scripts/crop-closeups.mjs cuts the tiles out of the screenshots
+  capture-shots.mjs already takes (rectangles in source pixels, canvas crop
+  since sharp is not installed), so a tile cannot drift away from the product.
+  What we REFUSED from the reference: its stock photograph of a person, and
+  its "One Platform. Every Production." tab list, which trades our vertical
+  positioning for a breadth claim. GOTCHA while iterating: Next caches
+  optimized images, so a re-cropped file keeps rendering the old one until
+  `rm -rf .next/cache/images`.
 
 ## 5. Data model (the spine)
 
