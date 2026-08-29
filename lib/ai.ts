@@ -7,8 +7,16 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { parseShotDocDraft, type ShotDocDraft } from "@/lib/shot-doc";
 import { parseBillingDocDraft, type BillingDocDraft } from "@/lib/billing-import";
+import {
+  parseInvoiceDraft,
+  str,
+  day,
+  money,
+  type InvoiceDraft,
+} from "@/lib/invoice-draft";
 export type { ShotDocDraft, ShotDocRow, ShotDocPage } from "@/lib/shot-doc";
 export type { BillingDocDraft, BillingDocLineDraft } from "@/lib/billing-import";
+export { parseInvoiceDraft, type InvoiceDraft } from "@/lib/invoice-draft";
 
 export const ANTHROPIC_MODEL = "claude-opus-4-8";
 // Short, cheap rewrites (the composer's Polish button) run on the small model.
@@ -397,145 +405,39 @@ async function openaiReadDocument(
   return content;
 }
 
-const INVOICE_SYSTEM = `You read a vendor invoice for a commercial production studio and return only the facts printed on it.
+const INVOICE_SYSTEM = `You read a bill from a vendor to a commercial production studio and return only the facts printed on it.
+
+The document may be an INVOICE (money already owed) or an ESTIMATE, quote, or bid (money about to be committed). Both are read the same way and both are valid: a producer logs an estimate as a commitment long before the invoice arrives. Only a document that bills nothing at all (a contract with no figures, a call sheet, a photo of something else, a blank page) is unreadable.
 
 You are filling in a form that a producer will check before saving, so accuracy matters far more than completeness. A field you are unsure about must be null. A guess that looks plausible is worse than nothing, because the producer may not catch it.
 
 Return ONLY a JSON object, no prose, no code fences, with exactly these keys:
 {
+  "documentKind": string or null,    // "invoice" | "estimate", whichever the document calls itself; an estimate covers a quote or a bid
   "vendor": string or null,          // who is BILLING (the sender / "from" party), never the studio being billed
-  "description": string or null,     // one short line for what the invoice covers, under 80 characters
-  "amount": number or null,          // the TOTAL AMOUNT DUE, as a plain number: no currency symbol, no thousands separators
-  "days": number or null,            // days billed, ONLY if the invoice bills by the day and states a quantity of days
+  "vendorAlt": string or null,       // the OTHER name this could be filed under, else null (see the rule below)
+  "description": string or null,     // one short line for what it covers, under 80 characters
+  "amount": number or null,          // the FINAL TOTAL, as a plain number: no currency symbol, no thousands separators
+  "days": number or null,            // days billed, only in the narrow case described below
   "currency": string or null,        // 3-letter code if one is shown
-  "invoiceNumber": string or null,
+  "invoiceNumber": string or null,   // the document's own number, estimate numbers included
   "invoiceDate": string or null,     // YYYY-MM-DD
   "dueDate": string or null,         // YYYY-MM-DD
   "budgetLineId": string or null,    // the id of the best-matching budget line from the list given, or null if none clearly fits
-  "notes": string or null,           // anything a producer would want flagged (payment terms, deposit, partial billing), else null
-  "unreadable": boolean              // true if this is not a readable invoice at all
+  "notes": string or null,           // what a producer would want flagged: payment terms, deposits and advances, what is excluded, what is billed directly by someone else
+  "unreadable": boolean              // true only if the document bills nothing at all
 }
 
 Rules:
-- The amount is the final total due, after tax and after any deposit already paid. If the invoice shows both a subtotal and a total, take the total.
-- days is only for day-rate work with a stated quantity ("3 days @ $800", "2 x shoot day"). A flat fee, a kit rental, or a licence has no day count, so return null. Never divide the total by a rate to invent one.
-- If several dates appear, invoiceDate is the issue date, not the service date or the period covered.
+- THE AMOUNT IS THE GRAND TOTAL, the single figure the studio is being asked to commit to or pay. These documents routinely group charges into sections (fees, expenses, crew) with a subtotal under each, then print a final line such as "TOTAL ESTIMATE", "TOTAL DUE", or "BALANCE DUE". Take that final line, never a section subtotal, and never the largest single line item. If an amount has already been paid or advanced, still return the full total and say what was paid in notes.
+- A line reading "waived", "N/A", "provided by client", or "$0.00" contributes nothing. Do not treat it as missing information and do not add it in.
+- VENDOR AND VENDORALT. Work often bills through a rep, an agency, or a loan-out company on behalf of a named artist, so two names appear: the company on the letterhead and the person whose fees are itemised ("SET DESIGNER JANE SMITH'S FEES"). Put the one the document presents as the biller in vendor, and the other in vendorAlt. Either may be the name the studio knows them by, so returning both matters. When only one name appears, vendorAlt is null.
+- DAYS is for the narrow case where the whole document is one person's day rate times a number of days, so that days multiplied by the rate is the total. If the document mixes several different day rates, or adds expenses, kit fees, or assistants on top, return null. Never divide the total by a rate to invent a day count. A wrong day count makes the app report a rate discrepancy that does not exist.
+- If several dates appear, invoiceDate is the issue date, not the shoot date, the service date, or the period covered.
 - An ambiguous date format (03/04/2026) should be read using other clues on the document; if it stays ambiguous, return null rather than picking one.
+- dueDate is only a date the document PRINTS as a due date. Do not compute one from payment terms ("net 45", "due within 45 days"), and do not use an estimate's "valid for" or "valid until" date, which is a deadline for accepting rather than for paying. Put the terms in notes instead.
 - Only return a budgetLineId that appears verbatim in the list provided. If nothing clearly fits, null.
-- If the document is not an invoice (a contract, a photo of something else, a blank page), set unreadable to true and every other field to null.
 - Do not use em dashes in any text you return.`;
-
-export type InvoiceDraft = {
-  vendor: string | null;
-  description: string | null;
-  amount: number | null;
-  days: number | null;
-  currency: string | null;
-  invoiceNumber: string | null;
-  invoiceDate: string | null;
-  dueDate: string | null;
-  budgetLineId: string | null;
-  notes: string | null;
-  unreadable: boolean;
-};
-
-const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-function str(v: unknown, max: number): string | null {
-  if (typeof v !== "string") return null;
-  const t = v.trim();
-  return t ? t.slice(0, max) : null;
-}
-
-function day(v: unknown): string | null {
-  const s = str(v, 10);
-  if (!s || !ISO_DAY.test(s)) return null;
-  // A syntactically valid string can still be an impossible date (2026-02-31),
-  // and Date would silently roll it forward into March.
-  const [y, m, d] = s.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  const ok =
-    dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
-  return ok ? s : null;
-}
-
-/**
- * The model's JSON is untrusted input: it can be malformed, wrapped in a code
- * fence, or carry a hallucinated budget line id. Everything is validated here,
- * and anything that fails becomes null rather than reaching a money field.
- */
-export function parseInvoiceDraft(raw: string, validLineIds: string[]): InvoiceDraft {
-  const empty: InvoiceDraft = {
-    vendor: null,
-    description: null,
-    amount: null,
-    days: null,
-    currency: null,
-    invoiceNumber: null,
-    invoiceDate: null,
-    dueDate: null,
-    budgetLineId: null,
-    notes: null,
-    unreadable: true,
-  };
-
-  // Models sometimes wrap JSON in a fence despite being told not to.
-  const cleaned = raw.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "").trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start === -1 || end <= start) return empty;
-
-  let obj: Record<string, unknown>;
-  try {
-    obj = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
-  } catch {
-    return empty;
-  }
-
-  // Accept a number, or a string the model formatted anyway ("1,250.00", "$900").
-  let amount: number | null = null;
-  const rawAmount = obj.amount;
-  if (typeof rawAmount === "number") {
-    amount = rawAmount;
-  } else if (typeof rawAmount === "string") {
-    const digits = rawAmount.replace(/[^0-9.\-]/g, "");
-    // Number("") is 0, so a string with no digits at all ("n/a", "see below")
-    // would otherwise land in a money field as $0.00 and read as a real zero
-    // cost rather than as nothing extracted.
-    const n = digits === "" ? NaN : Number(digits);
-    amount = Number.isFinite(n) ? n : null;
-  }
-  // A negative or absurd total is a misread, not a cost.
-  if (amount !== null && (!Number.isFinite(amount) || amount < 0 || amount > 1e9)) {
-    amount = null;
-  }
-  if (amount !== null) amount = Math.round(amount * 100) / 100;
-
-  // A day count is only useful when it is a plausible number of days; anything
-  // else means the model inferred rather than read it.
-  const rawDays = typeof obj.days === "number" ? obj.days : Number(obj.days);
-  const days =
-    Number.isFinite(rawDays) && rawDays > 0 && rawDays <= 500
-      ? Math.round(rawDays * 100) / 100
-      : null;
-
-  const lineId = str(obj.budgetLineId, 64);
-
-  return {
-    vendor: str(obj.vendor, 200),
-    description: str(obj.description, 200),
-    amount,
-    days,
-    currency: str(obj.currency, 8),
-    invoiceNumber: str(obj.invoiceNumber, 100),
-    invoiceDate: day(obj.invoiceDate),
-    dueDate: day(obj.dueDate),
-    // A hallucinated id would silently file the cost against the wrong line.
-    budgetLineId: lineId && validLineIds.includes(lineId) ? lineId : null,
-    notes: str(obj.notes, 500),
-    unreadable: obj.unreadable === true,
-  };
-}
 
 /**
  * Reads an invoice document into a DRAFT. Nothing here writes anything: the
@@ -637,21 +539,6 @@ export type SowDraft = {
   deliverables: SowDeliverable[];
   unreadable: boolean;
 };
-
-/** Shared with the invoice parser: a money value that cannot be trusted raw. */
-function money(v: unknown): number | null {
-  let n: number | null = null;
-  if (typeof v === "number") {
-    n = v;
-  } else if (typeof v === "string") {
-    const digits = v.replace(/[^0-9.\-]/g, "");
-    // Number("") is 0, so a string with no digits would otherwise land as a
-    // real zero fee rather than as nothing extracted.
-    n = digits === "" ? NaN : Number(digits);
-  }
-  if (n === null || !Number.isFinite(n) || n < 0 || n > 1e9) return null;
-  return Math.round(n * 100) / 100;
-}
 
 /**
  * The trust boundary between model output and a contract record. Everything is

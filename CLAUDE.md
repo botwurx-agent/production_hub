@@ -1814,6 +1814,42 @@ Two halves, both about connecting the ledger to what already exists.
   and the days parsing are unit-tested in the scratchpad, including the
   numeric-arrives-as-a-string case.
 
+### Cost extraction: it reads ESTIMATES too (found on a real vendor document)
+The operator fed it a REDEYE prop-styling estimate for Hint Water and it came
+back wrong. Four causes, all now fixed, and the first is the instructive one:
+- IT WAS PROMPTED FOR INVOICES ONLY, and told to set `unreadable` on anything
+  that was not one. The document says ESTIMATE in four places. But a vendor's
+  estimate is exactly what a producer logs as a COMMITMENT weeks before any
+  invoice exists, which is the whole point of a cost being a commitment with
+  `cost_payments` against it. The prompt now reads invoice OR estimate/quote/
+  bid, and `unreadable` means only that the document bills nothing at all.
+  `documentKind` comes back so the banner can say which it read, and an
+  estimate says out loud that it is what you are committing to, not a bill.
+- THE GRAND TOTAL, not a section subtotal. These documents group charges (fees
+  $3,600, expenses $2,000) with a subtotal under each and then print TOTAL
+  ESTIMATE $5,600. The prompt names that shape explicitly, and says a line
+  reading waived / N/A / provided by client contributes nothing.
+- TWO NAMES, because the work bills through a rep: REDEYE Reps on the
+  letterhead, "SET DESIGNER AMY TAYLOR'S FEES" in the table. `vendorAlt`
+  carries the second one and BOTH are tried against the project roster, since
+  either may be the name the studio knows. A matched roster name then wins
+  over the letterhead in the form, because that is what the studio files under.
+  parseInvoiceDraft drops an alternate identical to the vendor.
+- DAYS IS NARROWER NOW. This document has a $1,000 prep day and two $1,300
+  shoot days plus expenses, so any day count divided into the total would fire
+  a rate discrepancy that does not exist. `days` is only for the case where one
+  person's day rate times a number of days IS the total.
+Also: dueDate is only a PRINTED due date. Not computed from "net 45", and
+never an estimate's "valid for 5 days", which is a deadline for accepting
+rather than paying; the terms go in notes.
+lib/invoice-draft.ts is a new module holding InvoiceDraft + parseInvoiceDraft
++ the shared str/day/money primitives, split out of lib/ai.ts for the reason
+shot-doc.ts and billing-import.ts already were: lib/ai.ts is `server-only`, so
+nothing in it could be unit-tested. 32 assertions in the scratchpad, built from
+this document's real traps.
+NOT verified against the live model: no AI key exists outside Vercel, so the
+prompt changes are reasoned from the document's own text rather than re-run.
+
 ### Budget slice 2: invoice extraction (AI, draft-and-confirm) — BUILT
 Attach an invoice to the add-cost modal and the form fills itself. The contract
 is the same as the composer's Polish button: the model ASSISTS, the human

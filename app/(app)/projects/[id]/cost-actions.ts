@@ -303,11 +303,14 @@ export async function extractInvoiceDraft(
     );
   } catch (e) {
     reportError("extractInvoiceDraft/ai", e);
-    return { error: "Could not read that invoice. Fill the form in by hand." };
+    return { error: "Could not read that document. Fill the form in by hand." };
   }
 
   if (draft.unreadable) {
-    return { error: "That did not look like an invoice. Fill the form in by hand." };
+    return {
+      error:
+        "That did not look like a bill or an estimate. Fill the form in by hand.",
+    };
   }
 
   // Vendor matching is deliberately deterministic rather than another model
@@ -318,7 +321,11 @@ export async function extractInvoiceDraft(
     .select("id, name, company")
     .eq("project_id", projectId);
 
-  const match = draft.vendor ? matchVendor(draft.vendor, roster ?? []) : null;
+  // Both names are tried: a bill routed through a rep carries the agency on the
+  // letterhead and the artist in the fee table, and the roster may hold either.
+  const match =
+    (draft.vendor ? matchVendor(draft.vendor, roster ?? []) : null) ??
+    (draft.vendorAlt ? matchVendor(draft.vendorAlt, roster ?? []) : null);
 
   return {
     ok: true,
@@ -460,7 +467,9 @@ export async function draftCostFromAttachment(
     return { ok: true, draft: null, contactId: null, vendorMatch: null, ...context };
   }
 
-  const match = draft.vendor ? matchVendor(draft.vendor, context.roster) : null;
+  const match =
+    (draft.vendor ? matchVendor(draft.vendor, context.roster) : null) ??
+    (draft.vendorAlt ? matchVendor(draft.vendorAlt, context.roster) : null);
   return {
     ok: true,
     draft,

@@ -511,6 +511,9 @@ export function CostModal({
   const [reading, setReading] = useState(false);
   const [filled, setFilled] = useState<string[] | null>(initialFilled ?? null);
   const [before, setBefore] = useState<CostInput | null>(null);
+  // What the document called itself. An estimate is a commitment rather than a
+  // bill, so the banner names it instead of calling everything an invoice.
+  const [docKind, setDocKind] = useState<"invoice" | "estimate" | null>(null);
 
   async function readInvoice(f: File) {
     setReading(true);
@@ -525,6 +528,7 @@ export function CostModal({
     }
     const { draft, contactId, vendorMatch } = res;
     setBefore(form);
+    setDocKind(draft.documentKind);
 
     const got: string[] = [];
     setForm((prev) => {
@@ -564,6 +568,10 @@ export function CostModal({
       if (draft.notes) next.notes = draft.notes;
       if (contactId) {
         next.contactId = contactId;
+        // The matched roster name wins over the letterhead: a bill routed
+        // through a rep says "REDEYE Reps" while the studio files the cost
+        // under the stylist it booked.
+        if (vendorMatch) next.vendor = vendorMatch;
         got.push(`roster match (${vendorMatch})`);
       }
       return next;
@@ -572,7 +580,10 @@ export function CostModal({
     // A currency we do not store is worth saying out loud rather than
     // silently treating a EUR invoice as dollars.
     if (draft.currency && draft.currency.toUpperCase() !== "USD") {
-      toast(`That invoice is in ${draft.currency.toUpperCase()}. Amounts here are USD.`, "error");
+      toast(
+        `That document is in ${draft.currency.toUpperCase()}. Amounts here are USD.`,
+        "error"
+      );
     }
   }
 
@@ -840,15 +851,15 @@ export function CostModal({
           </div>
           {aiEnabled && !file && !cost?.storage_path && (
             <p className="mt-1 text-[11px] text-text-faint">
-              Attach the invoice and the fields below fill themselves. You check
-              them before saving.
+              Attach the invoice or estimate and the fields below fill
+              themselves. You check them before saving.
             </p>
           )}
 
           {reading && (
             <div className="mt-2 flex items-center gap-2 rounded-[10px] border border-border bg-surface-2 px-2.5 py-2 text-xs text-text-muted">
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-              Reading the invoice...
+              Reading the document...
             </div>
           )}
 
@@ -856,14 +867,22 @@ export function CostModal({
             <div className="mt-2 rounded-[10px] border border-amber bg-amber-bg px-2.5 py-2 text-[11px] leading-relaxed text-amber">
               {filled.length === 0 ? (
                 <span className="font-semibold">
-                  Nothing could be read off that invoice. Fill the fields in by hand.
+                  Nothing could be read off that document. Fill the fields in by
+                  hand.
                 </span>
               ) : (
                 <>
                   <span className="font-semibold">
-                    Filled from the invoice: {filled.join(", ")}.
+                    Filled from the {docKind ?? "document"}: {filled.join(", ")}.
                   </span>{" "}
-                  Check the amount against the document before saving.
+                  Check the total against the document before saving.
+                  {docKind === "estimate" && (
+                    <>
+                      {" "}
+                      This is an estimate, so it is what you are committing to,
+                      not a bill yet.
+                    </>
+                  )}
                 </>
               )}
               {before && (
