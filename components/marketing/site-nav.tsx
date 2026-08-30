@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CtaButton } from "./cta";
+import { SiteNavMobile } from "./site-nav-mobile";
 import { LOGIN_URL } from "@/lib/marketing/hosts";
 import {
   FEATURES,
@@ -19,6 +20,10 @@ import {
  * server component with no client JS. The trigger itself LINKS to /features
  * (the overview), so a click, a tap, and a keyboard user all have a way in
  * that never depends on hover.
+ *
+ * None of that reaches a PHONE, where this row and the Log in link are both
+ * hidden. SiteNavMobile is the small client island that carries them, and it
+ * is the only JavaScript this nav ships.
  *
  * "How it works" was removed rather than pointed somewhere new: it had been
  * linking to /#how, an anchor that does not exist on the home page, so it
@@ -153,6 +158,10 @@ export function SiteNav() {
               Log in
             </a>
             <CtaButton size="sm" />
+            {/* Below md the two links above are hidden and Log in is gone
+                below sm, so without this a phone could reach neither the
+                feature pages, nor pricing, nor its own account. */}
+            <SiteNavMobile />
           </div>
         </div>
       </nav>
