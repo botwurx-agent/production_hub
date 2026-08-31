@@ -661,11 +661,23 @@ export const FEATURES: FeatureDef[] = [
   },
   {
     slug: "crew-management-software",
-    nav: "Crew & talent",
+    // NAMED AS THE APP NAMES IT. This page is the app's "Project contacts"
+    // page and nothing else; it used to be called "Crew & talent", which is a
+    // word the product does not use anywhere. Worse, it collided with a
+    // DIFFERENT app page ("Gear & crew"), so a reader scanning the nav for
+    // their contacts roster found nothing and a reader looking for gear found
+    // the wrong page. The site describes what the app has, in the app's own
+    // vocabulary; anything else is a term we invented for ourselves.
+    //
+    // The SLUG stays a search term, which is the whole point of the
+    // page-per-functionality URLs. Nobody types "project contacts" into
+    // Google; they type "crew management software" and land on the roster
+    // that answers it.
+    nav: "Project contacts",
     hint: "One roster per job",
     hue: "orange",
-    keyword: "Crew management",
-    metaTitle: "Crew and Talent Management Software for Production",
+    keyword: "Project contacts",
+    metaTitle: "Project Contacts: Crew, Talent and Vendor Roster Software",
     h1: "One roster per job.",
     lede: "Crew, talent, extras, clients and vendors on one per-job roster, with the details each kind of person actually needs: positions and rates for crew, wardrobe and dietary for talent, and files for everyone.",
     problem: "The crew list is a spreadsheet, the talent's measurements are in a text thread with wardrobe, and the W-9 is somewhere in email. Every department is asking you, because you are the only index.",
