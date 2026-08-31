@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/ui/card";
 import { BoardsIcon } from "@/components/app-shell/nav-icons";
 import { IconTile } from "@/components/ui/icon-tile";
 import { RAIL_ART } from "@/components/boards/rail-icons";
+import { RailPortal } from "@/components/boards/rail-portal";
 import { BoardCanvas } from "@/components/boards/board-canvas";
 import { BoardAssetPicker } from "@/components/boards/board-asset-picker";
 import { BoardFigmaModal } from "@/components/boards/board-figma-modal";
@@ -140,36 +141,10 @@ export function BoardsWorkspace({
   const [videoOpen, setVideoOpen] = useState(false);
   const [shapesOpen, setShapesOpen] = useState(false);
   const shapesRef = useRef<HTMLDivElement>(null);
+  // The Shape button, so the picker opens beside the tool it belongs to and a
+  // click on any OTHER tool counts as outside and closes it.
+  const shapeBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Close the shape picker on a pointer press outside it.
-  //
-  // THIS USED TO BE A `fixed inset-0` BACKDROP, and that made the shape tool
-  // completely unusable: the backdrop sat over the whole canvas, so a shape
-  // dragged out of the picker was dropped ONTO THE BACKDROP and the canvas
-  // never received the drop. Clicking a tile does nothing by design (creation
-  // is drag-only), so there was no way at all to get a shape onto a board.
-  //
-  // The card rail's flyout already learned this and uses a listener; the
-  // picker never got the same treatment. Rule worth keeping: on this canvas,
-  // never close a popover with a full-screen element. Something is always
-  // being dragged across it.
-  useEffect(() => {
-    if (!shapesOpen) return;
-    function onDown(e: PointerEvent) {
-      if (shapesRef.current && !shapesRef.current.contains(e.target as Node)) {
-        setShapesOpen(false);
-      }
-    }
-    // Deferred, or the very press that OPENED the picker closes it again.
-    const t = window.setTimeout(
-      () => document.addEventListener("pointerdown", onDown),
-      0,
-    );
-    return () => {
-      window.clearTimeout(t);
-      document.removeEventListener("pointerdown", onDown);
-    };
-  }, [shapesOpen]);
   // Flashes the picker's "drag a shape" heading when a tile is clicked.
   const [shapeNudge, setShapeNudge] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -1124,7 +1099,7 @@ export function BoardsWorkspace({
                 <RailBtn label="Heading" hint="Title a part of the board" art="heading" hue="indigo" disabled={busy} dragKind="heading" dragOnly onClick={addHeadingToBoard} />
                 <RailBtn label="To-do" hint="What the look still needs" art="todo" hue="green" disabled={busy} dragKind="todo" dragOnly onClick={addTodoToBoard} />
                 <RailBtn label="Column" hint="Stack cards into a group" art="column" hue="blue" disabled={busy} dragKind="column" dragOnly onClick={addColumnToBoard} />
-                <RailBtn label="Shape" hint="Block out a composition" art="shape" hue="purple" disabled={busy} dragKind="shape:rect" onClick={() => setShapesOpen((o) => !o)} />
+                <RailBtn anchorRef={shapeBtnRef} label="Shape" hint="Block out a composition" art="shape" hue="purple" disabled={busy} dragKind="shape:rect" onClick={() => setShapesOpen((o) => !o)} />
                 <RailBtn label="Line" hint="Connect two cards" art="line" hue="cyan" disabled={busy} dragKind="line" dragOnly onClick={addLineToBoard} />
                 <RailBtn label="Colour" hint="A swatch for the palette" art="color" hue="pink" disabled={busy} dragKind="color" dragOnly onClick={addColorToBoard} />
 
@@ -1143,12 +1118,16 @@ export function BoardsWorkspace({
 
                 {/* Shape picker: drag a tile onto the board to place it, the
                     same rule the creation tools follow. */}
-                {shapesOpen && (
-                  <>
-                    <div
-                      ref={shapesRef}
-                      className="absolute left-full top-0 z-30 ml-2 w-[248px] rounded-[14px] border border-border bg-surface p-2.5 shadow-lg"
-                    >
+                <RailPortal
+                  anchor={shapeBtnRef}
+                  open={shapesOpen}
+                  onClose={() => setShapesOpen(false)}
+                  width={248}
+                >
+                  <div
+                    ref={shapesRef}
+                    className="rounded-[14px] border border-border bg-surface p-2.5 shadow-lg"
+                  >
                       <p
                         className={`mb-1.5 px-0.5 text-[10px] font-bold uppercase tracking-wide transition ${
                           shapeNudge ? "text-accent" : "text-text-faint"
@@ -1188,10 +1167,9 @@ export function BoardsWorkspace({
                             </svg>
                           </button>
                         ))}
-                      </div>
                     </div>
-                  </>
-                )}
+                  </div>
+                </RailPortal>
               </div>
             )}
 
@@ -2494,25 +2472,26 @@ function CardRail({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [backTip, setBackTip] = useState(false);
+  const backRef = useRef<HTMLButtonElement>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on a click anywhere outside the rail (including on the canvas), so a
-  // flyout never sits over the board once you have moved on. A listener rather
-  // than a backdrop element: a backdrop would swallow the click that opens the
-  // NEXT tool, making every switch take two clicks.
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(null);
-    }
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, [open]);
+  // Closing on an outside click is RailPortal's job now, per tool. It has to
+  // be: the flyout is portaled out of this rail, so a handler that only knew
+  // about the rail would treat a click INSIDE the open flyout as outside and
+  // close it before the click could land on anything.
+  //
+  // The rule it inherits is the same one recorded here before: a listener,
+  // never a backdrop element, or the click that opens the next tool gets
+  // swallowed and every switch takes two clicks.
 
   return (
     <RailFlyoutCtx.Provider value={{ open, setOpen }}>
       <div ref={ref} className={`${RAIL_SHELL} z-30 gap-1 py-2`}>
         <button
+          ref={backRef}
+          onMouseEnter={() => setBackTip(true)}
+          onMouseLeave={() => setBackTip(false)}
           onClick={onClose}
           aria-label="Back to tools"
           className="group relative grid h-10 w-10 place-items-center rounded-[10px] text-text-muted transition hover:bg-surface-2 hover:text-text"
@@ -2520,10 +2499,12 @@ function CardRail({
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
             {ICON.back}
           </svg>
-          <span className="pointer-events-none absolute left-full z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
+        </button>
+        <RailPortal anchor={backRef} open={backTip} width={220}>
+          <span className="inline-block whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md">
             Back to tools
           </span>
-        </button>
+        </RailPortal>
         <span className="px-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-text-faint">
           {label}
         </span>
@@ -2555,9 +2536,14 @@ function RailTool({
 }) {
   const { open, setOpen } = useContext(RailFlyoutCtx);
   const isOpen = Boolean(id) && open === id;
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [tip, setTip] = useState(false);
   return (
-    <div className="relative">
+    <>
       <button
+        ref={btnRef}
+        onMouseEnter={() => setTip(true)}
+        onMouseLeave={() => setTip(false)}
         // Keeps focus (and the text selection) inside a note or caption while
         // its formatting tools are used: execCommand acts on whatever is
         // selected, and focusing the button first would throw that away.
@@ -2580,26 +2566,30 @@ function RailTool({
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           {icon}
         </svg>
-        {!isOpen && (
-          <span className="pointer-events-none absolute left-full z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
-            {label}
-          </span>
-        )}
       </button>
 
-      {isOpen && (
-        <div
-          className={`absolute left-full top-0 z-40 ml-2 rounded-[14px] border border-border bg-surface p-3 shadow-lg ${
-            wide ? "w-[248px]" : "w-[210px]"
-          }`}
-        >
+      {/* Both of these used to sit at `left-full` INSIDE the rail, which now
+          clips its horizontal axis, so both go through the portal. */}
+      <RailPortal anchor={btnRef} open={tip && !isOpen} width={220}>
+        <span className="inline-block whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md">
+          {label}
+        </span>
+      </RailPortal>
+
+      <RailPortal
+        anchor={btnRef}
+        open={isOpen}
+        onClose={() => setOpen(null)}
+        width={wide ? 248 : 210}
+      >
+        <div className="rounded-[14px] border border-border bg-surface p-3 shadow-lg">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-text-faint">
             {label}
           </p>
           <div className="flex flex-col gap-3">{children}</div>
         </div>
-      )}
-    </div>
+      </RailPortal>
+    </>
   );
 }
 
@@ -2646,9 +2636,15 @@ function CardTools({
  *
  * `overflow-y-auto` because thirteen labelled tools are taller than a short
  * laptop viewport, and `self-start` means the rail does not stretch to fill.
+ *
+ * `overflow-x-hidden` is NOT redundant with that: an axis of `visible` paired
+ * with a non-visible axis computes to `auto`, so scrolling vertically silently
+ * made this a horizontal scroll container too and every tooltip at `left-full`
+ * added its width to the scrollable area. Everything that needs to escape
+ * sideways now goes through RailPortal instead of being clipped by this.
  */
 const RAIL_W = "w-[68px]";
-const RAIL_SHELL = `relative flex ${RAIL_W} max-h-full shrink-0 flex-col items-center self-start overflow-y-auto rounded-[14px] border border-border bg-surface`;
+const RAIL_SHELL = `relative flex ${RAIL_W} max-h-full shrink-0 flex-col items-center self-start overflow-y-auto overflow-x-hidden rounded-[14px] border border-border bg-surface`;
 
 const BoardZoomCtx = createContext<() => number>(() => 1);
 
@@ -2661,6 +2657,7 @@ function RailBtn({
   disabled,
   dragKind,
   dragOnly,
+  anchorRef,
 }: {
   /** ONE WORD, shown under the icon. Anything longer is the tooltip's job. */
   label: string;
@@ -2680,9 +2677,17 @@ function RailBtn({
   // already there and then had to be dug out and moved. Dragging puts it
   // exactly where it belongs, so a click just says so.
   dragOnly?: boolean;
+  /**
+   * The rail's own ref for this button, when something outside RailBtn has to
+   * anchor to it (the shape picker). Kept separate from the internal one so a
+   * tooltip and a picker can point at the same button without fighting.
+   */
+  anchorRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const zoom = useContext(BoardZoomCtx);
   const [nudge, setNudge] = useState(false);
+  const [tip, setTip] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -2705,7 +2710,15 @@ function RailBtn({
   }
 
   return (
+    <>
     <button
+      ref={(el) => {
+        (btnRef as React.MutableRefObject<HTMLButtonElement | null>).current = el;
+        if (anchorRef)
+          (anchorRef as React.MutableRefObject<HTMLButtonElement | null>).current = el;
+      }}
+      onMouseEnter={() => setTip(true)}
+      onMouseLeave={() => setTip(false)}
       onClick={press}
       disabled={disabled}
       /* See the note on data-demo in board-canvas: the demo recorder finds the
@@ -2743,11 +2756,14 @@ function RailBtn({
       >
         {nudge ? "Drag me" : label}
       </span>
-      {/* The longer line lives here, so it explains without taking width. */}
-      <span className="pointer-events-none absolute left-full top-1.5 z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
+    </button>
+    {/* The longer line, outside the rail's scroll box. See RailPortal. */}
+    <RailPortal anchor={btnRef} open={tip && !nudge} width={220}>
+      <span className="inline-block whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md">
         {hint}
       </span>
-    </button>
+    </RailPortal>
+    </>
   );
 }
 
