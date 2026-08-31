@@ -122,20 +122,28 @@ drift away from the product. Two scripts, both driving the real demo studio in
 a real browser at the same 1503x852 viewport, so a still and a clip are
 interchangeable in a page section.
 
-One-time setup (Playwright is not a package dependency, since it is only ever
-run by hand):
+One-time setup, run from the repo root:
 
 ```
-npm i -g playwright        # or: npm i -D playwright
+npm i --no-save playwright
 npx playwright install chromium
 ```
+
+`--no-save` because Playwright is deliberately NOT in package.json: it is only
+ever run by hand, and as a devDependency its postinstall would download about
+150MB of browsers on every Vercel build. It still has to live in the repo's own
+`node_modules` rather than being installed globally, since the scripts do a
+bare `import { chromium } from "playwright"` and Node resolves that by walking
+up from the script, never through the global root. The second line downloads
+the browser itself into a shared per-user cache, so it is only ever needed once
+per machine.
 
 The transcode to MP4 needs an ffmpeg. Any one of these is enough, and the
 script says which it found:
 
 ```
 brew install ffmpeg        # or
-npm i -D ffmpeg-static     # or
+npm i --no-save ffmpeg-static   # or
 pip install imageio-ffmpeg
 ```
 
