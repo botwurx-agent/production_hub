@@ -328,7 +328,13 @@ export const FEATURES: FeatureDef[] = [
     h1: "Every shot, accounted for.",
     lede: "Shot lists with size, angle and movement on every row, a frame from the storyboard beside each one, and a presentation view that goes out with the job's cover on it.",
     problem: "The shot list lives in a spreadsheet, the storyboard lives in a PDF, and on the day nobody is sure which row goes with which frame. The two documents describe the same shots and have never met.",
-    shots: [],
+    shots: [
+      {
+        shot: "project-shot-list",
+        caption: "app.studio-flows.com/projects/bright-water/shot-list",
+        alt: "A shot list as a table: the storyboard frame on each row, with description, shot size, shot type and camera movement in their own columns.",
+      },
+    ],
     blocks: [
       {
         title: "Rows built for set",
@@ -699,7 +705,13 @@ export const FEATURES: FeatureDef[] = [
     h1: "One roster per job.",
     lede: "Crew, talent, extras, clients and vendors on one per-job roster, with the details each kind of person actually needs: positions and rates for crew, wardrobe and dietary for talent, and files for everyone.",
     problem: "The crew list is a spreadsheet, the talent's measurements are in a text thread with wardrobe, and the W-9 is somewhere in email. Every department is asking you, because you are the only index.",
-    shots: [],
+    shots: [
+      {
+        shot: "project-contacts",
+        caption: "app.studio-flows.com/projects/bright-water/contacts",
+        alt: "The project contacts roster: folder tabs for crew, talent, extras, vendors and clients, each card carrying a position, a day rate and the details that kind of person needs.",
+      },
+    ],
     blocks: [
       {
         title: "A roster with folders",
@@ -771,7 +783,13 @@ export const FEATURES: FeatureDef[] = [
     h1: "Booked, or not booked.",
     lede: "The kit and the crew for a shoot day as one checklist, with day rates only the studio can see. Props keep their own list, holding the options you sourced and the one the client picked.",
     problem: "The gear list is a text thread with the rental house, the prop options are a folder of phone photos, and on the morning of the shoot nobody can say with certainty what was actually confirmed. The one question that matters, is it booked, is the one thing a spreadsheet never records.",
-    shots: [],
+    shots: [
+      {
+        shot: "project-gear",
+        caption: "app.studio-flows.com/projects/bright-water/gear",
+        alt: "The gear list: kit grouped into categories, each with its own confirmed count, and a progress bar across the whole shoot.",
+      },
+    ],
     blocks: [
       {
         title: "A list that says booked",
