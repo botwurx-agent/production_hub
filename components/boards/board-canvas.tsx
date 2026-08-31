@@ -175,6 +175,7 @@ export function BoardCanvas({
   items,
   setItems,
   connections,
+  arrived,
   background,
   onDropFiles,
   onDropTool,
@@ -191,6 +192,10 @@ export function BoardCanvas({
 }: {
   boardId: string;
   items: BoardItemView[];
+  // Ids of cards that were just CREATED, which animate in once. Set by the
+  // workspace at every creation path; deliberately empty on load, on undo and
+  // on redo. Absent in the read-only share view.
+  arrived?: string[];
   setItems: React.Dispatch<React.SetStateAction<BoardItemView[]>>;
   connections: BoardConnection[];
   background: string;
@@ -1226,6 +1231,7 @@ export function BoardCanvas({
                     key={it.id}
                     data-column-id={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{
                       position: "absolute",
                       left: it.x,
@@ -1306,6 +1312,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{
                       ...common,
                       backgroundColor: noteBg,
@@ -1368,6 +1375,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{ ...common, boxShadow: ring }}
                     className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-surface"
                     onPointerDown={(e) => startMove(e, it)}
@@ -1423,6 +1431,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{ ...common, boxShadow: ring }}
                     className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-surface"
                   >
@@ -1514,6 +1523,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{ ...common, boxShadow: ring }}
                     className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-black"
                   >
@@ -1590,6 +1600,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{ ...common, boxShadow: ring, backgroundColor: hex }}
                     className="group flex cursor-move flex-col justify-end overflow-hidden rounded-[10px] border border-border"
                     onPointerDown={(e) => startMove(e, it)}
@@ -1620,6 +1631,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{
                       ...common,
                       // No box: the SVG silhouette IS the card, so the resting
@@ -1674,6 +1686,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{
                       position: "absolute",
                       left: it.x,
@@ -1721,6 +1734,7 @@ export function BoardCanvas({
                   <div
                     key={it.id}
                     data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                     style={{ ...common, boxShadow: ring }}
                     className="group flex flex-col overflow-hidden rounded-[10px] border border-border bg-black"
                   >
@@ -1764,6 +1778,7 @@ export function BoardCanvas({
                 <div
                   key={it.id}
                   data-item-id={it.id}
+                    data-arrived={arrived?.includes(it.id) ? "1" : undefined}
                   style={{ ...common, boxShadow: ring }}
                   className="group flex flex-col overflow-hidden rounded-[10px] bg-surface"
                   onPointerDown={(e) => startMove(e, it)}

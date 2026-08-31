@@ -168,8 +168,31 @@ export function BoardsWorkspace({
     seenHintsRef.current = seen;
   }
   function maybeHint(kind: string, itemId: string) {
+    markArrived(itemId);
     if (seenHintsRef.current?.has(kind)) return;
     setHint({ kind, itemId });
+  }
+
+  // A card that has just been CREATED animates in, so it confirms its own
+  // arrival. That matters more here than it would elsewhere, because creation
+  // is drag-only: you let go somewhere on a large canvas and the only feedback
+  // that the drop took is the card itself.
+  //
+  // ON CREATION ONLY, which is the whole design. It deliberately does NOT fire
+  // on board load (ten cards animating every time you open a board is a
+  // slower-feeling app, not a nicer one) and NOT on undo or redo (restoring a
+  // snapshot re-adds every row, so the entire canvas would replay at once and
+  // read as a glitch). Keying off maybeHint is what buys that: every creation
+  // path in this file already calls it with the new id, and nothing else does.
+  //
+  // The id is dropped again after the animation, so a card animates exactly
+  // once and a later re-render cannot replay it.
+  const [arrived, setArrived] = useState<string[]>([]);
+  function markArrived(itemId: string) {
+    setArrived((prev) => [...prev, itemId]);
+    setTimeout(() => {
+      setArrived((prev) => prev.filter((id) => id !== itemId));
+    }, 700);
   }
   function dismissHint() {
     if (hint) {
@@ -1076,6 +1099,7 @@ export function BoardsWorkspace({
               <BoardCanvas
                 boardId={active.id}
                 items={items}
+                arrived={arrived}
                 setItems={setItems}
                 connections={connections}
                 background={active.background ?? "dots"}

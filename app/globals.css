@@ -222,3 +222,38 @@
 .ce-ph:empty::before { content: attr(data-placeholder); color: var(--text-faint); }
 /* Read-only shared board: hide edit-only affordances. */
 [data-readonly="1"] [data-resize] { display: none; }
+
+/*
+ * A board card confirming its own arrival.
+ *
+ * Creation on the canvas is DRAG-ONLY: you let go somewhere on a large surface
+ * and the only feedback that the drop took is the card appearing. Popping into
+ * existence in a single frame reads as a jump; a short rise reads as landing.
+ *
+ * Set by the workspace at creation time only, never on board load, undo or
+ * redo, so this can never replay a whole canvas at once. Kept to 260ms and a
+ * 4px rise, because this fires on a working surface many times an hour and
+ * anything longer would be something to wait through rather than to notice.
+ */
+@keyframes sf-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-arrived="1"] {
+  animation: sf-card-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Someone who has asked for less motion still gets the card, just not the
+   move. Never hide the arrival itself: it is the only feedback a drop has. */
+@media (prefers-reduced-motion: reduce) {
+  [data-arrived="1"] {
+    animation: none;
+  }
+}
