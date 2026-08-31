@@ -131,6 +131,37 @@ export function BoardsWorkspace({
   const [linkOpen, setLinkOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
   const [shapesOpen, setShapesOpen] = useState(false);
+  const shapesRef = useRef<HTMLDivElement>(null);
+
+  // Close the shape picker on a pointer press outside it.
+  //
+  // THIS USED TO BE A `fixed inset-0` BACKDROP, and that made the shape tool
+  // completely unusable: the backdrop sat over the whole canvas, so a shape
+  // dragged out of the picker was dropped ONTO THE BACKDROP and the canvas
+  // never received the drop. Clicking a tile does nothing by design (creation
+  // is drag-only), so there was no way at all to get a shape onto a board.
+  //
+  // The card rail's flyout already learned this and uses a listener; the
+  // picker never got the same treatment. Rule worth keeping: on this canvas,
+  // never close a popover with a full-screen element. Something is always
+  // being dragged across it.
+  useEffect(() => {
+    if (!shapesOpen) return;
+    function onDown(e: PointerEvent) {
+      if (shapesRef.current && !shapesRef.current.contains(e.target as Node)) {
+        setShapesOpen(false);
+      }
+    }
+    // Deferred, or the very press that OPENED the picker closes it again.
+    const t = window.setTimeout(
+      () => document.addEventListener("pointerdown", onDown),
+      0,
+    );
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [shapesOpen]);
   // Flashes the picker's "drag a shape" heading when a tile is clicked.
   const [shapeNudge, setShapeNudge] = useState(false);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -187,13 +218,37 @@ export function BoardsWorkspace({
   //
   // The id is dropped again after the animation, so a card animates exactly
   // once and a later re-render cannot replay it.
-  const [arrived, setArrived] = useState<string[]>([]);
+  const [arrived, setArrived] = useState<{ id: string; at: number }[]>([]);
   function markArrived(itemId: string) {
-    setArrived((prev) => [...prev, itemId]);
-    setTimeout(() => {
-      setArrived((prev) => prev.filter((id) => id !== itemId));
-    }, 700);
+    setArrived((prev) =>
+      prev.some((a) => a.id === itemId) ? prev : [...prev, { id: itemId, at: Date.now() }],
+    );
   }
+
+  // THE TIMER STARTS WHEN THE CARD APPEARS, not when it was created, and that
+  // distinction is the whole reason the first version did not visibly work.
+  // An add awaits the insert, fires reload(), and marks the id immediately,
+  // but reload is a round trip: the card only mounts when it comes back. On a
+  // fast local server that is 50ms and the animation plays; against a real
+  // database on a real connection it can be most of a second, by which time a
+  // fixed timer from creation has already cleared the id and the card mounts
+  // with nothing on it. So the id is held until `items` actually contains it,
+  // and only then given its 800ms.
+  //
+  // The 20s sweep is for an id that never arrives at all (a failed insert, a
+  // board switched away from mid-save), so the list cannot grow forever.
+  const arrivedIds = arrived.map((a) => a.id);
+  useEffect(() => {
+    const shown = arrived.filter((a) => items.some((i) => i.id === a.id));
+    const stale = arrived.filter((a) => Date.now() - a.at > 20000);
+    if (!shown.length && !stale.length) return;
+    const drop = new Set([...shown, ...stale].map((a) => a.id));
+    const t = window.setTimeout(
+      () => setArrived((prev) => prev.filter((a) => !drop.has(a.id))),
+      shown.length ? 800 : 0,
+    );
+    return () => window.clearTimeout(t);
+  }, [arrived, items]);
   function dismissHint() {
     if (hint) {
       seenHintsRef.current?.add(hint.kind);
@@ -1048,8 +1103,10 @@ export function BoardsWorkspace({
                     same rule the creation tools follow. */}
                 {shapesOpen && (
                   <>
-                    <div className="fixed inset-0 z-20" onClick={() => setShapesOpen(false)} />
-                    <div className="absolute left-full top-0 z-30 ml-2 w-[248px] rounded-[14px] border border-border bg-surface p-2.5 shadow-lg">
+                    <div
+                      ref={shapesRef}
+                      className="absolute left-full top-0 z-30 ml-2 w-[248px] rounded-[14px] border border-border bg-surface p-2.5 shadow-lg"
+                    >
                       <p
                         className={`mb-1.5 px-0.5 text-[10px] font-bold uppercase tracking-wide transition ${
                           shapeNudge ? "text-accent" : "text-text-faint"
@@ -1099,7 +1156,7 @@ export function BoardsWorkspace({
               <BoardCanvas
                 boardId={active.id}
                 items={items}
-                arrived={arrived}
+                arrived={arrivedIds}
                 setItems={setItems}
                 connections={connections}
                 background={active.background ?? "dots"}
