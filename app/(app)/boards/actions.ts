@@ -14,6 +14,7 @@ import {
 } from "@/lib/figma";
 import { unfurl, isFetchableUrl, safeFetch, BROWSER_UA } from "@/lib/unfurl";
 import { shapeDef, serializeShapeData } from "@/lib/board-shape";
+import { newItemFields } from "@/lib/board-defaults";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Board } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
@@ -665,13 +666,9 @@ export async function addNote(
     .insert({
       studio_id: ctx.studio.id,
       board_id: boardId,
-      kind: "note",
-      text: "",
-      hue: "yellow",
+      ...newItemFields("note"),
       x,
       y,
-      w: 220,
-      h: 160,
       z,
       parent_id: parentId ?? null,
       sort,
@@ -744,12 +741,9 @@ export async function addColumn(
     .insert({
       studio_id: ctx.studio.id,
       board_id: boardId,
-      kind: "column",
-      name: "Column",
+      ...newItemFields("column"),
       x,
       y,
-      w: 260,
-      h: 320,
       z,
       created_by: ctx.userId,
     })
@@ -774,12 +768,9 @@ export async function addColorItem(
     .insert({
       studio_id: ctx.studio.id,
       board_id: boardId,
-      kind: "color",
-      text: "#6366F1",
+      ...newItemFields("color"),
       x,
       y,
-      w: 160,
-      h: 160,
       z,
       created_by: ctx.userId,
     })
@@ -843,13 +834,9 @@ export async function addShapeItem(
     .insert({
       studio_id: ctx.studio.id,
       board_id: boardId,
-      kind: "shape",
-      text: serializeShapeData({ shape: def.key }),
-      hue: "blue",
+      ...newItemFields("shape", def.key),
       x,
       y,
-      w: def.w,
-      h: def.h,
       z,
       created_by: ctx.userId,
     })
@@ -874,12 +861,9 @@ export async function addHeadingItem(
     .insert({
       studio_id: ctx.studio.id,
       board_id: boardId,
-      kind: "heading",
-      text: "",
+      ...newItemFields("heading"),
       x,
       y,
-      w: 360,
-      h: 60,
       z,
       created_by: ctx.userId,
     })
@@ -1210,13 +1194,9 @@ export async function addTodoItem(
     .insert({
       studio_id: ctx.studio.id,
       board_id: boardId,
-      kind: "todo",
-      text: "[]",
-      hue: "blue",
+      ...newItemFields("todo"),
       x,
       y,
-      w: 240,
-      h: 200,
       z,
       parent_id: parentId ?? null,
       sort,

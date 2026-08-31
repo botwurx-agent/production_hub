@@ -75,6 +75,12 @@ import {
   parseShapeData,
   serializeShapeData,
 } from "@/lib/board-shape";
+import {
+  isDroppableKind,
+  newItemFields,
+  type DroppableKind,
+} from "@/lib/board-defaults";
+import { setCardDragImage } from "@/lib/board-drag-image";
 import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 
@@ -200,6 +206,13 @@ export function BoardsWorkspace({
   }
   function maybeHint(kind: string, itemId: string) {
     markArrived(itemId);
+    showToolHint(kind, itemId);
+  }
+  // The first-use hint on its own. placeItem needs this WITHOUT the arrival
+  // mark, because by the time it runs the card has already animated in under
+  // its placeholder id and marking the real id would replay the animation on
+  // the remounted element. See the swap in placeItem.
+  function showToolHint(kind: string, itemId: string) {
     if (seenHintsRef.current?.has(kind)) return;
     setHint({ kind, itemId });
   }
@@ -218,6 +231,13 @@ export function BoardsWorkspace({
   //
   // The id is dropped again after the animation, so a card animates exactly
   // once and a later re-render cannot replay it.
+  // The current items, readable from an async callback that started before
+  // the user's last action. See the undo race in placeItem.
+  const itemsRef = useRef<BoardItemView[]>(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   const [arrived, setArrived] = useState<{ id: string; at: number }[]>([]);
   function markArrived(itemId: string) {
     setArrived((prev) =>
@@ -503,36 +523,18 @@ export function BoardsWorkspace({
   }
 
   function addNoteToBoard() {
-    if (!activeId) return;
     const at = spot();
-    pushHistory();
-    startBusy(async () => {
-      const res = await addNote(activeId, at.x, at.y);
-      reload(activeId);
-      if ("id" in res) maybeHint("note", res.id);
-    });
+    placeItem("note", at.x, at.y);
   }
 
   function addTodoToBoard() {
-    if (!activeId) return;
     const at = spot();
-    pushHistory();
-    startBusy(async () => {
-      const res = await addTodoItem(activeId, at.x, at.y);
-      reload(activeId);
-      if ("id" in res) maybeHint("todo", res.id);
-    });
+    placeItem("todo", at.x, at.y);
   }
 
   function addColumnToBoard() {
-    if (!activeId) return;
     const at = spot();
-    pushHistory();
-    startBusy(async () => {
-      const res = await addColumn(activeId, at.x, at.y);
-      reload(activeId);
-      if ("id" in res) maybeHint("column", res.id);
-    });
+    placeItem("column", at.x, at.y);
   }
 
   function addLineToBoard() {
@@ -550,92 +552,152 @@ export function BoardsWorkspace({
   }
 
   function addColorToBoard() {
-    if (!activeId) return;
     const at = spot();
-    pushHistory();
-    startBusy(async () => {
-      const res = await addColorItem(activeId, at.x, at.y);
-      reload(activeId);
-      if ("id" in res) {
-        setSelectedId(res.id);
-        maybeHint("color", res.id);
-      }
-    });
+    placeItem("color", at.x, at.y, { select: true });
   }
 
   function addHeadingToBoard() {
-    if (!activeId) return;
     const at = spot();
+    placeItem("heading", at.x, at.y, { select: true });
+  }
+
+  // PLACE THE CARD NOW, PERSIST IT AFTER.
+  //
+  // A drop used to cost TWO sequential server round trips before anything
+  // appeared: the insert, and then a full reload() that refetches every item on
+  // the board and re-signs its storage URLs. Locally that is fast enough to
+  // miss; against a real database on a real connection it is most of a second
+  // of staring at the spot where you let go, which is the difference the
+  // operator measured against Milanote.
+  //
+  // The browser already knows everything about the row it is asking for, so it
+  // builds it and shows it immediately, then swaps in the real id when the
+  // insert answers. The defaults come from lib/board-defaults.ts, which the
+  // server action spreads into the same insert, so the optimistic card cannot
+  // be a different size or colour from the one that lands.
+  //
+  // On failure the card is taken back off the board and the error is shown,
+  // because a card that looks saved and is not is worse than a slow one.
+  //
+  // NOT used for images, links or videos: those genuinely need the server (an
+  // upload, an unfurl, a signed URL) and there is nothing honest to draw until
+  // it answers.
+  function placeItem(
+    kind: DroppableKind,
+    x: number,
+    y: number,
+    opts: { shape?: string; select?: boolean } = {},
+  ) {
+    if (!activeId) return;
+    const boardId = activeId;
     pushHistory();
+
+    const tempId = `pending-${Math.random().toString(36).slice(2)}`;
+    const fields = newItemFields(kind, opts.shape);
+    const local: BoardItemView = {
+      ...fields,
+      id: tempId,
+      mimeType: null,
+      x,
+      y,
+      // The server computes this as max + 1; so does this, and a disagreement
+      // only reorders against a card added by someone else in the same second.
+      z: items.reduce((m, i) => Math.max(m, i.z), 0) + 1,
+      signedUrl: null,
+      url: null,
+      thumbUrl: null,
+      storagePath: null,
+      parentId: null,
+      sort: 0,
+    };
+    setItems((prev) => [...prev, local]);
+    markArrived(tempId);
+    if (opts.select) setSelectedId(tempId);
+
     startBusy(async () => {
-      const res = await addHeadingItem(activeId, at.x, at.y);
-      reload(activeId);
-      if ("id" in res) {
-        setSelectedId(res.id);
-        maybeHint("heading", res.id);
+      const res =
+        kind === "shape"
+          ? await addShapeItem(boardId, opts.shape ?? "rect", x, y)
+          : kind === "note"
+            ? await addNote(boardId, x, y)
+            : kind === "todo"
+              ? await addTodoItem(boardId, x, y)
+              : kind === "column"
+                ? await addColumn(boardId, x, y)
+                : kind === "heading"
+                  ? await addHeadingItem(boardId, x, y)
+                  : await addColorItem(boardId, x, y);
+
+      if (!("id" in res)) {
+        setItems((prev) => prev.filter((i) => i.id !== tempId));
+        setSelectedId((cur) => (cur === tempId ? null : cur));
+        showNotice(res.error);
+        return;
       }
+      // UNDO WHILE THE INSERT WAS IN FLIGHT. Placing the card immediately
+      // opened a window that did not exist when nothing appeared until the
+      // server answered: the card is on screen for a few hundred milliseconds
+      // before its row exists, so Cmd+Z can remove it from the board while the
+      // insert is still going. Without this the row would land afterwards and
+      // the card would come back from the dead on the next load, which is the
+      // kind of thing that stops people trusting undo at all. If the
+      // placeholder is gone, so is the intent: delete the row we just made.
+      if (!itemsRef.current.some((i) => i.id === tempId)) {
+        void deleteItem(res.id);
+        setArrived((prev) => prev.filter((a) => a.id !== tempId));
+        return;
+      }
+      // Swap the placeholder's id for the real one, in place, so the card does
+      // not blink and its position is whatever the user has since dragged it
+      // to rather than where it was dropped.
+      setItems((prev) =>
+        prev.map((i) => (i.id === tempId ? { ...i, id: res.id } : i)),
+      );
+      setSelectedId((cur) => (cur === tempId ? res.id : cur));
+      // DROP the mark rather than carrying it over to the real id. Every card
+      // is keyed by `it.id`, so changing the id changes the React key and
+      // REMOUNTS the card; a mark that followed the id would start the
+      // entrance animation over again a few hundred milliseconds after it
+      // finished, which is a visible double flash. The card has already
+      // arrived under its placeholder id, so the animation's job is done.
+      setArrived((prev) => prev.filter((a) => a.id !== tempId));
+      showToolHint(kind, res.id);
     });
   }
 
   function addShapeToBoard(shape: string, at = spot()) {
-    if (!activeId) return;
-    pushHistory();
-    startBusy(async () => {
-      const res = await addShapeItem(activeId, shape, at.x, at.y);
-      reload(activeId);
-      if ("id" in res) {
-        setSelectedId(res.id);
-        maybeHint("shape", res.id);
-      }
-    });
+    placeItem("shape", at.x, at.y, { shape, select: true });
   }
 
-  // Dropped a rail tool onto the canvas: create it at the drop point.
+  // Dropped a rail tool onto the canvas: place it at the drop point, now.
   function onDropTool(kind: string, x: number, y: number) {
     if (!activeId) return;
     // Shape tiles carry which shape they are ("shape:star").
     if (kind.startsWith("shape:")) {
       setShapesOpen(false);
-      addShapeToBoard(kind.slice("shape:".length), { x, y });
+      placeItem("shape", x, y, { shape: kind.slice("shape:".length), select: true });
       return;
     }
-    pushHistory();
-    startBusy(async () => {
-      if (kind === "note") {
-        const res = await addNote(activeId, x, y);
-        reload(activeId);
-        if ("id" in res) maybeHint("note", res.id);
-      } else if (kind === "todo") {
-        const res = await addTodoItem(activeId, x, y);
-        reload(activeId);
-        if ("id" in res) maybeHint("todo", res.id);
-      } else if (kind === "column") {
-        const res = await addColumn(activeId, x, y);
-        reload(activeId);
-        if ("id" in res) maybeHint("column", res.id);
-      } else if (kind === "line") {
+    // A line is not a card: its geometry lives as JSON in `text` and it draws
+    // in its own SVG layer, so it keeps the original insert-then-reload path
+    // rather than being squeezed into the card placeholder.
+    if (kind === "line") {
+      pushHistory();
+      startBusy(async () => {
         const res = await addLine(activeId, x, y, x + 200, y + 60);
         reload(activeId);
         if ("id" in res) {
           setSelectedLineId(res.id);
           maybeHint("line", res.id);
         }
-      } else if (kind === "color") {
-        const res = await addColorItem(activeId, x, y);
-        reload(activeId);
-        if ("id" in res) {
-          setSelectedId(res.id);
-          maybeHint("color", res.id);
-        }
-      } else if (kind === "heading") {
-        const res = await addHeadingItem(activeId, x, y);
-        reload(activeId);
-        if ("id" in res) {
-          setSelectedId(res.id);
-          maybeHint("heading", res.id);
-        }
-      }
-    });
+      });
+      return;
+    }
+    if (kind === "note" || kind === "todo" || kind === "column") {
+      placeItem(kind, x, y);
+    } else if (kind === "color" || kind === "heading") {
+      placeItem(kind, x, y, { select: true });
+    }
   }
 
   const selectedLine = selectedLineId
@@ -1124,6 +1186,7 @@ export function BoardsWorkspace({
                             onDragStart={(e) => {
                               e.dataTransfer.setData("application/x-board-tool", `shape:${s.key}`);
                               e.dataTransfer.effectAllowed = "copy";
+                              setCardDragImage(e, "shape", s.key);
                               setShapeNudge(false);
                             }}
                             onClick={() => {
@@ -2634,6 +2697,12 @@ function RailBtn({
           ? (e) => {
               e.dataTransfer.setData("application/x-board-tool", dragKind);
               e.dataTransfer.effectAllowed = "copy";
+              // Carry a picture of the CARD, not of this 40px button.
+              if (dragKind.startsWith("shape:")) {
+                setCardDragImage(e, "shape", dragKind.slice("shape:".length));
+              } else if (isDroppableKind(dragKind)) {
+                setCardDragImage(e, dragKind);
+              }
               setNudge(false);
             }
           : undefined
