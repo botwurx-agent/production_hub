@@ -32,6 +32,11 @@ const PROJECT = "b1000000-0000-4000-a000-000000000001";
 const CLIENT = "c1000000-0000-4000-a000-000000000001";
 // the client review portal takes no login, so it is captured in a clean context
 const REVIEW_TOKEN = "nl7Qk2vX9mBd4TsPzR6yHgWc1JfEoAu3";
+// The same portal over a DOC rather than an asset: a moodboard shared for
+// review, with the client's pins on it. Seeded on the demo studio's Bright
+// Water board (a review_links row with target_type 'moodboard' plus three
+// pinned comments) so this is the real page, not a mockup.
+const BOARD_REVIEW_TOKEN = "mB6kQd3wS9xLpT2vRc7yHnZa4JeUf1Go";
 
 // name, path, theme, and how long to settle. Signed image URLs and the summary
 // panel arrive after first paint, so a flat wait is more reliable here than
@@ -129,6 +134,7 @@ const clean = await browser.newContext({
 });
 const guest = await clean.newPage();
 await shoot(guest, "client-review-portal", `/r/${REVIEW_TOKEN}`, "light", 3500);
+await shoot(guest, "board-review-portal", `/r/${BOARD_REVIEW_TOKEN}`, "light", 4000);
 
 // phone, for the responsive band on the site
 const phone = await browser.newContext({

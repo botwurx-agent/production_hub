@@ -111,13 +111,35 @@ template" is our buyer at the exact moment of need.
 
 ## What we should do, in order
 
-1. Rebuild the moodboard page on their section pattern: heading, one sentence,
-   one large demo per capability, replacing bullet lists.
-2. Build the demo-recording pipeline. Playwright records video natively and
-   already drives the demo studio for screenshots, so a script can drag a card
-   in, connect two, and select one to show the rail become its editor. Open
-   questions: where the files live (a handful of loops outweighs this repo), and
-   whether they run on the operator's machine like the screenshots do.
-3. Apply the same pattern to the other feature pages, starting with the ones
-   whose claims are motion (client review, AI pipeline, task board).
-4. Decide on board templates, as product and as marketing at once.
+1. DONE. The moodboard page is rebuilt on their section pattern: heading, one
+   sentence, one large demo, six times over, with the three-bullet claim panels
+   removed rather than kept beside them. `FeatureDemo` in
+   lib/marketing/features.ts is the shape, and the feature-page template
+   renders the stack in place of the claim panels whenever a page carries one.
+   That page is now the reference implementation for the rest.
+2. DONE. scripts/capture-demos.mjs (`npm run demos`) records the clips off the
+   real demo studio at the same 1503x852 viewport as the screenshots, writes
+   WebM plus an MP4 and a poster, and deletes whatever the recording created so
+   the studio is unchanged afterwards. Files live in the repo: a clip is around
+   180KB, less than any screenshot beside it.
+3. NEXT, and waiting on the operator to look at the moodboard page first: the
+   same pattern on the other pages whose claims are motion. Client review
+   (pins, drawn markup, the scrubber), the AI pipeline (triage, compare) and
+   the task board (dragging a card between columns) are the three that gain
+   most. Everything else can keep its claim panels; a page whose claims are
+   layouts is not helped by a loop.
+4. Board templates, as product and as marketing at once, remain the cheapest of
+   the six gaps below and the only one that is also an SEO play.
+
+## The gaps, and what each would cost
+
+Ordered by what they would change, not by effort.
+
+| gap | what it would take |
+| --- | --- |
+| Comments on a board card, in place | Real work. We have the whole review stack, but it is built around SENDING a surface for review; commenting in the working view is a different affordance. |
+| Live collaborator presence | The largest by far. There is no realtime infrastructure in the app at all, and nothing merges concurrent edits, so presence would make a collision VISIBLE rather than prevent it. |
+| Freehand drawing on the canvas | Small. draw-canvas.tsx already does exactly this in the review surfaces; the work is mounting it on the board and storing the strokes as an item. |
+| Board templates | Small, and the highest leverage. Also the SEO play: their /templates/<category>/<specific> pages are a long-tail library, and a producer searching "commercial shoot moodboard template" is our buyer at the exact moment of need. |
+| Web clipper extension | A browser extension is its own product, review process and release channel. We unfurl a pasted link, which is most of the value for a fraction of the cost. |
+| Mobile and desktop apps | Not planned. The web app is responsive, which is a different and smaller claim, and we should not make theirs. |

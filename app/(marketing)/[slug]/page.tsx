@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
+import { DemoVideo } from "@/components/marketing/demo-video";
 import { FeatureMesh } from "@/components/marketing/feature-mesh";
 import { Motif } from "@/components/marketing/motifs";
 import { PointList, Section, SectionHeader } from "@/components/marketing/section";
@@ -91,6 +92,10 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
   const mods = modulesForPage(f.slug);
   const hasShot = f.shots.length > 0;
   const shot = f.shots[0];
+  const demos = f.demos ?? [];
+  // A page argues with claim panels OR with demo sections, never both, so the
+  // fold-closer line takes its titles from whichever one is carrying the page.
+  const closers = demos.length > 0 ? demos : f.blocks;
 
   return (
     <>
@@ -134,10 +139,15 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
           </Canvas>
         </div>
 
-        {/* Fold-closer: the three claims in one line, dots as hue markers, so
-            the argument's shape is visible before anyone scrolls. */}
+        {/* Fold-closer: the claims in one line, dots as hue markers, so the
+            argument's shape is visible before anyone scrolls. Reads from
+            whichever of blocks or demos this page argues with, and is dropped
+            past four, because at 1400px a fifth column leaves each claim about
+            230px and a row of clipped sentences argues nothing. A demo page
+            that runs long makes its shape with the sections themselves. */}
+        {closers.length > 0 && closers.length <= 4 && (
         <div className="mt-14 hidden items-stretch justify-between gap-6 border-t border-border pt-8 lg:flex">
-          {f.blocks.map((b) => (
+          {closers.map((b) => (
             <div key={b.title} className="flex flex-1 items-center gap-3 [&:not(:first-child)]:border-l [&:not(:first-child)]:border-border [&:not(:first-child)]:pl-6">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -149,6 +159,7 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
             </div>
           ))}
         </div>
+        )}
       </Section>
 
       {/* THE PROBLEM: a full band that reads like a pull quote, not a caption. */}
@@ -165,7 +176,9 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
 
       {/* THE CLAIMS: numbered panels with real presence, not columns of small
           text. The numeral is the visual anchor for a section that has no
-          screenshot of its own. */}
+          screenshot of its own. Skipped entirely on a page that shows its
+          capabilities instead (see the demo stack below). */}
+      {f.blocks.length > 0 && (
       <Section>
         <div className="grid gap-6 lg:grid-cols-3">
           {f.blocks.map((b, i) => (
@@ -192,6 +205,55 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
           ))}
         </div>
       </Section>
+      )}
+
+      {/* SHOWN, NOT ARGUED. One heading, ONE sentence, one large product demo,
+          repeated. Taken from how the category's design-tool leader structures
+          every body section of their home page, and written up in
+          docs/competitor-research/milanote.md.
+
+          CENTRED, which reads against CLAUDE.md 4.6's "nothing important is
+          center-stacked", and deliberately. That rule's real principle is the
+          sentence after it: every section has a visual anchor. It was written
+          about sections whose anchor was weak or absent, where centring left
+          the fold empty. A section built around a full-width moving demo
+          satisfies the principle maximally, and there centring reads as
+          confidence rather than as a template. Keep the two-column rule
+          wherever the anchor is a still.
+
+          Bands alternate tint so a stack of five has rhythm instead of
+          reading as one long scroll of the same slab. */}
+      {demos.map((d, i) => (
+        <Section
+          key={d.title}
+          tint={i % 2 === 0 ? "tinted" : "plain"}
+          className="!py-20 sm:!py-24"
+        >
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="font-display text-4xl font-extrabold leading-[1.06] tracking-tight text-text sm:text-5xl">
+              {d.title}
+            </h2>
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-text-muted sm:text-xl">
+              {d.body}
+            </p>
+          </div>
+          <div className="mx-auto mt-12 max-w-[1180px]">
+            <Canvas hue={f.hue}>
+              <BrowserFrame
+                alt={d.alt}
+                caption={d.caption}
+                hue={f.hue}
+                shot={d.shot}
+                sizes="(min-width: 1200px) 1100px, 100vw"
+              >
+                {d.clip ? (
+                  <DemoVideo clip={d.clip} alt={d.alt} hue={f.hue} />
+                ) : undefined}
+              </BrowserFrame>
+            </Canvas>
+          </div>
+        </Section>
+      ))}
 
       {/* THE DIFFERENTIATOR: the page's one claim a competitor cannot make,
           with the motif staged on its color canvas. */}

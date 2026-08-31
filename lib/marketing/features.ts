@@ -42,6 +42,39 @@ export type FeatureBlock = {
   points: string[];
 };
 
+/**
+ * One capability shown rather than argued.
+ *
+ * WHY THIS EXISTS (from docs/competitor-research/milanote.md): every body
+ * section of Milanote's home page is a heading, ONE sentence, and ONE large
+ * animated product demo. No bullet lists, no tick grids, no three-column
+ * cards. Ours were the inverse: three blocks of four bullets against one
+ * static screenshot. On the canvas pages that is a losing trade, because every
+ * claim there is an INTERACTION (creation is drag-only, selecting a card turns
+ * the tool rail into that card's editor, an arrow is drawn by dragging between
+ * two cards) and a still frame cannot show interaction at all.
+ *
+ * The `body` is ONE SENTENCE, deliberately. If a section needs two, the visual
+ * is not carrying its share and the fix is a better clip, not more prose.
+ *
+ * A demo takes a `clip` (recorded by scripts/capture-demos.mjs) or a `shot`
+ * (a closeup still from capture-shots.mjs) but never both. Prefer the clip
+ * where the claim is a gesture; a still is right where the claim is a LAYOUT,
+ * which a loop would only make restless.
+ */
+export type FeatureDemo = {
+  title: string;
+  /** One sentence. See above. */
+  body: string;
+  /** Basename in public/marketing/demos, without an extension. */
+  clip?: string;
+  /** Basename in public/marketing/shots, for a claim a frame can carry. */
+  shot?: string;
+  alt: string;
+  /** Shown under a still, as on every other product shot. */
+  caption?: string;
+};
+
 /** One cell of the long-tail tick grid. */
 export type FeatureTick = {
   t: string;
@@ -88,7 +121,15 @@ export type FeatureDef = {
   problem: string;
   /** Real screenshots only. Empty means the motif leads the hero. */
   shots: FeatureShot[];
+  /**
+   * The three claim panels. May be EMPTY on a page that carries `demos`
+   * instead: the two are alternatives, not layers, or the page says the same
+   * thing twice in two voices. When blocks are empty the fold-closer line and
+   * the body both read from `demos`.
+   */
   blocks: FeatureBlock[];
+  /** Shown-not-argued sections, in place of the claim panels. */
+  demos?: FeatureDemo[];
   /** Heading over the tick grid. */
   moreTitle: string;
   ticks: FeatureTick[];
@@ -397,7 +438,7 @@ export const FEATURES: FeatureDef[] = [
     keyword: "Moodboard maker",
     metaTitle: "Moodboard Maker for Creative Production",
     h1: "Where the look comes together.",
-    lede: "A freeform canvas for references, notes and direction: drag anything anywhere, connect ideas with arrows, pull images from Figma, Drive or the project itself, and share the board as a link.",
+    lede: "A real canvas for references, notes and direction. Drag anything anywhere, connect ideas with arrows, pull frames from Figma, Drive or the job itself, and send the board to the client for pinned feedback.",
     problem: "The look of the job gets decided across a Pinterest board, a Figma file and a folder of screenshots, and none of them is attached to the job. Three weeks later nobody can find the frame everyone agreed on.",
     shots: [
       {
@@ -406,55 +447,74 @@ export const FEATURES: FeatureDef[] = [
         alt: "A moodboard canvas: photographic references arranged freely, a pinned note about the look, and a to-do list, all on one board.",
       },
     ],
-    blocks: [
+    // NO CLAIM PANELS ON THIS PAGE, on purpose. Every argument the canvas has
+    // is a GESTURE, and a bullet describing a gesture is the weakest possible
+    // version of it. The page shows them instead. See FeatureDemo.
+    blocks: [],
+    demos: [
       {
-        title: "A real canvas",
-        body: "Freeform, zoomable, and fast: cards go where you drop them and stay there.",
-        points: [
-          "Images, rich-text notes, to-do cards and link cards with automatic previews",
-          "Columns that stack cards, and drag-into to file them",
-          "Connection arrows between cards, and free lines with labels and arrowheads",
-          "Dots, grid or plain background; drag tools straight off the rail",
-        ],
+        title: "Nothing lands where you did not put it.",
+        body: "Every tool is dragged onto the canvas rather than clicked, so a new card arrives exactly where you meant it instead of on top of the reference you were looking at.",
+        clip: "moodboard-drag",
+        caption: "app.studio-flows.com/projects/bright-water/moodboard",
+        alt: "Dragging a note tool off the rail and dropping it onto an empty part of the moodboard, where it becomes a card.",
       },
       {
-        title: "Fed from everywhere",
-        body: "The references already live somewhere. The board reaches them instead of asking you to re-upload your taste.",
-        points: [
-          "Import frames from Figma by pasting a file link",
-          "Browse and pull files from Google Drive",
-          "Pick from the project's own asset library",
-          "Drop files from the desktop, several at once",
-        ],
+        title: "Pick a card and the tools become its tools.",
+        body: "The rail changes to match whatever you selected, without taking a pixel from the canvas or covering the card you are working on.",
+        clip: "moodboard-rail",
+        caption: "app.studio-flows.com/projects/bright-water/moodboard",
+        alt: "Selecting a card on the moodboard, after which the tool rail becomes that card's editor and a formatting flyout opens beside it.",
       },
       {
-        title: "Attached to the job, or above it",
-        body: "A moodboard can belong to one project or float studio-wide, and either way it can face the client.",
-        points: [
-          "Project moodboards sit in the Visualize band of the job's hub",
-          "Studio-wide boards for the look you keep coming back to",
-          "Share a read-only link, no login on the other end",
-          "Send it to client review and collect pinned comments on the board itself",
-        ],
+        title: "Draw the reasoning, not just the references.",
+        body: "Drag from one card to another and an arrow joins them, so the board records why these frames belong together instead of only that they do.",
+        clip: "moodboard-connect",
+        caption: "app.studio-flows.com/projects/bright-water/moodboard",
+        alt: "Dragging from one card's connect anchor onto another card, which draws an arrow between the two.",
+      },
+      {
+        title: "A hundred references, still a board.",
+        body: "Drag a card onto a column and it files itself inside, so the pile every moodboard eventually becomes stays something a person can actually read.",
+        clip: "moodboard-column",
+        caption: "app.studio-flows.com/projects/bright-water/moodboard",
+        alt: "Dragging a reference card onto a column on the moodboard, where it stacks in with the cards already filed there.",
+      },
+      {
+        title: "The references already live somewhere.",
+        body: "Pull frames straight out of Figma, browse Google Drive, or take an image from the project's own library, so the board is fed rather than re-uploaded.",
+        clip: "moodboard-import",
+        caption: "app.studio-flows.com/projects/bright-water/moodboard",
+        alt: "Opening the import tools on the moodboard rail and picking an image from the project's own asset library.",
+      },
+      {
+        title: "Send the board. Get pins back.",
+        body: "Share it as a link with no login on the other end, and the client's notes come back pinned to the exact reference they meant.",
+        shot: "board-review-portal",
+        caption: "studio-flows.com/r/shared-link",
+        alt: "The client review portal showing a moodboard with numbered comment pins on two references and the comment rail beside it.",
       },
     ],
     moreTitle: "More the canvas does",
     ticks: [
-      { t: "Undo and redo", d: "Sixty steps of history, keyboard shortcuts, per board." },
-      { t: "Link unfurling", d: "Paste a URL, get a titled card with the page's own preview image." },
-      { t: "Rich text notes", d: "Bold, lists, links and a color panel, edited in place." },
-      { t: "Z-order and resize", d: "Layer and size cards like a layout, not a grid." },
-      { t: "Copy and paste", d: "Duplicate a card or carry it between boards." },
-      { t: "Tabs", d: "Several boards side by side, one canvas each." },
+      { t: "Undo and redo", d: "Sixty steps of history per board, on the keyboard shortcut your hands already know." },
+      { t: "Link cards", d: "Paste a URL and get a titled card carrying the page's own preview image." },
+      { t: "Rich text notes", d: "Bold, lists, links and a color for the card, edited on the board itself." },
+      { t: "Resize from any corner", d: "Four visible handles, and the opposite corner stays pinned while you drag." },
+      { t: "Lines and arrowheads", d: "Solid or dashed, a weight, a label, and an arrowhead on either end or both." },
+      { t: "Zoom that behaves", d: "Pinch twice as far and it zooms twice as much, anchored under the cursor." },
+      { t: "To-do cards", d: "A checklist card for the things the look still needs before the shoot." },
+      { t: "Shapes and color", d: "Blocks of color and simple shapes, for the parts of a look that are not a photograph." },
+      { t: "The job's, or the studio's", d: "A board can belong to one project, or float above all of them and follow you." },
     ],
     diff: {
       eyebrow: "The difference",
       title: "It is connected, not another silo.",
-      body: "A standalone moodboard tool is one more place the job leaks into. This canvas lives inside the production: it reads the project's assets, it reaches Figma and Drive where the references already are, and its output goes into the same review flow as everything else.",
+      body: "A standalone moodboard tool is one more place the job leaks into. This canvas lives inside the production: it reads the project's own assets, it reaches Figma and Drive where the references already are, and its output goes into the same review flow as the cut.",
       points: [
         "The frame everyone agreed on is findable, on the job, forever",
         "Client feedback arrives as pins on the board, not adjectives in an email",
-        "No exports, no re-uploads, no 'which version of the board is this'",
+        "No exports, no re-uploads, no wondering which version of the board this is",
       ],
     },
     band: "visualize",

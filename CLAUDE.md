@@ -3330,6 +3330,83 @@ box are what made the PAGE scroll sideways on an iPad in landscape.
   components/production/shot-list.tsx has the same bug twice and is UNUSED (the
   old production tab strip's editor); nothing imports it.
 
+### Marketing pages: show it, do not argue it (2026-08-31)
+
+From the operator's screen recording of Milanote's home page, written up in
+docs/competitor-research/milanote.md (that file is the record; read it before
+touching this area). EVERY body section of their page is a heading, ONE
+sentence, and ONE large animated product demo. No bullet lists, no tick grids,
+no three-column cards anywhere in the body. Ours were the exact inverse: three
+blocks of four bullets plus a six-cell tick grid against one static screenshot.
+
+- `FeatureDemo` (lib/marketing/features.ts) is the shape, and `demos` on a
+  FeatureDef REPLACES `blocks` rather than joining it: a page argues with claim
+  panels OR shows capabilities, never both, or it says the same thing twice in
+  two voices. `blocks: []` is now legal and the template skips that section.
+  The fold-closer line reads from whichever is carrying the page, and is
+  dropped past four claims, because at 1400px a fifth column leaves each one
+  about 230px and a row of clipped sentences argues nothing.
+- A demo section is CENTRED, which reads against section 4.6's "nothing
+  important is center-stacked". That is deliberate and the reasoning matters:
+  4.6's real principle is the sentence after it, EVERY SECTION HAS A VISUAL
+  ANCHOR. It was written about sections whose anchor was weak or missing, where
+  centring left the fold empty. A section built around a full-width moving demo
+  satisfies that maximally, and centring there reads as confidence. Keep the
+  two-column rule wherever the anchor is a still.
+- MOODBOARD IS THE REFERENCE IMPLEMENTATION and the only page converted so far
+  (six demo sections, claim panels removed, tick grid widened to nine). The
+  operator asked for that page specifically, on the grounds that the canvas
+  rivals Milanote and sells on its own. The pages that would gain most next are
+  the other ones whose claims are MOTION: client review, the AI pipeline, the
+  task board. A page whose claims are layouts is not helped by a loop.
+
+### Demo clips (scripts/capture-demos.mjs, `npm run demos`): BUILT
+A screenshot cannot show an interaction, and on the canvas pages every claim IS
+an interaction: creation is drag-only, selecting a card turns the tool rail into
+that card's editor, an arrow is drawn by dragging between two cards.
+- Drives the real demo studio the same way capture-shots.mjs does, at the SAME
+  1503x852 viewport so a clip's section is the same height as a screenshot's.
+  Writes three files per clip: WebM (all Playwright can record), MP4/H.264
+  (listed first by the player, since iOS Safari's WebM support is patchy enough
+  that some iPhones would show a blank frame) and a JPG poster. Measured: 487KB
+  webm, 177KB mp4, 9KB poster, so a clip is SMALLER than any screenshot beside
+  it and the repo is the right home. ffmpeg is resolved from four places and is
+  deliberately not a hard dependency: without one you still get WebM.
+- INTERACTIONS ARE ANCHORED ON `data-demo` ATTRIBUTES, never CSS classes, so
+  restyling cannot silently break a recording.
+- RECORDING IS A WRITE against the studio whose whole job is to be
+  photographed, so every card a clip creates is deleted afterwards by id, in a
+  page that is not being recorded. Two cascade rules shape the clips
+  themselves: deleting a card takes its arrows (board_connections cascades) and
+  deleting a column takes its children (parent_id cascades). That is why the
+  connect clip creates its own note before joining it to a reference, and why
+  the column clip files a note it created into a column it created. Filing a
+  REAL reference into a demo column would delete the reference on cleanup.
+- `DemoVideo` runs its existence check on the SERVER, exactly as `<Shot>` does,
+  so a page can be designed and reviewed before the clips exist and a missing
+  clip is a labelled placeholder naming itself, not a black rectangle.
+  `DemoPlayer` is the client half and exists only to read
+  `prefers-reduced-motion`, which cannot stop an autoplay attribute from CSS.
+- MIDDLEWARE, found while verifying and worse than the feature: the matcher
+  exempted only IMAGE extensions, so .mp4 and .webm were redirected to /login
+  for a logged-out visitor, meaning every clip would have been invisible to the
+  only audience the marketing site has, silently (the page renders, the file is
+  just absent). Same class as the pdf.worker bug. Video, font, ico and script
+  extensions are now listed. IF A STATIC FILE IS MYSTERIOUSLY MISSING ON THE
+  PUBLIC SITE, CHECK THAT MATCHER FIRST.
+- NOT YET RECORDED, and not recordable from a Claude Code session: the agent
+  proxy answers 403 to CONNECT for the Supabase host, so a dev server in that
+  environment cannot sign in as the demo user at all (it surfaces as a login
+  error reading "Host not i... is not valid JSON"). `npm run demos` has to run
+  on the operator's machine, exactly like `npm run shots` already does. Six
+  clips are declared and the moodboard page renders placeholders until they
+  land: moodboard-drag, moodboard-rail, moodboard-connect, moodboard-column,
+  moodboard-import.
+- Seeded for the sixth section: a `review_links` row with target_type
+  'moodboard' on the demo studio's Bright Water board plus three pinned
+  comments, so `board-review-portal` in capture-shots.mjs photographs the real
+  client portal over a BOARD rather than an asset.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
