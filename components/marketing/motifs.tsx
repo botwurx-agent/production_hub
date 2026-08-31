@@ -572,6 +572,74 @@ function HubMotif() {
   );
 }
 
+function GearMotif() {
+  return (
+    <Stage hue="blue" label="A gear list with two lines confirmed and one still open, and a prop with three sourced options where the client picked the second.">
+      <div className="overflow-clip rounded-[12px] border border-border bg-bg">
+        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+          <span className="text-[12px] font-bold text-text">Camera</span>
+          <span className="rounded-pill px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: "var(--m-bg)", color: "var(--m)" }}>
+            2/3 · $2,050/day
+          </span>
+        </div>
+        {[
+          ["Alexa 35 body", "$850", true],
+          ["Signature Primes, 5 lens set", "$1,200", true],
+          ["High-speed rig, day 2", "", false],
+        ].map(([name, rate, done]) => (
+          <div key={name as string} className="flex items-center gap-3 border-b border-border px-4 py-2.5 last:border-0">
+            <span
+              className="grid h-4 w-4 shrink-0 place-items-center rounded-[5px] border"
+              style={
+                done
+                  ? { backgroundColor: "var(--h-green)", borderColor: "var(--h-green)" }
+                  : { borderColor: "var(--border-strong)" }
+              }
+            >
+              {done ? (
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              ) : null}
+            </span>
+            <span className={`min-w-0 flex-1 truncate text-[12.5px] ${done ? "font-medium text-text-muted" : "font-semibold text-text"}`}>
+              {name}
+            </span>
+            <span className="shrink-0 text-[11.5px] font-bold tabular-nums text-text-faint">{rate}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 rounded-[12px] border border-border bg-bg p-3">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-[12px] font-bold text-text">Hero glassware</span>
+          <StatusChip tone="green">Booked or on set</StatusChip>
+        </div>
+        <div className="flex gap-2">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="relative h-12 flex-1 rounded-[8px] border"
+              style={
+                i === 1
+                  ? { borderColor: "var(--m)", backgroundColor: "var(--m-bg)" }
+                  : { borderColor: "var(--border)", backgroundColor: "var(--surface-2)" }
+              }
+            >
+              {i === 1 ? (
+                <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-pill px-1.5 py-0.5 text-[9px] font-bold text-white" style={{ backgroundColor: "var(--m)" }}>
+                  Picked
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] font-medium text-text-faint">Client picked option 2</p>
+      </div>
+    </Stage>
+  );
+}
+
 /** One motif per feature page, keyed by slug. */
 const MOTIFS: Record<string, () => ReactNode> = {
   "production-hub": HubMotif,
@@ -583,6 +651,7 @@ const MOTIFS: Record<string, () => ReactNode> = {
   "production-communication": CommunicationMotif,
   "call-sheet-software": CallSheetMotif,
   "crew-management-software": CrewMotif,
+  "gear-list-software": GearMotif,
   "production-budgeting-software": BudgetMotif,
   "production-invoicing": InvoicingMotif,
   "ai-video-production": AiMotif,

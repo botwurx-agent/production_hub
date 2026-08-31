@@ -24,6 +24,7 @@ export const FEATURE_SLUGS = [
   "production-communication",
   "call-sheet-software",
   "crew-management-software",
+  "gear-list-software",
   "production-budgeting-software",
   "production-invoicing",
   "ai-video-production",

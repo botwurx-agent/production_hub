@@ -184,7 +184,13 @@ export const FEATURES: FeatureDef[] = [
     h1: "Who's on it, and what's waiting.",
     lede: "A kanban that tells the truth about production work: a Waiting column for everything sitting with a client or a vendor, phases that speak your job's language, and cards that carry people, files and checklists.",
     problem: "Generic task tools have two states: yours and done. On a real job half the work is waiting on somebody outside the building, and a board that cannot say so misreports where the job actually stands.",
-    shots: [],
+    shots: [
+      {
+        shot: "project-tasks",
+        caption: "app.studio-flows.com/projects/bright-water/tasks",
+        alt: "The task board: To do, In progress, Waiting and Done, with checklists, due dates, attachments and who is on each card.",
+      },
+    ],
     blocks: [
       {
         title: "A board with a Waiting column",
@@ -251,7 +257,13 @@ export const FEATURES: FeatureDef[] = [
     h1: "The board, off the PDF.",
     lede: "Build storyboards frame by frame, or drop in the director's PDF and watch it become one: panels cropped exactly, captions split into scene, action and camera, frames drawn in the shape they were drawn in.",
     problem: "The board arrives as a PDF, and turning it into something the job can use means retyping every caption and cropping every panel by hand. So nobody does, and the board stays a dead attachment.",
-    shots: [],
+    shots: [
+      {
+        shot: "project-storyboards",
+        caption: "app.studio-flows.com/projects/bright-water/storyboards",
+        alt: "A storyboard: six numbered frames in 16:9, each with its own description, sound note and duration, and the board list beside them.",
+      },
+    ],
     blocks: [
       {
         title: "Import the director's PDF",
@@ -381,7 +393,13 @@ export const FEATURES: FeatureDef[] = [
     h1: "Where the look comes together.",
     lede: "A freeform canvas for references, notes and direction: drag anything anywhere, connect ideas with arrows, pull images from Figma, Drive or the project itself, and share the board as a link.",
     problem: "The look of the job gets decided across a Pinterest board, a Figma file and a folder of screenshots, and none of them is attached to the job. Three weeks later nobody can find the frame everyone agreed on.",
-    shots: [],
+    shots: [
+      {
+        shot: "project-moodboard",
+        caption: "app.studio-flows.com/projects/bright-water/moodboard",
+        alt: "A moodboard canvas: photographic references arranged freely, a pinned note about the look, and a to-do list, all on one board.",
+      },
+    ],
     blocks: [
       {
         title: "A real canvas",
@@ -735,6 +753,78 @@ export const FEATURES: FeatureDef[] = [
     },
     band: "produce",
     related: ["call-sheet-software", "production-budgeting-software"],
+  },
+
+
+  {
+    slug: "gear-list-software",
+    // The app's own page name. Gear and props are two pages in the product and
+    // they were both anchored on the contacts page, which sold three different
+    // screens under one heading. They belong together here because they are the
+    // same job (physical things this shoot needs, and whether they are secured)
+    // and neither is the contacts roster.
+    nav: "Gear & crew",
+    hint: "The kit list, and what it costs",
+    hue: "blue",
+    keyword: "Gear & crew",
+    metaTitle: "Gear List Software for Production: Kit, Rates and Props",
+    h1: "Booked, or not booked.",
+    lede: "The kit and the crew for a shoot day as one checklist, with day rates only the studio can see. Props keep their own list, holding the options you sourced and the one the client picked.",
+    problem: "The gear list is a text thread with the rental house, the prop options are a folder of phone photos, and on the morning of the shoot nobody can say with certainty what was actually confirmed. The one question that matters, is it booked, is the one thing a spreadsheet never records.",
+    shots: [],
+    blocks: [
+      {
+        title: "A list that says booked",
+        body: "Quantities, items and notes, with a tick per line and a count that does not flatter you.",
+        points: [
+          "A confirmed count and a bar, so the gap is the first thing you see",
+          "Day rates per line, and the quantity times the rate beside it",
+          "Per day, never per job: the day count lives on the budget, and guessing it here would misstate the number",
+          "Categories you name yourself: camera, grip, electric, or whatever this job calls them",
+        ],
+      },
+      {
+        title: "Props are sourced, not made",
+        body: "A prop is a requirement first and a decision second, so it holds both.",
+        points: [
+          "Each prop carries its options, with photos and prop-house links on the option itself",
+          "Picking one settles the prop and moves it along by itself",
+          "Still needed, awaiting a pick, booked or on set: three states, advanced by clicking",
+          "A prop whose picked option is deleted goes back to undecided rather than reading as booked",
+        ],
+      },
+      {
+        title: "The client picks the glass",
+        body: "The one part of the shoot's shopping list a client genuinely has an opinion about.",
+        points: [
+          "Send the prop list for review through the same portal as cuts and boards",
+          "They pin a comment on the third glass, not on an email thread",
+          "No account for them, and the link is revocable",
+          "The decision comes back on the prop, where the options already are",
+        ],
+      },
+    ],
+    moreTitle: "More it holds",
+    ticks: [
+      { t: "Rates crew cannot see", d: "Day rates live in a studio-only table, refused at the database to anyone on the job." },
+      { t: "Feeds the budget", d: "The vendor picker knows the agreed rate and checks it against what was invoiced." },
+      { t: "Photos on the option", d: "The phone shot of the actual glass, filed on the actual prop." },
+      { t: "Links to the prop house", d: "Where you found it, kept with what you found." },
+      { t: "Counted honestly", d: "Props with no pick are counted apart, so a green number cannot hide a gap." },
+      { t: "Notes per line", d: "The thing the rental house said, next to the thing they said it about." },
+    ],
+    diff: {
+      eyebrow: "The difference",
+      title: "A prop is sourced and approved.",
+      body: "Gear you book. Creative work you approve. A prop is the one object that is both, which is why it usually falls between the rental spreadsheet and the review tool and ends up properly tracked in neither. Here it is a single record: the options you found, the one you picked, and the client saying yes to it in the portal they already use for cuts.",
+      points: [
+        "Options with photos and prop-house links, held on the prop",
+        "Client sign-off through the review portal, with no account to create",
+        "Rates stay in studio-only tables, structurally invisible to crew on the job",
+      ],
+    },
+    band: "produce",
+    related: ["crew-management-software", "call-sheet-software"],
   },
 
   /* --------------------------------------------------------------- Money */
@@ -1345,7 +1435,8 @@ export const MODULES: ModuleDef[] = [
     key: "gear",
     name: "Gear & crew",
     band: "produce",
-    page: "crew-management-software",
+    page: "gear-list-software",
+    own: true,
     hue: "blue",
     blurb: "The checklist of kit and people, with day rates.",
     points: [
@@ -1358,7 +1449,7 @@ export const MODULES: ModuleDef[] = [
     key: "props",
     name: "Props",
     band: "produce",
-    page: "crew-management-software",
+    page: "gear-list-software",
     hue: "green",
     blurb: "Sourcing options per prop, and a client pick.",
     points: [

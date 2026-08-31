@@ -48,6 +48,8 @@ const SHOTS = [
   ["project-shot-list", `/projects/${PROJECT}/shot-list`, "light", 3000],
   ["project-storyboards", `/projects/${PROJECT}/storyboards`, "light", 3000],
   ["project-contacts", `/projects/${PROJECT}/contacts`, "light", 2500],
+  ["project-moodboard", `/projects/${PROJECT}/moodboard`, "light", 3000],
+  ["project-tasks", `/projects/${PROJECT}/tasks`, "light", 2500],
   ["project-calendar", `/projects/${PROJECT}/calendar`, "light", 2500],
   ["pipeline", "/pipeline", "light", 2500],
   ["client", `/clients/${CLIENT}`, "light", 2500],
@@ -75,6 +77,12 @@ async function shoot(page, name, path, theme, settle) {
     try {
       localStorage.setItem("theme", t);
       // a tour card popping up over the UI ruins an otherwise good screenshot
+      // The sidebar's collapse state is remembered per browser, so without
+      // pinning it a capture inherits whatever the last session was left in.
+      // That is how project-moodboard, project-storyboards and project-tasks
+      // came back with the 68px icon rail while the other eight shots carry
+      // the full 240px sidebar with the studio name on it.
+      localStorage.setItem("sidebar.collapsed", "0");
       localStorage.setItem("tour.seen.welcome", "1");
       localStorage.setItem("tour.seen.project-hub", "1");
       localStorage.setItem("dashboard.setupDismissed", "1");
@@ -87,7 +95,12 @@ async function shoot(page, name, path, theme, settle) {
 
 // signed-in screens
 const ctx = await browser.newContext({
-  viewport: { width: 1600, height: 1000 },
+  // 1503x852 at 2x is 3006x1704, which is the shape every shot on the site
+  // already is (aspect 1.764). Every shot renders at the same WIDTH on a
+  // marketing page, so its aspect ratio alone decides how tall its section
+  // is: a 1600x1000 capture draws a section a fifth taller than its
+  // neighbours for no reason a reader can see.
+  viewport: { width: 1503, height: 852 },
   deviceScaleFactor: 2,
 });
 const page = await ctx.newPage();
@@ -110,7 +123,8 @@ for (const [name, path, theme, settle] of SHOTS) {
 
 // the client portal, signed out, because that is how a client sees it
 const clean = await browser.newContext({
-  viewport: { width: 1600, height: 1000 },
+  // Same shape as every other shot; see the note on the first context.
+  viewport: { width: 1503, height: 852 },
   deviceScaleFactor: 2,
 });
 const guest = await clean.newPage();
