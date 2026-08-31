@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/card";
 import { BoardsIcon } from "@/components/app-shell/nav-icons";
+import { IconTile } from "@/components/ui/icon-tile";
+import { RAIL_ART } from "@/components/boards/rail-icons";
 import { BoardCanvas } from "@/components/boards/board-canvas";
 import { BoardAssetPicker } from "@/components/boards/board-asset-picker";
 import { BoardFigmaModal } from "@/components/boards/board-figma-modal";
@@ -1117,52 +1119,27 @@ export function BoardsWorkspace({
                 onClose={() => setSelectedLineId(null)}
               />
             ) : (
-              <div className="relative flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2">
-                <RailBtn label="Note" disabled={busy} dragKind="note" dragOnly onClick={addNoteToBoard}>
-                  <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5" />
-                </RailBtn>
-                <RailBtn label="Heading" disabled={busy} dragKind="heading" dragOnly onClick={addHeadingToBoard}>
-                  <path d="M6 4v16M18 4v16M6 12h12" />
-                </RailBtn>
-                <RailBtn label="To-do list" disabled={busy} dragKind="todo" dragOnly onClick={addTodoToBoard}>
-                  <path d="M9 11l3 3 8-8" /><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" />
-                </RailBtn>
-                <RailBtn label="Column" disabled={busy} dragKind="column" dragOnly onClick={addColumnToBoard}>
-                  <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 9v11" />
-                </RailBtn>
-                <RailBtn label="Shape" disabled={busy} dragKind="shape:rect" onClick={() => setShapesOpen((o) => !o)}>
-                  <rect x="3" y="9" width="12" height="12" rx="2" /><circle cx="16.5" cy="8.5" r="5" />
-                </RailBtn>
-                <RailBtn label="Line / arrow" disabled={busy} dragKind="line" dragOnly onClick={addLineToBoard}>
-                  <path d="M5 19 19 5" /><path d="M11 5h8v8" />
-                </RailBtn>
-                <RailBtn label="Link" onClick={() => setLinkOpen(true)}>
-                  <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
-                </RailBtn>
-                <RailBtn label="Video (paste a link)" onClick={() => setVideoOpen(true)}>
-                  <rect x="2" y="4" width="20" height="16" rx="3" /><path d="m10 8 6 4-6 4V8z" />
-                </RailBtn>
-                <RailBtn label="Upload image" disabled={busy} onClick={() => fileRef.current?.click()}>
-                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
-                </RailBtn>
-                <RailBtn label="Color swatch" disabled={busy} dragKind="color" dragOnly onClick={addColorToBoard}>
-                  <circle cx="13.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="10.5" r="2.5" /><circle cx="8.5" cy="7.5" r="2.5" /><path d="M12 22a10 10 0 1 1 0-20 8 8 0 0 1 0 16h-1.5a1.5 1.5 0 0 0 0 3z" />
-                </RailBtn>
+              <div className={`${RAIL_SHELL} gap-0.5 p-2`}>
+                <p className={RAIL_GROUP}>Make</p>
+                <RailBtn label="Note" hint="A thought, in rich text" art="note" hue="yellow" disabled={busy} dragKind="note" dragOnly onClick={addNoteToBoard} />
+                <RailBtn label="Heading" hint="Title a part of the board" art="heading" hue="indigo" disabled={busy} dragKind="heading" dragOnly onClick={addHeadingToBoard} />
+                <RailBtn label="To-do list" hint="What the look still needs" art="todo" hue="green" disabled={busy} dragKind="todo" dragOnly onClick={addTodoToBoard} />
+                <RailBtn label="Column" hint="Stack cards into a group" art="column" hue="blue" disabled={busy} dragKind="column" dragOnly onClick={addColumnToBoard} />
+                <RailBtn label="Shape" hint="Block out a composition" art="shape" hue="purple" disabled={busy} dragKind="shape:rect" onClick={() => setShapesOpen((o) => !o)} />
+                <RailBtn label="Line" hint="Connect two cards" art="line" hue="cyan" disabled={busy} dragKind="line" dragOnly onClick={addLineToBoard} />
+                <RailBtn label="Colour" hint="A swatch for the palette" art="color" hue="pink" disabled={busy} dragKind="color" dragOnly onClick={addColorToBoard} />
 
-                <div className="my-1 h-px w-6 bg-border" />
-
-                <RailBtn label="Project assets" onClick={() => setAssetOpen(true)}>
-                  <path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                </RailBtn>
+                <div className="my-1.5 h-px w-full bg-border" />
+                <p className={RAIL_GROUP}>Bring in</p>
+                <RailBtn label="Upload" hint="From this computer" art="image" hue="orange" disabled={busy} onClick={() => fileRef.current?.click()} />
+                <RailBtn label="Link" hint="Paste a URL, get a preview" art="link" hue="blue" onClick={() => setLinkOpen(true)} />
+                <RailBtn label="Video" hint="Paste a video link" art="video" hue="red" onClick={() => setVideoOpen(true)} />
+                <RailBtn label="Project assets" hint="From this job's library" art="assets" hue="indigo" onClick={() => setAssetOpen(true)} />
                 {driveConnected && (
-                  <RailBtn label="Google Drive" onClick={() => setDriveOpen(true)}>
-                    <path d="M8 3h8l5 9H13zM3 21l4-7h11l-4 7zM8 3 3 14" />
-                  </RailBtn>
+                  <RailBtn label="Google Drive" hint="Browse and pull a file" art="drive" hue="green" onClick={() => setDriveOpen(true)} />
                 )}
                 {figmaConnected && (
-                  <RailBtn label="Figma" onClick={() => setFigmaOpen(true)}>
-                    <rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 4v16" />
-                  </RailBtn>
+                  <RailBtn label="Figma" hint="Import frames from a file" art="figma" hue="purple" onClick={() => setFigmaOpen(true)} />
                 )}
 
                 {/* Shape picker: drag a tile onto the board to place it, the
@@ -2535,26 +2512,17 @@ function CardRail({
 
   return (
     <RailFlyoutCtx.Provider value={{ open, setOpen }}>
-      <div
-        ref={ref}
-        className="relative z-30 flex w-[52px] shrink-0 flex-col items-center gap-1 self-start rounded-[14px] border border-border bg-surface py-2"
-      >
+      <div ref={ref} className={`${RAIL_SHELL} z-30 gap-0.5 p-2`}>
         <button
           onClick={onClose}
-          aria-label="Back to tools"
-          className="group relative grid h-10 w-10 place-items-center rounded-[10px] text-text-muted transition hover:bg-surface-2 hover:text-text"
+          className="flex w-full items-center gap-2 rounded-[10px] px-1.5 py-1.5 text-left text-text-muted transition hover:bg-surface-2 hover:text-text"
         >
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
             {ICON.back}
           </svg>
-          <span className="pointer-events-none absolute left-full z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
-            Back to tools
-          </span>
+          <span className="text-[11px] font-semibold">Back to tools</span>
         </button>
-        <span className="px-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-text-faint">
-          {label}
-        </span>
-        <div className="my-1 h-px w-6 bg-border" />
+        <p className={RAIL_GROUP}>{label}</p>
         {children}
       </div>
     </RailFlyoutCtx.Provider>
@@ -2596,7 +2564,7 @@ function RailTool({
            board-canvas. */
         data-demo={id && children ? "card-tool" : undefined}
         aria-expanded={id ? isOpen : undefined}
-        className={`group relative grid h-10 w-10 place-items-center rounded-[10px] transition ${
+        className={`group relative flex w-full items-center gap-2 rounded-[10px] px-1.5 py-[7px] text-left transition ${
           danger
             ? "text-text-faint hover:bg-red-bg hover:text-red"
             : isOpen
@@ -2604,14 +2572,19 @@ function RailTool({
               : "text-text-muted hover:bg-surface-2 hover:text-text"
         }`}
       >
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-          {icon}
-        </svg>
-        {!isOpen && (
-          <span className="pointer-events-none absolute left-full z-40 ml-2 hidden whitespace-nowrap rounded-[7px] bg-text px-2 py-1 text-[11px] font-semibold text-bg shadow-md group-hover:block">
-            {label}
-          </span>
-        )}
+        <span className="grid h-7 w-7 shrink-0 place-items-center">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            {icon}
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold leading-tight">
+          {label}
+        </span>
+        {id && children ? (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-45">
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        ) : null}
       </button>
 
       {isOpen && (
@@ -2658,17 +2631,46 @@ function CardTools({
  * bug this whole change exists to remove. Carries a ref-reader, not a number,
  * so a zoom change does not re-render the rail.
  */
+/**
+ * THE TWO RAILS MUST BE THE SAME WIDTH, and that is not a style preference.
+ *
+ * The rail shows tools until you select a card, then it becomes that card's
+ * editor in the same place. CLAUDE.md records two layouts that were rejected
+ * for getting this wrong: an in-flow panel of a different width pushed the
+ * whole canvas sideways on every select and snapped it back on deselect, so
+ * cards appeared to jump; floating it over the canvas then covered the card
+ * being edited. Same footprint in both states is the fix.
+ *
+ * So the shell lives here once and both states use it. Widening one of them by
+ * hand reintroduces a bug that has already been found twice.
+ *
+ * `overflow-y-auto` because thirteen labelled tools are taller than a short
+ * laptop viewport, and `self-start` means the rail does not stretch to fill.
+ */
+const RAIL_W = "w-[206px]";
+const RAIL_SHELL = `relative flex ${RAIL_W} max-h-full shrink-0 flex-col self-start overflow-y-auto rounded-[14px] border border-border bg-surface`;
+const RAIL_GROUP =
+  "px-2 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-text-faint";
+
 const BoardZoomCtx = createContext<() => number>(() => 1);
 
 function RailBtn({
   label,
+  hint,
+  art,
+  hue = "indigo",
   onClick,
   disabled,
   dragKind,
   dragOnly,
-  children,
 }: {
   label: string;
+  /** One line saying what the tool makes. Shown under the label. */
+  hint: string;
+  /** Key into RAIL_ART. */
+  art: string;
+  /** Identity hue for the tile, the same system the rest of the app uses. */
+  hue?: string;
   onClick: () => void;
   disabled?: boolean;
   // When set, the tool can be dragged onto the board to place it at the drop
@@ -2679,7 +2681,6 @@ function RailBtn({
   // already there and then had to be dug out and moved. Dragging puts it
   // exactly where it belongs, so a click just says so.
   dragOnly?: boolean;
-  children: React.ReactNode;
 }) {
   const zoom = useContext(BoardZoomCtx);
   const [nudge, setNudge] = useState(false);
@@ -2693,9 +2694,12 @@ function RailBtn({
 
   function press() {
     if (dragOnly) {
+      // The tile shakes and says "Drag me". A tooltip is a sentence you have
+      // to read; a shake answers in the language of the gesture you just got
+      // wrong, and is done before it can irritate.
       setNudge(true);
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setNudge(false), 1900);
+      timer.current = setTimeout(() => setNudge(false), 1600);
       return;
     }
     onClick();
@@ -2705,7 +2709,6 @@ function RailBtn({
     <button
       onClick={press}
       disabled={disabled}
-      aria-label={label}
       /* See the note on data-demo in board-canvas: the demo recorder finds the
          tools it films by attribute rather than by position in the rail. */
       data-demo={`rail-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
@@ -2715,7 +2718,7 @@ function RailBtn({
           ? (e) => {
               e.dataTransfer.setData("application/x-board-tool", dragKind);
               e.dataTransfer.effectAllowed = "copy";
-              // Carry a picture of the CARD, not of this 40px button.
+              // Carry a picture of the CARD, not of this button.
               if (dragKind.startsWith("shape:")) {
                 setCardDragImage(e, "shape", dragKind.slice("shape:".length), zoom());
               } else if (isDroppableKind(dragKind)) {
@@ -2725,21 +2728,26 @@ function RailBtn({
             }
           : undefined
       }
-      className={`group relative grid h-10 w-10 place-items-center rounded-[10px] text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-40 ${
-        dragKind ? "cursor-grab active:cursor-grabbing" : ""
-      }`}
+      className={`group flex w-full items-center gap-2.5 rounded-[11px] px-2 py-[7px] text-left transition disabled:opacity-40 ${
+        nudge ? "bg-accent-soft" : "hover:bg-surface-2"
+      } ${dragKind ? "cursor-grab active:cursor-grabbing" : ""}`}
     >
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        {children}
-      </svg>
-      <span
-        className={`pointer-events-none absolute left-full z-40 ml-2 whitespace-nowrap rounded-[7px] px-2 py-1 text-[11px] font-semibold shadow-md ${
-          nudge
-            ? "block bg-accent text-accent-fg"
-            : "hidden bg-text text-bg group-hover:block"
-        }`}
-      >
-        {nudge ? `Drag "${label}" onto the board` : label}
+      <span data-wobble={nudge ? "1" : undefined}>
+        <IconTile hue={hue} size="sm">
+          {RAIL_ART[art]}
+        </IconTile>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12.5px] font-semibold leading-tight text-text">
+          {nudge ? "Drag me" : label}
+        </span>
+        <span
+          className={`block truncate text-[11px] leading-tight ${
+            nudge ? "font-medium text-accent" : "text-text-faint"
+          }`}
+        >
+          {nudge ? "onto the board" : hint}
+        </span>
       </span>
     </button>
   );
