@@ -189,6 +189,9 @@ export function BoardsWorkspace({
   // Set by BoardCanvas; returns canvas coords at the center of the visible
   // viewport so new items land where the user is looking (not off-screen).
   const placeRef = useRef<(() => { x: number; y: number }) | null>(null);
+  // The canvas's zoom, so a drag ghost is the size the card will be.
+  const zoomRef = useRef(1);
+  const readZoom = useCallback(() => zoomRef.current, []);
   function spot() {
     return placeRef.current?.() ?? { x: 80, y: 80 };
   }
@@ -873,6 +876,7 @@ export function BoardsWorkspace({
     "inline-flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-50";
 
   return (
+    <BoardZoomCtx.Provider value={readZoom}>
     <div className="flex h-[calc(100dvh-8rem)] min-w-0 flex-col overflow-hidden">
       {/* Tabs */}
       <div className="mb-3 flex items-center gap-1 overflow-x-auto border-b border-border pb-2">
@@ -1186,7 +1190,7 @@ export function BoardsWorkspace({
                             onDragStart={(e) => {
                               e.dataTransfer.setData("application/x-board-tool", `shape:${s.key}`);
                               e.dataTransfer.effectAllowed = "copy";
-                              setCardDragImage(e, "shape", s.key);
+                              setCardDragImage(e, "shape", s.key, zoomRef.current);
                               setShapeNudge(false);
                             }}
                             onClick={() => {
@@ -1233,6 +1237,7 @@ export function BoardsWorkspace({
                 hint={hint}
                 onDismissHint={dismissHint}
                 placementRef={placeRef}
+                zoomRef={zoomRef}
                 onBeforeChange={(before) => history.capture(before)}
               />
             </div>
@@ -1363,6 +1368,7 @@ export function BoardsWorkspace({
         </div>
       )}
     </div>
+    </BoardZoomCtx.Provider>
   );
 }
 
@@ -2643,6 +2649,17 @@ function CardTools({
   );
 }
 
+/**
+ * The canvas's zoom, readable by the rail's tool buttons.
+ *
+ * A context rather than a prop because RailBtn is used a dozen times and every
+ * one of them would have to remember to pass it; a tool that forgot would
+ * silently draw its drag ghost at the wrong size, which is exactly the class of
+ * bug this whole change exists to remove. Carries a ref-reader, not a number,
+ * so a zoom change does not re-render the rail.
+ */
+const BoardZoomCtx = createContext<() => number>(() => 1);
+
 function RailBtn({
   label,
   onClick,
@@ -2664,6 +2681,7 @@ function RailBtn({
   dragOnly?: boolean;
   children: React.ReactNode;
 }) {
+  const zoom = useContext(BoardZoomCtx);
   const [nudge, setNudge] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -2699,9 +2717,9 @@ function RailBtn({
               e.dataTransfer.effectAllowed = "copy";
               // Carry a picture of the CARD, not of this 40px button.
               if (dragKind.startsWith("shape:")) {
-                setCardDragImage(e, "shape", dragKind.slice("shape:".length));
+                setCardDragImage(e, "shape", dragKind.slice("shape:".length), zoom());
               } else if (isDroppableKind(dragKind)) {
-                setCardDragImage(e, dragKind);
+                setCardDragImage(e, dragKind, undefined, zoom());
               }
               setNudge(false);
             }

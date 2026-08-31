@@ -27,9 +27,16 @@ export function setCardDragImage(
   e: React.DragEvent,
   kind: DroppableKind,
   shape?: string,
+  /** The canvas's current zoom, so the ghost is the size the card will be. */
+  zoom = 1,
 ) {
   if (typeof document === "undefined" || !e.dataTransfer.setDragImage) return;
   const f = newItemFields(kind, shape);
+  // A card's w/h are CANVAS units; on screen they are scaled by the zoom. A
+  // ghost drawn at 100% would be twice the size of the card that lands on a
+  // board at 50%, which is the same broken promise as dragging an icon.
+  const gw = Math.max(24, Math.round(f.w * zoom));
+  const gh = Math.max(24, Math.round(f.h * zoom));
 
   const ghost = document.createElement("div");
   ghost.style.cssText = [
@@ -37,8 +44,8 @@ export function setCardDragImage(
     // Off-screen rather than hidden: it has to render to be snapshotted.
     "left:-10000px",
     "top:0",
-    `width:${f.w}px`,
-    `height:${f.h}px`,
+    `width:${gw}px`,
+    `height:${gh}px`,
     "border-radius:12px",
     "border:1px solid var(--border)",
     "box-shadow:0 8px 24px rgba(0,0,0,.14)",
@@ -53,8 +60,9 @@ export function setCardDragImage(
   document.body.appendChild(ghost);
 
   // Grab it by the middle, so the card sits under the cursor rather than
-  // hanging off to one side of it.
-  e.dataTransfer.setDragImage(ghost, f.w / 2, f.h / 2);
+  // hanging off to one side of it. The canvas subtracts the same half-size on
+  // drop, so where the ghost is when you let go is where the card lands.
+  e.dataTransfer.setDragImage(ghost, gw / 2, gh / 2);
   // The snapshot is already taken; the node has done its job.
   window.setTimeout(() => ghost.remove(), 0);
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BoardItemView } from "@/app/(app)/boards/actions";
+import { isDroppableKind, newItemFields } from "@/lib/board-defaults";
 import type { BoardSnapshot } from "@/lib/use-board-history";
 import {
   parseLineData,
@@ -187,6 +188,7 @@ export function BoardCanvas({
   hint,
   onDismissHint,
   placementRef,
+  zoomRef,
   onBeforeChange,
   readOnly = false,
 }: {
@@ -209,6 +211,11 @@ export function BoardCanvas({
   hint: { kind: string; itemId: string } | null;
   onDismissHint: () => void;
   placementRef?: React.MutableRefObject<(() => { x: number; y: number }) | null>;
+  // The canvas's current zoom, so the rail can draw a drag ghost at the size
+  // the card will actually be. Same shape as placementRef: the canvas owns
+  // the value and hands it up through a ref rather than a state prop, since
+  // nothing above needs to re-render when it changes.
+  zoomRef?: React.MutableRefObject<number>;
   // Called with the PRE-edit snapshot right before a gesture/op is persisted, so
   // the parent can record an undo step. Absent in the read-only share view.
   onBeforeChange?: (before: BoardSnapshot) => void;
@@ -699,6 +706,7 @@ export function BoardCanvas({
     return { x: Math.round(c.x), y: Math.round(c.y) };
   }
   if (placementRef) placementRef.current = viewportCenter;
+  if (zoomRef) zoomRef.current = scale;
   // Persist a caption (HTML) onto an image / video card, preserving its fit.
   function saveMediaCaption(it: BoardItemView, html: string) {
     const text = serializeMediaMeta({ ...parseMediaMeta(it.text), caption: html });
@@ -714,6 +722,27 @@ export function BoardCanvas({
     const tool = e.dataTransfer.getData("application/x-board-tool");
     if (tool) {
       const { x, y } = canvasCoords(e.clientX, e.clientY);
+      // LAND THE CARD WHERE THE CURSOR IS, not half a card away from it.
+      //
+      // A card is positioned by its TOP-LEFT (`left: it.x, top: it.y`) while
+      // the drag image is held by its MIDDLE, so using the drop point directly
+      // put the card half its own size down and to the right of where you let
+      // go: 110px across and 80px down for a note. You aimed at a gap and the
+      // card landed next to it.
+      //
+      // The offset is applied in CANVAS units, which is what makes it exact at
+      // any zoom: canvasCoords has already divided out the scale, and a card's
+      // w/h are canvas units too. Doing it in screen pixels would be right at
+      // 100% and wrong everywhere else.
+      const kind = tool.startsWith("shape:") ? "shape" : tool;
+      if (isDroppableKind(kind)) {
+        const f = newItemFields(
+          kind,
+          tool.startsWith("shape:") ? tool.slice("shape:".length) : undefined,
+        );
+        onDropTool(tool, Math.round(x - f.w / 2), Math.round(y - f.h / 2));
+        return;
+      }
       onDropTool(tool, Math.round(x), Math.round(y));
       return;
     }
