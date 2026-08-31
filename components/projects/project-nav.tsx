@@ -95,9 +95,23 @@ const BANDS: Band[] = [
 export function ProjectNav({
   projectId,
   projectType,
+  bar = false,
 }: {
   projectId: string;
   projectType: string;
+  /**
+   * Render inside the app's topbar rather than in the page.
+   *
+   * The strip used to sit at the top of the page body, which put it about
+   * 100px down the screen with empty header above it, and pushed every project
+   * page down by its own height plus a margin. In the topbar it occupies space
+   * that was already blank, and every project page starts higher.
+   *
+   * Only the chrome differs: in the bar it fills the header's height and its
+   * active underline sits on the header's own bottom border, so it needs no
+   * border or margin of its own.
+   */
+  bar?: boolean;
 }) {
   const pathname = usePathname();
   const base = `/projects/${projectId}`;
@@ -149,8 +163,17 @@ export function ProjectNav({
   }, [open]);
 
   return (
-    <div ref={ref} className="relative mb-5 border-b border-border print:hidden">
-      <div className="flex items-center gap-1 overflow-x-auto pb-px">
+    <div
+      ref={ref}
+      className={`relative print:hidden ${
+        bar ? "min-w-0 flex-1" : "mb-5 border-b border-border"
+      }`}
+    >
+      <div
+        className={`flex items-center gap-1 overflow-x-auto ${
+          bar ? "h-14" : "pb-px"
+        }`}
+      >
         <div className="relative shrink-0">
           <Link
             href={base}
@@ -164,7 +187,11 @@ export function ProjectNav({
             Overview
           </Link>
           {seg === "" && (
-            <span className="absolute bottom-[-1px] left-3 right-3 h-0.5 rounded-full bg-accent" />
+            <span
+              className={`absolute left-3 right-3 h-0.5 rounded-full bg-accent ${
+                bar ? "bottom-0" : "bottom-[-1px]"
+              }`}
+            />
           )}
         </div>
 
@@ -198,7 +225,9 @@ export function ProjectNav({
               </button>
               {(isActive || isOpen) && (
                 <span
-                  className="absolute bottom-[-1px] left-3 right-3 h-0.5 rounded-full"
+                  className={`absolute left-3 right-3 h-0.5 rounded-full ${
+                    bar ? "bottom-0" : "bottom-[-1px]"
+                  }`}
                   style={{ backgroundColor: `var(--h-${b.hue})` }}
                 />
               )}

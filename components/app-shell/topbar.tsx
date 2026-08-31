@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
@@ -17,6 +18,7 @@ export function Topbar({
   assistant = false,
   studioName = "",
   logoUrl = null,
+  projectNav = null,
 }: {
   email: string | null;
   needsYouCount?: number;
@@ -29,6 +31,19 @@ export function Topbar({
   /** For the phone drawer's header, which is the sidebar's header. */
   studioName?: string;
   logoUrl?: string | null;
+  /**
+   * The project's phase-band nav, on a project route only.
+   *
+   * Built by the app layout (which already reads the path from the x-pathname
+   * header) rather than passed up from the page, for the same reason the invite
+   * button reads the URL: the topbar renders above every route, and threading
+   * an id down would mean every page remembering to pass one.
+   *
+   * Hidden below lg, where the header has no room next to the drawer, the
+   * brand and four utility buttons. The project layout still renders it in the
+   * page body at those widths, so nothing is lost on a phone.
+   */
+  projectNav?: ReactNode;
 }) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur print:hidden">
@@ -55,9 +70,17 @@ export function Topbar({
           </span>
         </Link>
 
-        <div className="flex-1" />
+        {/* Always a flex-1 spacer, so hiding the nav on a narrow screen cannot
+            slide the utility cluster left off the right edge. */}
+        <div className="flex min-w-0 flex-1">
+          {projectNav ? (
+            <div className="hidden min-w-0 flex-1 lg:flex short:!hidden">
+              {projectNav}
+            </div>
+          ) : null}
+        </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {/* Hidden from collaborators, who cannot invite anyone: the server
               actions refuse them, so a button here would only be a dead end. */}
           {!collaborator && <InviteButton />}
