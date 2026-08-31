@@ -2441,6 +2441,10 @@ function RailTool({
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => (id && children ? setOpen(isOpen ? null : id) : onClick?.())}
         aria-label={label}
+        /* Only the tools that OPEN a flyout are filmed, since the clip exists
+           to show the rail becoming the card's editor. See data-demo in
+           board-canvas. */
+        data-demo={id && children ? "card-tool" : undefined}
         aria-expanded={id ? isOpen : undefined}
         className={`group relative grid h-10 w-10 place-items-center rounded-[10px] transition ${
           danger
@@ -2540,6 +2544,9 @@ function RailBtn({
       onClick={press}
       disabled={disabled}
       aria-label={label}
+      /* See the note on data-demo in board-canvas: the demo recorder finds the
+         tools it films by attribute rather than by position in the rail. */
+      data-demo={`rail-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
       draggable={Boolean(dragKind)}
       onDragStart={
         dragKind

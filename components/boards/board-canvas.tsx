@@ -1986,6 +1986,10 @@ export function BoardCanvas({
               return (
                 <button
                   title="Drag to connect to another card"
+                  /* Anchored by attribute for scripts/capture-demos.mjs, the
+                     same reason the tour anchors on data-tour: a restyle must
+                     not silently break the recording. */
+                  data-demo="connect-anchor"
                   onPointerDown={(e) => startConnect(e, sel)}
                   onPointerMove={(e) => e.stopPropagation()}
                   onPointerEnter={() => setHovered(sel.id)}
