@@ -16,6 +16,14 @@ Recording needs ffmpeg on PATH, or `ffmpeg-static` in node_modules, or the
 `imageio-ffmpeg` python package. The script looks for all three and says which
 it found.
 
+The pointer in the clips is DRAWN, not recorded. Playwright records through
+Chromium's screencast API, which does not composite the operating system's
+cursor, so without this a clip shows cards moving with nothing driving them.
+The drawn one follows the real mouse by listening for the events Playwright's
+dispatches produce, so it cannot drift out of step with what the app is being
+told. `glide()` eases each move rather than using Playwright's linear
+interpolation, which starts and stops dead.
+
 Adding a clip: add an entry to `CLIPS` in `scripts/capture-demos.mjs` and give
 whatever it clicks a `data-demo` attribute in the component. Anchor on
 `data-demo`, never on a CSS class, so restyling cannot silently break a

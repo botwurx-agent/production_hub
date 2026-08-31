@@ -98,17 +98,131 @@ const FFMPEG = resolveFfmpeg();
  * The returned id is what the cleanup pass deletes, so a recording run leaves
  * the demo studio exactly as it found it.
  */
+/**
+ * THE CURSOR HAS TO BE DRAWN. Playwright records through Chromium's screencast
+ * API, which composites the page and NOT the operating system's pointer, so a
+ * recorded clip shows cards moving with nothing visibly driving them. Verified
+ * rather than assumed: a probe that moved across a page and clicked a button
+ * recorded the click landing and not a pointer in a single frame.
+ *
+ * So one is injected into the page. It FOLLOWS THE REAL MOUSE rather than
+ * being animated separately (it listens for the events Playwright's own
+ * dispatches produce), which means it cannot drift out of step with what the
+ * app is actually being told, and every gesture gets a pointer for free.
+ * `dragover` and `drag` are listened for alongside `mousemove` because native
+ * HTML5 drag-and-drop suppresses mousemove for the duration of a drag, and the
+ * rail's creation tools are exactly that.
+ *
+ * INJECTED TWICE ON PURPOSE, and the belt matters as much as the braces: as an
+ * init script so it survives a navigation, and again by hand afterwards
+ * because an init script only runs for a document the browser NAVIGATED to.
+ * The draw is idempotent, so running it twice costs nothing and running it
+ * zero times costs the whole clip.
+ *
+ * WORTH BEING CLEAR ABOUT WHAT THIS IS: every product demo of this kind has a
+ * cursor that lands dead centre on a button and never overshoots, which is
+ * what makes people ask whether the video is an animation. It is not. It is
+ * the real product in a real browser being driven by code, with a drawn
+ * pointer on top. Only the hand is synthetic; everything it touches is the
+ * running app.
+ */
+const CURSOR_JS = `(() => {
+  if (document.getElementById("__demo_cursor")) return;
+  if (!document.body) return;
+  const el = document.createElement("div");
+  el.id = "__demo_cursor";
+  const arrow =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' +
+    '<path d="M5 2.5 5 19.2 9.3 15.2 12 21.5 15 20.2 12.3 14 18.2 13.6Z" ' +
+    'fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+  el.style.cssText =
+    "position:fixed;left:0;top:0;width:22px;height:22px;z-index:2147483647;" +
+    "pointer-events:none;will-change:transform;transform:translate(-100px,-100px);" +
+    "background:no-repeat center/contain url('data:image/svg+xml;utf8," +
+    encodeURIComponent(arrow) + "')";
+  document.body.appendChild(el);
+
+  const ring = document.createElement("div");
+  ring.id = "__demo_ring";
+  ring.style.cssText =
+    "position:fixed;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;" +
+    "border-radius:999px;border:2px solid rgba(17,17,17,.55);z-index:2147483646;" +
+    "pointer-events:none;opacity:0;will-change:transform,opacity";
+  document.body.appendChild(ring);
+
+  let x = -100, y = -100;
+  const put = (e) => {
+    // A drag's final event reports 0,0; taking it would snap the pointer to
+    // the corner at the exact moment the card lands.
+    if (!e.clientX && !e.clientY) return;
+    x = e.clientX; y = e.clientY;
+    el.style.transform = "translate(" + x + "px," + y + "px)";
+    ring.style.transform = "translate(" + x + "px," + y + "px) scale(1)";
+  };
+  ["mousemove", "dragover", "pointermove", "drag"].forEach((t) =>
+    document.addEventListener(t, put, true));
+
+  // A press pulse, so a click reads as a click rather than as the page
+  // deciding to change on its own.
+  document.addEventListener("mousedown", () => {
+    ring.style.transition = "none";
+    ring.style.opacity = "0.9";
+    ring.style.transform = "translate(" + x + "px," + y + "px) scale(0.55)";
+    requestAnimationFrame(() => {
+      ring.style.transition = "transform .45s ease-out, opacity .45s ease-out";
+      ring.style.opacity = "0";
+      ring.style.transform = "translate(" + x + "px," + y + "px) scale(1.35)";
+    });
+  }, true);
+})()`;
+
+/** Register the cursor for every document this page loads from here on. */
+async function installCursor(page) {
+  await page.addInitScript({ content: CURSOR_JS });
+}
+
+/** Draw it right now, for the document already on screen. */
+async function drawCursor(page) {
+  await page.evaluate(CURSOR_JS);
+}
+
+/**
+ * Move the pointer there over `ms`, on an ease-in-out curve.
+ *
+ * Playwright's own `{ steps: n }` interpolates LINEARLY, which starts and stops
+ * dead and is the one thing that reads as a machine rather than as a hand. A
+ * cursor that accelerates away and settles into its target is the difference
+ * between a clip that looks made and one that looks logged.
+ */
+async function glide(page, x, y, ms = 700) {
+  const frames = Math.max(8, Math.round(ms / 16));
+  const from = glide.at ?? { x, y };
+  for (let i = 1; i <= frames; i++) {
+    const t = i / frames;
+    const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    await page.mouse.move(from.x + (x - from.x) * e, from.y + (y - from.y) * e);
+    await page.waitForTimeout(16);
+  }
+  glide.at = { x, y };
+}
+
+/** Centre of an element, for glide targets. */
+async function centreOf(locator) {
+  const b = await locator.boundingBox();
+  return b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null;
+}
+
 async function dragTool(page, tool, x, y) {
   const before = await itemIds(page);
   const el = page.locator(`[data-demo="rail-${tool}"]`).first();
   if (!(await el.count())) return null;
-  const b = await el.boundingBox();
-  if (!b) return null;
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-  await page.waitForTimeout(700);
+  const c = await centreOf(el);
+  if (!c) return null;
+  await glide(page, c.x, c.y, 800);
+  await page.waitForTimeout(500);
   await page.mouse.down();
-  await page.mouse.move(x, y, { steps: 45 });
-  await page.waitForTimeout(400);
+  await glide(page, x, y, 900);
+  await page.waitForTimeout(350);
   await page.mouse.up();
   await page.waitForTimeout(1400);
   const after = await itemIds(page);
@@ -197,12 +311,19 @@ const CLIPS = [
       // whole point is that the canvas does not move while it happens.
       const card = page.locator("[data-item-id]").first();
       if (!(await card.count())) return;
+      const b = await card.boundingBox();
+      if (!b) return;
+      await glide(page, b.x + 40, b.y + 40, 800);
+      await page.waitForTimeout(300);
       await card.click({ position: { x: 40, y: 40 } });
-      await page.waitForTimeout(1600);
+      await page.waitForTimeout(1400);
       const tool = page.locator('[data-demo="card-tool"]').first();
-      if (await tool.count()) {
+      const t = await centreOf(tool);
+      if (t) {
+        await glide(page, t.x, t.y, 700);
+        await page.waitForTimeout(300);
         await tool.click();
-        await page.waitForTimeout(2200);
+        await page.waitForTimeout(2000);
       }
     },
   },
@@ -227,11 +348,11 @@ const CLIPS = [
       if (!box || !(await anchor.count())) return;
       const a = await anchor.boundingBox();
       if (!a) return;
-      await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
-      await page.waitForTimeout(500);
+      await glide(page, a.x + a.width / 2, a.y + a.height / 2, 650);
+      await page.waitForTimeout(450);
       await page.mouse.down();
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 40 });
-      await page.waitForTimeout(400);
+      await glide(page, box.x + box.width / 2, box.y + box.height / 2, 850);
+      await page.waitForTimeout(350);
       await page.mouse.up();
       await page.waitForTimeout(2000);
     },
@@ -254,11 +375,11 @@ const CLIPS = [
       const from = await page.locator(`[data-item-id="${note}"]`).boundingBox();
       const to = await page.locator(`[data-column-id="${col}"]`).boundingBox();
       if (!from || !to) return;
-      await page.mouse.move(from.x + from.width / 2, from.y + 16);
+      await glide(page, from.x + from.width / 2, from.y + 16, 700);
       await page.waitForTimeout(400);
       await page.mouse.down();
-      await page.mouse.move(to.x + to.width / 2, to.y + to.height - 30, { steps: 45 });
-      await page.waitForTimeout(500);
+      await glide(page, to.x + to.width / 2, to.y + to.height - 30, 900);
+      await page.waitForTimeout(450);
       await page.mouse.up();
       await page.waitForTimeout(2200);
     },
@@ -275,11 +396,10 @@ const CLIPS = [
       // somewhere, and the board goes and gets them.
       const tool = page.locator('[data-demo="rail-project-assets"]').first();
       if (!(await tool.count())) return;
-      await page.mouse.move(760, 420);
-      const b = await tool.boundingBox();
-      if (!b) return;
-      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 25 });
-      await page.waitForTimeout(800);
+      const c = await centreOf(tool);
+      if (!c) return;
+      await glide(page, c.x, c.y, 900);
+      await page.waitForTimeout(700);
       await tool.click();
       await page.waitForTimeout(3000);
     },
@@ -319,8 +439,13 @@ for (const clip of CLIPS) {
     recordVideo: { dir: TMP, size: VIEW },
   });
   const page = await ctx.newPage();
+  await installCursor(page);
+  // Each clip starts its pointer from a neutral spot rather than wherever the
+  // last one left it, or its first move is a jump in from off-screen.
+  glide.at = { x: 900, y: 700 };
   await page.goto(BASE + clip.path, { waitUntil: "domcontentloaded" });
   await prime(page);
+  await drawCursor(page);
   await page.waitForTimeout(clip.settle);
 
   const before = clip.mutates === false ? [] : await itemIds(page);
