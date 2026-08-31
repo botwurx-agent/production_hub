@@ -115,6 +115,58 @@ Setup (one time):
 Slack user tokens do not expire, so there is no refresh step. Read/link and
 file import are layered in later slices.
 
+## Marketing screenshots and demo clips
+
+The marketing site's evidence is generated, never hand-taken, so it cannot
+drift away from the product. Two scripts, both driving the real demo studio in
+a real browser at the same 1503x852 viewport, so a still and a clip are
+interchangeable in a page section.
+
+One-time setup (Playwright is not a package dependency, since it is only ever
+run by hand):
+
+```
+npm i -g playwright        # or: npm i -D playwright
+npx playwright install chromium
+```
+
+The transcode to MP4 needs an ffmpeg. Any one of these is enough, and the
+script says which it found:
+
+```
+brew install ffmpeg        # or
+npm i -D ffmpeg-static     # or
+pip install imageio-ffmpeg
+```
+
+Then, with the dev server running against the real Supabase project:
+
+```
+npm run dev                             # terminal 1
+DEMO_PASSWORD=... npm run shots         # terminal 2, screenshots
+DEMO_PASSWORD=... npm run demos         # terminal 2, clips
+```
+
+- `DEMO_PASSWORD` is the demo studio's login. `BASE_URL` overrides the target
+  if you are not on the default dev port. `CHROMIUM_PATH` points at a browser
+  binary if Playwright's own is not where it expects. `FFMPEG` points at a
+  transcoder directly.
+- `shots` writes PNGs into `public/marketing/shots/`; `demos` writes a WebM, an
+  MP4 and a JPG poster per clip into `public/marketing/demos/`. Commit what
+  they produce.
+- A page renders a labelled placeholder naming any shot or clip that has not
+  been captured yet, so the site is designable before the media exists.
+- `demos` performs real interactions, so it WRITES to the demo studio. Every
+  card a clip creates is deleted afterwards by id. If a run dies halfway, check
+  the board it was recording before re-running.
+- Adding a clip: add an entry to `CLIPS` in `scripts/capture-demos.mjs`, and
+  give whatever it drives a `data-demo` attribute in the component. Anchor on
+  `data-demo`, never on a CSS class, or restyling will silently break the
+  recording.
+- Neither script can run inside a Claude Code session: the agent proxy denies
+  CONNECT to the Supabase host, so the dev server there cannot sign in at all
+  (it surfaces as a login error reading `Host not i... is not valid JSON`).
+
 ## Conventions
 
 - Token-first styling: never hardcode colors. Use the Tailwind tokens that map
