@@ -9,6 +9,8 @@ import { AutoPrint } from "@/components/production/auto-print";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { signedLogoUrl } from "@/lib/branding";
 import { ProductionCover } from "@/components/production/production-cover";
+import { DayDivider } from "@/components/production/day-divider";
+import { ShotTile } from "@/components/production/shot-tile";
 import type {
   ShotBoard,
   ShotGroup,
@@ -156,26 +158,19 @@ export default async function ShotBoardViewPage({
           // the days are doing the breaking.
           return (
             <section key={g.id} className={showDays ? undefined : "break-inside-avoid"}>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <span
-                    style={printExact}
-                    className="rounded-[8px] bg-text px-2.5 py-1 text-xs font-bold text-bg"
-                  >
-                    Shot {String(gi + 1).padStart(2, "0")}
-                  </span>
-                  <h2 className="font-display text-2xl font-extrabold tracking-tight text-text">
-                    {g.title || "Untitled shot"}
-                  </h2>
-                </div>
-                {g.subtitle?.trim() && (
-                  <span className="text-xs font-bold uppercase tracking-widest text-text-faint">
-                    {g.subtitle}
-                  </span>
-                )}
+              <div className="mb-2 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+                <h2 className="font-display text-3xl font-extrabold leading-tight tracking-tight text-text">
+                  {g.title || "Untitled shot list"}
+                </h2>
+                <span className="pb-1 text-[11px] font-bold uppercase tracking-widest text-text-faint">
+                  {g.subtitle?.trim() ? `${g.subtitle} · ` : ""}
+                  {groupCards.length} {groupCards.length === 1 ? "shot" : "shots"}
+                </span>
               </div>
               {g.description?.trim() && (
-                <p className="mb-4 max-w-3xl text-sm text-text-muted">{g.description}</p>
+                <p className="mb-4 max-w-3xl text-[15px] leading-relaxed text-text-muted">
+                  {g.description}
+                </p>
               )}
 
               {/* DAYS BREAK THE PAGE. A two-day shoot goes out as one document
@@ -185,109 +180,38 @@ export default async function ShotBoardViewPage({
                   section. Only when there IS a second day: a lone "Day 1"
                   banner on a one-day shoot is noise, and a page break before
                   it would be a blank sheet. */}
-              {dayGroups.map((d, di) => (
+              {dayGroups.map((d, di) => {
+              // The running number of the FIRST shot in this day, so a day's
+              // shots can be named even when nobody typed a code.
+              const dayStart = running + 1;
+              return (
               <div key={d.key} className={showDays && di > 0 ? "break-before-page pt-6" : ""}>
               {showDays && (
-                <div className="mb-3 flex items-center gap-3">
-                  <span
-                    style={printExact}
-                    className="rounded-[8px] bg-text px-2.5 py-1 text-xs font-bold text-bg"
-                  >
-                    {d.label}
-                  </span>
-                  <span className="text-xs font-bold uppercase tracking-widest text-text-faint">
-                    {d.shots.length} {d.shots.length === 1 ? "shot" : "shots"}
-                  </span>
-                  <span className="h-px flex-1 bg-border" />
+                <div className="mb-6">
+                  <DayDivider
+                    label={d.label}
+                    overline={overline || b?.location?.trim() || "Shoot schedule"}
+                    shots={d.shots.map((c, i) => ({ code: c.code, n: dayStart + i }))}
+                  />
                 </div>
               )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {d.shots.map((c) => {
                   running += 1;
                   return (
-                    <div
+                    <ShotTile
                       key={c.id}
-                      className="overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm"
-                    >
-                      <div
-                        className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-surface-2/60"
-                        style={printExact}
-                      >
-                        {c.signedUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={c.signedUrl} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="text-xs font-semibold text-text-faint">
-                            No image
-                          </span>
-                        )}
-                        {c.code?.trim() && (
-                          <span
-                            style={printExact}
-                            className="absolute left-2 top-2 rounded-[7px] bg-surface px-2 py-0.5 text-xs font-bold text-text"
-                          >
-                            {c.code}
-                          </span>
-                        )}
-                        {c.day?.trim() && (
-                          <span
-                            style={printExact}
-                            className="absolute right-2 top-2 rounded-pill bg-black/75 px-2 py-0.5 text-[11px] font-bold text-white"
-                          >
-                            {c.day}
-                          </span>
-                        )}
-                        <span
-                          style={printExact}
-                          className="absolute bottom-2 right-2 rounded-[7px] bg-black/75 px-1.5 py-0.5 text-[11px] font-bold text-white"
-                        >
-                          {String(running).padStart(2, "0")}
-                        </span>
-                      </div>
-                      <div className="space-y-2 p-3">
-                        {c.description?.trim() && (
-                          <p className="text-sm text-text">{c.description}</p>
-                        )}
-                        {(c.vo?.trim() || c.notes?.trim() || (Array.isArray(c.tags) && c.tags.length > 0)) && (
-                          <div className="border-t border-border pt-2">
-                            {c.vo?.trim() && (
-                              <p className="text-xs text-text-muted">
-                                <span className="font-bold uppercase tracking-wide text-text-faint">
-                                  VO / OST{" "}
-                                </span>
-                                {c.vo}
-                              </p>
-                            )}
-                            {c.notes?.trim() && (
-                              <p className="mt-1 text-xs text-text-muted">
-                                <span className="font-bold uppercase tracking-wide text-text-faint">
-                                  Notes{" "}
-                                </span>
-                                {c.notes}
-                              </p>
-                            )}
-                            {Array.isArray(c.tags) && c.tags.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {(c.tags as string[]).map((t, i) => (
-                                  <span
-                                    key={i}
-                                    style={printExact}
-                                    className="rounded-[6px] bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-text-muted"
-                                  >
-                                    {t}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                      shot={c}
+                      n={running}
+                      imageUrl={c.signedUrl}
+                      dayLabel={showDays ? d.label : null}
+                    />
                   );
                 })}
               </div>
               </div>
-              ))}
+              );
+              })}
             </section>
           );
         })}

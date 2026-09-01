@@ -182,17 +182,11 @@ export default async function StoryboardPresentPage({
               {/* Titled the way the shot list titles a list: a numbered chip
                   and a real heading, rather than a small bold line. */}
               {visibleBoards.length > 1 && (
-                <div className="mb-3 flex flex-wrap items-center gap-3">
-                  <span
-                    style={printExact}
-                    className="rounded-[8px] bg-text px-2.5 py-1 text-xs font-bold text-bg"
-                  >
-                    {String(bi + 1).padStart(2, "0")}
-                  </span>
-                  <h2 className="font-display text-2xl font-extrabold tracking-tight text-text">
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+                  <h2 className="font-display text-3xl font-extrabold leading-tight tracking-tight text-text">
                     {board.name?.trim() || "Storyboard"}
                   </h2>
-                  <span className="ml-auto text-xs font-bold uppercase tracking-widest text-text-faint">
+                  <span className="pb-1 text-[11px] font-bold uppercase tracking-widest text-text-faint">
                     {bframes.length} frame{bframes.length === 1 ? "" : "s"}
                   </span>
                 </div>
