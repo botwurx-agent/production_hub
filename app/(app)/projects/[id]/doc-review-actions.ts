@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeDrawing } from "@/lib/review-drawing";
 import { requireStudioContext } from "@/lib/studio";
+import { loadMentionRoster } from "@/lib/mention-roster";
+import { deliverMentions } from "@/lib/mention-notify";
+import { mentionAuthorName, mentionSubjectForDoc } from "@/lib/mention-context";
 import { isDocKind, type DocKind } from "@/lib/review-links";
 import {
   loadDocReviewDetail,
@@ -140,7 +143,10 @@ export async function addDocReviewCommentAt(
   parentId?: string | null,
   drawing?: unknown,
   // Out-point for a range comment; timecode is the in-point.
-  timecodeEnd?: number | null
+  timecodeEnd?: number | null,
+  // Roster contact ids the author picked, validated server-side against this
+  // project's own roster.
+  mentions?: string[]
 ): Promise<DocReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -195,7 +201,7 @@ export async function addDocReviewCommentAt(
     pinNumber = ((lastPin?.pin_number as number | null) ?? 0) + 1;
   }
 
-  const { error } = await supabase.from("review_comments").insert({
+  const { data: inserted, error } = await supabase.from("review_comments").insert({
     studio_id: ctx.studio.id,
     author_id: ctx.userId,
     body: text,
@@ -208,8 +214,27 @@ export async function addDocReviewCommentAt(
     timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
-  });
+  })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  // After the comment is safely stored, and never able to fail it.
+  if (inserted && mentions?.length) {
+    const roster = await loadMentionRoster(projectId);
+    const subject = await mentionSubjectForDoc(supabase, projectId, kind);
+    await deliverMentions(supabase, inserted.id, mentions, roster, {
+      authorName: await mentionAuthorName(supabase, projectId, ctx.userId),
+      projectId,
+      projectTitle: subject.projectTitle,
+      studioId: ctx.studio.id,
+      studioName: ctx.studio.name,
+      subject: subject.label,
+      href: `/projects/${projectId}/review`,
+      body: text,
+    });
+  }
+
   revalidatePath(`/projects/${projectId}/review`);
   return null;
 }

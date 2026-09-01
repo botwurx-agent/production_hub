@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { loadProjectAssets } from "@/lib/project-data";
 import { CutReviewView } from "@/components/review/cut-review-view";
+import { MentionRosterProvider } from "@/components/review/mention-roster";
+import { loadMentionRoster } from "@/lib/mention-roster";
 
 // Full-page internal review of a single master-cut version.
 export default async function CutReviewPage({
@@ -32,15 +34,18 @@ export default async function CutReviewPage({
 
   const link = reviewLinkByAsset.get(cut.id) ?? null;
 
+  const roster = await loadMentionRoster(project.id);
   return (
-    <CutReviewView
-      projectId={project.id}
-      projectTitle={project.title}
-      cut={cut}
-      activeVersionId={version.id}
-      reviewToken={link?.token ?? null}
-      reviewLinkId={link?.id ?? null}
-      currentUserId={ctx.userId}
-    />
+    <MentionRosterProvider roster={roster}>
+      <CutReviewView
+        projectId={project.id}
+        projectTitle={project.title}
+        cut={cut}
+        activeVersionId={version.id}
+        reviewToken={link?.token ?? null}
+        reviewLinkId={link?.id ?? null}
+        currentUserId={ctx.userId}
+      />
+    </MentionRosterProvider>
   );
 }

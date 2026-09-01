@@ -7,6 +7,9 @@ import { REACTIONS } from "@/lib/review-reactions";
 import { reportError, logWrite } from "@/lib/log";
 import { requireStudioContext } from "@/lib/studio";
 import { syncAssetStatusFromApprovals } from "@/lib/review-status";
+import { loadMentionRoster } from "@/lib/mention-roster";
+import { deliverMentions } from "@/lib/mention-notify";
+import { mentionAuthorName, mentionSubjectForVersion } from "@/lib/mention-context";
 import type { ApprovalStatus } from "@/lib/database.types";
 
 export type ReviewState = { error?: string } | null;
@@ -23,7 +26,7 @@ export async function addReviewComment(
   if (!body) return { error: "Write a comment first." };
 
   const supabase = createClient();
-  const { error } = await supabase.from("review_comments").insert({
+  const { data: inserted, error } = await supabase.from("review_comments").insert({
     studio_id: ctx.studio.id,
     version_id: versionId,
     author_id: ctx.userId,
@@ -50,7 +53,11 @@ export async function addReviewCommentAt(
   // Out-point for a range comment; timecode is the in-point.
   timecodeEnd?: number | null,
   // For a PDF, which page the pin was dropped on.
-  pinPage?: number | null
+  pinPage?: number | null,
+  // Roster contact ids the author picked. Validated server-side against the
+  // project's own roster, so an id from the browser can only ever name someone
+  // already on this job.
+  mentions?: string[]
 ): Promise<ReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -103,7 +110,7 @@ export async function addReviewCommentAt(
     pinNumber = ((lastPin?.pin_number as number | null) ?? 0) + 1;
   }
 
-  const { error } = await supabase.from("review_comments").insert({
+  const { data: inserted, error } = await supabase.from("review_comments").insert({
     studio_id: ctx.studio.id,
     version_id: versionId,
     author_id: ctx.userId,
@@ -119,8 +126,28 @@ export async function addReviewCommentAt(
     timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
-  });
+  })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
+
+  // Mentions are delivered AFTER the comment is safely stored, and never fail
+  // it: the note existing is what matters most, and a mail outage must not turn
+  // a posted comment into an error the author has to retype.
+  if (inserted && mentions?.length) {
+    const roster = await loadMentionRoster(projectId);
+    const subject = await mentionSubjectForVersion(supabase, versionId);
+    await deliverMentions(supabase, inserted.id, mentions, roster, {
+      authorName: await mentionAuthorName(supabase, projectId, ctx.userId),
+      projectId,
+      projectTitle: subject.projectTitle,
+      studioId: ctx.studio.id,
+      studioName: ctx.studio.name,
+      subject: subject.label,
+      href: `/projects/${projectId}/review`,
+      body: text,
+    });
+  }
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/assets`);

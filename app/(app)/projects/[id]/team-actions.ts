@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { linkContactToUser } from "@/lib/link-contact";
 import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
@@ -180,6 +181,14 @@ export async function acceptProjectInvite(): Promise<{
     .order("created_at", { ascending: false })
     .limit(1);
 
+  // The producer has usually already put this person on the crew list, and the
+  // invite went to the same address, so join the two now: it is what lets a
+  // mention reach their bell and lets their real name lead their own comments.
+  const projectId = data?.[0]?.project_id;
+  if (projectId) {
+    await linkContactToUser(supabase, projectId, user.id, user.email);
+  }
+
   revalidatePath("/", "layout");
-  return { projectId: data?.[0]?.project_id };
+  return { projectId };
 }

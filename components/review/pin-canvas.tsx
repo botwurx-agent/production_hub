@@ -5,6 +5,9 @@ import { timeAgo } from "@/lib/format";
 import { DrawCanvas } from "@/components/review/draw-canvas";
 import { DrawToolbar } from "@/components/review/draw-toolbar";
 import { EmojiPicker } from "@/components/review/emoji-picker";
+import { MentionPicker, MentionChips } from "@/components/review/mention-picker";
+import { useMentionRoster } from "@/components/review/mention-roster";
+import { mentionText, type MentionCandidate } from "@/lib/mentions";
 import { DRAW_COLORS, type Drawing, type DrawTool } from "@/lib/review-drawing";
 import type { PortalComment } from "@/lib/review-links";
 import { useModalRoomy } from "@/components/ui/modal";
@@ -40,7 +43,9 @@ export function PinCanvas({
   onPost: (
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null }
+    // `extra` is the extension point: a caller that does not care about
+    // drawings or mentions simply ignores it.
+    extra?: { drawing?: Drawing | null; mentions?: string[] }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
@@ -57,6 +62,10 @@ export function PinCanvas({
   const [tool, setTool] = useState<DrawTool>("arrow");
   const [color, setColor] = useState(DRAW_COLORS[0]);
   const [redo, setRedo] = useState<Drawing["strokes"]>([]);
+  // Who this comment will notify. Held as the whole candidate rather than an
+  // id so the chips can name people without a second lookup.
+  const roster = useMentionRoster();
+  const [picked, setPicked] = useState<MentionCandidate[]>([]);
 
   const pins = comments.filter(
     (c) => !c.resolved && c.x != null && c.y != null && c.pinNumber != null
@@ -82,7 +91,10 @@ export function PinCanvas({
     const t = text.trim();
     if (!t || sending || disabled) return;
     setSending(true);
-    const ok = await onPost(t, pending, { drawing: draft });
+    const ok = await onPost(t, pending, {
+      drawing: draft,
+      mentions: picked.map((p) => p.id),
+    });
     setSending(false);
     if (ok) {
       setText("");
@@ -90,6 +102,7 @@ export function PinCanvas({
       setDraft(null);
       setRedo([]);
       setDrawMode(false);
+      setPicked([]);
     }
   }
 
@@ -108,20 +121,25 @@ export function PinCanvas({
       d ? { ...d, strokes: [...d.strokes, next] } : { w: 16, h: 9, strokes: [next] }
     );
   }
-  function insertEmoji(e: string) {
+  function addMention(c: MentionCandidate) {
+    setPicked((prev) => (prev.some((p) => p.id === c.id) ? prev : [...prev, c]));
+    insertAtCaret(`${mentionText(c)} `);
+  }
+  function insertAtCaret(s: string) {
     const el = textRef.current;
     if (!el) {
-      setText((t) => t + e);
+      setText((t) => t + s);
       return;
     }
     const start = el.selectionStart ?? text.length;
     const end = el.selectionEnd ?? text.length;
-    setText(text.slice(0, start) + e + text.slice(end));
+    setText(text.slice(0, start) + s + text.slice(end));
     requestAnimationFrame(() => {
       el.focus();
-      el.setSelectionRange(start + e.length, start + e.length);
+      el.setSelectionRange(start + s.length, start + s.length);
     });
   }
+  const insertEmoji = insertAtCaret;
 
   const activeComment = comments.find((c) => c.id === activeId) ?? null;
   const shownDrawing = drawMode ? draft : (activeComment?.drawing ?? null);
@@ -381,6 +399,7 @@ export function PinCanvas({
               {draft ? "Drawing" : "Draw"}
             </button>
             <EmojiPicker onPick={insertEmoji} />
+            <MentionPicker roster={roster} onPick={addMention} disabled={disabled} />
             {pending && (
               <button
                 onClick={() => setPending(null)}
@@ -398,6 +417,14 @@ export function PinCanvas({
               {sending ? "Posting…" : "Post"}
             </button>
           </div>
+          {picked.length > 0 && (
+            <div className="mt-2">
+              <MentionChips
+                picked={picked}
+                onRemove={(id) => setPicked((p) => p.filter((x) => x.id !== id))}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

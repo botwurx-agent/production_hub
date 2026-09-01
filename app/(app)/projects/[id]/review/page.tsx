@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { MentionRosterProvider } from "@/components/review/mention-roster";
+import { loadMentionRoster } from "@/lib/mention-roster";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
@@ -50,7 +52,9 @@ export default async function ReviewPage({
     SECTIONS.some((s) => s.status === a.status)
   );
 
+  const roster = await loadMentionRoster(project.id);
   return (
+    <MentionRosterProvider roster={roster}>
     <div>
       <ProjectSubhead
         projectId={project.id}
@@ -137,5 +141,6 @@ export default async function ReviewPage({
         </div>
       )}
     </div>
+    </MentionRosterProvider>
   );
 }

@@ -9,6 +9,12 @@ export type NewNotification = {
   title: string;
   body?: string | null;
   href?: string | null;
+  /**
+   * Who it is for (migration 0102). Omit for the studio-wide broadcast every
+   * notification was before mentions existed, which is what every existing
+   * caller still wants.
+   */
+  user_id?: string | null;
 };
 
 // Inserts a notification. Client-agnostic so it works from the authenticated
@@ -24,5 +30,6 @@ export async function createNotification(
     title: n.title,
     body: n.body ?? null,
     href: n.href ?? null,
+    user_id: n.user_id ?? null,
   });
 }

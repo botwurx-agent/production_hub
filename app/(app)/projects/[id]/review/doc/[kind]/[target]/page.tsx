@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { loadDocReviewDetail } from "@/lib/doc-review-data";
 import { DocReviewView } from "@/components/review/doc-review-view";
+import { MentionRosterProvider } from "@/components/review/mention-roster";
+import { loadMentionRoster } from "@/lib/mention-roster";
 
 type DocKind = "shot_list" | "storyboard" | "moodboard";
 const KINDS: DocKind[] = ["shot_list", "storyboard", "moodboard"];
@@ -48,15 +50,18 @@ export default async function DocReviewPage({
   if (!detail) notFound();
 
   const back = BACK[kind];
+  const roster = await loadMentionRoster(project.id);
   return (
-    <DocReviewView
-      projectId={project.id}
-      projectTitle={project.title}
-      kind={kind}
-      targetId={params.target}
-      backHref={`/projects/${project.id}/${back.path}`}
-      backLabel={back.label}
-      initialDetail={detail}
-    />
+    <MentionRosterProvider roster={roster}>
+      <DocReviewView
+        projectId={project.id}
+        projectTitle={project.title}
+        kind={kind}
+        targetId={params.target}
+        backHref={`/projects/${project.id}/${back.path}`}
+        backLabel={back.label}
+        initialDetail={detail}
+      />
+    </MentionRosterProvider>
   );
 }

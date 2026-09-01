@@ -119,7 +119,7 @@ export function ReviewModal({
   async function postPinned(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; page?: number }
+    extra?: { drawing?: Drawing | null; page?: number; mentions?: string[] }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
       projectId,
@@ -130,7 +130,8 @@ export function ReviewModal({
       null,
       extra?.drawing ?? null,
       null,
-      extra?.page ?? null
+      extra?.page ?? null,
+      extra?.mentions
     );
     if (res?.error) return false;
     router.refresh();
@@ -143,6 +144,7 @@ export function ReviewModal({
       parentId?: string | null;
       drawing?: Drawing | null;
       timecodeEnd?: number | null;
+      mentions?: string[];
     }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
@@ -153,7 +155,9 @@ export function ReviewModal({
       timecode,
       extra?.parentId ?? null,
       extra?.drawing ?? null,
-      extra?.timecodeEnd ?? null
+      extra?.timecodeEnd ?? null,
+      null,
+      extra?.mentions
     );
     if (res?.error) return false;
     router.refresh();

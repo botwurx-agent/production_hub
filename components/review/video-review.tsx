@@ -13,6 +13,9 @@ import {
   type DrawTool,
 } from "@/lib/review-drawing";
 import { EmojiPicker } from "@/components/review/emoji-picker";
+import { MentionPicker, MentionChips } from "@/components/review/mention-picker";
+import { useMentionRoster } from "@/components/review/mention-roster";
+import { mentionText, type MentionCandidate } from "@/lib/mentions";
 import { DrawToolbar } from "@/components/review/draw-toolbar";
 import { CommentReactions } from "@/components/review/comment-reactions";
 import type { PortalComment } from "@/lib/review-links";
@@ -70,6 +73,7 @@ export function VideoReview({
       parentId?: string | null;
       drawing?: Drawing | null;
       timecodeEnd?: number | null;
+      mentions?: string[];
     }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
@@ -105,6 +109,10 @@ export function VideoReview({
   // a comment is selected.
   const [drawMode, setDrawMode] = useState(false);
   const [draft, setDraft] = useState<Drawing | null>(null);
+  // Who this comment will notify. Empty on the public portal, which mounts no
+  // roster provider, so a client is never shown the crew list.
+  const roster = useMentionRoster();
+  const [picked, setPicked] = useState<MentionCandidate[]>([]);
   const [color, setColor] = useState(DRAW_COLORS[0]);
   const [tool, setTool] = useState<DrawTool>("pen");
   // Strokes popped by Undo, so Redo can put them back.
@@ -234,6 +242,7 @@ export function VideoReview({
     const ok = await onPost(t, at, {
       drawing: draft,
       timecodeEnd: pendingEnd != null && pendingEnd > at ? pendingEnd : null,
+      mentions: picked.map((p) => p.id),
     });
     setSending(false);
     if (ok) {
@@ -242,6 +251,7 @@ export function VideoReview({
       setPendingEnd(null);
       setDraft(null);
       setDrawMode(false);
+      setPicked([]);
     }
   }
 
@@ -267,6 +277,10 @@ export function VideoReview({
   }
   function insertEmoji(e: string) {
     insertAtCaret(textRef.current, text, e, setText);
+  }
+  function addMention(c: MentionCandidate) {
+    setPicked((prev) => (prev.some((p) => p.id === c.id) ? prev : [...prev, c]));
+    insertAtCaret(textRef.current, text, `${mentionText(c)} `, setText);
   }
   function insertReplyEmoji(e: string) {
     insertAtCaret(replyRef.current, replyText, e, setReplyText);
@@ -923,6 +937,7 @@ export function VideoReview({
             </button>
 
             <EmojiPicker onPick={insertEmoji} />
+            <MentionPicker roster={roster} onPick={addMention} disabled={disabled} />
 
             <span className="flex-1" />
 
@@ -934,6 +949,14 @@ export function VideoReview({
               {sending ? "Posting…" : "Post"}
             </button>
           </div>
+          {picked.length > 0 && (
+            <div className="mt-2">
+              <MentionChips
+                picked={picked}
+                onRemove={(id) => setPicked((p) => p.filter((x) => x.id !== id))}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

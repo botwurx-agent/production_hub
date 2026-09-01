@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { loadDocReviewDetail } from "@/lib/doc-review-data";
 import { ShotReviewView } from "@/components/review/shot-review-view";
+import { MentionRosterProvider } from "@/components/review/mention-roster";
+import { loadMentionRoster } from "@/lib/mention-roster";
 
 // Full-page internal review of a single AI pipeline shot.
 export default async function ShotReviewPage({
@@ -37,12 +39,15 @@ export default async function ShotReviewPage({
   );
   if (!detail) notFound();
 
+  const roster = await loadMentionRoster(project.id);
   return (
-    <ShotReviewView
-      projectId={project.id}
-      projectTitle={project.title}
-      shotId={params.shotId}
-      initialDetail={detail}
-    />
+    <MentionRosterProvider roster={roster}>
+      <ShotReviewView
+        projectId={project.id}
+        projectTitle={project.title}
+        shotId={params.shotId}
+        initialDetail={detail}
+      />
+    </MentionRosterProvider>
   );
 }

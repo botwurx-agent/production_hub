@@ -14,6 +14,8 @@ export type ShotAnchor = {
   parentId?: string | null;
   drawing?: Drawing | null;
   timecodeEnd?: number | null;
+  /** Roster contacts the author chose to notify. */
+  mentions?: string[];
 };
 
 // Review canvas for an AI pipeline shot. If the shot has a playable take video,
@@ -56,6 +58,7 @@ export function AiShotReviewCanvas({
               parentId: extra?.parentId ?? null,
               drawing: extra?.drawing ?? null,
               timecodeEnd: extra?.timecodeEnd ?? null,
+              mentions: extra?.mentions,
             })
           }
           onResolve={onResolve}
@@ -76,7 +79,11 @@ export function AiShotReviewCanvas({
       wide={wide}
       emptyHint="Click a frame to drop a pin and start."
       onPost={(text, pin, extra) =>
-          onPost(text, { pin, drawing: extra?.drawing ?? null })
+          onPost(text, {
+            pin,
+            drawing: extra?.drawing ?? null,
+            mentions: extra?.mentions,
+          })
         }
       onResolve={onResolve}
     />

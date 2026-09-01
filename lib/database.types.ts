@@ -1976,6 +1976,8 @@ export type Database = {
           title: string;
           body: string | null;
           href: string | null;
+          // Who this is for. Null = the studio-wide broadcast it always was.
+          user_id: string | null;
           read_at: string | null;
           created_at: string;
         };
@@ -1987,6 +1989,7 @@ export type Database = {
           title: string;
           body?: string | null;
           href?: string | null;
+          user_id?: string | null;
           read_at?: string | null;
           created_at?: string;
         };
@@ -1998,7 +2001,35 @@ export type Database = {
           title?: string;
           body?: string | null;
           href?: string | null;
+          user_id?: string | null;
           read_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      comment_mentions: {
+        Row: {
+          id: string;
+          studio_id: string;
+          comment_id: string;
+          contact_id: string;
+          notified_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          comment_id: string;
+          contact_id: string;
+          notified_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          comment_id?: string;
+          contact_id?: string;
+          notified_at?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -3378,6 +3409,7 @@ export type Database = {
           name: string;
           phone: string | null;
           role: string | null;
+          user_id: string | null;
           studio_id: string;
           updated_at: string;
         };
@@ -3394,6 +3426,7 @@ export type Database = {
           name: string;
           phone?: string | null;
           role?: string | null;
+          user_id?: string | null;
           studio_id: string;
           updated_at?: string;
         };
@@ -3410,6 +3443,7 @@ export type Database = {
           name?: string;
           phone?: string | null;
           role?: string | null;
+          user_id?: string | null;
           studio_id?: string;
           updated_at?: string;
         };

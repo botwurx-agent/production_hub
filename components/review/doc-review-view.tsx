@@ -63,7 +63,7 @@ export function DocReviewView({
   async function post(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null }
+    extra?: { drawing?: Drawing | null; mentions?: string[] }
   ): Promise<boolean> {
     const res = await addDocReviewCommentAt(
       projectId,
@@ -73,7 +73,9 @@ export function DocReviewView({
       pin,
       null,
       null,
-      extra?.drawing ?? null
+      extra?.drawing ?? null,
+      null,
+      extra?.mentions
     );
     if (res?.error) return false;
     await reload();

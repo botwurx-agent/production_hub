@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { MentionRosterProvider } from "@/components/review/mention-roster";
+import { loadMentionRoster } from "@/lib/mention-roster";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { Card, EmptyState } from "@/components/ui/card";
@@ -51,7 +53,9 @@ export default async function AssetsPage({
       a.versions.reduce((m, v) => Math.max(m, v.version_number), 0) + 1,
   }));
 
+  const roster = await loadMentionRoster(project.id);
   return (
+    <MentionRosterProvider roster={roster}>
     <div>
       <ProjectSubhead
         projectId={project.id}
@@ -133,5 +137,6 @@ export default async function AssetsPage({
         </AssetsDropzone>
       </Card>
     </div>
+    </MentionRosterProvider>
   );
 }
