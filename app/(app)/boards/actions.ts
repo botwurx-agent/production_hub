@@ -1280,25 +1280,109 @@ export async function deleteItem(id: string): Promise<void> {
 }
 
 // Projects + their assets, for the "add from project assets" picker.
-export async function getProjectAssetsForBoard(): Promise<{
-  projects: {
-    id: string;
-    title: string;
-    assets: { id: string; name: string }[];
-  }[];
+export type PickableAsset = {
+  id: string;
+  name: string;
+  type: string | null;
+  /** A resized preview, when the asset has one. */
+  thumbUrl: string | null;
+};
+
+/**
+ * The assets a board can pull in.
+ *
+ * SCOPED TO THE BOARD'S PROJECT. This used to take no arguments at all and
+ * select every project in the studio, so a moodboard that belongs to one job
+ * offered the assets of every other job: not just noise, but a real way to put
+ * another client's frame on this client's board. A board that belongs to a
+ * project offers that project's library and nothing else.
+ *
+ * A STUDIO-WIDE BOARD (the ones under /boards, with no project) keeps the full
+ * list grouped by project, because there is no job to scope it to and pulling
+ * across projects is the point of a scratch board.
+ *
+ * Returns a THUMBNAIL per asset, which the old shape could not: it returned
+ * `{id, name}` only, so the picker could only draw a list of filenames, and
+ * choosing a reference by its filename is not choosing it by eye. Resized
+ * copies, not originals, so opening the picker does not pull a folder of
+ * 30MB generator exports.
+ */
+export async function getProjectAssetsForBoard(boardId?: string): Promise<{
+  projects: { id: string; title: string; assets: PickableAsset[] }[];
+  /** Set when the board belongs to a project, for the picker's heading. */
+  scopedTo: string | null;
 }> {
   await requireStudioContext();
   const supabase = createClient();
-  const { data } = await supabase
+
+  let projectId: string | null = null;
+  if (boardId) {
+    const { data: board } = await supabase
+      .from("boards")
+      .select("project_id")
+      .eq("id", boardId)
+      .maybeSingle();
+    projectId = board?.project_id ?? null;
+  }
+
+  let q = supabase
     .from("projects")
-    .select("id, title, assets(id, name, current_version_id)")
+    .select(
+      "id, title, assets(id, name, type, current_version_id, versions:versions!versions_asset_id_fkey(id, storage_path, poster_path, mime_type))"
+    )
     .order("created_at", { ascending: false });
-  const projects = (data ?? []).map((p) => ({
+  if (projectId) q = q.eq("id", projectId);
+  const { data } = await q;
+
+  type V = {
+    id: string;
+    storage_path: string | null;
+    poster_path: string | null;
+    mime_type: string | null;
+  };
+  type A = {
+    id: string;
+    name: string;
+    type: string | null;
+    current_version_id: string | null;
+    versions: V[] | null;
+  };
+
+  // One signing pass for the whole picker rather than per asset. A PDF has no
+  // still of its own but may carry a rendered first page (versions.poster_path,
+  // migration 0087), so a folder of boards and treatments looks like the
+  // documents it holds rather than a row of identical glyphs.
+  const rows = (data ?? []) as unknown as { id: string; title: string; assets: A[] | null }[];
+  const paths: string[] = [];
+  for (const p of rows) {
+    for (const a of p.assets ?? []) {
+      const v = (a.versions ?? []).find((x) => x.id === a.current_version_id);
+      if (!v) continue;
+      if (v.poster_path) paths.push(v.poster_path);
+      else if (v.storage_path && isResizable(v.mime_type)) paths.push(v.storage_path);
+    }
+  }
+  const thumbs = await signThumbs(paths);
+
+  const projects = rows.map((p) => ({
     id: p.id,
     title: p.title,
-    assets: ((p.assets as { id: string; name: string; current_version_id: string | null }[]) ?? [])
+    assets: (p.assets ?? [])
       .filter((a) => a.current_version_id)
-      .map((a) => ({ id: a.id, name: a.name })),
+      .map((a) => {
+        const v = (a.versions ?? []).find((x) => x.id === a.current_version_id);
+        const key = v?.poster_path ?? (v?.storage_path ?? null);
+        return {
+          id: a.id,
+          name: a.name,
+          type: a.type ?? null,
+          thumbUrl: key ? (thumbs.get(key) ?? null) : null,
+        };
+      }),
   }));
-  return { projects };
+
+  return {
+    projects,
+    scopedTo: projectId ? (rows[0]?.title ?? null) : null,
+  };
 }
