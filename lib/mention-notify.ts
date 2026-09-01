@@ -6,7 +6,7 @@ import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
 import { siteOrigin } from "@/lib/site-url";
 import { reportError } from "@/lib/log";
-import { validMentionIds, type MentionCandidate } from "@/lib/mentions";
+import { validMentionIds, cleanEmail, type MentionCandidate } from "@/lib/mentions";
 
 /**
  * Delivering a mention.
@@ -102,7 +102,8 @@ export async function deliverMentions(
     // By email, for everyone with an address. Sent even to someone who also has
     // an account: a mention is a request for action, and a bell they may not
     // look at today is not delivery.
-    if (person.email?.trim() && emailConfigured()) {
+    const addr = cleanEmail(person.email);
+    if (addr && emailConfigured()) {
       const mail = renderEmail({
         heading: `${ctx.authorName} mentioned you on ${ctx.projectTitle}`,
         lines: [`On ${ctx.subject}:`, ctx.body],
@@ -111,7 +112,7 @@ export async function deliverMentions(
         footnote: `Sent by ${ctx.studioName} from Studio Flows because you are on the ${ctx.projectTitle} crew list.`,
       });
       const res = await sendEmail({
-        to: person.email.trim(),
+        to: addr,
         subject: `${ctx.authorName} mentioned you on ${ctx.projectTitle}`,
         html: mail.html,
         text: mail.text,

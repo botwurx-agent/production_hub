@@ -7,6 +7,7 @@ import {
   matchMentions,
   mentionSubtitle,
   mentionText,
+  reachOf,
   type MentionCandidate,
 } from "@/lib/mentions";
 import { CATEGORY_HUE } from "@/lib/crew-positions";
@@ -106,7 +107,9 @@ export function MentionPicker({
                         Someone with no account and no email cannot be told at
                         all, and finding that out after posting is too late. */}
                     <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wide text-text-faint">
-                      {c.userId ? "In app" : c.email ? "Email" : "No contact"}
+                      {{ app: "In app", email: "Email", none: "No contact" }[
+                        reachOf(c)
+                      ]}
                     </span>
                   </button>
                 );

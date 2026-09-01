@@ -191,3 +191,35 @@ export function validMentionIds(
   }
   return out;
 }
+
+/**
+ * The address to actually send to, or null if there isn't a usable one.
+ *
+ * PASTED ADDRESSES ARRIVE DRESSED. A real roster on a real job had
+ * "amymelissataylor@gmail.com>" in it, a leftover from copying "Name <addr>"
+ * out of a mail client, and that would have bounced silently: the mention would
+ * look sent, the stylist would never hear about it, and the feature would look
+ * broken rather than the data. So the angle-bracket form is unwrapped, stray
+ * brackets and whitespace are stripped, and anything that still does not look
+ * like an address is treated as no address at all, which the picker then says
+ * out loud rather than promising a delivery it cannot make.
+ *
+ * Deliberately a shallow check, not RFC validation: the job here is to catch
+ * the copy-paste debris that actually occurs, not to adjudicate exotic but
+ * legal addresses.
+ */
+export function cleanEmail(raw: string | null | undefined): string | null {
+  const t = (raw ?? "").trim();
+  if (!t) return null;
+  // "Amy Taylor <amy@example.com>" keeps only what is inside the brackets.
+  const angled = t.match(/<([^>]+)>/);
+  const candidate = (angled ? angled[1] : t).replace(/[<>\s]/g, "");
+  if (!/^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$/.test(candidate)) return null;
+  return candidate;
+}
+
+/** Whether this person can be reached at all, and how. */
+export function reachOf(c: MentionCandidate): "app" | "email" | "none" {
+  if (c.userId) return "app";
+  return cleanEmail(c.email) ? "email" : "none";
+}
