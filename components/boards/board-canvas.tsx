@@ -100,6 +100,13 @@ type DragRef = {
   id: string;
   kind: string;
   mode: "move" | "resize";
+  /**
+   * The OTHER cards moving with this one, when a marquee selection is dragged.
+   * Empty for an ordinary single-card drag, and the code path is identical in
+   * that case: the primary card is clamped exactly as before and the others
+   * follow its ACTUAL delta, so a group cannot drift apart at the canvas edge.
+   */
+  others?: { id: string; x: number; y: number }[];
   corner?: ResizeCorner;
   startX: number;
   startY: number;
@@ -233,6 +240,37 @@ export function BoardCanvas({
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
   const [connCursor, setConnCursor] = useState<{ x: number; y: number } | null>(null);
   const [selectedConn, setSelectedConn] = useState<string | null>(null);
+  /**
+   * MARQUEE SELECTION. Press on empty canvas and drag: a box appears and every
+   * card it touches is selected as a group, which is how you delete or move
+   * fifteen references without fifteen clicks.
+   *
+   * `multi` is canvas-local rather than lifted to the workspace because the
+   * workspace's single `selected` drives the contextual rail, and a rail
+   * showing one card's editor makes no sense for a group. The two are kept
+   * mutually exclusive: selecting a card clears the group, and the marquee
+   * clears the single selection.
+   */
+  const [multi, setMulti] = useState<Set<string>>(new Set());
+  const [marquee, setMarquee] = useState<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  } | null>(null);
+  const marqueeRef = useRef<{ x0: number; y0: number } | null>(null);
+  /**
+   * Every selectable card's box in CANVAS coords, measured ONCE when the
+   * marquee starts. Read from the DOM rather than from x/y/w/h because a
+   * column's rendered height flows from its children and its stored `h` is
+   * not what you see, so arithmetic alone would miss a tall column the box
+   * clearly crosses. Cards cannot move while a marquee is being drawn, so one
+   * layout pass at the start is enough: measuring per frame would be the same
+   * O(items) forced layout the hover code was rewritten to avoid.
+   */
+  const marqueeBoxes = useRef<
+    { id: string; x: number; y: number; w: number; h: number }[]
+  >([]);
   const [hovered, setHovered] = useState<string | null>(null);
   const drag = useRef<DragRef>(null);
   const lineDrag = useRef<{
@@ -275,13 +313,28 @@ export function BoardCanvas({
       const d = drag.current;
       if (!d) return;
       const s = scaleRef.current;
-      const dx = (e.clientX - d.startX) / s;
-      const dy = (e.clientY - d.startY) / s;
+      const rawX = (e.clientX - d.startX) / s;
+      const rawY = (e.clientY - d.startY) / s;
+      // CLAMP THE DELTA, NOT EACH CARD. A group dragged into the canvas edge
+      // has to stay rigid: clamping every member's own position at 0 would
+      // pile them onto the edge and they would not come back apart. So the
+      // whole group stops when its leftmost (or topmost) member reaches 0.
+      // For a single card, minX is its own x and this is exactly the old
+      // Math.max(0, origX + dx).
+      const minX = Math.min(d.origX, ...(d.others ?? []).map((o) => o.x));
+      const minY = Math.min(d.origY, ...(d.others ?? []).map((o) => o.y));
+      const dx = d.mode === "move" ? Math.max(rawX, -minX) : rawX;
+      const dy = d.mode === "move" ? Math.max(rawY, -minY) : rawY;
+      const followers = d.mode === "move" ? d.others : undefined;
       setItems((prev) =>
         prev.map((it) => {
+          if (followers?.length) {
+            const o = followers.find((f) => f.id === it.id);
+            if (o) return { ...it, x: o.x + dx, y: o.y + dy };
+          }
           if (it.id !== d.id) return it;
           if (d.mode === "move") {
-            return { ...it, x: Math.max(0, d.origX + dx), y: Math.max(0, d.origY + dy) };
+            return { ...it, x: d.origX + dx, y: d.origY + dy };
           }
           // Corner-aware resize: a west corner moves x and shrinks w, a north
           // corner moves y and shrinks h, so the OPPOSITE corner stays pinned.
@@ -357,8 +410,11 @@ export function BoardCanvas({
         return;
       }
       // Move: if dropped over a column, file it into that column instead.
+      // Never for a GROUP drag: filing several loose cards into a column at
+      // once is a different action from moving them, and doing it silently
+      // because the drop happened to land over one is not what was asked.
       const colId =
-        moved && d.kind !== "column"
+        moved && d.kind !== "column" && !d.others?.length
           ? columnAtPoint(e.clientX, e.clientY, d.id)
           : null;
       if (colId) {
@@ -378,8 +434,11 @@ export function BoardCanvas({
         beforeRef.current = null;
       }
       setItems((prev) => {
-        const cur = prev.find((x) => x.id === d.id);
-        if (cur) void moveItem(cur.id, cur.x, cur.y);
+        const ids = [d.id, ...(d.others ?? []).map((o) => o.id)];
+        for (const id of ids) {
+          const cur = prev.find((x) => x.id === id);
+          if (cur) void moveItem(cur.id, cur.x, cur.y);
+        }
         return prev;
       });
     }
@@ -427,7 +486,10 @@ export function BoardCanvas({
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
         return;
-      if (selected) {
+      if (multi.size > 0) {
+        e.preventDefault();
+        removeMany([...multi]);
+      } else if (selected) {
         e.preventDefault();
         const it = items.find((i) => i.id === selected);
         if (it?.kind === "column") deleteColumn(selected);
@@ -440,7 +502,74 @@ export function BoardCanvas({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, selectedConn, items, readOnly]);
+  }, [selected, selectedConn, items, readOnly, multi]);
+
+  // Esc drops a group selection, the same way it backs out of everything else.
+  useEffect(() => {
+    if (multi.size === 0) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMulti(new Set());
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [multi]);
+
+  // Drawing the marquee. Listeners live on the window so the box keeps
+  // following a cursor that has left the canvas, and are only mounted while a
+  // box is actually being drawn.
+  const marqueeOn = marquee !== null;
+  useEffect(() => {
+    if (!marqueeOn) return;
+    let raf = 0;
+    let last: PointerEvent | null = null;
+    function apply(e: PointerEvent) {
+      const o = marqueeRef.current;
+      if (!o) return;
+      const p = canvasCoords(e.clientX, e.clientY);
+      setMarquee({ x0: o.x0, y0: o.y0, x1: p.x, y1: p.y });
+      const box = {
+        x: Math.min(o.x0, p.x),
+        y: Math.min(o.y0, p.y),
+        w: Math.abs(p.x - o.x0),
+        h: Math.abs(p.y - o.y0),
+      };
+      // TOUCHING counts, not containing: you sweep a box across a cluster and
+      // expect to catch what it crossed, which is what every canvas tool does.
+      const hit = marqueeBoxes.current.filter(
+        (b) =>
+          b.x < box.x + box.w &&
+          b.x + b.w > box.x &&
+          b.y < box.y + box.h &&
+          b.y + b.h > box.y
+      );
+      setMulti(new Set(hit.map((b) => b.id)));
+    }
+    function onMove(e: PointerEvent) {
+      last = e;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (last) apply(last);
+      });
+    }
+    function onUp(e: PointerEvent) {
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      apply(e);
+      marqueeRef.current = null;
+      setMarquee(null);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marqueeOn]);
 
   // Dragging a line's endpoint or whole body (rAF-coalesced like card drags).
   useEffect(() => {
@@ -760,13 +889,24 @@ export function BoardCanvas({
       ["TEXTAREA", "INPUT", "BUTTON", "A"].includes(target.tagName)
     )
       return;
-    setSelected(it.id);
+    // Pressing a card that is part of the group DRAGS THE WHOLE GROUP and
+    // keeps it selected; pressing any other card is an ordinary single
+    // selection and drops the group, so the two selections never coexist.
+    const inGroup = multi.has(it.id) && multi.size > 1;
+    const others = inGroup
+      ? items
+          .filter((p) => p.id !== it.id && multi.has(p.id) && !p.parentId)
+          .map((p) => ({ id: p.id, x: p.x, y: p.y }))
+      : [];
+    if (!inGroup) setMulti(new Set());
+    setSelected(inGroup ? null : it.id);
     onSelectLine(null);
     captureBefore();
     drag.current = {
       id: it.id,
       kind: it.kind,
       mode: "move",
+      others,
       startX: e.clientX,
       startY: e.clientY,
       origX: it.x,
@@ -816,6 +956,59 @@ export function BoardCanvas({
     setItems((prev) => prev.filter((p) => p.id !== id));
     setSelected(null);
     void deleteItem(id);
+  }
+  /**
+   * Delete a whole marquee selection as ONE undo step. A snapshot per card
+   * would mean pressing undo fifteen times to put fifteen cards back, which is
+   * not what "I deleted that group by mistake" means.
+   */
+  function removeMany(ids: string[]) {
+    if (readOnly || ids.length === 0) return;
+    onBeforeChange?.(snapshotNow());
+    const set = new Set(ids);
+    // A column takes its children with it (parent_id cascades in the DB), so
+    // the optimistic view has to drop them too or they linger until a reload.
+    setItems((prev) =>
+      prev.filter((p) => !set.has(p.id) && !(p.parentId && set.has(p.parentId)))
+    );
+    setSelected(null);
+    setMulti(new Set());
+    void Promise.all(ids.map((id) => deleteItem(id))).then(() =>
+      // One reload at the end: deleting a card also deletes its arrows, which
+      // live in their own table and are not in local state.
+      onReloadRef.current()
+    );
+  }
+  /**
+   * Press on empty canvas: measure every card once, then let the effect above
+   * follow the cursor. Nothing is selected yet, so a plain click (press and
+   * release without moving) ends with an empty box and clears the selection,
+   * which is the behaviour the background handler had before.
+   */
+  function startMarquee(e: React.PointerEvent) {
+    const rect = contentRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const sc = scaleRef.current;
+    marqueeBoxes.current = Array.from(
+      contentRef.current?.querySelectorAll<HTMLElement>("[data-item-id]") ?? []
+    )
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          id: el.getAttribute("data-item-id") as string,
+          x: (r.left - rect.left) / sc,
+          y: (r.top - rect.top) / sc,
+          w: r.width / sc,
+          h: r.height / sc,
+        };
+      })
+      // A card filed inside a column moves with its column, so selecting it
+      // separately would let a marquee drag pull it out of the column it is
+      // in. Only top-level cards join a group.
+      .filter((b) => !items.find((i) => i.id === b.id)?.parentId);
+    const p = canvasCoords(e.clientX, e.clientY);
+    marqueeRef.current = { x0: p.x, y0: p.y };
+    setMarquee({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
   }
   // Checklist edits. persist=false for keystrokes (persisted on blur); true for
   // discrete actions (toggle / add / remove).
@@ -1160,11 +1353,15 @@ export function BoardCanvas({
               ...bgStyle(presenting ? "plain" : background),
             }}
             onPointerDown={(e) => {
-              if (e.target === e.currentTarget) {
-                setSelected(null);
-                setSelectedConn(null);
-                onSelectLine(null);
-              }
+              if (e.target !== e.currentTarget) return;
+              setSelected(null);
+              setSelectedConn(null);
+              onSelectLine(null);
+              setMulti(new Set());
+              // Left button only: a right-click on the canvas opens a context
+              // menu, and starting a selection under it would be a box you
+              // could not see and did not ask for.
+              if (!readOnly && e.button === 0) startMarquee(e);
             }}
             onPointerMove={(e) => {
               if (readOnly || drag.current || connectFrom) return;
@@ -1226,6 +1423,11 @@ export function BoardCanvas({
 
             {cardItems.map((it) => {
               const isSel = selected === it.id;
+              // A group member gets the same accent ring so the selection is
+              // legible, but NOT isSel itself: that also grows four resize
+              // handles and a connect anchor, and twelve cards each sprouting
+              // six controls reads as a mess rather than as a selection.
+              const inGroup = multi.has(it.id);
               const common: React.CSSProperties = {
                 position: "absolute",
                 left: it.x,
@@ -1234,9 +1436,10 @@ export function BoardCanvas({
                 height: it.h,
                 zIndex: it.z,
               };
-              const ring = isSel
-                ? "0 0 0 2px var(--accent)"
-                : "0 1px 3px rgba(0,0,0,.12)";
+              const ring =
+                isSel || inGroup
+                  ? "0 0 0 2px var(--accent)"
+                  : "0 1px 3px rgba(0,0,0,.12)";
 
               if (it.kind === "column") {
                 const kids = childrenByParent.get(it.id) ?? [];
@@ -1666,7 +1869,7 @@ export function BoardCanvas({
                       // No box: the SVG silhouette IS the card, so the resting
                       // drop shadow the boxed cards use would draw a floating
                       // rectangle around nothing. Selection is an outline.
-                      outline: isSel ? "2px solid var(--accent)" : undefined,
+                      outline: isSel || inGroup ? "2px solid var(--accent)" : undefined,
                       outlineOffset: 3,
                       borderRadius: 6,
                       touchAction: "none",
@@ -1722,7 +1925,7 @@ export function BoardCanvas({
                       top: it.y,
                       width: it.w,
                       zIndex: it.z,
-                      outline: isSel ? "2px solid var(--accent)" : undefined,
+                      outline: isSel || inGroup ? "2px solid var(--accent)" : undefined,
                       outlineOffset: 4,
                       borderRadius: 4,
                     }}
@@ -1731,7 +1934,7 @@ export function BoardCanvas({
                     {/* Drag grip (the text is editable, so it can't be dragged) */}
                     <div
                       className="absolute -left-5 top-1 hidden h-6 w-5 cursor-move place-items-center rounded-[5px] text-text-faint group-hover:grid"
-                      style={{ touchAction: "none", boxShadow: isSel ? "0 0 0 2px var(--accent)" : undefined }}
+                      style={{ touchAction: "none", boxShadow: isSel || inGroup ? "0 0 0 2px var(--accent)" : undefined }}
                       onPointerDown={(e) => startMove(e, it)}
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" opacity="0.6" aria-hidden>
@@ -1866,6 +2069,25 @@ export function BoardCanvas({
                 </div>
               );
             })}
+
+            {/* The selection box itself. Drawn in canvas units and above every
+                card, and never interactive: it must not swallow the pointerup
+                that ends the very gesture drawing it. */}
+            {marquee && (
+              <div
+                className="pointer-events-none absolute rounded-[4px] border border-accent"
+                style={{
+                  left: Math.min(marquee.x0, marquee.x1),
+                  top: Math.min(marquee.y0, marquee.y1),
+                  width: Math.abs(marquee.x1 - marquee.x0),
+                  height: Math.abs(marquee.y1 - marquee.y0),
+                  zIndex: 5000,
+                  // A token with an /opacity modifier compiles to nothing on a
+                  // var()-valued colour in this setup, so the tint is mixed.
+                  backgroundColor: "color-mix(in oklch, var(--accent) 12%, transparent)",
+                }}
+              />
+            )}
 
             {/* Standalone line/arrow objects (above cards, but only the stroke +
                 endpoints are interactive so cards stay clickable). */}
@@ -2139,6 +2361,34 @@ export function BoardCanvas({
           </div>
         </div>
       </div>
+
+      {/* What a group selection can do. A bar rather than the contextual rail:
+          the rail holds ONE card's editor, and there is no sensible editor for
+          twelve cards at once. Delete is what the group is for. */}
+      {multi.size > 0 && !readOnly && (
+        <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-[12px] border border-border bg-surface/95 px-2.5 py-1.5 shadow-lg backdrop-blur">
+          <span className="pl-1 text-xs font-semibold text-text">
+            {multi.size} selected
+          </span>
+          <span className="hidden text-[11px] text-text-muted sm:inline">
+            drag to move them together
+          </span>
+          <button
+            type="button"
+            onClick={() => removeMany([...multi])}
+            className="rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-red transition hover:border-red hover:bg-red-bg"
+          >
+            Delete
+          </button>
+          <button
+            type="button"
+            onClick={() => setMulti(new Set())}
+            className="rounded-[8px] px-2 py-1 text-xs font-semibold text-text-muted transition hover:text-text"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Zoom + present popover */}
       <div className="absolute bottom-3 right-3 z-20">
