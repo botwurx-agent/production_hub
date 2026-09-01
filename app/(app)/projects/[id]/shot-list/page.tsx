@@ -120,6 +120,7 @@ export default async function ShotListPage({
       flavor_hue: c.flavor_hue,
       description: c.description,
       vo: c.vo,
+      notes: c.notes,
       shot_size: c.shot_size,
       shot_type: c.shot_type,
       movement: c.movement,

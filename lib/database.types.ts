@@ -627,6 +627,7 @@ export type Database = {
           mime_type: string | null;
           image_name: string | null;
           description: string | null;
+          notes: string | null;
           vo: string | null;
           shot_size: string | null;
           shot_type: string | null;
@@ -649,6 +650,7 @@ export type Database = {
           mime_type?: string | null;
           image_name?: string | null;
           description?: string | null;
+          notes?: string | null;
           vo?: string | null;
           shot_size?: string | null;
           shot_type?: string | null;
@@ -671,6 +673,7 @@ export type Database = {
           mime_type?: string | null;
           image_name?: string | null;
           description?: string | null;
+          notes?: string | null;
           vo?: string | null;
           shot_size?: string | null;
           shot_type?: string | null;

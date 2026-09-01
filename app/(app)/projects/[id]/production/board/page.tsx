@@ -248,7 +248,7 @@ export default async function ShotBoardViewPage({
                         {c.description?.trim() && (
                           <p className="text-sm text-text">{c.description}</p>
                         )}
-                        {(c.vo?.trim() || (Array.isArray(c.tags) && c.tags.length > 0)) && (
+                        {(c.vo?.trim() || c.notes?.trim() || (Array.isArray(c.tags) && c.tags.length > 0)) && (
                           <div className="border-t border-border pt-2">
                             {c.vo?.trim() && (
                               <p className="text-xs text-text-muted">
@@ -256,6 +256,14 @@ export default async function ShotBoardViewPage({
                                   VO / OST{" "}
                                 </span>
                                 {c.vo}
+                              </p>
+                            )}
+                            {c.notes?.trim() && (
+                              <p className="mt-1 text-xs text-text-muted">
+                                <span className="font-bold uppercase tracking-wide text-text-faint">
+                                  Notes{" "}
+                                </span>
+                                {c.notes}
                               </p>
                             )}
                             {Array.isArray(c.tags) && c.tags.length > 0 && (

@@ -389,7 +389,22 @@ export function stripFurniture(
       // one slot are only furniture when they are page numbers.
       const repeats = entry.texts.size === 1;
       const numbered = [...entry.texts].every(isNumber);
-      return !(repeats || numbered);
+      // A TITLE PLUS A PAGE NUMBER is the same footer and slipped through both
+      // of the tests above: "HINT / Treat Yourself / Botwurx 1" is neither one
+      // repeated text (the number differs every page) nor a bare number. It
+      // rode into the notes of all ten shots on a real import. Strip the
+      // digits and see whether what is left is the same line every time.
+      //
+      // Only reachable for a run that is ALREADY in the page margin and
+      // ALREADY in the same slot on most pages, which is what keeps it off
+      // real content: body copy does not sit in the margin on every page in
+      // the same place differing only by a number.
+      const stems = new Set(
+        [...entry.texts].map((t) => t.replace(/\d+/g, " ").replace(/\s+/g, " ").trim()),
+      );
+      const numberedTitle =
+        stems.size === 1 && [...stems][0].length > 0 && entry.texts.size > 1;
+      return !(repeats || numbered || numberedTitle);
     })
   );
 }

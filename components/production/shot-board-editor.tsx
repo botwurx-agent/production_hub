@@ -43,6 +43,7 @@ export type CardView = {
   flavor_hue: string | null;
   description: string | null;
   vo: string | null;
+  notes: string | null;
   shot_size: string | null;
   shot_type: string | null;
   movement: string | null;
@@ -956,6 +957,34 @@ function ShotRow({
               <option key={d} value={d} />
             ))}
           </datalist>
+        </div>
+
+        {/* VO / SUPERS AND NOTES, which had no input at all until now. `vo`
+            existed on the row and was rendered on the export, so a shot list
+            imported from a treatment showed text under "VO / OST" that could
+            not be edited or cleared from anywhere in the app. They are two
+            different things (what is heard or read over the shot, versus how
+            it is shot and built), so they get two fields rather than one, and
+            the importer no longer conflates them.
+
+            Full width under the description rather than in the Code/Day row:
+            both hold sentences, and an 80px box beside a code is what made
+            the Day field invisible for as long as it shipped. */}
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          <textarea
+            defaultValue={card.vo ?? ""}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.vo ?? null)) onCapture(); updateCard(projectId, card.id, { vo: e.target.value }); }}
+            placeholder="VO / supers..."
+            rows={2}
+            className={`${cell} min-h-[40px] resize-y border-border`}
+          />
+          <textarea
+            defaultValue={card.notes ?? ""}
+            onBlur={(e) => { if ((e.target.value || null) !== (card.notes ?? null)) onCapture(); updateCard(projectId, card.id, { notes: e.target.value }); }}
+            placeholder="Notes..."
+            rows={2}
+            className={`${cell} min-h-[40px] resize-y border-border`}
+          />
         </div>
         </div>
 

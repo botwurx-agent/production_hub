@@ -243,6 +243,7 @@ export async function updateCard(
     flavor_hue?: string;
     description?: string;
     vo?: string;
+    notes?: string;
     shot_size?: string;
     shot_type?: string;
     movement?: string;
@@ -363,6 +364,7 @@ type ShotCardSnap = {
   image_name: string | null;
   description: string | null;
   vo: string | null;
+  notes: string | null;
   shot_size: string | null;
   shot_type: string | null;
   movement: string | null;
@@ -409,6 +411,7 @@ export async function restoreShotBoard(
     image_name: c.image_name,
     description: c.description,
     vo: c.vo,
+    notes: c.notes,
     shot_size: c.shot_size,
     shot_type: c.shot_type,
     movement: c.movement,
@@ -487,6 +490,7 @@ export async function duplicateCard(
     image_name: src.image_name,
     description: src.description,
     vo: src.vo,
+    notes: src.notes,
     shot_size: src.shot_size,
     shot_type: src.shot_type,
     movement: src.movement,

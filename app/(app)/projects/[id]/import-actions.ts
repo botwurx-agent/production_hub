@@ -124,7 +124,14 @@ export async function importShotList(
       shot_type: r.type,
       movement: r.movement,
       day: r.day,
-      vo: r.notes,
+      // NOTES, not VO. This wrote the deck's NOTES section into `vo`, the
+      // voiceover / supers field, because shot_cards had no notes column: an
+      // imported shot list came back with camera, staging and build notes
+      // filed under "VO / OST" on the export, and there was no input anywhere
+      // in the app to correct it. Migration 0101 gave notes their own home.
+      // `vo` is left empty on import: a treatment's notes were never
+      // voiceover, and guessing which lines are spoken is the producer's call.
+      notes: r.notes,
       storage_path: r.image?.storagePath ?? null,
       mime_type: r.image?.mimeType ?? null,
       image_name: r.image?.name ?? null,
