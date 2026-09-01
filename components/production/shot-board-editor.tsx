@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { dayOptions, groupByDay, hasDays } from "@/lib/shot-days";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/card";
@@ -257,6 +258,9 @@ export function ShotBoardEditor({
 
   const active = groups.find((g) => g.id === activeId) ?? groups[0] ?? null;
   const activeCards = active ? cards.filter((c) => c.group_id === active.id) : [];
+  // The days already in use, offered by each row's Day picker so a second
+  // spelling of the same day cannot start a second section.
+  const usedDays = dayOptions(activeCards);
   const blankRows = activeCards.filter((c) => !c.storagePath).length;
 
   function selectList(id: string) {
@@ -637,22 +641,61 @@ export function ShotBoardEditor({
                 </div>
               )}
 
+              {/* A two-day shoot is ONE list with the days marked in it, not
+                  two documents. Sections appear only when a real second day
+                  does: a header reading "Day 1" over the only day there is
+                  would be noise on the far more common one-day shoot.
+
+                  Shot numbers keep running across the whole list rather than
+                  restarting per day, because a shot is referred to on set by
+                  its number and renumbering it on the second morning would
+                  break every reference to it. */}
               <div className="space-y-3">
-                {activeCards.map((c, i) => (
-                  <ShotRow
-                    key={c.id}
-                    projectId={projectId}
-                    card={c}
-                    number={i + 1}
-                    assets={assets}
-                    busy={busy}
-                    selected={selected.has(c.id)}
-                    onToggleSelect={() => toggleCard(c.id)}
-                    onChange={refresh}
-                    onStructural={act}
-                    onCapture={() => history.capture({ groups, cards })}
-                  />
-                ))}
+                {(() => {
+                  const days = groupByDay(activeCards);
+                  const sectioned = hasDays(days);
+                  let n = 0;
+                  return days.map((d) => (
+                    <div key={d.key} className="space-y-3">
+                      {sectioned && (
+                        <div className="flex items-center gap-3 pt-2 first:pt-0">
+                          <span
+                            className="rounded-[8px] px-2.5 py-1 text-[12px] font-bold"
+                            style={{
+                              backgroundColor: `var(--h-${COL.size}-bg)`,
+                              color: `var(--h-${COL.size})`,
+                            }}
+                          >
+                            {d.label}
+                          </span>
+                          <span className="text-[12px] font-semibold text-text-faint">
+                            {d.shots.length} {d.shots.length === 1 ? "shot" : "shots"}
+                          </span>
+                          <span className="h-px flex-1 bg-border" />
+                        </div>
+                      )}
+                      {d.shots.map((c) => {
+                        n += 1;
+                        return (
+                          <ShotRow
+                            key={c.id}
+                            projectId={projectId}
+                            card={c}
+                            number={n}
+                            dayChoices={usedDays}
+                            assets={assets}
+                            busy={busy}
+                            selected={selected.has(c.id)}
+                            onToggleSelect={() => toggleCard(c.id)}
+                            onChange={refresh}
+                            onStructural={act}
+                            onCapture={() => history.capture({ groups, cards })}
+                          />
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
               </div>
 
               <button
@@ -680,6 +723,7 @@ export function ShotBoardEditor({
 function ShotRow({
   projectId,
   card,
+  dayChoices,
   number,
   assets,
   busy,
@@ -691,6 +735,8 @@ function ShotRow({
 }: {
   projectId: string;
   card: CardView;
+  /** The days already used in this list, for the Day combobox. */
+  dayChoices: string[];
   number: number;
   assets: PickableAsset[];
   busy: boolean;
@@ -894,12 +940,22 @@ function ShotRow({
                sitting side by side at 80px. */
             className={`${cell} !w-20 border-border`}
           />
+          {/* A COMBOBOX, not a plain box. The value is still free text (a
+              producer may want "Pickups" or "Day 2A"), but the days already in
+              this list are offered, because "1" and "Day 1" typed on different
+              mornings are one day to a person and two sections to a groupBy. */}
           <input
+            list={`days-${card.id}`}
             defaultValue={card.day ?? ""}
             onBlur={(e) => { if ((e.target.value || null) !== (card.day ?? null)) onCapture(); updateCard(projectId, card.id, { day: e.target.value }); }}
             placeholder="Day"
             className={`${cell} !w-20 border-border`}
           />
+          <datalist id={`days-${card.id}`}>
+            {dayChoices.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
         </div>
         </div>
 

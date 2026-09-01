@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { groupByDay, hasDays } from "@/lib/shot-days";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage } from "@/lib/asset-storage";
@@ -148,8 +149,13 @@ export default async function ShotBoardViewPage({
       <div data-theme="light" className="mt-6 space-y-10">
         {visibleGroups.map((g, gi) => {
           const groupCards = cards.filter((c) => c.group_id === g.id);
+          const dayGroups = groupByDay(groupCards);
+          const showDays = hasDays(dayGroups);
+          // `break-inside-avoid` keeps a shot together on one page, but it
+          // contradicts a child asking for a page break, so it is dropped when
+          // the days are doing the breaking.
           return (
-            <section key={g.id} className="break-inside-avoid">
+            <section key={g.id} className={showDays ? undefined : "break-inside-avoid"}>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <span
@@ -172,8 +178,31 @@ export default async function ShotBoardViewPage({
                 <p className="mb-4 max-w-3xl text-sm text-text-muted">{g.description}</p>
               )}
 
+              {/* DAYS BREAK THE PAGE. A two-day shoot goes out as one document
+                  with a hard break before each new day, so nobody on set has
+                  to work out where Thursday ends. `break-before-page` is the
+                  print rule; on screen the same header just reads as a
+                  section. Only when there IS a second day: a lone "Day 1"
+                  banner on a one-day shoot is noise, and a page break before
+                  it would be a blank sheet. */}
+              {dayGroups.map((d, di) => (
+              <div key={d.key} className={showDays && di > 0 ? "break-before-page pt-6" : ""}>
+              {showDays && (
+                <div className="mb-3 flex items-center gap-3">
+                  <span
+                    style={printExact}
+                    className="rounded-[8px] bg-text px-2.5 py-1 text-xs font-bold text-bg"
+                  >
+                    {d.label}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-text-faint">
+                    {d.shots.length} {d.shots.length === 1 ? "shot" : "shots"}
+                  </span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {groupCards.map((c) => {
+                {d.shots.map((c) => {
                   running += 1;
                   return (
                     <div
@@ -249,6 +278,8 @@ export default async function ShotBoardViewPage({
                   );
                 })}
               </div>
+              </div>
+              ))}
             </section>
           );
         })}
