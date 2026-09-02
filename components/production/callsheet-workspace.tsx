@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { RosterContact } from "@/lib/callsheet-import";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { confirmAction } from "@/components/ui/confirm";
@@ -37,6 +38,7 @@ export function CallSheetWorkspace({
   recipients,
   mealRounds,
   contactOptions,
+  roster = [],
   templates,
   logoUrl,
   emailEnabled = false,
@@ -48,6 +50,8 @@ export function CallSheetWorkspace({
   recipients: CallSheetRecipient[];
   mealRounds: MealRoundWithResponses[];
   contactOptions: ContactOption[];
+  /** The project roster, for filling a sheet section without retyping it. */
+  roster?: RosterContact[];
   templates: CallSheetTemplate[];
   logoUrl: string | null;
   emailEnabled?: boolean;
@@ -250,6 +254,7 @@ export function CallSheetWorkspace({
               entries={activeEntries}
               templates={templates}
               logoUrl={logoUrl}
+              roster={roster}
             />
 
             <Modal

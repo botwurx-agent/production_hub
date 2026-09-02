@@ -4,7 +4,7 @@
 
 export type CallSheetBlock = {
   id: string;
-  type: string; // header|schedule|locations|contacts|company|cast|crew|notes|text
+  type: string; // header|schedule|locations|contacts|company|cast|crew|clients|notes|text
   hidden?: boolean;
   title?: string; // custom text blocks
   body?: string; // custom text blocks
@@ -17,6 +17,12 @@ export const FIXED_BLOCKS: { type: string; label: string }[] = [
   { type: "locations", label: "Locations & safety" },
   { type: "cast", label: "Cast & talent" },
   { type: "crew", label: "Crew" },
+  // The client and agency attending the shoot. Their own section rather than
+  // rows in Crew: a brand manager listed as crew on a document that goes to
+  // the whole unit is simply wrong. Existing sheets keep their stored layout
+  // and can add it from the block palette; new sheets get it by default, and
+  // it prints only when somebody is in it.
+  { type: "clients", label: "Client & agency" },
   // Renders only when the sheet has a meal round, so a sheet without one is
   // unchanged. Existing sheets keep their stored layout and can add it from
   // the block palette; new sheets get it by default.

@@ -3,6 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import {
+  alreadyOn,
+  entryFromContact,
+  validContactIds,
+  type EntryKind,
+  type ExistingEntry,
+  type RosterContact,
+} from "@/lib/callsheet-import";
 import { generateReviewToken } from "@/lib/review-links";
 import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
@@ -183,12 +191,85 @@ export async function deleteCallSheet(
   rp(projectId);
 }
 
-// ---- Entries (cast / crew rows on a specific call sheet) --------------------
+// ---- Entries (cast / crew / client rows on a specific call sheet) ----------
+
+/**
+ * Fill a section of the call sheet from the project roster.
+ *
+ * The producer typed everyone in once already, with positions and phone
+ * numbers, organized into folders that ARE the call sheet's sections. This
+ * copies them across rather than making them type it twice.
+ *
+ * A COPY, NOT A LIVE BINDING, and that is deliberate. A call sheet is a
+ * document that gets sent and printed and photographed, so a row must never
+ * change under someone after they have it. `contact_id` records where the row
+ * came from (for the dedupe that makes this button safe to press twice) but
+ * nothing reads back through it to re-render a name.
+ *
+ * CALL TIMES ARE NEVER GUESSED. The roster has no call time and inventing one
+ * from the general call would be a figure somebody might act on. The column
+ * arrives blank for the producer to fill, which is the fine tuning they
+ * expected to do anyway.
+ */
+export async function addCallSheetEntriesFromRoster(
+  projectId: string,
+  callSheetId: string,
+  contactIds: unknown
+): Promise<CallSheetState & { added?: number }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  // The roster is loaded server-side and is the allowlist, so an id from the
+  // browser can only ever name somebody already on this project.
+  const { data: roster } = await supabase
+    .from("contacts")
+    .select("id, name, role, type, email, phone")
+    .eq("project_id", projectId);
+  const ids = validContactIds(contactIds, (roster ?? []) as RosterContact[]);
+  if (ids.length === 0) return { added: 0 };
+
+  const { data: existing } = await supabase
+    .from("call_sheet_entries")
+    .select("id, name, kind, contact_id")
+    .eq("call_sheet_id", callSheetId);
+  const rows = (existing ?? []) as ExistingEntry[];
+
+  const { data: last } = await supabase
+    .from("call_sheet_entries")
+    .select("position")
+    .eq("call_sheet_id", callSheetId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Re-checked HERE and not only in the picker: the sheet may have changed in
+  // another tab since the modal opened, and a duplicate on a document that goes
+  // to the whole unit is worse than a missing row.
+  const byId = new Map((roster ?? []).map((c) => [c.id, c as RosterContact]));
+  const wanted = ids
+    .map((id) => byId.get(id))
+    .filter((c): c is RosterContact => Boolean(c) && !alreadyOn(rows, c as RosterContact));
+  if (wanted.length === 0) return { added: 0 };
+
+  let pos = (last?.position ?? -1) + 1;
+  const { error } = await supabase.from("call_sheet_entries").insert(
+    wanted.map((c) => ({
+      studio_id: ctx.studio.id,
+      call_sheet_id: callSheetId,
+      position: pos++,
+      ...entryFromContact(c),
+    }))
+  );
+  if (error) return { error: error.message };
+  rp(projectId);
+  return { added: wanted.length };
+}
+
 
 export async function addCallSheetEntry(
   projectId: string,
   callSheetId: string,
-  kind: "cast" | "crew" = "crew"
+  kind: EntryKind = "crew"
 ): Promise<CallSheetState> {
   const ctx = await requireStudioContext();
   const supabase = createClient();

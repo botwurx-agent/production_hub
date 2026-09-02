@@ -158,7 +158,10 @@ export function CallSheetDocument({
 }) {
   const s = sheet;
   const cast = entries.filter((e) => e.kind === "cast");
-  const crew = entries.filter((e) => e.kind !== "cast");
+  const clients = entries.filter((e) => e.kind === "client");
+  // Crew is the catch-all, so every row written before the client section
+  // existed keeps printing exactly where it did.
+  const crew = entries.filter((e) => e.kind !== "cast" && e.kind !== "client");
 
   const blocks = normalizeLayout(s?.layout);
   const hidden = new Set(blocks.filter((b) => b.hidden).map((b) => b.type));
@@ -296,6 +299,11 @@ export function CallSheetDocument({
       )}
       {show("crew") && (
         <People title="Crew" roleLabel="Role" extraLabel="Contact" people={crew} accent={accent} />
+      )}
+      {/* Only prints when somebody is in it: a job with no client attending
+          should not ship an empty section to the unit. */}
+      {show("clients") && clients.length > 0 && (
+        <People title="Client & agency" roleLabel="Title" extraLabel="Contact" people={clients} accent={accent} />
       )}
 
       <div className="mt-4 flex items-center justify-between text-[10px] text-text-faint">

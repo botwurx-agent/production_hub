@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { RosterImportButton } from "@/components/production/callsheet-roster-import";
+import type { EntryKind, RosterContact } from "@/lib/callsheet-import";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -47,6 +49,7 @@ export function CallSheetBuilder({
   entries,
   templates = [],
   logoUrl,
+  roster = [],
 }: {
   projectId: string;
   callSheetId: string;
@@ -55,6 +58,8 @@ export function CallSheetBuilder({
   entries: CallSheetEntry[];
   templates?: CallSheetTemplate[];
   logoUrl: string | null;
+  /** The project's contacts, for filling a section without retyping them. */
+  roster?: RosterContact[];
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -106,7 +111,7 @@ export function CallSheetBuilder({
   useEffect(() => setRows(entries), [sig]); // eslint-disable-line react-hooks/exhaustive-deps
   const editRow = (id: string, patch: Partial<CallSheetEntry>) =>
     setRows((p) => p.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  const addRow = (kind: "cast" | "crew") =>
+  const addRow = (kind: EntryKind) =>
     start(async () => {
       await addCallSheetEntry(projectId, callSheetId, kind);
       router.refresh();
@@ -213,7 +218,7 @@ export function CallSheetBuilder({
   }
 
   const bodyCtx: BlockCtx = {
-    F, rows, editRow, addRow, delRow, projectId, accentVar, updateText, notes: f.notes,
+    F, rows, roster, callSheetId, editRow, addRow, delRow, projectId, accentVar, updateText, notes: f.notes,
     setNotes: (v: string) => set("notes", v), saveNotes: () => save("notes", f.notes),
   };
 
@@ -475,8 +480,10 @@ export function CallSheetBuilder({
 type BlockCtx = {
   F: (k: string, ph: string, cls?: string) => React.ReactNode;
   rows: CallSheetEntry[];
+  roster: RosterContact[];
+  callSheetId: string;
   editRow: (id: string, patch: Partial<CallSheetEntry>) => void;
-  addRow: (kind: "cast" | "crew") => void;
+  addRow: (kind: EntryKind) => void;
   delRow: (id: string) => void;
   projectId: string;
   accentVar: string;
@@ -571,6 +578,8 @@ function BodyBlock({ block, ctx }: { block: CallSheetBlock; ctx: BlockCtx }) {
       return <PeopleBlock ctx={ctx} kind="cast" title="Cast & talent" roleLabel="Character" />;
     case "crew":
       return <PeopleBlock ctx={ctx} kind="crew" title="Crew" roleLabel="Role" />;
+    case "clients":
+      return <PeopleBlock ctx={ctx} kind="client" title="Client & agency" roleLabel="Title" />;
     case "notes":
       return (
         <div>
@@ -610,28 +619,46 @@ function PeopleBlock({
   ctx, kind, title, roleLabel,
 }: {
   ctx: BlockCtx;
-  kind: "cast" | "crew";
+  kind: EntryKind;
   title: string;
   roleLabel: string;
 }) {
-  const { rows, editRow, addRow, delRow, projectId, accentVar } = ctx;
-  const people = rows.filter((r) => (kind === "cast" ? r.kind === "cast" : r.kind !== "cast"));
+  const { rows, roster, callSheetId, editRow, addRow, delRow, projectId, accentVar } = ctx;
+  // CREW IS THE CATCH-ALL, which keeps every row written before the client
+  // section existed exactly where it was. Only the two named kinds are pulled
+  // out of it; anything else (including an empty kind) stays in Crew rather
+  // than vanishing from the sheet.
+  const people = rows.filter((r) =>
+    kind === "cast" ? r.kind === "cast"
+    : kind === "client" ? r.kind === "client"
+    : r.kind !== "cast" && r.kind !== "client"
+  );
   const cell =
     "w-full rounded-[6px] border border-transparent bg-transparent px-1.5 py-1 text-sm text-text outline-none transition hover:border-border focus:border-border-strong focus:bg-surface";
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
         <SectionLabel accent={accentVar}>{title}</SectionLabel>
+        <div className="flex items-center gap-1.5 print:hidden">
+        <RosterImportButton
+          projectId={projectId}
+          callSheetId={callSheetId}
+          kind={kind}
+          roster={roster}
+          entries={rows}
+          label={title}
+        />
         <button
           onClick={() => addRow(kind)}
           className="rounded-[8px] border border-border px-2 py-0.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text print:hidden"
         >
           + Add
         </button>
+        </div>
       </div>
       {people.length === 0 ? (
         <p className="rounded-[10px] border border-dashed border-border py-4 text-center text-xs text-text-faint">
-          No one added yet.
+          No one added yet. Pull them from the project roster rather than retyping.
         </p>
       ) : (
         <div className="overflow-hidden rounded-[10px] border border-border">

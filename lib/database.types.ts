@@ -2348,6 +2348,7 @@ export type Database = {
           call_time: string | null;
           contact: string | null;
           kind: string;
+          contact_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -2360,6 +2361,7 @@ export type Database = {
           call_time?: string | null;
           contact?: string | null;
           kind?: string;
+          contact_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -2372,6 +2374,7 @@ export type Database = {
           call_time?: string | null;
           contact?: string | null;
           kind?: string;
+          contact_id?: string | null;
           created_at?: string;
         };
         Relationships: [];

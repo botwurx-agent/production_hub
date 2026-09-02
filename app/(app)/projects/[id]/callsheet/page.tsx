@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { RosterContact } from "@/lib/callsheet-import";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { signedLogoUrl } from "@/lib/branding";
@@ -33,22 +34,38 @@ export default async function CallSheetPage({
   const [{ data: rosterRows }, { data: clientRows }] = await Promise.all([
     supabase
       .from("contacts")
-      .select("id, name, role, email")
+      .select("id, name, role, type, email, phone")
       .eq("project_id", project.id)
       .order("created_at", { ascending: true }),
     project.client_id
       ? supabase
           .from("contacts")
-          .select("id, name, role, email")
+          .select("id, name, role, type, email, phone")
           .eq("client_id", project.client_id)
           .order("created_at", { ascending: true })
-      : Promise.resolve({ data: [] as { id: string; name: string; role: string | null; email: string | null }[] }),
+      : Promise.resolve({
+          data: [] as {
+            id: string; name: string; role: string | null;
+            type: string | null; email: string | null; phone: string | null;
+          }[],
+        }),
   ]);
   const contactOptions = [...(rosterRows ?? []), ...(clientRows ?? [])].map((c) => ({
     id: c.id,
     name: c.name,
     role: c.role,
     email: c.email,
+  }));
+  // Filling a SHEET is the project's own roster only, unlike picking
+  // recipients above, which also offers the client's people. A sheet section
+  // is filled from the crew list the producer built for this job.
+  const roster: RosterContact[] = (rosterRows ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    role: c.role,
+    type: c.type,
+    email: c.email,
+    phone: c.phone,
   }));
 
   const [{ data: sheets }, { data: templates }] = await Promise.all([
@@ -115,6 +132,7 @@ export default async function CallSheetPage({
         recipients={recipients}
         mealRounds={mealRounds}
         contactOptions={contactOptions}
+        roster={roster}
         templates={(templates ?? []) as CallSheetTemplate[]}
         logoUrl={logoUrl}
         emailEnabled={emailConfigured()}
