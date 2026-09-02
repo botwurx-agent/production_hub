@@ -60,7 +60,7 @@ export function ProductionCover({
     <div
       data-theme="dark"
       style={printExact}
-      className="rounded-[16px] bg-bg p-8 text-text print:rounded-none"
+      className="rounded-[16px] bg-bg p-8 text-text print:rounded-none print:break-after-page"
     >
       <div className="mb-8 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">

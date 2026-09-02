@@ -195,7 +195,7 @@ export default async function ShotBoardViewPage({
                   />
                 </div>
               )}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-3 print:gap-3">
                 {d.shots.map((c) => {
                   running += 1;
                   return (

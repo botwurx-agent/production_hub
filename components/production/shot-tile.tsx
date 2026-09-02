@@ -107,27 +107,29 @@ export function ShotTile({
           </span>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-2.5 p-3.5">
+      <div className="flex flex-1 flex-col gap-2.5 p-3.5 print:gap-1.5 print:p-2.5">
         {spec.length > 0 && (
           <div data-role="spec" className="flex items-center gap-2">
             <span
               style={printExact}
               className="h-2 w-2 shrink-0 rounded-full bg-accent"
             />
-            <span className="text-[10.5px] font-bold uppercase tracking-widest text-text-muted">
+            <span className="text-[10.5px] font-bold uppercase tracking-widest text-text-muted print:text-[8.5px]">
               {spec.join(" · ")}
             </span>
           </div>
         )}
         {shot.description?.trim() && (
-          <p className="text-[14px] leading-relaxed text-text">{shot.description}</p>
+          <p className="text-[14px] leading-relaxed text-text print:text-[11px] print:leading-snug">
+            {shot.description}
+          </p>
         )}
-        <div className="mt-auto space-y-2 border-t border-border pt-2.5">
+        <div className="mt-auto space-y-2 border-t border-border pt-2.5 print:space-y-1 print:pt-1.5">
           {/* VO IS ALWAYS STATED, N/A included. It used to be hidden when
               empty, so a reader could not tell a shot with no line from one
               nobody had written a line for yet. */}
-          <p data-role="vo" className="text-[12px] leading-snug text-text-muted">
-            <span className="mr-1.5 text-[10px] font-bold uppercase tracking-widest text-text-faint">
+          <p data-role="vo" className="text-[12px] leading-snug text-text-muted print:text-[9.5px]">
+            <span className="mr-1.5 text-[10px] font-bold uppercase tracking-widest text-text-faint print:text-[8px]">
               VO
             </span>
             {vo ? (
@@ -137,16 +139,16 @@ export function ShotTile({
             )}
           </p>
           {motion && (
-            <p data-role="motion" className="text-[12px] leading-snug text-text-muted">
-              <span className="mr-1.5 text-[10px] font-bold uppercase tracking-widest text-text-faint">
+            <p data-role="motion" className="text-[12px] leading-snug text-text-muted print:text-[9.5px]">
+              <span className="mr-1.5 text-[10px] font-bold uppercase tracking-widest text-text-faint print:text-[8px]">
                 Motion
               </span>
               <span className="whitespace-pre-wrap">{motion}</span>
             </p>
           )}
           {notes && (
-            <p className="text-[12px] leading-snug text-text-muted">
-              <span className="mr-1.5 text-[10px] font-bold uppercase tracking-widest text-text-faint">
+            <p className="text-[12px] leading-snug text-text-muted print:text-[9.5px]">
+              <span className="mr-1.5 text-[10px] font-bold uppercase tracking-widest text-text-faint print:text-[8px]">
                 Notes
               </span>
               <span className="whitespace-pre-wrap">{notes}</span>
@@ -158,7 +160,7 @@ export function ShotTile({
                 <span
                   key={i}
                   style={printExact}
-                  className="rounded-[7px] bg-surface-2 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-text-muted"
+                  className="rounded-[7px] bg-surface-2 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-text-muted print:px-1.5 print:py-0.5 print:text-[8px]"
                 >
                   {t}
                 </span>

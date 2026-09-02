@@ -62,24 +62,24 @@ export function DayDivider({
       className="overflow-hidden rounded-[16px] bg-bg text-text print:rounded-none"
     >
       <div style={{ ...printExact, background: RULE }} className="h-[5px] w-full" />
-      <div className="px-8 py-14">
+      <div className="px-8 py-14 print:px-6 print:py-6">
         <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-orange">
           {overline?.trim() || "Shoot schedule"}
         </div>
-        <h2 className="mt-4 font-display text-6xl font-extrabold leading-[0.95] tracking-tight text-text">
+        <h2 className="mt-4 font-display text-6xl font-extrabold leading-[0.95] tracking-tight text-text print:mt-2 print:text-4xl">
           {label}
         </h2>
-        <p className="mt-4 max-w-lg text-base text-text-muted">
+        <p className="mt-4 max-w-lg text-base text-text-muted print:mt-2 print:text-sm">
           {shots.length} {shots.length === 1 ? "shot" : "shots"}
           {span ? `, ${span}.` : "."}
         </p>
         {names.length > 0 && (
-          <div className="mt-7 flex flex-wrap gap-2.5">
+          <div className="mt-7 flex flex-wrap gap-2.5 print:mt-3 print:gap-1.5">
             {names.map((n, i) => (
               <span
                 key={i}
                 style={printExact}
-                className="rounded-pill border border-border-strong px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-text-muted"
+                className="rounded-pill border border-border-strong px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-text-muted print:px-2.5 print:py-0.5 print:text-[9px]"
               >
                 Shot {n}
               </span>
