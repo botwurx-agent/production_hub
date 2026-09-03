@@ -486,12 +486,90 @@ export async function sendCallSheetEmail(
   });
   if (!result.ok) return { error: result.error ?? "The email could not be sent." };
 
+  await stampSent(supabase, r.id);
+
   // Emailing it IS sending it. Without this the status stayed on Draft unless
   // someone remembered to move the chip, which is a thing nobody remembers, and
   // the automatic reminders skip a draft on purpose.
   await markSheetSent(supabase, r.call_sheet_id);
   rp(projectId);
   return { ok: true };
+}
+
+/**
+ * Record that the sheet reached this person.
+ *
+ * ONLY AFTER A SUCCESSFUL SEND, never before, so a row marked Sent is a row the
+ * mail provider accepted. The producer reads this to decide whether to chase
+ * somebody, and a hopeful stamp would be worse than no stamp at all.
+ */
+async function stampSent(
+  supabase: ReturnType<typeof createClient>,
+  recipientId: string
+): Promise<void> {
+  const { data } = await supabase
+    .from("call_sheet_recipients")
+    .select("send_count")
+    .eq("id", recipientId)
+    .maybeSingle();
+  await supabase
+    .from("call_sheet_recipients")
+    .update({
+      sent_at: new Date().toISOString(),
+      send_count: (data?.send_count ?? 0) + 1,
+    })
+    .eq("id", recipientId);
+}
+
+/**
+ * Send the sheet to everyone who has not had it yet.
+ *
+ * WHY THIS EXISTS: a twelve-person unit meant twelve clicks, each with a
+ * confirmation that vanished after two and a half seconds, so by the end the
+ * producer could not tell who had been emailed. One press, one result.
+ *
+ * SKIPS ANYONE ALREADY SENT unless `resend` is set. Pressing it twice by
+ * accident must not put a second copy of the call sheet in twelve inboxes, and
+ * a resend is a thing you should have to mean.
+ *
+ * SEQUENTIAL, NOT PARALLEL. Twelve simultaneous requests to the mail provider
+ * is how a studio gets rate limited, and the ordering makes a partial failure
+ * legible: everyone before the failure is stamped and everyone after is not.
+ */
+export async function sendCallSheetToAll(
+  projectId: string,
+  callSheetId: string,
+  opts?: { resend?: boolean }
+): Promise<{ sent: number; skipped: number; noEmail: number; failed: number } | { error: string }> {
+  await requireStudioContext();
+  if (!emailConfigured()) return { error: "Email is not set up yet." };
+
+  const supabase = createClient();
+  const { data: rows } = await supabase
+    .from("call_sheet_recipients")
+    .select("id, email, sent_at")
+    .eq("call_sheet_id", callSheetId)
+    .order("created_at", { ascending: true });
+
+  let sent = 0;
+  let skipped = 0;
+  let noEmail = 0;
+  let failed = 0;
+  for (const r of rows ?? []) {
+    if (!r.email?.trim()) {
+      noEmail += 1;
+      continue;
+    }
+    if (r.sent_at && !opts?.resend) {
+      skipped += 1;
+      continue;
+    }
+    const res = await sendCallSheetEmail(projectId, r.id);
+    if ("error" in res) failed += 1;
+    else sent += 1;
+  }
+  rp(projectId);
+  return { sent, skipped, noEmail, failed };
 }
 
 async function markSheetSent(

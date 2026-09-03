@@ -3057,6 +3057,8 @@ export type Database = {
           confirmed_at: string | null;
           last_reminded_at: string | null;
           reminder_count: number;
+          sent_at: string | null;
+          send_count: number;
           contact_id: string | null;
           created_at: string;
         };
@@ -3071,6 +3073,8 @@ export type Database = {
           confirmed_at?: string | null;
           last_reminded_at?: string | null;
           reminder_count?: number;
+          sent_at?: string | null;
+          send_count?: number;
           contact_id?: string | null;
           created_at?: string;
         };
@@ -3085,6 +3089,8 @@ export type Database = {
           confirmed_at?: string | null;
           last_reminded_at?: string | null;
           reminder_count?: number;
+          sent_at?: string | null;
+          send_count?: number;
           contact_id?: string | null;
           created_at?: string;
         };

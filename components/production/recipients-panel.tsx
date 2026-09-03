@@ -9,6 +9,7 @@ import {
   addCallSheetRecipients,
   deleteCallSheetRecipient,
   sendCallSheetEmail,
+  sendCallSheetToAll,
   remindUnconfirmed,
 } from "@/app/(app)/projects/[id]/callsheet-actions";
 import { toast } from "@/components/ui/toast";
@@ -33,7 +34,7 @@ function fmt(ts: string | null) {
   }
 }
 
-type Filter = "all" | "open" | "confirmed";
+type Filter = "all" | "open" | "confirmed" | "unsent";
 
 /** One number, said plainly. Colour is the signal, not decoration. */
 function Tally({
@@ -81,10 +82,10 @@ export function RecipientsPanel({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
-  const [sent, setSent] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>("all");
   const [chasing, setChasing] = useState(false);
+  const [sendingAll, setSendingAll] = useState(false);
   const [busy, start] = useTransition();
 
   // The three states a producer actually cares about on the morning of a
@@ -93,13 +94,19 @@ export function RecipientsPanel({
   const waiting = recipients.filter((r) => !r.confirmed_at && r.viewed_at);
   const unopened = recipients.filter((r) => !r.confirmed_at && !r.viewed_at);
   const outstanding = recipients.length - confirmed.length;
+  // NOT SENT is its own state, and it is the one that was invisible: a row
+  // nobody has emailed looked exactly like a row that was emailed and ignored.
+  const unsent = recipients.filter((r) => !r.sent_at && r.email);
+  const noEmail = recipients.filter((r) => !r.email);
 
   const shown =
     filter === "confirmed"
       ? confirmed
       : filter === "open"
         ? [...unopened, ...waiting]
-        : recipients;
+        : filter === "unsent"
+          ? unsent
+          : recipients;
 
   function chase() {
     setChasing(true);
@@ -117,6 +124,25 @@ export function RecipientsPanel({
     });
   }
 
+  function sendAll(resend: boolean) {
+    setSendingAll(true);
+    sendCallSheetToAll(projectId, callSheetId, { resend }).then((res) => {
+      setSendingAll(false);
+      if ("error" in res) {
+        toast(res.error, "error");
+        return;
+      }
+      // Says what actually happened to all twelve, rather than a bare
+      // "sent": a skipped person and a failed person are different problems.
+      const parts: string[] = [`Sent to ${res.sent}`];
+      if (res.skipped > 0) parts.push(`${res.skipped} already had it`);
+      if (res.noEmail > 0) parts.push(`${res.noEmail} with no email, copy their link`);
+      if (res.failed > 0) parts.push(`${res.failed} failed`);
+      toast(parts.join(". "), res.failed > 0 ? "error" : "success");
+      router.refresh();
+    });
+  }
+
   function emailLink(recipientId: string) {
     setSending(recipientId);
     sendCallSheetEmail(projectId, recipientId).then((res) => {
@@ -125,9 +151,12 @@ export function RecipientsPanel({
         toast(res.error, "error");
         return;
       }
-      setSent(recipientId);
-      setTimeout(() => setSent((v) => (v === recipientId ? null : v)), 2500);
+      // No transient "Sent" flash any more: the row itself now carries
+      // sent_at, so the refresh below is what turns the row green, and it
+      // STAYS green. The old flash reverted after 2.5 seconds and left a
+      // producer twelve rows in unable to tell who had been emailed.
       toast("Call sheet emailed.", "success");
+      router.refresh();
     });
   }
 
@@ -312,16 +341,47 @@ export function RecipientsPanel({
             />
             <Tally label="Viewed, not confirmed" count={waiting.length} hue="amber" />
             <Tally label="Not opened" count={unopened.length} hue="red" />
-            {emailEnabled && outstanding > 0 && (
-              <button
-                onClick={chase}
-                disabled={chasing}
-                className="ml-auto rounded-[9px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
-              >
-                {chasing ? "Sending..." : `Remind ${outstanding} unconfirmed`}
-              </button>
-            )}
+            <span className="ml-auto flex items-center gap-1.5">
+              {emailEnabled && unsent.length > 0 && (
+                <button
+                  onClick={() => sendAll(false)}
+                  disabled={sendingAll}
+                  className="rounded-[9px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
+                >
+                  {sendingAll
+                    ? "Sending…"
+                    : `Send to ${unsent.length} ${unsent.length === 1 ? "person" : "people"}`}
+                </button>
+              )}
+              {/* Only once everybody has had it, and never the primary
+                  action: putting a second copy of a call sheet into twelve
+                  inboxes is something you should have to mean. */}
+              {emailEnabled && unsent.length === 0 && recipients.some((r) => r.sent_at) && (
+                <button
+                  onClick={() => sendAll(true)}
+                  disabled={sendingAll}
+                  className="rounded-[9px] border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-50"
+                >
+                  {sendingAll ? "Sending…" : "Resend to everyone"}
+                </button>
+              )}
+              {emailEnabled && outstanding > 0 && (
+                <button
+                  onClick={chase}
+                  disabled={chasing}
+                  className="rounded-[9px] border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-50"
+                >
+                  {chasing ? "Sending…" : `Remind ${outstanding} unconfirmed`}
+                </button>
+              )}
+            </span>
           </div>
+          {noEmail.length > 0 && (
+            <p className="mt-2 text-[11.5px] text-amber">
+              {noEmail.length} {noEmail.length === 1 ? "person has" : "people have"} no
+              email address, so they can only be sent their link by hand.
+            </p>
+          )}
           {outstanding > 0 && (
             <p className="mt-2 text-[11.5px] text-text-muted">
               Anyone still unconfirmed is reminded automatically once a day in
@@ -333,6 +393,7 @@ export function RecipientsPanel({
             {(
               [
                 ["all", `Everyone (${recipients.length})`],
+                ["unsent", `Not sent (${unsent.length})`],
                 ["open", `Outstanding (${outstanding})`],
                 ["confirmed", `Confirmed (${confirmed.length})`],
               ] as [Filter, string][]
@@ -360,8 +421,9 @@ export function RecipientsPanel({
         </p>
       ) : (
         <div className="overflow-hidden rounded-[12px] border border-border">
-          <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_auto] gap-2 border-b border-border bg-surface-2/50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          <div className="grid grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_auto] gap-2 border-b border-border bg-surface-2/50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
             <span>Recipient</span>
+            <span>Sent</span>
             <span>Viewed</span>
             <span>Confirmed</span>
             <span />
@@ -370,18 +432,40 @@ export function RecipientsPanel({
             <p className="px-3 py-6 text-center text-sm text-text-faint">
               {filter === "open"
                 ? "Everyone has confirmed."
-                : "Nobody has confirmed yet."}
+                : filter === "unsent"
+                  ? "Everyone with an email address has been sent it."
+                  : "Nobody has confirmed yet."}
             </p>
           )}
           {shown.map((r) => (
             <div
               key={r.id}
-              className="grid grid-cols-[1.4fr_0.8fr_0.8fr_auto] items-center gap-2 border-b border-border px-3 py-2 last:border-0"
+              className="grid grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_auto] items-center gap-2 border-b border-border px-3 py-2 last:border-0"
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-text">{r.name}</div>
                 {r.email && <div className="truncate text-xs text-text-faint">{r.email}</div>}
               </div>
+              <span>
+                {r.sent_at ? (
+                  <span
+                    className="rounded-pill px-2 py-0.5 text-[11px] font-bold"
+                    style={{ backgroundColor: "var(--h-green-bg)", color: "var(--h-green)" }}
+                    title={
+                      r.send_count > 1
+                        ? `Sent ${r.send_count} times, last on ${fmt(r.sent_at)}`
+                        : `Sent ${fmt(r.sent_at)}`
+                    }
+                  >
+                    {fmt(r.sent_at)}
+                    {r.send_count > 1 ? ` ×${r.send_count}` : ""}
+                  </span>
+                ) : r.email ? (
+                  <span className="text-[11px] font-semibold text-amber">Not sent</span>
+                ) : (
+                  <span className="text-[11px] text-text-faint">No email</span>
+                )}
+              </span>
               <span>
                 {r.viewed_at ? (
                   <span className="rounded-pill px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: "var(--h-blue-bg)", color: "var(--h-blue)" }}>
@@ -407,7 +491,7 @@ export function RecipientsPanel({
                     disabled={sending === r.id}
                     className="rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-accent transition hover:bg-accent-soft disabled:opacity-50"
                   >
-                    {sending === r.id ? "Sending..." : sent === r.id ? "Sent" : "Email"}
+                    {sending === r.id ? "Sending…" : r.sent_at ? "Resend" : "Email"}
                   </button>
                 )}
                 <button
