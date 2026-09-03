@@ -69,12 +69,20 @@ export function RecipientsPanel({
   recipients,
   contactOptions = [],
   emailEnabled = false,
+  meals,
+  onOpenMeals,
 }: {
   projectId: string;
   callSheetId: string;
   recipients: CallSheetRecipient[];
   contactOptions?: ContactOption[];
   emailEnabled?: boolean;
+  /**
+   * The meal rounds on this sheet, so the panel can carry the step that comes
+   * AFTER sending. Absent when there is nowhere to open the meal panel.
+   */
+  meals?: { meal: string; sent_at: string | null; ordered: number; total: number }[];
+  onOpenMeals?: () => void;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -412,6 +420,43 @@ export function RecipientsPanel({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Once the sheet has gone out, the meal order is the next thing that
+          happens, and it used to live behind an unrelated button in the
+          toolbar with nothing connecting the two. */}
+      {onOpenMeals && recipients.some((r) => r.sent_at) && (
+        <button
+          onClick={onOpenMeals}
+          className="flex w-full items-center gap-3 rounded-[12px] border border-border px-3 py-2.5 text-left transition hover:bg-surface-2"
+        >
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px]" style={{ backgroundColor: "var(--h-amber-bg)", color: "var(--h-amber)" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 2v7a3 3 0 0 0 3 3 3 3 0 0 0 3-3V2M6 2v10m0 0v10M18 2c-1.7 1.5-2.5 3.8-2.5 6.5S16.3 13 18 14v8" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-text">
+              {!meals || meals.length === 0
+                ? "Set up the crew meal"
+                : meals.every((m) => m.sent_at)
+                  ? `Meal order sent${meals.length === 1 ? "" : ` (${meals.length} rounds)`}`
+                  : "Meal order not sent yet"}
+            </span>
+            <span className="block text-xs text-text-muted">
+              {!meals || meals.length === 0
+                ? "A separate email with the group order link. The call sheet does not need resending."
+                : meals
+                    .map((m) =>
+                      m.sent_at
+                        ? `${m.meal}: ${m.ordered}/${m.total} ordered`
+                        : `${m.meal}: not sent`
+                    )
+                    .join(" · ")}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-bold text-accent">Open</span>
+        </button>
       )}
 
       {/* List */}

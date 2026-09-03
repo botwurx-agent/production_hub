@@ -329,6 +329,12 @@ export function MealPanel({
         </p>
       ) : null}
 
+      <p className="rounded-[10px] border border-border bg-surface-2/40 px-3 py-2 text-xs text-text-muted">
+        This is its own email, separate from the call sheet. You do not need to
+        resend the call sheet: everyone opens theirs on a live link, so the
+        meal shows up on it as soon as you save.
+      </p>
+
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={() => save()} disabled={busy} variant="secondary">
           Save
@@ -337,7 +343,9 @@ export function MealPanel({
           onClick={() => save("send")}
           disabled={busy || !emailEnabled || picked.size === 0}
         >
-          {round?.sent_at ? "Save and resend" : "Save and send"}
+          {round?.sent_at
+            ? `Resend the order link to ${picked.size}`
+            : `Email the order link to ${picked.size}`}
         </Button>
         {round?.sent_at ? (
           <Button onClick={chase} disabled={busy} variant="secondary">

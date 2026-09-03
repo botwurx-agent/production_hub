@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { mealLabel } from "@/lib/meals";
 import type { RosterContact } from "@/lib/callsheet-import";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
@@ -284,6 +285,16 @@ export function CallSheetWorkspace({
                 recipients={activeRecipients}
                 contactOptions={contactOptions}
                 emailEnabled={emailEnabled}
+                meals={activeMeals.map((m) => ({
+                  meal: mealLabel(m.meal),
+                  sent_at: m.sent_at,
+                  ordered: (m.responses ?? []).filter((r) => r.ordered_at).length,
+                  total: (m.responses ?? []).length,
+                }))}
+                onOpenMeals={() => {
+                  setSendOpen(false);
+                  setMealOpen(true);
+                }}
               />
             </Modal>
           </div>
