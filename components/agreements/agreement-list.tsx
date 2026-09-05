@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -140,6 +141,11 @@ export function AgreementList({
   const router = useRouter();
   const [busy, start] = useTransition();
   const [editing, setEditing] = useState<Agreement | "new" | null>(null);
+  // A file dropped on the page. It opens the add form ALREADY CARRYING the
+  // document, rather than uploading something the app cannot describe: an
+  // agreement needs a kind, a counterparty and dates, and none of that is in
+  // the file's name.
+  const [dropped, setDropped] = useState<File | null>(null);
 
   function remove(a: Agreement) {
     if (
@@ -155,6 +161,22 @@ export function AgreementList({
   }
 
   return (
+    <FileDropzone
+      accept=".pdf,image/*"
+      multiple={false}
+      maxBytes={MAX_UPLOAD_BYTES}
+      onTooLarge={(over) =>
+        toast(
+          `"${over[0].name}" is ${formatBytes(over[0].size)}, over the ${formatBytes(MAX_UPLOAD_BYTES)} upload limit.`,
+          "error"
+        )
+      }
+      onFiles={(files) => {
+        setDropped(files[0]);
+        setEditing("new");
+      }}
+      label="Drop to add an agreement"
+    >
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -243,10 +265,15 @@ export function AgreementList({
           kinds={kinds}
           parents={parents}
           defaultCounterparty={defaultCounterparty}
-          onClose={() => setEditing(null)}
+          initialFile={dropped}
+          onClose={() => {
+            setEditing(null);
+            setDropped(null);
+          }}
         />
       )}
     </div>
+    </FileDropzone>
   );
 }
 
@@ -405,6 +432,7 @@ function AgreementModal({
   kinds,
   parents,
   defaultCounterparty,
+  initialFile = null,
   onClose,
 }: {
   agreement: Agreement | null;
@@ -412,6 +440,8 @@ function AgreementModal({
   kinds: AgreementKind[];
   parents: { id: string; label: string }[];
   defaultCounterparty: string | null;
+  /** A file dropped on the page, already attached when the form opens. */
+  initialFile?: File | null;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -420,7 +450,7 @@ function AgreementModal({
     const base = emptyInput(scope, kinds[0] ?? "sow");
     return { ...base, counterparty: defaultCounterparty };
   });
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(initialFile);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAiEnabled();
@@ -437,6 +467,19 @@ function AgreementModal({
   function set<K extends keyof AgreementInput>(k: K, v: AgreementInput[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
+
+  // A dropped file has to behave exactly like a picked one, or the two ways
+  // into this form quietly do different things. Same conditions as the pick
+  // path, and once only.
+  const autoRead = useRef(false);
+  useEffect(() => {
+    if (autoRead.current || !initialFile) return;
+    autoRead.current = true;
+    if (aiEnabled && !agreement && agreementKind(form.kind) === "sow") {
+      void readDocument(initialFile);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   async function readDocument(f: File) {
     setReading(true);

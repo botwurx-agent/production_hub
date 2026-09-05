@@ -1,6 +1,11 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { FileDropzone } from "@/components/ui/file-dropzone";
+
+// Documents go browser -> Storage on a server-minted signed URL, so the
+// ~4.5MB Server Action ceiling does not apply. Matches the assets dropzone.
+const MAX_DOC_BYTES = 200 * 1024 * 1024;
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
@@ -99,6 +104,20 @@ export function ProjectDocuments({
   }
 
   return (
+    <FileDropzone
+      maxBytes={MAX_DOC_BYTES}
+      onTooLarge={(over) =>
+        toast(
+          over.length === 1
+            ? `"${over[0].name}" is over the ${fileSize(MAX_DOC_BYTES)} limit.`
+            : `${over.length} files are over the ${fileSize(MAX_DOC_BYTES)} limit.`,
+          "error"
+        )
+      }
+      onFiles={(files) => start(() => upload(files))}
+      label="Drop to file as documents"
+      disabled={busy}
+    >
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -242,5 +261,6 @@ export function ProjectDocuments({
         </ul>
       )}
     </div>
+    </FileDropzone>
   );
 }

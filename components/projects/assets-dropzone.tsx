@@ -13,6 +13,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { ASSET_TYPE_LABEL } from "@/lib/status";
 import { fileSize } from "@/lib/format";
+import { FileDropzone } from "@/components/ui/file-dropzone";
 
 // Assets can be large (video cuts), so allow more than the board's image cap.
 const MAX_MB = 200;
@@ -41,10 +42,6 @@ type Staged = {
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, "").trim() || name || "Untitled";
 }
-function hasFiles(e: React.DragEvent): boolean {
-  return Array.from(e.dataTransfer?.types ?? []).includes("Files");
-}
-
 // Wraps the assets card so files dropped anywhere on it upload as new assets
 // (browser -> Storage direct, then a metadata insert), alongside the Add button.
 export function AssetsDropzone({
@@ -59,13 +56,10 @@ export function AssetsDropzone({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [active, setActive] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [staged, setStaged] = useState<Staged[]>([]);
-  const depth = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   function flash(msg: string) {
     setNotice(msg);
@@ -147,69 +141,27 @@ export function AssetsDropzone({
   }
 
   return (
-    <div
-      className="relative"
-      onDragEnter={(e) => {
-        if (!hasFiles(e)) return;
-        e.preventDefault();
-        depth.current += 1;
-        setActive(true);
-      }}
-      onDragOver={(e) => {
-        if (hasFiles(e)) e.preventDefault();
-      }}
-      onDragLeave={() => {
-        depth.current = Math.max(0, depth.current - 1);
-        if (depth.current === 0) setActive(false);
-      }}
-      onDrop={(e) => {
-        if (!hasFiles(e)) return;
-        e.preventDefault();
-        depth.current = 0;
-        setActive(false);
-        stageFiles(Array.from(e.dataTransfer.files));
-      }}
+    <FileDropzone
+      maxBytes={MAX_BYTES}
+      onTooLarge={(over) =>
+        flash(
+          over.length === 1
+            ? `"${over[0].name}" is over the ${MAX_MB} MB limit and was skipped.`
+            : `${over.length} files are over the ${MAX_MB} MB limit and were skipped.`
+        )
+      }
+      onFiles={stageFiles}
+      label="Drop files to upload as assets"
+      browse={{ text: "Drag & drop files here, or click to browse" }}
+      disabled={!!status}
     >
-      <input
-        ref={fileRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          stageFiles(Array.from(e.target.files ?? []));
-          if (fileRef.current) fileRef.current.value = "";
-        }}
-      />
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        disabled={!!status}
-        className="mb-4 flex w-full items-center justify-center gap-2.5 rounded-[12px] border-2 border-dashed border-border bg-surface-2/40 px-4 py-4 text-sm text-text-muted transition hover:border-accent hover:bg-accent-soft/40 hover:text-accent disabled:opacity-60"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 3v12m0-12 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-        </svg>
-        <span className="font-semibold">
-          Drag &amp; drop files here, or <span className="underline">click to browse</span>
-        </span>
-      </button>
-
       {children}
 
-      {(active || status) && (
+      {status && (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-[16px] border-2 border-dashed border-accent bg-accent-soft/50 backdrop-blur-[2px]">
           <div className="flex items-center gap-2 rounded-pill bg-surface px-4 py-2 text-sm font-semibold text-accent shadow">
-            {status ? (
-              <>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="animate-spin" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.5" /></svg>
-                {status}
-              </>
-            ) : (
-              <>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0-12 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
-                Drop files to upload as assets
-              </>
-            )}
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="animate-spin" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.5" /></svg>
+            {status}
           </div>
         </div>
       )}
@@ -356,6 +308,6 @@ export function AssetsDropzone({
           </div>
         </div>
       )}
-    </div>
+    </FileDropzone>
   );
 }

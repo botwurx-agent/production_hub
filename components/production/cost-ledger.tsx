@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -131,6 +132,10 @@ export function CostLedger({
   const [busy, start] = useTransition();
   const [editing, setEditing] = useState<ProjectCost | "new" | null>(null);
   const [openSchedule, setOpenSchedule] = useState<string | null>(null);
+  // A vendor invoice dropped on the ledger. It opens the add-a-cost form with
+  // the document attached, which is what makes the AI read fire: filing an
+  // invoice with no amount, vendor or budget line would not be a cost.
+  const [dropped, setDropped] = useState<File | null>(null);
 
   const paymentsByCost = useMemo(() => {
     const m = new Map<string, CostPayment[]>();
@@ -202,6 +207,19 @@ export function CostLedger({
   }
 
   return (
+    <FileDropzone
+      accept=".pdf,image/*"
+      multiple={false}
+      maxBytes={MAX_COST_DOC_BYTES}
+      onTooLarge={() =>
+        toast("That file is too large (4MB max for an invoice).", "error")
+      }
+      onFiles={(files) => {
+        setDropped(files[0]);
+        setEditing("new");
+      }}
+      label="Drop an invoice to log a cost"
+    >
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -337,10 +355,15 @@ export function CostLedger({
           cost={editing === "new" ? null : editing}
           lines={lines}
           roster={roster}
-          onClose={() => setEditing(null)}
+          initialFile={dropped}
+          onClose={() => {
+            setEditing(null);
+            setDropped(null);
+          }}
         />
       )}
     </div>
+    </FileDropzone>
   );
 }
 
@@ -475,6 +498,7 @@ export function CostModal({
   initial,
   initialFilled,
   attachment,
+  initialFile = null,
   onClose,
 }: {
   projectId: string;
@@ -494,13 +518,15 @@ export function CostModal({
     label: string;
     attach: (costId: string) => Promise<{ error: string } | { ok: true }>;
   };
+  /** An invoice dropped on the ledger, already attached when the form opens. */
+  initialFile?: File | null;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<CostInput>(
     cost ? toInput(cost) : (initial ?? emptyCost())
   );
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(initialFile);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAiEnabled();
@@ -514,6 +540,16 @@ export function CostModal({
   // What the document called itself. An estimate is a commitment rather than a
   // bill, so the banner names it instead of calling everything an invoice.
   const [docKind, setDocKind] = useState<"invoice" | "estimate" | null>(null);
+
+  // Dropped and picked have to behave identically, or the two ways in quietly
+  // do different things. Once only.
+  const autoRead = useRef(false);
+  useEffect(() => {
+    if (autoRead.current || !initialFile) return;
+    autoRead.current = true;
+    if (aiEnabled) void readInvoice(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   async function readInvoice(f: File) {
     setReading(true);
