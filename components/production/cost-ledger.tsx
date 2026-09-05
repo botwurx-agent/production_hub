@@ -219,6 +219,9 @@ export function CostLedger({
         setEditing("new");
       }}
       label="Drop an invoice to log a cost"
+      browse={{ text: "Drag an invoice here, or click to browse" }}
+      hint="PDF or an image, up to 4MB. Reads the amount and vendor for you."
+      disabled={Boolean(editing)}
     >
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

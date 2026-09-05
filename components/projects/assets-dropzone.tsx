@@ -153,7 +153,9 @@ export function AssetsDropzone({
       onFiles={stageFiles}
       label="Drop files to upload as assets"
       browse={{ text: "Drag & drop files here, or click to browse" }}
+      hint="Cuts, boards, stills, references. Up to 200 MB each."
       disabled={!!status}
+      className="relative"
     >
       {children}
 

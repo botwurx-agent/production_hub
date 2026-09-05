@@ -116,6 +116,8 @@ export function ProjectDocuments({
       }
       onFiles={(files) => start(() => upload(files))}
       label="Drop to file as documents"
+      browse={{ text: "Drag documents here, or click to browse" }}
+      hint="Permits, insurance certificates, delivery specs, agency schedules."
       disabled={busy}
     >
     <div>

@@ -176,6 +176,9 @@ export function AgreementList({
         setEditing("new");
       }}
       label="Drop to add an agreement"
+      browse={{ text: "Drag a document here, or click to browse" }}
+      hint="PDF or an image, up to 4MB. Fills the form for you."
+      disabled={Boolean(editing)}
     >
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
