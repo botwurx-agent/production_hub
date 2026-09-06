@@ -13,6 +13,7 @@ import {
   remindUnconfirmed,
 } from "@/app/(app)/projects/[id]/callsheet-actions";
 import { toast } from "@/components/ui/toast";
+import { recipientStage, tallyRecipients } from "@/lib/callsheet-status";
 import type { CallSheetRecipient } from "@/lib/database.types";
 
 export type ContactOption = {
@@ -98,20 +99,16 @@ export function RecipientsPanel({
 
   // The three states a producer actually cares about on the morning of a
   // shoot, in the order they care about them.
-  const confirmed = recipients.filter((r) => r.confirmed_at);
-  const waiting = recipients.filter((r) => !r.confirmed_at && r.viewed_at);
-  const unopened = recipients.filter((r) => !r.confirmed_at && !r.viewed_at);
-  const outstanding = recipients.length - confirmed.length;
-  // NOT SENT is its own state, and it is the one that was invisible: a row
-  // nobody has emailed looked exactly like a row that was emailed and ignored.
-  const unsent = recipients.filter((r) => !r.sent_at && r.email);
-  const noEmail = recipients.filter((r) => !r.email);
+  const t = tallyRecipients(recipients);
+  const confirmed = recipients.filter((r) => recipientStage(r).key === "confirmed");
+  const unsent = recipients.filter((r) => recipientStage(r).key === "unsent");
+  const outstanding = t.outstanding;
 
   const shown =
     filter === "confirmed"
       ? confirmed
       : filter === "open"
-        ? [...unopened, ...waiting]
+        ? recipients.filter((r) => recipientStage(r).key !== "confirmed")
         : filter === "unsent"
           ? unsent
           : recipients;
@@ -341,14 +338,10 @@ export function RecipientsPanel({
       {recipients.length > 0 && (
         <div className="rounded-[12px] border border-border bg-surface-2/30 p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Tally
-              label="Confirmed"
-              count={confirmed.length}
-              total={recipients.length}
-              hue="green"
-            />
-            <Tally label="Viewed, not confirmed" count={waiting.length} hue="amber" />
-            <Tally label="Not opened" count={unopened.length} hue="red" />
+            <Tally label="Confirmed" count={t.confirmed} total={t.total} hue="green" />
+            {t.opened > 0 && <Tally label="Opened, not confirmed" count={t.opened} hue="blue" />}
+            {t.sent > 0 && <Tally label="Sent, not opened" count={t.sent} hue="amber" />}
+            {t.unsent > 0 && <Tally label="Not sent" count={t.unsent} hue="red" />}
             <span className="ml-auto flex items-center gap-1.5">
               {emailEnabled && unsent.length > 0 && (
                 <button
@@ -384,10 +377,10 @@ export function RecipientsPanel({
               )}
             </span>
           </div>
-          {noEmail.length > 0 && (
+          {t.noEmail > 0 && (
             <p className="mt-2 text-[11.5px] text-amber">
-              {noEmail.length} {noEmail.length === 1 ? "person has" : "people have"} no
-              email address, so they can only be sent their link by hand.
+              {t.noEmail} {t.noEmail === 1 ? "person has" : "people have"} no email
+              address, so they can only be sent their link by hand.
             </p>
           )}
           {outstanding > 0 && (
@@ -400,10 +393,10 @@ export function RecipientsPanel({
           <div className="mt-2.5 flex flex-wrap gap-1">
             {(
               [
-                ["all", `Everyone (${recipients.length})`],
-                ["unsent", `Not sent (${unsent.length})`],
+                ["all", `Everyone (${t.total})`],
+                ["unsent", `Not sent (${t.unsent})`],
                 ["open", `Outstanding (${outstanding})`],
-                ["confirmed", `Confirmed (${confirmed.length})`],
+                ["confirmed", `Confirmed (${t.confirmed})`],
               ] as [Filter, string][]
             ).map(([key, label]) => (
               <button
@@ -466,11 +459,18 @@ export function RecipientsPanel({
         </p>
       ) : (
         <div className="overflow-hidden rounded-[12px] border border-border">
-          <div className="grid grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_auto] gap-2 border-b border-border bg-surface-2/50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          {/* ONE STATUS COLUMN, not three date columns. Three of them meant a
+              person who did everything on one day read as "Sep 2 Sep 2 Sep 2",
+              and twelve of those is thirty-six dates and no answer.
+
+              The actions track is a FIXED width, which is also the bug that
+              made the old header sit right of its values: the header and the
+              body are separate grids, and with an `auto` last track the empty
+              header cell measured 0 while the body's buttons measured ~260px,
+              so the flexible columns resolved differently in each. */}
+          <div className="grid grid-cols-[1fr_170px_224px] gap-3 border-b border-border bg-surface-2/50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
             <span>Recipient</span>
-            <span>Sent</span>
-            <span>Viewed</span>
-            <span>Confirmed</span>
+            <span>Status</span>
             <span />
           </div>
           {shown.length === 0 && (
@@ -482,66 +482,57 @@ export function RecipientsPanel({
                   : "Nobody has confirmed yet."}
             </p>
           )}
-          {shown.map((r) => (
+          {shown.map((r) => {
+            const st = recipientStage(r);
+            return (
             <div
               key={r.id}
-              className="grid grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_auto] items-center gap-2 border-b border-border px-3 py-2 last:border-0"
+              className="grid grid-cols-[1fr_170px_224px] items-center gap-3 border-b border-border px-3 py-2.5 last:border-0"
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-text">{r.name}</div>
-                {r.email && <div className="truncate text-xs text-text-faint">{r.email}</div>}
+                {r.email ? (
+                  <div className="truncate text-xs text-text-faint">{r.email}</div>
+                ) : (
+                  <div className="truncate text-xs text-amber">No email address</div>
+                )}
               </div>
-              <span>
-                {r.sent_at ? (
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <Steps steps={st.steps} hue={st.hue} />
                   <span
-                    className="rounded-pill px-2 py-0.5 text-[11px] font-bold"
-                    style={{ backgroundColor: "var(--h-green-bg)", color: "var(--h-green)" }}
-                    title={
-                      r.send_count > 1
-                        ? `Sent ${r.send_count} times, last on ${fmt(r.sent_at)}`
-                        : `Sent ${fmt(r.sent_at)}`
-                    }
+                    className="truncate text-[12.5px] font-bold"
+                    style={{ color: hueVar(st.hue) }}
                   >
-                    {fmt(r.sent_at)}
-                    {r.send_count > 1 ? ` ×${r.send_count}` : ""}
+                    {st.label}
                   </span>
-                ) : r.email ? (
-                  <span className="text-[11px] font-semibold text-amber">Not sent</span>
-                ) : (
-                  <span className="text-[11px] text-text-faint">No email</span>
+                  {st.at && (
+                    <span className="shrink-0 text-[12px] text-text-muted">
+                      {fmt(st.at)}
+                    </span>
+                  )}
+                </div>
+                {/* Only where something needs saying, so it is read when it
+                    appears rather than tuned out. */}
+                {st.note && (
+                  <div className="truncate text-[11px] text-text-faint">{st.note}</div>
                 )}
-              </span>
-              <span>
-                {r.viewed_at ? (
-                  <span className="rounded-pill px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: "var(--h-blue-bg)", color: "var(--h-blue)" }}>
-                    {fmt(r.viewed_at)}
-                  </span>
-                ) : (
-                  <span className="text-xs text-text-faint">—</span>
-                )}
-              </span>
-              <span>
-                {r.confirmed_at ? (
-                  <span className="rounded-pill px-2 py-0.5 text-[11px] font-bold" style={{ backgroundColor: "var(--green-bg)", color: "var(--green)" }}>
-                    {fmt(r.confirmed_at)}
-                  </span>
-                ) : (
-                  <span className="text-xs text-text-faint">—</span>
-                )}
-              </span>
-              <div className="flex items-center gap-1">
+              </div>
+
+              <div className="flex items-center justify-end gap-1">
                 {emailEnabled && r.email && (
                   <button
                     onClick={() => emailLink(r.id)}
                     disabled={sending === r.id}
-                    className="rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-accent transition hover:bg-accent-soft disabled:opacity-50"
+                    className="min-w-[66px] rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-accent transition hover:bg-accent-soft disabled:opacity-50"
                   >
                     {sending === r.id ? "Sending…" : r.sent_at ? "Resend" : "Email"}
                   </button>
                 )}
                 <button
                   onClick={() => copy(r.token)}
-                  className="rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+                  className="min-w-[76px] rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
                 >
                   {copied === r.token ? "Copied" : "Copy link"}
                 </button>
@@ -555,9 +546,47 @@ export function RecipientsPanel({
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
+  );
+}
+
+/** Token for a stage hue, so the row and the tallies cannot disagree. */
+function hueVar(hue: string): string {
+  return hue === "muted" ? "var(--text-muted)" : `var(--h-${hue})`;
+}
+
+/**
+ * Emailed, opened, confirmed, as three dots.
+ *
+ * The progression is the thing a producer is scanning for, and three dots read
+ * faster than three dates: a row of filled dots is done, a gap is where
+ * somebody stopped. The dates are still on the row, they just stop competing.
+ */
+function Steps({
+  steps,
+  hue,
+}: {
+  steps: [boolean, boolean, boolean];
+  hue: string;
+}) {
+  const labels = ["Emailed", "Opened", "Confirmed"];
+  return (
+    <span className="flex shrink-0 items-center gap-[3px]" aria-hidden>
+      {steps.map((on, i) => (
+        <span
+          key={i}
+          title={`${labels[i]}: ${on ? "yes" : "no"}`}
+          className="h-[6px] w-[6px] rounded-full"
+          style={{
+            backgroundColor: on ? hueVar(hue) : "var(--border-strong)",
+            opacity: on ? 1 : 0.5,
+          }}
+        />
+      ))}
+    </span>
   );
 }
