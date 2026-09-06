@@ -98,9 +98,18 @@ export function FileDropzone({
   onTooLarge,
   /** Overlay wording, e.g. "Drop to add an agreement". */
   label = "Drop files to upload",
-  /** The persistent dashed strip. Pass false only where one already exists. */
-  browse = { text: "Drag a file here, or click to browse" },
+  /** The persistent dashed panel. Pass false only where one already exists. */
+  browse = { text: "Drag a file here" },
   hint,
+  /** Wording for the built-in picker button. */
+  chooseLabel = "Choose a file",
+  /**
+   * Extra buttons beside the picker, for the OTHER way into the same job.
+   * On agreements that is starting a blank form: a paper contract with no
+   * scan yet is still an agreement, and burying that under a dropzone would
+   * make the common case easy and the second case unreachable.
+   */
+  actions,
   disabled = false,
   className = "",
   children,
@@ -112,8 +121,10 @@ export function FileDropzone({
   onTooLarge?: (files: File[]) => void;
   label?: string;
   browse?: { text: string } | false;
-  /** Small line under the strip, e.g. "PDF or an image, up to 4MB". */
+  /** Small line under the panel's heading, e.g. "PDF or an image, up to 4MB". */
   hint?: string;
+  chooseLabel?: string;
+  actions?: React.ReactNode;
   disabled?: boolean;
   className?: string;
   children: React.ReactNode;
@@ -178,18 +189,24 @@ export function FileDropzone({
       {/* SAYS IT IS POSSIBLE BEFORE YOU TRY. Nothing on the page indicated a
           file could be dropped, so nobody would think to. */}
       {browse && (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={disabled}
-          className="mb-4 flex w-full flex-col items-center justify-center gap-1 rounded-[12px] border-2 border-dashed border-border bg-surface-2/40 px-4 py-5 text-sm text-text-muted transition hover:border-accent hover:bg-accent-soft/40 hover:text-accent disabled:opacity-60"
-        >
-          <span className="flex items-center gap-2.5 font-semibold">
+        <div className="mb-4 flex flex-col items-center justify-center gap-2 rounded-[12px] border-2 border-dashed border-border bg-surface-2/40 px-4 py-6 text-center transition hover:border-border-strong">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-accent-soft text-accent">
             <UploadIcon />
-            {browse.text}
           </span>
-          {hint && <span className="text-xs text-text-faint">{hint}</span>}
-        </button>
+          <span className="text-sm font-semibold text-text">{browse.text}</span>
+          {hint && <span className="text-xs text-text-muted">{hint}</span>}
+          <span className="mt-1.5 flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={disabled}
+              className="rounded-[10px] bg-accent px-3.5 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-60"
+            >
+              {chooseLabel}
+            </button>
+            {actions}
+          </span>
+        </div>
       )}
 
       {children}

@@ -161,6 +161,15 @@ export function AgreementList({
   }
 
   return (
+    <>
+      <div className="mb-3">
+        <h3 className="text-sm font-bold text-text">Agreements</h3>
+        <p className="text-xs text-text-muted">
+          {agreements.length === 0
+            ? "NDAs, master agreements, SOWs and change orders on file."
+            : `${agreements.length} on file.`}
+        </p>
+      </div>
     <FileDropzone
       accept=".pdf,image/*"
       multiple={false}
@@ -176,25 +185,21 @@ export function AgreementList({
         setEditing("new");
       }}
       label="Drop to add an agreement"
-      browse={{ text: "Drag a document here, or click to browse" }}
-      hint="PDF or an image, up to 4MB. Fills the form for you."
+      browse={{ text: "Drag an agreement here" }}
+      hint="PDF or an image, up to 4MB. A SOW fills the form in for you."
+      chooseLabel="Choose a document"
+      actions={
+        <button
+          type="button"
+          onClick={() => setEditing("new")}
+          className="rounded-[10px] border border-border bg-surface px-3.5 py-2 text-sm font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+        >
+          Add without a document
+        </button>
+      }
       disabled={Boolean(editing)}
     >
     <div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-bold text-text">Agreements</h3>
-          <p className="text-xs text-text-muted">
-            {agreements.length === 0
-              ? "NDAs, master agreements, SOWs and change orders on file."
-              : `${agreements.length} on file.`}
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setEditing("new")}>
-          + Add an agreement
-        </Button>
-      </div>
-
       {/* Inherited from the account: a SOW is governed by these, so the project
           should say they exist without pretending to own them. */}
       {inherited.length > 0 && (
@@ -243,8 +248,8 @@ export function AgreementList({
       )}
 
       {agreements.length === 0 ? (
-        <p className="rounded-[12px] border border-dashed border-border py-8 text-center text-sm text-text-faint">
-          Nothing on file yet. Add a received NDA or SOW so it is findable later.
+        <p className="py-4 text-center text-sm text-text-faint">
+          Nothing on file yet.
         </p>
       ) : (
         <div className="space-y-2">
@@ -277,6 +282,7 @@ export function AgreementList({
       )}
     </div>
     </FileDropzone>
+    </>
   );
 }
 
