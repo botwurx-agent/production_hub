@@ -511,18 +511,13 @@ export default async function ProjectDetailPage({
           data (budget, billing, pipeline) and money talk lands in the prose,
           so a collaborator never sees the card. RLS (migration 0099) is the
           real boundary; hiding it here just keeps the hub from showing them
-          an empty box. */}
+          an empty box.
+
+          The heading, the AI mark and the collapse control all live inside
+          ProjectSummary, so a second page that mounts it gets the whole card
+          rather than having to rebuild the header and remember the toggle. */}
       {!ctx.isCollaborator && (
         <Card className="mb-6 p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <h2 className="font-display text-base font-bold">Project summary</h2>
-            <span
-              className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
-              style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
-            >
-              AI
-            </span>
-          </div>
           <ProjectSummary
             projectId={project.id}
             connected={aiConfigured()}

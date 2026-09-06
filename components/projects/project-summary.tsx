@@ -1,10 +1,28 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { shortDate } from "@/lib/format";
 import { summarizeProject } from "@/app/(app)/projects/[id]/ai-actions";
 import { parseSummary, splitTrailingNote } from "@/lib/summary-format";
+
+// A per-person preference about a card, not studio state, so it lives in
+// localStorage next to sidebar.collapsed and tasks.groupBy rather than in a
+// migration. One key for every project: the question is "do I want the summary
+// open", not "do I want it open on this job".
+const STORAGE_KEY = "project.summary.open";
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+      className={`shrink-0 transition-transform ${open ? "" : "-rotate-90"}`}
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
 
 // Small "AI" spark mark for the summary card.
 function SparkIcon({ className }: { className?: string }) {
@@ -31,6 +49,26 @@ export function ProjectSummary({
   const [at, setAt] = useState<string | null>(initialAt);
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
+  // Open is the default, since collapsed-by-default would hide the feature
+  // from anyone who has never touched the control. Restored client-side only,
+  // same as the sidebar, or the server and the client disagree on first paint.
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    try {
+      setOpen(localStorage.getItem(STORAGE_KEY) !== "0");
+    } catch {}
+  }, []);
+
+  function toggle() {
+    setOpen((o) => {
+      const next = !o;
+      try {
+        localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  }
 
   function run() {
     setError(null);
@@ -44,17 +82,57 @@ export function ProjectSummary({
     });
   }
 
+  // ONE SHELL FOR EVERY STATE. The header carries the title, the AI mark and
+  // the collapse control, and it used to live in the page that mounted this,
+  // so a second page would have had to rebuild all three (and remember to).
+  function Shell({ peek, children }: { peek?: string; children: React.ReactNode }) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          className="group -mx-1 flex w-full items-center gap-2 rounded-[8px] px-1 py-1 text-left transition hover:bg-surface-2"
+        >
+          <h2 className="font-display text-base font-bold text-text">
+            Project summary
+          </h2>
+          <span
+            className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
+            style={{ backgroundColor: "var(--accent-soft)", color: "var(--accent)" }}
+          >
+            AI
+          </span>
+          <span className="flex-1" />
+          <span className="text-text-faint transition group-hover:text-text-muted">
+            <Chevron open={open} />
+          </span>
+        </button>
+        {/* Collapsed, the opening status line still shows. A folded card whose
+            header says only "Project summary" is a dead row, and that sentence
+            is the twenty-second read this card exists for. */}
+        {!open && peek ? (
+          <p className="mt-1 line-clamp-1 pr-1 text-sm text-text-muted">{peek}</p>
+        ) : null}
+        {open ? <div className="mt-4">{children}</div> : null}
+      </div>
+    );
+  }
+
   if (!connected) {
     return (
-      <p className="rounded-[12px] border border-dashed border-border px-3 py-6 text-center text-sm text-text-muted">
-        Add an OpenAI or Anthropic API key to the deployment to turn on AI
-        summaries.
-      </p>
+      <Shell peek="AI summaries are off until a provider key is set.">
+        <p className="rounded-[12px] border border-dashed border-border px-3 py-6 text-center text-sm text-text-muted">
+          Add an OpenAI or Anthropic API key to the deployment to turn on AI
+          summaries.
+        </p>
+      </Shell>
     );
   }
 
   if (!content) {
     return (
+      <Shell peek="No summary yet.">
       <div className="rounded-[12px] border border-dashed border-border px-4 py-8 text-center">
         <span
           className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-[12px]"
@@ -75,13 +153,14 @@ export function ProjectSummary({
           <p className="mt-3 text-xs font-medium text-red">{error}</p>
         )}
       </div>
+      </Shell>
     );
   }
 
   const parsed = parseSummary(content);
 
   return (
-    <div>
+    <Shell peek={parsed.lead || undefined}>
       <div className={`transition ${busy ? "opacity-50" : ""}`}>
         {/* The opening status line is the twenty-second read, so it gets the
             weight and the full text colour. Everything below it is detail. */}
@@ -179,6 +258,6 @@ export function ProjectSummary({
         </Button>
       </div>
       {error && <p className="mt-2 text-xs font-medium text-red">{error}</p>}
-    </div>
+    </Shell>
   );
 }

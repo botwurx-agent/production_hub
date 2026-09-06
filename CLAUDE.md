@@ -2334,7 +2334,23 @@ splitTrailingNote and set in text-faint, since it is evidence rather than the
 point; only a bracket that CLOSES the item, and only with a real phrase in
 front of it, so a mostly-parenthetical item is left whole. 32 assertions in the
 scratchpad, including the real stored Hint summary end to end and a check that
-every distinctive word of it survives somewhere. lib/summary-format.ts parseSummary() reads it back
+every distinctive word of it survives somewhere. COLLAPSIBLE (2026-09-06), and the header moved INTO the component to make it
+so. The card is 669px open on a real project, which is most of the fold before
+the module hub starts, and there was no way to fold it. Clicking the header
+toggles it (a real button, so aria-expanded and the keyboard come for free) and
+the choice persists in localStorage ("project.summary.open") next to
+sidebar.collapsed: a per-person preference about a card, not studio state, and
+one key for every project since the question is "do I want the summary open",
+not "on this job". Open is the default, because collapsed-by-default hides the
+feature from anyone who never finds the control.
+COLLAPSED STILL SHOWS THE LEAD, clamped to one line (669px -> 98px). A folded
+card whose header reads only "Project summary" is a dead row, and that sentence
+is the twenty-second read the card exists for.
+The title, the AI mark and the toggle are now rendered by ProjectSummary rather
+than by the page that mounts it, and all three of its states (no key, no
+summary yet, a real summary) go through one Shell, so a second page gets the
+whole card instead of rebuilding the header and forgetting the toggle.
+lib/summary-format.ts parseSummary() reads it back
 into { lead, groups, rest } and components/projects/project-summary.tsx renders
 the lead at 15px in full text colour (it is the twenty-second read), each group
 behind a tinted status chip with a dot (green done / blue in progress / amber
