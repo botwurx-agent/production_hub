@@ -83,7 +83,7 @@ export async function runCallSheetReminders(
   const { data: recipients } = await service
     .from("call_sheet_recipients")
     .select(
-      "id, name, email, token, call_sheet_id, confirmed_at, last_reminded_at, reminder_count",
+      "id, name, email, token, call_sheet_id, confirmed_at, last_reminded_at, reminder_count, send_count",
     )
     .in(
       "call_sheet_id",
@@ -141,11 +141,18 @@ export async function runCallSheetReminders(
     });
 
     if (res.ok) {
+      // A REMINDER IS A SEND. It carries the same /c/<token> link, so the
+      // sheet has reached them and the panel must say so; stamping only the
+      // reminder columns is what made people who had been emailed read as
+      // "Not sent".
+      const at = new Date().toISOString();
       await service
         .from("call_sheet_recipients")
         .update({
-          last_reminded_at: new Date().toISOString(),
+          last_reminded_at: at,
           reminder_count: (r.reminder_count ?? 0) + 1,
+          sent_at: at,
+          send_count: (r.send_count ?? 0) + 1,
         })
         .eq("id", r.id);
       sent++;

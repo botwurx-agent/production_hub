@@ -25,6 +25,16 @@ export type RecipientLike = {
   viewed_at: string | null;
   confirmed_at: string | null;
   send_count?: number | null;
+  /**
+   * A reminder is an email too, and treating it as one is not a nicety.
+   * Both reminder paths (the manual chase and the daily cron) send the same
+   * /c/<token> link, and until this was found neither stamped `sent_at`, so
+   * five people on a live shoot read "Not sent" hours after we had emailed
+   * them. Both paths stamp it now; this stays as the answer for every row
+   * written before they did, and so the module cannot be wrong about the one
+   * question it exists to answer just because a caller forgot a column.
+   */
+  last_reminded_at?: string | null;
 };
 
 export type StageKey = "confirmed" | "viewed" | "sent" | "unsent" | "no_email";
@@ -58,8 +68,9 @@ export function recipientStage(r: RecipientLike): Stage {
   // confirmation on file, the honest answer about the email is "we do not
   // know", never "it was not sent".
   const got = Boolean(r.viewed_at || r.confirmed_at);
+  const emailedAt = r.sent_at ?? r.last_reminded_at ?? null;
   const steps: [StepState, StepState, StepState] = [
-    r.sent_at ? "done" : got ? "unknown" : "none",
+    emailedAt ? "done" : got ? "unknown" : "none",
     r.viewed_at ? "done" : "none",
     r.confirmed_at ? "done" : "none",
   ];
@@ -76,9 +87,9 @@ export function recipientStage(r: RecipientLike): Stage {
   if (r.viewed_at) {
     return { key: "viewed", label: "Opened", at: r.viewed_at, steps, hue: "blue", note: "Not confirmed yet" };
   }
-  if (r.sent_at) {
+  if (emailedAt) {
     const again = (r.send_count ?? 0) > 1 ? `Sent ${r.send_count} times` : null;
-    return { key: "sent", label: "Sent", at: r.sent_at, steps, hue: "muted", note: again ?? "Not opened yet" };
+    return { key: "sent", label: "Sent", at: emailedAt, steps, hue: "muted", note: again ?? "Not opened yet" };
   }
   if (!r.email?.trim()) {
     return { key: "no_email", label: "No email", at: null, steps, hue: "amber", note: "Copy their link instead" };

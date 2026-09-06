@@ -631,7 +631,7 @@ export async function remindUnconfirmed(
   const supabase = createClient();
   const { data: rows } = await supabase
     .from("call_sheet_recipients")
-    .select("id, name, email, token, confirmed_at, reminder_count")
+    .select("id, name, email, token, confirmed_at, reminder_count, send_count")
     .eq("call_sheet_id", callSheetId)
     .is("confirmed_at", null);
 
@@ -692,6 +692,12 @@ export async function remindUnconfirmed(
     sent++;
     // Counted alongside the automatic nudges, so a manual chase and the daily
     // job together stay inside one cap rather than doubling up on people.
+    //
+    // A REMINDER IS A SEND, and forgetting that was a real bug. The email
+    // carries the same /c/<token> link the first one did, so the sheet has
+    // reached them; stamping only the reminder columns left five people on a
+    // live shoot reading "Not sent" after we had emailed them, which is
+    // precisely the state this panel exists to report.
     await logWrite(
       "remindUnconfirmed/call_sheet_recipients",
       supabase
@@ -699,6 +705,8 @@ export async function remindUnconfirmed(
         .update({
           last_reminded_at: stamp,
           reminder_count: (r.reminder_count ?? 0) + 1,
+          sent_at: stamp,
+          send_count: (r.send_count ?? 0) + 1,
         })
         .eq("id", r.id)
     );

@@ -104,6 +104,10 @@ export function RecipientsPanel({
   const confirmed = recipients.filter((r) => recipientStage(r).key === "confirmed");
   const unsent = recipients.filter((r) => recipientStage(r).key === "unsent");
   const outstanding = t.outstanding;
+  // "Has the sheet gone out at all" asked through the same rule the rows read,
+  // rather than off sent_at directly: a reminder is a send too, and reading the
+  // column raw is what made an emailed person read as never emailed.
+  const anySent = recipients.some((r) => recipientStage(r).steps[0] !== "none");
 
   const shown =
     filter === "confirmed"
@@ -364,7 +368,7 @@ export function RecipientsPanel({
               {/* Only once everybody has had it, and never the primary
                   action: putting a second copy of a call sheet into twelve
                   inboxes is something you should have to mean. */}
-              {emailEnabled && unsent.length === 0 && recipients.some((r) => r.sent_at) && (
+              {emailEnabled && unsent.length === 0 && anySent && (
                 <button
                   onClick={() => sendAll(true)}
                   disabled={sendingAll}
@@ -454,7 +458,7 @@ export function RecipientsPanel({
       {/* Once the sheet has gone out, the meal order is the next thing that
           happens, and it used to live behind an unrelated button in the
           toolbar with nothing connecting the two. */}
-      {onOpenMeals && recipients.some((r) => r.sent_at) && (
+      {onOpenMeals && anySent && (
         <button
           onClick={onOpenMeals}
           className="flex w-full items-center gap-3 rounded-[12px] border border-border px-3 py-2.5 text-left transition hover:bg-surface-2"
@@ -602,7 +606,7 @@ export function RecipientsPanel({
                     disabled={sending === r.id}
                     className="min-w-[66px] rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-accent transition hover:bg-accent-soft disabled:opacity-50"
                   >
-                    {sending === r.id ? "Sending…" : r.sent_at ? "Resend" : "Email"}
+                    {sending === r.id ? "Sending…" : st.steps[0] === "done" ? "Resend" : "Email"}
                   </button>
                 )}
                 <button
