@@ -27,12 +27,20 @@ comment on column public.call_sheet_recipients.sent_at is
 comment on column public.call_sheet_recipients.send_count is
   'How many times it has been emailed to them. Distinguishes a first send from a resend.';
 
--- Anyone already viewed or confirmed obviously received it, so they are
--- backfilled rather than being shown as never sent, which would read as a bug
--- on the first load after deploy. The timestamp is the earliest thing we know
--- happened, so it is never later than the truth.
-update public.call_sheet_recipients
-set sent_at = coalesce(viewed_at, confirmed_at),
-    send_count = 1
-where sent_at is null
-  and coalesce(viewed_at, confirmed_at) is not null;
+-- NO BACKFILL, and the first version of this migration was wrong to try one.
+--
+-- It set sent_at = coalesce(viewed_at, confirmed_at) for anyone who had
+-- already opened, reasoning that they obviously received it. Two things went
+-- wrong within a day. The value is a FABRICATION: it made sent_at equal
+-- viewed_at to the millisecond on every row, a time nobody was ever emailed
+-- at. And it is a POINT-IN-TIME guess, so four people who had been emailed
+-- before this column existed and opened their link the next morning were
+-- missed entirely and displayed as "Not sent", which the operator correctly
+-- said could not be true.
+--
+-- The real repair is not a better guess, it is not guessing. Sends made before
+-- this column existed are simply unrecorded, and the app now treats "opened
+-- but no send on file" as an UNKNOWN send time rather than as never sent, so
+-- evidence of receipt outranks a missing timestamp. See lib/callsheet-status.ts.
+--
+-- The rows this originally wrote were nulled back out on 2026-09-03.

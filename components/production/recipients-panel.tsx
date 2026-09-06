@@ -13,7 +13,7 @@ import {
   remindUnconfirmed,
 } from "@/app/(app)/projects/[id]/callsheet-actions";
 import { toast } from "@/components/ui/toast";
-import { recipientStage, tallyRecipients } from "@/lib/callsheet-status";
+import { recipientStage, tallyRecipients, type StepState } from "@/lib/callsheet-status";
 import type { CallSheetRecipient } from "@/lib/database.types";
 
 export type ContactOption = {
@@ -570,20 +570,29 @@ function Steps({
   steps,
   hue,
 }: {
-  steps: [boolean, boolean, boolean];
+  steps: [StepState, StepState, StepState];
   hue: string;
 }) {
   const labels = ["Emailed", "Opened", "Confirmed"];
+  const words: Record<StepState, string> = {
+    done: "yes",
+    none: "no",
+    unknown: "sent before this was tracked, so the time is unknown",
+  };
   return (
     <span className="flex shrink-0 items-center gap-[3px]" aria-hidden>
-      {steps.map((on, i) => (
+      {steps.map((st, i) => (
         <span
           key={i}
-          title={`${labels[i]}: ${on ? "yes" : "no"}`}
+          title={`${labels[i]}: ${words[st]}`}
           className="h-[6px] w-[6px] rounded-full"
           style={{
-            backgroundColor: on ? hueVar(hue) : "var(--border-strong)",
-            opacity: on ? 1 : 0.5,
+            // A HOLLOW RING for unknown, so it reads as "we cannot say" rather
+            // than as a definite no. A flat grey dot would claim the send did
+            // not happen, which is exactly the wrong thing to assert.
+            backgroundColor: st === "done" ? hueVar(hue) : "transparent",
+            border: st === "done" ? undefined : `1.5px solid var(--border-strong)`,
+            opacity: st === "none" ? 0.45 : 1,
           }}
         />
       ))}

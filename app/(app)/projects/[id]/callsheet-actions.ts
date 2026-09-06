@@ -14,7 +14,7 @@ import {
 import { generateReviewToken } from "@/lib/review-links";
 import { sendEmail, emailConfigured } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
-import { logWrite } from "@/lib/log";
+import { logWrite, reportError } from "@/lib/log";
 import { siteOrigin } from "@/lib/site-url";
 
 export type CallSheetState = { error?: string } | null;
@@ -512,13 +512,17 @@ async function stampSent(
     .select("send_count")
     .eq("id", recipientId)
     .maybeSingle();
-  await supabase
+  const { error } = await supabase
     .from("call_sheet_recipients")
     .update({
       sent_at: new Date().toISOString(),
       send_count: (data?.send_count ?? 0) + 1,
     })
     .eq("id", recipientId);
+  // NOT SWALLOWED. The email has already gone by this point, so a failure here
+  // cannot be undone, but it leaves a row reading as never sent forever, which
+  // is precisely the confusion this column exists to end.
+  if (error) reportError("stampSent", error);
 }
 
 /**

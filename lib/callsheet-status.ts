@@ -29,44 +29,52 @@ export type RecipientLike = {
 
 export type StageKey = "confirmed" | "viewed" | "sent" | "unsent" | "no_email";
 
+/**
+ * A milestone is not a yes/no.
+ *
+ * "Unknown" exists because of a real incident: `sent_at` was added long after
+ * people had been emailed, so every send before that column existed is
+ * unrecorded. Anyone who then OPENED their link obviously received it, and
+ * showing them as "Not sent" was the app stating an absence of data as a fact
+ * about the world. Evidence of receipt outranks a missing timestamp.
+ */
+export type StepState = "done" | "none" | "unknown";
+
 export type Stage = {
   key: StageKey;
   /** The one word that answers "where are they". */
   label: string;
   /** The date that word refers to, or null. */
   at: string | null;
-  /** Which of emailed / opened / confirmed have happened, in order. */
-  steps: [boolean, boolean, boolean];
+  /** Emailed / opened / confirmed, in order. */
+  steps: [StepState, StepState, StepState];
   hue: "green" | "blue" | "amber" | "muted";
   /** Only when something needs explaining, e.g. a link shared by hand. */
   note: string | null;
 };
 
 export function recipientStage(r: RecipientLike): Stage {
-  const steps: [boolean, boolean, boolean] = [
-    Boolean(r.sent_at),
-    Boolean(r.viewed_at),
-    Boolean(r.confirmed_at),
+  // OPENING IT IS PROOF THEY GOT IT. With no send recorded but a view or a
+  // confirmation on file, the honest answer about the email is "we do not
+  // know", never "it was not sent".
+  const got = Boolean(r.viewed_at || r.confirmed_at);
+  const steps: [StepState, StepState, StepState] = [
+    r.sent_at ? "done" : got ? "unknown" : "none",
+    r.viewed_at ? "done" : "none",
+    r.confirmed_at ? "done" : "none",
   ];
 
-  // SAY ONLY WHAT IS KNOWN. This person was never emailed from here and opened
-  // the link anyway, which means it reached them some other way (copied into a
-  // text or a Slack message, or forwarded on). The app cannot see which, so it
-  // does not claim to: the first wording said "Link shared by hand", which
-  // guessed at a mechanism, and the operator had to ask what it meant.
-  //
-  // The consequence is the useful half and was missing: this person is not on
-  // the email trail, so a later send skips them unless they are emailed on
-  // purpose.
-  const notEmailed = !r.sent_at && (r.viewed_at || r.confirmed_at)
-    ? "Never emailed from here"
-    : null;
+  // NO NOTE FOR A MISSING SEND TIME. Two earlier wordings tried to explain it
+  // ("Link shared by hand", then "Never emailed from here") and both asserted
+  // something the app cannot know. Somebody who has opened their call sheet
+  // has it, and how it reached them is not the producer's problem; the hollow
+  // first dot says the send time is unknown and that is the whole truth.
 
   if (r.confirmed_at) {
-    return { key: "confirmed", label: "Confirmed", at: r.confirmed_at, steps, hue: "green", note: notEmailed };
+    return { key: "confirmed", label: "Confirmed", at: r.confirmed_at, steps, hue: "green", note: null };
   }
   if (r.viewed_at) {
-    return { key: "viewed", label: "Opened", at: r.viewed_at, steps, hue: "blue", note: notEmailed ?? "Not confirmed yet" };
+    return { key: "viewed", label: "Opened", at: r.viewed_at, steps, hue: "blue", note: "Not confirmed yet" };
   }
   if (r.sent_at) {
     const again = (r.send_count ?? 0) > 1 ? `Sent ${r.send_count} times` : null;
