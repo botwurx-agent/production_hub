@@ -2295,11 +2295,46 @@ Polish button: the model assists, the human commits.
   costs more than the deployment budgets for. gpt-5-mini can do this; a bigger
   model will pick tools better, which is the trade to revisit if it misroutes.
 
-### AI summary rendering (no migration) — BUILT
+### AI summary rendering (no migration) — BUILT, then SILENTLY BROKEN, now FIXED
 The project summary was rendered as `whitespace-pre-wrap` muted grey text, so
 the structure the model was already producing (one status sentence, then
 labelled groups with "- " items) was thrown away and the operator got a grey
-paragraph to hunt through. lib/summary-format.ts parseSummary() reads it back
+paragraph to hunt through.
+
+IT LOOKED LIKE IT HAD NEVER BEEN BUILT, for months, and the operator reported
+the same complaint again on 2026-09-06. parseSummary was returning ZERO groups
+on every real summary and everything was falling into `rest`, which renders as
+flat grey paragraphs, i.e. exactly the thing this replaced. Three causes, and
+the first is the one worth remembering:
+- THE HEADER TEST RAN BEFORE THE BULLET WAS STRIPPED. The model writes the
+  group headers as bullets ("- Waiting on: ..."), because the prompt said
+  `start item lines with "- "` and a header line looks like an item line. So
+  classify() was handed "- Waiting on" and matched nothing. A parser whose
+  whole job is tolerating how a model actually writes has to unbullet the line
+  BEFORE it asks what the line is. The prompt now also says the label takes no
+  bullet and names the semicolon separator, but the parser stays tolerant:
+  summaries already stored cannot be re-prompted, and drift is the normal case.
+- ITEMS ARE SEPARATED BY SEMICOLONS, not the dashes splitInline looked for, so
+  even a recognised group was one run-on line. splitInline is now bracket- and
+  quote-aware and splits on `;` or a space-fenced dash. COMMAS ARE DELIBERATELY
+  NOT A SEPARATOR: "(Veronica, Fred, Vanessa, Greg)" is one fact about one call
+  sheet, and splitting there makes it worse than the run-on line.
+- Two presentation fixes on the way: one trailing full stop comes off an item
+  (a fragment with a period next to unpunctuated siblings reads as a typo,
+  though never from an ellipsis), and a fragment split out of mid-sentence is
+  capitalised unless its first word is already mixed case ("iOS delivery").
+
+THE LAYOUT IS A LABEL RAIL, not a stack (operator: "too plain and hard to read,
+needs to be easy to skim"). Five sections stacked vertically all look alike, so
+finding "Waiting on" meant reading from the top. The chip now sits in a 132px
+left column with the items aligned in one column beside it, hairline between
+sections, so the eye runs down five anchors in one pass. Below `sm` it stacks.
+The trailing attribution on an item ("(Steve, Aug 31)") is split off by
+splitTrailingNote and set in text-faint, since it is evidence rather than the
+point; only a bracket that CLOSES the item, and only with a real phrase in
+front of it, so a mostly-parenthetical item is left whole. 32 assertions in the
+scratchpad, including the real stored Hint summary end to end and a check that
+every distinctive word of it survives somewhere. lib/summary-format.ts parseSummary() reads it back
 into { lead, groups, rest } and components/projects/project-summary.tsx renders
 the lead at 15px in full text colour (it is the twenty-second read), each group
 behind a tinted status chip with a dot (green done / blue in progress / amber

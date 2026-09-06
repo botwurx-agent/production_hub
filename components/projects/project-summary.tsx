@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { shortDate } from "@/lib/format";
 import { summarizeProject } from "@/app/(app)/projects/[id]/ai-actions";
-import { parseSummary } from "@/lib/summary-format";
+import { parseSummary, splitTrailingNote } from "@/lib/summary-format";
 
 // Small "AI" spark mark for the summary card.
 function SparkIcon({ className }: { className?: string }) {
@@ -91,37 +91,60 @@ export function ProjectSummary({
           </p>
         ) : null}
 
+        {/* A LABEL RAIL, not a stack. Five sections stacked vertically all
+            look alike, so finding "Waiting on" meant reading from the top. In
+            a left column the labels line up as five anchors the eye runs down
+            in one pass, and the items align in one column beside them. Below
+            sm there is no room for two columns, so it stacks. */}
         {parsed.groups.length > 0 ? (
-          <div className={parsed.lead ? "mt-5 space-y-5" : "space-y-5"}>
+          <div
+            className={`divide-y divide-border border-t border-border ${
+              parsed.lead ? "mt-5" : ""
+            }`}
+          >
             {parsed.groups.map((group) => (
-              <section key={group.label}>
+              <section
+                key={group.label}
+                className="py-4 sm:grid sm:grid-cols-[132px_1fr] sm:gap-x-6"
+              >
                 {/* A tinted chip with a dot, the same status vocabulary used
                     everywhere else, rather than a coloured row. */}
                 <span
-                  className="inline-flex items-center gap-1.5 rounded-pill px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.05em]"
+                  // justify-self, or the grid stretches the pill to the full
+                  // 132px rail and DONE trails an inch of empty tint.
+                  className="inline-flex h-fit w-fit items-center gap-1.5 rounded-pill px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.05em] sm:justify-self-start"
                   style={{
                     backgroundColor: `var(--h-${group.hue}-bg)`,
                     color: `var(--h-${group.hue})`,
                   }}
                 >
                   <span
-                    className="h-1.5 w-1.5 rounded-full"
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{ backgroundColor: `var(--h-${group.hue})` }}
                   />
                   {group.label}
                 </span>
-                <ul className="mt-2.5 space-y-2">
-                  {group.items.map((item, i) => (
-                    <li key={i} className="flex gap-2.5">
-                      <span
-                        aria-hidden
-                        className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-border-strong"
-                      />
-                      <span className="text-sm leading-[1.6] text-text">
-                        {item}
-                      </span>
-                    </li>
-                  ))}
+                <ul className="mt-2.5 space-y-2 sm:mt-0">
+                  {group.items.map((item, i) => {
+                    // The attribution recedes so the substance is what the eye
+                    // lands on. It is still there, still readable, just not
+                    // competing with the thing it is evidence for.
+                    const { main, note } = splitTrailingNote(item);
+                    return (
+                      <li key={i} className="flex gap-2.5">
+                        <span
+                          aria-hidden
+                          className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-border-strong"
+                        />
+                        <span className="text-sm leading-[1.6] text-text">
+                          {main}
+                          {note ? (
+                            <span className="text-text-faint"> {note}</span>
+                          ) : null}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             ))}
