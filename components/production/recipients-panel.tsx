@@ -37,30 +37,49 @@ function fmt(ts: string | null) {
 
 type Filter = "all" | "open" | "confirmed" | "unsent";
 
-/** One number, said plainly. Colour is the signal, not decoration. */
-function Tally({
+/**
+ * A count and the filter for it, in one control.
+ *
+ * THEY USED TO BE TWO ROWS. Coloured tally pills stated the numbers and chips
+ * below them filtered by the same numbers, so a twelve-person unit was
+ * described by six badges saying four things, and "Not sent" appeared twice on
+ * one screen. A count a producer reads and then wants to act on should be the
+ * thing they press, not a label above the thing they press.
+ *
+ * The dot carries the hue, so colour stays a signal without a row of filled
+ * pills competing with the status column beside them.
+ */
+function CountChip({
   label,
   count,
-  total,
   hue,
+  active,
+  onClick,
 }: {
   label: string;
   count: number;
-  total?: number;
-  hue: string;
+  hue?: string;
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
-    <span className="inline-flex items-baseline gap-1.5 rounded-[9px] px-2.5 py-1"
-      style={{ backgroundColor: `var(--h-${hue}-bg)`, color: `var(--h-${hue})` }}
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-semibold transition ${
+        active
+          ? "bg-accent text-accent-fg"
+          : "border border-border text-text-muted hover:bg-surface-2 hover:text-text"
+      }`}
     >
-      <span className="text-sm font-extrabold">
-        {count}
-        {total != null ? `/${total}` : ""}
-      </span>
-      <span className="text-[11px] font-bold uppercase tracking-wide opacity-80">
-        {label}
-      </span>
-    </span>
+      {hue && (
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: active ? "currentColor" : `var(--h-${hue})` }}
+        />
+      )}
+      {label}
+      <span className={active ? "opacity-80" : "text-text-faint"}>{count}</span>
+    </button>
   );
 }
 
@@ -343,16 +362,20 @@ export function RecipientsPanel({
         <p className="rounded-[10px] bg-red-bg px-3 py-2 text-sm font-medium text-red">{error}</p>
       )}
 
-      {/* Where twenty people stop being a list and start being an answer. The
-          three numbers are the question a producer is really asking, and the
-          chips filter straight to the ones still outstanding. */}
+      {/* Where twenty people stop being a list and start being an answer.
+          TWO ROWS, NOT FOUR: the state of play with the actions beside it, then
+          the counts, which are the filters. The earlier version stacked tally
+          pills, a wrapped button row, a two-line explainer and a chip row above
+          a list that had not started yet. */}
       {recipients.length > 0 && (
-        <div className="rounded-[12px] border border-border bg-surface-2/30 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Tally label="Confirmed" count={t.confirmed} total={t.total} hue="green" />
-            {t.opened > 0 && <Tally label="Opened, not confirmed" count={t.opened} hue="blue" />}
-            {t.sent > 0 && <Tally label="Sent, not opened" count={t.sent} hue="amber" />}
-            {t.unsent > 0 && <Tally label="Not sent" count={t.unsent} hue="red" />}
+        <div className="rounded-[12px] border border-border bg-surface-2 p-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {/* The one sentence worth reading first. Everything else in this
+                block is a way of acting on it. */}
+            <span className="flex items-baseline gap-1.5 text-[15px] font-bold text-text">
+              <span style={{ color: "var(--h-green)" }}>{t.confirmed}</span>
+              <span className="text-text-muted">of {t.total} confirmed</span>
+            </span>
             <span className="ml-auto flex items-center gap-1.5">
               {emailEnabled && unsent.length > 0 && (
                 <button
@@ -388,41 +411,53 @@ export function RecipientsPanel({
               )}
             </span>
           </div>
+          {/* THE COUNTS ARE THE FILTERS. Each one is a group with a different
+              job: chase them, email them, or leave them alone. */}
+          <div className="mt-2.5 flex flex-wrap gap-1">
+            <CountChip
+              label="Everyone"
+              count={t.total}
+              active={filter === "all"}
+              onClick={() => setFilter("all")}
+            />
+            <CountChip
+              label="Outstanding"
+              count={outstanding}
+              hue="blue"
+              active={filter === "open"}
+              onClick={() => setFilter("open")}
+            />
+            <CountChip
+              label="Not sent"
+              count={t.unsent}
+              hue="red"
+              active={filter === "unsent"}
+              onClick={() => setFilter("unsent")}
+            />
+            <CountChip
+              label="Confirmed"
+              count={t.confirmed}
+              hue="green"
+              active={filter === "confirmed"}
+              onClick={() => setFilter("confirmed")}
+            />
+          </div>
+          {/* Two footnotes, both one line, both only when they apply. The
+              reminder one used to run to two lines and sat above the filters,
+              which put a paragraph between the numbers and the way to use
+              them. */}
           {t.noEmail > 0 && (
             <p className="mt-2 text-[11.5px] text-amber">
-              {t.noEmail} {t.noEmail === 1 ? "person has" : "people have"} no email
-              address, so they can only be sent their link by hand.
+              {t.noEmail} {t.noEmail === 1 ? "person has" : "people have"} no
+              email address. Copy them their link instead.
             </p>
           )}
           {outstanding > 0 && (
             <p className="mt-2 text-[11.5px] text-text-muted">
-              Anyone still unconfirmed is reminded automatically once a day in
-              the three days before the shoot, twice at most. Confirming stops
-              it.
+              Unconfirmed crew are chased automatically, twice at most, in the
+              three days before the shoot.
             </p>
           )}
-          <div className="mt-2.5 flex flex-wrap gap-1">
-            {(
-              [
-                ["all", `Everyone (${t.total})`],
-                ["unsent", `Not sent (${t.unsent})`],
-                ["open", `Outstanding (${outstanding})`],
-                ["confirmed", `Confirmed (${t.confirmed})`],
-              ] as [Filter, string][]
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                className={`rounded-pill px-2.5 py-1 text-xs font-semibold transition ${
-                  filter === key
-                    ? "bg-accent text-accent-fg"
-                    : "border border-border text-text-muted hover:text-text"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
@@ -508,7 +543,7 @@ export function RecipientsPanel({
               body are separate grids, and with an `auto` last track the empty
               header cell measured 0 while the body's buttons measured ~260px,
               so the flexible columns resolved differently in each. */}
-          <div className="grid grid-cols-[22px_1fr_170px_224px] items-center gap-3 border-b border-border bg-surface-2/50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          <div className="grid grid-cols-[22px_1fr_170px_224px] items-center gap-3 border-b border-border bg-surface-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
             {/* Select-all covers the rows CURRENTLY SHOWN, not the whole
                 sheet: with a filter applied, "all" meaning something other
                 than what is on screen is how people send to the wrong list. */}
