@@ -95,6 +95,7 @@ export function RecipientsPanel({
   const [filter, setFilter] = useState<Filter>("all");
   const [chasing, setChasing] = useState(false);
   const [sendingAll, setSendingAll] = useState(false);
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [busy, start] = useTransition();
 
   // The three states a producer actually cares about on the morning of a
@@ -113,6 +114,11 @@ export function RecipientsPanel({
           ? unsent
           : recipients;
 
+  // What select-all means: the people ON SCREEN who can actually be emailed.
+  // Scoped to the filter, so ticking the box after choosing "Not sent" selects
+  // exactly the ones that chip promised, and never somebody hidden behind it.
+  const sendable = shown.filter((r) => r.email?.trim());
+
   function chase() {
     setChasing(true);
     remindUnconfirmed(projectId, callSheetId).then((res) => {
@@ -129,9 +135,9 @@ export function RecipientsPanel({
     });
   }
 
-  function sendAll(resend: boolean) {
+  function sendAll(resend: boolean, recipientIds?: string[]) {
     setSendingAll(true);
-    sendCallSheetToAll(projectId, callSheetId, { resend }).then((res) => {
+    sendCallSheetToAll(projectId, callSheetId, { resend, recipientIds }).then((res) => {
       setSendingAll(false);
       if ("error" in res) {
         toast(res.error, "error");
@@ -144,6 +150,7 @@ export function RecipientsPanel({
       if (res.noEmail > 0) parts.push(`${res.noEmail} with no email, copy their link`);
       if (res.failed > 0) parts.push(`${res.failed} failed`);
       toast(parts.join(". "), res.failed > 0 ? "error" : "success");
+      setChosen(new Set());
       router.refresh();
     });
   }
@@ -415,6 +422,35 @@ export function RecipientsPanel({
         </div>
       )}
 
+      {/* THE SELECTION BAR. Appears only when people are chosen, and states the
+          count in the button itself, so the thing being confirmed is "these
+          eight get emailed" rather than a bare "Send". */}
+      {chosen.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-[12px] border border-accent bg-accent-soft/50 px-3 py-2.5">
+          <span className="text-sm font-bold text-accent">
+            {chosen.size} selected
+          </span>
+          <button
+            onClick={() => setChosen(new Set())}
+            className="text-xs font-semibold text-text-muted transition hover:text-text"
+          >
+            Clear
+          </button>
+          <span className="flex-1" />
+          {emailEnabled && (
+            <button
+              onClick={() => sendAll(true, [...chosen])}
+              disabled={sendingAll}
+              className="rounded-[10px] bg-accent px-3.5 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
+            >
+              {sendingAll
+                ? "Sending…"
+                : `Send the call sheet to ${chosen.size}`}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Once the sheet has gone out, the meal order is the next thing that
           happens, and it used to live behind an unrelated button in the
           toolbar with nothing connecting the two. */}
@@ -468,7 +504,27 @@ export function RecipientsPanel({
               body are separate grids, and with an `auto` last track the empty
               header cell measured 0 while the body's buttons measured ~260px,
               so the flexible columns resolved differently in each. */}
-          <div className="grid grid-cols-[1fr_170px_224px] gap-3 border-b border-border bg-surface-2/50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+          <div className="grid grid-cols-[22px_1fr_170px_224px] items-center gap-3 border-b border-border bg-surface-2/50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-text-faint">
+            {/* Select-all covers the rows CURRENTLY SHOWN, not the whole
+                sheet: with a filter applied, "all" meaning something other
+                than what is on screen is how people send to the wrong list. */}
+            <input
+              type="checkbox"
+              aria-label="Select everyone shown"
+              className="h-4 w-4 accent-[var(--accent)]"
+              checked={sendable.length > 0 && sendable.every((r) => chosen.has(r.id))}
+              ref={(el) => {
+                if (el) {
+                  const some = sendable.some((r) => chosen.has(r.id));
+                  el.indeterminate = some && !sendable.every((r) => chosen.has(r.id));
+                }
+              }}
+              onChange={(e) =>
+                setChosen(
+                  e.target.checked ? new Set(sendable.map((r) => r.id)) : new Set()
+                )
+              }
+            />
             <span>Recipient</span>
             <span>Status</span>
             <span />
@@ -487,8 +543,27 @@ export function RecipientsPanel({
             return (
             <div
               key={r.id}
-              className="grid grid-cols-[1fr_170px_224px] items-center gap-3 border-b border-border px-3 py-2.5 last:border-0"
+              className={`grid grid-cols-[22px_1fr_170px_224px] items-center gap-3 border-b border-border px-3 py-2.5 last:border-0 ${
+                chosen.has(r.id) ? "bg-accent-soft/40" : ""
+              }`}
             >
+              {/* Nobody without an address can be emailed, so offering to
+                  select them would build a list that silently cannot be sent. */}
+              <input
+                type="checkbox"
+                aria-label={`Select ${r.name}`}
+                disabled={!r.email}
+                className="h-4 w-4 accent-[var(--accent)] disabled:opacity-30"
+                checked={chosen.has(r.id)}
+                onChange={(e) =>
+                  setChosen((prev) => {
+                    const next = new Set(prev);
+                    if (e.target.checked) next.add(r.id);
+                    else next.delete(r.id);
+                    return next;
+                  })
+                }
+              />
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-text">{r.name}</div>
                 {r.email ? (

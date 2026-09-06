@@ -543,7 +543,20 @@ async function stampSent(
 export async function sendCallSheetToAll(
   projectId: string,
   callSheetId: string,
-  opts?: { resend?: boolean }
+  opts?: {
+    /** Send again to people who already have it. */
+    resend?: boolean;
+    /**
+     * Send to exactly these people. Omitted means everyone on the sheet, which
+     * is the common case; a selection is for the job where the crew go out now
+     * and the client waits, or where only the day-two people need it.
+     *
+     * A CHOSEN PERSON IS SENT TO EVEN IF THEY ALREADY HAVE IT: picking
+     * somebody by hand is the same statement as pressing Resend on their row,
+     * and silently skipping them would be the app overruling a deliberate act.
+     */
+    recipientIds?: string[];
+  }
 ): Promise<{ sent: number; skipped: number; noEmail: number; failed: number } | { error: string }> {
   await requireStudioContext();
   if (!emailConfigured()) return { error: "Email is not set up yet." };
@@ -555,16 +568,22 @@ export async function sendCallSheetToAll(
     .eq("call_sheet_id", callSheetId)
     .order("created_at", { ascending: true });
 
+  const picked = opts?.recipientIds?.length ? new Set(opts.recipientIds) : null;
+  // Choosing people is itself the instruction to send to them, so a selection
+  // overrides the already-sent skip.
+  const resend = opts?.resend || Boolean(picked);
+
   let sent = 0;
   let skipped = 0;
   let noEmail = 0;
   let failed = 0;
   for (const r of rows ?? []) {
+    if (picked && !picked.has(r.id)) continue;
     if (!r.email?.trim()) {
       noEmail += 1;
       continue;
     }
-    if (r.sent_at && !opts?.resend) {
+    if (r.sent_at && !resend) {
       skipped += 1;
       continue;
     }
