@@ -49,18 +49,24 @@ export function recipientStage(r: RecipientLike): Stage {
     Boolean(r.confirmed_at),
   ];
 
-  // Somebody reached without an email address got their link by hand, so the
-  // emailed step is blank for a good reason and the row should say so rather
-  // than look broken.
-  const byHand = !r.sent_at && (r.viewed_at || r.confirmed_at)
-    ? "Link shared by hand"
+  // SAY ONLY WHAT IS KNOWN. This person was never emailed from here and opened
+  // the link anyway, which means it reached them some other way (copied into a
+  // text or a Slack message, or forwarded on). The app cannot see which, so it
+  // does not claim to: the first wording said "Link shared by hand", which
+  // guessed at a mechanism, and the operator had to ask what it meant.
+  //
+  // The consequence is the useful half and was missing: this person is not on
+  // the email trail, so a later send skips them unless they are emailed on
+  // purpose.
+  const notEmailed = !r.sent_at && (r.viewed_at || r.confirmed_at)
+    ? "Never emailed from here"
     : null;
 
   if (r.confirmed_at) {
-    return { key: "confirmed", label: "Confirmed", at: r.confirmed_at, steps, hue: "green", note: byHand };
+    return { key: "confirmed", label: "Confirmed", at: r.confirmed_at, steps, hue: "green", note: notEmailed };
   }
   if (r.viewed_at) {
-    return { key: "viewed", label: "Opened", at: r.viewed_at, steps, hue: "blue", note: byHand ?? "Not confirmed yet" };
+    return { key: "viewed", label: "Opened", at: r.viewed_at, steps, hue: "blue", note: notEmailed ?? "Not confirmed yet" };
   }
   if (r.sent_at) {
     const again = (r.send_count ?? 0) > 1 ? `Sent ${r.send_count} times` : null;
