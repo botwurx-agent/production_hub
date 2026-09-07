@@ -79,6 +79,8 @@ const BANDS: Band[] = [
       { seg: "tasks", label: "Tasks", sub: "What this project needs", hue: "purple", icon: Ismall(<><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>) },
       { seg: "contacts", label: "Project contacts", sub: "Crew, talent, vendors", hue: "orange", icon: Ismall(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>) },
       { seg: "calendar", label: "Calendar", sub: "Shoot & delivery dates", hue: "blue", icon: Ismall(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>) },
+      // Before Call sheet, because it is built first and the sheet reads it.
+      { seg: "schedule", label: "Schedule", sub: "The shoot, day by day", hue: "green", hideForAi: true, icon: Ismall(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h4M8 18h6" /></>) },
       { seg: "callsheet", label: "Call sheet", sub: "Industry call sheet + PDF", hue: "green", hideForAi: true, icon: Ismall(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h8M8 18h5" /></>) },
       { seg: "gear", label: "Gear & crew", sub: "Equipment and roster", hue: "cyan", hideForAi: true, icon: Ismall(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 13h6M9 17h4" /></>) },
       { seg: "props", label: "Props", sub: "Options, picks, approvals", hue: "pink", hideForAi: true, icon: Ismall(<><path d="M3 8.5 12 4l9 4.5-9 4.5z" /><path d="M3 8.5v7L12 20l9-4.5v-7" /><path d="M12 13v7" /></>) },
