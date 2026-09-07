@@ -3718,6 +3718,52 @@ UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
   has to say so and a studio-level AI off switch is the honest escape hatch.
 
 The parked items, so they are findable WHEN friction hits (not before):
+- LOCATION SCOUT ("Scout"): DECLINED by the operator 2026-09-07 after a design
+  discussion, on their own standing rule. It was an idea rather than friction
+  from a live job, and Hint was a studio shoot. Recorded because the technical
+  question underneath it WAS answered and that answer should not have to be
+  bought twice.
+  THE IDEA: a project page where whoever scouts a location uploads photos and
+  notes, or records a walkthrough video while talking, and the app breaks it
+  into a summary with stills. Reviewable with the same pins, drawings and
+  comments the video review has.
+  MEASURED, NOT GUESSED (headless Chromium, real getUserMedia): TWO
+  MediaRecorders on ONE camera stream work, one on the full stream and one on a
+  MediaStream carrying only the audio track. 720p at 1.5Mbps is ~44MB per 10
+  minutes; audio-only opus at 24kbps is ~1.8MB per 10 minutes. That second
+  number is the whole answer: transcription APIs cap at 25MB, so the audio of a
+  ten minute walkthrough is ~7% of the limit and NO ffmpeg, ffmpeg.wasm or
+  WebCodecs is needed anywhere. The hard part was never the AI, it was getting
+  the audio out of a video, and recording IN the page sidesteps it entirely.
+  This only works for in-app recording; importing a video shot in the phone's
+  camera app still needs real extraction, which is why that would be a later
+  slice if ever.
+  THE RISK THAT TURNED UP: recorded formats differ by browser. Chromium refused
+  `video/mp4` outright and records WebM (VP8/VP9 + opus); Safari records
+  mp4/h264. Our own demo-clip note already says iOS Safari's WebM support is
+  patchy enough to show a blank frame, so an Android scout could be unplayable
+  for a producer on an iPhone. Fix is to ask for mp4 first and fall back to
+  WebM. `audio/mp4` IS supported, so the transcription file can always be
+  universal.
+  SHAPE IT WOULD HAVE TAKEN: the props model (parent holds the requirement,
+  children hold the candidates, one gets picked), since "I need a kitchen, here
+  are four" is structurally identical to "I need a glass, here are three". A
+  `scout` DocKind joining the existing doc-review stack gets pins, drawings,
+  threads and the no-login /r/<token> portal for free, exactly as `props` did
+  in 0092 (and would hit the same trap: targetInProject and createDocReviewLink
+  both fall through to a `boards` lookup for any kind not named explicitly).
+  Money (a location's rate) goes in a studio-only side table, never a column,
+  per 0074.
+  THE FORK NEVER ANSWERED, and the first thing to settle if it comes back:
+  project-scoped scout, or a studio-level `locations` library a scout points
+  at. A studio scouts the same places for years, so project-only recreates the
+  gap vendor contacts already have.
+  AND: the AI must fill FIELDS, not write prose. Power and where the panel is,
+  load-in and elevator dimensions, ceiling height, window orientation, sound,
+  parking, permitted hours, contact. A paragraph about "an industrial interior
+  with good natural light" is a toy. Timestamped transcription would let each
+  finding carry the frame from the moment it was spoken, which is the part that
+  would have been genuinely novel.
 - Review-round edges, all half-built already: due/overdue never surfaces on the
   INTERNAL review page (the client portal shows it, the studio cannot see which
   reviews are late); version compare is image-only; the in-app ReviewModal is
