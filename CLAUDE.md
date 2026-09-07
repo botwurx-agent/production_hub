@@ -3574,6 +3574,67 @@ that card's editor, an arrow is drawn by dragging between two cards.
   comments, so `board-review-portal` in capture-shots.mjs photographs the real
   client portal over a BOARD rather than an asset.
 
+### Schedule builder (2026-09-07): MOCKUP BUILT, schema not started
+The operator: "an extremely important function that I totally forgot about."
+Every production level has one, and the app had NO home for it: the call sheet
+carries crew call, breakfast, lunch and wrap as four masthead fields and
+nothing in between (lib/callsheet-blocks.ts names a `schedule` block type that
+was never built). The competitive assessment specced it in section 3.2 as "the
+lightweight, commercial-shaped version of StudioBinder's stripboard".
+DECISIONS, all confirmed by the operator before anything was written:
+- ITS OWN PAGE at /projects/[id]/schedule with its own tables. An AD builds the
+  schedule BEFORE call sheets exist and re-shuffles shots across days for a
+  week; making them create a call sheet first is backwards. The call sheet is a
+  CONSUMER of the schedule (a schedule block, tomorrow's rows as the advance
+  block, masthead times derived from anchor rows).
+- THE SCHEDULE OWNS WHICH DAY A SHOT IS ON and all relative time. Today
+  shot_cards.day is free text; dragging a shot between days will write it.
+- TWO VIEWS, ONE ROW MODEL, which is the answer to "would a stripboard make
+  sense on a multi-day live-action job". A strip is a row. The DAY view lays one
+  day out on a time rail with COMPUTED times (the document a unit reads). The
+  BOARD view lays every day out as columns of the same rows, where an AD moves
+  work between days and where the stripboard's INT/EXT DAY/NIGHT colours earn
+  their place (the industry's own four: INT DAY white, EXT DAY yellow, INT
+  NIGHT blue, EXT NIGHT green, drawn as the strip's edge, not a full wash). On
+  a studio product shoot those fields stay blank, so the kind colour is the
+  edge instead and nothing is noise. The film stripboard's page counts, scene
+  numbers and cast IDs are NOT coming.
+- TIMES CASCADE, ANCHORS HOLD, and this is the whole "modern" claim. Each row
+  has a duration; the next row starts when the last ends; change one and the
+  day re-flows. An ANCHORED row (lunch at 1:00 because catering is booked)
+  holds its time and the cascade reports SLACK against it: a buffer if the
+  morning runs short, an OVERRUN INTO IT if the morning runs long, shown in red
+  above the row. Stretching the morning therefore does NOT move the wrap while
+  lunch is anchored; the overrun is absorbed and reported, which is the AD's
+  actual situation at 12:40. Unpin lunch and the wrap moves instead.
+- lib/schedule-time.ts is the pure module (parseHM, fmtHM, fmtDuration,
+  cascade, overUnder, onShootDay, totalMinutes), 47 assertions in the
+  scratchpad. NIGHT SHOOTS CROSS MIDNIGHT: a 1:00 AM wrap target under a 2:00
+  PM call was read as twenty-two hours over. onShootDay rolls a time forward a
+  day when it is MORE THAN TWELVE HOURS before call; a 7:00 anchor under an
+  8:00 call is a same-day pre-call and stays put. Found on the mockup's own
+  night-shoot example, not by reasoning.
+- THE MOCKUP: app/dev/schedule (components/dev/schedule-mockup.tsx). Real
+  Sidebar, ProjectSubhead and tokens; the Hint shots, sets and crew positions
+  are REAL, the three-day live-action job is invented and says so. Duration
+  steppers, anchor toggles and HTML5 drag (within a day, and between days on
+  the board) all work against local state; nothing saves. Auth-gated in
+  production by the /dev/* rule, so the operator can open it on the
+  deployment. DELETE IT when the real page lands. Verified: desktop, 390px
+  (tabs scroll), dark, and the night-shoot column reading "under" in the green
+  token after the fix.
+- ROW KINDS: call, meal, setup, shot, move, note, wrap, coloured indigo, amber,
+  blue, green, orange, purple, indigo. Kind is what a row IS; INT/EXT D/N is a
+  constraint. They are never both the edge in the same view.
+- NOT IN THE MOCKUP, deliberately: add/edit chrome, the shot-list picker, print,
+  the call sheet block, per-person call times. Layout and the cascade were the
+  questions; those are the build.
+- NEXT, once the operator has reacted to the layout: schema (schedule_days +
+  schedule_rows, row -> shot_card ids, call_sheets.schedule_day_id), the editor
+  for real, "Add shots" from the shot list, print via ProductionCover +
+  DayDivider, then the call sheet block and advance block, then people on rows
+  -> per-recipient call times.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
