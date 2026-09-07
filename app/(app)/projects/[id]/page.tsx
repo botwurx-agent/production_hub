@@ -113,6 +113,7 @@ export default async function ProjectDetailPage({
     .order("name");
 
   const [
+    { data: scheduleDays },
     { data: brief },
     { data: activityRaw },
     { data: summary },
@@ -132,6 +133,11 @@ export default async function ProjectDetailPage({
     { data: binderRows },
     { data: propRows },
   ] = await Promise.all([
+    supabase
+      .from("schedule_days")
+      .select("day_number, date, location")
+      .eq("project_id", params.id)
+      .order("day_number", { ascending: true }),
     supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
     supabase
       .from("activity")
@@ -860,6 +866,40 @@ export default async function ProjectDetailPage({
               ) : (
                 <p className="text-[13px] text-text-muted">
                   Track shoot, review, and delivery dates for this job.
+                </p>
+              )}
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/schedule`}
+              hue="green"
+              title="Schedule"
+              sub={
+                scheduleDays?.length
+                  ? `${scheduleDays.length} shoot ${scheduleDays.length === 1 ? "day" : "days"}`
+                  : "Not built"
+              }
+              footer={scheduleDays?.length ? "Open the schedule" : "Build the schedule"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h4M8 18h6" />
+                </svg>
+              }
+            >
+              {scheduleDays?.length ? (
+                <div className="flex flex-col gap-1 text-[13px] text-text-muted">
+                  {scheduleDays.slice(0, 3).map((d) => (
+                    <p key={d.day_number} className="truncate">
+                      <span className="font-semibold text-text">Day {d.day_number}</span>
+                      {d.date ? ` · ${longDate(d.date)}` : ""}
+                      {d.location ? ` · ${d.location}` : ""}
+                    </p>
+                  ))}
+                  {scheduleDays.length > 3 && <p>and {scheduleDays.length - 3} more</p>}
+                </div>
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  Day by day, built from the shot list. Times cascade; the call sheet reads it.
                 </p>
               )}
             </HubCard>

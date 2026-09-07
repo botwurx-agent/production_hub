@@ -143,3 +143,17 @@ export function onShootDay(min: number, dayStartMin: number): number {
 export function totalMinutes(strips: StripInput[]): number {
   return strips.reduce((n, s) => n + Math.max(0, Number(s.durationMin) || 0), 0);
 }
+
+/**
+ * The position for a row dropped between two others. Midpoint insertion, same
+ * as project_tasks.sort: one row is written per move rather than renumbering
+ * the day. Floats run out of precision after about fifty drops into the same
+ * gap, at which point two rows share a key and creation order decides; an
+ * unintended order rather than lost work, so not worth a renumbering pass.
+ */
+export function positionBetween(before: number | undefined, after: number | undefined): number {
+  if (before === undefined && after === undefined) return 0;
+  if (before === undefined) return (after as number) - 1;
+  if (after === undefined) return before + 1;
+  return (before + after) / 2;
+}

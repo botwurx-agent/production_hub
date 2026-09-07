@@ -3574,7 +3574,7 @@ that card's editor, an arrow is drawn by dragging between two cards.
   comments, so `board-review-portal` in capture-shots.mjs photographs the real
   client portal over a BOARD rather than an asset.
 
-### Schedule builder (2026-09-07): MOCKUP BUILT, schema not started
+### Schedule builder (2026-09-07): BUILT (migration 0107), print + call sheet block not yet
 The operator: "an extremely important function that I totally forgot about."
 Every production level has one, and the app had NO home for it: the call sheet
 carries crew call, breakfast, lunch and wrap as four masthead fields and
@@ -3654,11 +3654,57 @@ DECISIONS, all confirmed by the operator before anything was written:
 - NOT IN THE MOCKUP, deliberately: add/edit chrome, the shot-list picker, print,
   the call sheet block, per-person call times. Layout and the cascade were the
   questions; those are the build.
-- NEXT, once the operator has reacted to the layout: schema (schedule_days +
-  schedule_rows, row -> shot_card ids, call_sheets.schedule_day_id), the editor
-  for real, "Add shots" from the shot list, print via ProductionCover +
-  DayDivider, then the call sheet block and advance block, then people on rows
-  -> per-recipient call times.
+- THE REAL THING (same day, after the operator confirmed the table layout and
+  asked for edit/delete on a row). Migration 0107: `schedule_days` (project,
+  day_number unique per project, date, call_time and wrap_target AS TYPED,
+  location, notes), `schedule_rows` (day, float position for midpoint drops,
+  kind, title, location, set_name, int_ext, day_night, duration_min,
+  anchored_at as typed, notes), `schedule_row_shots` (UNIQUE ON THE SHOT: a
+  shot is on one row on one day, which is what makes the schedule the owner
+  of shot_cards.day; the actions write that column from the row's day and
+  clear it when a row or day is deleted), `schedule_row_people` (contact_id +
+  role talent|crew, so per-person call times can be derived later without
+  retyping), and `call_sheets.schedule_day_id` (nullable, connection-ready:
+  the sheet CONSUMES the schedule). RLS is the 0093 split: read is
+  is_studio_member OR can_access_project (crew must read it), write is
+  is_studio_member OR can_edit_project. Two SECURITY DEFINER helpers
+  (schedule_day_project, schedule_row_project) resolve a child to its project
+  so a child policy never subqueries a parent under that parent's own policy,
+  the 0100 recursion lesson. GOTCHA hit applying it: a `language sql` function
+  body is validated at creation, so the helpers had to be created AFTER the
+  tables; the first attempt failed on exactly that and DDL being
+  transactional meant nothing landed.
+- TIMES ARE NOT STORED, only durations and anchors; the loader hands rows to
+  lib/schedule-time cascade() and every surface derives the same clock.
+- CODE: lib/schedule-data.ts (loadSchedule, four queries grouped in memory
+  with signThumbs for the shot thumbnails; loadShotOptions with where each
+  shot already sits; loadRosterOptions), app/(app)/projects/[id]/
+  schedule-actions.ts (createScheduleDay inherits the previous day's call,
+  wrap and location and the first day gets 7:00 / 6:00 pm rather than a
+  blank that would make the day un-cascadable; deleteScheduleDay renumbers
+  the rest and re-syncs shot days; add/update/delete/moveScheduleRow;
+  setRowShots pulls a ticked shot off any other row first rather than failing
+  on the unique; setRowPeople), components/production/schedule-editor.tsx
+  (the mockup's Day and Board views on real data, optimistic local state with
+  router.refresh after each action, a ROW MODAL with every field plus the
+  shots picker, which badges a shot "on Day N" or "on another row", plus the
+  talent and crew pickers split by roster category, plus Delete behind
+  confirmAction; a DAY MODAL for date/call/wrap/location/notes with Delete
+  day; an Add bar with one button per kind that opens the new row straight
+  into the modal; canEdit hides grips, controls and add bars but leaves the
+  table readable for a reviewer). Page at /projects/[id]/schedule; hub card
+  in the Produce band before Call sheet, since the schedule is built first.
+- app/dev/schedule is now a FIXTURE mounting the REAL editor on hardcoded
+  data (the /dev/comms pattern), because a dev server in a Claude Code session
+  cannot reach Supabase. Actions fail there by design. ?job=live shows the
+  three-day live-action example. components/dev/schedule-mockup.tsx is gone.
+- NOT YET, in order: print view (one page per day through ProductionCover +
+  DayDivider), the call sheet `schedule` block reading schedule_day_id plus
+  the advance block, per-recipient call times from schedule_row_people, and
+  a "which day" pill on the shot list that reads from the schedule. The
+  end-to-end save path has NOT been exercised: the operator's first real
+  schedule is the test, and the thing most likely to surface is the shots
+  picker's steal-then-insert on a shot already on another row.
 
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the

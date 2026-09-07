@@ -2258,6 +2258,7 @@ export type Database = {
           accent: string | null;
           created_by: string | null;
           updated_at: string;
+          schedule_day_id: string | null;
         };
         Insert: {
           id?: string;
@@ -2296,6 +2297,7 @@ export type Database = {
           accent?: string | null;
           created_by?: string | null;
           updated_at?: string;
+          schedule_day_id?: string | null;
         };
         Update: {
           id?: string;
@@ -2334,6 +2336,7 @@ export type Database = {
           accent?: string | null;
           created_by?: string | null;
           updated_at?: string;
+          schedule_day_id?: string | null;
         };
         Relationships: [];
       };
@@ -2691,6 +2694,194 @@ export type Database = {
             referencedRelation: "project_task_assignees";
             referencedColumns: ["task_id"];
           },
+        ];
+      };
+      schedule_days: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          day_number: number;
+          date: string | null;
+          call_time: string | null;
+          wrap_target: string | null;
+          location: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          day_number: number;
+          date?: string | null;
+          call_time?: string | null;
+          wrap_target?: string | null;
+          location?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          day_number?: number;
+          date?: string | null;
+          call_time?: string | null;
+          wrap_target?: string | null;
+          location?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      schedule_rows: {
+        Row: {
+          id: string;
+          studio_id: string;
+          day_id: string;
+          position: number;
+          kind: string;
+          title: string;
+          location: string | null;
+          set_name: string | null;
+          int_ext: string | null;
+          day_night: string | null;
+          duration_min: number;
+          anchored_at: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          day_id: string;
+          position?: number;
+          kind?: string;
+          title?: string;
+          location?: string | null;
+          set_name?: string | null;
+          int_ext?: string | null;
+          day_night?: string | null;
+          duration_min?: number;
+          anchored_at?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          day_id?: string;
+          position?: number;
+          kind?: string;
+          title?: string;
+          location?: string | null;
+          set_name?: string | null;
+          int_ext?: string | null;
+          day_night?: string | null;
+          duration_min?: number;
+          anchored_at?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "schedule_rows_day_id_fkey";
+            columns: ["day_id"];
+            isOneToOne: false;
+            referencedRelation: "schedule_days";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      schedule_row_shots: {
+        Row: {
+          id: string;
+          studio_id: string;
+          row_id: string;
+          shot_card_id: string;
+          position: number;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          row_id: string;
+          shot_card_id: string;
+          position?: number;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          row_id?: string;
+          shot_card_id?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "schedule_row_shots_row_id_fkey";
+            columns: ["row_id"];
+            isOneToOne: false;
+            referencedRelation: "schedule_rows";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "schedule_row_shots_shot_card_id_fkey";
+            columns: ["shot_card_id"];
+            isOneToOne: true;
+            referencedRelation: "shot_cards";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      schedule_row_people: {
+        Row: {
+          id: string;
+          studio_id: string;
+          row_id: string;
+          contact_id: string;
+          role: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          row_id: string;
+          contact_id: string;
+          role?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          row_id?: string;
+          contact_id?: string;
+          role?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "schedule_row_people_row_id_fkey";
+            columns: ["row_id"];
+            isOneToOne: false;
+            referencedRelation: "schedule_rows";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "schedule_row_people_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id"];
+          }
         ];
       };
       project_task_files: {
