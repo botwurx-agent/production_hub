@@ -17,7 +17,7 @@ import {
   emailBillingDoc,
   updateDocStyle,
   saveDefaultDocStyle,
-  addDocAttachment,
+  attachDocFile,
   deleteDocAttachment,
   importBillingDocFromPdf,
 } from "@/app/(app)/projects/[id]/native-invoice-actions";
@@ -25,6 +25,8 @@ import { useAiEnabled } from "@/components/ai/ai-availability";
 import { SendDocEmailModal } from "@/components/production/send-doc-email-modal";
 import { toast } from "@/components/ui/toast";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
+import { MAX_DOCUMENT_BYTES } from "@/lib/upload-limits";
+import { uploadDirect } from "@/components/upload/direct-upload";
 import { shortDate } from "@/lib/format";
 import {
   DOC_TEMPLATES,
@@ -232,22 +234,25 @@ export function InvoiceWorkspace({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !form) return;
-    // Mirrored client-side so an oversized file is caught before the upload.
-    // Past the request-body cap the server action never runs at all, so there
-    // would be no error to show.
-    if (file.size > MAX_UPLOAD_BYTES) {
+    const docId = form.id;
+    // Mirrored client-side so an oversized file is refused before the upload
+    // starts rather than after it finishes, which on a big file is the
+    // difference between a message and a wasted wait.
+    if (file.size > MAX_DOCUMENT_BYTES) {
       toast(
         `That file is ${formatBytes(file.size)}, over the ${formatBytes(
-          MAX_UPLOAD_BYTES
+          MAX_DOCUMENT_BYTES
         )} limit. Attach a smaller file, or link to it in the notes.`,
         "error"
       );
       return;
     }
-    const fd = new FormData();
-    fd.set("file", file);
     start(async () => {
-      const res = await addDocAttachment(projectId, form.id, fd);
+      // Direct to Storage: a proposal's supporting deck is routinely bigger
+      // than a Server Action's request body, which is what capped this at 4MB.
+      const res = await uploadDirect({ kind: "billing_doc", docId }, file)
+        .then((d) => attachDocFile(projectId, docId, d.path, file.name))
+        .catch((e) => ({ error: e instanceof Error ? e.message : "Upload failed." }));
       if ("error" in res) {
         toast(res.error, "error");
         return;

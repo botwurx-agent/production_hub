@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { finalizeUpload, discardUpload } from "@/lib/upload-ticket";
 import { logWrite, reportError } from "@/lib/log";
 import { generateReviewToken } from "@/lib/review-links";
 import {
@@ -160,36 +161,22 @@ export async function deleteCost(
  * so the form can save without a file, and so a file can be added or replaced
  * later without retyping the row.
  */
-export async function uploadCostDoc(
+export async function attachCostDoc(
   projectId: string,
   costId: string,
-  formData: FormData
+  path: string,
+  fileName: string
 ): Promise<{ error: string } | { ok: true }> {
-  const ctx = await requireStudioContext();
+  await requireStudioContext();
   const supabase = createClient();
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "No file selected." };
-  }
-  if (file.size > MAX_COST_DOC_BYTES) {
-    return { error: "That file is too large (4MB max for an invoice)." };
-  }
-
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-120) || "invoice";
-  const path = `${ctx.studio.id}/costs/${projectId}/${generateReviewToken()}_${safeName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  const { error: upErr } = await supabase.storage
-    .from("assets")
-    .upload(path, buffer, {
-      contentType: file.type || "application/octet-stream",
-      upsert: false,
-    });
-  if (upErr) {
-    reportError("uploadCostDoc.upload", upErr);
-    return { error: "Could not upload that file. Try again." };
-  }
+  // The file is already in Storage: the browser uploaded it direct under a
+  // server-minted ticket, so a multi-page scanned invoice is no longer capped
+  // at the 4MB a Server Action can carry. `path` is data from the browser, so
+  // finalizeUpload re-runs the same authorization the ticket ran and checks the
+  // object's real size before this row is allowed to point at it.
+  const landed = await finalizeUpload({ kind: "cost", projectId }, path);
+  if ("error" in landed) return landed;
 
   // Replacing a document should not leave the old one behind.
   const { data: prev } = await supabase
@@ -202,14 +189,15 @@ export async function uploadCostDoc(
     .from("project_costs")
     .update({
       storage_path: path,
-      file_name: file.name.slice(0, 200),
+      file_name: fileName.slice(0, 200),
       updated_at: new Date().toISOString(),
     })
     .eq("id", costId);
 
   if (error) {
-    await supabase.storage.from("assets").remove([path]);
-    reportError("uploadCostDoc/project_costs", error);
+    // Nothing references the file yet, so the failed write takes it with it.
+    await discardUpload(path);
+    reportError("attachCostDoc/project_costs", error);
     return { error: "Could not attach that file." };
   }
   if (prev?.storage_path && prev.storage_path !== path) {

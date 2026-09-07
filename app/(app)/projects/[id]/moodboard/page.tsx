@@ -67,7 +67,6 @@ export default async function ProjectMoodboardPage({
         }
       />
       <BoardsWorkspace
-        studioId={ctx.studio.id}
         initialBoards={(boards ?? []) as Board[]}
         projects={[]}
         driveConnected={driveConnected(googleAccount?.scope)}

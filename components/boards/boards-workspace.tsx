@@ -85,14 +85,11 @@ import {
 } from "@/lib/board-defaults";
 import { setCardDragImage } from "@/lib/board-drag-image";
 import { parseTodo, serializeTodo, type TodoRow } from "@/lib/board-todo";
-import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
+import { MAX_IMAGE_BYTES } from "@/lib/upload-limits";
+import { uploadDirect } from "@/components/upload/direct-upload";
 
-const MAX_UPLOAD_MB = 40;
-const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+const IMAGE_MB = Math.round(MAX_IMAGE_BYTES / 1_000_000);
 
-function safeFileName(name: string): string {
-  return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "image";
-}
 import { videoEmbed } from "@/lib/video-embed";
 import { parseMediaMeta, serializeMediaMeta } from "@/lib/board-media";
 import type { Board } from "@/lib/database.types";
@@ -100,7 +97,6 @@ import type { Board } from "@/lib/database.types";
 type ProjectRef = { id: string; title: string };
 
 export function BoardsWorkspace({
-  studioId,
   initialBoards,
   projects,
   driveConnected,
@@ -110,7 +106,6 @@ export function BoardsWorkspace({
   reviewKind,
   reviewedIds = [],
 }: {
-  studioId: string;
   initialBoards: Board[];
   projects: ProjectRef[];
   driveConnected: boolean;
@@ -459,33 +454,47 @@ export function BoardsWorkspace({
   // and clipboard paste).
   function uploadImageFiles(files: File[], at: { x: number; y: number }) {
     if (!activeId || files.length === 0) return;
-    const over = files.filter((f) => f.size > MAX_UPLOAD_BYTES);
-    const ok = files.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+    // The ceiling here was a LOCAL 40MB constant this file invented, unrelated
+    // to any real limit: these bytes have never crossed a Server Action on
+    // this path, so the ~4.5MB request body does not apply, and nothing else
+    // was 40MB either. Now the shared image ceiling, so a board obeys the same
+    // rule as everywhere else instead of a number nobody chose.
+    const over = files.filter((f) => f.size > MAX_IMAGE_BYTES);
+    const ok = files.filter((f) => f.size <= MAX_IMAGE_BYTES);
     if (over.length > 0) {
       showNotice(
         over.length === 1
-          ? `"${over[0].name || "Image"}" is over the ${MAX_UPLOAD_MB} MB limit and was skipped.`
-          : `${over.length} images are over the ${MAX_UPLOAD_MB} MB limit and were skipped.`
+          ? `"${over[0].name || "Image"}" is over the ${IMAGE_MB} MB limit and was skipped.`
+          : `${over.length} images are over the ${IMAGE_MB} MB limit and were skipped.`
       );
     }
     if (ok.length === 0) return;
     const boardId = activeId;
     pushHistory();
     startBusy(async () => {
-      // Upload the bytes straight to Storage (bypasses the serverless body cap),
-      // then record the board items in one small server call.
-      const supabase = createBrowserSupabase();
+      // Through the shared ticket rather than uploading on the caller's own
+      // session with a path the browser built. Two things that fixes:
+      //
+      // A PROJECT COLLABORATOR CAN NOW DO THIS. The bucket policy is
+      // is_studio_member, and a collaborator has no membership, so uploading
+      // with their own session failed outright. The ticket is minted with the
+      // service role after the server has checked they can reach the board,
+      // which is the same reason createAssetUploadUrl exists for asset files.
+      //
+      // AND THE SERVER PICKS THE PATH, so a board card cannot be pointed at a
+      // path the browser chose.
       const uploaded: { path: string; name: string; mime: string | null }[] = [];
       for (const f of ok) {
-        const path = `${studioId}/boards/${boardId}/${crypto.randomUUID()}-${safeFileName(f.name)}`;
-        const { error } = await supabase.storage
-          .from("assets")
-          .upload(path, f, { contentType: f.type || undefined, upsert: false });
-        if (error) {
-          showNotice(`Couldn't upload "${f.name || "image"}": ${error.message}`);
-          continue;
+        try {
+          const d = await uploadDirect({ kind: "board", boardId }, f);
+          uploaded.push({ path: d.path, name: f.name || "image", mime: d.mimeType || null });
+        } catch (e) {
+          showNotice(
+            `Couldn't upload "${f.name || "image"}": ${
+              e instanceof Error ? e.message : "upload failed"
+            }`
+          );
         }
-        uploaded.push({ path, name: f.name || "image", mime: f.type || null });
       }
       if (uploaded.length > 0) {
         const res = await registerUploadedBoardItems(boardId, uploaded, at.x, at.y);

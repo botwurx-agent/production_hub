@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { finalizeUpload, discardUpload } from "@/lib/upload-ticket";
 import { generateReviewToken } from "@/lib/review-links";
 import {
   MAX_UPLOAD_BYTES,
@@ -425,57 +426,38 @@ export async function saveDefaultDocStyle(
 
 // Attach a file to a document (proposals carry supporting docs). Server-side
 // upload to the studio-scoped assets bucket, then record the row.
-export async function addDocAttachment(
+export async function attachDocFile(
   projectId: string,
   docId: string,
-  formData: FormData
+  path: string,
+  fileName: string
 ): Promise<{ error: string } | { ok: true }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "No file selected." };
-  }
-  // The file crosses a Server Action, so the ~4.5MB serverless request body is
-  // the real ceiling, not Gmail's or storage's. The old 25MB check could never
-  // fire: the request died at the platform edge first, so the click simply
-  // appeared to do nothing. Same reason MAX_UPLOAD_BYTES exists on the email
-  // path and MAX_COST_DOC_BYTES on the invoice path.
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return {
-      error: `That file is ${formatBytes(file.size)}, over the ${formatBytes(
-        MAX_UPLOAD_BYTES
-      )} limit for an upload. Attach a smaller file, or link to it in the notes.`,
-    };
-  }
-
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-120) || "file";
-  const path = `${ctx.studio.id}/billing/${docId}/${generateReviewToken()}_${safeName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  const { error: upErr } = await supabase.storage
-    .from("assets")
-    .upload(path, buffer, {
-      contentType: file.type || "application/octet-stream",
-      upsert: false,
-    });
-  if (upErr) {
-    reportError("addDocAttachment.upload", upErr);
-    return { error: "Could not upload that file. Try again." };
-  }
+  // The file is already in Storage: the browser uploaded it direct under a
+  // server-minted ticket, so a proposal's supporting deck is no longer capped
+  // at the 4MB a Server Action can carry. `path` is data from the browser, so
+  // finalizeUpload re-runs the same authorization the ticket ran (which
+  // includes proving this document is in the caller's studio) and reads the
+  // object's real size back before the row is written.
+  const landed = await finalizeUpload({ kind: "billing_doc", docId }, path);
+  if ("error" in landed) return landed;
 
   const { error } = await supabase.from("billing_document_attachments").insert({
     document_id: docId,
     studio_id: ctx.studio.id,
-    name: file.name.slice(0, 200),
+    name: fileName.slice(0, 200),
     storage_path: path,
-    content_type: file.type || null,
-    size_bytes: file.size,
+    // From the stored object rather than from what the browser said, since
+    // this is what the client will be shown on the shared document.
+    content_type: landed.mimeType,
+    size_bytes: landed.size,
     created_by: ctx.userId,
   });
   if (error) {
-    await supabase.storage.from("assets").remove([path]);
+    await discardUpload(path);
+    reportError("attachDocFile", error);
     return { error: "Could not save the attachment." };
   }
   rp(projectId);

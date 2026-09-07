@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage, isResizable, signThumbs } from "@/lib/asset-storage";
-import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import { requireStudioContext } from "@/lib/studio";
 import { getAccessToken as getGoogleToken } from "@/lib/gmail";
 import { getDriveFileBytes } from "@/lib/googledrive";
@@ -18,6 +17,7 @@ import { newItemFields } from "@/lib/board-defaults";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Board } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
+import { finalizeUpload } from "@/lib/upload-ticket";
 
 export type BoardState = { error?: string } | null;
 /** A board card can be scaled up on the canvas, so it gets more pixels. */
@@ -406,62 +406,20 @@ function safeName(name: string): string {
   return name.replace(/[^\w.\-]+/g, "_").slice(-120) || "file";
 }
 
-// Upload image files from the device onto a board.
-export async function addUploadItems(formData: FormData): Promise<BoardState> {
-  const ctx = await requireStudioContext();
-  const boardId = String(formData.get("boardId") ?? "");
-  const baseX = Number(formData.get("x") ?? 40);
-  const baseY = Number(formData.get("y") ?? 40);
-  if (!boardId) return { error: "Missing board." };
-
-  const files = formData
-    .getAll("files")
-    .filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length === 0) return { error: "No files chosen." };
-  // Checked on the TOTAL, not per file: they travel in one request body, so
-  // five 1MB images blow the same ceiling one 5MB image would.
-  const totalBytes = files.reduce((n, f) => n + f.size, 0);
-  if (totalBytes > MAX_UPLOAD_BYTES) {
-    return {
-      error: `Those files come to ${formatBytes(totalBytes)}, over the ${formatBytes(
-        MAX_UPLOAD_BYTES
-      )} upload limit. Add them in smaller batches.`,
-    };
-  }
-
-  const supabase = createClient();
-  let z = await nextZ(supabase, boardId);
-  let offset = 0;
-  for (const f of files) {
-    const bytes = Buffer.from(await f.arrayBuffer());
-    const path = `${ctx.studio.id}/boards/${boardId}/${crypto.randomUUID()}-${safeName(f.name)}`;
-    const { error: upErr } = await assetStorage()
-      .upload(path, bytes, { contentType: f.type || undefined, upsert: false });
-    if (upErr) return { error: upErr.message };
-    const { error } = await supabase.from("board_items").insert({
-      studio_id: ctx.studio.id,
-      board_id: boardId,
-      kind: "image",
-      name: f.name,
-      mime_type: f.type || null,
-      storage_path: path,
-      x: baseX + offset,
-      y: baseY + offset,
-      w: DEFAULT_W,
-      h: DEFAULT_H,
-      z: z++,
-      created_by: ctx.userId,
-    });
-    if (error) return { error: error.message };
-    offset += 28;
-  }
-  revalidatePath("/boards");
-  return null;
-}
-
-// Record board_items for files the browser already uploaded straight to Storage
-// (direct-to-storage upload, which bypasses the serverless request-body limit).
-// Paths are validated to live under the caller's studio.
+/**
+ * Record board_items for files the browser has already put in Storage.
+ *
+ * THE PATH CHECK USED TO BE `startsWith(studioId + "/")`, which asked only
+ * "is this somewhere in my studio". That let a board card be pointed at any
+ * file in the studio, an agreement PDF or a cost invoice included, and it
+ * never checked that the BOARD was the caller's either, so an item could be
+ * inserted onto another studio's board. finalizeUpload settles both: it
+ * re-reads the board (proving it is the caller's, and getting its studio from
+ * the row rather than the session) and refuses any path that is not exactly
+ * what a ticket for THAT board would have minted.
+ *
+ * Per file rather than per batch, because each one is a separate claim.
+ */
 export async function registerUploadedBoardItems(
   boardId: string,
   files: { path: string; name: string; mime: string | null }[],
@@ -472,14 +430,19 @@ export async function registerUploadedBoardItems(
   const supabase = createClient();
   let z = await nextZ(supabase, boardId);
   let offset = 0;
+  let refused = 0;
   for (const f of files) {
-    if (!f.path.startsWith(`${ctx.studio.id}/`)) continue;
+    const landed = await finalizeUpload({ kind: "board", boardId }, f.path);
+    if ("error" in landed) {
+      refused++;
+      continue;
+    }
     const { error } = await supabase.from("board_items").insert({
       studio_id: ctx.studio.id,
       board_id: boardId,
       kind: "image",
       name: f.name,
-      mime_type: f.mime || null,
+      mime_type: landed.mimeType ?? f.mime ?? null,
       storage_path: f.path,
       x: baseX + offset,
       y: baseY + offset,
@@ -492,6 +455,16 @@ export async function registerUploadedBoardItems(
     offset += 28;
   }
   revalidatePath("/boards");
+  // Said out loud. A silently dropped image reads as the upload having worked,
+  // and the card simply never appearing is worse than being told.
+  if (refused > 0) {
+    return {
+      error:
+        refused === files.length
+          ? "Those images could not be verified, so nothing was added."
+          : `${refused} of ${files.length} images could not be verified and were skipped.`,
+    };
+  }
   return null;
 }
 

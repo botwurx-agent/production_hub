@@ -41,7 +41,6 @@ export default async function BoardsPage() {
         hue="purple"
       />
       <BoardsWorkspace
-        studioId={ctx.studio.id}
         initialBoards={(boards ?? []) as Board[]}
         projects={projects ?? []}
         driveConnected={driveConnected(googleAccount?.scope)}

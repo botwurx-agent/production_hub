@@ -28,12 +28,20 @@ export function costStatus(v: string | null | undefined): CostStatus {
 }
 
 /**
- * A cost document travels browser -> Server Action -> storage, so its bytes
- * cross the ~4.5MB serverless request body. Over that the request is killed at
- * the platform edge before our code runs, so the click just appears to do
- * nothing. Staying under it lets us fail with a message instead. Matches
- * MAX_UPLOAD_BYTES in lib/attachment-limits.ts, which exists for the same
- * reason on the email path. An invoice PDF or a phone photo is well inside it.
+ * How big an invoice can be and still be READ AUTOMATICALLY.
+ *
+ * IT NO LONGER BOUNDS THE ATTACH. Filing the document is now a direct upload
+ * to Storage under a server-minted ticket, with no function in the path, so a
+ * multi-page scan of any reasonable size lands fine (MAX_DOCUMENT_BYTES).
+ *
+ * Having it read by AI is a different journey: those bytes go browser ->
+ * Server Action -> model, so they cross the ~4.5MB serverless request body,
+ * over which the request is killed at the platform edge before our code runs
+ * and the click just appears to do nothing. Staying under it lets us say so.
+ *
+ * So an oversized invoice ATTACHES and simply is not read, which is the right
+ * trade: filing the document is most of the value, and typing an amount is a
+ * few seconds.
  */
 export const MAX_COST_DOC_BYTES = 4_000_000;
 

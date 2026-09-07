@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { MAX_DOCUMENT_BYTES } from "@/lib/upload-limits";
+import { formatBytes } from "@/lib/attachment-limits";
+import { uploadDirect } from "@/components/upload/direct-upload";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,7 +14,7 @@ import {
   updateCost,
   deleteCost,
   setCostStatus,
-  uploadCostDoc,
+  attachCostDoc,
   getCostDocUrl,
   extractInvoiceDraft,
   type CostInput,
@@ -210,7 +213,7 @@ export function CostLedger({
     <FileDropzone
       accept=".pdf,image/*"
       multiple={false}
-      maxBytes={MAX_COST_DOC_BYTES}
+      maxBytes={MAX_DOCUMENT_BYTES}
       onTooLarge={() =>
         toast("That file is too large (4MB max for an invoice).", "error")
       }
@@ -555,6 +558,22 @@ export function CostModal({
   }, [initialFile]);
 
   async function readInvoice(f: File) {
+    // TWO DIFFERENT CEILINGS. ATTACHING is a direct upload with no function in
+    // the path, so a big scan is fine. READING sends the bytes through a
+    // Server Action, so it is still bound by the ~4.5MB request body, past
+    // which the request dies at the platform edge with nothing to report.
+    //
+    // The check is HERE rather than at the call sites because there are three
+    // of them: a pick, a drop, and the "Read it again" button.
+    if (f.size > MAX_COST_DOC_BYTES) {
+      toast(
+        `Attached. It is too big to read automatically (over ${formatBytes(
+          MAX_COST_DOC_BYTES
+        )}), so fill the amount in by hand.`,
+        "info"
+      );
+      return;
+    }
     setReading(true);
     setFilled(null);
     const fd = new FormData();
@@ -684,9 +703,11 @@ export function CostModal({
       }
     }
     if (file) {
-      const fd = new FormData();
-      fd.set("file", file);
-      const up = await uploadCostDoc(projectId, id, fd);
+      // Straight to Storage under a server-minted ticket, so a multi-page
+      // scanned invoice is not capped at the 4MB a Server Action can carry.
+      const up = await uploadDirect({ kind: "cost", projectId }, file)
+        .then((d) => attachCostDoc(projectId, id, d.path, file.name))
+        .catch((e) => ({ error: e instanceof Error ? e.message : "Upload failed." }));
       if ("error" in up) {
         // The row saved; only the document failed. Say exactly that, so the
         // producer does not re-enter a cost that is already recorded.
@@ -859,8 +880,13 @@ export function CostModal({
               const picked = e.target.files?.[0] ?? null;
               e.target.value = "";
               if (!picked) return;
-              if (picked.size > MAX_COST_DOC_BYTES) {
-                toast("That file is too large (4MB max for an invoice).", "error");
+              if (picked.size > MAX_DOCUMENT_BYTES) {
+                toast(
+                  `That file is ${formatBytes(picked.size)}, over the ${formatBytes(
+                    MAX_DOCUMENT_BYTES
+                  )} limit.`,
+                  "error"
+                );
                 return;
               }
               setFile(picked);

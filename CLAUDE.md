@@ -2013,16 +2013,39 @@ to stop routing uploads through a function at all.
   PUT straight at the signed URL, a protocol not verified against the live
   endpoint. Callers show an indeterminate state instead. Do not hand-roll the
   URL shape to fix this without checking it first.
-- DONE: the shared module, the client helper (components/upload/direct-upload.ts),
-  the bucket limit, and AGREEMENTS (`attachAgreementFile`). A scanned contract
-  now attaches at any size up to 100MB.
-  Its AI SOW read still crosses a Server Action, so it keeps MAX_UPLOAD_BYTES,
-  and the guard sits inside readDocument because a pick and a drop both reach
-  it; over the limit the file still ATTACHES and says it will not be read,
-  rather than blocking the attach over a convenience.
-- STILL TO DO: moodboard imports, invoice attachments, cost documents, then
-  client-side image compression for the small-file sites (props, talent, task
-  files), which is the better answer there than a new mint.
+- ALL FOUR BIG-FILE SITES ARE CONVERTED: agreements (attachAgreementFile),
+  cost documents (attachCostDoc), proposal attachments (attachDocFile) and
+  moodboard imports (registerUploadedBoardItems).
+- THE TWO-CEILING PATTERN, which now repeats three times and is the thing to
+  copy for the next one: ATTACHING is a direct upload with no function in the
+  path, so it takes MAX_DOCUMENT_BYTES. READING the same file with AI sends the
+  bytes through a Server Action, so it keeps MAX_UPLOAD_BYTES. An oversized
+  document therefore ATTACHES and says it will not be read automatically,
+  rather than blocking the attach over a convenience. The guard goes INSIDE the
+  read function (readDocument, readInvoice), never at the call sites, because
+  each has two or three of them (a pick, a drop, a "read it again" button) and
+  they have to behave identically. MAX_COST_DOC_BYTES now documents itself as
+  the AI-read ceiling rather than the attach ceiling.
+- THE BOARDS PATH HAD THREE REAL BUGS, all found by converting it rather than
+  by looking for them. (1) A COLLABORATOR COULD NOT UPLOAD AT ALL: the client
+  uploaded on its OWN session, and the bucket policy is is_studio_member, so a
+  project collaborator with no membership was refused outright. That is exactly
+  what createAssetUploadUrl was built to fix for asset files, and the moodboard
+  never got it. (2) THE BROWSER BUILT THE PATH and the server accepted anything
+  under `${studioId}/`, so a board card could be pointed at any file in the
+  studio (an agreement, a cost invoice), and nothing checked the BOARD was the
+  caller's either. finalizeUpload settles both. (3) A PHANTOM CEILING: a local
+  `MAX_UPLOAD_MB = 40` constant this file invented, unrelated to any real
+  limit, since these bytes have never crossed a Server Action. Now the shared
+  MAX_IMAGE_BYTES. `addUploadItems` (the old capped Server Action) was dead and
+  is deleted, along with the now-unused `studioId` prop and safeFileName.
+- AUDITED AFTERWARDS: every surviving MAX_UPLOAD_BYTES check is now either an
+  AI-read path, the email path (device bytes genuinely cross a function on
+  their way into the MIME), or one of the small-file sites below.
+- STILL TO DO: client-side image compression for props, talent files and task
+  files. Those are images, where shrinking a 4MB phone photo to 400KB solves it
+  completely, with no new authorization surface and a smaller storage bill. A
+  new mint is the wrong tool there.
 - CANNOT BE EXERCISED FROM A CLAUDE CODE SESSION: the agent proxy blocks the
   Supabase host, so a dev server here cannot sign in or reach Storage (same
   constraint as `npm run demos`). The pure logic is unit tested and the storage
