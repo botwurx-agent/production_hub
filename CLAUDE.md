@@ -1959,6 +1959,76 @@ created from a model reading a document unattended.
   MAX_UPLOAD_BYTES on the email path. (The rest of this class is now fixed too,
   see "Server Action upload caps" below.)
 
+### Direct uploads: one ticket, one gate (migration 0106) — IN PROGRESS
+The operator, after hitting the cap on a SOW: "I don't want there to, in any
+situation, have to deal with any sort of a cap issue." They asked whether we
+could compress files before upload, like veed.io. We can, and it is worth doing
+for images, but compression treats the symptom: `MAX_UPLOAD_BYTES` (4MB) is not
+a policy anyone chose, it is the Vercel serverless request body, and the cure is
+to stop routing uploads through a function at all.
+- THE PATTERN ALREADY EXISTED and only three files used it. `createAssetUploadUrl`
+  mints a signed URL server-side and the browser uploads DIRECT to Storage, no
+  function in the path, no cap. Seven other sites still posted a FormData to a
+  Server Action. Realistically only four of those handle files that can be big
+  (agreements, moodboard imports, invoice attachments, cost documents); the rest
+  are images, where compression is the better and cheaper answer.
+- WHY IT IS NOT A FREE WIN, and this is the argument that shaped the design: a
+  direct upload's authorization is the MINT, because the service role that
+  signs it bypasses the bucket policy and nothing downstream can refuse.
+  `createAssetUploadUrl` originally treated "can you read this project" as the
+  check, which was true until 0093 added reviewers, at which point a reviewer
+  could take a ticket and write bytes. Five more mint sites is five more chances
+  to repeat that, so EVERY scope's authorization lives in ONE file,
+  lib/upload-ticket.ts, side by side. Adding a scope means adding a case there,
+  never writing a new mint elsewhere.
+- THE PATH IS DATA FROM THE BROWSER. It is minted server-side, then handed back
+  by the client to whichever action writes the row. A first draft took it on
+  trust, which would have let a caller point their own row at another studio's
+  file and then sign it. `finalizeUpload(scope, path)` RE-RUNS the same
+  authorize() and refuses any path that is not the exact shape the ticket would
+  have built. The check itself is `pathWithinScope` in lib/upload-limits.ts,
+  pure and NOT server-only so it can be tested; 18 assertions cover traversal,
+  a cross-scope folder, another studio, a deeper path, and a studio id that
+  merely SHARES A PREFIX (which is why it matches a whole segment plus a slash,
+  not startsWith on the id).
+- FOUR CHECKS ON SIZE, only the last two authoritative: the picker (advisory),
+  the mint against the browser's DECLARED size (advisory, since the declaration
+  is the thing being checked), finalizeUpload against the object's REAL size
+  read back from Storage (deletes anything over before a row points at it), and
+  the bucket's own file_size_limit. That last was NULL, so the bucket fell back
+  to an invisible project-wide dashboard setting; 0106 sets it to 2GB
+  explicitly. GOTCHA: Supabase enforces the LOWER of the bucket limit and the
+  project global in Settings -> Storage, so raising this alone is not enough if
+  the global is still at its default.
+- storage metadata `size` comes back as a STRING, same trap as project_costs
+  numerics. Verified against live rows, not assumed.
+- TWO THINGS DELIBERATELY NOT EXPOSED from app/(app)/upload-actions.ts, both in
+  a first draft: re-exporting `finalizeUpload` would have let a browser confirm
+  any path against any limit, and an `abandonUpload(path)` cleanup action was a
+  delete endpoint taking an arbitrary path. An abandoned upload is an
+  unreferenced blob, which is waste rather than a leak, and not worth a
+  client-callable delete.
+- NO PROGRESS REPORTING yet, and it is a real gap on a large file: supabase-js
+  uploads with fetch, which cannot report progress, and getting it means an XHR
+  PUT straight at the signed URL, a protocol not verified against the live
+  endpoint. Callers show an indeterminate state instead. Do not hand-roll the
+  URL shape to fix this without checking it first.
+- DONE: the shared module, the client helper (components/upload/direct-upload.ts),
+  the bucket limit, and AGREEMENTS (`attachAgreementFile`). A scanned contract
+  now attaches at any size up to 100MB.
+  Its AI SOW read still crosses a Server Action, so it keeps MAX_UPLOAD_BYTES,
+  and the guard sits inside readDocument because a pick and a drop both reach
+  it; over the limit the file still ATTACHES and says it will not be read,
+  rather than blocking the attach over a convenience.
+- STILL TO DO: moodboard imports, invoice attachments, cost documents, then
+  client-side image compression for the small-file sites (props, talent, task
+  files), which is the better answer there than a new mint.
+- CANNOT BE EXERCISED FROM A CLAUDE CODE SESSION: the agent proxy blocks the
+  Supabase host, so a dev server here cannot sign in or reach Storage (same
+  constraint as `npm run demos`). The pure logic is unit tested and the storage
+  metadata shape was checked against live rows via MCP, but the end-to-end
+  upload has to be tried on the operator's machine.
+
 ### Server Action upload caps: the whole class, swept (no migration) — BUILT
 Any file that travels browser -> Server Action -> storage crosses the ~4.5MB
 serverless request body. Over it, the request is killed at the platform EDGE

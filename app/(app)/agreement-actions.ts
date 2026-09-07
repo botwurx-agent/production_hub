@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
+import { finalizeUpload, discardUpload } from "@/lib/upload-ticket";
 import { logWrite, reportError } from "@/lib/log";
-import { generateReviewToken } from "@/lib/review-links";
 import { agreementDirection, agreementKind } from "@/lib/agreements";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
 import { isCostDocType } from "@/lib/costs";
@@ -137,41 +137,26 @@ export async function deleteAgreement(
  * record can exist before the countersigned copy comes back, which is the
  * normal sequence: you sign, then wait for theirs.
  */
-export async function uploadAgreementFile(
+export async function attachAgreementFile(
   id: string,
   scope: { projectId?: string | null; clientId?: string | null },
-  formData: FormData
+  path: string,
+  fileName: string
 ): Promise<{ error: string } | { ok: true }> {
-  const ctx = await requireStudioContext();
+  await requireStudioContext();
   const supabase = createClient();
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "No file selected." };
-  }
-  // Crosses a Server Action, so the ~4.5MB request body is the real ceiling.
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return {
-      error: `That file is ${formatBytes(file.size)}, over the ${formatBytes(
-        MAX_UPLOAD_BYTES
-      )} upload limit.`,
-    };
-  }
-
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(-120) || "agreement";
-  const path = `${ctx.studio.id}/agreements/${generateReviewToken()}_${safeName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  const { error: upErr } = await supabase.storage
-    .from("assets")
-    .upload(path, buffer, {
-      contentType: file.type || "application/octet-stream",
-      upsert: false,
-    });
-  if (upErr) {
-    reportError("uploadAgreementFile.upload", upErr);
-    return { error: "Could not upload that file. Try again." };
-  }
+  // THE FILE IS ALREADY IN STORAGE by the time this runs. The browser uploaded
+  // it direct under a signed URL, so it never crossed a Server Action and the
+  // ~4.5MB request body that used to cap this at 4MB does not apply. A scanned
+  // contract is routinely bigger than that, which is how this was found.
+  //
+  // What arrives here is a PATH, which is data from the browser. finalizeUpload
+  // re-runs the same authorization the ticket ran, refuses a path that is not
+  // the shape it would have minted, and checks the file's real size before this
+  // row is allowed to point at it.
+  const landed = await finalizeUpload({ kind: "agreement" }, path);
+  if ("error" in landed) return landed;
 
   const { data: prev } = await supabase
     .from("agreements")
@@ -183,14 +168,15 @@ export async function uploadAgreementFile(
     .from("agreements")
     .update({
       storage_path: path,
-      file_name: file.name.slice(0, 200),
+      file_name: fileName.slice(0, 200),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
 
   if (error) {
-    await supabase.storage.from("assets").remove([path]);
-    reportError("uploadAgreementFile/agreements", error);
+    // Nothing references the file yet, so the failed insert takes it with it.
+    await discardUpload(path);
+    reportError("attachAgreementFile/agreements", error);
     return { error: "Could not attach that file." };
   }
   // Replacing a document should not leave the old one behind.
@@ -254,7 +240,7 @@ export async function draftFromSow(
     return {
       error: `That file is ${formatBytes(file.size)}, over the ${formatBytes(
         MAX_UPLOAD_BYTES
-      )} limit for reading.`,
+      )} limit for reading. It is attached either way; fill the form in by hand.`,
     };
   }
 

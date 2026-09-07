@@ -11,7 +11,7 @@ import {
   addAgreement,
   updateAgreement,
   deleteAgreement,
-  uploadAgreementFile,
+  attachAgreementFile,
   getAgreementFileUrl,
   draftFromSow,
   applySowDeliverables,
@@ -31,6 +31,8 @@ import {
   type AgreementKind,
 } from "@/lib/agreements";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
+import { MAX_DOCUMENT_BYTES } from "@/lib/upload-limits";
+import { uploadDirect } from "@/components/upload/direct-upload";
 import type { Agreement } from "@/lib/database.types";
 
 const money = new Intl.NumberFormat("en-US", {
@@ -173,10 +175,10 @@ export function AgreementList({
     <FileDropzone
       accept=".pdf,image/*"
       multiple={false}
-      maxBytes={MAX_UPLOAD_BYTES}
+      maxBytes={MAX_DOCUMENT_BYTES}
       onTooLarge={(over) =>
         toast(
-          `"${over[0].name}" is ${formatBytes(over[0].size)}, over the ${formatBytes(MAX_UPLOAD_BYTES)} upload limit.`,
+          `"${over[0].name}" is ${formatBytes(over[0].size)}, over the ${formatBytes(MAX_DOCUMENT_BYTES)} upload limit.`,
           "error"
         )
       }
@@ -186,7 +188,7 @@ export function AgreementList({
       }}
       label="Drop to add an agreement"
       browse={{ text: "Drag an agreement here" }}
-      hint="PDF or an image, up to 4MB. A SOW fills the form in for you."
+      hint="PDF or an image. A SOW fills the form in for you."
       chooseLabel="Choose a document"
       actions={
         <button
@@ -491,6 +493,25 @@ function AgreementModal({
   }, [initialFile]);
 
   async function readDocument(f: File) {
+    // TWO DIFFERENT CEILINGS, and they are not the same problem. ATTACHING is
+    // now a direct upload with no function in the path, so a big scan is fine.
+    // READING sends the bytes through a Server Action, so it is still bound by
+    // the ~4.5MB request body, over which the request dies at the platform
+    // edge with nothing to report. So an oversized SOW attaches and simply is
+    // not read, said out loud, rather than blocking the attach.
+    //
+    // The check lives HERE rather than at the call sites because there are two
+    // of them, a pick and a drop, and the comment above the drop effect
+    // promises they behave identically.
+    if (f.size > MAX_UPLOAD_BYTES) {
+      toast(
+        `Attached. It is too big to read automatically (over ${formatBytes(
+          MAX_UPLOAD_BYTES
+        )}), so fill the form in by hand.`,
+        "info"
+      );
+      return;
+    }
     setReading(true);
     setFilled(null);
     const fd = new FormData();
@@ -567,9 +588,12 @@ function AgreementModal({
 
     const id = agreement ? agreement.id : (res as { ok: true; id: string }).id;
     if (file) {
-      const fd = new FormData();
-      fd.set("file", file);
-      const up = await uploadAgreementFile(id, scope, fd);
+      // Straight to Storage under a server-minted ticket, so a scanned
+      // contract is not capped at the 4MB a Server Action can carry. The
+      // server picks the path and re-checks it before the row points at it.
+      const up = await uploadDirect({ kind: "agreement" }, file)
+        .then((d) => attachAgreementFile(id, scope, d.path, file.name))
+        .catch((e) => ({ error: e instanceof Error ? e.message : "Upload failed." }));
       if ("error" in up) {
         // The record saved; only the file failed. Say exactly that so the
         // producer does not re-enter an agreement that already exists.
@@ -796,10 +820,10 @@ function AgreementModal({
               const picked = e.target.files?.[0] ?? null;
               e.target.value = "";
               if (!picked) return;
-              if (picked.size > MAX_UPLOAD_BYTES) {
+              if (picked.size > MAX_DOCUMENT_BYTES) {
                 toast(
                   `That file is ${formatBytes(picked.size)}, over the ${formatBytes(
-                    MAX_UPLOAD_BYTES
+                    MAX_DOCUMENT_BYTES
                   )} upload limit.`,
                   "error"
                 );
@@ -807,7 +831,8 @@ function AgreementModal({
               }
               setFile(picked);
               // Reading a received SOW is the point of attaching it here, so it
-              // runs on pick. Still a draft, still confirmed before saving.
+              // runs on pick. Still a draft, still confirmed before saving, and
+              // readDocument decides whether the file is small enough to read.
               if (aiEnabled && !agreement && agreementKind(form.kind) === "sow") {
                 void readDocument(picked);
               }
