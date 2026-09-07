@@ -291,7 +291,7 @@ export function ScheduleEditor({
           )}
         </>
       ) : (
-        <BoardView days={days} canEdit={canEdit} drag={drag} setDrag={setDrag} onMove={moveRow} onOpen={(r, d) => setEditing({ row: r, day: d })} onAdd={addRow} />
+        <BoardView days={days} canEdit={canEdit} drag={drag} setDrag={setDrag} onMove={moveRow} onOpen={(r, d) => setEditing({ row: r, day: d })} onAdd={addRow} onEditDay={(d) => setEditingDay(d)} />
       )}
 
       {editing && (
@@ -419,6 +419,13 @@ function PinGlyph({ small }: { small?: boolean }) {
     </svg>
   );
 }
+function EditGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  );
+}
 function AnchorGlyph() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -504,6 +511,15 @@ function DayView({ day, canEdit, drag, setDrag, onPatch, onMove, onOpen, onAdd, 
             <div className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Talent today</div>
             <div className="mt-1"><TalentCell people={talent} compact /></div>
           </div>
+        )}
+        {/* SAID OUT LOUD. The header was clickable with only a hover state to
+            say so, and the operator asked how to delete a day. A control that
+            has to be asked about is not a control. */}
+        {canEdit && (
+          <button onClick={onEditDay}
+            className="inline-flex items-center gap-1.5 self-center rounded-[9px] border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text">
+            <EditGlyph /> Edit day
+          </button>
         )}
         <div className="ml-auto text-right">
           <div className="text-[11px] font-bold uppercase tracking-wide text-text-faint">Scheduled wrap</div>
@@ -614,7 +630,7 @@ function AddRowBar({ onAdd }: { onAdd: (k: StripKind) => void }) {
 // BOARD VIEW
 // ---------------------------------------------------------------------------
 
-function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd }: {
+function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd, onEditDay }: {
   days: Day[];
   canEdit: boolean;
   drag: Drag | null;
@@ -622,6 +638,7 @@ function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd }: {
   onMove: (from: Drag, toDayId: string, index: number) => void;
   onOpen: (r: Row, d: Day) => void;
   onAdd: (d: Day, k: StripKind) => void;
+  onEditDay: (d: Day) => void;
 }) {
   const [over, setOver] = useState<{ dayId: string; idx: number } | null>(null);
   return (
@@ -642,9 +659,17 @@ function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd }: {
           return (
             <div key={d.id} className="flex flex-col rounded-[14px] border border-border bg-surface">
               <div className="border-b border-border px-3.5 py-3">
-                <div className="flex items-baseline justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-base font-extrabold text-text">Day {d.dayNumber}</span>
-                  <span className="text-xs text-text-faint">{fmtDate(d.date)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs text-text-faint">{fmtDate(d.date)}</span>
+                    {canEdit && (
+                      <button onClick={() => onEditDay(d)} title="Edit or delete this day"
+                        className="grid h-6 w-6 place-items-center rounded-[6px] border border-border text-text-faint transition hover:bg-surface-2 hover:text-text">
+                        <EditGlyph />
+                      </button>
+                    )}
+                  </span>
                 </div>
                 <div className="mt-0.5 text-[11px] text-text-muted">
                   Call {fmtHM(callMin(d))} · {shots} shots · <span style={{ color: ou.deltaMin > 0 ? "var(--h-red)" : "var(--h-green)" }} className="font-semibold">wraps {fmtHM(ou.endMin)}</span>
