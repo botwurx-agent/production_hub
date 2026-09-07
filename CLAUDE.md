@@ -3620,9 +3620,34 @@ DECISIONS, all confirmed by the operator before anything was written:
   steppers, anchor toggles and HTML5 drag (within a day, and between days on
   the board) all work against local state; nothing saves. Auth-gated in
   production by the /dev/* rule, so the operator can open it on the
-  deployment. DELETE IT when the real page lands. Verified: desktop, 390px
-  (tabs scroll), dark, and the night-shoot column reading "under" in the green
-  token after the fix.
+  deployment. DELETE IT when the real page lands.
+- SECOND PASS, after the operator's reaction ("looks ok, not the best. It
+  needs to be VERY clear about all the information. Where is it going to show
+  talent? Also, location? Each row should be able to drag to a different
+  position"). The first pass put location as small text beside the title,
+  everybody as identical grey chips, and the drag handle behind a faint glyph
+  (the invisible-hotspot mistake the board resize handles made). A SCHEDULE
+  THAT CAST AND CREW READ IS A TABLE: the Day view is now a grid with named
+  columns (Time / What / Location & set / Talent / Crew / Duration), talent
+  drawn with an initials avatar in a column of its own, location as the place
+  you drive to (a stage, an address) with the set beneath it, a six-dot grip
+  visible on every row, and the day header stating the location and "Talent
+  today" before the rows. On a phone each row is a card with LABELLED fields.
+  The row model split `people` into `talent` and `crew`, and `set` into
+  `location` + `set`, which is what the schema should carry.
+- ROWS ARE DROP TARGETS, not only the seam between them. A 12px seam is the
+  same invisible-hotspot mistake; dropping on a row's upper half inserts
+  before it, lower half after. Proven with Playwright's dragTo (raw mouse
+  moves do NOT fire HTML5 drag events, which made a first test read as a
+  failure). Same-day moves adjust the index for the hole the drag leaves.
+- TAILWIND TRAP, hit again: `lg:${COLS}` built the desktop column class by
+  interpolation, so the literal `lg:grid-cols-[...]` token appeared nowhere in
+  the source, was never generated, and the desktop rows collapsed to one column
+  while the header (bare constant) laid out fine. The prefix now lives in the
+  string. Same family as the opacity modifiers compiling to nothing. Verified
+  by measuring all six header labels against their cells: dx=0 on every one.
+- Verified: desktop Hint and live action, board, 390px, dark, night-shoot
+  column green, drag reorder in the DOM.
 - ROW KINDS: call, meal, setup, shot, move, note, wrap, coloured indigo, amber,
   blue, green, orange, purple, indigo. Kind is what a row IS; INT/EXT D/N is a
   constraint. They are never both the edge in the same view.
