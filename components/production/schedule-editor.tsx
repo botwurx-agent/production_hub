@@ -263,16 +263,32 @@ export function ScheduleEditor({
               const t = cascade(d.rows, callMin(d));
               const ou = overUnder(t, wrapMin(d), callMin(d));
               const active = i === dayIdx;
+              // The close control is a SIBLING of the tab, not a child: a button
+              // cannot nest inside a button, so the two sit in one wrapper and the
+              // x is positioned into the tab's top-right corner like a browser tab.
               return (
-                <button key={d.id} onClick={() => setDayIdx(i)}
-                  className={`-mb-px flex shrink-0 flex-col items-start gap-0.5 rounded-t-[10px] border border-b-0 px-4 py-2.5 text-left transition ${
-                    active ? "border-border bg-surface" : "border-transparent hover:bg-surface-2"}`}>
-                  <span className={`text-sm font-bold ${active ? "text-text" : "text-text-muted"}`}>Day {d.dayNumber}</span>
-                  <span className="text-[11px] text-text-faint">
-                    {fmtDate(d.date)} · {d.rows.reduce((k, x) => k + x.shots.length, 0)} shots ·{" "}
-                    <span style={{ color: ou.deltaMin > 0 ? "var(--h-red)" : undefined }}>wraps {fmtHM(ou.endMin)}</span>
-                  </span>
-                </button>
+                <div key={d.id} className="relative shrink-0">
+                  <button onClick={() => setDayIdx(i)}
+                    className={`-mb-px flex flex-col items-start gap-0.5 rounded-t-[10px] border border-b-0 py-2.5 pl-4 text-left transition ${canEdit ? "pr-9" : "pr-4"} ${
+                      active ? "border-border bg-surface" : "border-transparent hover:bg-surface-2"}`}>
+                    <span className={`text-sm font-bold ${active ? "text-text" : "text-text-muted"}`}>Day {d.dayNumber}</span>
+                    <span className="text-[11px] text-text-faint">
+                      {fmtDate(d.date)} · {d.rows.reduce((k, x) => k + x.shots.length, 0)} shots ·{" "}
+                      <span style={{ color: ou.deltaMin > 0 ? "var(--h-red)" : undefined }}>wraps {fmtHM(ou.endMin)}</span>
+                    </span>
+                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); void removeDay(d); }}
+                      title={`Delete Day ${d.dayNumber}`}
+                      aria-label={`Delete Day ${d.dayNumber}`}
+                      data-testid="day-tab-close"
+                      className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-[6px] text-text-faint transition hover:bg-surface-2 hover:text-[var(--h-red)]"
+                    >
+                      <CloseGlyph />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -291,7 +307,7 @@ export function ScheduleEditor({
           )}
         </>
       ) : (
-        <BoardView days={days} canEdit={canEdit} drag={drag} setDrag={setDrag} onMove={moveRow} onOpen={(r, d) => setEditing({ row: r, day: d })} onAdd={addRow} onEditDay={(d) => setEditingDay(d)} />
+        <BoardView days={days} canEdit={canEdit} drag={drag} setDrag={setDrag} onMove={moveRow} onOpen={(r, d) => setEditing({ row: r, day: d })} onAdd={addRow} onEditDay={(d) => setEditingDay(d)} onDeleteDay={(d) => void removeDay(d)} />
       )}
 
       {editing && (
@@ -419,6 +435,14 @@ function PinGlyph({ small }: { small?: boolean }) {
     </svg>
   );
 }
+function CloseGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
 function EditGlyph() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -630,7 +654,7 @@ function AddRowBar({ onAdd }: { onAdd: (k: StripKind) => void }) {
 // BOARD VIEW
 // ---------------------------------------------------------------------------
 
-function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd, onEditDay }: {
+function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd, onEditDay, onDeleteDay }: {
   days: Day[];
   canEdit: boolean;
   drag: Drag | null;
@@ -639,6 +663,7 @@ function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd, onEdit
   onOpen: (r: Row, d: Day) => void;
   onAdd: (d: Day, k: StripKind) => void;
   onEditDay: (d: Day) => void;
+  onDeleteDay: (d: Day) => void;
 }) {
   const [over, setOver] = useState<{ dayId: string; idx: number } | null>(null);
   return (
@@ -664,10 +689,16 @@ function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd, onEdit
                   <span className="flex items-center gap-2">
                     <span className="text-xs text-text-faint">{fmtDate(d.date)}</span>
                     {canEdit && (
-                      <button onClick={() => onEditDay(d)} title="Edit or delete this day"
-                        className="grid h-6 w-6 place-items-center rounded-[6px] border border-border text-text-faint transition hover:bg-surface-2 hover:text-text">
-                        <EditGlyph />
-                      </button>
+                      <>
+                        <button onClick={() => onEditDay(d)} title="Edit this day"
+                          className="grid h-6 w-6 place-items-center rounded-[6px] border border-border text-text-faint transition hover:bg-surface-2 hover:text-text">
+                          <EditGlyph />
+                        </button>
+                        <button onClick={() => onDeleteDay(d)} title={`Delete Day ${d.dayNumber}`} aria-label={`Delete Day ${d.dayNumber}`} data-testid="day-column-close"
+                          className="grid h-6 w-6 place-items-center rounded-[6px] text-text-faint transition hover:bg-surface-2 hover:text-[var(--h-red)]">
+                          <CloseGlyph />
+                        </button>
+                      </>
                     )}
                   </span>
                 </div>
