@@ -11,7 +11,7 @@ import {
 /**
  * Two top-level items still, but "Product" became a FEATURES DROPDOWN
  * (operator's call, 2026-08-24) and then a page-per-functionality menu
- * (2026-08-27): thirteen dedicated pages at root-level keyword slugs, grouped
+ * (2026-08-27): dedicated pages at root-level keyword slugs, grouped
  * by the app's own phase bands. Built from lib/marketing/features.ts, the same
  * data that builds the pages, so the menu cannot list a page that does not
  * exist.
@@ -67,7 +67,7 @@ function FeaturesMenu() {
           near the right of the bar, so centering it would run off-screen. */}
       <div className="invisible absolute -right-24 top-full z-50 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
         <div className="w-[640px] rounded-2xl border border-border bg-surface p-5 shadow-xl">
-          {/* Thirteen pages, one per functionality, grouped by the app's own
+          {/* One page per functionality, grouped by the app's own
               phase bands. "Does it do call sheets" is answerable by name, and
               every name is a dedicated page rather than an anchor. */}
           <div className="grid grid-cols-3 gap-x-6 gap-y-5">

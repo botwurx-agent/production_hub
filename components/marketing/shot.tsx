@@ -56,6 +56,11 @@ function pngSize(file: string): { width: number; height: number } | null {
  * fed to next/image reserves the wrong space and shifts the layout as each
  * image lands.
  */
+/** Whether a capture has landed for this shot name (basename, no extension). */
+export function shotExists(name: string): boolean {
+  return fs.existsSync(path.join(process.cwd(), "public", "marketing", "shots", `${name}.png`));
+}
+
 export function Shot({
   src,
   alt,

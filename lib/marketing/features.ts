@@ -7,8 +7,8 @@ import { FEATURE_SLUGS, type FeatureSlug } from "@/lib/marketing/feature-slugs";
  * a route.
  *
  * RESTRUCTURED 2026-08-27 (operator's call): a page per FUNCTIONALITY at a
- * ROOT-LEVEL KEYWORD SLUG, not a page per argument under /features. Thirteen
- * pages, each built to own one search term ("call sheet software", "shot list
+ * ROOT-LEVEL KEYWORD SLUG, not a page per argument under /features. One page
+ * per functionality, each built to own one search term ("call sheet software", "shot list
  * software"), because that is what people type and the URL is the first
  * ranking signal. /features stays as the overview index; the old
  * /features/<slug> pages 301 in next.config.mjs.
@@ -138,6 +138,16 @@ export type FeatureDef = {
   /** Slugs of the two features to cross-link at the foot of the page. */
   related: FeatureSlug[];
 };
+
+/**
+ * The number of feature pages as a word, for the two places the copy says
+ * "one of thirteen". It read thirteen for weeks after the fourteenth page
+ * landed, so the count is derived rather than typed.
+ */
+export function countWord(n: number): string {
+  const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"];
+  return words[n] ?? String(n);
+}
 
 export const FEATURES: FeatureDef[] = [
   /* ---------------------------------------------------------------- Plan */
@@ -428,7 +438,7 @@ export const FEATURES: FeatureDef[] = [
       ],
     },
     band: "visualize",
-    related: ["storyboard-software", "call-sheet-software"],
+    related: ["storyboard-software", "shooting-schedule-software"],
   },
   {
     slug: "moodboard-maker",
@@ -670,6 +680,80 @@ export const FEATURES: FeatureDef[] = [
 
   /* ------------------------------------------------------------- Produce */
   {
+    slug: "shooting-schedule-software",
+    nav: "Schedule",
+    hint: "Times that cascade, day by day",
+    hue: "green",
+    keyword: "Shooting schedule software",
+    metaTitle: "Shooting Schedule Software: Day View, Stripboard, Cascading Times",
+    h1: "Change one row. The day re-flows.",
+    lede: "Build each shoot day as rows with durations, and the clock takes care of itself: move a setup, stretch a shot, and every time after it updates. Pin lunch where catering is booked and the schedule tells you how far over you are before you get there.",
+    problem: "The schedule is a spreadsheet the AD retypes every time a setup runs long, so by 11am the times on it are fiction and nobody trusts the wrap. Moving a shot to Day 2 means editing three documents and telling everyone twice.",
+    shots: [
+      {
+        shot: "project-schedule",
+        caption: "app.studio-flows.com/projects/bright-water/schedule",
+        alt: "A shoot day as a table: computed times down the left, what is being shot, the set, talent and crew on each row, and the wrap against its target.",
+      },
+    ],
+    blocks: [
+      {
+        title: "Times fall out of the durations",
+        body: "Nothing on the schedule stores a clock. Each row has a duration, the next one starts when it ends, and the day is recomputed every time anything changes.",
+        points: [
+          "Call, setup, shot, meal, move, note, wrap: seven kinds of row, each colored so the day reads at a glance",
+          "Steppers on every row: fifteen minutes up or down, and the whole day moves with it",
+          "The scheduled wrap sits beside the target, green when it fits and red when it does not",
+          "Night shoots that cross midnight are read correctly, not as twenty hours over",
+        ],
+      },
+      {
+        title: "Anchors hold, and report",
+        body: "Lunch is at 1:00 because catering is booked for 1:00. Pin it, and the morning's overrun shows up as a number above it instead of quietly pushing the wrap.",
+        points: [
+          "Any row can be anchored to a fixed time; the rest cascade around it",
+          "A short morning shows as a buffer, a long one as an overrun into the anchor, in red",
+          "Unpin it and the wrap moves instead: your call which one gives",
+          "One row model behind both views, so nothing is entered twice",
+        ],
+      },
+      {
+        title: "Drag it where it goes",
+        body: "A row drags to a new position in the day, or to another day on the board, and the shot list learns which day its shots are on.",
+        points: [
+          "Day view: one day as a table crew can read, with time, what, location and set, talent and crew",
+          "Board view: every day as a column of strips, INT/EXT and DAY/NIGHT on the edge, stripboard style",
+          "Attach shots from the shot list; the schedule owns which day each shot is on",
+          "Talent and crew per row, picked off the project roster, so 'when do I need to be there' has an answer",
+        ],
+      },
+    ],
+    moreTitle: "More schedule features",
+    ticks: [
+      { t: "Several days per job", d: "Each with its own date, call, wrap target and location; a new day inherits the last one's." },
+      { t: "Visible grips", d: "Every row shows its handle; drop onto a row's upper half to land before it, lower half after." },
+      { t: "Talent today", d: "The day header names who is on set before the rows start." },
+      { t: "Frames from the shot list", d: "A row carrying shots shows their thumbnails, so the strip is recognisable." },
+      { t: "Notes on the row", d: "Reset times, backup bottles, whatever the department needs to know." },
+      { t: "Location and set, separately", d: "The address you drive to and the set within it, each in its own column." },
+      { t: "Stripboard colors", d: "INT DAY, EXT DAY, INT NIGHT, EXT NIGHT: the industry's four, drawn as the strip's edge." },
+      { t: "Read-only for reviewers", d: "A collaborator with review access reads the schedule and cannot change it." },
+      { t: "Phone layout", d: "On a phone each row is a card with labelled fields, not a squeezed table." },
+    ],
+    diff: {
+      eyebrow: "The difference",
+      title: "It is a schedule, not a spreadsheet of times.",
+      body: "Every scheduling tool lets you type a time in a cell. This one refuses to store one: it stores what each thing takes and derives the clock. That is why moving a setup never leaves stale times behind it, why an anchored lunch reports the overrun instead of hiding it, and why the shot list and the schedule cannot disagree about which day a shot is on.",
+      points: [
+        "Durations in, times out, on every surface",
+        "Anchored rows report slack and overrun instead of silently shifting the wrap",
+        "One row model behind the day table and the stripboard, so the two never drift",
+      ],
+    },
+    band: "produce",
+    related: ["call-sheet-software", "shot-list-software"],
+  },
+  {
     slug: "call-sheet-software",
     nav: "Call sheets",
     hint: "Sent, seen, confirmed, chased",
@@ -741,7 +825,7 @@ export const FEATURES: FeatureDef[] = [
       ],
     },
     band: "produce",
-    related: ["crew-management-software", "shot-list-software"],
+    related: ["shooting-schedule-software", "crew-management-software"],
   },
   {
     slug: "crew-management-software",
@@ -1495,6 +1579,20 @@ export const MODULES: ModuleDef[] = [
   },
 
   // ---- Produce ----
+  {
+    key: "schedule",
+    name: "Schedule",
+    band: "produce",
+    page: "shooting-schedule-software",
+    own: true,
+    hue: "green",
+    blurb: "Shoot days as rows whose times cascade from their durations.",
+    points: [
+      "Day view for the crew, board view for the AD",
+      "Anchor lunch and see the overrun before it happens",
+      "Drag a shot to another day; the shot list follows",
+    ],
+  },
   {
     key: "callsheet",
     name: "Call sheets",

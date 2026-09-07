@@ -9,6 +9,7 @@ import {
   MODULE_BANDS,
   featureHref,
   moduleHref,
+  countWord,
 } from "@/lib/marketing/features";
 
 /** Identity hue per band, matching the app's own hub bands. */
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
 /**
  * The features overview: where the nav's "Features" lands on a click or a tap,
  * and the fallback for anyone the hover dropdown does not serve. A grid of the
- * thirteen feature pages, each at its own keyword URL.
+ * feature pages, each at its own keyword URL.
  */
 export default function FeaturesIndex() {
   return (
@@ -38,7 +39,7 @@ export default function FeaturesIndex() {
         <SectionHeader
           eyebrow="Features"
           title="Everything it takes to run the job."
-          sub="One spine, thirteen pieces. Each stands on its own, and every one gets stronger because the others are in the same place."
+          sub={`One spine, ${countWord(FEATURES.length)} pieces. Each stands on its own, and every one gets stronger because the others are in the same place.`}
         />
 
         <div className="mx-auto mt-16 grid max-w-6xl gap-5 sm:grid-cols-2 lg:grid-cols-3">

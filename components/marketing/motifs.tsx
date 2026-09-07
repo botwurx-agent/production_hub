@@ -640,6 +640,54 @@ function GearMotif() {
   );
 }
 
+function ScheduleMotif() {
+  const rows: { time: string; what: string; dur: string; tone?: "amber" }[] = [
+    { time: "7:00", what: "Crew call", dur: "30m" },
+    { time: "7:30", what: "Build tabletop, hero lighting", dur: "2h" },
+    { time: "9:30", what: "1A  Condensation on the shoulder", dur: "1h 30m" },
+    { time: "11:00", what: "1B  Cap seal cracks, quarter turn", dur: "1h 45m" },
+    { time: "1:00", what: "Lunch", dur: "1h", tone: "amber" },
+    { time: "2:00", what: "1C  Full bottle reveal", dur: "1h 30m" },
+  ];
+  return (
+    <Stage hue="green" label="A shoot day whose times cascade from durations, with lunch anchored and the wrap on target.">
+      <div className="mb-4 flex items-center justify-between">
+        <span className="font-display text-sm font-extrabold text-text">Day 1 · Call 7:00 AM</span>
+        <StatusChip tone="green"><Tick /> Wraps 6:00 PM, on target</StatusChip>
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((r, i) => (
+          <div key={r.time}>
+            {i === 4 && (
+              <div className="mb-1.5 pl-[68px] text-[11px] font-semibold" style={{ color: "var(--h-green)" }}>
+                15 min buffer before the anchor
+              </div>
+            )}
+            <div
+              className="grid grid-cols-[56px_1fr_auto] items-center gap-3 rounded-[10px] border border-border bg-bg px-3.5 py-2"
+              style={r.tone ? { borderColor: "var(--h-amber)" } : undefined}
+            >
+              <span className="font-mono text-[12px] font-bold text-text">{r.time}</span>
+              <span className="truncate text-[13px] font-semibold text-text">
+                {r.what}
+                {r.tone && (
+                  <span className="ml-2 inline-flex items-center rounded-pill px-1.5 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "var(--h-amber-bg)", color: "var(--h-amber)" }}>
+                    anchored
+                  </span>
+                )}
+              </span>
+              <span className="text-[11px] font-semibold text-text-faint">{r.dur}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-[12px] font-medium text-text-faint">
+        Stretch the morning and the buffer becomes an overrun, in red. The wrap only moves if you unpin lunch.
+      </p>
+    </Stage>
+  );
+}
+
 /** One motif per feature page, keyed by slug. */
 const MOTIFS: Record<string, () => ReactNode> = {
   "production-hub": HubMotif,
@@ -649,6 +697,7 @@ const MOTIFS: Record<string, () => ReactNode> = {
   "moodboard-maker": MoodboardMotif,
   "video-review-software": ReviewMotif,
   "production-communication": CommunicationMotif,
+  "shooting-schedule-software": ScheduleMotif,
   "call-sheet-software": CallSheetMotif,
   "crew-management-software": CrewMotif,
   "gear-list-software": GearMotif,

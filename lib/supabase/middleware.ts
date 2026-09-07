@@ -74,6 +74,13 @@ const PUBLIC_PATHS = [
   // one static script to anonymous visitors is exactly what the portal needs
   // and gives away nothing.
   "/pdf.worker.min.mjs",
+  // The two files a crawler reads before anything else. Neither is an image,
+  // so the matcher did not exempt them, and neither was listed here, so both
+  // were 307ing to /login: every keyword page was public and the index of
+  // them was not. Found while adding the schedule page, by fetching the
+  // sitemap it had just joined.
+  "/sitemap.xml",
+  "/robots.txt",
 ];
 
 /**

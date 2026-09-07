@@ -6,12 +6,15 @@ import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
 import { DemoVideo } from "@/components/marketing/demo-video";
 import { FeatureMesh } from "@/components/marketing/feature-mesh";
 import { Motif } from "@/components/marketing/motifs";
+import { shotExists } from "@/components/marketing/shot";
 import { PointList, Section, SectionHeader } from "@/components/marketing/section";
 import { FEATURE_SLUGS } from "@/lib/marketing/feature-slugs";
 import {
   featureBySlug,
   featureHref,
   modulesForPage,
+  countWord,
+  FEATURES,
 } from "@/lib/marketing/features";
 
 /**
@@ -90,8 +93,11 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
     .map((slug) => featureBySlug(slug))
     .filter((r): r is NonNullable<typeof r> => Boolean(r));
   const mods = modulesForPage(f.slug);
-  const hasShot = f.shots.length > 0;
   const shot = f.shots[0];
+  // A shot that is DECLARED but not yet CAPTURED leads with the motif, not
+  // with a dashed placeholder in the fold of a live page. The placeholder
+  // still shows further down, where a missing capture should be obvious.
+  const hasShot = Boolean(shot) && shotExists(shot.shot);
   const demos = f.demos ?? [];
   // A page argues with claim panels OR with demo sections, never both, so the
   // fold-closer line takes its titles from whichever one is carrying the page.
@@ -416,7 +422,7 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
               The whole toolkit
             </p>
             <h2 className="mt-3 font-display text-4xl font-extrabold leading-[1.06] tracking-tight text-text sm:text-5xl">
-              You just read about one of thirteen.
+              You just read about one of {countWord(FEATURES.length)}.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-text-muted">
               The rest is already in the box: every plan carries the whole

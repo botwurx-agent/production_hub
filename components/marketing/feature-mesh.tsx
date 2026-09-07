@@ -14,7 +14,7 @@ import {
  * This is the one structural idea taken straight from the category leader's
  * pages, because it is the idea that makes page-per-functionality compound:
  * every page passes a reader (and a crawler) to every other page, so the pages
- * rank as a body of work instead of thirteen orphans.
+ * rank as a body of work instead of orphans.
  *
  * REBUILT from a text-link grid into band rows of CARDS (operator's call: the
  * link grid read as a footer sitemap, which is precisely the floating-in-

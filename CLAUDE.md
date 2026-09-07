@@ -3705,6 +3705,34 @@ DECISIONS, all confirmed by the operator before anything was written:
   end-to-end save path has NOT been exercised: the operator's first real
   schedule is the test, and the thing most likely to surface is the shots
   picker's steal-then-insert on a shot already on another row.
+- DAY TABS CLOSE LIKE BROWSER TABS (operator's ask): an x in the corner of
+  each day tab and beside the pencil on each board column, both routed
+  through removeDay, which confirms first and counts the rows and shots that
+  go. The tab is a button, so the x is a SIBLING in a shared wrapper, never a
+  nested button.
+- DEMO DATA SEEDED on the Bright Water hero spot (fixed ids d1.../d2..., so
+  the seed is re-runnable): two days, Day 1 landing exactly on its 6:00 PM
+  wrap target and Day 2 overrunning by 75 minutes, so one screenshot shows
+  both readings of the cascade. Shots 1A to 2D are attached, talent and crew
+  come off the roster, lunch is anchored at 1:00 on both days.
+- MARKETING: its own keyword page at /shooting-schedule-software (Produce
+  band, hue green, before Call sheets), a MODULES entry, a pricing row, a
+  point on the home page's Shoot day section, and a ScheduleMotif. THE SHOT
+  IS DECLARED BUT NOT CAPTURED (`project-schedule`, added to
+  capture-shots.mjs): the hero leads with the motif until
+  public/marketing/shots/project-schedule.png exists, via a new
+  `shotExists` check in the slug template, so a declared-but-missing capture
+  never puts a dashed placeholder in the fold of a live page. The operator
+  captures it with `ONLY=project-schedule npm run shots` (ONLY is new: a
+  comma-separated subset, unknown names fail before the browser launches).
+  The two "one of thirteen" lines were stale at fourteen pages and now
+  derive from FEATURES.length via countWord.
+- FOUND ON THE WAY, worse than anything above: /sitemap.xml and /robots.txt
+  were 307ing to /login. Neither is an image, so the middleware matcher did
+  not exempt them, and neither was in PUBLIC_PATHS, so every keyword page was
+  public and the INDEX of them was not. Both are listed now, and app/robots.ts
+  exists (it did not) with the Sitemap line. Same class as the pdf.worker and
+  mp4 bugs: IF A NON-IMAGE PUBLIC FILE IS MISSING, CHECK THAT LIST FIRST.
 
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the

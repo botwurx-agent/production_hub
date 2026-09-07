@@ -22,6 +22,7 @@ export const FEATURE_SLUGS = [
   "moodboard-maker",
   "video-review-software",
   "production-communication",
+  "shooting-schedule-software",
   "call-sheet-software",
   "crew-management-software",
   "gear-list-software",

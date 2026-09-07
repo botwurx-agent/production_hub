@@ -49,6 +49,7 @@ const SHOTS = [
   ["project-review", `/projects/${PROJECT}/review`, "light", 3000],
   ["project-assets", `/projects/${PROJECT}/assets`, "light", 3000],
   ["project-budget", `/projects/${PROJECT}/budget`, "light", 2500],
+  ["project-schedule", `/projects/${PROJECT}/schedule`, "light", 3000],
   ["project-callsheet", `/projects/${PROJECT}/callsheet`, "light", 3000],
   ["project-shot-list", `/projects/${PROJECT}/shot-list`, "light", 3000],
   ["project-storyboards", `/projects/${PROJECT}/storyboards`, "light", 3000],
@@ -62,6 +63,18 @@ const SHOTS = [
   // that is how the product itself asks you to judge a frame
   ["project-hub-dark", `/projects/${PROJECT}`, "dark", 3500],
 ];
+
+// ONLY=project-schedule (comma-separated for several) captures a subset, so a
+// new page's shot can land without retaking and re-committing the other
+// fourteen PNGs. Unset, every shot is taken as before.
+const only = process.env.ONLY?.split(",").map((s) => s.trim()).filter(Boolean);
+const wanted = only?.length ? SHOTS.filter(([name]) => only.includes(name)) : SHOTS;
+if (only?.length && wanted.length !== only.length) {
+  const known = new Set(SHOTS.map(([n]) => n));
+  console.error("Unknown shot name(s):", only.filter((n) => !known.has(n)).join(", "));
+  process.exit(1);
+}
+
 
 mkdirSync(OUT, { recursive: true });
 
@@ -122,7 +135,7 @@ if (!/\/dashboard/.test(page.url())) {
   process.exit(1);
 }
 
-for (const [name, path, theme, settle] of SHOTS) {
+for (const [name, path, theme, settle] of wanted) {
   await shoot(page, name, path, theme, settle);
 }
 

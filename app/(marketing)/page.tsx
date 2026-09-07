@@ -309,6 +309,7 @@ export default function MarketingHome() {
             body="Send the call sheet and the app tracks who opened it and who confirmed, then nudges the rest as the day gets close. You read a number instead of a thread."
             more={{ href: "/call-sheet-software", label: "More about Call sheets & shot lists" }}
             points={[
+              "A shooting schedule whose times cascade from the durations, day by day",
               "Per-person call sheet links with view and confirm tracking",
               "Crew roster with positions, rates, and contacts",
               "Storyboards and shot lists that feed the sheet, nothing retyped",

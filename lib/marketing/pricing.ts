@@ -222,6 +222,7 @@ export const COMPARE: CompareBand[] = [
     hue: "amber",
     icon: "M7 4H5.5v12h9V4H13 M7.6 2.9h4.8v2.3H7.6z M8 9h4 M8 12h4",
     rows: [
+      { label: "Shooting schedule: day table and stripboard, times that cascade", cells: ALL },
       { label: "Call sheet builder with saved templates", cells: ALL },
       { label: "Per-recipient links with view and confirm tracking", cells: ALL },
       { label: "Automatic confirmation chasing before the day", cells: ALL },

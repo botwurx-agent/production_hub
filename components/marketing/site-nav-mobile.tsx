@@ -12,7 +12,7 @@ import { FEATURES, PAGE_BANDS, featureHref } from "@/lib/marketing/features";
  *
  * There was none. Features and Pricing were `hidden md:flex` and Log in was
  * `hidden sm:block`, so below 640px the bar offered exactly two things: the
- * wordmark and Start free. Thirteen feature pages, the pricing page, and the
+ * wordmark and Start free. The feature pages, the pricing page, and the
  * way back into the app were all unreachable from a phone, which is most of
  * the traffic a marketing site gets and the half of it least likely to try
  * again on a laptop.
