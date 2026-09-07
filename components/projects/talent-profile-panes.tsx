@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
+import { compressImage } from "@/lib/compress-image";
 import {
   WARDROBE_FIELDS,
   WARDROBE_GROUPS,
@@ -259,11 +260,14 @@ export function FilesPane({
   }
 
   function sendHeadshot() {
-    const file = pick(headshotRef.current);
-    if (!file) return;
-    const fd = new FormData();
-    fd.set("file", file);
+    const picked = pick(headshotRef.current);
+    if (!picked) return;
     start(async () => {
+      // A headshot is a photograph shown at avatar size on a roster card, so
+      // there is nothing to lose by shrinking it and a cap to stay clear of.
+      const file = await compressImage(picked);
+      const fd = new FormData();
+      fd.set("file", file);
       const res = await uploadHeadshot(projectId, contactId, fd);
       if (res?.error) return toast(res.error);
       router.refresh();
@@ -272,11 +276,14 @@ export function FilesPane({
   }
 
   function sendFile() {
-    const file = pick(fileRef.current);
-    if (!file) return;
-    const fd = new FormData();
-    fd.set("file", file);
+    const picked = pick(fileRef.current);
+    if (!picked) return;
     start(async () => {
+      // A photographed release form or a wardrobe snap. compressImage leaves a
+      // PDF or anything else it cannot decode exactly as it found it.
+      const file = await compressImage(picked);
+      const fd = new FormData();
+      fd.set("file", file);
       const res = await addContactFile(projectId, contactId, fd);
       if (res?.error) return toast(res.error);
       router.refresh();

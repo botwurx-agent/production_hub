@@ -2042,10 +2042,33 @@ to stop routing uploads through a function at all.
 - AUDITED AFTERWARDS: every surviving MAX_UPLOAD_BYTES check is now either an
   AI-read path, the email path (device bytes genuinely cross a function on
   their way into the MIME), or one of the small-file sites below.
-- STILL TO DO: client-side image compression for props, talent files and task
-  files. Those are images, where shrinking a 4MB phone photo to 400KB solves it
-  completely, with no new authorization surface and a smaller storage bill. A
-  new mint is the wrong tool there.
+- IMAGE COMPRESSION (lib/compress-image.ts) is the answer for the small-file
+  sites (prop photos, headshots and contact files, task attachments), rather
+  than a new mint. It is also better than what the compressor sites do: veed
+  and its kind upload your file to THEIR machine and compress it there, so the
+  big bytes cross the network anyway; in the browser they never leave the
+  device. MEASURED in headless Chromium on generated photographs, not guessed:
+  a 12MP camera JPEG 4944KB -> 661KB (87%), a 3000x2000 PNG 16.4MB -> 585KB
+  (96%). The 4.9MB one is the case that matters, since it was over the cap and
+  is now nowhere near it.
+- IT FAILS OPEN, EVERY PATH, which is what makes it safe to put on a picker and
+  forget: an undecodable format, a canvas that refuses, an image already under
+  600KB, or a result that came out BIGGER (a flat graphic re-encodes badly) all
+  return the ORIGINAL FILE, verified by identity in the tests. HEIC is
+  deliberately excluded even though it is what an iPhone shoots, because Chrome
+  cannot decode it to a canvas at all; iOS normally hands over a JPEG through
+  the picker anyway. SVG is excluded (rasterising a vector is a loss, not a
+  saving) and GIF is excluded (re-encoding kills the animation).
+- THE RULE THAT MUST NOT BE BROKEN: never compress the thing a client is
+  judging. This is for a prop photo, a headshot, a reference on a task card. It
+  is NOT for an asset version, a master cut, or anything going out for review,
+  because compressing on upload destroys the original. The app already holds
+  this line for DISPLAY (signThumb serves resized copies to grids while print,
+  export and review surfaces get the real file); this is the same line one step
+  earlier, and the module says so at the top.
+- Fixed while wiring it: the task-file picker did `if (size > MAX) continue`,
+  a SILENT skip, so an oversized file simply never appeared and the picker
+  looked broken. It says so now.
 - CANNOT BE EXERCISED FROM A CLAUDE CODE SESSION: the agent proxy blocks the
   Supabase host, so a dev server here cannot sign in or reach Storage (same
   constraint as `npm run demos`). The pure logic is unit tested and the storage

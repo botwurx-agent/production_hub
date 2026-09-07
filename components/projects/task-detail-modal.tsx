@@ -5,6 +5,8 @@ import { Modal } from "@/components/ui/modal";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { longDate, shortDate } from "@/lib/format";
 import { formatBytes, MAX_UPLOAD_BYTES } from "@/lib/attachment-limits";
+import { toast } from "@/components/ui/toast";
+import { compressImages } from "@/lib/compress-image";
 import { personInitials, type Person } from "@/lib/people";
 import { openInvite } from "@/components/app-shell/invite-open";
 import {
@@ -564,12 +566,29 @@ export function TaskDetailModal({
               // composer shipped this bug once already.
               const picked = e.target.files ? Array.from(e.target.files) : [];
               if (fileRef.current) fileRef.current.value = "";
-              for (const file of picked) {
-                if (file.size > MAX_UPLOAD_BYTES) continue;
-                const fd = new FormData();
-                fd.append("file", file);
-                onAddFile(fd);
-              }
+              void (async () => {
+                // A reference photo dropped on a card comes off a phone at
+                // several megabytes; shrunk here it lands at a few hundred KB
+                // and never troubles the cap. Fails open on anything it cannot
+                // decode, so it is never the reason an upload fails.
+                const files = await compressImages(picked);
+                for (const file of files) {
+                  if (file.size > MAX_UPLOAD_BYTES) {
+                    // It used to `continue` in silence, so an oversized file
+                    // simply never appeared and the picker looked broken.
+                    toast(
+                      `${file.name} is ${formatBytes(file.size)}, over the ${formatBytes(
+                        MAX_UPLOAD_BYTES
+                      )} limit.`,
+                      "error"
+                    );
+                    continue;
+                  }
+                  const fd = new FormData();
+                  fd.append("file", file);
+                  onAddFile(fd);
+                }
+              })();
             }}
           />
           <button

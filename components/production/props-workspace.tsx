@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { confirmAction } from "@/components/ui/confirm";
 import { MAX_UPLOAD_BYTES, formatBytes } from "@/lib/attachment-limits";
+import { compressImages } from "@/lib/compress-image";
 import {
   PROP_CATEGORIES,
   PROP_STATUS,
@@ -521,13 +522,22 @@ function PropModal({
   const [pendingLinks, setPendingLinks] = useState<string[]>([]);
   const [linkUrl, setLinkUrl] = useState("");
 
-  function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  async function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     // Copy the FileList BEFORE clearing the input: it is a live view.
     const list = e.target.files;
     const files = list ? Array.from(list) : [];
     e.target.value = "";
+
+    // SHRUNK IN THE BROWSER, so the bytes never leave the device at full size.
+    // A prop photo comes off a phone at four or five megabytes and lands here
+    // at a few hundred KB, which is what stops an ordinary snap of a glass
+    // being refused for being an ordinary snap of a glass. Fails open: a
+    // format it cannot decode, or a file that would come out bigger, passes
+    // through untouched, so this can never be the reason an upload fails.
+    const shrunk = await compressImages(files);
+
     const ok: { file: File; preview: string }[] = [];
-    for (const f of files) {
+    for (const f of shrunk) {
       if (f.size > MAX_UPLOAD_BYTES) {
         toast(
           `${f.name} is ${formatBytes(f.size)}, over the ${formatBytes(
