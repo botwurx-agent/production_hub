@@ -14,7 +14,13 @@ import { documentSource } from "@/lib/documents";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import { PdfThumb } from "@/components/projects/pdf-thumb";
 import { viewerKind } from "@/lib/file-kind";
-import { createAsset, addVersion } from "@/app/(app)/projects/[id]/actions";
+import { AssetViewer } from "@/components/projects/asset-viewer";
+import {
+  createAsset,
+  addVersion,
+  deleteAsset,
+  renameAsset,
+} from "@/app/(app)/projects/[id]/actions";
 import type { AssetWithVersions } from "@/components/projects/asset-types";
 
 /**
@@ -28,6 +34,15 @@ import type { AssetWithVersions } from "@/components/projects/asset-types";
  * What it does show instead is provenance, which is the whole reason for
  * filing something rather than leaving it in a thread: the sender, the date and
  * the subject of the email it came in on.
+ *
+ * OPEN MEANS VIEW, and it used to mean download. The row linked straight at the
+ * signed storage URL, so a PDF left the app into a browser tab at best, and
+ * anything the browser cannot render (a .pages SOW, which is what caught this)
+ * silently landed in the downloads folder with no explanation. It opens the
+ * shared AssetViewer now, the same window the assets library uses, which
+ * renders PDFs, images, video and Office files in place and NAMES the format
+ * when nothing can render it. Delete and rename come with that window rather
+ * than being built again here, so there is one way to manage a file.
  */
 function DocIcon() {
   return (
@@ -58,6 +73,7 @@ export function ProjectDocuments({
   const fileRef = useRef<HTMLInputElement>(null);
   const versionRef = useRef<HTMLInputElement>(null);
   const [versionFor, setVersionFor] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
   const [busy, start] = useTransition();
 
   async function upload(files: File[]) {
@@ -102,6 +118,12 @@ export function ProjectDocuments({
       toast(e instanceof Error ? e.message : "That upload failed.", "error");
     }
   }
+
+  const viewingDoc = viewing ? documents.find((d) => d.id === viewing) : null;
+  const viewingVersion = viewingDoc
+    ? (viewingDoc.versions.find((v) => v.id === viewingDoc.current_version_id) ??
+      viewingDoc.versions[0])
+    : null;
 
   return (
     <FileDropzone
@@ -203,7 +225,15 @@ export function ProjectDocuments({
               <li key={doc.id} className="flex flex-wrap items-center gap-3 py-3">
                 {/* A row of filenames tells you nothing about which permit is
                     which. Page one does. */}
-                <span className="grid h-[52px] w-[42px] shrink-0 place-items-center overflow-hidden rounded-[7px] border border-border bg-surface-2">
+                {/* The picture and the name open it as well. Reaching for a
+                    small word at the opposite end of the row to look at a
+                    document you are already pointing at is the kind of friction
+                    section 4.1 is about. */}
+                <button
+                  type="button"
+                  onClick={() => current && setViewing(doc.id)}
+                  aria-label={`Open ${doc.name}`}
+                  className="grid h-[52px] w-[42px] shrink-0 place-items-center overflow-hidden rounded-[7px] border border-border bg-surface-2 transition hover:border-border-strong">
                   {isPdf && current ? (
                     <PdfThumb
                       fileUrl={current.signedUrl ?? current.url}
@@ -217,11 +247,15 @@ export function ProjectDocuments({
                   ) : (
                     <DocIcon />
                   )}
-                </span>
+                </button>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-text">
+                  <button
+                    type="button"
+                    onClick={() => current && setViewing(doc.id)}
+                    className="block max-w-full truncate text-left text-sm font-semibold text-text hover:text-accent"
+                  >
                     {doc.name}
-                  </p>
+                  </button>
                   <p className="truncate text-xs text-text-muted">
                     {source ?? `Uploaded ${shortDate(doc.created_at)}`}
                   </p>
@@ -246,21 +280,48 @@ export function ProjectDocuments({
                   >
                     New version
                   </button>
-                  {current?.signedUrl ? (
-                    <a
-                      href={current.signedUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                  {current ? (
+                    <button
+                      type="button"
+                      onClick={() => setViewing(doc.id)}
                       className="text-xs font-semibold text-accent hover:underline"
                     >
                       Open
-                    </a>
+                    </button>
                   ) : null}
                 </div>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {/* ONE viewer for the list, keyed on which document is open, rather than
+          one mounted per row. Delete removes the storage objects as well as the
+          rows (deleteAsset does both), and it confirms first inside the window,
+          which is where somebody who has just looked at the wrong file is
+          standing. */}
+      {viewingDoc && viewingVersion && (
+        <AssetViewer
+          open
+          onClose={() => setViewing(null)}
+          name={viewingDoc.name}
+          version={viewingVersion}
+          onRename={async (next) => {
+            const res = await renameAsset(viewingDoc.id, next);
+            if (res?.error) return res.error;
+            router.refresh();
+            return null;
+          }}
+          onDelete={async () => {
+            const res = await deleteAsset(viewingDoc.id);
+            if (res?.error) return res.error;
+            setViewing(null);
+            toast("Document deleted.", "success");
+            router.refresh();
+            return null;
+          }}
+        />
       )}
     </div>
     </FileDropzone>

@@ -35,6 +35,42 @@ const EXT_KIND: Record<string, ViewerKind> = {
   log: "text", yml: "text", yaml: "text", html: "text", htm: "text", rtf: "text",
 };
 
+/**
+ * Human names for formats NO browser can display inline.
+ *
+ * These deliberately stay `ViewerKind: "other"`. The point is not to preview
+ * them, it is to say WHICH format is refusing, because "no inline preview"
+ * next to a file that then downloads itself reads as the app being broken. A
+ * .pages file is an Apple bundle (a zip of XML), so there is nothing to render
+ * and no viewer to point at, unlike Office files which Microsoft hosts one for.
+ */
+const UNVIEWABLE_LABEL: Record<string, string> = {
+  pages: "Apple Pages",
+  key: "Apple Keynote",
+  numbers: "Apple Numbers",
+  zip: "ZIP archive",
+  rar: "RAR archive",
+  "7z": "7-Zip archive",
+  psd: "Photoshop",
+  ai: "Illustrator",
+  indd: "InDesign",
+  sketch: "Sketch",
+  fig: "Figma",
+  aep: "After Effects",
+  prproj: "Premiere Pro",
+};
+
+/**
+ * The format's name when nothing can show it, or null when it is simply
+ * unrecognised. Reads the extension rather than the mime type, because these
+ * arrive with vendor mimes nobody recognises or with none at all.
+ */
+export function unviewableLabel(
+  ...candidates: (string | null | undefined)[]
+): string | null {
+  return UNVIEWABLE_LABEL[extOf(...candidates)] ?? null;
+}
+
 export function extOf(...candidates: (string | null | undefined)[]): string {
   for (const c of candidates) {
     if (!c) continue;

@@ -2536,6 +2536,47 @@ that PDF go", which the app could not answer.
   into the browser global rather than reaching Sentry. Now imported from
   lib/log.
 
+### Documents: Open means view, and there is a delete (no migration) — BUILT
+Operator, on filing a real SOW: "when I tried to click open it downloaded the
+file. If I click open, I just want to view the document. Also, there is no
+option to delete the document if I have mistakenly uploaded the incorrect one."
+Both were real, and the first had TWO causes worth separating.
+- THE ROW LINKED STRAIGHT AT THE SIGNED STORAGE URL. Every other file surface
+  in the app opens the shared AssetViewer; this one bypassed it, so at best a
+  PDF left the app into a browser tab and at worst the file just landed in the
+  downloads folder. Open now opens that viewer, and so do the thumbnail and the
+  name, since reaching for a small word at the far end of the row to look at
+  the document you are already pointing at is a 4.1 failure.
+- THE SECOND CAUSE WAS THE FILE ITSELF, and this is the part no code change can
+  fix: it was `IQBar_SOW.pages`, mime `application/x-iwork-pages-sffpages`. An
+  Apple Pages file is a zip of XML, so NO browser can render it and nothing we
+  can host will either (Microsoft's hosted viewer covers Office, and there is
+  no equivalent for iWork). Checked in the DB rather than guessed at, which is
+  what stopped this becoming an afternoon chasing content-disposition headers
+  on a signed URL that was behaving correctly all along.
+  So the honest fix is to SAY SO. `unviewableLabel` (lib/file-kind.ts) names
+  the format for the iWork, archive and design families, and the viewer's
+  fallback leads with that name, states that no browser can display it, and
+  labels its button Download, which is what actually happens. It previously
+  said "No inline preview for this file type" over a button reading "Open",
+  which reads as the app being broken. "Open in new tab" is also withheld for
+  these, since for one of them it is the same download wearing another word.
+  THE FORMAT IS A HEADING, NOT PART OF A SENTENCE: "This is a Apple Pages file"
+  was the first draft, and getting a/an right in front of every name in a list
+  that includes ZIP, 7-Zip, Illustrator and After Effects is not worth a helper.
+- DELETE AND RENAME COME FROM THE VIEWER rather than being built again on the
+  row: one way to manage a file, and deleteAsset already removes the storage
+  objects as well as the rows. The two-step "Delete file?" confirm is the
+  assets page's, inherited unchanged.
+- FOUND ON THE WAY: NOTHING revalidated `/projects/<id>/documents`, at any of
+  the six asset mutation sites, so the page only ever updated because the
+  client called router.refresh(). Filing an attachment from an email would not
+  have refreshed it. A document IS an asset (0078), so every one of those sites
+  now revalidates it alongside `/assets`.
+- Verified in Chromium against a throwaway fixture (deleted): opening triggers
+  ZERO downloads, a PDF renders in an iframe in place, the Pages file names its
+  format and offers only Download, and Delete confirms first.
+
 ### Guided tours (no migration) — BUILT
 Cards that pop up over the real UI and say what things are. Held to one rule,
 because section 4.1 says a flow that needs explaining is not done: a tour is

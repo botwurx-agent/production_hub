@@ -277,6 +277,7 @@ export async function addVersion(
   );
   revalidatePath(`/projects/${asset.project_id}`);
   revalidatePath(`/projects/${asset.project_id}/assets`);
+  revalidatePath(`/projects/${asset.project_id}/documents`);
   revalidatePath(`/projects/${asset.project_id}/review`);
   return null;
 }
@@ -443,6 +444,7 @@ export async function renameAsset(
   );
   revalidatePath(`/projects/${asset.project_id}`);
   revalidatePath(`/projects/${asset.project_id}/assets`);
+  revalidatePath(`/projects/${asset.project_id}/documents`);
   return null;
 }
 
@@ -568,6 +570,7 @@ export async function mergeAssetVersions(
   );
   revalidatePath(`/projects/${target.project_id}`);
   revalidatePath(`/projects/${target.project_id}/assets`);
+  revalidatePath(`/projects/${target.project_id}/documents`);
   revalidatePath(`/projects/${target.project_id}/review`);
   return null;
 }
@@ -626,6 +629,7 @@ export async function setVersionNumber(
     );
     revalidatePath(`/projects/${asset.project_id}`);
     revalidatePath(`/projects/${asset.project_id}/assets`);
+    revalidatePath(`/projects/${asset.project_id}/documents`);
     revalidatePath(`/projects/${asset.project_id}/review`);
   }
   return null;
@@ -698,6 +702,7 @@ export async function deleteVersion(versionId: string): Promise<ActionState> {
   );
   revalidatePath(`/projects/${asset.project_id}`);
   revalidatePath(`/projects/${asset.project_id}/assets`);
+  revalidatePath(`/projects/${asset.project_id}/documents`);
   revalidatePath(`/projects/${asset.project_id}/review`);
   return null;
 }
@@ -763,6 +768,7 @@ export async function deleteAsset(assetId: string): Promise<ActionState> {
   );
   revalidatePath(`/projects/${asset.project_id}`);
   revalidatePath(`/projects/${asset.project_id}/assets`);
+  revalidatePath(`/projects/${asset.project_id}/documents`);
   revalidatePath(`/projects/${asset.project_id}/review`);
   return null;
 }

@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { fileSize, shortDate } from "@/lib/format";
-import { viewerKind, officeEmbedUrl, officeViewUrl } from "@/lib/file-kind";
+import {
+  viewerKind,
+  officeEmbedUrl,
+  officeViewUrl,
+  unviewableLabel,
+} from "@/lib/file-kind";
 import { ScrubVideo } from "@/components/review/video-player";
 import { toast } from "@/components/ui/toast";
 import { Modal, useModalRoomy } from "@/components/ui/modal";
@@ -103,6 +108,13 @@ export function AssetViewer({
   // For Office files the browser can't display the raw bytes, so "Open in new
   // tab" points at the Office web viewer instead of downloading.
   const openLink = kind === "office" && link ? officeViewUrl(link) : link;
+  // A format nothing can render. Named so the stage can say which, and so the
+  // header stops offering "Open in new tab", which for one of these is just a
+  // download wearing another word.
+  const unviewable =
+    kind === "other"
+      ? unviewableLabel(name, version.storage_path, version.url)
+      : null;
 
   const heading = (
     <div className="min-w-0">
@@ -171,14 +183,18 @@ export function AssetViewer({
     <>
       {link && (
         <>
-          <a
-            href={openLink ?? undefined}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-[9px] bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent hover:text-accent-fg"
-          >
-            Open in new tab
-          </a>
+          {/* Not offered for a format nothing can render: a new tab would just
+              start the same download, under a word that promises a view. */}
+          {!unviewable && (
+            <a
+              href={openLink ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-[9px] bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent hover:text-accent-fg"
+            >
+              Open in new tab
+            </a>
+          )}
           <a
             href={link}
             download={name}
@@ -235,7 +251,7 @@ export function AssetViewer({
       id="asset-viewer"
       bodyClassName="flex min-h-[240px] flex-1 items-center justify-center overflow-auto bg-surface-2/40 p-4"
     >
-      <Stage kind={kind} link={link} name={name} />
+      <Stage kind={kind} link={link} name={name} unviewable={unviewable} />
     </Modal>
   );
 }
@@ -252,10 +268,13 @@ function Stage({
   kind,
   link,
   name,
+  unviewable,
 }: {
   kind: ReturnType<typeof viewerKind>;
   link: string | null;
   name: string;
+  /** Format name when nothing can render it, else null. */
+  unviewable?: string | null;
 }) {
   const roomy = useModalRoomy();
   // Chrome above and below the stage is fixed, so the media is sized against
@@ -308,14 +327,35 @@ function Stage({
       ) : (
         <div className="flex flex-col items-center gap-3 py-12 text-center text-text-muted">
           <FileGlyph />
-          <p className="text-sm">No inline preview for this file type.</p>
+          {/* NAME THE FORMAT when we know it. "No inline preview" beside a
+              button that then downloads the file reads as the app being
+              broken; "no browser can display a Pages file" is a fact about
+              the format and tells you what to do next. The button says
+              Download for the same reason: it is what actually happens. */}
+          {unviewable ? (
+            <>
+              {/* The format leads, as a label rather than inside a sentence.
+                  Scannable, and it sidesteps having to get "a" or "an" right
+                  in front of every name in the list. */}
+              <p className="font-display text-sm font-bold text-text">
+                {unviewable}
+              </p>
+              <p className="text-sm">No browser can display this format.</p>
+              <p className="max-w-sm text-xs text-text-faint">
+                Download it to read it, or re-file it as a PDF if the rest of
+                the crew needs to open it here.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm">No inline preview for this file type.</p>
+          )}
           <a
             href={link}
             target="_blank"
             rel="noreferrer"
             className="rounded-[9px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition hover:bg-accent-strong"
           >
-            Open {name}
+            Download {name}
           </a>
         </div>
       )}
