@@ -1910,6 +1910,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      contact_messages: {
+        Row: {
+          id: string;
+          name: string;
+          email: string;
+          company: string | null;
+          topic: string | null;
+          message: string;
+          emailed_at: string | null;
+          handled_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          email: string;
+          company?: string | null;
+          topic?: string | null;
+          message: string;
+          emailed_at?: string | null;
+          handled_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          email?: string;
+          company?: string | null;
+          topic?: string | null;
+          message?: string;
+          emailed_at?: string | null;
+          handled_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       feedback: {
         Row: {
           id: string;

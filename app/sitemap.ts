@@ -20,6 +20,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${ORIGIN}/`, lastModified: now, priority: 1 },
     { url: `${ORIGIN}/pricing`, lastModified: now, priority: 0.9 },
     { url: `${ORIGIN}/features`, lastModified: now, priority: 0.8 },
+    { url: `${ORIGIN}/contact`, lastModified: now, priority: 0.6 },
     ...FEATURE_SLUGS.map((slug) => ({
       url: `${ORIGIN}/${slug}`,
       lastModified: now,

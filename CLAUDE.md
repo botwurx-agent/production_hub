@@ -3594,6 +3594,55 @@ to people who look at pictures for a living.
   the built HTML resolves them to https://studio-flows.com (dev rewrites
   metadataBase to localhost, which is why dev output cannot confirm this).
 
+### Contact page (migration 0108) — BUILT
+There was no way to reach the studio from the site at all, and the footer's
+only Company link pointed at `/about`, which does not exist: a logged-out
+visitor clicking it was redirected to the LOGIN screen, which is worse than a
+404. That link is gone and Contact took its place; an About page was not built
+because nobody asked for one.
+- TWO COLUMNS, per section 4.6. Words left, the form right, filling the fold.
+  The left column is not decoration: most people arriving here do not need the
+  form at all, so the three FASTER routes are stated first (in-app Feedback for
+  a customer with a problem, pricing for a plan question, the feature pages for
+  a capability question). Sending someone through a form to wait a day for an
+  answer they could have had immediately is the failure this page avoids.
+- THE ROW IS WRITTEN BEFORE THE EMAIL IS SENT, and that order is the design.
+  Email is best effort here exactly as it is for invites: Resend can be down,
+  the key can be missing in a fresh environment. Somebody writing to a company
+  they are evaluating gets ONE shot at it, so `contact_messages` is the durable
+  record and the notification is a layer on top. `emailed_at` stays null when
+  the send fails, which is how a message that exists only in the table is found
+  later. If the INSERT fails, the person is told plainly and given the address,
+  never shown a success screen over a dropped message. Verified: with Supabase
+  unreachable from the sandbox, the form says so and offers the address.
+- RLS IS ON WITH NO POLICIES AT ALL. The submitter is anonymous, so there is no
+  auth.uid() to gate on and RLS cannot express "this stranger may write one
+  row". The service role writes it from the action, which has already applied
+  the filters. VERIFIED live by simulating both roles: anon reads 0 rows and
+  its insert is refused outright, and `authenticated` (a signed-in app user)
+  also reads 0, since customer messages are not studio data.
+- THREE SPAM FILTERS, no captcha (a third-party key and a UX cost for
+  pre-launch volume). A HONEYPOT field off-canvas at -9999px with tabIndex -1,
+  a MIN_FILL_MS timing check, and the existing in-memory rate limiter. The
+  first two return SUCCESS rather than an error: telling a script which check
+  it tripped is telling it how to pass next time, and no real person can reach
+  either branch. The rate limit does say so, because a person sending a genuine
+  second message deserves to know it did not go through.
+- lib/contact.ts is the trust boundary and is NOT `server-only`, the same call
+  as invoice-draft and upload-limits, so it is testable: 31 assertions in the
+  scratchpad covering the email shapes that must pass and fail, every length
+  cap, and that a hand-posted `topic` outside the fixed set is DROPPED rather
+  than stored (it would otherwise appear in the notification as if it were one
+  of ours). `singleLine` guards the subject and Reply-To against header
+  injection; the address cannot carry a newline anyway, since the validator
+  rejects whitespace in it.
+- DELIBERATELY NOT STORED: the sender's IP. It is used in memory for rate
+  limiting and never persisted, so the table holds nothing the person did not
+  type, and the privacy policy needs no new disclosure.
+- NOT BUILT: an in-app view of the messages. The notification email IS the read
+  path today, same as `feedback`. Worth adding when volume justifies it;
+  `handled_at` is already there for it.
+
 ### THE WEBSITE'S BIGGEST REMAINING PROBLEM: /moodboard-maker is empty
 Audited 2026-09-08 and not yet fixed. The page is the reference implementation
 of the show-don't-argue pattern, so it was given six demo sections and

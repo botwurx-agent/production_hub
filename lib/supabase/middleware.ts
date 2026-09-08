@@ -40,6 +40,7 @@ const PUBLIC_PATHS = [
   // that is not listed here silently redirects a logged-out visitor to /login,
   // which is the one audience the page exists for.
   "/pricing",
+  "/contact",
   // Prefix-matched (see the test below), so this covers the /features
   // overview in one entry.
   "/features",
