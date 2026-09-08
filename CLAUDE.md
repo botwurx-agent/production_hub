@@ -3527,6 +3527,89 @@ blocks of four bullets plus a six-cell tick grid against one static screenshot.
   the other ones whose claims are MOTION: client review, the AI pipeline, the
   task board. A page whose claims are layouts is not helped by a loop.
 
+### Sharing and identity: OG cards, favicon, structured data (2026-09-08) — BUILT
+Found by auditing the site rather than the code: nothing the site published
+could be shared. There was NO Open Graph image anywhere, no favicon of any
+kind, and only the title and description were set per page, so every one of
+the fifteen feature pages emitted the HOME PAGE's og:title, og:description and
+og:url. A link to the budget page pasted into Slack showed the home page's
+words, pointed at the root, and carried no picture. On a visual product sold
+to people who look at pictures for a living.
+- CARDS ARE GENERATED, not designed per page (lib/marketing/og.tsx + four
+  opengraph-image.tsx routes). Seventeen public pages need seventeen cards or
+  every share looks identical, and generating them from the SAME FeatureDef
+  the page renders means a card cannot describe a different page. The [slug]
+  route declares its own generateStaticParams (the image is its own route, so
+  without it they render on demand) and generateImageMetadata (a plain
+  `export const alt` is a constant, which would describe every card the same
+  way, the same failure in a smaller place).
+- THREE SATORI CONSTRAINTS, all found by rendering rather than by reading
+  docs, and all of them fail as a 500 on the image route, which surfaces as a
+  share with no picture and nothing visibly wrong on the page:
+  (1) It cannot parse `oklch()`, and the whole palette is written in it, so
+  lib/marketing/og.tsx carries exact sRGB conversions of the light-theme
+  tokens. Convert oklch -> oklab -> linear sRGB -> sRGB if a token moves; do
+  not sample a screenshot. Validated by oklch(1 0 0) landing on #ffffff.
+  (2) `radial-gradient(circle at <pos>, ...)` is the ONLY radial form it
+  parses. The CSS two-value size (`1100px 620px at 100% 0%`) is valid in every
+  browser and throws "Missing comma before color stops" here.
+  (3) An absolute inset resolves against the PADDING box, so `left: 0;
+  width: 100%` on a padded parent drew the top rule 140px short of the right
+  edge. The padding moved to an inner column and the rule is a flex child.
+- NO BRAND FONT, deliberately. next/font self-hosts Google fonts as woff2 and
+  Satori reads ttf, otf and woff only. Fetching the ttf at generation time was
+  rejected: it makes every deploy depend on a third party, and a failure there
+  is a failed BUILD rather than a plainer card. To do it properly, commit the
+  .ttf into the repo and read it off disk, which keeps the build hermetic.
+- Two typographic fixes worth keeping: `sentences()` trims on a full stop
+  rather than a character count (a hard clamp landed on "Pin lunch..." which
+  reads as a truncated database field), and `noBreakHyphens()` swaps U+2011 in
+  between letters, because "The day re-flows." was wrapping as "re-" then
+  "flows." U+2011 was CHECKED for tofu in the bundled face, not assumed.
+- `twitter.card` IS RESTATED AT EVERY OVERRIDE. Next REPLACES a parent's
+  `twitter` object rather than merging into it, so the child pages that set a
+  title silently dropped back to the small `summary` card. Same trap in the
+  other direction made the layout's `openGraph.url` pin EVERY page's og:url to
+  the home page; the layout no longer sets one.
+- FAVICON: there was none at all, so every tab and bookmark showed a blank
+  sheet. app/icon.tsx + app/apple-icon.tsx generate the same SF mark the nav
+  and sidebar draw, at the root so the app gets it too.
+- STRUCTURED DATA (components/marketing/structured-data.tsx): Organization +
+  WebSite site-wide, SoftwareApplication with real offers read from
+  lib/marketing/pricing.ts, and FAQPage from the ten written questions. NO
+  aggregateRating and NO review markup, and that is not an oversight: there
+  are no customers yet, so it would be a search-policy violation on the page a
+  buyer scrutinises hardest and the same fabricated social proof the copy
+  already refuses.
+- THE MIDDLEWARE BIT AGAIN, fourth time. `/icon` and the generated cards are
+  not images by extension and were 307ing to /login, so no card would ever
+  have rendered for a crawler. They CANNOT go in PUBLIC_PATHS: Next appends a
+  build hash (`/opengraph-image-pwu6ef`) so an exact entry goes stale on the
+  next deploy, and the prefix test only matches on a following slash. There is
+  now an `isMetadataRoute()` predicate in lib/supabase/middleware.ts. Same
+  session also found /sitemap.xml and /robots.txt doing it. IF A NON-IMAGE
+  PUBLIC FILE GOES MISSING, LOOK AT THAT MATCHER FIRST.
+- VERIFIED by production build, not just in dev: all 18 cards render 200 at
+  1200x630, every feature page has its own og:title, og:url and og:image, and
+  the built HTML resolves them to https://studio-flows.com (dev rewrites
+  metadataBase to localhost, which is why dev output cannot confirm this).
+
+### THE WEBSITE'S BIGGEST REMAINING PROBLEM: /moodboard-maker is empty
+Audited 2026-09-08 and not yet fixed. The page is the reference implementation
+of the show-don't-argue pattern, so it was given six demo sections and
+`blocks: []`, meaning NO written argument to fall back on. Five of its six
+clips were never recorded (`npm run demos` has never run) and its sixth shot
+(`board-review-portal`) was never captured, so the live page is 12,767px of
+six giant dashed placeholders. The placeholder was designed as a
+local-development affordance and it ships to production unchanged.
+Two halves to the fix, and only one of them is ours: record the clips on the
+operator's machine, AND make a demo section degrade honestly when a clip is
+missing (fall back to the page's still, or drop the section) so this cannot
+happen again on the next page converted to the pattern.
+Also still uncaptured: `project-schedule`, which is why the schedule page's
+hero runs on its motif. `ONLY=project-schedule npm run shots` (the ONLY filter
+is new) takes just that one without retaking the other fourteen.
+
 ### Demo clips (scripts/capture-demos.mjs, `npm run demos`): BUILT
 A screenshot cannot show an interaction, and on the canvas pages every claim IS
 an interaction: creation is drag-only, selecting a card turns the tool rail into

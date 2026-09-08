@@ -17,7 +17,10 @@ import {
 /* The app host redirects "/" to the dashboard or login, so this page is only
    ever the apex. Naming it canonical keeps any stray preview URL from competing
    with the real one in search. */
-export const metadata: Metadata = { alternates: { canonical: "/" } };
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+  openGraph: { url: "/" },
+};
 
 function FeatureCopy({
   eyebrow,

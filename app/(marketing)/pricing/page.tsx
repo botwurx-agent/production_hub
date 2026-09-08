@@ -7,12 +7,28 @@ import { BillingProvider, BillingToggle } from "@/components/marketing/pricing/b
 import { PlanCards } from "@/components/marketing/pricing/plan-cards";
 import { CompareTable } from "@/components/marketing/pricing/compare-table";
 import { PricingFaq } from "@/components/marketing/pricing/faq";
+import { PricingSchema, FaqSchema } from "@/components/marketing/structured-data";
+
+const PRICING_DESCRIPTION =
+  "One price for the whole production toolkit. Client review and crew access are free on every plan. Start with one project free, no card.";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description:
-    "One price for the whole production toolkit. Client review and crew access are free on every plan. Start with one project free, no card.",
+  description: PRICING_DESCRIPTION,
   alternates: { canonical: "/pricing" },
+  openGraph: {
+    title: "Pricing | Studio Flows",
+    description: PRICING_DESCRIPTION,
+    url: "/pricing",
+    type: "website",
+  },
+  // See the note in the feature page: a child `twitter` object replaces the
+  // layout's, so the card type has to be restated or it drops to `summary`.
+  twitter: {
+    card: "summary_large_image",
+    title: "Pricing | Studio Flows",
+    description: PRICING_DESCRIPTION,
+  },
 };
 
 /**
@@ -39,6 +55,9 @@ export const metadata: Metadata = {
 export default function PricingPage() {
   return (
     <>
+      <PricingSchema />
+      <FaqSchema />
+
       <BillingProvider>
         <Section className="pt-14 sm:pt-16">
           <SectionHeader

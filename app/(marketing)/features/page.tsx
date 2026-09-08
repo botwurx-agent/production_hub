@@ -20,11 +20,24 @@ const BAND_HUES: Record<string, string> = {
   produce: "amber",
 };
 
+const FEATURES_DESCRIPTION =
+  "Everything Studio Flows does, one page per feature: call sheets, shot lists, storyboards, client review, budgets, invoicing, the AI pipeline and more.";
+
 export const metadata: Metadata = {
   title: "Features",
-  description:
-    "Everything Studio Flows does, one page per feature: call sheets, shot lists, storyboards, client review, budgets, invoicing, the AI pipeline and more.",
+  description: FEATURES_DESCRIPTION,
   alternates: { canonical: "/features" },
+  openGraph: {
+    title: "Features | Studio Flows",
+    description: FEATURES_DESCRIPTION,
+    url: "/features",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Features | Studio Flows",
+    description: FEATURES_DESCRIPTION,
+  },
 };
 
 /**

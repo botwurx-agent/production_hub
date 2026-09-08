@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Aurora } from "@/components/marketing/aurora";
 import { SiteNav } from "@/components/marketing/site-nav";
 import { SiteFooter } from "@/components/marketing/site-footer";
+import { SiteSchema } from "@/components/marketing/structured-data";
 import "./marketing.css";
 
 export const metadata: Metadata = {
@@ -15,10 +16,21 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "Studio Flows",
-    url: "https://studio-flows.com",
+    // NO `url` HERE. Next merges the parent's openGraph into a child's, so a
+    // url set at the layout pinned EVERY page's og:url to the home page: a
+    // share of the budget page told Slack it was the root. Each page sets its
+    // own; the canonical alternate already carries the same value.
     title: "Studio Flows: every job, in one place",
     description:
       "The connected production hub for studios of every scale.",
+  },
+  // summary_large_image, not the small `summary` card this had. The product is
+  // a visual one sold to people who look at pictures for a living, and the
+  // small card crops the image to a thumbnail beside the text.
+  twitter: {
+    card: "summary_large_image",
+    title: "Studio Flows: every job, in one place",
+    description: "The connected production hub for studios of every scale.",
   },
   robots: { index: true, follow: true },
 };
@@ -57,6 +69,8 @@ export default function MarketingLayout({
           the hero sits on instead of reading as a white strip pasted on top.
           Fixed height: it is the top of the page that glows, not the whole
           scroll. */}
+      <SiteSchema />
+
       <Aurora />
       <SiteNav />
       <main className="relative z-10 flex-1">{children}</main>

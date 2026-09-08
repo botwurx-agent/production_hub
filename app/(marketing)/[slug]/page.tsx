@@ -56,10 +56,24 @@ export function generateMetadata({
 }): Metadata {
   const f = featureBySlug(params.slug);
   if (!f) return {};
+  const title = `${f.metaTitle} | Studio Flows`;
   return {
-    title: { absolute: `${f.metaTitle} | Studio Flows` },
+    title: { absolute: title },
     description: f.lede,
     alternates: { canonical: `/${f.slug}` },
+    // Stated per page, or every feature page shares the home page's card and a
+    // link to one of them describes another. The image itself comes from this
+    // segment's opengraph-image.tsx, which reads the same FeatureDef.
+    openGraph: {
+      title,
+      description: f.lede,
+      url: `/${f.slug}`,
+      type: "website",
+    },
+    // `card` is repeated at every override on purpose. Next REPLACES the
+    // parent's `twitter` object rather than merging into it, so a child that
+    // sets only a title silently drops back to the small `summary` card.
+    twitter: { card: "summary_large_image", title, description: f.lede },
   };
 }
 

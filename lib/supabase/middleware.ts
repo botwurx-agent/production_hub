@@ -84,6 +84,31 @@ const PUBLIC_PATHS = [
 ];
 
 /**
+ * Next's file-based metadata routes: the favicon, the touch icon, and the
+ * generated Open Graph cards.
+ *
+ * THESE CANNOT GO IN PUBLIC_PATHS, which is why they get their own rule. Next
+ * appends a build hash to the generated ones (`/opengraph-image-pwu6ef`), so
+ * an exact entry goes stale on the next deploy and the prefix test above only
+ * matches on a following slash. They also appear at EVERY segment depth: the
+ * root card, `/pricing/opengraph-image-...`, one per feature page.
+ *
+ * The cost of getting this wrong is invisible and total. A crawler fetching a
+ * card would be 307ed to /login, so every share would fall back to no image at
+ * all, and nothing on the page would look broken while it happened. This is
+ * the fourth thing bitten by the same gap, after the pdf.js worker, the demo
+ * clips, and the sitemap: IF A NON-IMAGE PUBLIC FILE GOES MISSING, LOOK HERE.
+ *
+ * Safe to open: each one renders a picture from our own marketing copy and
+ * reads nothing about the visitor.
+ */
+function isMetadataRoute(pathname: string): boolean {
+  return /(?:^|\/)(?:icon|apple-icon|opengraph-image|twitter-image)(?:-[a-z0-9]+)?$/i.test(
+    pathname,
+  );
+}
+
+/**
  * Refreshes the Supabase auth session on every request and gates the app.
  * Unauthenticated users hitting a protected path are sent to /login;
  * authenticated users hitting an auth page are sent to the app home.
@@ -138,6 +163,7 @@ export async function updateSession(request: NextRequest) {
 
   const isPublic =
     PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    isMetadataRoute(pathname) ||
     // /dev is the local-only namespace (the token reference, the screenshot
     // fixture). Open it without a session in development so a capture script
     // can reach it, and never in production, where it stays behind auth like
