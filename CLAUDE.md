@@ -2536,6 +2536,46 @@ that PDF go", which the app could not answer.
   into the browser global rather than reaching Sentry. Now imported from
   lib/log.
 
+### Board headings get a fill (no migration) — BUILT
+Operator: "our moodboard feature doesn't allow us to change the header fill in
+color, we only have the option to change the text." Exactly right. The heading
+rail had Size and style, Align and Text color, and nothing else, so labelling a
+band of a board meant a coloured WORD sitting on the board's own ground rather
+than a block you can see from across the canvas. Note cards have had a Box tab
+with fills since the Milanote pass; headings never got the equivalent.
+- NO MIGRATION, because a heading's whole look already lives encoded in
+  `board_items.hue` (lib/board-heading), the same move board-note-style made.
+  The fill is a `bg:` PREFIXED token; the text colour stays bare because the
+  bare token IS the legacy form and old rows have to keep parsing. That makes
+  ONE ordering rule load-bearing: the `bg:` test must run BEFORE the catch-all
+  that claims an unrecognised token as the text colour, or a fill is read as
+  the colour and the heading changes in the wrong way.
+- THE FILL REUSES noteColorVars rather than a second resolver, so a hue token
+  becomes its pale `-bg` tint and a custom hex is mixed toward the surface.
+  That is what keeps a filled heading readable in BOTH THEMES without adjusting
+  the text colour to match: the `-bg` tokens already flip dark, verified by
+  screenshotting every combination in light and dark.
+- PADDING AND RADIUS ARE APPLIED ONLY WHEN FILLED, so an unfilled heading keeps
+  its exact previous geometry and nothing on an existing board moves. Measured
+  in Chromium: unfilled padding stays 0px with a transparent background, and a
+  fill does not change the card's width (border-box).
+- 26 assertions in the scratchpad, and the ones that matter are the backward
+  compatible half: every legacy string ("", "red", "red|lg|center|i|u",
+  "#aabbcc") round-trips to ITSELF, a `bg:` token is never read as the text
+  colour, and tokens still parse in any order.
+- The rail's existing colour tool moved from ICON.palette to ICON.textColor and
+  the fill got a bucket icon, because two palette icons in one rail are
+  indistinguishable.
+- IT REACHES EVERY SURFACE FOR FREE: only board-canvas renders a heading (the
+  card and the compact in-column child), both through headingCss, and the
+  public shared board and the client doc-review both mount BoardCanvas. That is
+  the payoff of the module comment saying the two must not drift.
+- GOTCHA THAT COST TIME, worth knowing: `npx next build` while a `next dev`
+  server is running CLOBBERS .next, and the dev server then serves a 404 for
+  layout.css. Every design token resolves to empty, so a token-coloured element
+  renders transparent and looks like the feature is broken. Kill dev, delete
+  .next, restart. Do not debug the colour, check the stylesheet 200s.
+
 ### Documents: Open means view, and there is a delete (no migration) — BUILT
 Operator, on filing a real SOW: "when I tried to click open it downloaded the
 file. If I click open, I just want to view the document. Also, there is no

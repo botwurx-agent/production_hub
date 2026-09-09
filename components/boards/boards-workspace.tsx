@@ -2207,7 +2207,9 @@ function HeadingPanel({
         </div>
       </RailTool>
 
-      <RailTool id="color" label="Text color" icon={ICON.palette}>
+      {/* ICON.textColor rather than the palette, because there are two colour
+          tools in this rail now and two palettes would be indistinguishable. */}
+      <RailTool id="color" label="Text color" icon={ICON.textColor}>
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => patch({ color: null })}
@@ -2240,6 +2242,48 @@ function HeadingPanel({
           active={Boolean(style.color?.startsWith("#"))}
           value={style.color}
           onPick={(hex) => patch({ color: hex })}
+        />
+      </RailTool>
+
+      {/* The background behind the heading. A heading could only ever colour
+          its TEXT, so labelling a band of the board meant a coloured word on
+          the board's own ground rather than a block you can see from across
+          the canvas. The swatches paint each button in the tint it applies,
+          so the picker shows the result rather than naming it. */}
+      <RailTool id="fill" label="Fill" icon={ICON.fill}>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => patch({ fill: null })}
+            aria-label="No fill"
+            title="No fill"
+            className="grid h-7 w-7 place-items-center rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+            style={{
+              backgroundColor: "var(--surface)",
+              boxShadow: !style.fill ? "0 0 0 2px var(--accent)" : undefined,
+            }}
+          >
+            {/* A slash, the usual "none" mark for a colour well. */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <path d="M5 19 19 5" />
+            </svg>
+          </button>
+          {NOTE_COLORS.map((h) => (
+            <button
+              key={h}
+              onClick={() => patch({ fill: h })}
+              aria-label={h}
+              className="h-7 w-7 rounded-[8px] ring-1 ring-black/10 transition hover:scale-105"
+              style={{
+                backgroundColor: `var(--h-${h}-bg)`,
+                boxShadow: style.fill === h ? "0 0 0 2px var(--accent)" : undefined,
+              }}
+            />
+          ))}
+        </div>
+        <CustomColorButton
+          active={Boolean(style.fill?.startsWith("#"))}
+          value={style.fill}
+          onPick={(hex) => patch({ fill: hex })}
         />
       </RailTool>
 
@@ -2384,6 +2428,13 @@ const ICON = {
       <path d="M5 20h14" />
       <path d="m8 16 4-11 4 11" />
       <path d="M9.5 13h5" />
+    </>
+  ),
+  fill: (
+    <>
+      <path d="M19 11 9.5 1.5 8 3l2 2-6 6a1.5 1.5 0 0 0 0 2.1l5.4 5.4a1.5 1.5 0 0 0 2.1 0z" />
+      <path d="M5.5 12.5h13" />
+      <path d="M20.5 15.5c0 1.4-1 2.5-2.2 2.5s-2.3-1.1-2.3-2.5 2.3-4 2.3-4 2.2 2.6 2.2 4z" />
     </>
   ),
   palette: (
