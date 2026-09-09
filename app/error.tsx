@@ -5,6 +5,7 @@ import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorDetail } from "@/components/ui/error-detail";
 
 // Catches errors thrown above the app shell (e.g. in the (app) layout when a
 // studio context fails to load). Renders inside the root layout, so tokens and
@@ -28,11 +29,7 @@ export default function RootError({
           An unexpected error stopped this page from loading. Trying again often
           clears it.
         </p>
-        {error.digest && (
-          <p className="mt-3 font-mono text-xs text-text-faint">
-            Reference: {error.digest}
-          </p>
-        )}
+        <ErrorDetail error={error} boundary="root" />
         <div className="mt-6 flex justify-center gap-3">
           <Button onClick={reset}>Try again</Button>
           <Link href="/dashboard">

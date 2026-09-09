@@ -5,6 +5,7 @@ import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ErrorDetail } from "@/components/ui/error-detail";
 
 // Catches errors within app pages while keeping the shell (sidebar/topbar)
 // around it, so the user can navigate elsewhere instead of hitting a dead end.
@@ -27,11 +28,7 @@ export default function AppError({
           Something went wrong loading this view. Try again, or head back to
           your projects.
         </p>
-        {error.digest && (
-          <p className="mt-3 font-mono text-xs text-text-faint">
-            Reference: {error.digest}
-          </p>
-        )}
+        <ErrorDetail error={error} boundary="app" />
         <div className="mt-6 flex justify-center gap-3">
           <Button onClick={reset}>Try again</Button>
           <Link href="/projects">

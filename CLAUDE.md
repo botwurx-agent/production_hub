@@ -3978,6 +3978,44 @@ DECISIONS, all confirmed by the operator before anything was written:
   exists (it did not) with the Sitemap line. Same class as the pdf.worker and
   mp4 bugs: IF A NON-IMAGE PUBLIC FILE IS MISSING, CHECK THAT LIST FIRST.
 
+### An error card that says what broke (no migration) — BUILT
+The operator reported a repeating crash while adding and moving cards on the
+moodboard, and it could not be found, which is the part worth recording. There
+were NO server errors in Vercel for the window (307 requests, all 200 or 307),
+no explicit throw anywhere in the boards code, and Sentry is inert because
+NEXT_PUBLIC_SENTRY_DSN has never been set. So a client-side crash in this app
+reports NOTHING, anywhere, to anyone.
+- All three boundaries showed one sentence and, for a SERVER error, a digest. A
+  digest needs the platform's logs to mean anything, and a CLIENT error does not
+  carry one at all, so the commonest failure produced a screenshot of a generic
+  apology. The fault line is now ON THE CARD, because a screenshot is what
+  actually gets sent and a screenshot naming the fault is most of the diagnosis.
+- It is a SECOND line under the human sentence, never the headline: a producer
+  mid-job needs to know what to do first. The full block (stack, path, browser,
+  timestamp) goes to the CLIPBOARD via a Copy details button rather than on
+  screen, since a wall of frames reads as the app having fallen apart.
+- EACH BOUNDARY NAMES ITSELF (a faint `root` / `app` / `global` next to the
+  button), which exists because working out from a screenshot which one had
+  fired cost most of an afternoon: app/error.tsx says "stopped this page from
+  loading" and app/global-error.tsx says "stopped the app from loading", one
+  word apart, and they mean completely different things about where the error
+  came from (the (app) segment vs the root layout).
+- lib/error-detail.ts is pure and NOT `server-only`, so it is testable: 26
+  assertions covering the clamp, that a real message beats a digest, and that
+  Next's production replacement text ("An error occurred in the Server
+  Components render...") falls back to the digest rather than being shown as if
+  it were the fault. Bug the tests caught: the ellipsis was added AFTER slicing
+  to the limit, so a clamped line came back two characters over it.
+- components/ui/error-detail.tsx is shared by the two boundaries that render
+  inside the root layout. app/global-error.tsx hand-rolls the same block,
+  because it replaces the document and can use neither the stylesheet nor a
+  shared component.
+- Verified in Chromium against a throwaway /dev/boom fixture (deleted): the card
+  reads the TypeError's own message, and Copy details puts the file and line on
+  the clipboard.
+- THE MOODBOARD CRASH ITSELF IS STILL UNDIAGNOSED. Nothing was changed in the
+  boards code on a guess. The next occurrence names itself.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
