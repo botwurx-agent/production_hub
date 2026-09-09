@@ -307,7 +307,16 @@ export function AssetsView({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        // Two columns as before, each track capped at 85% of the width it
+        // would otherwise take, so a card is 15% smaller (operator's ask: the
+        // preview cards were too big). Expressed as a CALC OFF THE CONTAINER
+        // rather than a pixel cap, so the reduction is exactly 15% at every
+        // width instead of only at the one it was measured on. The 1rem is
+        // gap-4; change one and the other has to follow.
+        //
+        // The phone's single column is deliberately untouched: it is already
+        // narrow, and shrinking it would waste the screen rather than tidy it.
+        <div className="grid grid-cols-1 gap-4 sm:[grid-template-columns:repeat(2,minmax(0,calc((100%_-_1rem)/2*0.85)))]">
           {shown.map((a) => (
             <AssetCard
               key={a.id}
