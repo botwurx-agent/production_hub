@@ -307,16 +307,16 @@ export function AssetsView({
           </button>
         </div>
       ) : (
-        // Two columns as before, each track capped at 85% of the width it
-        // would otherwise take, so a card is 15% smaller (operator's ask: the
-        // preview cards were too big). Expressed as a CALC OFF THE CONTAINER
-        // rather than a pixel cap, so the reduction is exactly 15% at every
-        // width instead of only at the one it was measured on. The 1rem is
-        // gap-4; change one and the other has to follow.
+        // Three even columns on a wide screen (operator's ask), which fills the
+        // row rather than leaving the trailing gap a capped track left behind.
         //
-        // The phone's single column is deliberately untouched: it is already
-        // narrow, and shrinking it would waste the screen rather than tidy it.
-        <div className="grid grid-cols-1 gap-4 sm:[grid-template-columns:repeat(2,minmax(0,calc((100%_-_1rem)/2*0.85)))]">
+        // THE BREAKPOINT IS xl, NOT lg, AND THAT WAS MEASURED. The sidebar
+        // takes 240px from lg upward, so a 1024 screen has about 680px of card
+        // area: three columns there are 215px, which is a thumbnail rather
+        // than a preview. From xl a column never falls below 301px (301 at
+        // 1280, 354 at 1440, 378 at 1512), and below xl it holds two at a
+        // healthy width instead.
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((a) => (
             <AssetCard
               key={a.id}

@@ -2536,6 +2536,37 @@ that PDF go", which the app could not answer.
   into the browser global rather than reaching Sentry. Now imported from
   lib/log.
 
+### Assets grid: three even cards per row (no migration) — BUILT
+Operator, in two steps: "the preview cards in the asset page are a little too
+big, can you make them 15% smaller", then "now that I think about it, I think
+we should have 3 evenly spaced preview cards in a row." The second supersedes
+the first and the intermediate state is worth recording, because it is the
+reason the final shape is right.
+- THE GRID WAS TWO FLUID COLUMNS FOREVER (`sm:grid-cols-2`, no wider step), so
+  a card stretched to half the container and measured 548x556 on a 1440 laptop.
+  Two cards filled the fold.
+- THE 15% VERSION CAPPED EACH TRACK at 85% via a calc off the container, which
+  is exactly 15% at every width rather than only at the one it was measured on.
+  It worked, and it left about 160px of trailing space at the right of every
+  row, because a fluid grid cannot be both narrower AND full. That trade is
+  what the operator reconsidered.
+- THE BREAKPOINT IS xl, NOT lg, AND IT WAS MEASURED rather than chosen. The
+  sidebar takes 240px from lg upward, so a 1024 screen leaves about 680px of
+  card area and three columns there are 215px, which is a thumbnail rather than
+  a preview. From xl a column never falls below 301px (301 at 1280, 354 at
+  1440, 378 at 1512, 514 at 1920), and below xl it holds two at 323 to 409.
+- Verified in Chromium against the REAL page chrome (Sidebar + main px-8 +
+  Card p-5), not a bare container, since the sidebar is most of what decides
+  the number: at 1512 three columns of exactly 378px with equal 16px gaps and
+  zero space at either edge, at 1180 two of 409, no overflow at any width.
+- THE STYLESHEET TRAP BIT AGAIN and cost a measuring round: `npx next build`
+  while `next dev` is running clobbers .next, the dev server then 404s
+  layout.css, and EVERY Tailwind class silently stops applying. It surfaced as
+  a card measuring 1904x1890 with no grid at all, which reads as the component
+  being broken. Kill dev, delete .next, restart. It is already noted under the
+  heading fill; this is the second time in two sessions, so: DO NOT RUN A
+  PRODUCTION BUILD WHILE A DEV SERVER IS UP.
+
 ### Board headings get a fill (no migration) — BUILT
 Operator: "our moodboard feature doesn't allow us to change the header fill in
 color, we only have the option to change the text." Exactly right. The heading
