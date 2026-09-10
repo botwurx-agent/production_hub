@@ -69,6 +69,8 @@ import {
 import {
   parseHeadingStyle,
   serializeHeadingStyle,
+  stepHeadingSize,
+  HEADING_SIZES,
   type HeadingStyle,
 } from "@/lib/board-heading";
 import {
@@ -2163,16 +2165,52 @@ function HeadingPanel({
       <RailTool id="text" label="Size and style" icon={ICON.size}>
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-text-faint">Size</p>
-          <div className="flex gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
-            <button className={seg(style.size === "sm")} onClick={() => patch({ size: "sm" })} title="Small">
-              <span className="text-[11px]">S</span>
+          {/* A STEPPER OVER THE LADDER, not three t-shirt steps. S / M / L
+              bottomed out at 19px, which is already a banner, so labelling a
+              small cluster had nothing to reach for. The number is shown
+              because it is the honest answer to "how small", and the minus and
+              plus answer the thought people actually have, which is "a bit
+              smaller" rather than "17px". The row underneath is there so any
+              size is still one press away. */}
+          <div className="flex items-center gap-0.5 rounded-[9px] bg-surface-2 p-0.5">
+            <button
+              className={seg(false)}
+              title="Smaller"
+              aria-label="Smaller"
+              disabled={style.size <= HEADING_SIZES[0]}
+              onClick={() => patch({ size: stepHeadingSize(style.size, -1) })}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 12h14" /></svg>
             </button>
-            <button className={seg(style.size === "md")} onClick={() => patch({ size: "md" })} title="Medium">
-              <span className="text-[13px]">M</span>
+            <span className="w-11 shrink-0 text-center text-[12px] font-bold tabular-nums text-text">
+              {style.size}
+              <span className="text-[9px] font-semibold text-text-faint">px</span>
+            </span>
+            <button
+              className={seg(false)}
+              title="Bigger"
+              aria-label="Bigger"
+              disabled={style.size >= HEADING_SIZES[HEADING_SIZES.length - 1]}
+              onClick={() => patch({ size: stepHeadingSize(style.size, 1) })}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
             </button>
-            <button className={seg(style.size === "lg")} onClick={() => patch({ size: "lg" })} title="Large">
-              <span className="text-[15px]">L</span>
-            </button>
+          </div>
+          <div className="mt-1.5 grid grid-cols-6 gap-1">
+            {HEADING_SIZES.map((px) => (
+              <button
+                key={px}
+                onClick={() => patch({ size: px })}
+                title={`${px}px`}
+                className={`h-6 rounded-[7px] border text-[10px] font-bold tabular-nums transition ${
+                  style.size === px
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border text-text-muted hover:bg-surface-2 hover:text-text"
+                }`}
+              >
+                {px}
+              </button>
+            ))}
           </div>
         </div>
         <div className="flex gap-1.5">

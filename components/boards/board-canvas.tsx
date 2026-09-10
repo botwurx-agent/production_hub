@@ -15,7 +15,6 @@ import { parseNoteStyle, noteColorVars } from "@/lib/board-note-style";
 import {
   parseHeadingStyle,
   headingCss,
-  HEADING_FONT_SIZE,
 } from "@/lib/board-heading";
 import {
   parseShapeData,
@@ -1209,7 +1208,7 @@ export function BoardCanvas({
       body = (
         <div
           className="px-2 py-1.5 font-extrabold leading-tight tracking-tight"
-          style={{ ...headingCss(hs), fontSize: Math.min(HEADING_FONT_SIZE[hs.size], 20) }}
+          style={{ ...headingCss(hs), fontSize: Math.min(hs.size, 20) }}
         >
           {child.text || <span className="font-semibold text-text-faint">Heading</span>}
         </div>

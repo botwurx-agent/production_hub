@@ -3978,6 +3978,48 @@ DECISIONS, all confirmed by the operator before anything was written:
   exists (it did not) with the Sitemap line. Same class as the pdf.worker and
   mp4 bugs: IF A NON-IMAGE PUBLIC FILE IS MISSING, CHECK THAT LIST FIRST.
 
+### Board heading size is a number of pixels (no migration) — BUILT
+Operator: "the text size for the headline feature, we only have three options,
+I'm having the need to have smaller options. I'm not sure what the best
+approach is here, a drop down with a selection of pixel size, or an extra
+small option?" Both halves of that question have the same answer.
+- AN EXTRA SMALL STEP WOULD ONLY MOVE THE WALL. The ladder was sm/md/lg at
+  19/26/36, so its FLOOR was already a banner and labelling a small cluster had
+  nothing to reach for. One step below it is the same conversation again the
+  first time somebody wants a caption.
+- SO THE STORED VALUE CHANGED, not just the list. `HeadingStyle.size` is a
+  NUMBER of CSS pixels, written as a `sz:` PREFIXED token in board_items.hue,
+  the same shape `bg:` uses and subject to the same ordering rule: both
+  prefixed tests must run BEFORE the catch-all that claims an unrecognised
+  token as the text colour. The ladder is now presentation, so widening it
+  later costs nothing and strands nothing.
+- LEGACY VALUES SERIALIZE BACK TO THE LEGACY TOKEN. 19/26/36 write sm/md/lg
+  rather than sz:19 and friends, so a board full of headings nobody has resized
+  stays byte for byte what it was, the documented round-trip invariant still
+  holds, and a ROLLBACK of this change still reads every row (an old parser
+  handed "sz:44" would claim it as a colour). The three legacy values are also
+  ON the new ladder deliberately, so an existing heading always sits on a step
+  and the stepper behaves.
+- THE CONTROL IS A STEPPER OVER A LADDER, not a pixel dropdown and not more
+  t-shirt sizes. The number is shown because it is the honest answer to "how
+  small", the minus and plus answer the thought people actually have ("a bit
+  smaller", not "17px"), and a row of eleven chips underneath keeps any size one
+  press away. Ladder 11 to 56; 11px is a caption rather than a heading, which is
+  the point.
+- Junk out of storage is the trust boundary, the same rule as every extractor
+  here: "sz:" alone is Number("") which is 0, so integers only, positive only,
+  clamped 8 to 200. A corrupt row cannot draw a heading with no height or one
+  the height of the canvas.
+- 55 assertions in the scratchpad, most of them the backward-compatible half
+  (every pre-existing string round-trips to ITSELF, a size is never read as a
+  colour, off-ladder stepping takes the nearest step in the direction of
+  travel rather than snapping). Verified in Chromium by driving the REAL
+  HeadingPanel: four presses take 26 to 15, the floor disables rather than
+  walking off the scale, and picking 36 writes "lg" while picking 13 writes
+  "sz:13".
+- The in-column heading render keeps its 20px cap, now a plain Math.min on the
+  number.
+
 ### An error card that says what broke (no migration) — BUILT
 The operator reported a repeating crash while adding and moving cards on the
 moodboard, and it could not be found, which is the part worth recording. There
