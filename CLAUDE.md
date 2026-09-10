@@ -3978,6 +3978,52 @@ DECISIONS, all confirmed by the operator before anything was written:
   exists (it did not) with the Sitemap line. Same class as the pdf.worker and
   mp4 bugs: IF A NON-IMAGE PUBLIC FILE IS MISSING, CHECK THAT LIST FIRST.
 
+### The moodboard canvas grows with its content (no migration) — BUILT
+Operator: "I'm trying to go lower on the moodboard and it seems like its
+limiting the board size. Also, the mat on the lower part doesn't have the
+dots." TWO SYMPTOMS, ONE CAUSE, which is the useful part: the canvas was a
+FIXED 2400x1600 box. The dot pattern is painted on that box, so it stopped
+dead partway down, and the scroll area WAS that box, so there was nowhere left
+to go. Dragging clamps at 0 but deliberately not at the far edge, so a card
+pushed past 1600 ended up sitting on bare surface below the dots with the
+scrollbar already at its end. Nothing was wrong with the dots.
+- MIN_CANVAS_W/H are now a FLOOR, not the size, plus CANVAS_PAD (800, roughly
+  a screen) of headroom past the furthest thing so there is always somewhere to
+  drag to. An empty board is still exactly 2400x1600, verified.
+- TWO PASSES, and neither alone is right. lib/board-extent.ts boardExtent() is
+  pure and INSTANT, so the canvas grows while a card is still being dragged
+  toward the edge (measured: 3400 -> 3880 mid-drag). A DOM measurement of the
+  stage's direct children is EXACT, which the stored geometry cannot be: a
+  COLUMN's height flows from its children rather than from its `h`, so a tall
+  column near the bottom hung 129px off the end in testing. offset* is
+  untransformed layout size, so the canvas zoom does not enter into it.
+- ONLY DIRECT CHILDREN are measured (`:scope > [data-item-id]`). A column's
+  children are positioned against the column, which is itself absolute and so
+  their offsetParent, so their offsetTop would be read against the wrong origin.
+- IT ONLY EVER GROWS while a board is open, deliberately. Shrinking the scroll
+  area under someone scrolled near the bottom makes the browser clamp scrollTop
+  and the whole view jumps, and that would fire on every drag back up. Verified:
+  dragging down grows it, dragging back up holds.
+- THE BUG THAT WOULD HAVE SHIPPED SILENTLY, and the lesson worth keeping: the
+  board-switch reset was a plain useEffect, which is PASSIVE and therefore runs
+  AFTER the useLayoutEffect that measures. On mount it wiped the measurement
+  that had just been taken, and nothing re-triggered it because `items` had not
+  changed, so the column pass was dead code that looked correct. It is now done
+  DURING RENDER (React's documented adjust-state-on-prop-change pattern), which
+  re-renders before committing anything stale. RULE: a reset effect that clears
+  state a layout effect just wrote must not be passive.
+- boardExtent skips a PARENTED item (its stored x/y are wherever it was before
+  it was filed into a column, which would stretch the canvas to a place nothing
+  is drawn) and reads a LINE from its endpoints in `text`, since a line's own
+  w/h are zero and a low line would otherwise leave the canvas short exactly
+  where it is. 17 assertions in the scratchpad, including NaN and negative
+  geometry degrading to a finite extent rather than collapsing the stage.
+- Verified in Chromium against a throwaway fixture mounting the REAL BoardCanvas
+  (deleted): dots reach the bottom of the scrolled view, the scroller reaches
+  the lowest card, and a tall column sizes the canvas to its drawn bottom.
+- The public shared board and the client doc-review both mount BoardCanvas, so
+  they get this unchanged.
+
 ### Board heading size is a number of pixels (no migration) — BUILT
 Operator: "the text size for the headline feature, we only have three options,
 I'm having the need to have smaller options. I'm not sure what the best

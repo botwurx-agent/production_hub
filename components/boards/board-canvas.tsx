@@ -11,6 +11,7 @@ import {
   lineMidPoint,
   type LineData,
 } from "@/lib/board-line";
+import { boardExtent } from "@/lib/board-extent";
 import { parseNoteStyle, noteColorVars } from "@/lib/board-note-style";
 import {
   parseHeadingStyle,
@@ -85,8 +86,16 @@ function domainOf(url: string | null): string {
   }
 }
 
-const CANVAS_W = 2400;
-const CANVAS_H = 1600;
+// THE CANVAS GROWS WITH ITS CONTENT. These are the FLOOR, not the size: they
+// used to be fixed, which meant the dot pattern stopped dead partway down and
+// the scroll area ended with it, so a card dragged past the bottom sat on bare
+// surface with nowhere left to scroll. See lib/board-extent.
+const MIN_CANVAS_W = 2400;
+const MIN_CANVAS_H = 1600;
+// Headroom past the furthest thing on the board, so there is always somewhere
+// to drag to. Roughly a screen: less and the canvas feels like it ends, more
+// and the scrollbar promises a lot of nothing.
+const CANVAS_PAD = 800;
 const MIN_SCALE = 0.25;
 // 300%, matching Milanote: close enough to read a caption or place a pin on a
 // dense board. Zoom is multiplicative, so a wider range costs no extra travel.
@@ -1322,6 +1331,64 @@ export function BoardCanvas({
   );
   const connFromItem = connectFrom ? byId.get(connectFrom) : null;
 
+  // THE CANVAS SIZE, derived from what is on the board rather than fixed.
+  //
+  // Two passes, because neither alone is right. The STORED geometry (above) is
+  // instant, so the canvas grows while a card is still being dragged toward the
+  // edge. The MEASURED geometry is exact: a column's height flows from its
+  // children rather than from its `h`, and a heading can draw taller than its
+  // box, so a tall column near the bottom would otherwise hang off the end of
+  // the dots exactly as things did before. Only DIRECT children of the stage
+  // are measured; a column's children are positioned against the column, so
+  // their offsetTop would be read against the wrong origin.
+  const [measured, setMeasured] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const stage = contentRef.current;
+    if (!stage) return;
+    let w = 0;
+    let h = 0;
+    stage.querySelectorAll<HTMLElement>(":scope > [data-item-id]").forEach((el) => {
+      // offset* is untransformed layout size, so the canvas zoom does not
+      // enter into it and these are already canvas pixels.
+      w = Math.max(w, el.offsetLeft + el.offsetWidth);
+      h = Math.max(h, el.offsetTop + el.offsetHeight);
+    });
+    setMeasured((m) => (w === m.w && h === m.h ? m : { w, h }));
+  }, [items, boardId]);
+
+  // IT ONLY EVER GROWS while a board is open, and that is deliberate rather
+  // than lazy. Shrinking the scroll area under someone who is scrolled near the
+  // bottom makes the browser clamp scrollTop, so the whole view jumps, and it
+  // would happen on every drag back up. An infinite canvas keeping the room it
+  // once had is also just what these tools do.
+  const grownRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+
+  // THE BOARD-SWITCH RESET IS DONE DURING RENDER, not in an effect, and that is
+  // load-bearing rather than a style choice. As a plain useEffect it ran AFTER
+  // the layout effect above on mount, wiping the measurement it had just taken,
+  // and nothing re-triggered it because `items` had not changed. So a tall
+  // column stayed invisible to the canvas size and hung off the end of the dots
+  // exactly as before, silently. This is React's documented adjust-state-on-
+  // prop-change pattern: it re-renders before committing anything stale.
+  const [sizedBoard, setSizedBoard] = useState(boardId);
+  if (sizedBoard !== boardId) {
+    setSizedBoard(boardId);
+    setMeasured({ w: 0, h: 0 });
+    grownRef.current = { w: 0, h: 0 };
+  }
+
+  const stored = useMemo(() => boardExtent(items), [items]);
+  const reach = {
+    w: Math.max(stored.w, measured.w),
+    h: Math.max(stored.h, measured.h),
+  };
+  grownRef.current = {
+    w: Math.max(grownRef.current.w, reach.w),
+    h: Math.max(grownRef.current.h, reach.h),
+  };
+  const canvasW = Math.max(MIN_CANVAS_W, grownRef.current.w + CANVAS_PAD);
+  const canvasH = Math.max(MIN_CANVAS_H, grownRef.current.h + CANVAS_PAD);
+
   return (
     <div ref={rootRef} className="relative h-full w-full bg-bg">
       <div
@@ -1339,14 +1406,14 @@ export function BoardCanvas({
         onDrop={onDrop}
       >
         {/* Sizer drives the scroll area at the current zoom. */}
-        <div style={{ width: CANVAS_W * scale, height: CANVAS_H * scale }}>
+        <div style={{ width: canvasW * scale, height: canvasH * scale }}>
           <div
             ref={contentRef}
             className="relative"
             data-readonly={readOnly ? "1" : undefined}
             style={{
-              width: CANVAS_W,
-              height: CANVAS_H,
+              width: canvasW,
+              height: canvasH,
               transform: `scale(${scale})`,
               transformOrigin: "0 0",
               ...bgStyle(presenting ? "plain" : background),
@@ -1376,8 +1443,8 @@ export function BoardCanvas({
             {/* Connection arrows (behind cards) */}
             <svg
               className="pointer-events-none absolute left-0 top-0"
-              width={CANVAS_W}
-              height={CANVAS_H}
+              width={canvasW}
+              height={canvasH}
               style={{ zIndex: 0 }}
             >
               <defs>
@@ -2093,8 +2160,8 @@ export function BoardCanvas({
             {lineItems.length > 0 && (
               <svg
                 className="absolute left-0 top-0"
-                width={CANVAS_W}
-                height={CANVAS_H}
+                width={canvasW}
+                height={canvasH}
                 style={{ zIndex: 4000, pointerEvents: "none" }}
               >
                 <defs>
