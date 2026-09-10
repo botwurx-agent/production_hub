@@ -3978,6 +3978,45 @@ DECISIONS, all confirmed by the operator before anything was written:
   exists (it did not) with the Sitemap line. Same class as the pdf.worker and
   mp4 bugs: IF A NON-IMAGE PUBLIC FILE IS MISSING, CHECK THAT LIST FIRST.
 
+### Image captions save when you click away (no migration) — BUILT
+Operator: "image caption is not working. when i type something it doesnt save
+it or show what i typed on the bottom." Both halves were one bug, and the cause
+is a React ordering trap worth knowing.
+- CaptionBody saved ONLY on blur, and the caption box is rendered only while the
+  card is SELECTED or already carries a caption (`showCap = isSel ||
+  !!media.caption`). Clicking the canvas DESELECTS, React flushes that
+  synchronously from the pointerdown handler, and the element is out of the tree
+  BEFORE the browser's focusout is delivered to React's root listener. So blur
+  never fired on the one exit people actually take, nothing was written, and
+  since `media.caption` stayed empty the strip then hid itself, which is the
+  "doesn't show what I typed" half.
+- MEASURED, NOT REASONED, and the measurement is what identified it: tabbing
+  away SAVED, clicking the image half of the same card SAVED, clicking the
+  canvas called the handler zero times. A native listener showed focusout firing
+  on the element, so the event was real; React simply never delivered it,
+  because a MutationObserver's callback is a microtask and had made the removal
+  look later than it was.
+- THE FIX IS TO SURVIVE LOSING THE ELEMENT: the text is mirrored into a ref on
+  every keystroke (the element cannot be read once it is gone) and an unmount
+  cleanup commits it. A `saved` ref tracks what is already persisted, so a
+  caption that was focused and not touched never writes a row or pushes an undo
+  step just for being looked at. The cleanup reaches the CURRENT onSave through
+  a ref, since it runs once and the prop closes over the card's row.
+- NoteBody has the identical blur-only shape and is NOT affected: a note body IS
+  the card, so it is always mounted. The caption is the only contentEditable in
+  the boards that unmounts under the person typing in it. THE GENERAL RULE: a
+  contentEditable that saves on blur must also save on unmount if anything can
+  remove it, and selection-gated UI can.
+- Verified in Chromium against a throwaway fixture mounting the REAL BoardCanvas
+  (deleted), across all six exits: type then click the canvas (saves, exactly
+  one write), the text shows on the deselected card, reopening holds it, editing
+  an existing caption saves, focusing without typing writes nothing, and tabbing
+  away still saves. VIDEO cards use the same CaptionBody, so they are fixed too.
+- Worth knowing for the next fixture: a save fires a Server Action, which POSTs
+  to the current URL and, with no session in a Claude Code session, 303s to
+  /login and navigates the test away mid-run. Route-block the POST; the POST
+  landing at all is itself the evidence the save was attempted.
+
 ### The moodboard canvas grows with its content (no migration) — BUILT
 Operator: "I'm trying to go lower on the moodboard and it seems like its
 limiting the board size. Also, the mat on the lower part doesn't have the

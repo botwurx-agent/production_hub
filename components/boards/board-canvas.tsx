@@ -2617,6 +2617,20 @@ function HeadingBody({
 
 // Rich-text caption under an image / video card. Formatting is applied from the
 // card's panel (which finds this via the card's data-item-id).
+//
+// IT SAVES ON UNMOUNT AS WELL AS ON BLUR, and that is the whole reason a typed
+// caption used to disappear. Unlike a note body, which is the card and is always
+// mounted, this box is rendered only while the card is SELECTED or already has a
+// caption. Clicking the canvas deselects, and React flushes that synchronously
+// from the pointerdown handler, so the element is out of the tree BEFORE the
+// browser's focusout is delivered to React. Blur therefore never fired on the
+// one exit that people actually take. Measured, not reasoned: tabbing away
+// saved, clicking the same card saved, clicking the canvas saved nothing.
+//
+// So the current text is mirrored into a ref on every keystroke, since the
+// element cannot be read once it is gone, and the cleanup commits it. `saved`
+// tracks what is already persisted so an untouched caption never writes a row
+// or pushes an undo step just for being looked at.
 function CaptionBody({
   itemId,
   initial,
@@ -2631,10 +2645,35 @@ function CaptionBody({
   editable?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const saved = useRef(initial || "");
+  const live = useRef(initial || "");
+  // The unmount cleanup runs once, so it must reach the CURRENT onSave rather
+  // than the one captured on mount (it closes over the card's row).
+  const saveRef = useRef(onSave);
+  saveRef.current = onSave;
+
   useEffect(() => {
     if (ref.current) ref.current.innerHTML = initial || "";
+    saved.current = initial || "";
+    live.current = initial || "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId]);
+
+  useEffect(
+    () => () => {
+      if (live.current !== saved.current) saveRef.current(live.current);
+    },
+    []
+  );
+
+  function commit() {
+    const html = ref.current?.innerHTML ?? live.current;
+    live.current = html;
+    if (html === saved.current) return;
+    saved.current = html;
+    onSave(html);
+  }
+
   return (
     <div
       ref={ref}
@@ -2642,7 +2681,10 @@ function CaptionBody({
       suppressContentEditableWarning
       onFocus={onFocus}
       onPointerDown={(e) => e.stopPropagation()}
-      onBlur={() => onSave(ref.current?.innerHTML ?? "")}
+      onInput={() => {
+        live.current = ref.current?.innerHTML ?? "";
+      }}
+      onBlur={commit}
       data-placeholder="Add a caption"
       className={`rte w-full px-2.5 py-2 text-[13px] text-text outline-none ${editable ? "cursor-text" : ""}`}
     />
