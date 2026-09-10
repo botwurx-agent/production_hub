@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { connectingStudioId } from "@/lib/active-studio";
 import { exchangeFigmaCode, getFigmaMe, FIGMA_SCOPE } from "@/lib/figma";
 
 export async function GET(request: NextRequest) {
@@ -23,14 +24,8 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL("/login", origin));
 
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("studio_id")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!membership) return settings("error=no_studio");
+  const studioId = await connectingStudioId(supabase, user.id);
+  if (!studioId) return settings("error=no_studio");
 
   let tokens;
   try {
@@ -51,7 +46,7 @@ export async function GET(request: NextRequest) {
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   const { error } = await supabase.from("email_accounts").upsert(
     {
-      studio_id: membership.studio_id,
+      studio_id: studioId,
       user_id: user.id,
       provider: "figma",
       email: me.email || me.handle,

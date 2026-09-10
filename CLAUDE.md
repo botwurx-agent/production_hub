@@ -4194,6 +4194,24 @@ things it printed were both load-bearing: the code, and the boundary name.
   Vercel log. If it recurs, the card's Copy details carries the stack and the
   path, which separates the two.
 
+### A connector attaches to the studio you are LOOKING AT (no migration) — BUILT
+All four OAuth callbacks (google, slack, figma, freshbooks) resolved the studio
+with the same copied block: oldest membership, `order created_at limit 1`. Every
+other read in the app goes through getStudioContext, which honours the
+`sf_studio` cookie the studio switcher sets. So for anyone in two studios the
+two disagreed: switch to the second studio, connect Gmail, and the row is
+written against the first, on a Settings page that only ever renders the active
+one. It reads as the connect having silently failed, and reconnecting repeats it
+forever.
+- `connectingStudioId(supabase, userId)` in lib/active-studio.ts is now the one
+  implementation, next to the cookie and the reasoning that owns it. Same rule
+  as getStudioContext: the cookie is honoured only when it names a studio
+  present in the caller's own membership rows, so a stale or hand-edited value
+  falls back rather than granting anything.
+- Harmless for a single-studio user, which is why it survived: it only bites
+  once somebody accepts an invite to a second studio, and that is the normal
+  shape for a freelancer.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
