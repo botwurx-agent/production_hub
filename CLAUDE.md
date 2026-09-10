@@ -4140,8 +4140,59 @@ reports NOTHING, anywhere, to anyone.
 - Verified in Chromium against a throwaway /dev/boom fixture (deleted): the card
   reads the TypeError's own message, and Copy details puts the file and line on
   the clipboard.
-- THE MOODBOARD CRASH ITSELF IS STILL UNDIAGNOSED. Nothing was changed in the
-  boards code on a guess. The next occurrence names itself.
+- IT NAMED THE CRASH ON ITS FIRST OUTING, which is the whole return on having
+  built it: "Minified React error #482", boundary `global`. See the section
+  below.
+
+### React error #482 on the moodboard (no migration) — CAUSE REMOVED
+The error card shipped above did its job on the first recurrence, and the two
+things it printed were both load-bearing: the code, and the boundary name.
+
+- WHAT #482 IS, read out of the bundle rather than remembered. `node_modules/
+  next/dist/compiled/react-dom` throws it from `trackUsedThenable` when
+  `root.shellSuspendCounter > 100`: a SYNC render suspended in the shell a
+  hundred times in a row without ever committing, on an UNCACHED promise each
+  time. React's own text blames an async Client Component, which is a guess it
+  makes about the commonest cause and is wrong here (this app has no `use()`,
+  no `React.lazy` and no `next/dynamic` anywhere). The real meaning is narrower:
+  a refetch ping-loop. Worth knowing how to look it up, since the React repo's
+  `scripts/error-codes/codes.json` at the v18.3.1 TAG only reaches 434; Next
+  bundles a later canary, so the throw site has to be found in
+  `react-dom.production.js` and matched against `react-dom.development.js`,
+  which carries the full sentence.
+- THE BOUNDARY NAME IS WHAT POINTED AT THE ROUTER. `global` means it escaped
+  both the (app) segment boundary and the root one, which a component's own
+  error does not do. The suspend is in Next's `InnerLayoutRouter`
+  (`use(childNode.lazyData)`, a fresh `fetchServerResponse` whenever that cache
+  node is empty), so the loop is the client router refetching the current route
+  over and over.
+- THE IGNITION SOURCE WAS OURS. Every board action called
+  `revalidatePath("/boards")`, including the item-level ones, and a Server
+  Action that revalidates makes the client router discard and refetch the route
+  you are standing on. On the moodboard that is a full server re-render (four
+  Supabase queries) plus an RSC round trip for every card added, every drop
+  into a column and every reorder. Invalidate again before the last refetch has
+  settled and the node is empty on the next render, which is exactly the shape
+  the counter is counting. The operator's own words were "adding and moving
+  stuff around", and adding is precisely the half that revalidated: the
+  high-frequency drag actions (moveItem, resizeItem, updateItemText,
+  updateItemHue, bringToFront, deleteItem) never did.
+- SO THE REVALIDATION WENT, on eighteen item actions, and it cost nothing
+  because it was refreshing nothing anybody reads. THE BOARDS WORKSPACE IS THE
+  ONE EDITOR IN THIS APP THAT HOLDS ITS ITEMS CLIENT-SIDE: the page passes only
+  the `boards` rows (the tabs), and the workspace fetches items itself with
+  `getBoardItems` and calls its own `reload()` after a structural change. The
+  shot list and storyboard editors are prop-based (server state), so THEIR
+  revalidations are load-bearing and must not be removed by analogy. The five
+  board-level calls stay (create, rename, background, project, delete), since
+  those do change what the server rendered.
+- HONEST STATUS: this removes the trigger, it does not prove the loop. The
+  cause could not be reproduced here (a dev server in a Claude Code session
+  cannot reach Supabase), and a second candidate remains plausible: an RSC
+  refetch that comes back as an auth redirect the router cannot patch would
+  loop the same way and would leave no server error, which matches the empty
+  Vercel log. If it recurs, the card's Copy details carries the stack and the
+  path, which separates the two.
 
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the

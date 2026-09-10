@@ -53,6 +53,17 @@ export type BoardItemView = {
   sort: number;
 };
 
+// REVALIDATION IS FOR BOARDS, NOT FOR ITEMS, and the split is load-bearing
+// rather than tidiness. Only the board rows (the tabs, their names, kinds and
+// backgrounds) are server-rendered; a board's ITEMS are never passed as props,
+// they are fetched by the workspace itself and reloaded by it after a change.
+// So a revalidatePath on an item mutation refreshed nothing anybody reads, and
+// cost a full server re-render of whichever page you were standing on plus a
+// client router refetch of it, on every add, every drop into a column and every
+// reorder. That is also the ignition source React error #482 needs: a router
+// cache invalidated again before its refetch has settled can ping-loop, and the
+// moodboard is where those mutations come fastest.
+
 // ---- Boards -----------------------------------------------------------------
 
 export async function createBoard(
@@ -316,7 +327,6 @@ export async function restoreBoardState(
     );
   }
 
-  revalidatePath("/boards");
   return null;
 }
 
@@ -454,7 +464,6 @@ export async function registerUploadedBoardItems(
     if (error) return { error: error.message };
     offset += 28;
   }
-  revalidatePath("/boards");
   // Said out loud. A silently dropped image reads as the upload having worked,
   // and the card simply never appearing is worse than being told.
   if (refused > 0) {
@@ -510,7 +519,6 @@ export async function addAssetItems(
     if (error) return { error: error.message };
     offset += 28;
   }
-  revalidatePath("/boards");
   return null;
 }
 
@@ -560,7 +568,6 @@ export async function addDriveItems(
       if (error) return { error: error.message };
       offset += 28;
     }
-    revalidatePath("/boards");
     return null;
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Drive import failed." };
@@ -617,7 +624,6 @@ export async function addFigmaItems(
       if (error) return { error: error.message };
       offset += 28;
     }
-    revalidatePath("/boards");
     return null;
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Figma import failed." };
@@ -650,7 +656,6 @@ export async function addNote(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: data.id };
 }
 
@@ -695,7 +700,6 @@ export async function addLine(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: row.id };
 }
 
@@ -723,7 +727,6 @@ export async function addColumn(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: data.id };
 }
 
@@ -750,7 +753,6 @@ export async function addColorItem(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: data.id };
 }
 
@@ -784,7 +786,6 @@ export async function addVideoItem(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: data.id };
 }
 
@@ -816,7 +817,6 @@ export async function addShapeItem(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: data.id };
 }
 
@@ -843,7 +843,6 @@ export async function addHeadingItem(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: data.id };
 }
 
@@ -937,7 +936,6 @@ export async function duplicateItem(
     }
   }
 
-  revalidatePath("/boards");
   return { id: made.id };
 }
 
@@ -956,7 +954,6 @@ export async function attachToColumn(
       .update({ parent_id: columnId, sort })
       .eq("id", itemId)
   );
-  revalidatePath("/boards");
 }
 
 // Pop an item out of its column back onto the canvas at (x, y).
@@ -974,7 +971,6 @@ export async function detachFromColumn(
       .update({ parent_id: null, sort: 0, x: Math.max(0, x), y: Math.max(0, y) })
       .eq("id", itemId)
   );
-  revalidatePath("/boards");
 }
 
 // Persist a new order for a column's children (ids in display order).
@@ -984,7 +980,6 @@ export async function setColumnOrder(ids: string[]): Promise<void> {
   await Promise.all(
     ids.map((id, i) => supabase.from("board_items").update({ sort: i }).eq("id", id))
   );
-  revalidatePath("/boards");
 }
 
 // Rename a column (its title) or any item's name.
@@ -1147,7 +1142,6 @@ export async function addLinkItem(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: data.id };
 }
 
@@ -1178,7 +1172,6 @@ export async function addTodoItem(
     .select("id")
     .single();
   if (error) return { error: error.message };
-  revalidatePath("/boards");
   return { id: data.id };
 }
 
