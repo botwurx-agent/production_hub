@@ -356,14 +356,43 @@ export function BoardsWorkspace({
   // never had the right to write cannot be conjured by pasting. Consequence to
   // know: copy, delete the original, then paste reports that the card is gone,
   // which is the honest answer rather than a silent empty card.
-  const clipRef = useRef<string | null>(null);
+  // THE COPY OUTLIVES THE PAGE, deliberately. Two boards in one project are tabs
+  // in this workspace and a plain ref would carry between them, but two boards on
+  // DIFFERENT projects are different routes: the workspace remounts, and a ref
+  // would drop the copy with no way for anyone to tell that from a paste that
+  // simply refused. sessionStorage rather than a ref for that one reason. A stale
+  // or foreign id is safe, since the paste reads the source under RLS and reports
+  // that the card is gone.
+  const CLIP_KEY = "board.clip";
+  const clipRef = {
+    get current(): string | null {
+      try {
+        return sessionStorage.getItem(CLIP_KEY);
+      } catch {
+        return null;
+      }
+    },
+    set current(id: string | null) {
+      try {
+        if (id) sessionStorage.setItem(CLIP_KEY, id);
+        else sessionStorage.removeItem(CLIP_KEY);
+      } catch {}
+    },
+  };
 
+  // Used for BOTH duplicate-in-place and paste-onto-another-board, so it always
+  // names the board being looked at. Without that the copy went back to the
+  // board the card came from and the paste looked like it had been refused.
   const pasteCopy = useCallback(
-    (sourceId: string) => {
+    (sourceId: string, at?: { x: number; y: number }) => {
       if (!activeId) return;
       pushHistory();
       startBusy(async () => {
-        const res = await duplicateItem(sourceId);
+        const res = await duplicateItem(sourceId, {
+          boardId: activeId,
+          x: at?.x,
+          y: at?.y,
+        });
         if ("error" in res) {
           showNotice(res.error);
           return;
@@ -430,7 +459,7 @@ export function BoardsWorkspace({
         // above so Cmd+V has exactly one owner and the two cannot both fire.
         if (clipRef.current) {
           e.preventDefault();
-          pasteCopy(clipRef.current);
+          pasteCopy(clipRef.current, spot());
         }
         return;
       }

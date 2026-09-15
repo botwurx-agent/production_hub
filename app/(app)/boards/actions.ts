@@ -856,10 +856,21 @@ export async function addHeadingItem(
 //
 // A COLUMN takes its children with it. Copying one without them would hand back
 // an empty column, which reads as a bug rather than as a copy.
+/**
+ * Copy a card. Serves BOTH Cmd+D on the card's own board and a paste onto a
+ * DIFFERENT board, which is why `to` exists: the copy used to hardcode
+ * `src.board_id`, so pasting onto another board silently wrote the copy back
+ * onto the board it came from and the destination looked like it had refused
+ * the paste.
+ *
+ * Crossing boards is not just a different board_id. A child's parent column
+ * lives on the source board, so the copy is DETACHED and placed at the paste
+ * point; keeping parent_id would put a card inside a column on another board,
+ * which nothing renders and nothing can reach.
+ */
 export async function duplicateItem(
   itemId: string,
-  dx = 24,
-  dy = 24
+  to?: { boardId?: string; x?: number; y?: number }
 ): Promise<{ id: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -872,15 +883,33 @@ export async function duplicateItem(
   if (readErr) return { error: readErr.message };
   if (!src) return { error: "That card is no longer on the board." };
 
-  const z = await nextZ(supabase, src.board_id);
-  // A child keeps its column and lands at the end of it; a top-level card is
-  // offset so the copy is visibly its own object rather than hidden underneath.
-  const isChild = Boolean(src.parent_id);
+  const boardId = to?.boardId ?? src.board_id;
+  const crossing = boardId !== src.board_id;
+
+  if (crossing) {
+    // board_id is a plain column, so confirm the destination is one of ours
+    // rather than trusting an id that arrived from the browser.
+    const { data: dest } = await supabase
+      .from("boards")
+      .select("id")
+      .eq("id", boardId)
+      .maybeSingle();
+    if (!dest) return { error: "That board is no longer available." };
+  }
+
+  const z = await nextZ(supabase, boardId);
+  // On its own board a child keeps its column and lands at the end of it, and a
+  // top-level card is offset so the copy is visibly its own object rather than
+  // hidden underneath. Across boards there is no column to keep.
+  const isChild = Boolean(src.parent_id) && !crossing;
   const sort = isChild ? await nextSort(supabase, src.parent_id as string) : 0;
+
+  const place = (from: number, offset: number, given: number | undefined) =>
+    crossing ? Math.max(0, given ?? from) : Math.max(0, from + offset);
 
   const copy = {
     studio_id: ctx.studio.id,
-    board_id: src.board_id,
+    board_id: boardId,
     kind: src.kind,
     name: src.name,
     mime_type: src.mime_type,
@@ -888,12 +917,12 @@ export async function duplicateItem(
     url: src.url,
     text: src.text,
     hue: src.hue,
-    x: isChild ? src.x : Math.max(0, src.x + dx),
-    y: isChild ? src.y : Math.max(0, src.y + dy),
+    x: isChild ? src.x : place(src.x, 24, to?.x),
+    y: isChild ? src.y : place(src.y, 24, to?.y),
     w: src.w,
     h: src.h,
     z,
-    parent_id: src.parent_id,
+    parent_id: isChild ? src.parent_id : null,
     sort,
     created_by: ctx.userId,
   };
@@ -914,7 +943,7 @@ export async function duplicateItem(
     if (kids && kids.length > 0) {
       const rows = kids.map((k, i) => ({
         studio_id: ctx.studio.id,
-        board_id: k.board_id,
+        board_id: boardId,
         kind: k.kind,
         name: k.name,
         mime_type: k.mime_type,

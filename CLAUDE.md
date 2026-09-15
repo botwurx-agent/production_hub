@@ -4334,6 +4334,43 @@ Prerequisite for any future verification, and a real gap regardless.
   their material to a third-party model. The policy now says which two features
   do it and that not using them is the opt-out, which is true but manual.
 
+### Paste a card onto a DIFFERENT board (no migration) — BUILT
+Operator: "Im trying to copy and paste from 1 mood board and past it to another
+mood board. Why is it not allowing me to do that?" It was not refusing. It was
+pasting onto the board the card came FROM, which from the destination is
+indistinguishable from nothing happening.
+- COPY AND PASTE WERE WIRED ONTO `duplicateItem`, whose job was Cmd+D on one
+  board: it hardcoded `board_id: src.board_id` and offset the copy by 24px. So
+  Cmd+C on board A, switch to board B, Cmd+V, and the row landed back on A
+  while `reload(activeId)` refreshed B and found nothing new. The lesson worth
+  keeping: a function named DUPLICATE answers "another one of these, here", and
+  paste asks "one of those, THERE". Reusing the first for the second silently
+  drops the destination, which is the only part the caller cared about.
+- `duplicateItem(id, { boardId, x, y })` now takes a destination, and pasteCopy
+  always names the board being looked at, so the same call serves both and the
+  in-place case is unchanged (same board, same 24px offset, `x`/`y` ignored).
+- CROSSING BOARDS IS NOT JUST A DIFFERENT board_id, which is the part a quick
+  fix would have got wrong. A child's parent COLUMN lives on the source board,
+  so the copy is DETACHED and placed at the paste point; keeping parent_id
+  would file a card into a column on another board, which nothing renders and
+  nothing can reach. Position comes from the paste point too, since the
+  source's coordinates plus 24 could be anywhere on a board of another size.
+  The column branch copied its children with `board_id: k.board_id`, the same
+  bug one level down, so a pasted column would have arrived empty.
+- The destination is VERIFIED rather than trusted: board_id is a plain column,
+  so an id arriving from the browser is checked against `boards` under RLS
+  first. Nothing leaked without it (the row would carry the caller's studio_id
+  and stay invisible to the other studio), but it would have written an orphan.
+- THE COPY NOW OUTLIVES THE PAGE. Two boards in one project are tabs in one
+  workspace, so a ref carried between them, but two boards on DIFFERENT
+  PROJECTS are different routes: the workspace remounts and a ref drops the
+  copy, which reads exactly like a refused paste. It is sessionStorage for that
+  one reason. A stale or foreign id is safe, since the paste reads the source
+  under RLS and reports that the card is gone.
+- NOT verified end to end: a dev server in a Claude Code session cannot reach
+  Supabase, so the paste itself has to be tried on the operator's machine. The
+  build is clean and the reasoning above is from the code, not from a run.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
