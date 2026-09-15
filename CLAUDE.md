@@ -4370,6 +4370,25 @@ indistinguishable from nothing happening.
 - NOT verified end to end: a dev server in a Claude Code session cannot reach
   Supabase, so the paste itself has to be tried on the operator's machine. The
   build is clean and the reasoning above is from the code, not from a run.
+- SECOND ROUND, because the operator reported it STILL not pasting (IQBar Day 1
+  to Prelight, both real moodboards, checked in the DB rather than assumed from
+  the words "mood board"). Two more causes, and the first is the one that would
+  have kept this going another round:
+  - THE EDITABLE GUARD WAS A BLANKET ONE. Cmd+C returned early whenever
+    document.activeElement was contentEditable, and SELECTING A NOTE LEAVES
+    FOCUS IN THE NOTE'S OWN BODY, so clicking a note and pressing copy did
+    nothing at all, silently. What actually separates "copy these words" from
+    "copy this card" is a TEXT SELECTION, which was already checked one line
+    below. The guard now names INPUT and TEXTAREA only (a board-name field
+    keeps its own copy) and lets the selection test do the real work.
+  - A PASTE THAT FOUND NOTHING RETURNED SILENTLY, which is the exact shape of
+    the complaint. It now says "Nothing copied yet", so the next report says
+    which half failed instead of "it does not work". The copy toast likewise
+    names the next step, since copying changes nothing on screen.
+- VERIFIED IN CHROMIUM, and it is worth knowing because the whole design rests
+  on it: a `paste` event DOES fire on a non-editable body with an EMPTY system
+  clipboard (items=0). So routing the in-app card paste through the paste event
+  rather than the keydown is sound, and Cmd+V needs no clipboard write.
 
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the

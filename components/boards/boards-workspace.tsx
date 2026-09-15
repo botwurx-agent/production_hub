@@ -406,23 +406,30 @@ export function BoardsWorkspace({
   );
 
   // Cmd/Ctrl+C copies the selected card, Cmd/Ctrl+D duplicates it on the spot.
-  // Both are ignored while typing so the browser's own copy still works in a
-  // note, a title field, or a caption.
+  //
+  // THE EDITABLE GUARD IS NOT A BLANKET ONE, and that was a real dead end:
+  // selecting a NOTE leaves focus inside the note's own contentEditable body,
+  // so a plain "never while typing" test refused to copy the card you had just
+  // clicked, silently. What actually distinguishes the two intents is a TEXT
+  // SELECTION, which is checked below and covers copying words out of a note.
+  // A field you are genuinely typing in (the board name, a title input) still
+  // keeps its own copy, since those are INPUT and TEXTAREA.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey)) return;
       const key = e.key.toLowerCase();
       if (key !== "c" && key !== "d") return;
       const el = document.activeElement as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
-        return;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
       // A text selection means the user is copying words, not the card.
       if (key === "c" && (window.getSelection()?.toString() ?? "")) return;
       if (!selectedId) return;
       e.preventDefault();
       if (key === "c") {
         clipRef.current = selectedId;
-        toast("Copied");
+        // The copy changes nothing on screen, so the toast carries the next
+        // step: without it "did that work" has no answer until a paste fails.
+        toast("Copied. Open a board and press paste");
       } else {
         pasteCopy(selectedId);
       }
@@ -460,6 +467,11 @@ export function BoardsWorkspace({
         if (clipRef.current) {
           e.preventDefault();
           pasteCopy(clipRef.current, spot());
+        } else {
+          // NEVER SILENT. A paste with nothing copied and no image on the
+          // system clipboard is the exact shape of "it is not pasting", and
+          // saying which half is missing costs one line.
+          toast("Nothing copied yet. Select a card and press copy first");
         }
         return;
       }
