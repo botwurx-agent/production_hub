@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CtaButton } from "./cta";
 import { SiteNavMobile } from "./site-nav-mobile";
+import { StudioTile } from "@/components/brand/studio-mark";
 import { LOGIN_URL } from "@/lib/marketing/hosts";
 import {
   FEATURES,
@@ -126,12 +127,7 @@ export function SiteNav() {
     <header className="sticky top-0 z-40 backdrop-blur-md">
       <nav className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between px-6 sm:px-10">
         <Link href="/" className="flex items-center gap-2.5">
-          <span
-            className="grid h-8 w-8 place-items-center rounded-[9px] font-display text-[13px] font-extrabold"
-            style={{ backgroundColor: "var(--accent)", color: "var(--accent-fg)" }}
-          >
-            SF
-          </span>
+          <StudioTile />
           <span className="font-display text-[17px] font-bold tracking-tight text-text">
             Studio Flows
           </span>

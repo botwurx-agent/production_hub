@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StudioTile } from "@/components/brand/studio-mark";
 
 export default function LegalLayout({
   children,
@@ -9,9 +10,7 @@ export default function LegalLayout({
     <div className="min-h-screen bg-bg px-5 py-12">
       <div className="mx-auto w-full max-w-[720px]">
         <Link href="/" className="mb-8 flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-[11px] bg-accent text-accent-fg shadow-md">
-            <span className="text-sm font-extrabold tracking-tight">SF</span>
-          </span>
+          <StudioTile size={36} className="shadow-md" />
           <span className="font-display text-xl font-extrabold tracking-tight">
             Studio Flows
           </span>

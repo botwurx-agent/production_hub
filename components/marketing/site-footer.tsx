@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { APP_ORIGIN } from "@/lib/marketing/hosts";
+import { StudioTile } from "@/components/brand/studio-mark";
 import { FEATURES, featureHref } from "@/lib/marketing/features";
 
 const COLUMNS = [
@@ -37,15 +38,7 @@ export function SiteFooter() {
       <div className="mx-auto grid w-full max-w-[1400px] gap-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <span
-              className="grid h-8 w-8 place-items-center rounded-[9px] font-display text-[13px] font-extrabold"
-              style={{
-                backgroundColor: "var(--accent)",
-                color: "var(--accent-fg)",
-              }}
-            >
-              SF
-            </span>
+            <StudioTile />
             <span className="font-display text-[17px] font-bold tracking-tight text-text">
               Studio Flows
             </span>

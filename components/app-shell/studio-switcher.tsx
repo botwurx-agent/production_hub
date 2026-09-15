@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnchoredPopover } from "@/components/ui/anchored-popover";
 import { switchStudio } from "@/app/(app)/studio-actions";
+import { StudioTile } from "@/components/brand/studio-mark";
 
 export type StudioOption = { id: string; name: string; role: string };
 
@@ -37,9 +38,7 @@ export function StudioSwitcher({
       <img src={logoUrl} alt={name} className="h-full w-full object-contain p-0.5" />
     </span>
   ) : (
-    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-fg shadow-sm">
-      <span className="text-xs font-extrabold tracking-tight">SF</span>
-    </span>
+    <StudioTile className="shadow-sm" />
   );
 
   const label = (

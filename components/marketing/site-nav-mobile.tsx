@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { LOGIN_URL } from "@/lib/marketing/hosts";
+import { StudioTile } from "@/components/brand/studio-mark";
 import { FEATURES, PAGE_BANDS, featureHref } from "@/lib/marketing/features";
 
 /**
@@ -88,15 +89,7 @@ export function SiteNavMobile() {
               >
                 <div className="flex h-16 shrink-0 items-center justify-between px-6">
                   <Link href="/" className="flex items-center gap-2.5">
-                    <span
-                      className="grid h-8 w-8 place-items-center rounded-[9px] font-display text-[13px] font-extrabold"
-                      style={{
-                        backgroundColor: "var(--accent)",
-                        color: "var(--accent-fg)",
-                      }}
-                    >
-                      SF
-                    </span>
+                    <StudioTile />
                     <span className="font-display text-[17px] font-bold tracking-tight text-text">
                       Studio Flows
                     </span>

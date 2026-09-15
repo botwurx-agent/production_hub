@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { TileCss } from "@/lib/brand-mark-css";
 
 /**
  * The social card every marketing page hands to Slack, iMessage, LinkedIn and
@@ -167,23 +168,7 @@ export function ogCard({ eyebrow, title, body, hue: hueName = "indigo" }: OgCard
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div
-              style={{
-                width: 58,
-                height: 58,
-                borderRadius: 16,
-                backgroundColor: C.accent,
-                color: C.accentFg,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 25,
-                fontWeight: 800,
-                letterSpacing: -0.5,
-              }}
-            >
-              SF
-            </div>
+            <TileCss size={58} bg={C.accent} fg={C.accentFg} />
             <div style={{ display: "flex", fontSize: 30, fontWeight: 700, color: C.text, letterSpacing: -0.6 }}>
               Studio Flows
             </div>

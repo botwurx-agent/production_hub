@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { TOOL_LOGOS } from "@/components/marketing/tool-logos";
+import { MARK_BOX, MARK_PATH, MARK_RADIUS, MARK_SCALE, MARK_STROKE } from "@/lib/brand-mark";
 
 /**
  * The scattered-tools picture: a job spread across eight places, arrows drawing
@@ -155,20 +156,24 @@ export function ScatterConverge() {
           y={CY - 64}
           width="128"
           height="128"
-          rx="30"
+          rx={128 * MARK_RADIUS}
           fill="var(--accent)"
         />
-        <text
-          x={CX}
-          y={CY + 16}
-          textAnchor="middle"
-          className="font-display"
-          fontSize="46"
-          fontWeight="800"
-          fill="var(--accent-fg)"
+        {/* The mark, drawn at the same fraction of its tile as every other
+            surface. Scaled off the 100-unit grid rather than redrawn. */}
+        <g
+          transform={`translate(${CX - (128 * MARK_SCALE) / 2} ${
+            CY - (128 * MARK_SCALE) / 2
+          }) scale(${(128 * MARK_SCALE) / MARK_BOX})`}
         >
-          SF
-        </text>
+          <path
+            d={MARK_PATH}
+            stroke="var(--accent-fg)"
+            strokeWidth={MARK_STROKE}
+            strokeLinecap="round"
+            fill="none"
+          />
+        </g>
       </svg>
     </div>
   );

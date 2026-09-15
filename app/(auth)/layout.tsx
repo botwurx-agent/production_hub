@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StudioTile } from "@/components/brand/studio-mark";
 
 export default function AuthLayout({
   children,
@@ -9,9 +10,7 @@ export default function AuthLayout({
     <div className="flex min-h-screen flex-col items-center justify-center bg-bg px-5 py-12">
       <div className="w-full max-w-[400px]">
         <Link href="/" className="mb-8 flex items-center justify-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-[11px] bg-accent text-accent-fg shadow-md">
-            <span className="text-sm font-extrabold tracking-tight">SF</span>
-          </span>
+          <StudioTile size={36} className="shadow-md" />
           <span className="font-display text-xl font-extrabold tracking-tight">
             Studio Flows
           </span>

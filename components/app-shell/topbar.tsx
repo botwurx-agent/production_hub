@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { UserMenu } from "@/components/app-shell/user-menu";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
+import { StudioTile } from "@/components/brand/studio-mark";
 import { InviteButton } from "@/components/app-shell/invite-button";
 import type { StudioOption } from "@/components/app-shell/studio-switcher";
 
@@ -65,9 +66,7 @@ export function Topbar({
           href={collaborator ? "/projects" : "/dashboard"}
           className="flex items-center gap-2 lg:hidden short:!flex"
         >
-          <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-accent text-accent-fg">
-            <span className="text-xs font-extrabold tracking-tight">SF</span>
-          </span>
+          <StudioTile />
         </Link>
 
         {/* Always a flex-1 spacer, so hiding the nav on a narrow screen cannot

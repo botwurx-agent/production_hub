@@ -4,6 +4,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { StatusTag, type Hue } from "@/components/status-tag";
 import { useTheme } from "@/components/theme-provider";
 import type { Accent } from "@/lib/theme";
+import { StudioTile } from "@/components/brand/studio-mark";
 
 const hues: Hue[] = [
   "indigo",
@@ -40,9 +41,7 @@ export default function TokenTestPage() {
       <header className="mb-10 flex items-center justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-accent text-accent-fg shadow-md">
-              <span className="text-xs font-extrabold tracking-tight">SF</span>
-            </span>
+            <StudioTile className="shadow-md" />
             <span className="font-display text-lg font-extrabold tracking-tight">
               Studio Flows
             </span>

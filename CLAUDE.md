@@ -4223,6 +4223,51 @@ forever.
   once somebody accepts an invite to a second studio, and that is the normal
   shape for a freelancer.
 
+### The logo is a mark now, not the letters SF (no migration) — BUILT
+Operator: "I like the simplicity of the current logo but its too simple. I
+would love to add a subtle design character like a period that looks like wind
+to signify the flow aspect." The product had no logo at all, only the letters
+SF set in the display face inside a rounded indigo square, repeated by hand at
+twelve sites in four different corner radii.
+- THE FIRST TWO ATTEMPTS WERE THE INSTRUCTIVE PART, and both failed the same
+  way: they appended an ornament (a comet, a drift, a gust) to a wordmark. A
+  full stop trailing wind beside "Studio Flows" reads as a typographic accident
+  at any size small enough to be a favicon, and at 512px it read as a torpedo
+  aimed at the F. An ornament bolted to a font is not a mark. What worked was
+  CONSTRUCTING one: three strokes at ONE weight on a 100-unit grid, where the
+  implied S and the moving air are the same shape rather than two ideas stuck
+  together.
+- THE GEOMETRY IS ONE FILE, lib/brand-mark.ts. Top stroke right, middle
+  spanning, bottom left, so the eye completes the switchback. What keeps it off
+  a text-align icon is that no two strokes share an edge and the lengths are
+  unequal, so do NOT tidy those numbers into a common margin.
+- THREE RENDERERS, ONE SOURCE, because no single technique reaches every
+  surface. components/brand/studio-mark.tsx is an SVG path in currentColor for
+  the app and the marketing site (nine sites: both navs, the footer, the
+  topbar, the studio switcher, the auth and legal layouts, the token page, and
+  the converge picture, which draws the path inline since it is already inside
+  one SVG). lib/brand-mark-css.tsx lays the same bars out as rounded divs for
+  the THREE SATORI routes, since Satori cannot be relied on for inline SVG and
+  a failure there is a 500 that surfaces as a share with no picture. And
+  lib/email-template.ts builds them as STACKED BLOCKS, because Gmail strips
+  inline SVG outright and Outlook's Word engine ignores absolute positioning:
+  the one surface a new user meets first is the one that can use neither. A
+  hosted PNG was the other option and is worse, since images are blocked by
+  default in plenty of clients. The bars do not overlap vertically (the strokes
+  sit 9 grid units apart), so stacked blocks with top margins are an EXACT
+  layout rather than an approximation, and a client that drops border-radius
+  just gets square caps.
+- MARK_RADIUS exists because the chips were 9px, 10px, 7px and 11px round at
+  the same size. Invisible one at a time, sloppy when two are on screen.
+- public/brand/ holds the files code cannot reach (the Settings, Branding
+  upload, a client, a deck). The tile is SQUARE deliberately: that one upload
+  feeds both a 32px sidebar chip and the call sheet masthead, and a wide lockup
+  becomes an unreadable 6px strip in the first of those.
+- Verified by production build, not in dev: the favicon renders down to 16px
+  and still reads as three staggered bars, the OG card and the apple icon come
+  back 200 at full size, and the nav, login, legal and converge surfaces were
+  screenshotted.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
