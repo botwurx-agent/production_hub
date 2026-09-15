@@ -20,6 +20,15 @@ type ProviderMeta = {
   glyph: string;
   startPath: string;
   blurb: string;
+  /**
+   * Shown above the Connect button. Google's consent screen carries an
+   * "unverified app" warning until the OAuth app completes Google's review,
+   * and the button people need is behind an "Advanced" link most never think
+   * to open. Saying so first is the difference between somebody continuing
+   * and somebody closing the tab, and a warning you were told to expect
+   * reads very differently from one that ambushes you.
+   */
+  notice?: string;
 };
 
 const PROVIDERS: ProviderMeta[] = [
@@ -30,6 +39,8 @@ const PROVIDERS: ProviderMeta[] = [
     startPath: "/auth/google/start",
     blurb:
       "Bring Gmail email (with attachment import), Google Chat spaces, Google Drive files, and your Google Calendar into the app, tied to the right job. Reconnect to grant new access.",
+    notice:
+      "Google will say it has not verified this app. That means our review with Google is not finished, not that anything is wrong: choose Advanced, then Go to studio-flows.com, and carry on to the normal permissions screen.",
   },
   {
     key: "slack",
@@ -166,6 +177,12 @@ export function Connections({
             {mine.map((a) => (
               <AccountRow key={a.id} account={a} />
             ))}
+
+            {isConfigured && p.notice ? (
+              <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-xs leading-relaxed text-text-muted">
+                {p.notice}
+              </p>
+            ) : null}
 
             {isConfigured ? (
               <a

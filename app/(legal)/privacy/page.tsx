@@ -6,7 +6,7 @@ export default function PrivacyPage() {
   return (
     <>
       <h1>Privacy Policy</h1>
-      <p>Last updated: 30 July 2026</p>
+      <p>Last updated: 15 September 2026</p>
       <p>
         This policy explains what information Studio Flows (&ldquo;the
         Service&rdquo;) collects, how it is used, and the choices you have.
@@ -66,6 +66,101 @@ export default function PrivacyPage() {
         train their models. If you would rather no content left the Service,
         simply do not use those features; nothing runs on its own in the
         background.
+      </p>
+
+      <h2>Google user data</h2>
+      <p>
+        Studio Flows&rsquo; use and transfer of information received from Google
+        APIs to any other app will adhere to the{" "}
+        <a
+          href="https://developers.google.com/terms/api-services-user-data-policy"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Google API Services User Data Policy
+        </a>
+        , including the Limited Use requirements.
+      </p>
+      <p>
+        If you connect Google, we ask for the following access and use it only
+        to run the features named beside it:
+      </p>
+      <ul>
+        <li>
+          <strong>Gmail, read.</strong> To show a conversation you have linked
+          to a project inside that project, so a job&rsquo;s correspondence sits
+          with its brief, assets and approvals. We read a thread only because
+          you linked it.
+        </li>
+        <li>
+          <strong>Gmail, send.</strong> To send the reply you have written and
+          pressed Send on. Nothing is ever sent on your behalf automatically.
+        </li>
+        <li>
+          <strong>Drive, read.</strong> To let you browse your Drive and import
+          a file into a project, and to attach a file you pick to an email you
+          are writing. We read a file only when you choose it.
+        </li>
+        <li>
+          <strong>Calendar, events.</strong> To show your events on the
+          dashboard, and to create or delete the ones you make in the app.
+        </li>
+        <li>
+          <strong>Chat.</strong> To show messages in a space you have linked to
+          a project, and to post the message you write.
+        </li>
+      </ul>
+      <p>
+        We do not use Google user data for advertising, and we do not sell it.
+        We do not use it to develop, improve or train any generalized AI or
+        machine learning model, ours or anyone else&rsquo;s. No person at Studio
+        Flows reads your Google data except where you have explicitly asked us
+        to (for example to investigate a problem you reported), where it is
+        necessary for security, or where the law requires it.
+      </p>
+
+      <h3>Google data and the AI features</h3>
+      <p>
+        Two of the optional AI features can send Google data to our AI provider,
+        and only at the moment you press the button that runs them:
+      </p>
+      <ul>
+        <li>
+          The <strong>project summary</strong> fetches the Gmail threads you
+          have linked to that project when you generate it, and includes a short
+          gist of them, so the summary can say where the conversation stands.
+        </li>
+        <li>
+          <strong>Reading an emailed invoice or document</strong> sends that
+          attachment, so its amounts and dates can be filled into a form for you
+          to check before you save anything.
+        </li>
+      </ul>
+      <p>
+        This is inference only. The content is sent so the provider can produce
+        an answer, and under that provider&rsquo;s API terms it is not used to
+        train their models. If you would rather no Google content left the
+        Service, do not use those two features; neither runs on its own.
+      </p>
+
+      <h3>Keeping and removing Google data</h3>
+      <p>
+        We store the access tokens for your connection, and for a linked
+        conversation the identifier and subject needed to find it again. Message
+        bodies and Drive files are read live and are not copied into our
+        database, except where you deliberately import one (an attachment filed
+        as a project document, or a Drive file imported as an asset), which then
+        lives in your project until you delete it. Disconnecting Google in
+        Settings, Connections deletes the stored tokens. You can also revoke our
+        access directly from your{" "}
+        <a
+          href="https://myaccount.google.com/permissions"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Google account permissions
+        </a>
+        .
       </p>
 
       <h2>Who processes your data</h2>

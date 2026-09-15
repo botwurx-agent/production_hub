@@ -4268,6 +4268,72 @@ twelve sites in four different corner radii.
   back 200 at full size, and the nav, login, legal and converge surfaces were
   screenshotted.
 
+### Google OAuth verification: where it stands (2026-09-15)
+The app is PUBLISHED TO PRODUCTION (Google Auth Platform, Audience) and is NOT
+submitted for verification, deliberately. Consequences, all live now: anyone can
+connect without being added as a test user, they meet a "Google hasn't verified
+this app" screen and continue through Advanced, and refresh tokens no longer
+expire every 7 days (the Testing-mode behaviour that was silently killing every
+Google connection weekly, so every account connected before this needs ONE
+reconnect).
+- THE COUNTER IS THE THING TO WATCH: 100 users, over the lifetime of the
+  PROJECT, never resettable, not even by verifying later.
+- WHY NOT VERIFIED YET. Two of the six scopes are RESTRICTED (`gmail.readonly`,
+  `drive.readonly`), which carries a paid third-party security assessment,
+  renewed annually, taking months. The other four (gmail.send, calendar.events,
+  chat.spaces.readonly, chat.messages) are merely sensitive and would have been
+  a few free weeks. Dropping Drive to the Picker would remove one restricted
+  scope and buy nothing, since gmail.readonly is what the whole Communication
+  module reads and cannot go.
+- SUBMIT WHEN one of three is true, not on a date: a non-friend is about to pay
+  and the connectors are part of why; the counter passes about 30 (the process
+  runs in months and the cap cannot be raised mid-flight); or the scopes are
+  frozen, since adding one after approval means re-review and these have been
+  added incrementally before.
+- FALLBACK if it ever becomes urgent and the assessment is unaffordable:
+  Calendar and Chat are sensitive-only, so they could be verified cheaply on a
+  SEPARATE OAuth client while Gmail stays unverified. Costs users a second
+  connect button, so it is a fallback rather than a plan.
+- STILL OWED BY THE OPERATOR, both free and both worth doing before a trigger
+  fires so submission is a day rather than a month: verify studio-flows.com in
+  SEARCH CONSOLE under human@botwurx.com (the Cloud project owner), and record
+  the unlisted YouTube demo video showing the consent screen with the client ID
+  legible plus each scope in use. Reading the Verification Center commits
+  nothing; only the final Submit does.
+
+### The privacy policy had to name what leaves for Google (no migration) — BUILT
+Prerequisite for any future verification, and a real gap regardless.
+- THE FINDING THAT SHAPED IT, and it is not what anyone would assume from the
+  feature list: lib/project-context.ts fetches the project's LINKED GMAIL
+  THREADS LIVE FROM GMAIL at summary-generation time and sends a gist of the
+  real message content to the AI provider. "Log as a cost" on an email
+  attachment does the same with the file's bytes. So Gmail content genuinely
+  reaches a third party, and the policy did not say so. Under Limited Use that
+  is exactly the disclosure a restricted-scope reviewer looks for, and it is
+  the kind of omission that fails a review rather than delaying one.
+- The new "Google user data" section carries the verbatim Limited Use
+  affirmation with its link, then each scope with the feature it powers (so a
+  reviewer can match a justification to a screen), the no-ads / no-sale /
+  NO-TRAINING commitments, the human-access exceptions, that AI disclosure
+  stated plainly as INFERENCE ONLY, and how to revoke from Google's own side.
+- REMOVED: the counsel note in app/(legal)/layout.tsx reading "These pages are
+  a starting template". Its audience was the operator, it offered no legal
+  protection, and it shipped to production telling every reader (a Google
+  reviewer included) that the privacy policy is a draft. The reminder belongs
+  in the launch checklist, not under the policy.
+- The legal layout's prose styles had no `h3` rule, so the two new subheadings
+  would have rendered at browser default inside a text-sm article. Added, and
+  verified in Chromium (15px, weight 700) rather than assumed.
+- components/settings/connections.tsx gained an optional `notice` per provider,
+  shown above the Connect button: Google's warning is named BEFORE somebody
+  meets it, with the Advanced path spelled out, because the word "unsafe" is
+  what makes people close the tab. Neutral surface, not the amber used for
+  "not configured", since this is an expectation rather than a fault.
+- NOT DONE, and worth knowing: there is still no studio-level AI off switch,
+  which is the honest escape hatch for a client whose contract forbids sending
+  their material to a third-party model. The policy now says which two features
+  do it and that not using them is the opt-out, which is true but manual.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
