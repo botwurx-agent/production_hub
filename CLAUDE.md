@@ -1406,6 +1406,17 @@ optimizing the flow + IA of this whole section.
 - `NEXT_PUBLIC_SITE_URL` (optional; canonical origin)
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (Gmail/Chat/Drive/Calendar). Enable
   those APIs + add scopes in Google Cloud; users reconnect to grant new scopes.
+  THE CLOUD CONSOLE ACCOUNT IS `human@botwurx.com` (found 2026-09-15, after two
+  rounds of hunting because it was written down nowhere). Not studioflows1@
+  gmail.com, which is only the product's contact address in the launch docs, and
+  not botwurx@gmail.com. Confirm in one step if it is ever in doubt: the digits
+  before the first dash of GOOGLE_CLIENT_ID are the Cloud project NUMBER, and
+  `console.cloud.google.com/apis/credentials?project=<those digits>` opens only
+  for the owning account. Going the other way (loading a project URL while
+  signed in as a candidate) is what wastes time: the console remembers the last
+  project per browser, so a wrong account lands on "You need additional access"
+  for a project that may not even be ours. Use the PROJECT PICKER
+  (`/projectselector2/home/dashboard`), which carries no project id.
 - `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`
 - `FIGMA_CLIENT_ID`, `FIGMA_CLIENT_SECRET` (Figma app scope: `file_content:read`;
   redirect `<domain>/auth/figma/callback`)
