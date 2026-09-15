@@ -31,6 +31,17 @@ export type DroppableKind = "note" | "todo" | "column" | "heading" | "color" | "
 
 export const DEFAULT_COLOR_CARD = "#6366F1";
 
+/**
+ * A card holding a file (an image, a video, an imported frame).
+ *
+ * Here for the same reason as the rest of this file: an uploaded image is now
+ * drawn from the browser's own copy of the bytes before the row exists, so both
+ * sides have to agree on how big the card is or it would resize itself a moment
+ * after appearing.
+ */
+export const DEFAULT_MEDIA_W = 260;
+export const DEFAULT_MEDIA_H = 200;
+
 export function newItemFields(kind: DroppableKind, shape?: string): NewItemFields {
   switch (kind) {
     case "note":

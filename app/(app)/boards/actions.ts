@@ -13,7 +13,11 @@ import {
 } from "@/lib/figma";
 import { unfurl, isFetchableUrl, safeFetch, BROWSER_UA } from "@/lib/unfurl";
 import { shapeDef, serializeShapeData } from "@/lib/board-shape";
-import { newItemFields } from "@/lib/board-defaults";
+import {
+  DEFAULT_MEDIA_H,
+  DEFAULT_MEDIA_W,
+  newItemFields,
+} from "@/lib/board-defaults";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Board } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
@@ -23,8 +27,6 @@ export type BoardState = { error?: string } | null;
 /** A board card can be scaled up on the canvas, so it gets more pixels. */
 const BOARD_IMAGE_WIDTH = 1200;
 const SIGNED_TTL = 60 * 60;
-const DEFAULT_W = 260;
-const DEFAULT_H = 200;
 
 export type BoardItemView = {
   id: string;
@@ -155,11 +157,47 @@ export async function deleteBoard(id: string): Promise<BoardState> {
 
 // ---- Items ------------------------------------------------------------------
 
-export async function getBoardItems(
-  boardId: string
-): Promise<{ items: BoardItemView[] } | { error: string }> {
+/**
+ * ONE ROUND TRIP FOR A BOARD, not two, and that is not a micro-optimisation.
+ *
+ * Next QUEUES server actions: dispatchAction puts a second action on the end of
+ * the queue whenever one is already pending (see next/dist/shared/lib/router/
+ * action-queue), so a Promise.all of two actions from the browser runs them
+ * strictly one after the other. The workspace loaded items and connections that
+ * way, which meant every tab switch paid two full round trips, each with its own
+ * auth check, back to back. Merging them halves the wait and the two queries
+ * then genuinely run in parallel, server-side.
+ */
+export async function getBoardData(
+  boardId: string,
+  // Storage paths the browser already holds an unexpired URL for. Signing is an
+  // HTTP call to Storage PER IMAGE, so a board of thirty photographs re-signed
+  // thirty URLs on every revisit that nothing was going to look at: the client
+  // keeps a URL for 45 minutes against a 1h signature and reuses it, precisely
+  // so images do not refetch and flash. Telling us which ones it has skips that
+  // work entirely on a revisit.
+  //
+  // It is only ever the browser declining something for itself. A path it does
+  // not name is signed as usual, and a path it names wrongly costs it a picture,
+  // never access: these are URLs it was already given.
+  knownPaths: string[] = []
+): Promise<{ items: BoardItemView[]; connections: BoardConnection[] } | { error: string }> {
   await requireStudioContext();
   const supabase = createClient();
+  const [items, connections] = await Promise.all([
+    loadItems(supabase, boardId, new Set(knownPaths)),
+    loadConnections(supabase, boardId),
+  ]);
+  if ("error" in items) return items;
+  if ("error" in connections) return connections;
+  return { items: items.items, connections: connections.connections };
+}
+
+async function loadItems(
+  supabase: SupabaseClient<Database>,
+  boardId: string,
+  known: Set<string> = new Set()
+): Promise<{ items: BoardItemView[] } | { error: string }> {
   const { data, error } = await supabase
     .from("board_items")
     .select("*")
@@ -169,7 +207,7 @@ export async function getBoardItems(
 
   const paths = (data ?? [])
     .map((i) => i.storage_path)
-    .filter((p): p is string => Boolean(p));
+    .filter((p): p is string => Boolean(p) && !known.has(p as string));
   // Resized, not the original. A board card is drawn on the canvas and never
   // opened at full size, so the full file is only ever a download the canvas
   // does not need: a 34MB generator export behind a 300px card is pure wait.
@@ -178,7 +216,10 @@ export async function getBoardItems(
   // dragged large and zoomed into, so it has to survive being scaled up.
   const signed = await signThumbs(
     (data ?? [])
-      .filter((i) => i.storage_path && isResizable(i.mime_type))
+      .filter(
+        (i) =>
+          i.storage_path && isResizable(i.mime_type) && !known.has(i.storage_path)
+      )
       .map((i) => i.storage_path as string),
     BOARD_IMAGE_WIDTH
   );
@@ -432,49 +473,90 @@ function safeName(name: string): string {
  */
 export async function registerUploadedBoardItems(
   boardId: string,
-  files: { path: string; name: string; mime: string | null }[],
+  // x and y are where the browser has ALREADY drawn the card. They are optional
+  // so a caller with nothing on screen can still fall back to a base point and
+  // a stagger, but a caller that drew the card must send them: computing the
+  // stagger again here would put the row somewhere else the moment one file in
+  // the batch is refused, and the card would jump on the next load.
+  files: { path: string; name: string; mime: string | null; x?: number; y?: number }[],
   baseX: number,
   baseY: number
-): Promise<BoardState> {
+): Promise<{ items: BoardItemView[]; error?: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  let z = await nextZ(supabase, boardId);
-  let offset = 0;
-  let refused = 0;
-  for (const f of files) {
-    const landed = await finalizeUpload({ kind: "board", boardId }, f.path);
-    if ("error" in landed) {
-      refused++;
-      continue;
-    }
-    const { error } = await supabase.from("board_items").insert({
+  const z0 = await nextZ(supabase, boardId);
+
+  // Verified in PARALLEL and inserted in ONE statement. Each finalizeUpload is
+  // a storage round trip and each insert was another, so filing four images
+  // used to be eight sequential trips before the card could appear. Order is
+  // preserved by index, so the cards still land in the order they were picked.
+  const landed = await Promise.all(
+    files.map((f) => finalizeUpload({ kind: "board", boardId }, f.path))
+  );
+  const rows = files
+    .map((f, i) => ({ f, l: landed[i] }))
+    .filter((r) => !("error" in r.l))
+    .map(({ f, l }, i) => ({
       studio_id: ctx.studio.id,
       board_id: boardId,
       kind: "image",
       name: f.name,
-      mime_type: landed.mimeType ?? f.mime ?? null,
+      mime_type: ("mimeType" in l ? l.mimeType : null) ?? f.mime ?? null,
       storage_path: f.path,
-      x: baseX + offset,
-      y: baseY + offset,
-      w: DEFAULT_W,
-      h: DEFAULT_H,
-      z: z++,
+      x: f.x ?? baseX + i * 28,
+      y: f.y ?? baseY + i * 28,
+      w: DEFAULT_MEDIA_W,
+      h: DEFAULT_MEDIA_H,
+      z: z0 + i,
       created_by: ctx.userId,
-    });
-    if (error) return { error: error.message };
-    offset += 28;
-  }
+    }));
+  const refused = files.length - rows.length;
+
   // Said out loud. A silently dropped image reads as the upload having worked,
   // and the card simply never appearing is worse than being told.
-  if (refused > 0) {
+  if (rows.length === 0) {
     return {
-      error:
-        refused === files.length
-          ? "Those images could not be verified, so nothing was added."
-          : `${refused} of ${files.length} images could not be verified and were skipped.`,
+      error: refused
+        ? "Those images could not be verified, so nothing was added."
+        : "Nothing to add.",
     };
   }
-  return null;
+
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert(rows)
+    .select("*");
+  if (error) return { error: error.message };
+
+  // NO SIGNED URL IS RETURNED and none is needed: the browser still holds the
+  // bytes it just uploaded and is already drawing them, so signing here would
+  // only ask Storage to compute a 1200px transform nobody is waiting to look
+  // at. The card carries its storage path, so any later load signs it as usual.
+  const items: BoardItemView[] = (data ?? []).map((i) => ({
+    id: i.id,
+    kind: i.kind,
+    name: i.name,
+    mimeType: i.mime_type,
+    text: i.text,
+    hue: i.hue,
+    x: i.x,
+    y: i.y,
+    w: i.w,
+    h: i.h,
+    z: i.z,
+    signedUrl: null,
+    url: i.url,
+    thumbUrl: null,
+    storagePath: i.storage_path,
+    parentId: i.parent_id,
+    sort: i.sort ?? 0,
+  }));
+  return refused > 0
+    ? {
+        items,
+        error: `${refused} of ${files.length} images could not be verified and were skipped.`,
+      }
+    : { items };
 }
 
 // Add existing project assets (their current stored file) onto a board.
@@ -511,8 +593,8 @@ export async function addAssetItems(
       storage_path: cur.storage_path,
       x: baseX + offset,
       y: baseY + offset,
-      w: DEFAULT_W,
-      h: DEFAULT_H,
+      w: DEFAULT_MEDIA_W,
+      h: DEFAULT_MEDIA_H,
       z: z++,
       created_by: ctx.userId,
     });
@@ -560,8 +642,8 @@ export async function addDriveItems(
         storage_path: path,
         x: baseX + offset,
         y: baseY + offset,
-        w: DEFAULT_W,
-        h: DEFAULT_H,
+        w: DEFAULT_MEDIA_W,
+        h: DEFAULT_MEDIA_H,
         z: z++,
         created_by: ctx.userId,
       });
@@ -616,8 +698,8 @@ export async function addFigmaItems(
         storage_path: path,
         x: baseX + offset,
         y: baseY + offset,
-        w: DEFAULT_W,
-        h: DEFAULT_H,
+        w: DEFAULT_MEDIA_W,
+        h: DEFAULT_MEDIA_H,
         z: z++,
         created_by: ctx.userId,
       });
@@ -1029,11 +1111,10 @@ export type BoardConnection = {
   toItemId: string;
 };
 
-export async function getBoardConnections(
+async function loadConnections(
+  supabase: SupabaseClient<Database>,
   boardId: string
 ): Promise<{ connections: BoardConnection[] } | { error: string }> {
-  await requireStudioContext();
-  const supabase = createClient();
   const { data, error } = await supabase
     .from("board_connections")
     .select("id, from_item_id, to_item_id")

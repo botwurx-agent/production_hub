@@ -4334,6 +4334,98 @@ Prerequisite for any future verification, and a real gap regardless.
   their material to a third-party model. The policy now says which two features
   do it and that not using them is the opt-out, which is true but manual.
 
+### The moodboard is fast now (no migration) — BUILT
+Operator: uploading an image "takes a very long time for the image to come up,
+it's definitely not that way in Milanote, it's almost instant", and switching
+tab to tab "also takes a very long time to kind of like reload". Both were
+real, and neither was the database being slow.
+
+THE FINDING THAT EXPLAINS MOST OF IT: NEXT QUEUES SERVER ACTIONS. dispatchAction
+(next/dist/shared/lib/router/action-queue) appends to a linked list whenever one
+is already pending, so a `Promise.all` of two server actions from the browser
+runs them STRICTLY ONE AFTER THE OTHER. Read out of the bundled source, not
+remembered. Every parallel-looking Promise.all of actions in this app is
+actually serial, which is worth knowing well beyond the boards.
+- A tab switch was `Promise.all([getBoardItems, getBoardConnections])`, so two
+  full round trips back to back, each with its own auth check. They are one
+  action now (`getBoardData`), whose two queries genuinely do run in parallel
+  server-side.
+- An upload was FOUR queued actions before anything appeared: mint a ticket,
+  register the items, then getBoardItems and getBoardConnections for the reload.
+  Plus, at the end of all that, a 1200px Storage transform that is COMPUTED ON
+  FIRST REQUEST, so the freshly uploaded picture is the one image on the board
+  guaranteed to have no cached resize waiting for it.
+
+THE PICTURE GOES ON THE BOARD IMMEDIATELY, from an object URL over the bytes
+the browser already holds. It is exact, full resolution, and needs no network at
+all, so the card appears on the next frame and the round trip only gives it its
+real id. It KEEPS the local URL afterwards (seeded into the workspace's
+signed-URL cache) rather than swapping to a signed one, since asking for the
+signed one would trade an image already on screen for a blank box and a wait.
+This extends placeItem's optimistic pattern, whose comment used to say images
+were excluded because "there is nothing honest to draw until it answers". There
+is now.
+- Matched back on the STORAGE PATH, never on the order the rows came back in: a
+  bulk insert returns insert order in practice and is not promised to, and
+  getting it wrong would file one photograph's card against another's image,
+  which no later load would correct.
+- SWITCHING TABS MID-UPLOAD is guarded explicitly. The rows land on the board
+  they were sent to, but `items` then belongs to another board, so every
+  placeholder reads as missing and the undo-race branch would DELETE freshly
+  uploaded pictures. It returns early and prunes the placeholders out of that
+  board's cached snapshot.
+- Uploading no longer holds `startBusy`, which disables the whole tool rail.
+  Nothing is left for the rail to be protected from once the card is placed, and
+  a locked rail while an 8MB photograph finishes reads as the board seizing up.
+  A "saving N images" count in the toolbar says the bytes are still moving.
+- Server side, `registerUploadedBoardItems` verifies in PARALLEL and inserts in
+  ONE statement (it was a finalizeUpload and an insert per file, sequentially),
+  and returns the rows so nothing has to reload to see them. It also takes each
+  card's x and y from the browser, because recomputing the stagger server-side
+  puts the row somewhere else the moment one file in a batch is refused.
+
+A TAB YOU HAVE ALREADY OPENED PAINTS FROM MEMORY. boardCache holds every board
+this session has loaded, so a second visit is instant and the fetch that follows
+only corrects it; a first visit is unchanged. It is captured on the way OUT, in
+a cleanup keyed on the active id, NOT by an effect watching `items`: on the
+commit where activeId changes, `items` still belongs to the board being left, so
+an effect keyed on the new id would file the old board's cards under it. React
+18 runs all passive cleanups for a commit before any create functions, so the
+cleanup sees the old board. VERIFIED in Chromium against a throwaway fixture
+(deleted): capture always precedes the switch, local un-reloaded edits survive
+the round trip, and returning restores them.
+
+THE BROWSER TELLS THE SERVER WHAT NOT TO SIGN. Signing is an HTTP call to
+Storage PER IMAGE (the batch endpoint takes no transform, so there is no plural
+form), and the client already reuses a URL for 45 minutes against a 1h
+signature, so a board of thirty photographs re-signed thirty URLs on every
+revisit that nothing was going to look at. `getBoardData` takes the paths the
+client holds and skips them, derived from the same freshness rule the client
+applies, capped at 300 so the list cannot become the slow part. It is only ever
+the browser declining something for itself: a path named wrongly costs it a
+picture, never access.
+
+BOARD IMAGES ARE LAZY. Only a screenful of a canvas is ever visible and a board
+can hold dozens of photographs. MEASURED in Chromium against the real
+BoardCanvas: 24 of 30 loaded on open (Chrome's threshold reaches a few rows
+past the fold) and the rest on scroll, so the deferral does survive the canvas
+transform and its scroll container. Safe because BoardCanvas is ONLY the editor
+and the public shared board: nothing prints it, since the binder and the client
+doc review draw a moodboard through DocSurfaceView, so no export can come out
+with its lower half blank.
+
+DELIBERATELY NOT DONE: prefetching the other tabs' boards in the background.
+It would make the FIRST switch instant too, but a speculative load sits in the
+same queue as the user's next write, so dragging a card could wait seconds
+behind loads nobody asked for. A silently delayed save is a worse complaint than
+a slow tab, and harder to diagnose.
+
+CANNOT BE EXERCISED FROM A CLAUDE CODE SESSION: the agent proxy blocks the
+Supabase host, so the upload and the load both have to be tried on the
+operator's machine. What was measured here is the lazy loading and the effect
+ordering the cache rests on; the rest is reasoned from the code and the queue
+implementation.
+
 ### Paste a card onto a DIFFERENT board (no migration) — BUILT
 Operator: "Im trying to copy and paste from 1 mood board and past it to another
 mood board. Why is it not allowing me to do that?" It was not refusing. It was

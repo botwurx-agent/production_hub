@@ -27,8 +27,7 @@ import {
   deleteBoard,
   setBoardProject,
   setBoardBackground,
-  getBoardItems,
-  getBoardConnections,
+  getBoardData,
   registerUploadedBoardItems,
   addNote,
   addTodoItem,
@@ -81,6 +80,8 @@ import {
   serializeShapeData,
 } from "@/lib/board-shape";
 import {
+  DEFAULT_MEDIA_H,
+  DEFAULT_MEDIA_W,
   isDroppableKind,
   newItemFields,
   type DroppableKind,
@@ -129,7 +130,23 @@ export function BoardsWorkspace({
   const [connections, setConnections] = useState<BoardConnection[]>([]);
   const [loading, startLoad] = useTransition();
   const [busy, startBusy] = useTransition();
+  // Images whose bytes are still on their way up, while their cards are already
+  // drawn on the board.
+  const [uploading, setUploading] = useState(0);
   const history = useBoardHistory();
+
+  // Local URLs for pictures being uploaded, released when the workspace goes.
+  // An object URL holds its file in memory until it is revoked, and these are
+  // full-size photographs, so a session of heavy importing would otherwise keep
+  // every one of them alive for as long as the tab is open.
+  const objectUrls = useRef(new Set<string>());
+  useEffect(
+    () => () => {
+      for (const u of objectUrls.current) URL.revokeObjectURL(u);
+      objectUrls.current.clear();
+    },
+    []
+  );
 
   const [assetOpen, setAssetOpen] = useState(false);
   const [driveOpen, setDriveOpen] = useState(false);
@@ -288,15 +305,71 @@ export function BoardsWorkspace({
     });
   }, [URL_REUSE_MS]);
 
+  // WHAT A BOARD LOOKED LIKE LAST TIME, so returning to a tab paints from
+  // memory instead of from the network.
+  //
+  // Switching tabs used to mean a full server round trip before anything moved,
+  // which on a real connection is most of a second of staring at the board you
+  // just left. The cache holds every board this session has loaded, so a second
+  // visit is instant and the fetch that follows only corrects it. A first visit
+  // is unchanged.
+  //
+  // It is captured on the way OUT (the cleanup below) rather than written by an
+  // effect watching `items`, for one reason: on the commit where activeId
+  // changes, `items` still belongs to the board being left, so an effect keyed
+  // on the new id would file the old board's cards under it. A cleanup runs
+  // before the next effect with the refs still holding the old board, which is
+  // exactly what should be saved, local un-reloaded edits included.
+  const boardCache = useRef(
+    new Map<string, { items: BoardItemView[]; connections: BoardConnection[] }>()
+  );
+  const connectionsRef = useRef<BoardConnection[]>(connections);
+  useEffect(() => {
+    connectionsRef.current = connections;
+  }, [connections]);
+  useEffect(() => {
+    if (!activeId) return;
+    const id = activeId;
+    return () => {
+      boardCache.current.set(id, {
+        items: itemsRef.current,
+        connections: connectionsRef.current,
+      });
+    };
+  }, [activeId]);
+
+  // The board on screen, readable from a callback that started before the user
+  // switched tabs.
+  const activeIdRef = useRef(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  // The board a fetch was started for. A slow load for a board already switched
+  // away from must not land on the one now on screen.
+  const loadingFor = useRef<string | null>(null);
+
   const reload = useCallback(
     (id: string) => {
+      loadingFor.current = id;
+      // The paths this browser already holds a reusable URL for, by exactly the
+      // rule withStableUrls applies below: send only what will actually be
+      // reused, or the server skips signing something the client then discards.
+      // Capped so the list cannot itself become the slow part: this travels up
+      // with every load, and a long session of importing would otherwise send
+      // a few hundred paths to save signing a handful.
+      const now = Date.now();
+      const known: string[] = [];
+      for (const [path, c] of urlCache.current) {
+        if (known.length >= 300) break;
+        if (now - c.at < URL_REUSE_MS && (c.thumbUrl || c.signedUrl)) known.push(path);
+      }
       startLoad(async () => {
-        const [res, conns] = await Promise.all([
-          getBoardItems(id),
-          getBoardConnections(id),
-        ]);
-        if (!("error" in res)) setItems(withStableUrls(res.items));
-        if (!("error" in conns)) setConnections(conns.connections);
+        const res = await getBoardData(id, known);
+        if (loadingFor.current !== id) return;
+        if ("error" in res) return;
+        setItems(withStableUrls(res.items));
+        setConnections(res.connections);
       });
     },
     [withStableUrls]
@@ -341,8 +414,12 @@ export function BoardsWorkspace({
     setSelectedId(null);
     // Undo history is per-board; clear it so undo never crosses boards.
     history.reset();
-    if (activeId) reload(activeId);
-    else {
+    if (activeId) {
+      const cached = boardCache.current.get(activeId);
+      setItems(cached?.items ?? []);
+      setConnections(cached?.connections ?? []);
+      reload(activeId);
+    } else {
       setItems([]);
       setConnections([]);
     }
@@ -514,7 +591,70 @@ export function BoardsWorkspace({
     if (ok.length === 0) return;
     const boardId = activeId;
     pushHistory();
-    startBusy(async () => {
+
+    // THE PICTURE IS ALREADY IN THE BROWSER, so it goes on the board now.
+    //
+    // Nothing used to be drawn until the upload, the verification, the insert
+    // and a full board reload had all answered, which is four sequential trips
+    // before a file the user is already looking at in their Finder appears on
+    // the canvas. That is the wait the operator measured against Milanote, and
+    // none of it is work the picture needs: an object URL renders the exact
+    // bytes being uploaded, at full resolution, with no network at all.
+    //
+    // The card therefore appears on the next frame and the round trip only
+    // gives it its real id. It keeps the local URL afterwards (seeded into the
+    // signed-URL cache below) rather than swapping to a signed one, because
+    // Storage computes a resize ON FIRST REQUEST: asking for it here would
+    // trade an image that is already on screen for a blank box and a wait.
+    const staged = ok.map((file, i) => {
+      const objectUrl = URL.createObjectURL(file);
+      objectUrls.current.add(objectUrl);
+      return {
+        file,
+        objectUrl,
+        x: at.x + i * 28,
+        y: at.y + i * 28,
+        tempId: `pending-${Math.random().toString(36).slice(2)}`,
+      };
+    });
+    const topZ = items.reduce((m, i) => Math.max(m, i.z), 0);
+    setItems((prev) => [
+      ...prev,
+      ...staged.map((st, i) => ({
+        id: st.tempId,
+        kind: "image",
+        name: st.file.name || "image",
+        mimeType: st.file.type || null,
+        text: null,
+        hue: null,
+        x: st.x,
+        y: st.y,
+        w: DEFAULT_MEDIA_W,
+        h: DEFAULT_MEDIA_H,
+        z: topZ + 1 + i,
+        signedUrl: st.objectUrl,
+        url: null,
+        thumbUrl: st.objectUrl,
+        storagePath: null,
+        parentId: null,
+        sort: 0,
+      })),
+    ]);
+    staged.forEach((st) => markArrived(st.tempId));
+
+    const drop = (ids: string[]) => {
+      const gone = new Set(ids);
+      setItems((prev) => prev.filter((i) => !gone.has(i.id)));
+      setArrived((prev) => prev.filter((a) => !gone.has(a.id)));
+    };
+
+    // NOT through startBusy, which disables the whole tool rail: the card is
+    // already on the board, so there is nothing left for the rail to be
+    // protected from, and a locked rail while an 8MB photograph finishes
+    // uploading reads as the board having seized up. A count in the toolbar
+    // says the bytes are still moving.
+    setUploading((n) => n + staged.length);
+    void (async () => {
       // Through the shared ticket rather than uploading on the caller's own
       // session with a path the browser built. Two things that fixes:
       //
@@ -526,25 +666,116 @@ export function BoardsWorkspace({
       //
       // AND THE SERVER PICKS THE PATH, so a board card cannot be pointed at a
       // path the browser chose.
-      const uploaded: { path: string; name: string; mime: string | null }[] = [];
-      for (const f of ok) {
-        try {
-          const d = await uploadDirect({ kind: "board", boardId }, f);
-          uploaded.push({ path: d.path, name: f.name || "image", mime: d.mimeType || null });
-        } catch (e) {
-          showNotice(
-            `Couldn't upload "${f.name || "image"}": ${
-              e instanceof Error ? e.message : "upload failed"
-            }`
-          );
+      //
+      // Started together rather than one after another: minting a ticket is a
+      // server action and those are queued, but each file's bytes start moving
+      // the moment its own ticket lands, so the transfers overlap.
+      const results = await Promise.all(
+        staged.map(async (st) => {
+          try {
+            const d = await uploadDirect({ kind: "board", boardId }, st.file);
+            return { st, path: d.path, mime: d.mimeType || null };
+          } catch (e) {
+            showNotice(
+              `Couldn't upload "${st.file.name || "image"}": ${
+                e instanceof Error ? e.message : "upload failed"
+              }`
+            );
+            return { st, path: null, mime: null };
+          }
+        })
+      );
+      setUploading((n) => Math.max(0, n - staged.length));
+      drop(results.filter((r) => !r.path).map((r) => r.st.tempId));
+      const uploaded = results.filter(
+        (r): r is { st: (typeof staged)[number]; path: string; mime: string | null } =>
+          Boolean(r.path)
+      );
+      if (uploaded.length === 0) return;
+
+      const res = await registerUploadedBoardItems(
+        boardId,
+        uploaded.map((u) => ({
+          path: u.path,
+          name: u.st.file.name || "image",
+          mime: u.mime,
+          x: u.st.x,
+          y: u.st.y,
+        })),
+        at.x,
+        at.y
+      );
+      if (res.error) showNotice(res.error);
+      if (!("items" in res)) {
+        drop(uploaded.map((u) => u.st.tempId));
+        return;
+      }
+      // Swap each placeholder for its real row, keeping the local picture.
+      //
+      // MATCHED ON THE STORAGE PATH, not on the order the rows came back in: a
+      // bulk insert returns its rows in insert order in practice and is not
+      // promised to, and getting this wrong would put one photograph's card
+      // under another's file, which no later load would ever correct.
+      const byPath = new Map(uploaded.map((u) => [u.path, u.st] as const));
+      const swaps: { tempId: string; row: BoardItemView; objectUrl: string }[] = [];
+      for (const row of res.items) {
+        const st = row.storagePath ? byPath.get(row.storagePath) : undefined;
+        if (!st) continue;
+        swaps.push({ tempId: st.tempId, row, objectUrl: st.objectUrl });
+        urlCache.current.set(row.storagePath as string, {
+          signedUrl: st.objectUrl,
+          thumbUrl: st.objectUrl,
+          at: Date.now(),
+        });
+      }
+      // SWITCHED TABS MID-UPLOAD, and this guard is load-bearing. The rows
+      // land on the board they were sent to, but `items` now belongs to
+      // another board, so every placeholder would read as missing and the
+      // undo-race branch below would delete freshly uploaded pictures.
+      //
+      // The placeholders are taken out of that board's cached snapshot instead,
+      // or coming back to it would draw them beside the real rows the load then
+      // brings, which is the same picture twice for a round trip.
+      if (activeIdRef.current !== boardId) {
+        const snap = boardCache.current.get(boardId);
+        if (snap) {
+          const temps = new Set(staged.map((st) => st.tempId));
+          boardCache.current.set(boardId, {
+            ...snap,
+            items: snap.items.filter((i) => !temps.has(i.id)),
+          });
         }
+        return;
       }
-      if (uploaded.length > 0) {
-        const res = await registerUploadedBoardItems(boardId, uploaded, at.x, at.y);
-        if (res?.error) showNotice(res.error);
-        reload(boardId);
+      // A placeholder the user has since undone away is NOT resurrected: its
+      // row is deleted instead, the same race placeItem guards. Decided out
+      // here rather than inside the updater, which has to stay pure.
+      const live = new Set(itemsRef.current.map((i) => i.id));
+      for (const sw of swaps) {
+        if (!live.has(sw.tempId)) void deleteItem(sw.row.id);
       }
-    });
+      const byTemp = new Map(
+        swaps.filter((sw) => live.has(sw.tempId)).map((sw) => [sw.tempId, sw] as const)
+      );
+      setItems((prev) =>
+        prev.map((i) => {
+          const sw = byTemp.get(i.id);
+          if (!sw) return i;
+          return {
+            ...i,
+            id: sw.row.id,
+            storagePath: sw.row.storagePath,
+            mimeType: sw.row.mimeType,
+            z: sw.row.z,
+          };
+        })
+      );
+      // Dropped rather than carried to the real id: changing the id remounts
+      // the card, so a mark that followed it would replay the entrance.
+      setArrived((prev) =>
+        prev.filter((a) => !staged.some((st) => st.tempId === a.id))
+      );
+    })();
   }
 
   function onUpload(files: FileList | null) {
@@ -1025,6 +1256,11 @@ export function BoardsWorkspace({
             </div>
             <div className="ml-auto flex items-center gap-2">
               {loading && <span className="text-xs text-text-faint">loading...</span>}
+              {uploading > 0 && (
+                <span className="text-xs text-text-faint">
+                  saving {uploading} {uploading === 1 ? "image" : "images"}...
+                </span>
+              )}
               <button
                 className="inline-flex items-center gap-1.5 rounded-[9px] border border-accent bg-accent-soft px-3 py-1.5 text-xs font-bold text-accent transition hover:brightness-95"
                 onClick={() => setShareOpen(true)}

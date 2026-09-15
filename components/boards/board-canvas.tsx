@@ -1198,7 +1198,13 @@ export function BoardCanvas({
         <div>
           {child.thumbUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={child.thumbUrl} alt="" className="h-24 w-full object-cover" />
+            <img
+              src={child.thumbUrl}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="h-24 w-full object-cover"
+            />
           )}
           <div className="px-2 py-1.5">
             <div className="line-clamp-2 text-[12px] font-bold text-text">{child.name || dom}</div>
@@ -1685,6 +1691,8 @@ export function BoardCanvas({
                           src={it.thumbUrl}
                           alt=""
                           draggable={false}
+                          loading="lazy"
+                          decoding="async"
                           className="h-full w-full select-none object-cover"
                         />
                       ) : (
@@ -2088,6 +2096,16 @@ export function BoardCanvas({
                         src={it.signedUrl!}
                         alt={it.name ?? ""}
                         draggable={false}
+                        // A board can hold dozens of photographs and only a
+                        // screenful of it is ever visible, so the rest are not
+                        // fetched until they are scrolled to. Safe here because
+                        // BoardCanvas is only ever the editor and the public
+                        // shared board: nothing prints it (the binder and the
+                        // client doc review draw a moodboard through
+                        // DocSurfaceView), so there is no export that could
+                        // come out with the lower half blank.
+                        loading="lazy"
+                        decoding="async"
                         className={`h-full w-full select-none ${
                           media.fit === "contain" ? "object-contain" : "object-cover"
                         }`}
