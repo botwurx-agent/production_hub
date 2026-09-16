@@ -13,11 +13,17 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { ASSET_TYPE_LABEL } from "@/lib/status";
 import { fileSize } from "@/lib/format";
+import { MAX_MEDIA_BYTES } from "@/lib/upload-limits";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 
-// Assets can be large (video cuts), so allow more than the board's image cap.
-const MAX_MB = 200;
-const MAX_BYTES = MAX_MB * 1024 * 1024;
+// THE SHARED CEILING, not a number this file invented. It was a local
+// `MAX_MB = 200`, which corresponded to nothing: these bytes go browser ->
+// Storage on a server-minted signed URL, so no serverless request body is
+// crossed and the only real limits are the ticket's and the bucket's, both
+// MAX_MEDIA_BYTES. A 200MB PDF was refused here before anything was asked of
+// Storage. Same class as the phantom `MAX_UPLOAD_MB = 40` the boards path
+// carried; that sweep looked at Server Action paths and missed this one.
+const MAX_BYTES = MAX_MEDIA_BYTES;
 
 const TYPES = ["image", "video", "storyboard", "reference", "cut", "other"];
 
@@ -75,8 +81,8 @@ export function AssetsDropzone({
     if (over.length > 0) {
       flash(
         over.length === 1
-          ? `"${over[0].name}" is over the ${MAX_MB} MB limit and was skipped.`
-          : `${over.length} files are over the ${MAX_MB} MB limit and were skipped.`
+          ? `"${over[0].name}" is over the ${fileSize(MAX_BYTES)} limit and was skipped.`
+          : `${over.length} files are over the ${fileSize(MAX_BYTES)} limit and were skipped.`
       );
     }
     if (ok.length === 0) return;
@@ -146,8 +152,8 @@ export function AssetsDropzone({
       onTooLarge={(over) =>
         flash(
           over.length === 1
-            ? `"${over[0].name}" is over the ${MAX_MB} MB limit and was skipped.`
-            : `${over.length} files are over the ${MAX_MB} MB limit and were skipped.`
+            ? `"${over[0].name}" is over the ${fileSize(MAX_BYTES)} limit and was skipped.`
+            : `${over.length} files are over the ${fileSize(MAX_BYTES)} limit and were skipped.`
         )
       }
       onFiles={stageFiles}

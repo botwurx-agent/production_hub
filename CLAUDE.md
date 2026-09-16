@@ -4334,6 +4334,49 @@ Prerequisite for any future verification, and a real gap regardless.
   their material to a third-party model. The policy now says which two features
   do it and that not using them is the opt-out, which is true but manual.
 
+### A 200MB PDF was refused by a number we invented (no migration) — BUILT
+Operator: "im trying to upload a pdf to the assets folder thats larger than
+200mb... I thought we installed a compressor?" Two things worth separating.
+- THE COMPRESSOR IS IMAGES ONLY. lib/compress-image.ts re-encodes through a
+  browser canvas, so it cannot touch a PDF (nothing decodes one to a canvas),
+  and it is deliberately off the assets path under its own standing rule: never
+  compress the thing a client is judging.
+- THE REFUSAL WAS OURS, and the first diagnosis in that session was WRONG: the
+  Supabase project-wide limit was blamed, and the request never reached Supabase
+  at all. `assets-dropzone.tsx` carried a local `MAX_MB = 200` and
+  `project-documents.tsx` a matching `MAX_DOC_BYTES`, neither corresponding to
+  any real limit. THE SAME PHANTOM-CEILING CLASS as the boards path's invented
+  `MAX_UPLOAD_MB = 40`; that sweep looked at Server Action paths, and these two
+  go DIRECT to Storage on a signed URL, so it never saw them. Both now read
+  MAX_MEDIA_BYTES from lib/upload-limits.ts, which is also what the bucket is
+  set to. Swept the other six uploadAssetFile callers: no other invented cap.
+  THE LESSON, since this is twice: a cap written as a literal in a component is
+  the bug. Import the shared constant or there is nothing stopping the number
+  from being one somebody typed.
+- STILL UNVERIFIED and the likely next wall: the SUPABASE PROJECT-WIDE upload
+  limit (dashboard, Settings -> Storage) caps every bucket regardless of the
+  bucket's own value, exactly as the 0106 note warned. The `assets` bucket is
+  2GB; the largest object ever stored is 34.2MB, which is what a global still at
+  its 50MB default would look like. It cannot be read or changed from a Claude
+  Code session (no management token in env), so it is the operator's to check.
+- TWO FINDINGS NOT ACTED ON, both worth a session of their own:
+  (1) THERE ARE TWO MINTS. `createAssetUploadUrl` (app/(app)/projects/[id]/
+  upload-actions.ts) hand-rolls the same project read + can_edit_project check
+  as the `project_asset` case in lib/upload-ticket.ts, which 0106 said must be
+  the ONE place every scope's authorization lives. Nothing calls the
+  upload-ticket case today, so the rule is already broken by duplication rather
+  than by a new mint. Consolidating means threading file.size through
+  uploadAssetFile, which touches ten callers.
+  (2) createAssetUploadUrl checks NO size at all, so on the asset path the
+  bucket is the only enforcement. Acceptable (upload-limits.ts calls the bucket
+  the last line of defence) but it means the client check is the only thing
+  producing a readable error.
+- NOT BUILT, and the real gap on a file this size: `uploadToSignedUrl` is ONE
+  PUT with no resume and no progress. A 200MB upload that dies at 180MB reports
+  nothing and keeps nothing. Supabase supports resumable (TUS) uploads for
+  exactly this; wiring the asset path to them above a threshold is the durable
+  answer and has not been started.
+
 ### The moodboard is fast now (no migration) — BUILT
 Operator: uploading an image "takes a very long time for the image to come up,
 it's definitely not that way in Milanote, it's almost instant", and switching

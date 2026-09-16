@@ -2,14 +2,11 @@
 
 import { useRef, useState, useTransition } from "react";
 import { FileDropzone } from "@/components/ui/file-dropzone";
-
-// Documents go browser -> Storage on a server-minted signed URL, so the
-// ~4.5MB Server Action ceiling does not apply. Matches the assets dropzone.
-const MAX_DOC_BYTES = 200 * 1024 * 1024;
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
 import { fileSize, shortDate } from "@/lib/format";
+import { MAX_MEDIA_BYTES } from "@/lib/upload-limits";
 import { documentSource } from "@/lib/documents";
 import { uploadAssetFile } from "@/components/projects/upload-file";
 import { PdfThumb } from "@/components/projects/pdf-thumb";
@@ -22,6 +19,13 @@ import {
   renameAsset,
 } from "@/app/(app)/projects/[id]/actions";
 import type { AssetWithVersions } from "@/components/projects/asset-types";
+
+// Documents go browser -> Storage on a server-minted signed URL, so the
+// ~4.5MB Server Action ceiling does not apply. A document IS an asset (0078)
+// and rides the same ticket, so it takes the same shared ceiling rather than
+// the 200MB this file used to declare for itself: two copies of "matches the
+// assets dropzone" is how they stopped matching it.
+const MAX_DOC_BYTES = MAX_MEDIA_BYTES;
 
 /**
  * The paperwork side of a project: what arrived from outside and where it came
