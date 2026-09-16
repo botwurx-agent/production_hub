@@ -4353,12 +4353,15 @@ Operator: "im trying to upload a pdf to the assets folder thats larger than
   THE LESSON, since this is twice: a cap written as a literal in a component is
   the bug. Import the shared constant or there is nothing stopping the number
   from being one somebody typed.
-- STILL UNVERIFIED and the likely next wall: the SUPABASE PROJECT-WIDE upload
-  limit (dashboard, Settings -> Storage) caps every bucket regardless of the
-  bucket's own value, exactly as the 0106 note warned. The `assets` bucket is
-  2GB; the largest object ever stored is 34.2MB, which is what a global still at
-  its 50MB default would look like. It cannot be read or changed from a Claude
-  Code session (no management token in env), so it is the operator's to check.
+- THE SUPABASE PROJECT-WIDE LIMIT WAS NOT A SECOND WALL, and the guess that it
+  would be was the session's second wrong diagnosis. Reasoning from "the largest
+  object ever stored is 34.2MB" to "the global must still be at its 50MB
+  default" was inference from an absence: nothing bigger had ever been TRIED,
+  because our own constant refused it first. VERIFIED by the operator's retry:
+  a 255.3MB PDF landed on the first attempt with no dashboard change, so the
+  global is already set high enough and needs nothing. The lesson is the one
+  this section keeps teaching: read the error the user actually got before
+  theorising about a layer further down.
 - TWO FINDINGS NOT ACTED ON, both worth a session of their own:
   (1) THERE ARE TWO MINTS. `createAssetUploadUrl` (app/(app)/projects/[id]/
   upload-actions.ts) hand-rolls the same project read + can_edit_project check
@@ -4371,11 +4374,13 @@ Operator: "im trying to upload a pdf to the assets folder thats larger than
   bucket is the only enforcement. Acceptable (upload-limits.ts calls the bucket
   the last line of defence) but it means the client check is the only thing
   producing a readable error.
-- NOT BUILT, and the real gap on a file this size: `uploadToSignedUrl` is ONE
-  PUT with no resume and no progress. A 200MB upload that dies at 180MB reports
-  nothing and keeps nothing. Supabase supports resumable (TUS) uploads for
-  exactly this; wiring the asset path to them above a threshold is the durable
-  answer and has not been started.
+- NOT BUILT, and still the real gap on a file this size: `uploadToSignedUrl` is
+  ONE PUT with no resume and no progress. The 255MB upload above completed, so
+  the single PUT does work at that size on a good connection; what does not
+  exist is any recovery when it does not. A 250MB upload that dies at 230MB
+  reports nothing and keeps nothing, and shows no progress on the way. Supabase
+  supports resumable (TUS) uploads for exactly this; wiring the asset path to
+  them above a threshold is the durable answer and has not been started.
 
 ### The moodboard is fast now (no migration) — BUILT
 Operator: uploading an image "takes a very long time for the image to come up,
