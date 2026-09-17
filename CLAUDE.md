@@ -2422,6 +2422,79 @@ Polish button: the model assists, the human commits.
   costs more than the deployment budgets for. gpt-5-mini can do this; a bigger
   model will pick tools better, which is the trade to revisit if it misroutes.
 
+### DECISION (operator, 2026-09-17): an MCP CONNECTOR, and Runner probably goes
+The operator asked why Studio Flows cannot be connected to Claude the way they
+have Higgsfield connected, so they could discuss a job in Claude and have the
+tasks (or a storyboard) land in the app. It can be, and their follow-up call
+was that if it works, "runner is irrelevant and should be removed". Recorded so
+no session spends a day extending Runner. NOTHING IS BUILT YET.
+
+THE UPSIDE THAT DECIDES IT: the customer's own Claude subscription pays for the
+tokens. Runner is the only feature here with a genuine per-use cost, which is
+exactly why its tier could never be priced (see the Runner section above), and a
+connector inverts that: no marginal cost to us, on a better model than the
+gpt-5-mini Runner runs on. It also does something Runner structurally cannot,
+which is hold the conversation where the treatment PDF and the client's email
+already are, and only send the RESULT here.
+
+MOST OF IT EXISTS. lib/agent/tools.ts is already 18 plain JSON Schema tools
+(6 read, 12 propose_*) and lib/agent/read-tools.ts is 6 plain async executors.
+An MCP server is largely re-exposing that over a different transport.
+
+SO "REMOVE RUNNER" MEANS THE SURFACE, NOT THE LAYER, and the split is lucky: the
+~1,900 lines that would go (components/agent/*, the nav row + Cmd+K, the
+streaming route, agent_threads/agent_messages, limits.ts, suggestions.ts, and
+loop.ts + messages.ts which exist only because WE call the model) are mostly the
+part that costs money and the part that had to satisfy two providers' different
+tool-call shapes. The ~1,200 lines that STAY (tools.ts, read-tools.ts,
+schema-map.ts, values.ts, access.ts, and cards.ts if writes ever come) are the
+part that was hard to get right. Do not delete lib/agent/ wholesale.
+
+PROVE IT BEFORE DELETING IT, and not out of caution: the failure mode is not
+"it does not work", it is "it works and is clunky", which only a real job
+reveals. Order is a READ-ONLY connector for the operator's own account, one
+studio, one token, then a real job, then the deletion.
+
+FOUR THINGS TO SETTLE, none of them technical:
+- REACH. Claude Free cannot add custom connectors at all (Pro/Max/Team/
+  Enterprise only) and ChatGPT individuals on Plus/Pro get READS ONLY (writes
+  are Business/Enterprise/Edu). So a customer on our Free or Solo plan with no
+  paid AI subscription elsewhere would have no AI conversation at all. Fine if
+  this is a top-tier feature, but our free plan loses something it has today.
+- WRITES. Over MCP the tool call IS the write: the host shows its own generic
+  "allow this tool?" over a JSON argument blob, not our readable card, and
+  people tick "always allow". Our standing rule is that a confirmation you
+  cannot check in two seconds is not one, and Anthropic's own connector docs
+  recommend denylisting write tools when a human confirmation step is wanted.
+  If the connector stays read-only AND Runner goes, there is no conversational
+  write path at all. That may be correct (every write Runner proposes has a real
+  form in the app already), but decide it rather than discover it.
+- PRICING. Runner is the named reason for the top tier. If it goes, that tier
+  needs another. The connector can be gated (our token, our endpoint), so this
+  is answerable, not fatal.
+- AUTH IS THE REAL WORK. An MCP request carries no Supabase session, so the
+  token-to-user mapping is the crux and getting it wrong means service-role
+  writes with RLS bypassed, the one failure that could cross studios. Claude
+  supports OAuth with dynamic client registration, and in BETA a static header
+  where a credential is pasted once. The static header is far less work but
+  needs a personal-access-token table with scopes, expiry, last-used and a
+  revoke button in Settings, or it is a long-lived credential sitting in a
+  third-party surface with no way to kill it.
+ALSO: we stop controlling the system prompt, so a client's email body or a
+returned PDF becomes a prompt-injection surface with our write tools in reach
+(read-only removes nearly all of this), the connector is NOT ZDR eligible
+(lands on the brand-contract concern in docs/launch/security-and-compliance.md),
+and a failure inside a client we do not control arrives as "Claude said it
+created the task and it isn't there" with no log on our side.
+THE STORYBOARD CASE IS A SECOND SLICE, not a freebie: frames carry IMAGES, so
+Claude has to hand over bytes or a URL we fetch. lib/media-import.ts
+fetchMediaFromUrl already does that, SSRF-guarded, but it is a different shape
+of tool from propose_create_task.
+UNVERIFIED FROM A CLAUDE CODE SESSION: claude.com and support.claude.com are
+both egress-blocked, so the static-header details (per-user or per-org, and
+whether Pro/Max can use it or only Team/Enterprise admins) came from search
+results rather than the primary doc. Confirm before designing around it.
+
 ### AI summary rendering (no migration) — BUILT, then SILENTLY BROKEN, now FIXED
 The project summary was rendered as `whitespace-pre-wrap` muted grey text, so
 the structure the model was already producing (one status sentence, then
