@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { logWrite, reportError } from "@/lib/log";
 import { parseHM, type StripKind } from "@/lib/schedule-time";
+import { cleanDayLabel, dayKind, shotDayValue, type DayKind } from "@/lib/schedule-days";
 import type { Database } from "@/lib/database.types";
 
 type DayUpdate = Database["public"]["Tables"]["schedule_days"]["Update"];
@@ -33,7 +34,7 @@ function clock(v: unknown): string | null | { error: string } {
 
 export async function createScheduleDay(
   projectId: string,
-  input?: { date?: string | null; callTime?: string | null; wrapTarget?: string | null; location?: string | null }
+  input?: { date?: string | null; callTime?: string | null; wrapTarget?: string | null; location?: string | null; kind?: DayKind; label?: string | null }
 ): Promise<{ id: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -68,6 +69,10 @@ export async function createScheduleDay(
       studio_id: project.studio_id,
       project_id: projectId,
       day_number: (last?.day_number ?? 0) + 1,
+      // day_number is the ORDER. What the day IS lives in kind, and the
+      // crew-facing number is derived from it (lib/schedule-days.ts).
+      kind: dayKind(input?.kind),
+      label: cleanDayLabel(input?.label),
       date: input?.date ?? null,
       call_time: call ?? last?.call_time ?? "7:00",
       wrap_target: wrap ?? last?.wrap_target ?? "6:00 pm",
@@ -87,7 +92,7 @@ export async function createScheduleDay(
 export async function updateScheduleDay(
   projectId: string,
   dayId: string,
-  patch: { date?: string | null; callTime?: string | null; wrapTarget?: string | null; location?: string | null; notes?: string | null }
+  patch: { date?: string | null; callTime?: string | null; wrapTarget?: string | null; location?: string | null; notes?: string | null; kind?: DayKind; label?: string | null }
 ): Promise<Result> {
   await requireStudioContext();
   const supabase = createClient();
@@ -97,11 +102,16 @@ export async function updateScheduleDay(
   if ("wrapTarget" in patch) { const v = clock(patch.wrapTarget); if (v && typeof v === "object") return v; update.wrap_target = v; }
   if ("location" in patch) update.location = patch.location?.trim() || null;
   if ("notes" in patch) update.notes = patch.notes?.trim() || null;
+  if ("kind" in patch) update.kind = dayKind(patch.kind);
+  if ("label" in patch) update.label = cleanDayLabel(patch.label);
   const { error } = await supabase.from("schedule_days").update(update).eq("id", dayId);
   if (error) {
     reportError("updateScheduleDay", error);
     return { error: "Could not save the day." };
   }
+  // Turning a day into a prelight (or back) shifts every later shoot day's
+  // number, and shot_cards.day is a STORED copy of it, so it is rewritten.
+  if ("kind" in patch) await syncShotDaysForProject(supabase, projectId);
   rp(projectId);
   return null;
 }
@@ -370,28 +380,50 @@ async function shotIdsOnDay(supabase: Client, dayId: string): Promise<string[]> 
   return (links ?? []).map((l) => l.shot_card_id);
 }
 
-/** Write this row's day number onto every shot it carries. */
+/**
+ * Every day of a project in schedule order, as much of each as naming needs.
+ *
+ * shot_cards.day carries the CREW-FACING number, which counts shoot days only,
+ * so it cannot be read off one day in isolation: with a prelight first, the
+ * first shoot day is "1" and its position is 2. That is the bug this whole
+ * change exists to fix, so both sync paths go through here.
+ */
+async function orderedDays(supabase: Client, projectId: string) {
+  const { data } = await supabase
+    .from("schedule_days")
+    .select("id, kind, label")
+    .eq("project_id", projectId)
+    .order("day_number", { ascending: true });
+  return data ?? [];
+}
+
+/** Write this row's day, as the crew says it, onto every shot it carries. */
 async function syncShotDays(supabase: Client, rowId: string): Promise<void> {
+  // A row carries no project_id: it reaches the project through its day, which
+  // is why the embed is here rather than a second round trip.
   const { data: row } = await supabase
     .from("schedule_rows")
-    .select("day_id, day:schedule_days(day_number)")
+    .select("day_id, day:schedule_days(project_id)")
     .eq("id", rowId)
     .maybeSingle();
-  const dayNumber = (row?.day as unknown as { day_number: number } | null)?.day_number;
-  if (!dayNumber) return;
+  const projectId = (row?.day as unknown as { project_id: string } | null)?.project_id;
+  if (!row?.day_id || !projectId) return;
   const { data: links } = await supabase.from("schedule_row_shots").select("shot_card_id").eq("row_id", rowId);
   const ids = (links ?? []).map((l) => l.shot_card_id);
   if (!ids.length) return;
-  await logWrite("syncShotDays", supabase.from("shot_cards").update({ day: String(dayNumber) }).in("id", ids));
+  const value = shotDayValue(await orderedDays(supabase, projectId), row.day_id);
+  if (!value) return;
+  await logWrite("syncShotDays", supabase.from("shot_cards").update({ day: value }).in("id", ids));
 }
 
-/** After a renumber, every scheduled shot on the project is rewritten. */
+/** After a renumber or a kind change, every scheduled shot is rewritten. */
 async function syncShotDaysForProject(supabase: Client, projectId: string): Promise<void> {
-  const { data: days } = await supabase.from("schedule_days").select("id, day_number").eq("project_id", projectId);
-  for (const d of days ?? []) {
+  const days = await orderedDays(supabase, projectId);
+  for (const d of days) {
     const ids = await shotIdsOnDay(supabase, d.id);
-    if (ids.length) {
-      await logWrite("syncShotDaysForProject", supabase.from("shot_cards").update({ day: String(d.day_number) }).in("id", ids));
-    }
+    if (!ids.length) continue;
+    const value = shotDayValue(days, d.id);
+    if (!value) continue;
+    await logWrite("syncShotDaysForProject", supabase.from("shot_cards").update({ day: value }).in("id", ids));
   }
 }

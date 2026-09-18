@@ -30,6 +30,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
 import { confirmAction } from "@/components/ui/confirm";
+import { DAY_KINDS, type DayKind } from "@/lib/schedule-days";
+import { AnchoredPopover } from "@/components/ui/anchored-popover";
 import {
   cascade,
   fmtDuration,
@@ -208,9 +210,9 @@ export function ScheduleEditor({
     });
   }
 
-  function addDay() {
+  function addDay(kind: DayKind = "shoot") {
     start(async () => {
-      const res = await createScheduleDay(projectId);
+      const res = await createScheduleDay(projectId, { kind });
       if ("error" in res) return fail(res.error);
       router.refresh();
       setDayIdx(days.length);
@@ -220,7 +222,7 @@ export function ScheduleEditor({
   async function removeDay(d: Day) {
     const shots = d.rows.reduce((n, r) => n + r.shots.length, 0);
     const ok = await confirmAction({
-      title: `Delete Day ${d.dayNumber}?`,
+      title: `Delete ${d.name}?`,
       body: `${d.rows.length} ${d.rows.length === 1 ? "row" : "rows"} go with it${shots ? `, and ${shots} ${shots === 1 ? "shot goes" : "shots go"} back to unscheduled` : ""}. Later days renumber. There is no undo.`,
       confirmLabel: "Delete day",
     });
@@ -241,7 +243,7 @@ export function ScheduleEditor({
         hue="green"
         title="No shoot days yet"
         description="Add the first day, then build it from the shot list. Times fall out of the durations; the day re-flows when anything changes."
-        action={canEdit ? <Button onClick={addDay}>Add Day 1</Button> : undefined}
+        action={canEdit ? <Button onClick={() => addDay()}>Add Day 1</Button> : undefined}
       />
     );
   }
@@ -251,9 +253,7 @@ export function ScheduleEditor({
       <div className="flex flex-wrap items-center gap-2">
         <Seg value={view} onChange={(v) => pickView(v as "day" | "board")} options={[["day", "Day"], ["board", "Board"]]} />
         <span className="flex-1" />
-        {canEdit && (
-          <Button size="sm" variant="secondary" onClick={addDay}>+ Add a day</Button>
-        )}
+        {canEdit && <AddDayControl onAdd={addDay} />}
       </div>
 
       {view === "day" ? (
@@ -271,7 +271,7 @@ export function ScheduleEditor({
                   <button onClick={() => setDayIdx(i)}
                     className={`-mb-px flex flex-col items-start gap-0.5 rounded-t-[10px] border border-b-0 py-2.5 pl-4 text-left transition ${canEdit ? "pr-9" : "pr-4"} ${
                       active ? "border-border bg-surface" : "border-transparent hover:bg-surface-2"}`}>
-                    <span className={`text-sm font-bold ${active ? "text-text" : "text-text-muted"}`}>Day {d.dayNumber}</span>
+                    <span className={`text-sm font-bold ${active ? "text-text" : "text-text-muted"}`}>{d.name}</span>
                     <span className="text-[11px] text-text-faint">
                       {fmtDate(d.date)} · {d.rows.reduce((k, x) => k + x.shots.length, 0)} shots ·{" "}
                       <span style={{ color: ou.deltaMin > 0 ? "var(--h-red)" : undefined }}>wraps {fmtHM(ou.endMin)}</span>
@@ -280,8 +280,8 @@ export function ScheduleEditor({
                   {canEdit && (
                     <button
                       onClick={(e) => { e.stopPropagation(); void removeDay(d); }}
-                      title={`Delete Day ${d.dayNumber}`}
-                      aria-label={`Delete Day ${d.dayNumber}`}
+                      title={`Delete ${d.name}`}
+                      aria-label={`Delete ${d.name}`}
                       data-testid="day-tab-close"
                       className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-[6px] text-text-faint transition hover:bg-surface-2 hover:text-[var(--h-red)]"
                     >
@@ -491,6 +491,42 @@ function Controls({ r, canEdit, onPatch, className = "" }: { r: Timed<Row>; canE
 // verbatim in the source; `lg:${COLS}` produced a token that existed nowhere.
 const LG_COLS = "lg:grid-cols-[28px_4px_92px_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_172px]";
 
+/**
+ * "+ Add a day" adds the common case in one press, and the caret NAMES the
+ * other kinds. That is the whole reason it is a menu rather than a plain
+ * button: the operator built a real schedule and asked whether a prelight day
+ * was possible, which it now is, and a capability nobody can see is one that
+ * gets asked about instead of used.
+ */
+function AddDayControl({ onAdd }: { onAdd: (kind: DayKind) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  return (
+    <div ref={ref} className="flex items-center">
+      <Button size="sm" variant="secondary" onClick={() => onAdd("shoot")}>+ Add a day</Button>
+      <button onClick={() => setOpen((o) => !o)} aria-label="Add another kind of day" title="Prelight, travel, company move, wrap"
+        className="ml-1 grid h-8 w-7 place-items-center rounded-[9px] border border-border text-text-muted transition hover:bg-surface-2 hover:text-text">
+        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6l4 4 4-4" /></svg>
+      </button>
+      <AnchoredPopover anchorRef={ref} open={open} onClose={() => setOpen(false)} width={244} prefer="below">
+        <div className="py-1">
+          <p className="px-3 pb-1 pt-1.5 text-[11px] font-bold uppercase tracking-wide text-text-faint">Add a day</p>
+          {DAY_KINDS.map((k) => (
+            <button key={k.key} onClick={() => { setOpen(false); onAdd(k.key); }}
+              className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition hover:bg-surface-2">
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: `var(--h-${k.hue})` }} />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-text">{k.name}</span>
+                <span className="block text-[11px] leading-snug text-text-faint">{k.hint}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </AnchoredPopover>
+    </div>
+  );
+}
+
 function DayView({ day, canEdit, drag, setDrag, onPatch, onMove, onOpen, onAdd, onEditDay }: {
   day: Day;
   canEdit: boolean;
@@ -685,7 +721,7 @@ function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd, onEdit
             <div key={d.id} className="flex flex-col rounded-[14px] border border-border bg-surface">
               <div className="border-b border-border px-3.5 py-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-base font-extrabold text-text">Day {d.dayNumber}</span>
+                  <span className="text-base font-extrabold text-text">{d.name}</span>
                   <span className="flex items-center gap-2">
                     <span className="text-xs text-text-faint">{fmtDate(d.date)}</span>
                     {canEdit && (
@@ -694,7 +730,7 @@ function BoardView({ days, canEdit, drag, setDrag, onMove, onOpen, onAdd, onEdit
                           className="grid h-6 w-6 place-items-center rounded-[6px] border border-border text-text-faint transition hover:bg-surface-2 hover:text-text">
                           <EditGlyph />
                         </button>
-                        <button onClick={() => onDeleteDay(d)} title={`Delete Day ${d.dayNumber}`} aria-label={`Delete Day ${d.dayNumber}`} data-testid="day-column-close"
+                        <button onClick={() => onDeleteDay(d)} title={`Delete ${d.name}`} aria-label={`Delete ${d.name}`} data-testid="day-column-close"
                           className="grid h-6 w-6 place-items-center rounded-[6px] text-text-faint transition hover:bg-surface-2 hover:text-[var(--h-red)]">
                           <CloseGlyph />
                         </button>
@@ -799,7 +835,7 @@ function RowModal({ projectId, row, day, days, shotOptions, roster, onClose, onS
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => { titleRef.current?.focus(); }, []);
 
-  const rowIdOfShot = new Map(days.flatMap((d) => d.rows.flatMap((r) => r.shots.map((s) => [s.id, { rowId: r.id, dayNumber: d.dayNumber }] as const))));
+  const rowIdOfShot = new Map(days.flatMap((d) => d.rows.flatMap((r) => r.shots.map((s) => [s.id, { rowId: r.id, dayId: d.id, dayName: d.name }] as const))));
   const shotLists = Array.from(new Set(shotOptions.map((s) => s.list)));
   const talentOptions = roster.filter((c) => isTalentCategory(c.category));
   const crewOptions = roster.filter((c) => !isTalentCategory(c.category) && c.category !== "client");
@@ -932,7 +968,7 @@ function RowModal({ projectId, row, day, days, shotOptions, roster, onClose, onS
                           <span className="min-w-0 flex-1 truncate text-sm text-text-muted">{s.description}</span>
                           {otherRow && (
                             <span className="shrink-0 rounded-pill bg-amber-bg px-2 py-[1px] text-[10px] font-bold text-amber">
-                              {otherRow.dayNumber === day.dayNumber ? "on another row" : `on Day ${otherRow.dayNumber}`}
+                              {otherRow.dayId === day.id ? "on another row" : `on ${otherRow.dayName}`}
                             </span>
                           )}
                         </label>
@@ -1017,6 +1053,8 @@ function DayModal({ projectId, day, onClose, onSaved, onDelete }: {
   onSaved: (patch: Partial<Day>) => void;
   onDelete: () => void;
 }) {
+  const [kind, setKind] = useState<DayKind>(day.kind);
+  const [label, setLabel] = useState(day.label ?? "");
   const [date, setDate] = useState(day.date ?? "");
   const [callTime, setCallTime] = useState(day.callTime ?? "");
   const [wrapTarget, setWrapTarget] = useState(day.wrapTarget ?? "");
@@ -1030,15 +1068,44 @@ function DayModal({ projectId, day, onClose, onSaved, onDelete }: {
     if (callTime.trim() && parseHM(callTime) === null) return setError(`"${callTime}" is not a time.`);
     if (wrapTarget.trim() && parseHM(wrapTarget) === null) return setError(`"${wrapTarget}" is not a time.`);
     setSaving(true);
-    const res = await updateScheduleDay(projectId, day.id, { date: date || null, callTime: callTime || null, wrapTarget: wrapTarget || null, location: location || null, notes: notes || null });
+    const res = await updateScheduleDay(projectId, day.id, { kind, label: label || null, date: date || null, callTime: callTime || null, wrapTarget: wrapTarget || null, location: location || null, notes: notes || null });
     setSaving(false);
     if (res?.error) return setError(res.error);
-    onSaved({ date: date || null, callTime: callTime || null, wrapTarget: wrapTarget || null, location: location || null, notes: notes || null });
+    // The NAME is derived from every day together, so a kind change renumbers
+    // the others too. Left to the refresh rather than guessed at locally.
+    onSaved({ kind, label: label || null, date: date || null, callTime: callTime || null, wrapTarget: wrapTarget || null, location: location || null, notes: notes || null });
   }
 
   return (
-    <Modal open onClose={onClose} title={`Day ${day.dayNumber}`} size="md">
+    <Modal open onClose={onClose} title={day.name} size="md">
       <div className="flex flex-col gap-3">
+        <div>
+          <label className={labelCls}>What kind of day</label>
+          <div className="flex flex-wrap gap-1.5">
+            {DAY_KINDS.map((k) => (
+              <button key={k.key} onClick={() => setKind(k.key)} title={k.hint}
+                aria-pressed={kind === k.key}
+                className={`inline-flex items-center gap-1.5 rounded-[9px] border px-2.5 py-1.5 text-xs font-bold transition ${
+                  kind === k.key ? "border-transparent text-text ring-2 ring-accent" : "border-border text-text-muted hover:bg-surface-2 hover:text-text"}`}
+                style={kind === k.key ? { backgroundColor: `var(--h-${k.hue}-bg)` } : undefined}>
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: `var(--h-${k.hue})` }} />
+                {k.name}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-text-faint">
+            {kind === "shoot"
+              ? "Shoot days are numbered among themselves, so a prelight or a travel day never takes a shoot day's number."
+              : `Not counted as a shoot day. ${DAY_KINDS.find((k) => k.key === kind)?.hint ?? ""}`}
+          </p>
+        </div>
+        {kind !== "shoot" && (
+          <div>
+            <label className={labelCls}>Name this day <span className="font-normal normal-case text-text-faint">(optional)</span></label>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={60}
+              placeholder={DAY_KINDS.find((k) => k.key === kind)?.name ?? ""} className={inputCls} />
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div><label className={labelCls}>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></div>
           <div><label className={labelCls}>Call</label><input value={callTime} onChange={(e) => setCallTime(e.target.value)} placeholder="7:00" className={inputCls} /></div>

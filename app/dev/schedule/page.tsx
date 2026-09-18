@@ -10,6 +10,7 @@ import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import type { RosterOption, ScheduleDayView, ScheduleRowView, ShotOption } from "@/lib/schedule-data";
 import type { StripKind } from "@/lib/schedule-time";
+import { nameDays, type DayKind } from "@/lib/schedule-days";
 
 // Dynamic so the ?job=live toggle in the header is honoured; static would
 // pre-render one version and ignore the search param.
@@ -23,6 +24,16 @@ const row = (dayId: string, kind: StripKind, title: string, durationMin: number,
 });
 const sh = (id: string, code: string, description: string) => ({ id, code, description, thumbUrl: null });
 
+type DayInput = Omit<ScheduleDayView, "kind" | "label" | "name" | "shootNo"> & { kind?: DayKind; label?: string | null };
+/**
+ * Derives each day's name through the SAME nameDays() the loader uses, rather
+ * than hardcoding "Day 1", so a change to the numbering rule shows up here.
+ */
+const days = (list: DayInput[]): ScheduleDayView[] => {
+  const named = nameDays(list.map((d) => ({ id: d.id, kind: d.kind, label: d.label })));
+  return list.map((d, i) => ({ ...d, kind: named[i].kind, label: d.label ?? null, name: named[i].name, shootNo: named[i].shootNo }));
+};
+
 const STAGE = "Stage 2, Culver City";
 const MC = P("Motion Control Operator", "Motion Control Operator", "crew");
 const FS = P("Food Stylist", "Food Stylist", "crew");
@@ -31,8 +42,17 @@ const GF = P("Gaffer", "Gaffer", "crew");
 const KG = P("Key Grip", "Key Grip", "crew");
 const DP = P("Director of Photography", "Director of Photography", "crew");
 
-const HINT: ScheduleDayView[] = [
-  { id: "h1", projectId: "p", dayNumber: 1, date: "2026-09-03", callTime: "8:00", wrapTarget: "6:00 pm", location: STAGE, notes: null, rows: [
+const HINT: ScheduleDayView[] = days([
+  // The operator's real job, 2026-09-18: a prelight day and two shoot days. The
+  // prelight takes no shoot number, so the days read Prelight / Day 1 / Day 2.
+  { id: "h0", projectId: "p", kind: "prelight", dayNumber: 1, date: "2026-09-02", callTime: "9:00", wrapTarget: "5:00 pm", location: STAGE, notes: null, rows: [
+    row("h0", "call", "Crew call, rigging", 30, { location: STAGE, crew: [GF, KG] }),
+    row("h0", "setup", "Rig the cloud wall, pre-light Set A", 240, { location: STAGE, set: "Set A · Cloud wall", crew: [DP, GF, KG] }),
+    row("h0", "meal", "Lunch", 60, { anchoredAt: "1:00 pm", location: STAGE }),
+    row("h0", "setup", "Motion control build and rehearse", 150, { location: STAGE, set: "Set A · Cloud wall", crew: [MC, DP] }),
+    row("h0", "wrap", "Wrap", 0),
+  ]},
+  { id: "h1", projectId: "p", dayNumber: 2, date: "2026-09-03", callTime: "8:00", wrapTarget: "6:00 pm", location: STAGE, notes: null, rows: [
     row("h1", "call", "Crew call, load in", 30, { location: STAGE, crew: [GF, KG, MC] }),
     row("h1", "meal", "Breakfast", 30, { anchoredAt: "9:00", location: STAGE, notes: "Craft services on the dock" }),
     row("h1", "setup", "Light Set A, motion control rig check", 60, { location: STAGE, set: "Set A · Cloud wall", crew: [DP, GF, MC] }),
@@ -46,7 +66,7 @@ const HINT: ScheduleDayView[] = [
       shots: [sh("s3", "3", "We crest the cupcake and the first fantasy world opens up."), sh("s4", "4", "The transition lands in the cobbler world. Dolly right.")] }),
     row("h1", "wrap", "Wrap", 0),
   ]},
-  { id: "h2", projectId: "p", dayNumber: 2, date: "2026-09-04", callTime: "8:00", wrapTarget: "6:00 pm", location: STAGE, notes: null, rows: [
+  { id: "h2", projectId: "p", dayNumber: 3, date: "2026-09-04", callTime: "8:00", wrapTarget: "6:00 pm", location: STAGE, notes: null, rows: [
     row("h2", "call", "Crew call", 30, { location: STAGE }),
     row("h2", "meal", "Breakfast", 30, { anchoredAt: "9:00", location: STAGE }),
     row("h2", "setup", "Build pineapple world", 90, { location: STAGE, set: "Set C · Pineapple", crew: [PS] }),
@@ -57,14 +77,14 @@ const HINT: ScheduleDayView[] = [
     row("h2", "shot", "Product beauty", 60, { location: STAGE, set: "Set E · Beauty", crew: [P("Photographer", "Photographer", "crew"), FS], shots: [sh("s8", "8", "Final product beauty. The Treat Yourself variety pack.")] }),
     row("h2", "wrap", "Wrap", 0),
   ]},
-];
+]);
 
 const HOUSE = "412 Elm St, Pasadena";
 const CAFE = "Roasters Cafe, 88 Colorado Blvd";
 const MAYA = P("Maya Chen", "Lead", "talent");
 const THEO = P("Theo Okafor", "Supporting", "talent");
 const AD = P("1st AD", "1st AD", "crew");
-const LIVE: ScheduleDayView[] = [
+const LIVE: ScheduleDayView[] = days([
   { id: "l1", projectId: "p", dayNumber: 1, date: "2026-10-06", callTime: "6:00", wrapTarget: "5:00 pm", location: HOUSE, notes: null, rows: [
     row("l1", "call", "Crew call. Talent to HMU", 60, { location: HOUSE, talent: [MAYA], crew: [AD, P("HMU", "HMU", "crew"), P("Wardrobe", "Wardrobe", "crew")] }),
     row("l1", "shot", "Kitchen, wake-up sequence", 180, { location: HOUSE, set: "Kitchen", intExt: "INT", dayNight: "DAY", talent: [MAYA], crew: [DP, GF, P("Sound", "Sound", "crew")], shots: [sh("l3", "3", "She pours the coffee, light through the blinds."), sh("l4", "4", "CU hands, mug.")] }),
@@ -87,7 +107,7 @@ const LIVE: ScheduleDayView[] = [
     row("l3", "shot", "Cafe patio", 120, { location: CAFE, set: "Patio", intExt: "EXT", dayNight: "DAY", talent: [MAYA, THEO], shots: [sh("l14", "14", "Wide, they leave together.")] }),
     row("l3", "wrap", "Wrap", 0),
   ]},
-];
+]);
 
 const SHOTS: ShotOption[] = [
   ...HINT.flatMap((d) => d.rows.flatMap((r) => r.shots.map((s): ShotOption => ({ id: s.id, code: s.code, description: s.description, list: "HINT Treat Yourself Shot List", thumbUrl: null, rowId: r.id })))),

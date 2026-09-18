@@ -1428,7 +1428,12 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0100. Recent: 0100 =
+files in supabase/migrations. THROUGH 0109. Recent: 0109 =
+schedule_day_kind (schedule_days.kind + .label: a day can be a prelight,
+travel, company move or wrap day, and the crew-facing number is DERIVED from
+kind so only shoot days are counted; day_number stays the order key);
+0108 = contact_messages; 0107 = schedule; 0106 =
+assets_bucket_file_size_limit; 0100 =
 collab_tasks_assigned_only (a project collaborator sees ONLY tasks assigned to
 them: the task board is the producer's own running list and 0056 had made all
 of it collaborator-readable. Splits the four task tables member/collab;
@@ -4065,6 +4070,67 @@ DECISIONS, all confirmed by the operator before anything was written:
   public and the INDEX of them was not. Both are listed now, and app/robots.ts
   exists (it did not) with the Sitemap line. Same class as the pdf.worker and
   mp4 bugs: IF A NON-IMAGE PUBLIC FILE IS MISSING, CHECK THAT LIST FIRST.
+
+### A day can be a PRELIGHT day (migration 0109) — BUILT
+Real friction, mid-job: the operator was putting a schedule together for a
+shoot with a prelight day and two shoot days, and asked whether a prelight day
+was possible. It was not. A day carried `day_number` and nothing else, and the
+label was hardcoded `Day {n}` at six places.
+- TWO COSTS, and the second is the one that would have been found later and
+  hurt more. The tabs read Day 1 / Day 2 / Day 3 where the crew says Prelight /
+  Day 1 / Day 2. And `syncShotDaysForProject` stamped `shot_cards.day` from
+  `day_number`, so every shot on the first shoot day was written "2" and the
+  shot list silently disagreed with every call sheet and every conversation.
+- `kind` NAMES THE DAY (shoot | prelight | travel | move | wrap | other) and
+  `day_number` IS UNTOUCHED: they answer different questions, where a day sits
+  and what it is for, and the cascade, the renumber and the unique constraint
+  all still run on the position.
+- THE CREW-FACING NUMBER IS DERIVED, never stored (lib/schedule-days.ts
+  nameDays). Only shoot days are counted, and they are counted among
+  themselves, so inserting or deleting a prelight cannot stand a stale figure
+  up anywhere. Same call this app already makes for the schedule's times and
+  the task board's phase labels, and the reason a stored display number was
+  refused outright.
+- NAMED AS A SET, not per day, because a name depends on its neighbours: a
+  shoot day's number counts the others, and two prelights have to be told apart
+  ("Prelight 1", "Prelight 2"), while a single one stays plain "Prelight".
+  Shoot days are deliberately kept out of that dedupe pass, since their name
+  already carries a number and numbering it twice reads as a bug.
+- `label` is free text for a day whose kind does not name it (a fitting, a
+  scout, a strike), shown in the modal ONLY for a non-shoot day, because a
+  shoot day is named by its number and a stray label there would be ignored.
+- CHANGING A KIND REWRITES shot_cards.day for the whole project, since that
+  column is a STORED copy of a derived value and flipping one day renumbers
+  every later one. Both sync paths now go through `orderedDays` +
+  `shotDayValue`; a non-shoot day writes its NAME ("Prelight"), which is honest
+  and the column is free text.
+- `schedule_rows` carries no project_id and reaches the project through its
+  day, so syncShotDays embeds `day:schedule_days(project_id)` rather than
+  taking a second round trip. Worth knowing before adding any row-level query.
+- THE ADD CONTROL NAMES THE KINDS. "+ Add a day" still adds a shoot day in one
+  press and a caret opens a menu listing all six with a line each. That is the
+  whole point: the operator asked whether this existed, and a capability nobody
+  can see is one that gets asked about instead of used.
+- CONTRAST WAS MEASURED, and the first two attempts both failed. A solid hue
+  chip with white text is 2.24:1 for amber; the app's own StatusTag pattern
+  (the hue's text on its -bg tint) is 1.86:1 for amber on light, which is worth
+  knowing generally since that pattern is everywhere. The selected chip
+  therefore carries the hue as a DOT plus the -bg tint, keeps the normal text
+  colour for the label (8.2:1 or better on light, paper and dark, all three
+  measured by painting the oklch to a canvas, since getComputedStyle hands back
+  oklch and a naive parse reads 1.00:1 on everything), and says "selected" with
+  an accent ring, which is hue-independent so all six read alike.
+- 32 assertions in the scratchpad, most of them the backward-compatible half:
+  an all-shoot job reads and stamps exactly what it did before, and a row
+  written before 0109 (null, absent or unknown kind) is a shoot day rather than
+  a blank name.
+- Verified in Chromium against the REAL editor on app/dev/schedule, which now
+  carries the operator's own shape (prelight + two shoot days): tabs, board
+  columns, the modal title and the shot picker's "on Prelight" badge all agree,
+  the name field appears and disappears with the kind, and 390px is unchanged.
+- NOT DONE: the print view and the call sheet's `schedule` block do not exist
+  yet, so nothing else consumes this. Both should read `name`, never
+  `dayNumber`. The hub card was the one other crew-facing site and is converted.
 
 ### Image captions save when you click away (no migration) — BUILT
 Operator: "image caption is not working. when i type something it doesnt save

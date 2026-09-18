@@ -15,6 +15,7 @@ import { getProjectOutstanding } from "@/lib/outstanding";
 import { projectType, stageLabel, hasShootDay } from "@/lib/project-types";
 import { aiConfigured } from "@/lib/ai";
 import { loadProjectAssets } from "@/lib/project-data";
+import { nameDays } from "@/lib/schedule-days";
 import {
   ActivityPanel,
   type ActivityItem,
@@ -135,7 +136,7 @@ export default async function ProjectDetailPage({
   ] = await Promise.all([
     supabase
       .from("schedule_days")
-      .select("day_number, date, location")
+      .select("id, kind, label, date, location")
       .eq("project_id", params.id)
       .order("day_number", { ascending: true }),
     supabase.from("briefs").select("content").eq("project_id", params.id).maybeSingle(),
@@ -888,11 +889,13 @@ export default async function ProjectDetailPage({
             >
               {scheduleDays?.length ? (
                 <div className="flex flex-col gap-1 text-[13px] text-text-muted">
-                  {scheduleDays.slice(0, 3).map((d) => (
-                    <p key={d.day_number} className="truncate">
-                      <span className="font-semibold text-text">Day {d.day_number}</span>
-                      {d.date ? ` · ${longDate(d.date)}` : ""}
-                      {d.location ? ` · ${d.location}` : ""}
+                  {nameDays(scheduleDays).slice(0, 3).map((n, i) => (
+                    <p key={n.id} className="truncate">
+                      {/* The crew-facing name, so a prelight day does not read
+                          "Day 1" here while the schedule page calls it Prelight. */}
+                      <span className="font-semibold text-text">{n.name}</span>
+                      {scheduleDays[i].date ? ` · ${longDate(scheduleDays[i].date!)}` : ""}
+                      {scheduleDays[i].location ? ` · ${scheduleDays[i].location}` : ""}
                     </p>
                   ))}
                   {scheduleDays.length > 3 && <p>and {scheduleDays.length - 3} more</p>}

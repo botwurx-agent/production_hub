@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { assetStorage, isResizable, signThumbs } from "@/lib/asset-storage";
 import type { DayNight, IntExt, StripKind } from "@/lib/schedule-time";
+import { nameDays, type DayKind } from "@/lib/schedule-days";
 
 type Client = SupabaseClient<Database>;
 
@@ -42,7 +43,15 @@ export type ScheduleRowView = {
 export type ScheduleDayView = {
   id: string;
   projectId: string;
+  /** Position in the schedule. The ORDER key, not the crew-facing number. */
   dayNumber: number;
+  kind: DayKind;
+  /** Free-text name for a non-shoot day; null means the kind names it. */
+  label: string | null;
+  /** DERIVED: "Day 2", "Prelight", "Fitting". What every surface should show. */
+  name: string;
+  /** Its place among shoot days. Null on a prelight, travel or wrap day. */
+  shootNo: number | null;
   date: string | null;
   callTime: string | null;
   wrapTarget: string | null;
@@ -172,10 +181,19 @@ export async function loadSchedule(supabase: Client, projectId: string): Promise
     rowsByDay.set(r.day_id, list);
   }
 
-  return days.map((d) => ({
+  // Named as a SET, since a shoot day's number counts only shoot days and two
+  // prelights have to be told apart. Derived here so the editor, the print
+  // view and the call sheet cannot disagree about what a day is called.
+  const named = nameDays(days.map((d) => ({ id: d.id, kind: d.kind, label: d.label })));
+
+  return days.map((d, i) => ({
     id: d.id,
     projectId: d.project_id,
     dayNumber: d.day_number,
+    kind: named[i].kind,
+    label: d.label,
+    name: named[i].name,
+    shootNo: named[i].shootNo,
     date: d.date,
     callTime: d.call_time,
     wrapTarget: d.wrap_target,

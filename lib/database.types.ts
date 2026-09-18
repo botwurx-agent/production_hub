@@ -2738,6 +2738,8 @@ export type Database = {
           studio_id: string;
           project_id: string;
           day_number: number;
+          kind: string;
+          label: string | null;
           date: string | null;
           call_time: string | null;
           wrap_target: string | null;
@@ -2752,6 +2754,8 @@ export type Database = {
           studio_id: string;
           project_id: string;
           day_number: number;
+          kind?: string;
+          label?: string | null;
           date?: string | null;
           call_time?: string | null;
           wrap_target?: string | null;
@@ -2766,6 +2770,8 @@ export type Database = {
           studio_id?: string;
           project_id?: string;
           day_number?: number;
+          kind?: string;
+          label?: string | null;
           date?: string | null;
           call_time?: string | null;
           wrap_target?: string | null;
