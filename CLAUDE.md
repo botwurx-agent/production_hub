@@ -2428,6 +2428,10 @@ have Higgsfield connected, so they could discuss a job in Claude and have the
 tasks (or a storyboard) land in the app. It can be, and their follow-up call
 was that if it works, "runner is irrelevant and should be removed". Recorded so
 no session spends a day extending Runner. NOTHING IS BUILT YET.
+PARKED 2026-09-18 on the operator's call ("lets come back to this"), with the
+analysis below complete and nothing started. It is theirs to pick up, so do not
+open it unprompted: the next move is the read-only connector for their own
+account described below, not a design conversation from scratch.
 
 THE UPSIDE THAT DECIDES IT: the customer's own Claude subscription pays for the
 tokens. Runner is the only feature here with a genuine per-use cost, which is
@@ -4611,8 +4615,13 @@ and only build when something actually gets in the way (section 4.5 / section
 8). Do not open a session by proposing features off the list below. Ask what
 got in the way, or work on what is asked.
 
-TWO THINGS ARE GENUINELY WAITING ON THE OPERATOR, though, and both are theirs
-to answer rather than ours to start:
+THREE THINGS ARE GENUINELY WAITING ON THE OPERATOR, though, and all three are
+theirs to answer rather than ours to start:
+- THE MCP CONNECTOR, and whether Runner goes with it. Parked 2026-09-18 with
+  the whole analysis written up (see "DECISION (operator, 2026-09-17)" above):
+  the upside, the four non-technical questions, and why the first slice is a
+  read-only connector for their own account before anything is deleted. Nothing
+  is built. Waiting on them, not on us.
 - WHERE THE SHOT CLUSTER GOES. components/marketing/shot-cluster.tsx is built
   and verified and deliberately NOT placed (see section 4.6). They asked for
   the pattern to be noted and confirmed, and a first pass that shipped it to
