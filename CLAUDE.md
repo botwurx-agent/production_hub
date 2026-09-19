@@ -4186,6 +4186,34 @@ before that.
   90 minutes UNDER rather than 22 hours over, the location column carrying only
   what differs, and the editor's new action row wrapping with no horizontal
   overflow at 390px. Production build clean.
+- THE SHOTS ARE PICTURES, not codes (operator, straight after: the PDF and the
+  review link "doesnt include the small images, I think it would be helpful to
+  have some what of a visual reference"). The editor drew a thumbnail per shot
+  and the document printed "1A · 1B · 1C", which tells the producer who wrote
+  the list what is in the block and tells nobody else anything. ShotStrip in
+  schedule-document.tsx draws each shot as a 76x43 tile with its code under it,
+  so the strip reaches the PDF and the client link together.
+- THREE THINGS ABOUT THAT STRIP WORTH KEEPING:
+  (1) NOT LAZY. `?auto=1` calls window.print() as soon as the page is ready, so
+  a lazy tile below the fold has not loaded and every page after the first
+  prints blank boxes. This is the one place in the app where `loading="lazy"`
+  is a bug rather than a saving.
+  (2) RESIZED COPIES ARE RIGHT HERE even though it is a print view. The
+  standing rule (never serve a compressed copy where somebody is JUDGING the
+  image) is about review surfaces and artwork exports; a 76px reference beside
+  a call time is not being judged, and twenty full storyboard frames would be
+  tens of megabytes to draw postage stamps. loadSchedule already signed thumbs,
+  so nothing changed to get this.
+  (3) A SHOT WITH NO FRAME STILL PRINTS ITS SLOT, dashed and labelled, because
+  the numbering is what a client comments against and a silently missing tile
+  makes the list look shorter than it is.
+- The code under a tile is set in the text colour, not as a grey caption: it is
+  what somebody says out loud ("1B is the wrong glass") and at print size a
+  9px muted label is not readable. The row now reads title, then note, then the
+  pictures, so the words stay one block.
+- app/dev/schedule's fixture shots carry a DRAWN placeholder frame (an inline
+  SVG data URI, obviously not a screenshot) so the strip can be judged from a
+  session that cannot reach signed storage.
 
 ### Image captions save when you click away (no migration) — BUILT
 Operator: "image caption is not working. when i type something it doesnt save

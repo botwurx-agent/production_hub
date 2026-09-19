@@ -23,7 +23,22 @@ const row = (dayId: string, kind: StripKind, title: string, durationMin: number,
   id: `r${++n}`, dayId, position: n, kind, title, location: null, set: null, intExt: null, dayNight: null,
   durationMin, anchoredAt: null, notes: null, shots: [], talent: [], crew: [], ...extra,
 });
-const sh = (id: string, code: string, description: string) => ({ id, code, description, thumbUrl: null });
+// A stand-in frame so the export's shot strip can be judged here. Obviously
+// drawn, never a fake screenshot: the real thumbUrls are signed storage
+// transforms this environment cannot reach.
+const pic = (code: string, hue: string) =>
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="${hue}"/><circle cx="112" cy="30" r="22" fill="rgba(255,255,255,.35)"/><rect x="0" y="62" width="160" height="28" fill="rgba(0,0,0,.25)"/><text x="10" y="82" font-family="sans-serif" font-size="16" font-weight="bold" fill="#fff">${code}</text></svg>`
+  );
+const HUES = ["#6d7fd6", "#d68a6d", "#6dd6a7", "#c96dd6", "#d6c96d", "#6dc4d6"];
+let picN = 0;
+const sh = (id: string, code: string, description: string) => ({
+  id,
+  code,
+  description,
+  thumbUrl: pic(code, HUES[picN++ % HUES.length]),
+});
 
 type DayInput = Omit<ScheduleDayView, "kind" | "label" | "name" | "shootNo"> & { kind?: DayKind; label?: string | null };
 /**

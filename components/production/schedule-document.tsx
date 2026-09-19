@@ -144,6 +144,63 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * The shots on a row, as PICTURES.
+ *
+ * Codes alone ("1A · 1B · 1C") tell a producer who wrote the list what is in
+ * the block and tell nobody else anything. A unit reading the morning's
+ * schedule, and a client reading it a week early, both want to see what is
+ * being shot, which is the whole reason the shot list carries frames.
+ *
+ * THESE ARE RESIZED COPIES, signed by loadSchedule through signThumbs, and
+ * that is deliberate even though this is a print view. The app's standing rule
+ * (never serve a compressed copy where somebody is JUDGING the image) is about
+ * review surfaces and artwork exports; a 76px reference beside a call time is
+ * not being judged, and twenty full storyboard frames would be tens of
+ * megabytes fetched to draw postage stamps.
+ *
+ * NOT LAZY, which is the one detail that would silently break this: ?auto=1
+ * calls window.print() as soon as the page is ready, and a lazy image below
+ * the fold has not loaded yet, so the PDF would come out with blank tiles on
+ * every page after the first.
+ */
+function ShotStrip({ shots }: { shots: ScheduleRowView["shots"] }) {
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1.5">
+      {shots.map((s) => {
+        const code = s.code?.trim() || "";
+        return (
+          <figure key={s.id} className="m-0 w-[76px] break-inside-avoid">
+            {s.thumbUrl ? (
+              <img
+                src={s.thumbUrl}
+                alt={code ? `Shot ${code}` : "Shot"}
+                style={printExact}
+                className="h-[43px] w-[76px] rounded-[4px] border border-border object-cover"
+              />
+            ) : (
+              // A shot with no frame still prints its slot, so the numbering a
+              // client comments against stays complete.
+              <div
+                style={printExact}
+                className="grid h-[43px] w-[76px] place-items-center rounded-[4px] border border-dashed border-border text-[9px] font-bold uppercase tracking-wide text-text-faint"
+              >
+                No frame
+              </div>
+            )}
+            {/* The code is what somebody says out loud ("1B is the wrong
+                glass"), so it is set in the text colour rather than as a
+                caption nobody can read at print size. */}
+            <figcaption className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide text-text">
+              {code || s.description?.slice(0, 14) || ""}
+            </figcaption>
+          </figure>
+        );
+      })}
+    </div>
+  );
+}
+
 const same = (a: string | null, b: string | null) =>
   Boolean(a && b && a.trim().toLowerCase() === b.trim().toLowerCase());
 
@@ -195,16 +252,10 @@ function DayRows({ day }: { day: ScheduleDayView }) {
               </td>
               <td className="py-2.5 pr-3">
                 <div className="text-sm font-semibold text-text">{r.title || "Untitled"}</div>
-                {r.shots.length > 0 && (
-                  <div className="mt-0.5 text-[11px] text-text-muted">
-                    {r.shots
-                      .map((s) => s.code?.trim() || s.description?.slice(0, 40) || "shot")
-                      .join(" · ")}
-                  </div>
-                )}
                 {r.notes?.trim() && (
                   <div className="mt-0.5 text-[11px] italic text-text-muted">{r.notes}</div>
                 )}
+                {r.shots.length > 0 && <ShotStrip shots={r.shots} />}
               </td>
               <td className="py-2.5 pr-3 text-[12px] text-text-muted">
                 {/*
