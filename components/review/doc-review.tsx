@@ -26,6 +26,7 @@ const KIND_LABEL: Record<string, string> = {
   props: "props",
   ai_shot: "shot",
   sequence: "sequence",
+  schedule: "shooting schedule",
 };
 
 export function DocReview({

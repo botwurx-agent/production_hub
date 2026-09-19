@@ -305,6 +305,9 @@ const DOC_LABEL: Record<string, string> = {
   storyboard: "storyboard",
   moodboard: "moodboard",
   ai_shot: "shot",
+  sequence: "sequence",
+  props: "prop list",
+  schedule: "shooting schedule",
 };
 
 export async function submitDocComment(

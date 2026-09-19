@@ -16,19 +16,21 @@ import {
 import type { DocReviewDetail } from "@/lib/doc-review-data";
 import type { ApprovalStatus } from "@/lib/database.types";
 
-type DocKind = "shot_list" | "storyboard" | "moodboard" | "props";
+type DocKind = "shot_list" | "storyboard" | "moodboard" | "props" | "schedule";
 
 const HUE: Record<DocKind, string> = {
   shot_list: "purple",
   storyboard: "indigo",
   moodboard: "cyan",
   props: "pink",
+  schedule: "green",
 };
 const LABEL: Record<DocKind, string> = {
   shot_list: "Shot list",
   storyboard: "Storyboard",
   moodboard: "Moodboard",
   props: "Props",
+  schedule: "Shooting schedule",
 };
 
 // Full-page internal review of a doc: the same pin canvas the client sees (large),

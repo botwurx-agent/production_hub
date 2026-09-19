@@ -19,6 +19,8 @@ const DOC_NOUN: Record<string, string> = {
   moodboard: "moodboard",
   props: "props",
   ai_shot: "shot",
+  sequence: "sequence",
+  schedule: "shooting schedule",
 };
 
 // Has the client closed out the round this link is currently pointing at?

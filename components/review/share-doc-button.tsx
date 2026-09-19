@@ -6,7 +6,14 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { createDocReviewLink } from "@/app/(app)/projects/[id]/share-actions";
 
-type DocKind = "shot_list" | "storyboard" | "moodboard" | "props" | "ai_shot" | "sequence";
+type DocKind =
+  | "shot_list"
+  | "storyboard"
+  | "moodboard"
+  | "props"
+  | "ai_shot"
+  | "sequence"
+  | "schedule";
 
 const NOUN: Record<DocKind, string> = {
   shot_list: "shot list",
@@ -15,6 +22,7 @@ const NOUN: Record<DocKind, string> = {
   ai_shot: "shot",
   sequence: "sequence",
   props: "props",
+  schedule: "shooting schedule",
 };
 
 // Share a doc surface (shot list / storyboard / moodboard) for client review:

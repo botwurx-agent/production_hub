@@ -2,6 +2,7 @@
 
 import type { DocSurface } from "@/lib/review-links";
 import { aspectStyle } from "@/lib/frame-aspect";
+import { ScheduleDocument } from "@/components/production/schedule-document";
 
 // Read-only renders of the doc surfaces the client reviews. These are the
 // pinnable "stage" inside PinCanvas, so they must lay out deterministically
@@ -16,6 +17,14 @@ export function DocSurfaceView({ surface }: { surface: DocSurface }) {
   if (surface.kind === "ai_shot") return <AiShotSurface surface={surface} />;
   if (surface.kind === "sequence") return <SequenceSurface surface={surface} />;
   if (surface.kind === "props") return <PropsSurface surface={surface} />;
+  // The same renderer the PDF prints, so a client pins on the document the
+  // unit is working to rather than a second rendering that can drift.
+  if (surface.kind === "schedule")
+    return (
+      <div className="bg-surface p-5">
+        <ScheduleDocument days={surface.days} />
+      </div>
+    );
   return <MoodboardSurface surface={surface} />;
 }
 

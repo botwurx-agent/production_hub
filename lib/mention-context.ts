@@ -70,6 +70,7 @@ const DOC_LABELS: Record<string, string> = {
   props: "the prop list",
   sequence: "the sequence",
   ai_shot: "a shot",
+  schedule: "the shooting schedule",
 };
 
 /** "the shot list", plus the project it belongs to. */

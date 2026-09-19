@@ -6,13 +6,18 @@ import { DocReviewView } from "@/components/review/doc-review-view";
 import { MentionRosterProvider } from "@/components/review/mention-roster";
 import { loadMentionRoster } from "@/lib/mention-roster";
 
-type DocKind = "shot_list" | "storyboard" | "moodboard";
-const KINDS: DocKind[] = ["shot_list", "storyboard", "moodboard"];
+type DocKind = "shot_list" | "storyboard" | "moodboard" | "schedule";
+const KINDS: DocKind[] = ["shot_list", "storyboard", "moodboard", "schedule"];
 const BACK: Record<DocKind, { path: string; label: string }> = {
   shot_list: { path: "shot-list", label: "shot list" },
   storyboard: { path: "storyboards", label: "storyboards" },
   moodboard: { path: "moodboard", label: "moodboard" },
+  schedule: { path: "schedule", label: "schedule" },
 };
+// The project-scoped kinds: one per project, so the target IS the project id.
+// Everything else resolves to a board. Same split as targetInProject and
+// createDocReviewLink, and just as invisible to the compiler.
+const PROJECT_SCOPED: DocKind[] = ["shot_list", "schedule"];
 
 // Full-page internal review (comments) of a doc: storyboard / shot list / moodboard.
 export default async function DocReviewPage({
@@ -33,7 +38,7 @@ export default async function DocReviewPage({
   if (!project) notFound();
 
   // The target must belong to this project.
-  if (kind === "shot_list") {
+  if (PROJECT_SCOPED.includes(kind)) {
     if (params.target !== project.id) notFound();
   } else {
     const { data: board } = await supabase

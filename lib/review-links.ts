@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ReviewLink } from "@/lib/database.types";
 import type { ApprovalStatus } from "@/lib/database.types";
 import { assetStorage } from "@/lib/asset-storage";
+import { loadSchedule, type ScheduleDayView } from "@/lib/schedule-data";
 import { normalizeDrawing, type Drawing } from "@/lib/review-drawing";
 import type { CommentReaction } from "@/lib/review-reactions";
 import { loadReactions } from "@/lib/review-reactions-load";
@@ -213,7 +214,8 @@ export type DocKind =
   | "moodboard"
   | "ai_shot"
   | "sequence"
-  | "props";
+  | "props"
+  | "schedule";
 
 export function isDocKind(v: string | null | undefined): v is DocKind {
   return (
@@ -222,7 +224,8 @@ export function isDocKind(v: string | null | undefined): v is DocKind {
     v === "moodboard" ||
     v === "ai_shot" ||
     v === "sequence" ||
-    v === "props"
+    v === "props" ||
+    v === "schedule"
   );
 }
 
@@ -329,6 +332,17 @@ export type DocSurface =
        */
       kind: "props";
       items: DocPropItem[];
+    }
+  | {
+      /**
+       * The shooting schedule, every day of it, rendered by the SAME
+       * ScheduleDocument the PDF prints. A client or an agency producer reads
+       * the schedule to answer "when are you shooting my hero spot", so what
+       * they pin on has to be the document the unit is working to, not a second
+       * rendering of it that can drift.
+       */
+      kind: "schedule";
+      days: ScheduleDayView[];
     };
 
 export type DocSequenceShot = {
@@ -506,6 +520,16 @@ export async function loadDocSurface(
     }));
 
     return { surface: { kind: "props", items }, docTitle: "Props" };
+  }
+
+  if (kind === "schedule") {
+    // target_id = the project. A project has one schedule, the same way it has
+    // one shot list and one sequence, so this belongs in the project-scoped
+    // branch of targetInProject and createDocReviewLink rather than the boards
+    // lookup those two fall through to.
+    const days = await loadSchedule(client, targetId);
+    if (days.length === 0) return null;
+    return { surface: { kind: "schedule", days }, docTitle: "Shooting schedule" };
   }
 
   if (kind === "sequence") {

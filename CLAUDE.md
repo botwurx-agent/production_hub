@@ -1428,7 +1428,10 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0109. Recent: 0109 =
+files in supabase/migrations. THROUGH 0110. Recent: 0110 =
+schedule_review_target (approval_target gains 'schedule', so the shooting
+schedule joins the doc-review stack and can be shared, pinned and approved
+like the shot list); 0109 =
 schedule_day_kind (schedule_days.kind + .label: a day can be a prelight,
 travel, company move or wrap day, and the crew-facing number is DERIVED from
 kind so only shoot days are counted; day_number stays the order key);
@@ -4034,11 +4037,13 @@ DECISIONS, all confirmed by the operator before anything was written:
 - app/dev/schedule is now a FIXTURE mounting the REAL editor on hardcoded
   data (the /dev/comms pattern), because a dev server in a Claude Code session
   cannot reach Supabase. Actions fail there by design. ?job=live shows the
-  three-day live-action example. components/dev/schedule-mockup.tsx is gone.
-- NOT YET, in order: print view (one page per day through ProductionCover +
-  DayDivider), the call sheet `schedule` block reading schedule_day_id plus
-  the advance block, per-recipient call times from schedule_row_people, and
-  a "which day" pill on the shot list that reads from the schedule. The
+  three-day live-action example, and ?doc=1 swaps the editor for the EXPORT,
+  which is the only way to judge the printed document (and the client review
+  surface, which renders the same component) from a session that cannot reach
+  the real print route. components/dev/schedule-mockup.tsx is gone.
+- NOT YET, in order: the call sheet `schedule` block reading schedule_day_id
+  plus the advance block, per-recipient call times from schedule_row_people,
+  and a "which day" pill on the shot list that reads from the schedule. The
   end-to-end save path has NOT been exercised: the operator's first real
   schedule is the test, and the thing most likely to surface is the shots
   picker's steal-then-insert on a shot already on another row.
@@ -4128,9 +4133,59 @@ label was hardcoded `Day {n}` at six places.
   carries the operator's own shape (prelight + two shoot days): tabs, board
   columns, the modal title and the shot picker's "on Prelight" badge all agree,
   the name field appears and disappears with the kind, and 390px is unchanged.
-- NOT DONE: the print view and the call sheet's `schedule` block do not exist
-  yet, so nothing else consumes this. Both should read `name`, never
-  `dayNumber`. The hub card was the one other crew-facing site and is converted.
+- NOT DONE: the call sheet's `schedule` block does not exist yet. It should
+  read `name`, never `dayNumber`, the way the print view now does. The hub card
+  was the one other crew-facing site and is converted.
+
+### The schedule shares and prints (migration 0110) — BUILT
+Operator, the morning after the prelight day landed: "I have no sharing or
+printing options for the schedule." Correct, and it was the one production
+document with none: the shot list, the storyboard, the call sheet and every
+billing document all had link, email and PDF, and the schedule had a screen.
+Which is backwards, because the schedule is the document the most people read:
+the unit reads it on the morning and an agency producer asks for it days
+before that.
+- ONE RENDERER, components/production/schedule-document.tsx, the same call
+  CallSheetDocument and the binder already make. It is presentational and
+  hook-free, so the server print route and the client review canvas mount the
+  identical component and a studio is never answering questions about a
+  document it cannot see. TIMES ARE DERIVED IN IT, through the same cascade()
+  the editor runs, so a printed clock cannot disagree with the screen.
+- A ROW AT THE DAY'S OWN LOCATION PRINTS NO ADDRESS. The first pass repeated
+  "Stage 2, Culver City" against all twenty-two rows of a stage job, which
+  buries the company move that is the only line where the address genuinely
+  changes. The header states it once; the SET still prints on every row, since
+  that is what differs. Matched case-insensitively on the trimmed string.
+- THE PRINT ROUTE is /projects/[id]/production/schedule, beside the shot list
+  and call sheet exports and built the same way: ProductionCover reading
+  `shot_boards` (so filling the job block in once dresses this too),
+  data-theme="light" with print-exact colours, `break-before-page` per day,
+  ?auto=1 for the one-click PDF button. `?day=<id>` exports ONE day, which is
+  the common case: a unit is handed tomorrow, not the week. The chips naming
+  the days read `name`, so a prelight exports as Prelight.
+- SHARING IS THE DOC-REVIEW STACK, not new code. 0110 adds `schedule` to
+  approval_target and to DocKind, and the schedule gets pins, drawings,
+  threads, reactions, the internal Review page and the no-login /r/<token>
+  portal for nothing, exactly as `props` did in 0092. target_id is the PROJECT
+  (one schedule per job), so it is project-scoped, which matters at the TWO
+  BRANCHES TYPESCRIPT CANNOT CHECK, `targetInProject` (doc-review-actions) and
+  `createDocReviewLink` (share-actions): both now name shot_list, sequence,
+  props and schedule together. A THIRD such branch turned up while wiring this
+  and is worth knowing about, since the CLAUDE.md note only ever mentioned two:
+  the full-page internal review route app/(app)/projects/[id]/review/doc/
+  [kind]/[target] carries its OWN narrow kind list and its own project-scoped
+  test, which is why `props` and `sequence` never got a full page. Its list is
+  now a named PROJECT_SCOPED constant rather than an inline `kind ===
+  "shot_list"`.
+- Nothing is shared until a day exists. An empty schedule tells a client
+  nothing and loadDocSurface returns null for it, so the whole button group is
+  hidden rather than offering a link that renders blank.
+- VERIFIED in Chromium against the fixture (which gained ?doc=1 for exactly
+  this, since the print route needs a session and Supabase): Prelight / Day 1 /
+  Day 2 in the document headers, the night shoot's 1:00 AM wrap target read as
+  90 minutes UNDER rather than 22 hours over, the location column carrying only
+  what differs, and the editor's new action row wrapping with no horizontal
+  overflow at 390px. Production build clean.
 
 ### Image captions save when you click away (no migration) — BUILT
 Operator: "image caption is not working. when i type something it doesnt save

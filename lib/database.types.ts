@@ -4614,7 +4614,8 @@ export type Database = {
         | "moodboard"
         | "ai_shot"
         | "sequence"
-        | "props";
+        | "props"
+        | "schedule";
       asset_status:
         | "draft"
         | "in_review"

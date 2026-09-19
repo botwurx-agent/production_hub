@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-type DocKind = "shot_list" | "storyboard" | "moodboard";
+type DocKind = "shot_list" | "storyboard" | "moodboard" | "schedule";
 
 // Links to the full-page comments/review view for a doc. Shows the client-comment
 // count as a badge when there is any.

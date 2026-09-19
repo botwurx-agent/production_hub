@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { canEditProject, requireStudioContext } from "@/lib/studio";
 import { loadRosterOptions, loadSchedule, loadShotOptions } from "@/lib/schedule-data";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
+import { emailConfigured } from "@/lib/email";
 import { ScheduleEditor } from "@/components/production/schedule-editor";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +19,27 @@ export default async function SchedulePage({ params }: { params: { id: string } 
     .maybeSingle();
   if (!project) notFound();
 
-  const [days, shotOptions, roster] = await Promise.all([
+  const [days, shotOptions, roster, { data: docReview }] = await Promise.all([
     loadSchedule(supabase, project.id),
     loadShotOptions(supabase, project.id),
     loadRosterOptions(supabase, project.id),
+    supabase
+      .from("doc_reviews")
+      .select("id")
+      .eq("target_type", "schedule")
+      .eq("target_id", project.id)
+      .maybeSingle(),
   ]);
+
+  // Client comments returned on the schedule, from a shared review link. The
+  // author_id filter is what makes this "what came back from outside" rather
+  // than a count of the studio's own notes.
+  const { count: commentCount } = await supabase
+    .from("review_comments")
+    .select("id", { count: "exact", head: true })
+    .eq("target_type", "schedule")
+    .eq("target_id", project.id)
+    .is("author_id", null);
 
   return (
     <div>
@@ -45,6 +62,10 @@ export default async function SchedulePage({ params }: { params: { id: string } 
           shotOptions={shotOptions}
           roster={roster}
           canEdit={canEditProject(ctx, project.id)}
+          studioName={ctx.studio.name}
+          emailEnabled={emailConfigured()}
+          inReview={Boolean(docReview)}
+          commentCount={commentCount ?? 0}
         />
       </div>
     </div>

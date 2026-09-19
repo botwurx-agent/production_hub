@@ -32,6 +32,10 @@ import { toast } from "@/components/ui/toast";
 import { confirmAction } from "@/components/ui/confirm";
 import { DAY_KINDS, type DayKind } from "@/lib/schedule-days";
 import { AnchoredPopover } from "@/components/ui/anchored-popover";
+import { DocReviewButton } from "@/components/review/doc-review-button";
+import { ShareDocButton } from "@/components/review/share-doc-button";
+import { EmailDocButton } from "@/components/review/email-doc-button";
+import { SendToReviewButton } from "@/components/projects/send-to-review-button";
 import {
   cascade,
   fmtDuration,
@@ -110,12 +114,20 @@ export function ScheduleEditor({
   shotOptions,
   roster,
   canEdit,
+  studioName,
+  emailEnabled,
+  inReview,
+  commentCount,
 }: {
   projectId: string;
   days: Day[];
   shotOptions: ShotOption[];
   roster: RosterOption[];
   canEdit: boolean;
+  studioName: string;
+  emailEnabled: boolean;
+  inReview: boolean;
+  commentCount: number;
 }) {
   const router = useRouter();
   const [days, setDays] = useState<Day[]>(serverDays);
@@ -253,6 +265,55 @@ export function ScheduleEditor({
       <div className="flex flex-wrap items-center gap-2">
         <Seg value={view} onChange={(v) => pickView(v as "day" | "board")} options={[["day", "Day"], ["board", "Board"]]} />
         <span className="flex-1" />
+        {/*
+          A schedule is a document before it is anything else: the unit reads it
+          on the morning, and an agency producer asks for it days before that.
+          So it carries the same four deliveries every other production document
+          does (internal comments, the review cycle, a client link, email) plus
+          a one-click PDF. Nothing is shared until a day exists, since an empty
+          schedule tells a client nothing and the link would render blank.
+        */}
+        {days.length > 0 && (
+          <>
+            <DocReviewButton
+              projectId={projectId}
+              kind="schedule"
+              targetId={projectId}
+              count={commentCount}
+            />
+            {canEdit && (
+              <SendToReviewButton
+                projectId={projectId}
+                kind="schedule"
+                targetId={projectId}
+                inReview={inReview}
+              />
+            )}
+            <ShareDocButton
+              projectId={projectId}
+              kind="schedule"
+              targetId={projectId}
+              label="Share"
+            />
+            <EmailDocButton
+              projectId={projectId}
+              kind="schedule"
+              targetId={projectId}
+              studioName={studioName}
+              enabled={emailEnabled}
+            />
+            <a
+              href={`/projects/${projectId}/production/schedule?auto=1`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Opens the printable schedule and prints it. Pick a single day there."
+              className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+              PDF
+            </a>
+          </>
+        )}
         {canEdit && <AddDayControl onAdd={addDay} />}
       </div>
 

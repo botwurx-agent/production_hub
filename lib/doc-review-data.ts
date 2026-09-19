@@ -33,6 +33,7 @@ const KIND_FALLBACK: Record<DocKind, string> = {
   ai_shot: "Shot",
   sequence: "Sequence",
   props: "Props",
+  schedule: "Shooting schedule",
 };
 
 // All docs in review for a project, with the counts the Review card shows.

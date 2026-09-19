@@ -6,6 +6,7 @@
 // Actions fire and fail here (no session), which is expected. Auth-gated in
 // production by the /dev/* rule.
 import { ScheduleEditor } from "@/components/production/schedule-editor";
+import { ScheduleDocument } from "@/components/production/schedule-document";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { Sidebar } from "@/components/app-shell/sidebar";
 import type { RosterOption, ScheduleDayView, ScheduleRowView, ShotOption } from "@/lib/schedule-data";
@@ -118,8 +119,20 @@ const ROSTER: RosterOption[] = [
   { contactId: "c-maya", name: "Maya Chen", position: "Lead", category: "talent" },
 ];
 
-export default function Page({ searchParams }: { searchParams: { job?: string } }) {
+export default function Page({ searchParams }: { searchParams: { job?: string; doc?: string } }) {
   const days = searchParams.job === "live" ? LIVE : HINT;
+  // ?doc=1 renders the EXPORT instead of the editor. The print route itself
+  // needs a session and Supabase, so this fixture is the only way to judge the
+  // document (and the client review surface, which renders the same component)
+  // from a Claude Code session.
+  const asDoc = searchParams.doc === "1";
+  const qs = (next: Record<string, string | undefined>) => {
+    const p = new URLSearchParams();
+    if (next.job) p.set("job", next.job);
+    if (next.doc) p.set("doc", next.doc);
+    const q = p.toString();
+    return q ? `/dev/schedule?${q}` : "/dev/schedule";
+  };
   return (
     <div className="flex min-h-screen bg-bg text-text">
       <Sidebar studioName="Studio Flows" assistant />
@@ -127,8 +140,11 @@ export default function Page({ searchParams }: { searchParams: { job?: string } 
         <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur">
           <div className="flex h-14 items-center gap-3 px-4 md:px-6">
             <div className="flex-1" />
-            <a href={searchParams.job === "live" ? "/dev/schedule" : "/dev/schedule?job=live"} className="text-xs font-semibold text-accent hover:underline">
+            <a href={qs({ job: searchParams.job === "live" ? undefined : "live", doc: searchParams.doc })} className="text-xs font-semibold text-accent hover:underline">
               {searchParams.job === "live" ? "Show Hint (real shots)" : "Show 3-day live action (example)"}
+            </a>
+            <a href={qs({ job: searchParams.job, doc: asDoc ? undefined : "1" })} className="text-xs font-semibold text-accent hover:underline">
+              {asDoc ? "Show the editor" : "Show the export"}
             </a>
             <span className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-border bg-surface px-2.5 text-xs font-semibold text-text-muted">Fixture · saves fail here</span>
           </div>
@@ -138,7 +154,14 @@ export default function Page({ searchParams }: { searchParams: { job?: string } 
             subtitle="The shoot, day by day. Times fall out of the durations; the day re-flows when anything changes."
             icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h4M8 18h6" /></svg>} />
           <div className="mt-5">
-            <ScheduleEditor projectId="p" days={days} shotOptions={SHOTS} roster={ROSTER} canEdit />
+            {asDoc ? (
+              <div data-theme="light" className="rounded-[16px] bg-bg p-5">
+                <ScheduleDocument days={days} />
+              </div>
+            ) : (
+              <ScheduleEditor projectId="p" days={days} shotOptions={SHOTS} roster={ROSTER} canEdit
+                studioName="Northline Studio" emailEnabled inReview={false} commentCount={0} />
+            )}
           </div>
         </main>
       </div>
