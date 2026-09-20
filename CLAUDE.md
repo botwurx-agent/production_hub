@@ -4215,6 +4215,41 @@ before that.
   SVG data URI, obviously not a screenshot) so the strip can be judged from a
   session that cannot reach signed storage.
 
+### The studio name is editable (no migration) — BUILT
+Operator: "i cant change a studio name in settings?" Correct, and it had never
+been possible. The Settings page printed `ctx.studio.name` as a read-only `<dd>`
+and nothing in the whole codebase ever wrote to `studios.name`: it was
+collected once by the signup form and frozen.
+- THE DATABASE ALREADY ALLOWED IT. `studios_update` is `is_studio_admin(id)`
+  for both USING and WITH CHECK, checked against the live project rather than
+  assumed, so this was a missing form and a missing action, not a permissions
+  question. No migration.
+- IT IS NOT A DECORATIVE FIELD, which is why it mattered: the name is the
+  company on a call sheet MASTHEAD, the sender line of every invite and client
+  review email, the cover of a binder, the heading of a shared board and the
+  studio on an editor handoff. A typo or a rebrand was printed on all of it
+  permanently.
+- BOTH REVALIDATES, the pair the logo upload already uses: `/settings` AND
+  `("/", "layout")`. The sidebar and the studio switcher render the name in the
+  LAYOUT, so a page-only revalidate would leave the old name on screen beside
+  the new one.
+- ADMINS ONLY, matching the logo and the RLS. A member sees the name and a
+  plain line reading "Studio admins can change this", never a control that
+  refuses: the capability is stated rather than discovered through an error. A
+  collaborator cannot reach the page at all and their synthesised context
+  carries role `member`, so the guard refuses them twice over.
+- READ-ONLY UNTIL ASKED. Pressing Edit swaps the line for an input, which keeps
+  a card that is mostly a summary quiet. Enter saves, Escape cancels and STOPS
+  PROPAGATING so the rename is abandoned without closing anything around it,
+  and a save whose value is unchanged closes without writing a row.
+- Whitespace is COLLAPSED, not just trimmed, on both sides: this is printed on
+  a masthead, so a double space or a pasted newline shows up there rather than
+  here. Capped at 80 characters.
+- Verified in Chromium against a throwaway fixture mounting the REAL component
+  (deleted): one Edit button across an admin card and a member card, the input
+  opens with its text selected, Escape posts nothing, Enter posts exactly once,
+  an unchanged save posts nothing, and 390px has no horizontal overflow.
+
 ### Image captions save when you click away (no migration) — BUILT
 Operator: "image caption is not working. when i type something it doesnt save
 it or show what i typed on the bottom." Both halves were one bug, and the cause

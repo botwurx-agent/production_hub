@@ -11,6 +11,7 @@ import { StatusTag } from "@/components/status-tag";
 import { Appearance } from "@/components/settings/appearance";
 import { Connections } from "@/components/settings/connections";
 import { LogoUpload } from "@/components/settings/logo-upload";
+import { StudioName } from "@/components/settings/studio-name";
 import { BillingProfileForm } from "@/components/settings/billing-profile";
 import { TeamPanel } from "@/components/settings/team-panel";
 import type { BillingProfile } from "@/lib/database.types";
@@ -147,12 +148,7 @@ export default async function SettingsPage({
         <Card className="p-5">
           <h2 className="mb-4 font-display text-base font-bold">Studio</h2>
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <dt className="text-xs font-semibold text-text-faint">Name</dt>
-              <dd className="mt-0.5 text-sm font-medium text-text">
-                {ctx.studio.name}
-              </dd>
-            </div>
+            <StudioName name={ctx.studio.name} canEdit={canManageTeam} />
             <div>
               <dt className="text-xs font-semibold text-text-faint">
                 Your role
