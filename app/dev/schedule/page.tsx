@@ -125,17 +125,39 @@ const LIVE: ScheduleDayView[] = days([
   ]},
 ]);
 
+const L1 = "HINT Treat Yourself Shot List";
+const L2 = "Social cutdowns";
+/**
+ * Unscheduled shots on two lists, so the "Build from the shot list" dialog has
+ * something real to plan: its preview runs the same pure planner the action
+ * does, so the row counts and wrap times it shows here are the real ones.
+ */
 const SHOTS: ShotOption[] = [
-  ...HINT.flatMap((d) => d.rows.flatMap((r) => r.shots.map((s): ShotOption => ({ id: s.id, code: s.code, description: s.description, list: "HINT Treat Yourself Shot List", thumbUrl: null, rowId: r.id })))),
-  { id: "s9", code: "9", description: "Alt beauty, top down (unscheduled)", list: "HINT Treat Yourself Shot List", thumbUrl: null, rowId: null },
+  ...HINT.flatMap((d) => d.rows.flatMap((r) => r.shots.map((s): ShotOption => ({ id: s.id, code: s.code, description: s.description, list: L1, groupId: "g1", day: "1", thumbUrl: null, rowId: r.id })))),
+  // Day "2" JOINS the existing Day 2; "Prelight" makes a new day that has to
+  // slot in FIRST; the undayed second list becomes a new Day 3. All three paths
+  // of the builder on one screen.
+  { id: "s9", code: "9", description: "Alt beauty, top down", list: L1, groupId: "g1", day: "2", thumbUrl: null, rowId: null },
+  { id: "s10", code: "10", description: "Pour, slow motion, backlit", list: L1, groupId: "g1", day: "2", thumbUrl: null, rowId: null },
+  { id: "s11", code: "11", description: "Pack hero, locked pedestal", list: L1, groupId: "g1", day: "Prelight", thumbUrl: null, rowId: null },
+  { id: "s12", code: "12", description: "Trio, end card", list: L1, groupId: "g1", day: "Prelight", thumbUrl: null, rowId: null },
+  ...Array.from({ length: 7 }, (_, i): ShotOption => ({
+    id: `c${i + 1}`, code: `C${i + 1}`, description: `Vertical cutdown beat ${i + 1}`,
+    list: L2, groupId: "g2", day: null, thumbUrl: null, rowId: null,
+  })),
 ];
 const ROSTER: RosterOption[] = [
   ...[DP, GF, KG, MC, FS, PS].map((p) => ({ contactId: p.contactId, name: p.name, position: p.position, category: "crew" })),
   { contactId: "c-maya", name: "Maya Chen", position: "Lead", category: "talent" },
 ];
 
-export default function Page({ searchParams }: { searchParams: { job?: string; doc?: string } }) {
-  const days = searchParams.job === "live" ? LIVE : HINT;
+export default function Page({ searchParams }: { searchParams: { job?: string; doc?: string; days?: string } }) {
+  // ?days=none is the EMPTY schedule, which is what a new project opens on and
+  // the only place the "build it from the shot list" prompt is the whole page.
+  const empty = searchParams.days === "none";
+  const days = empty ? [] : searchParams.job === "live" ? LIVE : HINT;
+  // With no days there are no rows, so nothing can be scheduled on one.
+  const shots = empty ? SHOTS.map((s) => ({ ...s, rowId: null })) : SHOTS;
   // ?doc=1 renders the EXPORT instead of the editor. The print route itself
   // needs a session and Supabase, so this fixture is the only way to judge the
   // document (and the client review surface, which renders the same component)
@@ -145,6 +167,7 @@ export default function Page({ searchParams }: { searchParams: { job?: string; d
     const p = new URLSearchParams();
     if (next.job) p.set("job", next.job);
     if (next.doc) p.set("doc", next.doc);
+    if (searchParams.days) p.set("days", searchParams.days);
     const q = p.toString();
     return q ? `/dev/schedule?${q}` : "/dev/schedule";
   };
@@ -174,7 +197,7 @@ export default function Page({ searchParams }: { searchParams: { job?: string; d
                 <ScheduleDocument days={days} />
               </div>
             ) : (
-              <ScheduleEditor projectId="p" days={days} shotOptions={SHOTS} roster={ROSTER} canEdit
+              <ScheduleEditor projectId="p" days={days} shotOptions={shots} roster={ROSTER} canEdit
                 studioName="Northline Studio" emailEnabled inReview={false} commentCount={0} />
             )}
           </div>

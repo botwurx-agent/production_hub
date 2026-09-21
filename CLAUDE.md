@@ -4215,6 +4215,100 @@ before that.
   SVG data URI, obviously not a screenshot) so the strip can be judged from a
   session that cannot reach signed storage.
 
+### The schedule builds itself from the shot list (no migration) — BUILT
+Operator, after the first real run: it "worked great but it was very tedious and
+time consuming. The objective of the app is to make things more efficient."
+Their three-day job came to 56 rows typed by hand.
+- WHERE THE TEDIUM ACTUALLY WAS, read off their real schedule rather than
+  guessed: roughly HALF those rows are `setup` rows in a strict setup / shot /
+  setup / shot alternation (15 minutes, 60 for a day opener), and the rest is
+  the day scaffold, an opening setup, one anchored lunch, a closing wrap. None
+  of it is a judgement call. The location was also retyped on all 56 rows, and
+  it is spelled "Stege 2" on two days and "Stage 2" on the third, which is what
+  per-row manual entry looks like from the inside.
+- THE DAY SPLIT COMES FROM `shot_cards.day`, AND THAT WAS THE ONE DESIGN
+  QUESTION THE DATABASE ANSWERED. The first pass made one day per shot LIST,
+  which is a fair reading of "split the days according to the shot list". Their
+  real job is ONE list of 33 shots whose day column reads Prelight (6), 1 (13),
+  2 (14), exactly the three days they built, so that rule would have produced a
+  single 33-shot day wrapping after midnight. A list with NO day values still
+  becomes one day, which is right for a one-day job and for the demo studio's
+  two lists named "Day 1, product" and "Day 2, liquid". Decided per LIST, so a
+  dayed list and an undayed one can coexist, and same-value groups MERGE across
+  lists.
+- A NON-NUMERIC DAY VALUE NAMES A NON-SHOOT DAY, which closes a loop rather
+  than opening one: `shotDayValue` (0109) writes a non-shoot day's NAME into
+  that column, so "Prelight" is read back into a prelight day. Anything
+  unrecognised becomes an `other` day wearing its own label.
+- ORDERING CANNOT BE READ OFF THE LIST. In their list the six Prelight shots
+  sit LAST by position, because they were added after the plan, so ordering day
+  groups by where their shots appear would have put the prelight at the end of
+  the shoot. KIND_RANK puts prelight and travel before the numbered days and
+  wrap after; numbered days sort numerically (so 10 follows 2, not 1).
+- IT ONLY EVER ADDS, and that is the whole reason there is no replace mode:
+  this page has no undo. A shot already on a row is skipped. A planned day that
+  MATCHES one the schedule already has JOINS it, adding only the work (no
+  second opener, no second lunch, no second wrap) inserted before that day's
+  wrap row, so a re-run after new shots are added drops them on the right days
+  instead of making a second Day 1. Joining a day that is EMPTY plans the full
+  scaffold into it, which is what `ExistingDay.hasRows` is for.
+- A NEW DAY IS NOT APPENDED, IT IS SLOTTED IN. A prelight added on a second run
+  would otherwise take the next `day_number` and sit after Day 2, which is the
+  confusion 0109 exists to prevent, and the editor cannot reorder days.
+  `mergeDayOrder` merges the new days into the existing sequence by the same
+  rank, EXISTING DAYS KEEPING THEIR RELATIVE ORDER always (ties go to the day
+  that already exists), and the action renumbers. The renumber PARKS every
+  existing day on 10000+i first, because (project_id, day_number) is unique and
+  an in-place shuffle collides with a day it has not moved yet; a failed insert
+  unparks them before giving up.
+- DURATIONS ARE NOT INFERRED. `shot_cards` has no duration column, so there is
+  nothing to read: every shot gets the same flat default (60, with 15 between
+  and 60 for the day opener, all the operator's numbers). Guessing from shot
+  size or camera movement would look clever, be wrong often, and each wrong
+  guess is a row to fix, which is worse than a uniform number you can see is
+  provisional.
+- LUNCH IS PLACED BY THE CASCADE, not appended: the day is laid out, lunch goes
+  before the first row that would START at or after 1:00 pm, then walks BACK
+  over a setup, since you break and then set up rather than the reverse. A day
+  that ends before lunch gets none.
+- ONE SHOT PER ROW. Their schedule sometimes put two on a row, almost certainly
+  because the two shared a set, and the shot list carries no set or location, so
+  we cannot know. A row already holds several shots, so merging two is a tick in
+  the row modal.
+- A BLANK DAY IN A DAYED LIST IS LEFT OFF, never guessed onto a day, and the
+  dialog names the number. Filing work on the wrong day is worse than leaving it
+  unscheduled, which is a state the picker and a re-run both recover from.
+- NO LOCATION ON A GENERATED ROW. The day header states it once and
+  ScheduleDocument already suppresses a row location that only repeats the
+  day's. Stamping it on fifty rows would mean a later correction to the day
+  leaves fifty rows saying the old thing: the "Stege 2" mistake, manufactured at
+  scale.
+- THE DIALOG RUNS THE REAL PLANNER. lib/schedule-build.ts is pure and NOT
+  `server-only`, so components/production/schedule-build-modal.tsx runs the same
+  `planSchedule` through the same `cascade` and states each day's row count and
+  the time it WRAPS before anything is written, plus an amber line when a day
+  runs past the target. That is the AD's actual question ("will this fit the
+  day") and answering it up front is what makes the defaults safe to accept.
+  The browser sends OPTIONS, never rows; the action re-derives everything from
+  the project's own lists and days.
+- `loadShotOptions` gained `groupId` and `day`, and now sorts by LIST then
+  position. The query orders by card position across every group at once, which
+  interleaved the lists, so the row modal's picker was already showing one
+  list's shots broken up by another's.
+- 113 assertions in the scratchpad, most of them the day split: the operator's
+  real Prelight/1/2 shape, two dayed lists merging, a dayed and an undayed list
+  coexisting, 10 sorting after 2, case and whitespace, joining, the empty-day
+  case, and that a joined day does not consume a date from the consecutive run.
+  Bugs the tests caught before anything shipped: `Number("")` is 0, so a cleared
+  duration field planned a nil-length row (the "n/a" trap again), and an ABSENT
+  lunch time silently turned lunch off where a CLEARED one should.
+- Verified in Chromium against app/dev/schedule, which gained `?days=none` (the
+  empty schedule) and unscheduled fixture shots covering all three paths at
+  once: a day that joins, a prelight that slots in first, and an undayed list
+  becoming a new day. NOT verified end to end: a dev server in a Claude Code
+  session cannot reach Supabase, so the write path has to be tried on the
+  operator's machine. The renumber is the part to watch.
+
 ### The studio name is editable (no migration) — BUILT
 Operator: "i cant change a studio name in settings?" Correct, and it had never
 been possible. The Settings page printed `ctx.studio.name` as a read-only `<dd>`

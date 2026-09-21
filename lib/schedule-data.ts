@@ -65,7 +65,11 @@ export type ShotOption = {
   id: string;
   code: string | null;
   description: string | null;
+  /** The shot list it is on. `groupId` is the id of that list. */
   list: string;
+  groupId: string;
+  /** The list's own day column, free text ("1", "Prelight"). The day split reads it. */
+  day: string | null;
   thumbUrl: string | null;
   /** The row it is already scheduled on, if any. The picker says so. */
   rowId: string | null;
@@ -213,7 +217,7 @@ export async function loadShotOptions(supabase: Client, projectId: string): Prom
   if (!groups?.length) return [];
   const { data: cards } = await supabase
     .from("shot_cards")
-    .select("id, group_id, position, code, description, storage_path, mime_type")
+    .select("id, group_id, position, code, description, day, storage_path, mime_type")
     .in("group_id", groups.map((g) => g.id))
     .order("position", { ascending: true });
   if (!cards?.length) return [];
@@ -226,14 +230,26 @@ export async function loadShotOptions(supabase: Client, projectId: string): Prom
     cards.filter((c) => c.storage_path && isResizable(c.mime_type)).map((c) => c.storage_path as string)
   );
   const listName = new Map(groups.map((g) => [g.id, g.title]));
-  return cards.map((c) => ({
-    id: c.id,
-    code: c.code,
-    description: c.description,
-    list: listName.get(c.group_id) ?? "",
-    thumbUrl: c.storage_path ? thumbs.get(c.storage_path) ?? null : null,
-    rowId: placedBy.get(c.id) ?? null,
-  }));
+  // Sorted by LIST, then by position within it. The query orders by card
+  // position across every group at once, which interleaves the lists, so both
+  // the row modal's picker and the schedule builder would show one list's
+  // shots broken up by another's.
+  const listOrder = new Map(groups.map((g, i) => [g.id, i]));
+  return cards
+    .map((c) => ({
+      id: c.id,
+      code: c.code,
+      description: c.description,
+      list: listName.get(c.group_id) ?? "",
+      groupId: c.group_id,
+      day: c.day,
+      thumbUrl: c.storage_path ? thumbs.get(c.storage_path) ?? null : null,
+      rowId: placedBy.get(c.id) ?? null,
+      _list: listOrder.get(c.group_id) ?? 0,
+      _pos: c.position,
+    }))
+    .sort((a, b) => a._list - b._list || a._pos - b._pos)
+    .map(({ _list, _pos, ...rest }) => rest);
 }
 
 /** The project roster, for the talent and crew pickers. */

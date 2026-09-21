@@ -36,6 +36,8 @@ import { DocReviewButton } from "@/components/review/doc-review-button";
 import { ShareDocButton } from "@/components/review/share-doc-button";
 import { EmailDocButton } from "@/components/review/email-doc-button";
 import { SendToReviewButton } from "@/components/projects/send-to-review-button";
+import { ScheduleBuildModal } from "@/components/production/schedule-build-modal";
+import type { ExistingDay } from "@/lib/schedule-build";
 import {
   cascade,
   fmtDuration,
@@ -137,7 +139,23 @@ export function ScheduleEditor({
   const [drag, setDrag] = useState<Drag | null>(null);
   const [editing, setEditing] = useState<{ row: Row; day: Day } | null>(null);
   const [editingDay, setEditingDay] = useState<Day | null>(null);
+  const [building, setBuilding] = useState(false);
   const [, start] = useTransition();
+
+  // A build is offered while any shot is still unscheduled, because that is the
+  // only case where it would write anything: it appends days and skips shots
+  // already on a row, so it can never overwrite an arrangement made by hand.
+  const unscheduled = shotOptions.filter((s) => !s.rowId).length;
+  const lastDay = days[days.length - 1];
+  // What the builder needs to know about the days that already exist, so a
+  // planned "Day 2" joins the real Day 2 rather than making a second one.
+  const existingDays: ExistingDay[] = days.map((d) => ({
+    id: d.id,
+    kind: d.kind,
+    name: d.name,
+    shootNo: d.shootNo,
+    hasRows: d.rows.length > 0,
+  }));
 
   const day = days[Math.min(dayIdx, Math.max(0, days.length - 1))];
 
@@ -251,12 +269,36 @@ export function ScheduleEditor({
   // ---- empty ---------------------------------------------------------------
   if (days.length === 0) {
     return (
-      <EmptyState
-        hue="green"
-        title="No shoot days yet"
-        description="Add the first day, then build it from the shot list. Times fall out of the durations; the day re-flows when anything changes."
-        action={canEdit ? <Button onClick={() => addDay()}>Add Day 1</Button> : undefined}
-      />
+      <>
+        <EmptyState
+          hue="green"
+          title="No shoot days yet"
+          description={
+            unscheduled > 0
+              ? `Build it from the shot list: one list becomes one day, with a setup before every shot. ${unscheduled} ${unscheduled === 1 ? "shot is" : "shots are"} waiting. Times fall out of the durations, so the day re-flows when anything changes.`
+              : "Add the first day, then fill it. Times fall out of the durations; the day re-flows when anything changes."
+          }
+          action={
+            canEdit ? (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {unscheduled > 0 && <Button onClick={() => setBuilding(true)}>Build from the shot list</Button>}
+                <Button variant={unscheduled > 0 ? "secondary" : "primary"} onClick={() => addDay()}>
+                  Add a day
+                </Button>
+              </div>
+            ) : undefined
+          }
+        />
+        {building && (
+          <ScheduleBuildModal
+            projectId={projectId}
+            shotOptions={shotOptions}
+            existing={[]}
+            onClose={() => setBuilding(false)}
+            onBuilt={() => { setBuilding(false); router.refresh(); }}
+          />
+        )}
+      </>
     );
   }
 
@@ -313,6 +355,11 @@ export function ScheduleEditor({
               PDF
             </a>
           </>
+        )}
+        {canEdit && unscheduled > 0 && (
+          <Button size="sm" variant="secondary" onClick={() => setBuilding(true)} title={`${unscheduled} ${unscheduled === 1 ? "shot is" : "shots are"} not on the schedule yet`}>
+            Build from the shot list
+          </Button>
         )}
         {canEdit && <AddDayControl onAdd={addDay} />}
       </div>
@@ -382,6 +429,21 @@ export function ScheduleEditor({
           onClose={() => setEditing(null)}
           onSaved={(patch) => { patchRowLocal(editing.row.id, patch); setEditing(null); router.refresh(); }}
           onDeleted={() => { setDays((ds) => ds.map((d) => ({ ...d, rows: d.rows.filter((r) => r.id !== editing.row.id) }))); setEditing(null); router.refresh(); }}
+        />
+      )}
+      {building && (
+        <ScheduleBuildModal
+          projectId={projectId}
+          shotOptions={shotOptions}
+          existing={existingDays}
+          seed={{ callTime: lastDay?.callTime, wrapTarget: lastDay?.wrapTarget, location: lastDay?.location }}
+          onClose={() => setBuilding(false)}
+          onBuilt={() => {
+            setBuilding(false);
+            // Land on the first day it made, which is the one to look at.
+            setDayIdx(days.length);
+            router.refresh();
+          }}
         />
       )}
       {editingDay && (
