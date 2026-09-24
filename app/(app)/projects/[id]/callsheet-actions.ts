@@ -97,6 +97,136 @@ export async function createCallSheet(
   return { id: data.id };
 }
 
+/**
+ * Duplicate a call sheet.
+ *
+ * Straight from a real shoot: the prelight sheet went out yesterday and Day 1
+ * goes out today. The two differ by a date and a few call times, and everything
+ * else (the company block, the key contacts, the block layout, the accent and,
+ * above all, the twenty or thirty crew rows) is identical work typed again.
+ *
+ * WHAT CARRIES IS EVERYTHING EXCEPT WHAT WOULD GO OUT WRONG. The row is copied
+ * wholesale and only the fields below are dropped, so a column added later
+ * carries by default. Add one here if it is ever a fact about a SPECIFIC DAY or
+ * a record of what happened to this sheet, since silently carrying either is
+ * the failure this guards against:
+ * - `shoot_date`, `day_of` and `weather` are stated as fact about one day, and
+ *   a call sheet dated yesterday reaching the unit is the worst thing this
+ *   document can do. They arrive blank, which the masthead shows plainly, and
+ *   blank is the one state nobody acts on by mistake.
+ * - `status` returns to draft. It is also load-bearing: the reminder cron only
+ *   chases `sent` and `confirmed` sheets, so a copy that inherited `sent` would
+ *   start chasing people about a sheet nobody has been sent.
+ * - `schedule_day_id` points at one day of the schedule, which is precisely the
+ *   day this copy is not.
+ * The times (crew call, shoot call, lunch, wrap, breakfast) DO carry, because
+ * they usually repeat and the operator asked to "make any necessary changes",
+ * not to start again.
+ *
+ * THE CREW ROWS CARRY IN FULL, call times included: that is the bulk of the
+ * work and the reason this exists.
+ *
+ * RECIPIENTS CARRY AS PEOPLE, NEVER AS HISTORY. The name, email and contact
+ * come over so the same unit does not have to be re-picked, but each row gets a
+ * FRESH token and no tracking at all. Copying a token would hand two sheets to
+ * one link, and copying viewed_at / confirmed_at would open the new sheet
+ * claiming yesterday's crew have already confirmed tomorrow, which is exactly
+ * the lie the confirmation tracking exists to prevent.
+ *
+ * MEAL ROUNDS DO NOT CARRY. A round is a group-order link and a cutoff time,
+ * and both belong to a day that has passed.
+ */
+export async function duplicateCallSheet(
+  projectId: string,
+  callSheetId: string
+): Promise<{ id: string; entries: number; recipients: number } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+
+  const { data: source } = await supabase
+    .from("call_sheets")
+    .select("*")
+    .eq("id", callSheetId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!source) return { error: "Call sheet not found." };
+
+  const {
+    id: _id,
+    created_by: _createdBy,
+    updated_at: _updatedAt,
+    position: _position,
+    status: _status,
+    title: _title,
+    shoot_date: _shootDate,
+    day_of: _dayOf,
+    weather: _weather,
+    schedule_day_id: _scheduleDay,
+    ...carry
+  } = source;
+
+  const { data: last } = await supabase
+    .from("call_sheets")
+    .select("position")
+    .eq("project_id", projectId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: made, error } = await supabase
+    .from("call_sheets")
+    .insert({
+      ...carry,
+      title: `${(source.title || "Call sheet").trim()} (copy)`.slice(0, 200),
+      status: "draft",
+      position: (last?.position ?? -1) + 1,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error || !made) {
+    reportError("duplicateCallSheet/call_sheets", error);
+    return { error: "Could not duplicate the call sheet." };
+  }
+
+  // Cast, crew and client rows, in their existing order.
+  const { data: entries } = await supabase
+    .from("call_sheet_entries")
+    .select("position, name, role, call_time, contact, kind, contact_id")
+    .eq("call_sheet_id", callSheetId)
+    .order("position", { ascending: true });
+  if (entries?.length) {
+    const { error: entryErr } = await supabase.from("call_sheet_entries").insert(
+      entries.map((e) => ({ studio_id: ctx.studio.id, call_sheet_id: made.id, ...e }))
+    );
+    if (entryErr) reportError("duplicateCallSheet/call_sheet_entries", entryErr);
+  }
+
+  const { data: people } = await supabase
+    .from("call_sheet_recipients")
+    .select("name, email, contact_id")
+    .eq("call_sheet_id", callSheetId)
+    .order("created_at", { ascending: true });
+  if (people?.length) {
+    const { error: peopleErr } = await supabase.from("call_sheet_recipients").insert(
+      people.map((r) => ({
+        studio_id: ctx.studio.id,
+        call_sheet_id: made.id,
+        name: r.name,
+        email: r.email,
+        contact_id: r.contact_id,
+        // A new link per person. Nothing else comes over, so every row reads
+        // "not opened", which is true of a sheet that has not been sent.
+        token: generateReviewToken(),
+      }))
+    );
+    if (peopleErr) reportError("duplicateCallSheet/call_sheet_recipients", peopleErr);
+  }
+
+  rp(projectId);
+  return { id: made.id, entries: entries?.length ?? 0, recipients: people?.length ?? 0 };
+}
+
 export async function saveCallSheet(
   projectId: string,
   callSheetId: string,

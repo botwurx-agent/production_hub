@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { mealLabel } from "@/lib/meals";
 import type { RosterContact } from "@/lib/callsheet-import";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { confirmAction } from "@/components/ui/confirm";
+import { toast } from "@/components/ui/toast";
 import { CallSheetBuilder } from "@/components/production/callsheet-builder";
 import { RecipientsPanel, type ContactOption } from "@/components/production/recipients-panel";
 import { MealPanel, type MealRoundWithResponses } from "@/components/production/meal-panel";
 import { shortDate } from "@/lib/format";
 import {
   createCallSheet,
+  duplicateCallSheet,
   renameCallSheet,
   setCallSheetStatus,
   deleteCallSheet,
@@ -62,6 +64,11 @@ export function CallSheetWorkspace({
   const [activeId, setActiveId] = useState<string | null>(sheets[0]?.id ?? null);
   const [sendOpen, setSendOpen] = useState(false);
   const [mealOpen, setMealOpen] = useState(false);
+  // The sheet whose name should be selected once the server hands it back. A
+  // duplicate arrives called "<title> (copy)" and the first thing anyone does
+  // is rename it, so the cursor is put there rather than left to be hunted.
+  const [pendingRename, setPendingRename] = useState<string | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
 
   const active = sheets.find((s) => s.id === activeId) ?? sheets[0] ?? null;
   const activeEntries = active
@@ -75,10 +82,43 @@ export function CallSheetWorkspace({
     ? mealRounds.filter((m) => m.call_sheet_id === active.id)
     : [];
 
+  // Waits for the refresh to land: the new sheet is not in `sheets` until the
+  // server render returns, so the input it belongs to does not exist yet.
+  useEffect(() => {
+    if (!pendingRename || active?.id !== pendingRename) return;
+    const el = titleRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+    setPendingRename(null);
+  }, [pendingRename, active?.id]);
+
   function newSheet() {
     start(async () => {
       const res = await createCallSheet(projectId);
       if ("id" in res) setActiveId(res.id);
+      router.refresh();
+    });
+  }
+
+  function duplicate(id: string) {
+    start(async () => {
+      const res = await duplicateCallSheet(projectId, id);
+      if ("error" in res) return toast(res.error, "error");
+      const bits: string[] = [];
+      if (res.entries) bits.push(`${res.entries} ${res.entries === 1 ? "row" : "rows"}`);
+      if (res.recipients) {
+        bits.push(`${res.recipients} ${res.recipients === 1 ? "recipient" : "recipients"}`);
+      }
+      // Says what did NOT come over, since a blank date is the one difference
+      // somebody could otherwise miss.
+      toast(
+        bits.length
+          ? `Copied ${bits.join(" and ")}. Add the date and check the times.`
+          : "Copied. Add the date and check the times."
+      );
+      setActiveId(res.id);
+      setPendingRename(res.id);
       router.refresh();
     });
   }
@@ -182,6 +222,7 @@ export function CallSheetWorkspace({
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <input
                 key={active.id}
+                ref={titleRef}
                 defaultValue={active.title ?? ""}
                 onBlur={(e) => renameCallSheet(projectId, active.id, e.target.value)}
                 placeholder="Call sheet name"
@@ -233,6 +274,18 @@ export function CallSheetWorkspace({
                     {confirmedCount}/{activeRecipients.length}
                   </span>
                 )}
+              </button>
+              <button
+                onClick={() => duplicate(active.id)}
+                disabled={busy}
+                title="Copy this sheet's crew, layout and contacts into a new draft"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-50"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="12" height="12" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                Duplicate
               </button>
               <button
                 onClick={() => void remove(active.id)}

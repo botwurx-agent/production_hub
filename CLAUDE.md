@@ -4309,6 +4309,58 @@ Their three-day job came to 56 rows typed by hand.
   session cannot reach Supabase, so the write path has to be tried on the
   operator's machine. The renumber is the part to watch.
 
+### Duplicate a call sheet (no migration) — BUILT
+Operator, mid-job: "i sent out the prelight call sheet yesterday. Today i have
+to send out the call sheet for day 1. It would be much easier to duplicate
+yesterdays call sheet and make any necessary changes." Their own data made the
+case: IQBar Bites carried an "IQBar Prelight" sheet (sent, 5 crew rows, 4
+recipients) AND a second empty "IQBar Prelight" draft, which is what pressing
+New and giving up looks like from the database side.
+- COPY EVERYTHING, DROP WHAT WOULD GO OUT WRONG. The row is taken with
+  `select("*")` and destructured to omit, rather than listing the columns to
+  keep, so a column added later carries by default. The omit list is the whole
+  design and each entry is there for a reason: `shoot_date`, `day_of` and
+  `weather` are stated as fact about ONE day and a sheet dated yesterday
+  reaching the unit is the worst thing this document can do; `status` returns to
+  draft, which is load-bearing rather than tidy, since the reminder cron only
+  chases `sent` and `confirmed` sheets and a copy inheriting `sent` would start
+  chasing people about a sheet nobody has been sent; `schedule_day_id` points at
+  one day of the schedule, which is precisely the day the copy is not. ADD TO
+  THAT LIST any future column that is a fact about a specific day or a record of
+  what happened to this sheet.
+- THE TIMES DO CARRY (crew call, shoot call, lunch, wrap, breakfast). They
+  usually repeat, and the ask was to "make any necessary changes", not to start
+  again. A blank date is the one difference somebody could miss, so the toast
+  names it ("Copied 9 rows and 7 recipients. Add the date and check the times.")
+  rather than leaving it to be noticed on the printed sheet.
+- THE CREW ROWS CARRY IN FULL, call times included. That is the bulk of the
+  retyping and the reason this exists.
+- RECIPIENTS CARRY AS PEOPLE, NEVER AS HISTORY. Name, email and contact_id come
+  over so the same unit is not re-picked, but every row gets a FRESH token and
+  no tracking at all. Copying a token would hand two sheets to one link, and
+  copying viewed_at / confirmed_at / sent_at would open the new sheet claiming
+  yesterday's crew have already confirmed tomorrow, which is exactly the lie the
+  confirmation tracking (0038, 0088) exists to prevent. A recipient with a fresh
+  token on a DRAFT sheet is inert: the cron skips drafts, so nothing fires.
+- MEAL ROUNDS DO NOT CARRY. A round is a group-order link plus a cutoff time,
+  and both belong to a day that has passed.
+- The copy is named "<title> (copy)", becomes active, and its name input is
+  FOCUSED AND SELECTED, because renaming it to "Day 1" is the first thing
+  anybody does. That focus waits for the refresh to land (`pendingRename`
+  compared against the active id), since the new sheet is not in `sheets` until
+  the server render returns and the input it belongs to does not exist yet.
+- VERIFIED AGAINST THE LIVE DATABASE by running the action's exact SQL on the
+  DEMO studio's "Day 1, studio" and deleting the copy afterwards: 9 entries and
+  7 recipients copied, 9 of 9 entry call times carried, status draft, date /
+  day_of / weather / schedule_day_id all null, 7 distinct tokens with 0
+  collisions, 0 recipients carrying any history, 0 meal rounds. The button was
+  verified in Chromium on a throwaway fixture (deleted) at 390 to 1500px and in
+  dark; at 390 it wraps onto one line with Send and the close control.
+- KNOWN, and pre-existing rather than introduced: none of this workspace's
+  handlers wrap their action call in try/catch, so a thrown action (as opposed
+  to one returning {error}) escapes the transition to the error boundary.
+  Duplicate follows the file's existing shape.
+
 ### The studio name is editable (no migration) — BUILT
 Operator: "i cant change a studio name in settings?" Correct, and it had never
 been possible. The Settings page printed `ctx.studio.name` as a read-only `<dd>`
