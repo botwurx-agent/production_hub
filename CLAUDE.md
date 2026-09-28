@@ -3888,6 +3888,30 @@ Claude Code session cannot reach, so no clip had ever been recorded.
 - Worth knowing: `pkill -f "next dev"` inside a Bash call kills that call's own
   shell (the pattern matches its command line). Kill by pid.
 
+### Animated home hero: PROTOTYPE, not placed (2026-09-28)
+Operator's reference is monday.com's home hero (a 5s screen recording, frames
+studied): words left, and on the right a SIMPLIFIED hand-built board animated
+in code. A floating agent chip lands on a row, types what just happened, the
+status cell shimmers and flips to green with a small burst, then the next beat
+(about 1s each), ending on a cut to a card stack. It is NOT a screen recording,
+which is why it reads as snappy: the real app is dense and its changes are
+instant.
+- components/marketing/hero-motion.tsx is our version: one persistent board
+  ("Bright Water, Hero spot") with five production documents, and four beats
+  about 2.3s apart (client approves the storyboard, schedule re-flows to its
+  wrap, crew confirm 12/12, an invoice lands and the margin updates), then the
+  header flips to "Ready to shoot" and it loops. Token colours, both themes,
+  no animation library, reduced motion gets the finished board still.
+- PREVIEW at /dev/hero-motion (two-column hero, words left), recorded as the
+  fixture clip `hero-motion`. The live home page is UNCHANGED.
+- OPEN, for the operator: whether to adopt it, and it bends section 4.6
+  ("motifs never imitate a screenshot"). It is a drawn, simplified board, not
+  a fake screenshot, which is the reference's own approach, but that line is
+  theirs to confirm. Placing it also resolves the home hero's centre-stack.
+- TRIM GOTCHA: the recorded video runs about half a second behind the wall
+  clock the lead-in trim is measured on, so a clip's `prepare` step has to
+  wait past that or the cut lands before the moment it was aiming at.
+
 ### Demo clips (scripts/capture-demos.mjs, `npm run demos`): BUILT
 A screenshot cannot show an interaction, and on the canvas pages every claim IS
 an interaction: creation is drag-only, selecting a card turns the tool rail into

@@ -405,6 +405,26 @@ const CLIPS = [
     },
   },
   {
+    name: "hero-motion",
+    // The animated home-hero PROTOTYPE (components/marketing/hero-motion.tsx),
+    // recorded so it can be watched outside a browser. Nothing is driven: the
+    // scene plays itself, so the take is one full loop.
+    fixture: true,
+    path: "/dev/hero-motion?clean=1",
+    settle: 3000,
+    // Restart once painted, BEFORE the lead-in is measured, so the trimmed
+    // clip and its poster open on the clean first frame. The video runs about
+    // half a second behind the wall clock the trim is measured on, so the wait
+    // after the restart has to cover that too, or the cut lands before it.
+    async prepare(page) {
+      await page.evaluate(() => window.dispatchEvent(new Event("hero-motion:restart")));
+      await page.waitForTimeout(950);
+    },
+    async act(page) {
+      await page.waitForTimeout(10700);
+    },
+  },
+  {
     name: "schedule-reflow",
     // A FIXTURE clip: the real ScheduleEditor on app/dev/schedule's hardcoded
     // three-day job, so it records without a session or the database. See
@@ -519,6 +539,7 @@ for (const clip of RUN) {
   await prime(page);
   await drawCursor(page);
   await page.waitForTimeout(clip.settle);
+  if (clip.prepare) await clip.prepare(page);
   // Recording starts when the context opens, so the first seconds of every
   // take are a blank page loading. Everything up to here is trimmed off, and
   // the POSTER comes from the trimmed start: taken from frame one, it was a
