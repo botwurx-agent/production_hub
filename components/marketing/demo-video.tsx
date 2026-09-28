@@ -28,6 +28,16 @@ import { DemoPlayer } from "@/components/marketing/demo-player";
  * the player lists it first. A clip costs about 180KB, which is less than any
  * of the screenshots it sits beside.
  */
+/**
+ * Whether a clip has been recorded, in either format. Server-only, like
+ * shotExists: the marketing pages use it to leave out a demo section whose
+ * evidence does not exist yet, rather than ship the placeholder below.
+ */
+export function clipExists(clip: string): boolean {
+  const dir = path.join(process.cwd(), "public", "marketing", "demos");
+  return ["mp4", "webm"].some((ext) => fs.existsSync(path.join(dir, `${clip}.${ext}`)));
+}
+
 export function DemoVideo({
   clip,
   alt,

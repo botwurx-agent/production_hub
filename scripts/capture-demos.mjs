@@ -404,15 +404,84 @@ const CLIPS = [
       await page.waitForTimeout(3000);
     },
   },
+  {
+    name: "schedule-reflow",
+    // A FIXTURE clip: the real ScheduleEditor on app/dev/schedule's hardcoded
+    // three-day job, so it records without a session or the database. See
+    // `fixture` below for what that changes.
+    fixture: true,
+    path: "/dev/schedule?job=live&clean=1",
+    settle: 1800,
+    async act(page) {
+      // The whole claim in one gesture: durations drive the clock, an anchored
+      // row holds, and the overrun is REPORTED rather than silently pushing
+      // lunch. Then release the anchor and the afternoon, and the wrap, move.
+      const longer = page.getByRole("button", { name: "15 minutes longer" }).nth(1);
+      const c = await centreOf(longer);
+      if (!c) return;
+      await glide(page, c.x, c.y, 1000);
+      await page.waitForTimeout(500);
+      for (let i = 0; i < 10; i++) {
+        await page.mouse.down();
+        await page.mouse.up();
+        await page.waitForTimeout(i < 7 ? 260 : 520);
+      }
+      await page.waitForTimeout(1600);
+      // The pin on the lunch row.
+      const pin = page.locator('[data-demo="row-anchor"][aria-pressed="true"]:visible').first();
+      const p = await centreOf(pin);
+      if (!p) return;
+      await glide(page, p.x, p.y, 900);
+      await page.waitForTimeout(450);
+      await pin.click();
+      await page.waitForTimeout(2600);
+    },
+  },
 ];
 
 mkdirSync(OUT, { recursive: true });
 rmSync(TMP, { recursive: true, force: true });
 
+/**
+ * ONLY=schedule-reflow,moodboard-drag records a subset, same as capture-shots.
+ * An unknown name fails before the browser launches rather than after a run.
+ */
+const only = (process.env.ONLY ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+const unknown = only.filter((n) => !CLIPS.some((c) => c.name === n));
+if (unknown.length) {
+  console.error(`Unknown clip(s): ${unknown.join(", ")}`);
+  process.exit(1);
+}
+const RUN = only.length ? CLIPS.filter((c) => only.includes(c.name)) : CLIPS;
+
 const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : undefined,
 );
 
+/**
+ * FIXTURE CLIPS need no session. They record a /dev page that mounts the real
+ * component on hardcoded data (the same pattern as /dev/comms and
+ * /dev/schedule), which is what lets a clip be recorded from an environment
+ * that cannot reach Supabase at all. The demo studio is still the better
+ * source wherever it works, since a fixture has to be kept in step with the
+ * component; a fixture is for surfaces whose data cannot be seeded or whose
+ * recording would otherwise be a write against the studio.
+ *
+ * Every Server Action a fixture fires is answered with an EMPTY 200. Next reads
+ * a non-flight response as "done, nothing to apply", so the editor keeps its
+ * optimistic change on screen. Without this the action reaches the server,
+ * finds no session, and the page lands on the error card mid-take.
+ */
+async function answerActionsLocally(page) {
+  await page.route("**/*", (route) =>
+    route.request().method() === "POST" && route.request().headers()["next-action"]
+      ? route.fulfill({ status: 200, contentType: "text/plain", body: "" })
+      : route.continue(),
+  );
+}
+
+let storageState;
+if (RUN.some((c) => !c.fixture)) {
 /** Sign in once; every clip reuses the session. */
 const auth = await browser.newContext({ viewport: VIEW });
 const login = await auth.newPage();
@@ -427,10 +496,11 @@ if (!/\/dashboard/.test(login.url())) {
   await browser.close();
   process.exit(1);
 }
-const storageState = await auth.storageState();
+storageState = await auth.storageState();
 await auth.close();
+}
 
-for (const clip of CLIPS) {
+for (const clip of RUN) {
   // One context per clip: Playwright writes a video per context, and closing it
   // is what flushes the file.
   const ctx = await browser.newContext({
@@ -439,7 +509,9 @@ for (const clip of CLIPS) {
     recordVideo: { dir: TMP, size: VIEW },
   });
   const page = await ctx.newPage();
+  if (clip.fixture) await answerActionsLocally(page);
   await installCursor(page);
+  const t0 = Date.now();
   // Each clip starts its pointer from a neutral spot rather than wherever the
   // last one left it, or its first move is a jump in from off-screen.
   glide.at = { x: 900, y: 700 };
@@ -447,10 +519,17 @@ for (const clip of CLIPS) {
   await prime(page);
   await drawCursor(page);
   await page.waitForTimeout(clip.settle);
+  // Recording starts when the context opens, so the first seconds of every
+  // take are a blank page loading. Everything up to here is trimmed off, and
+  // the POSTER comes from the trimmed start: taken from frame one, it was a
+  // white rectangle, which is exactly what a reduced-motion visitor saw.
+  const lead = Math.max(0, (Date.now() - t0) / 1000 - 0.4);
 
-  const before = clip.mutates === false ? [] : await itemIds(page);
+  // A fixture writes nothing, so there is nothing to put back.
+  const tracks = clip.mutates !== false && !clip.fixture;
+  const before = tracks ? await itemIds(page) : [];
   await clip.act(page);
-  const after = clip.mutates === false ? [] : await itemIds(page);
+  const after = tracks ? await itemIds(page) : [];
   const made = after.filter((id) => !before.includes(id));
 
   await ctx.close();
@@ -466,6 +545,14 @@ for (const clip of CLIPS) {
 
   if (FFMPEG) {
     const mp4 = join(OUT, `${clip.name}.mp4`);
+    // Trim the lead-in off the WebM too, in place.
+    const raw = join(TMP, `${clip.name}.raw.webm`);
+    mkdirSync(TMP, { recursive: true });
+    renameSync(webm, raw);
+    execFileSync(FFMPEG, [
+      "-loglevel", "error", "-y", "-ss", String(lead), "-i", raw,
+      "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "38", "-row-mt", "1", "-an", webm,
+    ]);
     execFileSync(FFMPEG, [
       "-loglevel", "error", "-y", "-i", webm,
       // yuv420p and the even-dimension scale are what make it play on phones
@@ -478,7 +565,7 @@ for (const clip of CLIPS) {
     // and so reduced-motion visitors get a still rather than nothing.
     execFileSync(FFMPEG, [
       "-loglevel", "error", "-y", "-i", webm,
-      "-frames:v", "1", "-q:v", "3", join(OUT, `${clip.name}.jpg`),
+      "-frames:v", "1", "-q:v", "3", "-update", "1", join(OUT, `${clip.name}.jpg`),
     ]);
     console.log(`      ${clip.name}.mp4 + poster`);
   }

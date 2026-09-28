@@ -28,3 +28,16 @@ Adding a clip: add an entry to `CLIPS` in `scripts/capture-demos.mjs` and give
 whatever it clicks a `data-demo` attribute in the component. Anchor on
 `data-demo`, never on a CSS class, so restyling cannot silently break a
 recording.
+
+FIXTURE CLIPS (`fixture: true` in `CLIPS`) record a `/dev/*` page that mounts
+the REAL component on hardcoded data, the same pattern as `/dev/comms` and
+`/dev/schedule`. They need no sign-in and no database, so they can be recorded
+from a Claude Code session, where the proxy blocks Supabase. The recorder
+answers every Server Action with an empty 200, so the component keeps its
+optimistic change on screen instead of hitting the error card. `ONLY=<name>`
+records a subset:
+
+    ONLY=schedule-reflow npm run demos
+
+Every clip is trimmed to start after the page has settled, and the poster is
+taken from that trimmed start (it used to be frame one, a blank loading page).

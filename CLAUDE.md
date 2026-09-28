@@ -3867,6 +3867,27 @@ Also still uncaptured: `project-schedule`, which is why the schedule page's
 hero runs on its motif. `ONLY=project-schedule npm run shots` (the ONLY filter
 is new) takes just that one without retaking the other fourteen.
 
+### Marketing motion: clips record from FIXTURES now (2026-09-28)
+Operator: the site's biggest problem is that it does not SHOW the product, so
+they end up explaining the app to people instead of sending the link. The
+blocker was never design: the recorder needed the live demo studio, which a
+Claude Code session cannot reach, so no clip had ever been recorded.
+- FIXTURE CLIPS unblock it. A clip marked `fixture: true` records a /dev page
+  mounting the REAL component on hardcoded data, needs no sign-in, and has
+  every Server Action answered with an empty 200 (Next reads a non-flight
+  response as "done", so the optimistic change stays on screen instead of
+  landing on the error card). First one: `schedule-reflow` (lengthen a scene
+  into a fixed lunch, the overrun flags red, unpin lunch, the afternoon and
+  the wrap re-flow). Recorded and committed, NOT PLACED on any page yet:
+  placement is the operator's call.
+- The recorder also TRIMS the loading lead-in and takes the poster from the
+  trimmed start (it was frame one, a blank page), and takes `ONLY=`.
+- PRODUCTION NOW DROPS a demo section with nothing recorded or captured behind
+  it (clipExists in demo-video.tsx), which ends /moodboard-maker shipping six
+  dashed placeholders. Dev still shows them.
+- Worth knowing: `pkill -f "next dev"` inside a Bash call kills that call's own
+  shell (the pattern matches its command line). Kill by pid.
+
 ### Demo clips (scripts/capture-demos.mjs, `npm run demos`): BUILT
 A screenshot cannot show an interaction, and on the canvas pages every claim IS
 an interaction: creation is drag-only, selecting a card turns the tool rail into

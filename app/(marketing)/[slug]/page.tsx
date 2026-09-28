@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrowserFrame } from "@/components/marketing/browser-frame";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
-import { DemoVideo } from "@/components/marketing/demo-video";
+import { DemoVideo, clipExists } from "@/components/marketing/demo-video";
 import { FeatureMesh } from "@/components/marketing/feature-mesh";
 import { Motif } from "@/components/marketing/motifs";
 import { shotExists } from "@/components/marketing/shot";
@@ -113,6 +113,15 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
   // still shows further down, where a missing capture should be obvious.
   const hasShot = Boolean(shot) && shotExists(shot.shot);
   const demos = f.demos ?? [];
+  // In PRODUCTION a demo section with nothing recorded or captured behind it is
+  // left out entirely. The dashed placeholder is a development affordance (it
+  // names the missing file), and it shipped: /moodboard-maker went live as six
+  // giant empty boxes because none of its clips had been recorded. Development
+  // still shows every section, so a missing capture stays obvious there.
+  const shown =
+    process.env.NODE_ENV === "production"
+      ? demos.filter((d) => (d.clip ? clipExists(d.clip) : d.shot ? shotExists(d.shot) : false))
+      : demos;
   // A page argues with claim panels OR with demo sections, never both, so the
   // fold-closer line takes its titles from whichever one is carrying the page.
   const closers = demos.length > 0 ? demos : f.blocks;
@@ -243,7 +252,7 @@ export default function FeaturePage({ params }: { params: { slug: string } }) {
 
           Bands alternate tint so a stack of five has rhythm instead of
           reading as one long scroll of the same slab. */}
-      {demos.map((d, i) => (
+      {shown.map((d, i) => (
         <Section
           key={d.title}
           tint={i % 2 === 0 ? "tinted" : "plain"}

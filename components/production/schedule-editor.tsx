@@ -593,6 +593,9 @@ function Controls({ r, canEdit, onPatch, className = "" }: { r: Timed<Row>; canE
         <button
           onClick={(e) => { e.stopPropagation(); const anchoredAt = r.anchoredAt ? null : fmtHM(r.startMin, { ampm: false }); onPatch(r.id, { anchoredAt }, { anchoredAt }); }}
           title={r.anchoredAt ? "Fixed: holds this time. Click to let it flow." : "Flows from the row above. Click to fix it at this time."}
+          aria-label={r.anchoredAt ? "Let this row flow" : "Fix this row at its time"}
+          aria-pressed={!!r.anchoredAt}
+          data-demo="row-anchor"
           className={`grid h-7 w-7 place-items-center rounded-[7px] border text-xs transition ${r.anchoredAt ? "border-accent bg-accent-soft text-accent" : "border-border text-text-faint hover:text-text"}`}>
           <AnchorGlyph />
         </button>

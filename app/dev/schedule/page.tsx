@@ -151,7 +151,7 @@ const ROSTER: RosterOption[] = [
   { contactId: "c-maya", name: "Maya Chen", position: "Lead", category: "talent" },
 ];
 
-export default function Page({ searchParams }: { searchParams: { job?: string; doc?: string; days?: string } }) {
+export default function Page({ searchParams }: { searchParams: { job?: string; doc?: string; days?: string; clean?: string } }) {
   // ?days=none is the EMPTY schedule, which is what a new project opens on and
   // the only place the "build it from the shot list" prompt is the whole page.
   const empty = searchParams.days === "none";
@@ -175,6 +175,9 @@ export default function Page({ searchParams }: { searchParams: { job?: string; d
     <div className="flex min-h-screen bg-bg text-text">
       <Sidebar studioName="Studio Flows" assistant />
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* ?clean=1 drops this bar so scripts/capture-demos.mjs can record the
+            real editor without fixture controls in frame. */}
+        {searchParams.clean === "1" ? null : (
         <header className="sticky top-0 z-10 border-b border-border bg-bg/80 backdrop-blur">
           <div className="flex h-14 items-center gap-3 px-4 md:px-6">
             <div className="flex-1" />
@@ -187,6 +190,7 @@ export default function Page({ searchParams }: { searchParams: { job?: string; d
             <span className="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-border bg-surface px-2.5 text-xs font-semibold text-text-muted">Fixture · saves fail here</span>
           </div>
         </header>
+        )}
         <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-6 md:px-6">
           <ProjectSubhead projectId="mock" projectTitle={searchParams.job === "live" ? "Morning Ritual (example)" : "Hint Treat Yourself"} section="Schedule" hue="green"
             subtitle="The shoot, day by day. Times fall out of the durations; the day re-flows when anything changes."
