@@ -257,6 +257,77 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "video-review-software": {
+    hero: "review",
+    chapters: [
+      {
+        nav: "Share it",
+        title: "A link your client will actually use.",
+        body: "Send the cut, the frame or the board as a link. The client opens it in any browser, types their name, and starts reviewing, with no account to make and nothing to install. Give it a respond-by date and the chasing happens for you.",
+        details: [
+          { t: "No login for the client", d: "They open the link, type their name so you know who said what, and comment straight away." },
+          { t: "Email it from the app", d: "Send the review link with a message, from inside the project." },
+          { t: "Respond-by dates", d: "The client sees the date in amber, and in red once it has passed." },
+          { t: "Reminders that stop", d: "An overdue review gets a nudge by email, at most three, two days apart, and none once they respond." },
+          { t: "Every version on the link", d: "The client can open earlier versions and the notes left on them, while only the latest can be approved." },
+        ],
+        scene: "rv-share",
+      },
+      {
+        nav: "Pins on the frame",
+        title: "Point at the exact spot.",
+        body: "Click anywhere on an image and write the note there. A numbered pin marks the spot and the comment sits beside it, so feedback is never 'the thing on the left'. PDFs work the same way, page by page, which is how a director's storyboard usually arrives.",
+        details: [
+          { t: "Numbered pins", d: "Every note is pinned to the spot it is about and numbered to match the comment rail." },
+          { t: "PDFs, page by page", d: "Each page gets its own pins, and page chips show how many notes each one has." },
+          { t: "Zoom that stays sharp", d: "Fit, 1.5x, 2x and 3x, re-rendered at each size so small type is readable." },
+          { t: "Your documents too", d: "Shot lists, storyboards, moodboards, props and the shooting schedule go through the same review." },
+        ],
+        scene: "rv-pins",
+      },
+      {
+        nav: "Frame-accurate video",
+        title: "Notes on the moment, not a timestamp in an email.",
+        body: "Pause on a frame and comment on it, or mark a whole stretch that drags. Markers sit on the timeline and clicking a note jumps straight to it. The player has what an editor expects, and the guides answer the question every commercial asks: does it survive the vertical cutdown?",
+        details: [
+          { t: "Comment on a frame", d: "Pause and write. The note is pinned to that exact moment, in broadcast timecode." },
+          { t: "Range comments", d: "Mark an in and an out for a note about a whole section. Clicking it plays just that stretch." },
+          { t: "An editor's player", d: "J, K and L shuttle, frame stepping, playback speed from 0.25x to 2x, loop and volume." },
+          { t: "Safe areas and crop masks", d: "Title and action safe, rule of thirds, and 1:1, 4:5 and 9:16 masks for social cuts." },
+          { t: "Zoom and grab a frame", d: "Zoom to 2x or 4x and pan, or download the current frame as a still." },
+        ],
+        scene: "rv-video",
+      },
+      {
+        nav: "Draw and discuss",
+        title: "Draw on it. Then talk it through.",
+        body: "Sometimes the note is easier to draw than to write. Mark up the frame with arrows, boxes and circles, then discuss it in a thread until it is done and resolved.",
+        details: [
+          { t: "Drawing tools", d: "Arrow, line, box, circle and freehand pen, in five colours, with undo and redo." },
+          { t: "Drawings stay attached", d: "Selecting a comment replays its drawing, on any screen size." },
+          { t: "Threaded replies", d: "The studio and the client reply under the note, so the conversation stays with the frame." },
+          { t: "Reactions", d: "A quick thumbs up when the note is just agreement." },
+          { t: "Resolve, filter and search", d: "Mark notes resolved, filter by open, resolved or yours, and search every comment." },
+          { t: "Edit or delete your own", d: "People can fix their own notes, and only their own." },
+        ],
+        scene: "rv-draw",
+      },
+      {
+        nav: "Versions and sign-off",
+        title: "Every round kept. One clear yes.",
+        body: "Upload the next version on top of the last. Nothing is lost: each version keeps its own notes, before and after can sit side by side, and the client approves or requests changes on the latest. Your team can greenlight it internally before the client ever sees it.",
+        details: [
+          { t: "Versions, never overwritten", d: "v1, v2 and v3 all stay openable, each with the notes that were left on it." },
+          { t: "Compare side by side", d: "Put two versions of an image next to each other to see what changed." },
+          { t: "Approve or request changes", d: "One clear decision from the client, recorded against the version they saw." },
+          { t: "Internal review first", d: "Your team reviews and greenlights on the project's Review page before anything goes to the client." },
+          { t: "In your notifications", d: "Every client comment and decision lands in the studio's bell, with their name on it." },
+          { t: "Send options for a pick", d: "For generated shots, share a set of takes and get back stars, notes and one pick per reviewer." },
+        ],
+        scene: "rv-versions",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];

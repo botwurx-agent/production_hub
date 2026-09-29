@@ -4,6 +4,18 @@ import { useEffect, useState } from "react";
 import { FitStage, useInView, useSceneClock } from "./scene-kit";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
 import {
+  RV_DRAW_MS,
+  RV_PINS_MS,
+  RV_SHARE_MS,
+  RV_VERS_MS,
+  RV_VIDEO_MS,
+  ReviewDrawScene,
+  ReviewPinsScene,
+  ReviewShareScene,
+  ReviewVersionsScene,
+  ReviewVideoScene,
+} from "./scenes-review";
+import {
   CS_BUILD_MS,
   CS_CHASE_MS,
   CS_DUP_MS,
@@ -70,6 +82,11 @@ const SCENES = {
   "cs-send": { ms: CS_SEND_MS, C: CallSheetSendScene, label: "Send", hue: "amber" },
   "cs-chase": { ms: CS_CHASE_MS, C: CallSheetChaseScene, label: "Chase", hue: "amber" },
   "cs-meals": { ms: CS_MEALS_MS, C: CallSheetMealsScene, label: "Meals", hue: "amber" },
+  "rv-share": { ms: RV_SHARE_MS, C: ReviewShareScene, label: "Share", hue: "green" },
+  "rv-pins": { ms: RV_PINS_MS, C: ReviewPinsScene, label: "Pins", hue: "green" },
+  "rv-video": { ms: RV_VIDEO_MS, C: ReviewVideoScene, label: "Video", hue: "green" },
+  "rv-draw": { ms: RV_DRAW_MS, C: ReviewDrawScene, label: "Draw", hue: "green" },
+  "rv-versions": { ms: RV_VERS_MS, C: ReviewVersionsScene, label: "Versions", hue: "green" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;
