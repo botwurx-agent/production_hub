@@ -10,8 +10,8 @@ import type { ReactNode } from "react";
  * it work, and both were the failure modes of a first sketch:
  * - A pinned panel is NEVER taller than the viewport under the nav. A sticky
  *   element taller than the room it pins into shows its top forever and its
- *   bottom never, so the panel has a fixed height and the evidence is
- *   cropped at its bottom edge rather than growing the panel.
+ *   bottom never, so the panel has a fixed height and the evidence is SCALED
+ *   to fit it (never cropped: see the note on the evidence column).
  * - Only from `lg`. On a phone the viewport is too short to hold a headline and
  *   a product shot at once, so the panels simply stack.
  *
@@ -25,7 +25,7 @@ export type StackPanel = {
   body: string;
   hue: string;
   cta?: ReactNode;
-  /** The evidence: a BrowserFrame, a clip, a motif. Fills the lower area. */
+  /** The evidence, normally a LiveScene. Fills the right column. */
   children: ReactNode;
 };
 
@@ -40,39 +40,30 @@ export function StackPanels({ panels }: { panels: StackPanel[] }) {
           style={{ zIndex: i + 1 }}
         >
           <article
-            className="flex h-full flex-col overflow-hidden rounded-[32px] border border-border px-6 pt-8 shadow-[0_-18px_50px_-30px_rgba(40,30,90,.35)] sm:px-12 sm:pt-12 lg:pt-10"
+            className="grid h-full overflow-hidden rounded-[32px] border border-border px-6 py-8 shadow-[0_-18px_50px_-30px_rgba(40,30,90,.35)] sm:px-12 sm:py-12 lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)] lg:items-center lg:gap-12 lg:py-10"
             style={{
               background: `linear-gradient(160deg, var(--h-${p.hue}-bg) 0%, var(--surface-2) 45%, var(--surface) 100%)`,
             }}
           >
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-end lg:gap-16">
-              <div>
-                <p
-                  className="mb-3 text-xs font-semibold uppercase tracking-[0.16em]"
-                  style={{ color: `var(--h-${p.hue})` }}
-                >
-                  {p.eyebrow}
-                </p>
-                <h2 className="font-display text-5xl font-extrabold leading-[0.98] tracking-[-0.025em] text-text lg:text-[4.25rem]">
-                  {p.title}
-                </h2>
-              </div>
-              <div className="lg:pb-2">
-                <p className="text-lg leading-relaxed text-text-muted">{p.body}</p>
-                {p.cta ? <div className="mt-5">{p.cta}</div> : null}
-              </div>
+            <div>
+              <p
+                className="mb-3 text-xs font-semibold uppercase tracking-[0.16em]"
+                style={{ color: `var(--h-${p.hue})` }}
+              >
+                {p.eyebrow}
+              </p>
+              <h2 className="font-display text-5xl font-extrabold leading-[0.98] tracking-[-0.025em] text-text lg:text-[3.75rem]">
+                {p.title}
+              </h2>
+              <p className="mt-6 text-lg leading-relaxed text-text-muted">{p.body}</p>
+              {p.cta ? <div className="mt-6">{p.cta}</div> : null}
             </div>
-            {/* The evidence takes whatever height is left and BLEEDS off the
-                panel's bottom edge, cropped by the article's overflow, the
-                way monday's panels crop their product UI. Fitting the whole
-                frame into the leftover height made it a small picture in the
-                middle of a big panel; cropping keeps it large, and the top of
-                a product screen is the part that says what it is. The panel's
-                own fixed height is what keeps a pinned panel inside the
-                viewport. */}
-            <div className="mt-8 flex min-h-0 flex-1 justify-center lg:mt-10">
-              <div className="w-full max-w-[1120px]">{p.children}</div>
-            </div>
+            {/* The evidence FITS the panel, whole. The first version let a
+                screenshot bleed off the bottom edge the way monday's panels
+                crop their UI, and the operator was right that it cut off the
+                thing being shown. The scenes are fixed drawings scaled to
+                this box (scene-kit.tsx FitStage), so nothing is ever lost. */}
+            <div className="mt-8 min-h-0 lg:mt-0 lg:h-full">{p.children}</div>
           </article>
         </div>
       ))}

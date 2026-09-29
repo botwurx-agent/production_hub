@@ -8,11 +8,13 @@ import { SiteNav } from "@/components/marketing/site-nav";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { Aurora } from "@/components/marketing/aurora";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
-import { HeroMotion } from "@/components/marketing/hero-motion";
+import Link from "next/link";
+import { HeroShowcase, LiveScene } from "@/components/marketing/scene-stage";
 import { JobPath } from "@/components/marketing/job-path";
 import { StackPanels } from "@/components/marketing/stack-panels";
-import { BrowserFrame } from "@/components/marketing/browser-frame";
-import { DemoVideo } from "@/components/marketing/demo-video";
+import { Section, SectionHeader } from "@/components/marketing/section";
+import { ModuleMap } from "@/components/marketing/module-map";
+import { Wash } from "@/components/marketing/aurora";
 
 export const dynamic = "force-dynamic";
 
@@ -46,9 +48,28 @@ export default function Page() {
             className="relative rounded-[32px] p-6 sm:p-12"
             style={{ background: "linear-gradient(145deg, var(--h-indigo-bg) 0%, var(--surface-2) 60%, var(--surface) 100%)" }}
           >
-            <HeroMotion />
+            <HeroShowcase />
           </div>
         </section>
+
+        {/* INSIDE A PROJECT, kept from the live home page at the operator's
+            request (2026-09-29): the module map is the one section that shows
+            the whole product at once. */}
+        <Section id="product" backdrop={<Wash hue="indigo" />}>
+          <SectionHeader
+            eyebrow="Inside a project"
+            title="Everything it takes to run the job, on one page."
+            sub="A project here is not a folder. It is the whole production: the brief, the boards, the crew, the money and the delivery, each waiting in the phase where the work happens."
+          />
+          <div className="mt-16">
+            <ModuleMap />
+          </div>
+          <div className="mt-12 text-center">
+            <Link href="/production-hub" className="text-[15px] font-semibold text-accent">
+              More about the project hub
+            </Link>
+          </div>
+        </Section>
 
         {/* THE JOB'S PATH: drawn by the scroll. */}
         <div id="path">
@@ -59,60 +80,25 @@ export default function Page() {
         <StackPanels
           panels={[
             {
-              eyebrow: "Client review",
-              title: "Clients point at the frame.",
-              body: "Send a link, no login on their end. Notes come back pinned to the exact spot on the frame, or the exact moment in the cut.",
-              hue: "pink",
-              children: (
-                <BrowserFrame
-                  shot="client-review-portal"
-                  motion="none"
-                  caption="studio-flows.com/r/shared-link"
-                  alt="The client review portal: a pack shot with numbered comment pins and the comment thread beside it."
-                  sizes="(min-width: 1200px) 1100px, 100vw"
-                />
-              ),
+              eyebrow: "Storyboards and shot lists",
+              title: "From pencils to a shot list.",
+              body: "Frames go from sketch to final on the board, and every frame becomes a shot with its size and move, ready for the day.",
+              hue: "purple",
+              children: <LiveScene name="storyboard" className="h-full" />,
             },
             {
               eyebrow: "Shooting schedule",
               title: "The day re-flows itself.",
               body: "Change one scene and every time after it moves. Lunch holds its slot, and an overrun shows in red before it becomes a problem on set.",
               hue: "green",
-              children: (
-                <BrowserFrame motion="none" caption="app.studio-flows.com/projects/morning-ritual/schedule" alt="The schedule editor re-flowing a day around a fixed lunch.">
-                  <DemoVideo clip="schedule-reflow" hue="green" alt="Lengthening a scene until it runs into a fixed lunch, then unpinning lunch so the afternoon and wrap move." />
-                </BrowserFrame>
-              ),
+              children: <LiveScene name="schedule" className="h-full" />,
             },
             {
-              eyebrow: "Call sheets",
-              title: "Crew confirm themselves.",
-              body: "Every person gets their own link. You see who opened it and who confirmed, and the stragglers are chased for you before the shoot.",
-              hue: "amber",
-              children: (
-                <BrowserFrame
-                  shot="project-callsheet"
-                  motion="none"
-                  caption="app.studio-flows.com/projects/bright-water/callsheet"
-                  alt="A call sheet in the builder, with the masthead, schedule and crew blocks."
-                  sizes="(min-width: 1200px) 1100px, 100vw"
-                />
-              ),
-            },
-            {
-              eyebrow: "Budget",
-              title: "Know what the job made.",
-              body: "Every invoice lands against the line it belongs to, deposits and balances included, and the margin is waiting for you at the end.",
-              hue: "indigo",
-              children: (
-                <BrowserFrame
-                  shot="project-budget"
-                  motion="none"
-                  caption="app.studio-flows.com/projects/bright-water/budget"
-                  alt="The budget page: bid against actual by line, the cost ledger and the margin band."
-                  sizes="(min-width: 1200px) 1100px, 100vw"
-                />
-              ),
+              eyebrow: "Communication",
+              title: "Every thread, filed with the job.",
+              body: "Gmail, Slack and Google Chat on the project they belong to. Reply from here, file the attachment, and the conversation stays where it always was.",
+              hue: "cyan",
+              children: <LiveScene name="comms" className="h-full" />,
             },
           ]}
         />

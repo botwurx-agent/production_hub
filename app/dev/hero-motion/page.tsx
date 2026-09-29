@@ -3,7 +3,7 @@
 // page shows our version in that layout so it can be judged before anything on
 // the live site changes. ?clean=1 hides the note bar for recording, and
 // ?theme=dark previews the dark theme. Auth-gated in production by /dev/*.
-import { HeroMotion } from "@/components/marketing/hero-motion";
+import { HeroShowcase } from "@/components/marketing/scene-stage";
 import { CtaButton, CtaMicrocopy } from "@/components/marketing/cta";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export default function Page({ searchParams }: { searchParams: { clean?: string;
           className="relative rounded-[32px] p-6 sm:p-12"
           style={{ background: "linear-gradient(145deg, var(--h-indigo-bg) 0%, var(--surface-2) 60%, var(--surface) 100%)" }}
         >
-          <HeroMotion />
+          <HeroShowcase />
         </div>
       </section>
     </div>
