@@ -299,11 +299,12 @@ export function CallSheetScene({ t }: { t: number }) {
           })}
         </div>
 
-        {/* The chase, done for you */}
+        {/* The chase, done for you. Sits over the header's empty middle so it
+            never covers the crew rows it is talking about. */}
         {t >= REMIND_AT && t < 6300 ? (
           <div
             className="absolute flex items-center gap-2.5 rounded-[12px] border border-border bg-surface px-3 py-2.5 shadow-[0_16px_40px_-14px_rgba(40,30,90,.5)]"
-            style={{ right: 20, bottom: 18, ...arrive(t, REMIND_AT, 16), opacity: t > 6000 ? 1 - ramp(t, 6000, 300) : arrive(t, REMIND_AT, 16).opacity }}
+            style={{ left: 262, top: 6, ...arrive(t, REMIND_AT, -12), opacity: t > 6000 ? 1 - ramp(t, 6000, 300) : arrive(t, REMIND_AT, 16).opacity }}
           >
             <span className="grid h-7 w-7 place-items-center rounded-full" style={{ background: "var(--h-amber-bg)", color: "var(--h-amber)" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">

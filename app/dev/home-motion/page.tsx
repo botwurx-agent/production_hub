@@ -88,7 +88,7 @@ export default function Page() {
             },
             {
               eyebrow: "Shooting schedule",
-              title: "The day re-flows itself.",
+              title: "The day re\u2011flows itself.",
               body: "Change one scene and every time after it moves. Lunch holds its slot, and an overrun shows in red before it becomes a problem on set.",
               hue: "green",
               children: <LiveScene name="schedule" className="h-full" />,
