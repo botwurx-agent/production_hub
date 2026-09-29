@@ -184,7 +184,7 @@ export function ReviewPinsScene({ t }: { t: number }) {
             {IMG_PINS.map((p) => <Pin key={p.n} {...p} t={t} />)}
           </>
         ) : (
-          <div style={arrive(t, PDF_AT, 10)}>
+          <div className="absolute inset-0" style={arrive(t, PDF_AT, 10)}>
             <div className="absolute flex gap-1.5" style={{ left: 16, top: 62 }}>
               {[1, 2, 3, 4].map((n) => (
                 <span key={n} className="rounded-full px-2 py-0.5 text-[10.5px] font-bold" style={{ background: n === page ? "var(--accent-soft)" : "var(--surface-2)", color: n === page ? "var(--accent)" : "var(--text-muted)" }}>
