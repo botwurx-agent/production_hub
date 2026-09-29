@@ -4,6 +4,18 @@ import { useEffect, useState } from "react";
 import { FitStage, useInView, useSceneClock } from "./scene-kit";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
 import {
+  BG_LEDGER_MS,
+  BG_LINES_MS,
+  BG_MARGIN_MS,
+  BG_READ_MS,
+  BG_SCHED_MS,
+  BudgetLedgerScene,
+  BudgetLinesScene,
+  BudgetMarginScene,
+  BudgetReadScene,
+  BudgetScheduleScene,
+} from "./scenes-budget";
+import {
   MB_BUILD_MS,
   MB_EDIT_MS,
   MB_IMPORT_MS,
@@ -36,6 +48,11 @@ const SCENES = {
   "mb-organize": { ms: MB_ORG_MS, C: MoodboardOrganizeScene, label: "Organize", hue: "pink" },
   "mb-edit": { ms: MB_EDIT_MS, C: MoodboardEditScene, label: "Edit in place", hue: "pink" },
   "mb-review": { ms: MB_REVIEW_MS, C: MoodboardReviewScene, label: "Client review", hue: "pink" },
+  "bg-lines": { ms: BG_LINES_MS, C: BudgetLinesScene, label: "Bid against actual", hue: "blue" },
+  "bg-ledger": { ms: BG_LEDGER_MS, C: BudgetLedgerScene, label: "Log a cost", hue: "blue" },
+  "bg-read": { ms: BG_READ_MS, C: BudgetReadScene, label: "Read the invoice", hue: "blue" },
+  "bg-schedule": { ms: BG_SCHED_MS, C: BudgetScheduleScene, label: "Deposits", hue: "blue" },
+  "bg-margin": { ms: BG_MARGIN_MS, C: BudgetMarginScene, label: "Margin", hue: "blue" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;

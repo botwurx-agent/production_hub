@@ -112,6 +112,77 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "production-budgeting-software": {
+    hero: "budget",
+    chapters: [
+      {
+        nav: "Bid against actual",
+        title: "Every line, bid against what it actually cost.",
+        body: "Set the bid for each line of the job. The actual fills itself in from the costs you log against that line, so the number is never somebody's guess from three weeks ago, and a line that runs over the bid turns red while there is still time to do something about it.",
+        details: [
+          { t: "Actuals built from real costs", d: "A line's actual is the sum of the invoices filed against it, and it shows how many there are." },
+          { t: "Quick numbers still work", d: "A line with nothing filed yet keeps a typed figure, so a fast estimate is never blocked." },
+          { t: "Nothing slips through", d: "A cost that has not been given a line yet still counts toward the job's total, because the money left either way." },
+          { t: "Over the bid, in red", d: "Lines that run past their bid, and the job's total, go red on the page." },
+          { t: "On the project's front page", d: "The bid-against-actual bar sits on the project hub, from the same numbers as this page." },
+        ],
+        scene: "bg-lines",
+      },
+      {
+        nav: "Log a cost",
+        title: "A cost is a record, not a typed number.",
+        body: "Every cost carries who it was from, what it was for, the invoice itself and where it stands. Pick the vendor from the people already on the job and the app knows the rate you agreed, so an invoice that does not match gets flagged before you pay it.",
+        details: [
+          { t: "Vendor from the job's roster", d: "Pick a crew member or supplier already on the project, with their agreed day rate shown beside them." },
+          { t: "Rate checking", d: "Enter the days and it compares days times the agreed rate against the invoiced amount, and flags anything over or under." },
+          { t: "The invoice rides on the cost", d: "Attach the PDF or photo, and open it later from the ledger with one click." },
+          { t: "Status that means something", d: "Received, approved, paid. Click the chip to move it along." },
+          { t: "Invoice number and due date", d: "Kept on the cost, so the list of what is due, and when, builds itself." },
+        ],
+        scene: "bg-ledger",
+      },
+      {
+        nav: "Read the invoice",
+        title: "Drop in the invoice. The form fills itself.",
+        body: "Attach a supplier's invoice or estimate and the app reads it for you: who it is from, the amount, the dates, the invoice number and which line it belongs to. It fills the form and tells you exactly what it filled. You check it and save, so no money figure is ever written without a person looking at it.",
+        details: [
+          { t: "PDFs and photos", d: "A PDF straight from the vendor, or a photo of a paper invoice taken on your phone." },
+          { t: "It finds the right vendor", d: "The name on the invoice is matched against the people on the job, including when the work was billed through an agency." },
+          { t: "Reads estimates too", d: "A vendor's estimate becomes the cost you are committing to, weeks before the final invoice arrives." },
+          { t: "You always confirm", d: "A banner names every field it filled, with Undo, and nothing saves until you press Save." },
+          { t: "Straight from the email", d: "An invoice attached to a Gmail thread on the project becomes a cost with Log as a cost, no downloading." },
+          { t: "Foreign currency warned", d: "An invoice in another currency is called out rather than quietly treated as dollars." },
+        ],
+        scene: "bg-read",
+      },
+      {
+        nav: "Deposits and schedules",
+        title: "Deposits stop being a guess.",
+        body: "Vendors want a deposit up front and the balance later. Split any cost into payments with their own due dates, mark each one when it goes out, and the app keeps track of exactly what is still owed, on this job and across every job you have running.",
+        details: [
+          { t: "Deposit and balance in one step", d: "Choose a percentage and two due dates. The balance is the remainder, so the two always add back to the total." },
+          { t: "Any schedule you need", d: "Add as many payments as the vendor asks for, each with its own date and a note of how it was paid." },
+          { t: "Still owed, exactly", d: "A part-paid cost counts only what is left, on the budget page, the ledger and the dashboard." },
+          { t: "The next payment date", d: "Each cost shows when its next payment is due, and flags it when it is overdue." },
+          { t: "Every job's unpaid bills in one list", d: "A dashboard widget totals what you owe across all your live projects, overdue first." },
+        ],
+        scene: "bg-schedule",
+      },
+      {
+        nav: "Margin and privacy",
+        title: "Know what the job made. Only you.",
+        body: "What you billed and what the job cost sit on one page, from real documents on both sides, and the margin is worked out for you. None of it is visible to the crew you invite onto a project: they see the work, never the money.",
+        details: [
+          { t: "Billed from your invoices", d: "Only what you actually invoiced counts, never an estimate or a proposal. With no invoices yet, it uses the figure you entered on delivery." },
+          { t: "Margin in dollars and percent", d: "Worked out as profit on what you billed, the way a studio quotes it." },
+          { t: "A bar that turns red on a loss", d: "Cost shown as a share of what you billed, so a job going under is obvious at a glance." },
+          { t: "Crew cannot see the money", d: "Budgets, costs, invoices and day rates are hidden from collaborators by the database itself, not just by hiding a button." },
+          { t: "One source of truth", d: "The budget page, the project hub and the dashboard all work from the same ledger, so they never disagree." },
+        ],
+        scene: "bg-margin",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];
