@@ -307,14 +307,18 @@ export function CallSheetDuplicateScene({ t }: { t: number }) {
 
 /* ------------------------------------------------------------------- SEND */
 
-export const CS_SEND_MS = 12500;
+export const CS_SEND_MS = 16500;
 
-const CHECK = (i: number) => 900 + i * 220;
-const ADD_AT = 2900;
-const EMAIL_AT = 3900;
-const SEEN = [4600, 4900, 5300, 5700, 6100, 6400];
-const CONF = [5200, 5700, 6300, 6900, 7400];
-const FILTER_AT = 9000;
+// Ticked down the left column, then the right, one name about every 0.65s so
+// the pointer glides rather than darting (the operator found the first pace,
+// a name every 0.2s zigzagging across both columns, distracting).
+const TICK_ORDER = [0, 2, 4, 6, 1, 3, 5, 7];
+const CHECK = (i: number) => 1000 + TICK_ORDER.indexOf(i) * 650;
+const ADD_AT = 6700;
+const EMAIL_AT = 8000;
+const SEEN = [8700, 9000, 9400, 9800, 10200, 10500];
+const CONF = [9300, 9800, 10400, 11000, 11500];
+const FILTER_AT = 13100;
 
 export function CallSheetSendScene({ t }: { t: number }) {
   const added = t >= ADD_AT;
@@ -390,14 +394,14 @@ export function CallSheetSendScene({ t }: { t: number }) {
       </Window>
       <ActionLabel t={t} at={CHECK(0)} x={60} y={100} text="Tick people off the roster" after={1500} />
       <ActionLabel t={t} at={EMAIL_AT} x={560} y={144} text="Email everyone their link" />
-      <ActionLabel t={t} at={5600} x={300} y={60} text="Watch it come in" tone="green" after={1600} />
+      <ActionLabel t={t} at={9700} x={300} y={60} text="Watch it come in" tone="green" after={1600} />
       <ActionLabel t={t} at={FILTER_AT} x={480} y={96} text="Who hasn't opened it?" tone="amber" after={1800} />
       <Cursor
         t={t}
         travel={600}
         path={[
           { t: 500, x: 300, y: 380 },
-          ...people.map((_, i) => ({ t: CHECK(i), x: i % 2 === 0 ? 30 : 334, y: 104 + Math.floor(i / 2) * 34, click: true })),
+          ...TICK_ORDER.map((i) => ({ t: CHECK(i), x: i % 2 === 0 ? 30 : 334, y: 104 + Math.floor(i / 2) * 34, click: true })),
           { t: ADD_AT, x: 60, y: 256, click: true },
           { t: EMAIL_AT, x: 580, y: 136, click: true },
           { t: FILTER_AT, x: 520, y: 86, click: true },
@@ -500,15 +504,15 @@ export function CallSheetChaseScene({ t }: { t: number }) {
 
 /* ------------------------------------------------------------------ MEALS */
 
-export const CS_MEALS_MS = 12500;
+export const CS_MEALS_MS = 13300;
 
 const LINK_AT = 900;
-const DROP = [2300, 2700];
-const SEND_AT = 3900;
-const OPEN = [4600, 5000, 5500, 6000];
-const ORDER_AT = 6400;
-const CHASE_AT = 8200;
-const NOTE_AT = 9600;
+const DROP = [2300, 3200];
+const SEND_AT = 4700;
+const OPEN = [5400, 5800, 6300, 6800];
+const ORDER_AT = 7200;
+const CHASE_AT = 9000;
+const NOTE_AT = 10400;
 
 export function CallSheetMealsScene({ t }: { t: number }) {
   const list = [
@@ -573,7 +577,7 @@ export function CallSheetMealsScene({ t }: { t: number }) {
       </Window>
       <ActionLabel t={t} at={LINK_AT} x={330} y={80} text="Paste the group-order link" after={1100} />
       <ActionLabel t={t} at={DROP[0]} x={350} y={240} text="Leave the client off the crew lunch" tone="muted" after={900} />
-      <ActionLabel t={t} at={5000} x={300} y={160} text="See who opened it" tone="blue" after={1300} />
+      <ActionLabel t={t} at={5800} x={300} y={160} text="See who opened it" tone="blue" after={1300} />
       <ActionLabel t={t} at={CHASE_AT} x={150} y={300} text="Chase the rest in one click" tone="amber" after={1200} />
       <ActionLabel t={t} at={NOTE_AT} x={280} y={360} text="The sheet carries the note, never the link" tone="indigo" after={1800} />
       <Cursor
