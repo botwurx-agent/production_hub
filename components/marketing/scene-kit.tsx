@@ -376,3 +376,54 @@ export function arrive(t: number, at: number, dy = 10): CSSProperties {
   const s = spring(p);
   return { opacity: clamp01(p * 2), transform: `translateY(${(1 - s) * dy}px) scale(${0.94 + 0.06 * s})` };
 }
+
+/**
+ * A small label beside the pointer saying what the next click does. Shown from
+ * `before` ms ahead of the action until `after` ms past it, so the viewer
+ * reads the intent and then sees it happen. Flips to the pointer's left near
+ * the right edge so it never spills out of the scene.
+ */
+export function ActionLabel({
+  t,
+  at,
+  x,
+  y,
+  text,
+  tone = "indigo",
+  before = 550,
+  after = 650,
+}: {
+  t: number;
+  at: number;
+  x: number;
+  y: number;
+  text: string;
+  tone?: Tone;
+  before?: number;
+  after?: number;
+}) {
+  const show = ramp(t, at - before, 200) * (1 - ramp(t, at + after, 200));
+  if (show <= 0) return null;
+  const c = TONE[tone];
+  return (
+    <span
+      className="pointer-events-none absolute z-40 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-extrabold"
+      style={{
+        ...(x > 470 ? { right: SCENE_W - x + 8 } : { left: x + 20 }),
+        top: y + 16,
+        opacity: show,
+        color: c.fg,
+        background: c.bg,
+        boxShadow: "0 6px 16px -8px rgba(40,30,90,.45)",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/** Where something dragged is at time t: eased from `from` to `to` over [start, start+dur]. */
+export function dragAt(t: number, start: number, dur: number, from: { x: number; y: number }, to: { x: number; y: number }) {
+  const p = easeInOut(ramp(t, start, dur));
+  return { x: lerp(from.x, to.x, p), y: lerp(from.y, to.y, p), p };
+}

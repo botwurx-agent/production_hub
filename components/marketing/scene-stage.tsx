@@ -3,6 +3,18 @@
 import { useEffect, useState } from "react";
 import { FitStage, useInView, useSceneClock } from "./scene-kit";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
+import {
+  MB_BUILD_MS,
+  MB_EDIT_MS,
+  MB_IMPORT_MS,
+  MB_ORG_MS,
+  MB_REVIEW_MS,
+  MoodboardBuildScene,
+  MoodboardEditScene,
+  MoodboardImportScene,
+  MoodboardOrganizeScene,
+  MoodboardReviewScene,
+} from "./scenes-moodboard";
 import { MOOD_MS, MoodboardScene, PIPELINE_MS, PipelineScene } from "./scenes-more";
 import { BOARD_MS, COMMS_MS, CommsScene, SCHEDULE_MS, ScheduleScene, StoryboardScene } from "./scenes-panels";
 
@@ -19,6 +31,11 @@ const SCENES = {
   comms: { ms: COMMS_MS, C: CommsScene, label: "Communication", hue: "cyan" },
   moodboard: { ms: MOOD_MS, C: MoodboardScene, label: "Moodboards", hue: "orange" },
   pipeline: { ms: PIPELINE_MS, C: PipelineScene, label: "AI pipeline", hue: "purple" },
+  "mb-build": { ms: MB_BUILD_MS, C: MoodboardBuildScene, label: "Build the board", hue: "pink" },
+  "mb-import": { ms: MB_IMPORT_MS, C: MoodboardImportScene, label: "Bring references in", hue: "pink" },
+  "mb-organize": { ms: MB_ORG_MS, C: MoodboardOrganizeScene, label: "Organize", hue: "pink" },
+  "mb-edit": { ms: MB_EDIT_MS, C: MoodboardEditScene, label: "Edit in place", hue: "pink" },
+  "mb-review": { ms: MB_REVIEW_MS, C: MoodboardReviewScene, label: "Client review", hue: "pink" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;
@@ -28,13 +45,22 @@ export type SceneName = keyof typeof SCENES;
  * From `lg` the stage is absolutely positioned inside its box so it can fit
  * the panel's height as well as its width; below that it fits the width.
  */
-export function LiveScene({ name, className = "" }: { name: SceneName; className?: string }) {
+export function LiveScene({
+  name,
+  className = "",
+  box = false,
+}: {
+  name: SceneName;
+  className?: string;
+  /** The container has its own height (a pinned panel): fit both dimensions. */
+  box?: boolean;
+}) {
   const [ref, inView] = useInView<HTMLDivElement>(0.3);
   const { ms, C } = SCENES[name];
   const t = useSceneClock({ duration: ms, playing: inView, loop: true });
   return (
     <div ref={ref} className={`relative ${className}`}>
-      <FitStage className="lg:absolute lg:inset-0">
+      <FitStage className={box ? "lg:absolute lg:inset-0" : ""}>
         <C t={t} />
       </FitStage>
     </div>

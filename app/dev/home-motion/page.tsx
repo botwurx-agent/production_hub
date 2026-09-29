@@ -85,28 +85,28 @@ export default function Page() {
               title: "From pencils to a shot list.",
               body: "Frames go from sketch to final on the board, and every frame becomes a shot with its size and move, ready for the day.",
               hue: "purple",
-              children: <LiveScene name="storyboard" className="h-full" />,
+              children: <LiveScene name="storyboard" className="h-full" box />,
             },
             {
               eyebrow: "Shooting schedule",
               title: "The day re\u2011flows itself.",
               body: "Change one scene and every time after it moves. Lunch holds its slot, and an overrun shows in red before it becomes a problem on set.",
               hue: "green",
-              children: <LiveScene name="schedule" className="h-full" />,
+              children: <LiveScene name="schedule" className="h-full" box />,
             },
             {
               eyebrow: "Communication",
               title: "Every thread, filed with the job.",
               body: "Gmail, Slack and Google Chat on the project they belong to. Reply from here, file the attachment, and the conversation stays where it always was.",
               hue: "cyan",
-              children: <LiveScene name="comms" className="h-full" />,
+              children: <LiveScene name="comms" className="h-full" box />,
             },
             {
               eyebrow: "AI pipeline",
               title: "A hundred generations, one pick.",
               body: "Import every take from the tools you generate in. Reject, star and pick with provenance on each one, let the client choose, and drop the winner into the sequence.",
               hue: "pink",
-              children: <LiveScene name="pipeline" className="h-full" />,
+              children: <LiveScene name="pipeline" className="h-full" box />,
             },
           ]}
         />
