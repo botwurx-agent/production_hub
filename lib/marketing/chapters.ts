@@ -183,6 +183,80 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "call-sheet-software": {
+    hero: "callsheet",
+    chapters: [
+      {
+        nav: "Build the sheet",
+        title: "Build the call sheet on the call sheet.",
+        body: "There is no form to fill in and preview. You edit the real sheet in place, laid out the way the industry expects, and what you see is what the crew gets.",
+        details: [
+          { t: "The industry masthead", d: "Your logo, the production, key contacts, the general call, and a table for breakfast, lunch, wrap, sunrise, sunset and weather." },
+          { t: "Blocks in any order", d: "Locations, crew, cast, company, notes and more, dragged by their handle into the order this day needs." },
+          { t: "Hide what you do not need", d: "Hidden blocks wait in the palette and come back with one click." },
+          { t: "Your own blocks", d: "Add a text block for parking, safety, a dress code or anything else, with its own heading." },
+          { t: "Your colour", d: "An accent colour for headings and the masthead, carried onto the printed sheet." },
+          { t: "Templates", d: "Save the layout and colour as a template and apply it to the next job's sheets." },
+        ],
+        scene: "cs-build",
+      },
+      {
+        nav: "Every day of the shoot",
+        title: "Day one, day two, the prelight. One click each.",
+        body: "A job has as many call sheets as it has days. Duplicate yesterday's and change what changed, instead of starting again. When you need paper, the PDF is one click.",
+        details: [
+          { t: "As many sheets as the job needs", d: "Each day, the scout and the prelight gets its own sheet, status and recipients." },
+          { t: "Duplicate a sheet", d: "Crew, call times, locations and the layout all carry over, so the next day takes minutes." },
+          { t: "Nothing stale goes out", d: "The date and weather are left blank on the copy, and the app tells you to fill them in, so yesterday's date never reaches the unit." },
+          { t: "Fresh links for the copy", d: "The same people come across, each with a new link and no history, so nobody looks confirmed for a day they have not seen." },
+          { t: "One-click PDF", d: "A print-ready sheet in the industry layout, in light colours, with your accent kept." },
+        ],
+        scene: "cs-dup",
+      },
+      {
+        nav: "A link per person",
+        title: "Everyone gets their own link. You see who read it.",
+        body: "Pick people off the project's roster and each one gets a personal link to the sheet. You see who opened it and who confirmed, and the three kinds of silence are separated, because they are different problems.",
+        details: [
+          { t: "Recipients from the roster", d: "Tick crew and client contacts off the project's list, or add anyone by name and email." },
+          { t: "Email or copy the link", d: "Send it from the app, or copy a person's own link into a text message." },
+          { t: "Viewed and confirmed", d: "Each person's link records when they opened it and when they pressed Confirm." },
+          { t: "Three numbers that matter", d: "Confirmed, viewed but not confirmed, and not opened, with a filter for each." },
+          { t: "Sent status, automatically", d: "Emailing a sheet moves it from Draft to Sent without anyone touching the chip." },
+          { t: "No login for crew", d: "The link opens the sheet in any browser, on any phone." },
+        ],
+        scene: "cs-send",
+      },
+      {
+        nav: "The chasing",
+        title: "The chasing happens without you.",
+        body: "As the shoot gets close, anyone who has not confirmed gets a reminder by email. It stays polite by design: it starts three days out, sends at most one a day, stops after two, and stops the moment someone confirms.",
+        details: [
+          { t: "Starts three days before", d: "A sheet built weeks ahead stays quiet until the shoot is close." },
+          { t: "One a day, two at most", d: "After two reminders it stops, because at that point it is a phone call." },
+          { t: "Stops on confirm", d: "Confirming ends the reminders for that person immediately." },
+          { t: "Plain language", d: "The email says tomorrow or in two days, not a bare date." },
+          { t: "Nudge by hand", d: "A Remind unconfirmed button sends the same email now, sharing the same limit so nobody gets doubled up." },
+          { t: "On the project's front page", d: "The hub shows confirmed over total, amber until everyone is in, green when they are." },
+        ],
+        scene: "cs-chase",
+      },
+      {
+        nav: "Crew meals",
+        title: "The lunch email, handled.",
+        body: "On a real shoot there is a second email: a group-order link with a cutoff, and a morning spent chasing whoever ignored it. Paste the link, choose who is on the order, send it, and see who opened it.",
+        details: [
+          { t: "Paste any group-order link", d: "Whichever delivery app you use. The crew order there, the app handles everything around it." },
+          { t: "Choose who is on the order", d: "Everyone on the sheet by default, and leave the client or the agency off a crew lunch." },
+          { t: "Who opened it", d: "Each person's link shows when they opened it, and people can mark themselves as ordered." },
+          { t: "Chase outstanding", d: "One click emails everyone who has not opened it yet." },
+          { t: "Nothing after the cutoff", d: "No reminder is sent once the order has closed." },
+          { t: "On the printed sheet", d: "The call sheet carries the meal plan and the cutoff, never the live link, since a sheet gets forwarded widely." },
+        ],
+        scene: "cs-meals",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];

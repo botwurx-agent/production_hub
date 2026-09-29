@@ -4,6 +4,18 @@ import { useEffect, useState } from "react";
 import { FitStage, useInView, useSceneClock } from "./scene-kit";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
 import {
+  CS_BUILD_MS,
+  CS_CHASE_MS,
+  CS_DUP_MS,
+  CS_MEALS_MS,
+  CS_SEND_MS,
+  CallSheetBuildScene,
+  CallSheetChaseScene,
+  CallSheetDuplicateScene,
+  CallSheetMealsScene,
+  CallSheetSendScene,
+} from "./scenes-callsheet";
+import {
   BG_LEDGER_MS,
   BG_LINES_MS,
   BG_MARGIN_MS,
@@ -53,6 +65,11 @@ const SCENES = {
   "bg-read": { ms: BG_READ_MS, C: BudgetReadScene, label: "Read the invoice", hue: "blue" },
   "bg-schedule": { ms: BG_SCHED_MS, C: BudgetScheduleScene, label: "Deposits", hue: "blue" },
   "bg-margin": { ms: BG_MARGIN_MS, C: BudgetMarginScene, label: "Margin", hue: "blue" },
+  "cs-build": { ms: CS_BUILD_MS, C: CallSheetBuildScene, label: "Build the sheet", hue: "amber" },
+  "cs-dup": { ms: CS_DUP_MS, C: CallSheetDuplicateScene, label: "Every day", hue: "amber" },
+  "cs-send": { ms: CS_SEND_MS, C: CallSheetSendScene, label: "Send", hue: "amber" },
+  "cs-chase": { ms: CS_CHASE_MS, C: CallSheetChaseScene, label: "Chase", hue: "amber" },
+  "cs-meals": { ms: CS_MEALS_MS, C: CallSheetMealsScene, label: "Meals", hue: "amber" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;
