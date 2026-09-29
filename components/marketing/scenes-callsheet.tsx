@@ -414,11 +414,11 @@ export const CS_CHASE_MS = 12500;
 const DAYS = [
   { d: "Sun", note: "Too early, stays quiet", at: 600 },
   { d: "Mon", note: "3 days out: first reminder to 3 people", at: 2000, sent: 3 },
-  { d: "Tue", note: "Second reminder to the 1 left", at: 4600, sent: 1 },
-  { d: "Wed", note: "Cap reached. That one is a phone call.", at: 6800 },
+  { d: "Tue", note: "Second reminder to the 2 left", at: 4600, sent: 2 },
+  { d: "Wed", note: "Mia has had two. That one is a phone call.", at: 6800 },
   { d: "Thu", note: "Shoot day", at: 9200 },
 ];
-const MANUAL_AT = 7800;
+const CALL_AT2 = 7600;
 const ALL_AT = 8600;
 
 export function CallSheetChaseScene({ t }: { t: number }) {
@@ -435,7 +435,7 @@ export function CallSheetChaseScene({ t }: { t: number }) {
             return (
               <div key={d.d} className="flex-1 rounded-[10px] border px-2 py-2 text-center" style={{ borderColor: on ? "var(--accent)" : "var(--border)", background: on ? "var(--accent-soft)" : past ? "var(--surface-2)" : "var(--surface)", transition: "all .3s" }}>
                 <p className="text-[11px] font-extrabold">{d.d}</p>
-                <p className="text-[10px] text-text-faint">{d.d === "Thu" ? "Shoot" : `${["3", "3", "2", "1", "0"][DAYS.indexOf(d)]}${d.d === "Sun" ? "+" : ""} days out`}</p>
+                <p className="text-[10px] text-text-faint">{d.d === "Thu" ? "Shoot" : `${["4", "3", "2", "1"][DAYS.indexOf(d)]} ${d.d === "Wed" ? "day" : "days"} out`}</p>
               </div>
             );
           })}
@@ -456,7 +456,7 @@ export function CallSheetChaseScene({ t }: { t: number }) {
         <div className="absolute" style={{ left: 282, top: 160, width: 342 }}>
           {DAYS.filter((d) => d.sent && t >= d.at).map((d) =>
             Array.from({ length: d.sent! }).map((_, i) => {
-              const who = d.d === "Mon" ? ["Leo Park", "Mia Chen", "Theo Lin"][i] : "Mia Chen";
+              const who = d.d === "Mon" ? ["Leo Park", "Mia Chen", "Theo Lin"][i] : ["Mia Chen", "Theo Lin"][i];
               const at = d.at + 200 + i * 220;
               return t >= at ? (
                 <div key={`${d.d}${i}`} className="mb-1.5 flex items-center gap-2 rounded-[10px] border border-border bg-surface px-2.5 py-1.5" style={arrive(t, at, 8)}>
@@ -467,17 +467,18 @@ export function CallSheetChaseScene({ t }: { t: number }) {
                   <span className="flex-1 text-[11.5px]">
                     <b>{who}</b> <span className="text-text-faint">· "Your call is in {d.d === "Mon" ? "3 days" : "2 days"}"</span>
                   </span>
-                  {(who === "Leo Park" && t >= 3000) || (who === "Theo Lin" && t >= 5600 && d.d === "Mon") ? (
+                  {(who === "Leo Park" && t >= 3000) || (who === "Theo Lin" && t >= 5600 && d.d === "Tue") ? (
                     <Chip tone="green" t={t}>Confirmed</Chip>
                   ) : null}
                 </div>
               ) : null;
             }),
           )}
-          {t >= MANUAL_AT - 400 ? (
-            <div className="mt-2 flex items-center gap-2" style={arrive(t, MANUAL_AT - 400, 6)}>
-              <Btn tone="quiet" on press={t >= MANUAL_AT - 60 && t < MANUAL_AT + 80}>Remind 1 unconfirmed</Btn>
-              {t >= ALL_AT ? <Chip tone="green" t={t} since={ALL_AT}>Mia confirmed</Chip> : null}
+          {t >= CALL_AT2 ? (
+            <div className="mt-2 flex items-center gap-2 rounded-[10px] border border-dashed border-border px-2.5 py-1.5" style={arrive(t, CALL_AT2, 6)}>
+              <Avatar name="Mia Chen" hue="indigo" size={20} />
+              <span className="flex-1 text-[11.5px]"><b>Mia Chen</b> <span className="text-text-faint">· no more emails, call 310 555 0199</span></span>
+              {t >= ALL_AT ? <Chip tone="green" t={t} since={ALL_AT}>Confirmed</Chip> : null}
             </div>
           ) : null}
         </div>
@@ -492,8 +493,7 @@ export function CallSheetChaseScene({ t }: { t: number }) {
         <Burst t={t} at={ALL_AT} x={560} y={26} />
       </Window>
       <ActionLabel t={t} at={DAYS[1].at + 300} x={300} y={150} text="It sends the reminders for you" tone="amber" after={1400} />
-      <ActionLabel t={t} at={MANUAL_AT} x={420} y={236} text="Or nudge by hand, same limits" after={1000} />
-      <Cursor t={t} travel={650} path={[{ t: 7000, x: 500, y: 380 }, { t: MANUAL_AT, x: 360, y: 250, click: true }]} />
+      <ActionLabel t={t} at={CALL_AT2} x={300} y={300} text="It stops at two, so nobody gets spammed" tone="indigo" after={1400} />
     </div>
   );
 }
