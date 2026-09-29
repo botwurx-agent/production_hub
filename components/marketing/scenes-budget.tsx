@@ -628,7 +628,7 @@ export function BudgetMarginScene({ t }: { t: number }) {
       <ActionLabel t={t} at={INV[0].at + 200} x={60} y={130} text="Billed comes from your invoices" tone="indigo" after={1000} />
       <ActionLabel t={t} at={COST_AT + 300} x={380} y={130} text="Cost comes from the ledger" tone="amber" after={900} />
       <ActionLabel t={t} at={BAND_AT + 500} x={420} y={330} text="The margin, worked out for you" tone="green" after={1600} />
-      <ActionLabel t={t} at={CREW_AT + 400} x={200} y={200} text="And your crew never see it" tone="muted" after={2000} />
+      <ActionLabel t={t} at={CREW_AT + 400} x={200} y={200} text="And your crew never see it" tone="muted" before={150} after={2000} />
     </div>
   );
 }
