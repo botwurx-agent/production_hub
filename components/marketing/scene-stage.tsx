@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { FitStage, useInView, useSceneClock } from "./scene-kit";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
+import { MOOD_MS, MoodboardScene, PIPELINE_MS, PipelineScene } from "./scenes-more";
 import { BOARD_MS, COMMS_MS, CommsScene, SCHEDULE_MS, ScheduleScene, StoryboardScene } from "./scenes-panels";
 
 /**
@@ -16,6 +17,8 @@ const SCENES = {
   storyboard: { ms: BOARD_MS, C: StoryboardScene, label: "Storyboards", hue: "purple" },
   schedule: { ms: SCHEDULE_MS, C: ScheduleScene, label: "Schedule", hue: "green" },
   comms: { ms: COMMS_MS, C: CommsScene, label: "Communication", hue: "cyan" },
+  moodboard: { ms: MOOD_MS, C: MoodboardScene, label: "Moodboards", hue: "orange" },
+  pipeline: { ms: PIPELINE_MS, C: PipelineScene, label: "AI pipeline", hue: "purple" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;
@@ -45,7 +48,7 @@ export function LiveScene({ name, className = "" }: { name: SceneName; className
  * the tabs name the feature out loud and each scene is a different end of the
  * job. A click jumps to that scene and the cycle carries on from there.
  */
-export function HeroShowcase({ scenes = ["review", "callsheet", "budget"] }: { scenes?: SceneName[] }) {
+export function HeroShowcase({ scenes = ["review", "moodboard", "callsheet", "budget"] }: { scenes?: SceneName[] }) {
   const [i, setI] = useState(0);
   const [run, setRun] = useState(0);
   const [ref, inView] = useInView<HTMLDivElement>(0.2);

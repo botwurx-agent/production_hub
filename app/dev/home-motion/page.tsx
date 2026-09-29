@@ -15,6 +15,7 @@ import { StackPanels } from "@/components/marketing/stack-panels";
 import { Section, SectionHeader } from "@/components/marketing/section";
 import { ModuleMap } from "@/components/marketing/module-map";
 import { Wash } from "@/components/marketing/aurora";
+import { Ticker } from "@/components/marketing/ticker";
 
 export const dynamic = "force-dynamic";
 
@@ -100,11 +101,29 @@ export default function Page() {
               hue: "cyan",
               children: <LiveScene name="comms" className="h-full" />,
             },
+            {
+              eyebrow: "AI pipeline",
+              title: "A hundred generations, one pick.",
+              body: "Import every take from the tools you generate in. Reject, star and pick with provenance on each one, let the client choose, and drop the winner into the sequence.",
+              hue: "pink",
+              children: <LiveScene name="pipeline" className="h-full" />,
+            },
+          ]}
+        />
+
+        {/* THE RUNNING LINE, from monday.com's foot of page. */}
+        <Ticker
+          items={[
+            "Spreadsheets store your job. Studio Flows runs it.",
+            "Approvals that do not get lost.",
+            "Call sheets that confirm themselves.",
+            "Every thread, filed with the job.",
+            "Know what the job made.",
           ]}
         />
 
         {/* CLOSE */}
-        <section className="mx-auto max-w-[1400px] px-6 pb-28 pt-8 sm:px-10">
+        <section className="mx-auto max-w-[1400px] px-6 pb-28 pt-16 sm:px-10">
           <div className="rounded-[32px] px-8 py-16 text-center sm:px-16" style={{ background: "linear-gradient(145deg, var(--h-indigo-bg) 0%, var(--surface-2) 70%)" }}>
             <h2 className="mx-auto max-w-3xl font-display text-5xl font-extrabold leading-[1.0] tracking-[-0.02em] text-text sm:text-6xl">
               Run your next job through it.
