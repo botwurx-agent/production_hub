@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { FitStage, useInView, useSceneClock } from "./scene-kit";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
+import { SC_BOARD_MS, SC_BUILD_MS, SC_DAY_MS, SC_SHARE_MS, ScheduleBoardScene, ScheduleBuildScene, ScheduleDayScene, ScheduleShareScene } from "./scenes-schedule";
+import { CM_ATTACH_MS, CM_LINK_MS, CM_REPLY_MS, CM_SLACK_MS, CM_STUDIO_MS, CommsAttachScene, CommsLinkScene, CommsReplyScene, CommsSlackScene, CommsStudioScene } from "./scenes-comms";
+import { CR_ACCESS_MS, CR_ADD_MS, CR_ROSTER_MS, CR_TALENT_MS, CR_USED_MS, CrewAccessScene, CrewAddScene, CrewRosterScene, CrewTalentScene, CrewUsedScene } from "./scenes-crew";
 import {
   SL_FRAMES_MS,
   SL_IMPORT_MS,
@@ -121,6 +124,20 @@ const SCENES = {
   "sb-import": { ms: SB_IMPORT_MS, C: StoryboardImportScene, label: "Import", hue: "purple" },
   "sb-review": { ms: SB_REVIEW_MS, C: StoryboardReviewScene, label: "Review", hue: "purple" },
   "sb-export": { ms: SB_EXPORT_MS, C: StoryboardExportScene, label: "Export", hue: "purple" },
+  "sc-day": { ms: SC_DAY_MS, C: ScheduleDayScene, label: "A day", hue: "green" },
+  "sc-board": { ms: SC_BOARD_MS, C: ScheduleBoardScene, label: "Board", hue: "green" },
+  "sc-build": { ms: SC_BUILD_MS, C: ScheduleBuildScene, label: "Build", hue: "green" },
+  "sc-share": { ms: SC_SHARE_MS, C: ScheduleShareScene, label: "Share", hue: "green" },
+  "cm-link": { ms: CM_LINK_MS, C: CommsLinkScene, label: "Link", hue: "cyan" },
+  "cm-reply": { ms: CM_REPLY_MS, C: CommsReplyScene, label: "Reply", hue: "cyan" },
+  "cm-attach": { ms: CM_ATTACH_MS, C: CommsAttachScene, label: "Attachments", hue: "cyan" },
+  "cm-slack": { ms: CM_SLACK_MS, C: CommsSlackScene, label: "Slack", hue: "cyan" },
+  "cm-studio": { ms: CM_STUDIO_MS, C: CommsStudioScene, label: "Studio", hue: "cyan" },
+  "cr-roster": { ms: CR_ROSTER_MS, C: CrewRosterScene, label: "Roster", hue: "orange" },
+  "cr-add": { ms: CR_ADD_MS, C: CrewAddScene, label: "Add", hue: "orange" },
+  "cr-talent": { ms: CR_TALENT_MS, C: CrewTalentScene, label: "Talent", hue: "orange" },
+  "cr-access": { ms: CR_ACCESS_MS, C: CrewAccessScene, label: "Access", hue: "orange" },
+  "cr-used": { ms: CR_USED_MS, C: CrewUsedScene, label: "Used", hue: "orange" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;
