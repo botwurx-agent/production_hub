@@ -126,7 +126,7 @@ export function ShotRowsScene({ t }: { t: number }) {
           </div>
         ))}
         {t >= ADD_AT ? (
-          <div style={arrive(t, ADD_AT, 8)}>
+          <div className="absolute inset-0" style={arrive(t, ADD_AT, 8)}>
             <span className="absolute text-[11px] font-extrabold" style={{ left: COLX[0] + 4, top: Y(2) + 7, color: "var(--accent)" }}>{t >= CODE_AT ? "2A" : ""}</span>
             <div className="absolute rounded-[6px] border border-dashed border-border" style={{ left: COLX[1], top: Y(2), width: COLS[1], height: 38 }} />
             <div className="absolute" style={{ left: COLX[2], top: Y(2) + 5 }}>
@@ -395,9 +395,9 @@ export function ShotOrganizeScene({ t }: { t: number }) {
               </div>
             ) : null}
             {t >= UNDO_AT && t < UNDO_AT + 1500 ? (
-              <div className="absolute rounded-full px-3 py-1 text-[11.5px] font-extrabold text-white" style={{ left: 120, top: 300, background: "var(--text)", ...arrive(t, UNDO_AT, 8) }}>Undone · Cmd Z</div>
+              <div className="absolute rounded-full px-3 py-1 text-[11.5px] font-extrabold text-white" style={{ left: 220, top: 268, background: "var(--text)", ...arrive(t, UNDO_AT, 8) }}>Undone · Cmd Z</div>
             ) : null}
-            <div className="absolute" style={{ left: 0, top: 300 }}>
+            <div className="absolute" style={{ left: 0, top: 312 }}>
               <Btn on={t >= SCHED_AT - 400} press={t >= SCHED_AT - 60}>Schedule page: build from shot lists</Btn>
             </div>
           </div>
@@ -427,7 +427,7 @@ export function ShotOrganizeScene({ t }: { t: number }) {
       </Window>
       <ActionLabel t={t} at={SEL[0]} x={200} y={120} text="Select a few shots" after={1600} />
       <ActionLabel t={t} at={MOVE_TO_AT} x={420} y={70} text="Move them to another day" tone="blue" />
-      <ActionLabel t={t} at={UNDO_AT} x={320} y={290} text="Changed your mind? Undo" tone="muted" after={900} />
+      <ActionLabel t={t} at={UNDO_AT} x={430} y={300} text="Changed your mind? Undo" tone="muted" after={900} />
       <ActionLabel t={t} at={SCHED_AT} x={200} y={350} text="The schedule builds from your lists" tone="green" after={1600} />
       <Cursor
         t={t}
@@ -437,7 +437,7 @@ export function ShotOrganizeScene({ t }: { t: number }) {
           ...SEL.map((s, k) => ({ t: s, x: 205, y: 64 + 41 + (k + 2) * 38 + 19, click: true })),
           { t: MOVE_OPEN, x: 548, y: 82, click: true },
           { t: MOVE_TO_AT, x: 520, y: 110, click: true },
-          { t: SCHED_AT, x: 300, y: 377, click: true },
+          { t: SCHED_AT, x: 300, y: 389, click: true },
         ]}
       />
     </div>

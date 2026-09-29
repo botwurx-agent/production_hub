@@ -295,7 +295,7 @@ export function StoryboardReviewScene({ t }: { t: number }) {
     { n: 1, x: 200, y: 150, at: TEAM_PIN, who: "Sam Ortiz", role: "1st AD", hue: "green", text: "Frame 2 needs a second setup.", internal: true },
     { n: 2, x: 440, y: 150, at: CLIENT_PIN, who: "Maya Torres", role: "Client", hue: "pink", text: "Love frame 3. Keep this light.", internal: false },
   ];
-  const visible = pins.filter((p) => t >= p.at && (client ? true : p.internal));
+  const visible = pins.filter((p) => t >= p.at && (client ? !p.internal : p.internal));
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
       <Window
@@ -348,7 +348,7 @@ export function StoryboardReviewScene({ t }: { t: number }) {
             </div>
           ) : null}
         </div>
-        {!client ? <p className="absolute text-[10.5px] text-text-faint" style={{ left: 16, top: 250, width: 400 }}>Team notes stay internal. The client sees the board once it is greenlit and shared.</p> : null}
+        {!client ? <p className="absolute text-[10.5px] text-text-faint" style={{ left: 16, top: 250, width: 400 }}>The client sees the board once your team has greenlit it and shared the link.</p> : null}
         <Burst t={t} at={APPROVE_AT} x={480} y={210} spread={1.3} />
       </Window>
       <ActionLabel t={t} at={SEND_AT} x={560} y={20} text="Send it to your team first" />
