@@ -3912,6 +3912,34 @@ instant.
   clock the lead-in trim is measured on, so a clip's `prepare` step has to
   wait past that or the cut lands before the moment it was aiming at.
 
+### Home page rebuilt around motion: PREVIEW at /dev/home-motion (2026-09-29)
+From the monday.com scroll the operator recorded (docs/competitor-research/
+monday.md, which holds the take / adapt / skip list they agreed). Nothing on
+the live site has changed; the preview renders inside the real marketing
+shell (nav, footer, light theme) so it is judged as a page.
+- HERO: two columns, words left, HeroMotion right.
+- components/marketing/job-path.tsx: the job's path DRAWN BY THE SCROLL
+  (brief, storyboard, client review branching to changes-requested with a
+  dashed loop back to the storyboard, or approved, then schedule, call sheet,
+  delivery, a paid invoice). A 320vh section with a sticky stage; scroll
+  position through the section IS the progress, so scrolling back rewinds it.
+  The stage is one fixed 720x900 drawing scaled to fit its column by width
+  AND height. Reduced motion gets the finished drawing.
+- components/marketing/stack-panels.tsx: feature panels that SLIDE UP OVER
+  each other (pure CSS sticky, lg only). A pinned panel must never be taller
+  than the viewport, so the panel has a fixed height and its evidence BLEEDS
+  off the bottom edge, cropped, rather than shrinking to fit (fitting made it
+  a small picture in a big panel).
+- NOT YET BUILT from the agreed list: the storyboard that goes from pencil
+  sketch to approved final as fragments fly into it, and project-type tabs.
+- GOTCHA: in the dev server the first request for each large screenshot is
+  slow (the optimizer resizes a 3000px PNG), so a quick screenshot shows blank
+  frames. Warm the page first; it is not a layout bug.
+- GOTCHA, hit twice now: any Bash call that kills processes by matching a
+  pattern also matches its OWN command line if that pattern appears anywhere
+  in it (even inside a heredoc), and kills the shell. Kill by pid, in a call
+  of its own.
+
 ### Demo clips (scripts/capture-demos.mjs, `npm run demos`): BUILT
 A screenshot cannot show an interaction, and on the canvas pages every claim IS
 an interaction: creation is drag-only, selecting a card turns the tool rail into
