@@ -311,19 +311,19 @@ export function MoodboardImportScene({ t }: { t: number }) {
               <Photo a="amber" b="orange" />
               <Tag text="Upload" hue="indigo" />
             </Card>
-            <Card x={432} y={82} w={112} h={130} style={land(1800)}>
+            <Card x={432} y={70} w={112} h={112} style={land(1800)}>
               <Photo a="blue" b="indigo" kind={1} />
               <Tag text="Upload" hue="indigo" />
             </Card>
           </>
         ) : null}
         {t >= 3500 && t < 4900 ? (
-          <div className="absolute rounded-[9px] border bg-surface px-2.5 py-1.5 text-[11.5px]" style={{ left: 290, top: 190, width: 250, borderColor: "var(--accent)", ...arrive(t, 3500, 6) }}>
+          <div className="absolute rounded-[9px] border bg-surface px-2.5 py-1.5 text-[11.5px]" style={{ left: 290, top: 200, width: 250, borderColor: "var(--accent)", ...arrive(t, 3500, 6) }}>
             {typed("pinterest.com/pin/kitchen-light", t, 3700, 30)}
           </div>
         ) : null}
         {t >= 4900 ? (
-          <Card x={290} y={176} w={170} h={112} style={{ background: "var(--surface)", ...land(4900) }}>
+          <Card x={290} y={196} w={170} h={112} style={{ background: "var(--surface)", ...land(4900) }}>
             <div className="h-[62px]" style={{ background: "linear-gradient(135deg, var(--h-amber-bg), var(--h-pink-bg))" }} />
             <div className="px-2 py-1.5">
               <p className="truncate text-[11.5px] font-bold">Kitchen light references</p>
@@ -333,7 +333,7 @@ export function MoodboardImportScene({ t }: { t: number }) {
           </Card>
         ) : null}
         {t >= 6800 ? (
-          <Card x={472} y={224} w={130} h={92} style={land(6800)}>
+          <Card x={472} y={196} w={130} h={92} style={land(6800)}>
             <Photo a="cyan" b="blue" kind={2} />
             <Tag text="Project" hue="green" />
           </Card>
@@ -629,7 +629,7 @@ const COPIED_AT = 1700;
 const PORTAL_AT = 3000;
 const PINS = [
   { n: 1, x: 190, y: 160, at: 4100, who: "Maya", hue: "pink", text: "Love this light. More of this." },
-  { n: 2, x: 452, y: 150, at: 6300, who: "Jon", hue: "cyan", text: "This glass reads too cold.", draw: true },
+  { n: 2, x: 372, y: 118, at: 6300, who: "Jon", hue: "cyan", text: "This glass reads too cold.", draw: true },
 ];
 const REPLY_AT = 8300;
 const APPROVE_AT = 10700;
