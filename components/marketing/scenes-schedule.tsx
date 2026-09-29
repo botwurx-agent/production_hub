@@ -65,7 +65,7 @@ export function ScheduleDayScene({ t }: { t: number }) {
   });
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="Schedule · Day 1 · Thu, Oct 6" sub="Stage 2, Culver City · call 7:00 AM" right={<Chip tone="green" t={t}>Wraps {clock(m)}</Chip>}>
+      <Window title="Schedule · Day 1 · Thu, Oct 6" sub="Stage 2, Culver City · call 7:00 AM" right={<Chip tone="green" t={t}>Wrap target 6:00 PM</Chip>}>
         <div className="absolute flex text-[10px] font-extrabold uppercase tracking-[0.1em] text-text-faint" style={{ left: 24, top: 64, width: 592 }}>
           <span className="w-[68px]">Time</span>
           <span className="flex-1">What</span>
