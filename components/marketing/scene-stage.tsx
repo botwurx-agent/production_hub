@@ -4,6 +4,30 @@ import { useEffect, useState } from "react";
 import { FitStage, useInView, useSceneClock } from "./scene-kit";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
 import {
+  SL_FRAMES_MS,
+  SL_IMPORT_MS,
+  SL_ORG_MS,
+  SL_ROWS_MS,
+  SL_SHARE_MS,
+  ShotFramesScene,
+  ShotImportScene,
+  ShotOrganizeScene,
+  ShotRowsScene,
+  ShotShareScene,
+} from "./scenes-shotlist";
+import {
+  SB_ASPECT_MS,
+  SB_EXPORT_MS,
+  SB_GRID_MS,
+  SB_IMPORT_MS,
+  SB_REVIEW_MS,
+  StoryboardAspectScene,
+  StoryboardExportScene,
+  StoryboardGridScene,
+  StoryboardImportScene,
+  StoryboardReviewScene,
+} from "./scenes-storyboard";
+import {
   RV_DRAW_MS,
   RV_PINS_MS,
   RV_SHARE_MS,
@@ -87,6 +111,16 @@ const SCENES = {
   "rv-video": { ms: RV_VIDEO_MS, C: ReviewVideoScene, label: "Video", hue: "green" },
   "rv-draw": { ms: RV_DRAW_MS, C: ReviewDrawScene, label: "Draw", hue: "green" },
   "rv-versions": { ms: RV_VERS_MS, C: ReviewVersionsScene, label: "Versions", hue: "green" },
+  "sl-rows": { ms: SL_ROWS_MS, C: ShotRowsScene, label: "Rows", hue: "blue" },
+  "sl-frames": { ms: SL_FRAMES_MS, C: ShotFramesScene, label: "Frames", hue: "blue" },
+  "sl-import": { ms: SL_IMPORT_MS, C: ShotImportScene, label: "Import", hue: "blue" },
+  "sl-organize": { ms: SL_ORG_MS, C: ShotOrganizeScene, label: "Organize", hue: "blue" },
+  "sl-share": { ms: SL_SHARE_MS, C: ShotShareScene, label: "Share", hue: "blue" },
+  "sb-grid": { ms: SB_GRID_MS, C: StoryboardGridScene, label: "Frames", hue: "purple" },
+  "sb-aspect": { ms: SB_ASPECT_MS, C: StoryboardAspectScene, label: "Shape", hue: "purple" },
+  "sb-import": { ms: SB_IMPORT_MS, C: StoryboardImportScene, label: "Import", hue: "purple" },
+  "sb-review": { ms: SB_REVIEW_MS, C: StoryboardReviewScene, label: "Review", hue: "purple" },
+  "sb-export": { ms: SB_EXPORT_MS, C: StoryboardExportScene, label: "Export", hue: "purple" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;

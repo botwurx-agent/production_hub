@@ -328,6 +328,138 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "shot-list-software": {
+    hero: "storyboard",
+    chapters: [
+      {
+        nav: "Shots as rows",
+        title: "A shot list that reads like a shot list.",
+        body: "Every shot is a row, with the columns a crew actually reads: what it is, the size, the type and the camera move. Pick from the standard terms or type your own, and give each shot its code and day.",
+        details: [
+          { t: "The columns that matter", d: "Description, shot size, shot type and camera movement, each in its own column." },
+          { t: "Standard terms, or your own", d: "Pick Close-up or Dolly in from the list, or type something the list does not have." },
+          { t: "Codes and days", d: "Give each shot its number (1A, 2B) and the day it shoots on." },
+          { t: "Undo and redo", d: "Every edit can be taken back, on Cmd or Ctrl Z." },
+        ],
+        scene: "sl-rows",
+      },
+      {
+        nav: "A frame on every shot",
+        title: "A picture on every shot.",
+        body: "A shot list is easier to shoot from when every row shows what the shot looks like. Pick a frame from the project's assets, upload one, or pull the whole board's frames onto the list in one click.",
+        details: [
+          { t: "From the project's assets", d: "Choose any image already on the job for a row." },
+          { t: "Or upload one", d: "Drop a reference straight into the row." },
+          { t: "Pull frames off the storyboard", d: "Add frames to every row in one click, matched by shot number, so 1B gets frame 1B." },
+          { t: "Only fills the gaps", d: "Rows that already have a picture are left alone, so it is safe to run again." },
+        ],
+        scene: "sl-frames",
+      },
+      {
+        nav: "Import a PDF",
+        title: "The treatment becomes the shot list.",
+        body: "The client sends a treatment or a script as a PDF. Instead of retyping it, drop it in: the app reads it and proposes the shots, and you choose which ones go on the list.",
+        details: [
+          { t: "Reads decks and scripts", d: "The beats of the cut become rows, and the look described on the visual pages is picked up too." },
+          { t: "The right cut", d: "When a script has a :30 and a :15, it reads the longest one, so shots are not listed twice." },
+          { t: "On-screen text kept apart", d: "A super or a title card is not mistaken for a shot." },
+          { t: "You choose", d: "Every proposed shot is a tick box. Nothing goes on the list until you add it." },
+        ],
+        scene: "sl-import",
+      },
+      {
+        nav: "Organize and schedule",
+        title: "Every day of the shoot, sorted.",
+        body: "Keep one list per day, per location, or however the job splits. Move shots between lists in bulk, and when the list is ready, the shooting schedule builds itself from it.",
+        details: [
+          { t: "As many lists as you need", d: "A list per day or per location, each with its own shot count." },
+          { t: "Select and act in bulk", d: "Tick several shots and duplicate, move them to another list, or delete them together." },
+          { t: "The schedule builds from it", d: "The schedule page lays out each day from your lists' day column, with setups between shots and lunch placed for you." },
+          { t: "On the project's front page", d: "The shot count sits on the project hub, one click from anywhere." },
+        ],
+        scene: "sl-organize",
+      },
+      {
+        nav: "Share and print",
+        title: "Present it, print it, get it signed off.",
+        body: "Fill in the job details once and every export carries them. Print a PDF with a proper cover, or share the list for review and let the client pin notes on the exact shot.",
+        details: [
+          { t: "A cover block", d: "Client, agency, director, job number and more, filled in once and printed on the shot list, the storyboard and the binder." },
+          { t: "One-click PDF", d: "A clean export with the frames, ready to hand out or send." },
+          { t: "Share for review", d: "A link with no login, where the client pins a note on the shot they mean and approves the list." },
+          { t: "Email it", d: "Send the review link from the app, with a respond-by date if you want one." },
+          { t: "Export one list or all", d: "Print a single day's list or every list on the job." },
+        ],
+        scene: "sl-share",
+      },
+    ],
+  },
+  "storyboard-software": {
+    hero: "sb-import",
+    chapters: [
+      {
+        nav: "Frames with notes",
+        title: "Every frame, with everything it needs.",
+        body: "A storyboard here is a grid of frames in order, and every frame carries its own notes: the scene, what happens, the sound and anything else the crew should know. Add frames and drag them into order, and the numbers follow.",
+        details: [
+          { t: "An image per frame", d: "Upload a drawing or pick an image from the project's assets." },
+          { t: "Scene, description, sound, notes", d: "Four fields on every frame, so the board is readable without the director in the room." },
+          { t: "Drag to reorder", d: "Move a frame and every frame after it renumbers itself." },
+          { t: "Several boards per job", d: "One board for the hero spot, another for the cutdowns, each listed beside the grid." },
+          { t: "Undo and redo", d: "Snapshot history per board, on the keyboard shortcut." },
+        ],
+        scene: "sb-grid",
+      },
+      {
+        nav: "The right shape",
+        title: "Frames that keep their shape.",
+        body: "Boards are drawn for the format they will run in. Choose 16:9, 4:5, 9:16 or 1:1 and every frame redraws in that shape, showing the whole picture rather than a strip cut out of the middle.",
+        details: [
+          { t: "Four frame shapes", d: "16:9 for broadcast, 4:5 and 1:1 for feeds, 9:16 for vertical." },
+          { t: "Detected on import", d: "A board read from a PDF picks up its own frame shape automatically." },
+          { t: "Never cropped", d: "The full image is always shown, on the page, in review and in the PDF." },
+        ],
+        scene: "sb-aspect",
+      },
+      {
+        nav: "Import a board",
+        title: "The board, straight off the PDF.",
+        body: "Directors send boards as PDFs. Drop one in and the app finds each frame on every page, reads the caption next to it and files it into the right fields. The shot list comes with it, with every row already carrying its frame.",
+        details: [
+          { t: "Finds the frames", d: "Each picture on each page becomes a frame, with logos and page furniture left out." },
+          { t: "Captions filed properly", d: "Shot numbers, action, camera, voiceover and notes each land in their own field." },
+          { t: "Check before it goes in", d: "Every frame is shown with its number and first line before you import." },
+          { t: "A shot list too", d: "When the board has both, the shot list is created alongside, each row matched to its frame by number." },
+        ],
+        scene: "sb-import",
+      },
+      {
+        nav: "Review and sign-off",
+        title: "Your team first. Then the client.",
+        body: "Send the board into the project's review so your team can pin notes and greenlight it. Then share it with the client, who reviews the board itself, pins notes on the frame they mean, and approves it.",
+        details: [
+          { t: "Internal review", d: "The board appears on the project's Review page, with team notes and a greenlight." },
+          { t: "Then share with the client", d: "A link with no login, from the same place, once the team is happy." },
+          { t: "Pinned notes and drawings", d: "The client pins a comment or draws on the frame they mean." },
+          { t: "Approve or request changes", d: "One clear decision, with the notes that explain it." },
+          { t: "Into the client binder", d: "Add the approved board to the project binder with everything else the client needs." },
+        ],
+        scene: "sb-review",
+      },
+      {
+        nav: "Present and send",
+        title: "A board that looks like it came from a studio.",
+        body: "Present the board on screen or print it as a PDF, with a dark cover carrying the job details and two frames to a page so every note is readable at print size. Email it from the app with a review link attached.",
+        details: [
+          { t: "A proper cover", d: "Client, agency, director and job number from the job block you filled in once." },
+          { t: "Two frames a page", d: "Big enough to read, with the frame number on the picture and its notes beneath." },
+          { t: "Prints in light", d: "The PDF always prints light, whatever theme you work in." },
+          { t: "Email with a review link", d: "Send it with a respond-by date, and the client reviews it in the browser." },
+        ],
+        scene: "sb-export",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];
