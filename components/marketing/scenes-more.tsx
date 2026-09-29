@@ -228,7 +228,7 @@ export function MoodboardScene({ t }: { t: number }) {
 
 /* ------------------------------------------------------------- AI PIPELINE */
 
-export const PIPELINE_MS = 9000;
+export const PIPELINE_MS = 14500;
 
 const TAKES = [
   { a: "amber", b: "orange", model: "Kling 2.1", seed: "4412" },
@@ -239,21 +239,42 @@ const TAKES = [
   { a: "cyan", b: "green", model: "Kling 2.1", seed: "4414" },
 ];
 const IMPORT_AT = 500;
-const REJECT = { 1: 2300, 3: 2650, 5: 3000 } as Record<number, number>;
-const STAR = { 0: 3400, 2: 3700 } as Record<number, number>;
+// One decision about every 1.1s, left to right, so each one can be followed:
+// the cursor glides to a take, a label says what it is about to do, then it
+// does it. The operator's note on the first cut was that it bounced around too
+// fast to tell what was happening.
+const ACTIONS = [
+  { t: 3000, i: 0, kind: "star" },
+  { t: 4200, i: 1, kind: "reject" },
+  { t: 5400, i: 3, kind: "reject" },
+  { t: 6600, i: 5, kind: "reject" },
+  { t: 7800, i: 2, kind: "star" },
+  { t: 9100, i: 2, kind: "pick" },
+] as const;
+const REJECT = Object.fromEntries(ACTIONS.filter((a) => a.kind === "reject").map((a) => [a.i, a.t])) as Record<number, number>;
+const STAR = Object.fromEntries(ACTIONS.filter((a) => a.kind === "star").map((a) => [a.i, a.t])) as Record<number, number>;
 const PICK = 2;
-const PICK_AT = 4300;
-const SLOT_AT = 5000;
-const CLIENT_AT = 6200;
-const DONE_AT = 7200;
+const PICK_AT = 9100;
+const SLOT_AT = 10300;
+const CLIENT_AT = 11400;
+const DONE_AT = 12500;
+const ACTION_LABEL = { star: "Star it", reject: "Reject it", pick: "Pick as the take" } as const;
+const ACTION_TONE = { star: "amber", reject: "red", pick: "green" } as const;
 const TILE = { x0: 16, y0: 100, w: 192, h: 96, gx: 16, gy: 14 };
 const tilePos = (i: number) => ({ x: TILE.x0 + (i % 3) * (TILE.w + TILE.gx), y: TILE.y0 + Math.floor(i / 3) * (TILE.h + TILE.gy) });
+
+/** Where the pointer goes for each kind of decision on a take. */
+function actionPoint(i: number, kind: "star" | "reject" | "pick") {
+  const p = tilePos(i);
+  if (kind === "pick") return { x: p.x + 96, y: p.y + 52 };
+  return { x: p.x + (kind === "star" ? 150 : 176), y: p.y + 16 };
+}
 
 export function PipelineScene({ t }: { t: number }) {
   const picked = t >= PICK_AT;
   const pp = tilePos(PICK);
   // The picked take flies down into slot 4 of the sequence.
-  const fly = easeInOut(ramp(t, SLOT_AT - 500, 500));
+  const fly = easeInOut(ramp(t, SLOT_AT - 800, 800));
   const slotX = 16 + 3 * 104;
   const slotY = 356;
   return (
@@ -364,7 +385,7 @@ export function PipelineScene({ t }: { t: number }) {
           );
         })}
         {/* The flight from grid to slot */}
-        {t >= SLOT_AT - 500 && t < SLOT_AT ? (
+        {t >= SLOT_AT - 800 && t < SLOT_AT ? (
           <div
             className="absolute rounded-[10px] border-2"
             style={{
@@ -379,17 +400,33 @@ export function PipelineScene({ t }: { t: number }) {
         ) : null}
         <Burst t={t} at={DONE_AT} x={560} y={26} />
       </Window>
+      {/* What the next click does, beside the pointer */}
+      {ACTIONS.map((a) => {
+        const show = ramp(t, a.t - 500, 200) * (1 - ramp(t, a.t + 500, 200));
+        if (show <= 0) return null;
+        const at = actionPoint(a.i, a.kind);
+        return (
+          <span
+            key={`${a.t}`}
+            className="pointer-events-none absolute z-40 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-extrabold"
+            style={{
+              // Flip to the pointer's left near the right edge, or it spills out.
+              ...(at.x > 470 ? { right: 640 - at.x + 8 } : { left: at.x + 20 }),
+              top: at.y + 16,
+              opacity: show,
+              color: `var(--h-${ACTION_TONE[a.kind]})`,
+              background: `var(--h-${ACTION_TONE[a.kind]}-bg)`,
+              boxShadow: "0 6px 16px -8px rgba(40,30,90,.45)",
+            }}
+          >
+            {ACTION_LABEL[a.kind]}
+          </span>
+        );
+      })}
       <Cursor
         t={t}
-        path={[
-          { t: 1900, x: 320, y: 300 },
-          { t: REJECT[1], x: tilePos(1).x + 180, y: tilePos(1).y + 14, click: true },
-          { t: REJECT[3], x: tilePos(3).x + 180, y: tilePos(3).y + 14, click: true },
-          { t: REJECT[5], x: tilePos(5).x + 180, y: tilePos(5).y + 14, click: true },
-          { t: STAR[0], x: tilePos(0).x + 150, y: tilePos(0).y + 14, click: true },
-          { t: STAR[2], x: tilePos(2).x + 150, y: tilePos(2).y + 14, click: true },
-          { t: PICK_AT, x: pp.x + 100, y: pp.y + 50, click: true },
-        ]}
+        travel={750}
+        path={[{ t: 2000, x: 320, y: 300 }, ...ACTIONS.map((a) => ({ t: a.t, ...actionPoint(a.i, a.kind), click: true }))]}
       />
     </div>
   );

@@ -257,7 +257,16 @@ export function Burst({ t, at, x = 0, y = 0, spread = 1 }: { t: number; at: numb
  * The pointer that makes a scene read as somebody USING the product. A path of
  * waypoints in scene coordinates; `click` puts a ring on that stop.
  */
-export function Cursor({ t, path }: { t: number; path: { t: number; x: number; y: number; click?: boolean }[] }) {
+export function Cursor({
+  t,
+  path,
+  travel = 450,
+}: {
+  t: number;
+  path: { t: number; x: number; y: number; click?: boolean }[];
+  /** How long each move takes, in ms. Longer reads calmer. */
+  travel?: number;
+}) {
   if (!path.length) return null;
   let x = path[0].x;
   let y = path[0].y;
@@ -269,8 +278,8 @@ export function Cursor({ t, path }: { t: number; path: { t: number; x: number; y
       x = a.x;
       y = a.y;
       if (b) {
-        // Travel in the last 450ms before the next stop, dwell otherwise.
-        const move = Math.min(450, b.t - a.t);
+        // Travel in the last `travel` ms before the next stop, dwell otherwise.
+        const move = Math.min(travel, b.t - a.t);
         const p = easeInOut(ramp(t, b.t - move, move));
         x = lerp(a.x, b.x, p);
         y = lerp(a.y, b.y, p);
