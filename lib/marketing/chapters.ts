@@ -940,7 +940,8 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];
 
 /**
- * Pages whose LIVE route uses the chapter form. Empty until the operator
- * approves one; every page's chapters can be previewed at /dev/feature/<slug>.
+ * Pages whose LIVE route uses the chapter form: every page that has chapters
+ * (operator approved them all, 2026-09-30). Runner has none yet, so it keeps
+ * the older block layout. Previews stay at /dev/feature/<slug>.
  */
-export const LIVE_CHAPTER_PAGES: FeatureSlug[] = [];
+export const LIVE_CHAPTER_PAGES = Object.keys(CHAPTERS) as FeatureSlug[];
