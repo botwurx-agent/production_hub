@@ -6,6 +6,7 @@ import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene
 import { SC_BOARD_MS, SC_BUILD_MS, SC_DAY_MS, SC_SHARE_MS, ScheduleBoardScene, ScheduleBuildScene, ScheduleDayScene, ScheduleShareScene } from "./scenes-schedule";
 import { CM_ATTACH_MS, CM_LINK_MS, CM_REPLY_MS, CM_SLACK_MS, CM_STUDIO_MS, CommsAttachScene, CommsLinkScene, CommsReplyScene, CommsSlackScene, CommsStudioScene } from "./scenes-comms";
 import { GR_LIST_MS, GR_PICK_MS, GR_PROPS_MS, GearListScene, GearPickScene, GearPropsScene, TK_BOARD_MS, TK_CARD_MS, TK_LIST_MS, TK_PEOPLE_MS, TaskBoardScene, TaskCardScene, TaskListScene, TaskPeopleScene } from "./scenes-tasks";
+import { IV_BUILD_MS, IV_FLOW_MS, IV_IMPORT_MS, IV_SEND_MS, IV_SIGN_MS, IV_STYLE_MS, InvoiceBuildScene, InvoiceFlowScene, InvoiceImportScene, InvoiceSendScene, InvoiceSignScene, InvoiceStyleScene } from "./scenes-invoicing";
 import { CR_ACCESS_MS, CR_ADD_MS, CR_ROSTER_MS, CR_TALENT_MS, CR_USED_MS, CrewAccessScene, CrewAddScene, CrewRosterScene, CrewTalentScene, CrewUsedScene } from "./scenes-crew";
 import {
   SL_FRAMES_MS,
@@ -146,6 +147,12 @@ const SCENES = {
   "gr-list": { ms: GR_LIST_MS, C: GearListScene, label: "Gear", hue: "blue" },
   "gr-props": { ms: GR_PROPS_MS, C: GearPropsScene, label: "Props", hue: "blue" },
   "gr-pick": { ms: GR_PICK_MS, C: GearPickScene, label: "Pick", hue: "blue" },
+  "iv-flow": { ms: IV_FLOW_MS, C: InvoiceFlowScene, label: "Flow", hue: "green" },
+  "iv-build": { ms: IV_BUILD_MS, C: InvoiceBuildScene, label: "Build", hue: "green" },
+  "iv-style": { ms: IV_STYLE_MS, C: InvoiceStyleScene, label: "Style", hue: "green" },
+  "iv-sign": { ms: IV_SIGN_MS, C: InvoiceSignScene, label: "Sign", hue: "green" },
+  "iv-send": { ms: IV_SEND_MS, C: InvoiceSendScene, label: "Send", hue: "green" },
+  "iv-import": { ms: IV_IMPORT_MS, C: InvoiceImportScene, label: "Import", hue: "green" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;

@@ -739,6 +739,72 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "production-invoicing": {
+    hero: "iv-flow",
+    chapters: [
+      {
+        nav: "Build it in place",
+        title: "Type on the document the client will receive.",
+        body: "An estimate, a proposal and an invoice are three documents with three jobs, and each counts in its own series. Open one and you are editing the real thing: the client's details fill from their contacts, line items total as you type, and tax is set line by line.",
+        details: [
+          { t: "Three kinds, three series", d: "EST, PROP and INV numbers that count themselves." },
+          { t: "Bill-To from the client", d: "Pick a contact on the client's account and the block fills in." },
+          { t: "Tax per line", d: "Tax only what is taxable, then a discount, notes and terms." },
+          { t: "Saves as you go", d: "No save button to forget." },
+        ],
+        scene: "iv-build",
+      },
+      {
+        nav: "Your style",
+        title: "Your layout, your color, your type.",
+        body: "Pick one of three templates, set your accent color, and choose sans or serif. Save it as the studio default and every new document starts looking like yours, with your logo from Settings at the top.",
+        details: [
+          { t: "Three templates", d: "Classic, Modern with a color band, or Bold with a large title." },
+          { t: "Accent color", d: "Headers and the total take your color." },
+          { t: "Sans or serif", d: "A modern or a classic face for the whole document." },
+          { t: "Studio default", d: "Set it once and new documents inherit it." },
+        ],
+        scene: "iv-style",
+      },
+      {
+        nav: "Signed online",
+        title: "A proposal the client signs from a link.",
+        body: "Send a proposal and the client opens it without an account, reads the scope and any files you attached, and signs by typing or drawing. The signature is recorded with their name, email, time and IP, the document freezes so it cannot be changed afterwards, and your studio is notified.",
+        details: [
+          { t: "No login for the client", d: "A private link opens the proposal on any device." },
+          { t: "Typed or drawn", d: "Either is a valid electronic signature for a proposal." },
+          { t: "An audit trail", d: "Signer name, email, time and IP are kept with the signature." },
+          { t: "Frozen once signed", d: "A signed proposal cannot be edited or re-sent." },
+          { t: "Files attached", d: "A scope document, usage terms or references travel with it." },
+        ],
+        scene: "iv-sign",
+      },
+      {
+        nav: "Sent three ways",
+        title: "Email, a link, or a PDF.",
+        body: "However the client works, the document reaches them. Email it from the app with your own note, copy its link, or download a PDF that matches exactly. What goes out is frozen as a snapshot, and you can see when they have opened it.",
+        details: [
+          { t: "By email", d: "To, subject and your message, sent from the app." },
+          { t: "A share link", d: "One link to the document, with view tracking." },
+          { t: "A matching PDF", d: "Built from the same snapshot, so the PDF and the link agree." },
+          { t: "Feeds the margin", d: "Invoices are the Billed side of the budget's margin, with no copying." },
+        ],
+        scene: "iv-send",
+      },
+      {
+        nav: "Import a PDF",
+        title: "Already made it somewhere else? Bring it in.",
+        body: "If an estimate or invoice already exists as a PDF from another tool, drop it in and it comes back as an editable draft: lines, bill-to, dates, discount, notes and terms filled in. It keeps its printed number, and nothing is sent until you send it.",
+        details: [
+          { t: "Read for you", d: "Line items, bill-to, dates, notes and terms come across as fields." },
+          { t: "Keeps its number", d: "A document that already has an identity keeps it." },
+          { t: "A draft, never sent", d: "Check it, then send it yourself." },
+          { t: "Totals checked", d: "If the lines do not add up to the printed total, you are told both figures." },
+        ],
+        scene: "iv-import",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];
