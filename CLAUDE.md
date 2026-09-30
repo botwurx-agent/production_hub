@@ -1818,6 +1818,27 @@ is now a LEDGER, the same move that makes an Asset a file plus Versions.
 - Slice 4 (margin + unpaid rollup) and slice 5 (payment schedule) are BUILT,
   see below.
 
+### One way to add a cost (no migration) — BUILT
+Operator, on the budget page: the dashed "drag an invoice or receipt here"
+panel and the "+ Add a cost" button "sound like they do the same thing", and
+they did: both opened the same CostModal, one with the file attached. Two
+visible controls for one job read as two different jobs.
+- The page panel is GONE (`browse={false}` on the ledger's FileDropzone). The
+  window-wide drop still works, as a shortcut nobody has to choose between.
+- "+ Add a cost" opens the form at the DOCUMENT first: a drop panel reading
+  "Drop an invoice, an estimate or a receipt" with "Choose a file or take a
+  photo", and a quiet "No document? Enter it by hand" link that reveals the
+  fields. Most costs arrive as a document, so that is the default path and
+  typing is the exception, not an equal alternative.
+- The start step shows only for a NEW cost with no file, no email attachment
+  and no prefilled draft (`choosing` in CostModal); editing a cost, the Gmail
+  "Log as a cost" path and a page drop all go straight to the fields.
+- acceptFile is the ONE handler for the picker, the start panel and a drop, so
+  the three ways of handing over a document cannot drift apart.
+- Verified in Chromium against a throwaway fixture mounting the real
+  CostLedger (deleted): one button on the page, the start step, the manual
+  link revealing the fields, a picked file landing on the form, 390px clean.
+
 ### Pay a cost through FreshBooks Bill Pay (migration 0111) — SLICE 1 BUILT, NOT YET RUN LIVE
 Operator, 2026-09-30, with real live-action bills to pay: FreshBooks now has
 Bill Pay, so do the work in Studio Flows and hand only the PAYMENT to
