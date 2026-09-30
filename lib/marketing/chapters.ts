@@ -805,6 +805,71 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "ai-video-production": {
+    hero: "pipeline",
+    chapters: [
+      {
+        nav: "Elements",
+        title: "Your characters, places and props, by @handle.",
+        body: "Save the elements a job is built from, each with its picture and the @handle the platform knows it by. On a shot, the elements it uses sit above the prompt as chips: click one to drop its handle in where you are typing. If the prompt names a handle none of the shot's elements owns, you are told before you generate, because the platform would silently ignore it.",
+        details: [
+          { t: "Named the way Higgsfield names them", d: "Character, location and prop elements with their handle, kept verbatim." },
+          { t: "Chips above the prompt", d: "Click to insert the handle at the cursor; a tick shows which are already in." },
+          { t: "One check that matters", d: "A handle in the prompt that no element on this shot owns is flagged." },
+          { t: "Where each is used", d: "A map of which shots use which elements, for continuity." },
+        ],
+        scene: "ai-elements",
+      },
+      {
+        nav: "Import from Higgsfield",
+        title: "Paste the links. The clips come in.",
+        body: "Generation stays on the platform. When the takes are ready, paste their share links, up to forty at once, and each one is fetched, stored and added to the shot as a candidate. The platform, aspect ratio, resolution and duration are read off the file itself, so the record is filled in without anyone typing it.",
+        details: [
+          { t: "Share links or file links", d: "Paste a batch, one per line, and see which ones came in." },
+          { t: "Stored with the project", d: "Clips are copied in, so they survive the platform's link expiring." },
+          { t: "Provenance filled in", d: "Platform from the link, aspect, resolution and duration from the media." },
+          { t: "Images too", d: "Reference and frame candidates come in the same way on the image stage." },
+        ],
+        scene: "ai-import",
+      },
+      {
+        nav: "Triage",
+        title: "A hundred takes, judged from the keyboard.",
+        body: "Open a shot's candidates full screen on a neutral dark stage and go through them without the mouse: reject, star, move on, compare two side by side, then press Enter on the take. Stars are the shortlist between kept and picked, so a pool of a hundred narrows to a few and then to one.",
+        details: [
+          { t: "Keyboard first", d: "Arrows to move, X to reject, S to star, Enter to pick the take." },
+          { t: "Compare up to four", d: "Near-identical takes side by side, each with its own pick and star." },
+          { t: "Filter the pool", d: "All, kept, starred or rejected, and by model." },
+          { t: "A neutral stage", d: "Dark in any theme, so the interface does not change how the take looks." },
+        ],
+        scene: "ai-triage",
+      },
+      {
+        nav: "Send for a pick",
+        title: "Let the director choose from the shortlist.",
+        body: "Choose which candidates someone should see and share one link. They play each option, star favourites, leave notes at a moment in the clip, and mark their pick, without an account. Their choice comes back to the shot as feedback and changes nothing until you decide.",
+        details: [
+          { t: "You choose what they see", d: "Send four options, not the whole pool." },
+          { t: "Stars, notes and a pick", d: "Timecoded notes on video, and one pick per reviewer." },
+          { t: "Results on the shot", d: "Who picked which option, with their stars and notes." },
+          { t: "Edit without resending", d: "Add or remove options and the same link keeps working." },
+        ],
+        scene: "ai-pick",
+      },
+      {
+        nav: "Sequence to cut",
+        title: "From picked takes to the cut, and to the editor.",
+        body: "The sequence shows each shot's picked take in order, with its voiceover beside it. Upload the master cut from your edit as versions and collect notes by timecode, then hand the editor one link with every take and its voiceover, named so the pairs line up.",
+        details: [
+          { t: "Voiceover per shot", d: "The read that plays over each clip is kept with that clip." },
+          { t: "Master cut by version", d: "Upload v1, collect notes, upload v2, with the history kept." },
+          { t: "Review like any cut", d: "Timecoded notes and approval, internally and with the client." },
+          { t: "Editor handoff", d: "01_Paris-Cafe.mp4 beside 01_Paris-Cafe.mp3, for every shot." },
+        ],
+        scene: "ai-cut",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];
