@@ -31,7 +31,7 @@ export default function MarketingHome() {
     <section className="mx-auto grid max-w-[1400px] items-center gap-14 px-6 pb-20 pt-10 sm:px-10 lg:min-h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-10 lg:pb-10">
       <div>
         <p className="mb-5 text-xs font-semibold uppercase tracking-[0.16em] text-accent">
-          For production studios of every scale
+          Built for commercial production
         </p>
         <h1 className="font-display text-5xl font-extrabold leading-[1.0] tracking-[-0.025em] text-text sm:text-[4.5rem]">
           Every job, in <span className="text-accent">one place</span>.
@@ -61,8 +61,8 @@ export default function MarketingHome() {
     <Section id="product" backdrop={<Wash hue="indigo" />}>
       <SectionHeader
         eyebrow="Inside a project"
-        title="Everything it takes to run the job, on one page."
-        sub="A project here is not a folder. It is the whole production: the brief, the boards, the crew, the money and the delivery, each waiting in the phase where the work happens."
+        title="Laid out the way a production moves."
+        sub="A project is not a folder of files. It is twenty-one tools, from the brief to the budget, each waiting in the phase where you'll need it: plan, visualize, review, produce."
       />
       <div className="mt-16">
         <ModuleMap />
@@ -120,11 +120,12 @@ export default function MarketingHome() {
           Run your next job through it.
         </h2>
         <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-text-muted">
-          The free plan runs a whole job, brief to invoice. No card needed.
+          The free plan takes one real job all the way through, and it stays free.
         </p>
         <div className="mt-8 flex justify-center">
           <CtaButton shine />
         </div>
+        <CtaMicrocopy className="mt-4" />
       </div>
     </section>
     {/* THE RUNNING LINE, under the close and above the footer, the way
@@ -132,10 +133,10 @@ export default function MarketingHome() {
     <Ticker
       items={[
         "Spreadsheets store your job. Studio Flows runs it.",
-        "Approvals that do not get lost.",
-        "Call sheets that confirm themselves.",
-        "Every thread, filed with the job.",
-        "Know what the job made.",
+        "Your client approves without an account.",
+        "Crew confirm the call sheet from one link.",
+        "See the margin before the job wraps.",
+        "Every AI take, one pick.",
       ]}
     />
     </>

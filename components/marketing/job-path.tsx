@@ -62,7 +62,7 @@ const NODES: Node[] = [
   { id: "delivery", x: 360, y: 765, w: 250, label: "Delivery", sub: "Final cut, v3", hue: "blue", t: 0.8, icon: "film" },
   {
     id: "invoice", x: 360, y: 870, w: 250, label: "Invoice", sub: "INV-1042, $42,000", hue: "indigo", t: 0.89, icon: "invoice",
-    chip: { text: "Paid", hue: "green", t: 0.95 },
+    chip: { text: "Sent", hue: "green", t: 0.95 },
   },
 ];
 
@@ -100,9 +100,9 @@ const ease = (p: number, t: number, span = 0.07) => {
 };
 
 export function JobPath({
-  eyebrow = "One path, start to paid",
-  title = "The whole job, in the order it happens.",
-  body = "Every step lives on the same project, so the approval, the schedule, the call sheet and the invoice all know about each other.",
+  eyebrow = "How a job moves",
+  title = "Every step picks up where the last one left off.",
+  body = "The shot list builds the schedule, the crew list sends the call sheet, and the invoice lands in the budget. Nothing gets retyped between steps.",
   cta,
 }: {
   eyebrow?: string;
@@ -193,7 +193,7 @@ export function JobPath({
             ref={boxRef}
             className="relative h-[min(78vw,640px)] w-full lg:h-full"
             role="img"
-            aria-label="A project's path: brief, storyboard, client review which either sends it back for changes or approves it, then schedule, call sheet, delivery and a paid invoice."
+            aria-label="A project's path: brief, storyboard, client review which either sends it back for changes or approves it, then schedule, call sheet, delivery and the invoice."
           >
             <div
               className="absolute left-1/2 top-1/2"
@@ -295,5 +295,5 @@ function stageLabel(p: number) {
   if (p < 0.6) return "Round two is approved";
   if (p < 0.8) return "The shoot is scheduled and called";
   if (p < 0.95) return "Delivered";
-  return "And paid.";
+  return "Invoiced.";
 }
