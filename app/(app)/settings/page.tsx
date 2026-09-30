@@ -3,7 +3,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { googleConfigured } from "@/lib/google";
 import { slackConfigured } from "@/lib/slack";
 import { figmaConfigured } from "@/lib/figma";
-import { freshbooksConfigured } from "@/lib/freshbooks";
+import { freshbooksConfigured, hasBillScopes } from "@/lib/freshbooks";
 import { PageHeader } from "@/components/page-header";
 import { SettingsIcon } from "@/components/app-shell/nav-icons";
 import { Card } from "@/components/ui/card";
@@ -80,7 +80,7 @@ export default async function SettingsPage({
         .order("created_at"),
       supabase
         .from("billing_accounts")
-        .select("fb_identity_email")
+        .select("fb_identity_email, scope")
         .eq("studio_id", ctx.studio.id)
         .eq("provider", "freshbooks")
         .maybeSingle(),
@@ -198,6 +198,9 @@ export default async function SettingsPage({
               connectedEmail: billingAccount
                 ? (billingAccount.fb_identity_email ?? "")
                 : null,
+              needsReconnect: billingAccount
+                ? !hasBillScopes(billingAccount.scope)
+                : false,
             }}
           />
         </Card>

@@ -31,6 +31,13 @@ import {
   type CostStatus,
 } from "@/lib/costs";
 import { PaymentSchedule } from "@/components/production/payment-schedule";
+import {
+  FreshbooksBillControl,
+  FreshbooksSync,
+  SendBillModal,
+  openBill,
+  type FreshbooksState,
+} from "@/components/production/freshbooks-bill";
 import type { DocumentKind } from "@/lib/invoice-draft";
 import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
@@ -145,6 +152,7 @@ export function CostLedger({
   roster,
   payments,
   todayIso,
+  freshbooks,
 }: {
   projectId: string;
   costs: ProjectCost[];
@@ -153,11 +161,15 @@ export function CostLedger({
   payments: CostPayment[];
   /** Computed on the server, so overdue cannot differ after hydration. */
   todayIso: string;
+  /** Null when FreshBooks is not connected: no pay-via controls at all. */
+  freshbooks: FreshbooksState | null;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
   const [editing, setEditing] = useState<ProjectCost | "new" | null>(null);
   const [openSchedule, setOpenSchedule] = useState<string | null>(null);
+  const [billing, setBilling] = useState<ProjectCost | null>(null);
+  const openBills = costs.filter(openBill).length;
   // A vendor invoice dropped on the ledger. It opens the add-a-cost form with
   // the document attached, which is what makes the AI read fire: filing an
   // invoice with no amount, vendor or budget line would not be a cost.
@@ -212,7 +224,11 @@ export function CostLedger({
       !window.confirm(
         `Delete the ${money.format(Number(cost.amount) || 0)} cost from ${
           cost.vendor || "this vendor"
-        }? The attached document is deleted too.`
+        }? The attached document is deleted too.${
+          cost.fb_bill_id
+            ? " Its bill stays in FreshBooks; delete it there as well if it is not going to be paid."
+            : ""
+        }`
       )
     )
       return;
@@ -266,9 +282,14 @@ export function CostLedger({
                 }.`}
           </p>
         </div>
-        <Button size="sm" onClick={() => setEditing("new")}>
-          + Add a cost
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {freshbooks && (
+            <FreshbooksSync projectId={projectId} openCount={openBills} />
+          )}
+          <Button size="sm" onClick={() => setEditing("new")}>
+            + Add a cost
+          </Button>
+        </div>
       </div>
 
       {costs.length === 0 ? (
@@ -348,6 +369,9 @@ export function CostLedger({
                     ? `${costPayments.filter((p) => p.paid_at).length}/${costPayments.length}`
                     : "Split"}
                 </button>
+                {freshbooks && (c.fb_bill_id || summary.owed > 0) && (
+                  <FreshbooksBillControl cost={c} onSend={() => setBilling(c)} />
+                )}
                 {c.storage_path && <DocButton costId={c.id} name={c.file_name} />}
                 <button
                   onClick={() => setEditing(c)}
@@ -380,6 +404,15 @@ export function CostLedger({
             );
           })}
         </div>
+      )}
+
+      {billing && freshbooks && (
+        <SendBillModal
+          projectId={projectId}
+          cost={billing}
+          state={freshbooks}
+          onClose={() => setBilling(null)}
+        />
       )}
 
       {editing && (

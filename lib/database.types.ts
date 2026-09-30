@@ -2130,6 +2130,10 @@ export type Database = {
           storage_path: string | null;
           file_name: string | null;
           notes: string | null;
+          fb_bill_id: string | null;
+          fb_bill_status: string | null;
+          fb_bill_outstanding: number | null;
+          fb_synced_at: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -2151,6 +2155,10 @@ export type Database = {
           storage_path?: string | null;
           file_name?: string | null;
           notes?: string | null;
+          fb_bill_id?: string | null;
+          fb_bill_status?: string | null;
+          fb_bill_outstanding?: number | null;
+          fb_synced_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -2172,6 +2180,10 @@ export type Database = {
           storage_path?: string | null;
           file_name?: string | null;
           notes?: string | null;
+          fb_bill_id?: string | null;
+          fb_bill_status?: string | null;
+          fb_bill_outstanding?: number | null;
+          fb_synced_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;

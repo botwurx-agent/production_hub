@@ -1428,7 +1428,10 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0110. Recent: 0110 =
+files in supabase/migrations. THROUGH 0111. Recent: 0111 =
+cost_freshbooks_bill (project_costs.fb_bill_id / fb_bill_status /
+fb_bill_outstanding / fb_synced_at: the link from a cost to the FreshBooks
+bill it was sent across as); 0110 =
 schedule_review_target (approval_target gains 'schedule', so the shooting
 schedule joins the doc-review stack and can be shared, pinned and approved
 like the shot list); 0109 =
@@ -1809,6 +1812,53 @@ is now a LEDGER, the same move that makes an Asset a file plus Versions.
   Saturation.io's ground, and the audit already said no to it).
 - Slice 4 (margin + unpaid rollup) and slice 5 (payment schedule) are BUILT,
   see below.
+
+### Pay a cost through FreshBooks Bill Pay (migration 0111) — SLICE 1 BUILT, NOT YET RUN LIVE
+Operator, 2026-09-30, with real live-action bills to pay: FreshBooks now has
+Bill Pay, so do the work in Studio Flows and hand only the PAYMENT to
+FreshBooks. This reopens the 07-29 "closed again" decision on their call, and
+it is deliberately a probe: build the thinnest real version, send one real
+bill, and let that answer the questions the docs could not.
+- THE ONE API FACT THAT SHAPES IT: FreshBooks can CREATE a bill and READ its
+  status, and can only RECORD a payment, never initiate one. So the send is
+  ours, the Pay click is on FreshBooks' own screen, and paid status comes back.
+  Nothing here moves money.
+- FLOW: a cost row on the budget carries "Pay via FB" -> SendBillModal
+  (components/production/freshbooks-bill.tsx) shows exactly what goes (vendor,
+  amount, bill number, dates) plus a FreshBooks EXPENSE CATEGORY picker, because
+  every bill line must carry one. The last pick is remembered in localStorage
+  ("freshbooks.billCategory"); first time it prefers anything named contract /
+  subcontract / professional. Send -> sendCostToFreshbooks finds the vendor by a
+  normalised name or creates it (Bill Vendors API, BETA), creates a one-line
+  bill for the cost's amount, and stores fb_bill_id on the cost. The row then
+  shows an "FB unpaid" chip linking to FreshBooks.
+- READ-BACK: FreshbooksSync runs syncFreshbooksBills ONCE when the budget
+  opens (quietly) and again on the "Check FreshBooks" button. A bill FreshBooks
+  calls paid (or with nothing outstanding) flips the cost to paid: the chip if
+  there is no payment schedule, every unpaid scheduled payment if there is.
+  So "pay in FreshBooks, come back" is the whole loop. No webhook yet.
+- ONE COST, ONE BILL: a second send is refused server-side. If the bill is
+  created and the link-back write fails, the error names the FreshBooks bill id
+  and says not to send again, since a retry would create a duplicate.
+- SCOPES CHANGED: bills + bill_vendors read/write + expenses:read were added.
+  The callback now stores `scope` on billing_accounts (it was always null), and
+  hasBillScopes() uses it to show a Reconnect prompt in Settings and in the
+  send window BEFORE anything fails. Every existing connection needs one
+  reconnect. If FreshBooks' developer app has granular scopes enabled, the new
+  scopes may also need ticking there or the reconnect is refused.
+- SHAPES ARE FROM SEARCH RESULTS, NOT THE DOCS: freshbooks.com is
+  egress-blocked from Claude Code sessions, so the bill / vendor / category
+  request and response shapes in lib/freshbooks.ts were assembled from their
+  API reference as quoted by search. Parsing is tolerant; the first live send
+  is the verification. Most likely thing to be wrong: the vendor create
+  response key, or `due_offset_days` vs a plain due date.
+- NOT IN SLICE 1, deliberately, pending the live test: attaching the invoice
+  PDF to the bill (FreshBooks takes an `attachment`, which needs their upload
+  API first); a deep link to the one bill (FRESHBOOKS_BILLS_URL is the bills
+  list, since the per-bill web URL is undocumented); a deposit already paid
+  here is NOT subtracted (the bill is for the full commitment); editing a cost
+  after sending does not update the bill; deleting a cost leaves its bill in
+  FreshBooks (the confirm says so).
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
@@ -5305,6 +5355,9 @@ The parked items, so they are findable WHEN friction hits (not before):
 
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
 pending the FreshBooks-vs-Melio decision; do not extend it until confirmed.
+EXCEPTION, on the operator's call 2026-09-30: paying VENDOR bills through
+FreshBooks Bill Pay (see "Pay a cost through FreshBooks Bill Pay"). That slice
+is a probe; what the first live bill shows decides the rest.
 Remaining roadmap if the operator asks for direction: Phase 7 (AI-video
 pipeline) is the flagship differentiator and is the one thing worth proposing
 unprompted. See docs/DEVELOPMENT.md for setup.
