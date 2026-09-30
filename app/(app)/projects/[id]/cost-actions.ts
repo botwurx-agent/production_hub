@@ -6,6 +6,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { finalizeUpload, discardUpload } from "@/lib/upload-ticket";
 import { logWrite, reportError } from "@/lib/log";
 import { generateReviewToken } from "@/lib/review-links";
+import { formatBytes } from "@/lib/attachment-limits";
 import {
   costStatus,
   depositSplit,
@@ -252,7 +253,7 @@ export async function extractInvoiceDraft(
 > {
   await requireStudioContext();
   if (!aiConfigured()) {
-    return { error: "No AI provider is set up, so invoices cannot be read here." };
+    return { error: "No AI provider is set up, so documents cannot be read here." };
   }
 
   const file = formData.get("file");
@@ -260,10 +261,17 @@ export async function extractInvoiceDraft(
     return { error: "No file selected." };
   }
   if (!isCostDocType(file.type)) {
-    return { error: "Only a PDF or a photo of an invoice can be read." };
+    return { error: "Only a PDF or a photo can be read." };
   }
   if (file.size > MAX_COST_DOC_BYTES) {
-    return { error: "That file is too large to read (4MB max)." };
+    // The bytes cross a Server Action on their way to the model, so this is the
+    // request-body ceiling rather than a policy. The client compresses a photo
+    // before it gets here, so in practice only a large PDF reaches this.
+    return {
+      error: `That file is too large to read (${formatBytes(
+        MAX_COST_DOC_BYTES
+      )} max).`,
+    };
   }
 
   const supabase = createClient();
@@ -297,7 +305,7 @@ export async function extractInvoiceDraft(
   if (draft.unreadable) {
     return {
       error:
-        "That did not look like a bill or an estimate. Fill the form in by hand.",
+        "That did not look like an invoice, an estimate, or a receipt. Fill the form in by hand.",
     };
   }
 

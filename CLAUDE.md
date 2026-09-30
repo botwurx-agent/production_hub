@@ -4382,6 +4382,87 @@ Their three-day job came to 56 rows typed by hand.
   session cannot reach Supabase, so the write path has to be tried on the
   operator's machine. The renumber is the part to watch.
 
+### Photograph a receipt onto the budget (no migration) — BUILT
+Operator, straight off a real job: they were "running around and purchasing
+various things for the IQ bar shoot and collecting receipts", and wanted to
+upload them to the budget so the app saved the copy AND lifted the figures onto
+a line, ideally photographing them in the app. Most of that path already
+existed: the add-a-cost modal has taken a PDF or an image since budget slice 2
+and reads it into a draft. Four things were wrong with it for a receipt, and
+the first is the one that mattered.
+- IT WOULD HAVE FILED EVERY RECEIPT AS MONEY STILL OWED. A cost defaults to
+  `received`, and `summarizePayments` falls back to that chip when there is no
+  payment schedule, so the budget's "Still owed" tile and the dashboard's
+  unpaid-invoice widget would have chased the producer for a pile of cash they
+  handed over at the counter. `documentKind` now has a third value, `receipt`,
+  and a receipt lands as `paid`. The operator's own rule: "a receipt is always
+  paid if I have it in hand."
+- THE EXTRACTOR WAS PROMPTED FOR BILLS ONLY ("You read a bill from a vendor"),
+  so a till slip was being read by rules about reps billing for named artists,
+  day counts and printed due dates, none of which a receipt has. The prompt now
+  names three kinds and gives the receipt its own paragraph: the merchant is
+  the vendor, the total INCLUDES tax and tip (never the pre-tax subtotal), days
+  and dueDate are always null, and the tax, card and return window go in notes
+  since none has a field. It also says out loud how to tell a receipt from an
+  invoice (a tender line, a card type, an approval code, a change-due line,
+  "PAID"), because that one word is what decides owed versus paid.
+- A PHONE PHOTO WAS OVER THE READ CEILING, on the device this is most useful
+  on. `MAX_COST_DOC_BYTES` is 4MB because the read crosses a Server Action, and
+  a 12MP camera JPEG is about 5MB, so the feature would have attached the
+  receipt and then told the producer to type the amount in by hand. A COPY is
+  now compressed for the read; the ORIGINAL is still what gets attached, since
+  the receipt is the studio's record of the spend and a smaller one buys
+  nothing (the attach is a direct upload with no function in its path, so it
+  was never capped). Settings are gentler than the app's default (2600px at
+  0.85, not 2400 at 0.82) because this is a document whose small print is the
+  point, and a file already under 3MB is sent untouched. MEASURED in Chromium
+  against generated receipt photographs CARRYING SENSOR GRAIN, since grain is
+  what makes a camera JPEG big and a clean synthetic image flatters the
+  compressor: 4,924KB to 1,195KB at 12MP, 18,945KB to 1,219KB at 48MP, both
+  about a third of the ceiling. A PDF passes straight through, so a large scan
+  still gets the honest "fill it in by hand" toast.
+- BATCH IS DELIBERATELY NOT BUILT (the operator: "one at a time would be
+  fine"), so there is no multi-file picker and no per-receipt review grid.
+- NO `kind` COLUMN AND NO MARKER ON THE ROW, which was left to our judgement.
+  A receipt already reads correctly as a paid cost with the shop as vendor, the
+  purchase date and no invoice number, the paperclip already says a document is
+  attached, and job cost stays one number in one place. A column recording that
+  this one arrived as a photograph answers a question nobody asks.
+- NO getUserMedia CAMERA EITHER. `accept=".pdf,image/*"` already makes iOS and
+  Android offer Take Photo as the first item, without leaving the app, and the
+  native camera focuses and exposes better than anything we would write.
+  `capture="environment"` was specifically NOT added: on iOS it REMOVES the
+  photo-library option, so it would take a capability away. What was missing
+  was that nobody could see it, so the hint under the picker says so.
+- VENDOR MATCHING IS LEFT ALONE and correctly does nothing here: it runs
+  against the PROJECT ROSTER, where Home Depot will never appear, so it returns
+  null and the cost stays unassigned rather than guessing. For a receipt the
+  match that matters is the BUDGET LINE, which the extractor already whitelists
+  against the project's real ids, and the prompt now says that is the only
+  thing filing the spend anywhere.
+- THE EMAIL PATH GOT THE SAME RULE. components/projects/log-cost-attachment.tsx
+  hardcoded `status: "received"`, so an emailed order confirmation would have
+  landed as owed; it now reads `documentKind` and the modal takes an
+  `initialDocKind` so a read done there shows the same banner as one done in
+  the modal. The two ways in have to behave identically or they quietly
+  diverge, which is the rule that file already states about a drop and a pick.
+- FIXED ON THE WAY, both pre-existing: the dropzone's copy claimed a "4MB max
+  for an invoice" while the zone enforces MAX_DOCUMENT_BYTES (100MB), a number
+  somebody typed, the same phantom-ceiling class as the boards path and the
+  assets dropzone; and `got.push(...)` ran INSIDE the setForm updater, which
+  React calls twice in development, so the banner named every filled field
+  twice. The list is built outside the updater now.
+- 48 assertions in the scratchpad: the kind whitelist (an unrecognised word
+  such as "purchase order" or "statement" must come back NULL rather than
+  reaching the paid branch), the money traps on a receipt total ("n/a" must not
+  become $0.00), a timestamped purchase date keeping its date part, and the
+  fact the whole thing rests on: `summarizePayments(x, [], "paid").owed` is 0
+  while `"received"` still owes x.
+- NOT verified against the live model: no AI key exists outside Vercel, so the
+  receipt prompt is reasoned from how these documents are printed rather than
+  re-run. The first real receipt is the test, and the thing to watch is whether
+  a printed invoice from a small supplier gets read as a receipt.
+
 ### Duplicate a call sheet (no migration) — BUILT
 Operator, mid-job: "i sent out the prelight call sheet yesterday. Today i have
 to send out the call sheet for day 1. It would be much easier to duplicate

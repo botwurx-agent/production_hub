@@ -1,6 +1,6 @@
 /**
- * The trust boundary between a model reading a vendor's bill and the money
- * fields of a cost record.
+ * The trust boundary between a model reading a vendor's bill, a quote, or a
+ * till receipt and the money fields of a cost record.
  *
  * Deliberately NOT "server-only" (same call as lib/shot-doc.ts and
  * lib/billing-import.ts): the parsing is pure, it is where the sharp edges
@@ -22,14 +22,21 @@ export function money(v: unknown): number | null {
   return Math.round(n * 100) / 100;
 }
 
+export type DocumentKind = "invoice" | "estimate" | "receipt";
+
 export type InvoiceDraft = {
-  /** What the document calls itself, so the UI can say which it read. */
-  documentKind: "invoice" | "estimate" | null;
+  /**
+   * What the document calls itself, so the UI can say which it read, and so a
+   * receipt can land as already paid: money handed over at a till is not money
+   * the studio still owes.
+   */
+  documentKind: DocumentKind | null;
   vendor: string | null;
   /**
    * The other name the cost could be filed under, when a bill arrives through
    * a rep or a loan-out company on behalf of a named artist. Both are tried
    * against the project roster, since either may be the name the studio knows.
+   * Always null on a receipt: a shop does not bill on anyone's behalf.
    */
   vendorAlt: string | null;
   description: string | null;
@@ -128,13 +135,18 @@ export function parseInvoiceDraft(raw: string, validLineIds: string[]): InvoiceD
 
   const lineId = str(obj.budgetLineId, 64);
 
+  // Whitelisted rather than passed through: the kind decides whether the cost
+  // lands as owed or as already paid, so an unrecognised word must mean "not
+  // stated" rather than reaching that branch.
   const kindRaw = str(obj.documentKind, 20)?.toLowerCase() ?? null;
-  const documentKind =
+  const documentKind: DocumentKind | null =
     kindRaw === "invoice"
       ? "invoice"
       : kindRaw === "estimate" || kindRaw === "quote" || kindRaw === "bid"
         ? "estimate"
-        : null;
+        : kindRaw === "receipt" || kindRaw === "sales receipt"
+          ? "receipt"
+          : null;
 
   const vendor = str(obj.vendor, 200);
   const vendorAltRaw = str(obj.vendorAlt, 200);

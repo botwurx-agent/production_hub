@@ -405,27 +405,34 @@ async function openaiReadDocument(
   return content;
 }
 
-const INVOICE_SYSTEM = `You read a bill from a vendor to a commercial production studio and return only the facts printed on it.
+const INVOICE_SYSTEM = `You read a document about money a commercial production studio owes or has spent, and return only the facts printed on it.
 
-The document may be an INVOICE (money already owed) or an ESTIMATE, quote, or bid (money about to be committed). Both are read the same way and both are valid: a producer logs an estimate as a commitment long before the invoice arrives. Only a document that bills nothing at all (a contract with no figures, a call sheet, a photo of something else, a blank page) is unreadable.
+It will be one of three things, and all three are valid:
+- an INVOICE: money already owed to a vendor.
+- an ESTIMATE, quote, or bid: money about to be committed. A producer logs one of these long before the invoice arrives.
+- a RECEIPT: money already spent. A till slip, a card receipt, a paid receipt, or an order confirmation, usually photographed on a phone while the producer is out buying things.
+
+Only a document that records no money at all (a contract with no figures, a call sheet, a photo of something else, a blank page) is unreadable.
+
+TELLING A RECEIPT FROM AN INVOICE MATTERS MORE THAN ANY OTHER FIELD, because an invoice is logged as still owed and a receipt is logged as already paid, and getting it the wrong way round makes the app misreport what the studio owes. A receipt shows a payment that has already been taken: a tender or payment line, a card type with the last digits, an approval or authorisation code, "PAID", a cash-and-change line, or a zero balance. An invoice asks to be paid: it names the studio as the bill-to party, and shows a balance due, payment terms, or where to send the money. A shop, restaurant, hardware store, or online order is a receipt; a freelancer, rental house, or supplier billing the studio by name is an invoice.
 
 You are filling in a form that a producer will check before saving, so accuracy matters far more than completeness. A field you are unsure about must be null. A guess that looks plausible is worse than nothing, because the producer may not catch it.
 
 Return ONLY a JSON object, no prose, no code fences, with exactly these keys:
 {
-  "documentKind": string or null,    // "invoice" | "estimate", whichever the document calls itself; an estimate covers a quote or a bid
-  "vendor": string or null,          // who is BILLING (the sender / "from" party), never the studio being billed
+  "documentKind": string or null,    // "invoice" | "estimate" | "receipt", whichever this is; an estimate covers a quote or a bid
+  "vendor": string or null,          // who is BILLING (the sender / "from" party), or on a receipt the MERCHANT paid, never the studio
   "vendorAlt": string or null,       // the OTHER name this could be filed under, else null (see the rule below)
   "description": string or null,     // one short line for what it covers, under 80 characters
   "amount": number or null,          // the FINAL TOTAL, as a plain number: no currency symbol, no thousands separators
   "days": number or null,            // days billed, only in the narrow case described below
   "currency": string or null,        // 3-letter code if one is shown
-  "invoiceNumber": string or null,   // the document's own number, estimate numbers included
-  "invoiceDate": string or null,     // YYYY-MM-DD
+  "invoiceNumber": string or null,   // the document's own number: an estimate number, or a receipt's transaction or order number
+  "invoiceDate": string or null,     // YYYY-MM-DD, the issue date, or on a receipt the date of purchase
   "dueDate": string or null,         // YYYY-MM-DD
   "budgetLineId": string or null,    // the id of the best-matching budget line from the list given, or null if none clearly fits
-  "notes": string or null,           // what a producer would want flagged: payment terms, deposits and advances, what is excluded, what is billed directly by someone else
-  "unreadable": boolean              // true only if the document bills nothing at all
+  "notes": string or null,           // what a producer would want flagged: payment terms, deposits and advances, what is excluded, what is billed directly by someone else; on a receipt the tax, the payment method, and any return window
+  "unreadable": boolean              // true only if the document records no money at all
 }
 
 Rules:
@@ -433,15 +440,20 @@ Rules:
 - A line reading "waived", "N/A", "provided by client", or "$0.00" contributes nothing. Do not treat it as missing information and do not add it in.
 - VENDOR AND VENDORALT. Work often bills through a rep, an agency, or a loan-out company on behalf of a named artist, so two names appear: the company on the letterhead and the person whose fees are itemised ("SET DESIGNER JANE SMITH'S FEES"). Put the one the document presents as the biller in vendor, and the other in vendorAlt. Either may be the name the studio knows them by, so returning both matters. When only one name appears, vendorAlt is null.
 - DAYS is for the narrow case where the whole document is one person's day rate times a number of days, so that days multiplied by the rate is the total. If the document mixes several different day rates, or adds expenses, kit fees, or assistants on top, return null. Never divide the total by a rate to invent a day count. A wrong day count makes the app report a rate discrepancy that does not exist.
-- If several dates appear, invoiceDate is the issue date, not the shoot date, the service date, or the period covered.
+- ON A RECEIPT, six of those fields read differently. vendor is the merchant's own name as printed at the top, not the shopping centre, the parent company, or a franchise number. amount is the FINAL TOTAL CHARGED, including sales tax and any tip, never the pre-tax subtotal. description is what was bought, in one short line taken from the item lines, naming the kinds of thing rather than listing twenty items ("gaffer tape, zip ties, foam core"). invoiceNumber is the transaction, order, or reference number if one is printed, and never the store, register, lane, or cashier number. dueDate and days are ALWAYS null, because it is already paid and a shop does not bill days. vendorAlt is null.
+- A receipt's notes are worth filling in: the sales tax amount, how it was paid and the last digits of the card if shown, and any return or exchange window. Those are what a producer needs when reconciling against a card statement, and none of them has a field of its own.
+- A RECEIPT IS USUALLY A PHONE PHOTO, so it may be crumpled, at an angle, cropped, or in shadow, and thermal print fades. Read the fields you can read and return null for the rest. Do not call the document unreadable because part of it is illegible: the total and the merchant are usually the clearest things on it, and those two alone are worth having.
+- budgetLineId matters most on a receipt, because a shop will never appear on the project's crew roster, so the budget line is the only thing that files the spend anywhere. Match on what was bought.
+- If several dates appear, invoiceDate is the issue date, not the shoot date, the service date, or the period covered. On a receipt it is the date of the purchase itself, date only, with any time of day dropped.
 - An ambiguous date format (03/04/2026) should be read using other clues on the document; if it stays ambiguous, return null rather than picking one.
 - dueDate is only a date the document PRINTS as a due date. Do not compute one from payment terms ("net 45", "due within 45 days"), and do not use an estimate's "valid for" or "valid until" date, which is a deadline for accepting rather than for paying. Put the terms in notes instead.
 - Only return a budgetLineId that appears verbatim in the list provided. If nothing clearly fits, null.
 - Do not use em dashes in any text you return.`;
 
 /**
- * Reads an invoice document into a DRAFT. Nothing here writes anything: the
- * producer confirms every field before it becomes a financial record.
+ * Reads an invoice, an estimate, or a till receipt into a DRAFT. Nothing here
+ * writes anything: the producer confirms every field before it becomes a
+ * financial record.
  */
 export async function extractInvoice(
   doc: AiDocument,
@@ -453,7 +465,7 @@ export async function extractInvoice(
         .join("\n")}`
     : "This project has no budget lines yet, so budgetLineId must be null.";
 
-  const user = `Read this invoice and return the JSON object.\n\n${lineList}`;
+  const user = `Read this document and return the JSON object.\n\n${lineList}`;
   const provider = aiProvider();
   const maxTokens = 4000;
 
