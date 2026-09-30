@@ -8,6 +8,7 @@ import { CM_ATTACH_MS, CM_LINK_MS, CM_REPLY_MS, CM_SLACK_MS, CM_STUDIO_MS, Comms
 import { GR_LIST_MS, GR_PICK_MS, GR_PROPS_MS, GearListScene, GearPickScene, GearPropsScene, TK_BOARD_MS, TK_CARD_MS, TK_LIST_MS, TK_PEOPLE_MS, TaskBoardScene, TaskCardScene, TaskListScene, TaskPeopleScene } from "./scenes-tasks";
 import { IV_BUILD_MS, IV_FLOW_MS, IV_IMPORT_MS, IV_SEND_MS, IV_SIGN_MS, IV_STYLE_MS, InvoiceBuildScene, InvoiceFlowScene, InvoiceImportScene, InvoiceSendScene, InvoiceSignScene, InvoiceStyleScene } from "./scenes-invoicing";
 import { AI_CUT_MS, AI_ELEMENTS_MS, AI_IMPORT_MS, AI_PICK_MS, AI_TRIAGE_MS, AiCutScene, AiElementsScene, AiImportScene, AiPickScene, AiTriageScene } from "./scenes-ai";
+import { HB_BINDER_MS, HB_DOCS_MS, HB_HUB_MS, HB_SLATE_MS, HB_SUMMARY_MS, HB_TYPE_MS, HubBinderScene, HubDocsScene, HubScene, HubSlateScene, HubSummaryScene, HubTypeScene } from "./scenes-hub";
 import { CR_ACCESS_MS, CR_ADD_MS, CR_ROSTER_MS, CR_TALENT_MS, CR_USED_MS, CrewAccessScene, CrewAddScene, CrewRosterScene, CrewTalentScene, CrewUsedScene } from "./scenes-crew";
 import {
   SL_FRAMES_MS,
@@ -159,6 +160,12 @@ const SCENES = {
   "ai-triage": { ms: AI_TRIAGE_MS, C: AiTriageScene, label: "Triage", hue: "purple" },
   "ai-pick": { ms: AI_PICK_MS, C: AiPickScene, label: "Pick", hue: "purple" },
   "ai-cut": { ms: AI_CUT_MS, C: AiCutScene, label: "Cut", hue: "purple" },
+  "hb-hub": { ms: HB_HUB_MS, C: HubScene, label: "Hub", hue: "indigo" },
+  "hb-type": { ms: HB_TYPE_MS, C: HubTypeScene, label: "Types", hue: "indigo" },
+  "hb-slate": { ms: HB_SLATE_MS, C: HubSlateScene, label: "Slate", hue: "indigo" },
+  "hb-docs": { ms: HB_DOCS_MS, C: HubDocsScene, label: "Documents", hue: "indigo" },
+  "hb-summary": { ms: HB_SUMMARY_MS, C: HubSummaryScene, label: "Summary", hue: "indigo" },
+  "hb-binder": { ms: HB_BINDER_MS, C: HubBinderScene, label: "Binder", hue: "indigo" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;

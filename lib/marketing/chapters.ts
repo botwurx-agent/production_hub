@@ -870,6 +870,71 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "production-hub": {
+    hero: "hb-hub",
+    chapters: [
+      {
+        nav: "Shaped by the job",
+        title: "Tell it what kind of job, and it fits.",
+        body: "Start a project by picking what it is: live action, a commercial, AI video or CGI. The stages name themselves the way that kind of job runs, so an AI project moves from Concept to Generation rather than to a shoot, and the modules it needs come forward. Moving a job on is one click on the stage bar.",
+        details: [
+          { t: "Four kinds of job", d: "Live action, commercial, AI video and CGI or VFX." },
+          { t: "Stages in your words", d: "Pre-pro and Shoot for live action, Concept and Generation for AI." },
+          { t: "The right modules forward", d: "An AI job gets the pipeline and elements; everything else stays reachable." },
+          { t: "Add the client as you go", d: "A new client can be created from inside the new project form." },
+        ],
+        scene: "hb-type",
+      },
+      {
+        nav: "The studio slate",
+        title: "Every live job on one timeline.",
+        body: "Switch the projects page from board or list to the slate: one lane per job, pre-production, shoot and post drawn across the weeks. Two shoots on the same day are flagged, and a job past its due date draws in red all the way to today, so the overrun is the first thing you see.",
+        details: [
+          { t: "Board, list or slate", d: "The same projects, three ways, with archived jobs kept out of the way." },
+          { t: "Shoot clashes", d: "Days carrying more than one shoot are marked." },
+          { t: "Overdue runs to today", d: "A late job keeps growing until it is delivered." },
+          { t: "4, 6 or 12 weeks", d: "Page by the week so nothing shifts under you." },
+        ],
+        scene: "hb-slate",
+      },
+      {
+        nav: "Documents",
+        title: "Permits, insurance and specs, filed from the email.",
+        body: "The paperwork around a job arrives by email. File an attachment to the project's documents in one click and it keeps where it came from: who sent it, when, and in which thread. Open it to view it right there, and upload a new version when it is reissued.",
+        details: [
+          { t: "One click from Gmail", d: "Add to documents, add to assets or log as a cost, from the same attachment." },
+          { t: "Where it came from", d: "The sender, the date and the subject stay with the file." },
+          { t: "Versions, not copies", d: "A reissued permit is v2 of the same document." },
+          { t: "Page-one previews", d: "PDFs show their first page, so you can tell them apart at a glance." },
+        ],
+        scene: "hb-docs",
+      },
+      {
+        nav: "Project summary",
+        title: "Where does this job stand? Twenty seconds.",
+        body: "Ask for a summary and the hub reads the project and answers in one sentence, then sorts the rest into what is done, what is in progress, what you are waiting on, the next action and what to watch. Fold it down to that one sentence when you just want the headline.",
+        details: [
+          { t: "One line first", d: "The status of the job, readable in a glance." },
+          { t: "Sorted by what it means", d: "Done, in progress, waiting on, next action and watch, each marked." },
+          { t: "Folds to the headline", d: "Collapsed, it still shows the first line." },
+          { t: "Studio only", d: "The summary can mention money, so crew on the project do not see it." },
+        ],
+        scene: "hb-summary",
+      },
+      {
+        nav: "Client binder",
+        title: "Everything the client asked to see, and nothing else.",
+        body: "Bigger clients want the whole job in one place. Build a binder from what the project already has, the shot list, storyboards, moodboards, call sheets and more, where everything starts off and you tick what goes in. Internal notes are removed before it is shown, and it is only visible once you share it.",
+        details: [
+          { t: "Off by default", d: "A call sheet added on Friday is not in Monday's binder unless you add it." },
+          { t: "The real documents", d: "Each section is the same storyboard or shot list the client already approved." },
+          { t: "Notes removed", d: "Hidden notes are left out of the page entirely, not just hidden." },
+          { t: "Link and PDF", d: "Share one link, or print the same pages to PDF." },
+        ],
+        scene: "hb-binder",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];
