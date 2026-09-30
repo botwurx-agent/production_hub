@@ -648,6 +648,97 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "production-task-management": {
+    hero: "tk-board",
+    chapters: [
+      {
+        nav: "The board",
+        title: "Every task on the job, where it actually stands.",
+        body: "Drag cards across To do, In progress, Waiting and Done. Waiting is the column that earns its place: half of a real job is sitting with a client, an agency or a vendor, and now you can see which half. Flip the same cards into phases when you want to see the job by pre-production, production and post.",
+        details: [
+          { t: "Waiting, not just in progress", d: "Work that is with someone else gets its own column, so the board tells the truth about the job." },
+          { t: "Group by phase", d: "The same cards re-column by stage, named for the kind of job it is." },
+          { t: "Drag to move", d: "Drop a card between two others and it stays exactly where you put it." },
+          { t: "Due dates that speak up", d: "Anything past its date turns red on the card." },
+        ],
+        scene: "tk-board",
+      },
+      {
+        nav: "Inside a card",
+        title: "Everything a task needs, on the task.",
+        body: "Open a card and it holds the whole job of doing it: named checklists for the steps, files with pictures shown right on the card, and notes from the people working on it. A location photo on a task is visible from the board without opening anything.",
+        details: [
+          { t: "Named checklists", d: "Several lists per card, each with its own name, so load-in and strike stay apart." },
+          { t: "Files with previews", d: "Images show on the card face; everything else is one click away." },
+          { t: "Notes", d: "A running conversation on the task, attributed to whoever wrote it." },
+          { t: "Opens in a window", d: "The board stays put while you work, no columns jumping under your cursor." },
+        ],
+        scene: "tk-card",
+      },
+      {
+        nav: "People",
+        title: "Several people on a task, and a way to add more.",
+        body: "A shoot-day setup is the DP and the gaffer, a delivery is the editor and the producer. Put everyone on the card. If the person you need is not on the job yet, invite them from the same picker, and they show as pending until they accept.",
+        details: [
+          { t: "Several assignees", d: "Everyone doing the work, with their initials on the card." },
+          { t: "Invite from the picker", d: "The moment you need someone is the moment you can invite them." },
+          { t: "Pending, named", d: "An invite that has not been accepted yet is listed, so nothing looks like it failed." },
+          { t: "Crew see their own", d: "A crew member invited to the job sees the tasks assigned to them, not your whole running list." },
+        ],
+        scene: "tk-people",
+      },
+      {
+        nav: "List view",
+        title: "A board for where things are. A list for what is next.",
+        body: "Switch the same tasks into a list when the question is what needs doing today, or when you are on your phone. The grouping carries over, so it is the same view of the work read a different way.",
+        details: [
+          { t: "Board or list", d: "One switch, remembered for next time." },
+          { t: "Sorted by due date", d: "Tomorrow's delivery sits above a someday idea, never below it." },
+          { t: "Built for a phone", d: "The list reads cleanly on a small screen on set." },
+        ],
+        scene: "tk-list",
+      },
+    ],
+  },
+  "gear-list-software": {
+    hero: "gr-list",
+    chapters: [
+      {
+        nav: "Gear list",
+        title: "The kit list, and what it runs to a day.",
+        body: "List the gear the job needs, tick it off as it is confirmed, and add a day rate where there is one. The page keeps a confirmed count and a per-day kit total, and the rates are visible to your studio only, never to crew invited to the project.",
+        details: [
+          { t: "Confirmed count", d: "See at a glance how much of the list is locked in." },
+          { t: "Quantity and day rate", d: "Each line shows quantity times rate, and the list totals it per day." },
+          { t: "Rates stay private", d: "Crew on the project see the gear, not what it costs." },
+        ],
+        scene: "gr-list",
+      },
+      {
+        nav: "Props",
+        title: "Props, with the options you are choosing between.",
+        body: "A prop is something you source, not something you make, and there are usually a few to pick from. Add photos and prop-house links as options while you create the prop, then pick the one you are going with.",
+        details: [
+          { t: "Options with photos and links", d: "Drop in the pictures and the listing links as you add the prop." },
+          { t: "Pick the winner", d: "One option becomes the choice, and the prop shows it." },
+          { t: "Grouped by category", d: "Glassware, linens, furnishings and the rest, each in its own group." },
+          { t: "Status as you go", d: "From needed to options in, approved, booked and on set, moving forward on its own when the first option arrives." },
+        ],
+        scene: "gr-props",
+      },
+      {
+        nav: "Client pick",
+        title: "Let the client choose the glass.",
+        body: "Some props need sign-off. Share the prop list through the same review link the rest of the job uses, and the client pins a comment on the exact option they mean, approves, or asks for changes, without an account.",
+        details: [
+          { t: "No login for the client", d: "A private link opens the prop list with every option shown." },
+          { t: "Pinned comments", d: "The client points at the exact option they mean." },
+          { t: "Approve or request changes", d: "Their decision comes back to the project and to your review page." },
+        ],
+        scene: "gr-pick",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];

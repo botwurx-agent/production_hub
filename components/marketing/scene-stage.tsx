@@ -5,6 +5,7 @@ import { FitStage, useInView, useSceneClock } from "./scene-kit";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
 import { SC_BOARD_MS, SC_BUILD_MS, SC_DAY_MS, SC_SHARE_MS, ScheduleBoardScene, ScheduleBuildScene, ScheduleDayScene, ScheduleShareScene } from "./scenes-schedule";
 import { CM_ATTACH_MS, CM_LINK_MS, CM_REPLY_MS, CM_SLACK_MS, CM_STUDIO_MS, CommsAttachScene, CommsLinkScene, CommsReplyScene, CommsSlackScene, CommsStudioScene } from "./scenes-comms";
+import { GR_LIST_MS, GR_PICK_MS, GR_PROPS_MS, GearListScene, GearPickScene, GearPropsScene, TK_BOARD_MS, TK_CARD_MS, TK_LIST_MS, TK_PEOPLE_MS, TaskBoardScene, TaskCardScene, TaskListScene, TaskPeopleScene } from "./scenes-tasks";
 import { CR_ACCESS_MS, CR_ADD_MS, CR_ROSTER_MS, CR_TALENT_MS, CR_USED_MS, CrewAccessScene, CrewAddScene, CrewRosterScene, CrewTalentScene, CrewUsedScene } from "./scenes-crew";
 import {
   SL_FRAMES_MS,
@@ -138,6 +139,13 @@ const SCENES = {
   "cr-talent": { ms: CR_TALENT_MS, C: CrewTalentScene, label: "Talent", hue: "orange" },
   "cr-access": { ms: CR_ACCESS_MS, C: CrewAccessScene, label: "Access", hue: "orange" },
   "cr-used": { ms: CR_USED_MS, C: CrewUsedScene, label: "Used", hue: "orange" },
+  "tk-board": { ms: TK_BOARD_MS, C: TaskBoardScene, label: "Board", hue: "purple" },
+  "tk-card": { ms: TK_CARD_MS, C: TaskCardScene, label: "Card", hue: "purple" },
+  "tk-people": { ms: TK_PEOPLE_MS, C: TaskPeopleScene, label: "People", hue: "purple" },
+  "tk-list": { ms: TK_LIST_MS, C: TaskListScene, label: "List", hue: "purple" },
+  "gr-list": { ms: GR_LIST_MS, C: GearListScene, label: "Gear", hue: "blue" },
+  "gr-props": { ms: GR_PROPS_MS, C: GearPropsScene, label: "Props", hue: "blue" },
+  "gr-pick": { ms: GR_PICK_MS, C: GearPickScene, label: "Pick", hue: "blue" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;
