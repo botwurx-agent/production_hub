@@ -1420,9 +1420,14 @@ optimizing the flow + IA of this whole section.
 - `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`
 - `FIGMA_CLIENT_ID`, `FIGMA_CLIENT_SECRET` (Figma app scope: `file_content:read`;
   redirect `<domain>/auth/figma/callback`)
-- `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` (billing connector, ON HOLD;
-  redirect `<domain>/auth/freshbooks/callback`, e.g.
-  production-hub-steel.vercel.app). Set in Vercel already.
+- `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` (billing connector; set in
+  Vercel). FreshBooks only accepts redirects LISTED in its Developer Portal, and
+  the callback is built from whichever host the user is on. Both
+  `https://app.studio-flows.com/auth/freshbooks/callback` and the old
+  production-hub-steel.vercel.app one are registered (the app. one was added
+  2026-09-30 after a reconnect failed with "The redirect uri included is not
+  valid"). Google, Slack and Figma build theirs the same way, so a connector that
+  refuses its redirect on a new domain is this, not a code bug.
 - AI (optional): `OPENAI_API_KEY` (+ `OPENAI_MODEL`, default gpt-5-mini) or
   `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one.
 
