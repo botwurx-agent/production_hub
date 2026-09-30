@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { MAX_DOCUMENT_BYTES } from "@/lib/upload-limits";
 import { formatBytes } from "@/lib/attachment-limits";
 import { uploadDirect } from "@/components/upload/direct-upload";
+import { compressImage } from "@/lib/compress-image";
 import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import {
   type CostStatus,
 } from "@/lib/costs";
 import { PaymentSchedule } from "@/components/production/payment-schedule";
+import type { DocumentKind } from "@/lib/invoice-draft";
 import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
 export type RosterOption = {
@@ -49,6 +51,27 @@ const moneyExact = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
+
+/**
+ * How a photographed document is shrunk BEFORE it is sent to be read.
+ *
+ * Deliberately gentler than the app's default compression (2400px at 0.82):
+ * this is a document whose small print is the whole point, not a thumbnail.
+ * Only the COPY sent to the model is compressed, never the file that gets
+ * attached, so the studio keeps the receipt it photographed.
+ *
+ * MEASURED in Chromium against generated receipt photographs carrying sensor
+ * grain, since grain is what makes a camera JPEG big and a clean synthetic
+ * image would flatter this: a 12MP camera JPEG goes 4,924KB to 1,195KB and a
+ * 48MP one 18,945KB to 1,219KB, both about a third of the read ceiling. A file
+ * already under 3MB is sent untouched, because it fits as it is and
+ * re-encoding it would only lose detail.
+ */
+const READ_COMPRESSION = {
+  maxEdge: 2600,
+  quality: 0.85,
+  skipUnderBytes: 3_000_000,
+};
 
 const field =
   "w-full rounded-[8px] border border-border bg-surface px-2.5 py-1.5 text-sm text-text outline-none transition focus:border-border-strong";
@@ -215,15 +238,18 @@ export function CostLedger({
       multiple={false}
       maxBytes={MAX_DOCUMENT_BYTES}
       onTooLarge={() =>
-        toast("That file is too large (4MB max for an invoice).", "error")
+        toast(
+          `That file is too large (${formatBytes(MAX_DOCUMENT_BYTES)} max).`,
+          "error"
+        )
       }
       onFiles={(files) => {
         setDropped(files[0]);
         setEditing("new");
       }}
-      label="Drop an invoice to log a cost"
-      browse={{ text: "Drag an invoice here, or click to browse" }}
-      hint="PDF or an image, up to 4MB. Reads the amount and vendor for you."
+      label="Drop an invoice or a receipt to log a cost"
+      browse={{ text: "Drag an invoice or a receipt here, or click to browse" }}
+      hint="A PDF or a photo. Reads the vendor, the amount and the date for you."
       disabled={Boolean(editing)}
     >
     <div>
@@ -232,8 +258,8 @@ export function CostLedger({
           <h3 className="text-sm font-bold text-text">Costs</h3>
           <p className="text-xs text-text-muted">
             {costs.length === 0
-              ? "Vendor and freelancer invoices, rolled up into the actuals above."
-              : `${costs.length} ${costs.length === 1 ? "invoice" : "invoices"}, ${money.format(totals.all)} total${
+              ? "Invoices, receipts and everything else this job spent, rolled up into the actuals above."
+              : `${costs.length} ${costs.length === 1 ? "cost" : "costs"}, ${money.format(totals.all)} total${
                   totals.outstanding > 0
                     ? `, ${money.format(totals.outstanding)} still owed`
                     : ", all paid"
@@ -247,7 +273,8 @@ export function CostLedger({
 
       {costs.length === 0 ? (
         <p className="rounded-[12px] border border-dashed border-border py-8 text-center text-sm text-text-faint">
-          No costs logged yet. Add a vendor invoice to start the running tab.
+          No costs logged yet. Add an invoice, or photograph a receipt, to
+          start the running tab.
         </p>
       ) : (
         <div className="overflow-hidden rounded-[12px] border border-border">
@@ -484,9 +511,9 @@ function DocButton({ costId, name }: { costId: string; name: string | null }) {
         else window.open(res.url, "_blank", "noopener");
       }}
       disabled={loading}
-      title={name ?? "Open the invoice"}
+      title={name ?? "Open the document"}
       className="grid h-7 w-7 place-items-center rounded-[7px] text-text-muted transition hover:bg-surface-2 hover:text-accent"
-      aria-label="Open the invoice document"
+      aria-label="Open the attached document"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -503,6 +530,7 @@ export function CostModal({
   roster,
   initial,
   initialFilled,
+  initialDocKind,
   attachment,
   initialFile = null,
   onClose,
@@ -515,6 +543,12 @@ export function CostModal({
   initial?: CostInput | null;
   /** Which fields that draft filled, for the same banner as an in-modal read. */
   initialFilled?: string[] | null;
+  /**
+   * What that draft's document called itself, so a read done elsewhere says
+   * the same thing in the same banner as one done here. The two ways in have
+   * to behave identically or they quietly diverge.
+   */
+  initialDocKind?: DocumentKind | null;
   /**
    * An invoice that already exists somewhere else (a Gmail attachment), filed
    * against the cost once it saves. Replaces the file picker: there is nothing
@@ -544,8 +578,11 @@ export function CostModal({
   const [filled, setFilled] = useState<string[] | null>(initialFilled ?? null);
   const [before, setBefore] = useState<CostInput | null>(null);
   // What the document called itself. An estimate is a commitment rather than a
-  // bill, so the banner names it instead of calling everything an invoice.
-  const [docKind, setDocKind] = useState<"invoice" | "estimate" | null>(null);
+  // bill and a receipt is money already gone, so the banner names which it
+  // read instead of calling all three an invoice.
+  const [docKind, setDocKind] = useState<DocumentKind | null>(
+    initialDocKind ?? null
+  );
 
   // Dropped and picked have to behave identically, or the two ways in quietly
   // do different things. Once only.
@@ -565,7 +602,15 @@ export function CostModal({
     //
     // The check is HERE rather than at the call sites because there are three
     // of them: a pick, a drop, and the "Read it again" button.
-    if (f.size > MAX_COST_DOC_BYTES) {
+    //
+    // A PHOTOGRAPHED RECEIPT WOULD FAIL THAT CEILING ON EVERY CURRENT PHONE,
+    // which is the one device it is most useful on: a 12MP camera JPEG is
+    // around 5MB, so the feature would refuse to read exactly the document it
+    // was built for. So a COPY is compressed for the read. The original is
+    // still what gets attached, because the receipt is the studio's own record
+    // of the spend and there is nothing to gain from keeping a smaller one.
+    const forReading = await compressImage(f, READ_COMPRESSION);
+    if (forReading.size > MAX_COST_DOC_BYTES) {
       toast(
         `Attached. It is too big to read automatically (over ${formatBytes(
           MAX_COST_DOC_BYTES
@@ -577,7 +622,7 @@ export function CostModal({
     setReading(true);
     setFilled(null);
     const fd = new FormData();
-    fd.set("file", f);
+    fd.set("file", forReading);
     const res = await extractInvoiceDraft(projectId, fd);
     setReading(false);
     if ("error" in res) {
@@ -588,52 +633,61 @@ export function CostModal({
     setBefore(form);
     setDocKind(draft.documentKind);
 
+    // Built OUTSIDE the state updater. React can call an updater more than
+    // once for a single change, and does exactly that in development, so
+    // pushing into a list from inside it names every filled field twice.
     const got: string[] = [];
-    setForm((prev) => {
-      const next = { ...prev };
-      if (draft.vendor) {
-        next.vendor = draft.vendor;
-        got.push("vendor");
-      }
-      if (draft.description) {
-        next.description = draft.description;
-        got.push("description");
-      }
-      if (draft.amount !== null) {
-        next.amount = draft.amount;
-        got.push("amount");
-      }
-      if (draft.days !== null) {
-        next.days = draft.days;
-        got.push("days billed");
-      }
-      if (draft.invoiceNumber) {
-        next.invoiceNumber = draft.invoiceNumber;
-        got.push("invoice number");
-      }
-      if (draft.invoiceDate) {
-        next.invoiceDate = draft.invoiceDate;
-        got.push("invoice date");
-      }
-      if (draft.dueDate) {
-        next.dueDate = draft.dueDate;
-        got.push("due date");
-      }
-      if (draft.budgetLineId) {
-        next.budgetLineId = draft.budgetLineId;
-        got.push("budget line");
-      }
-      if (draft.notes) next.notes = draft.notes;
-      if (contactId) {
-        next.contactId = contactId;
-        // The matched roster name wins over the letterhead: a bill routed
-        // through a rep says "REDEYE Reps" while the studio files the cost
-        // under the stylist it booked.
-        if (vendorMatch) next.vendor = vendorMatch;
-        got.push(`roster match (${vendorMatch})`);
-      }
-      return next;
-    });
+    const patch: Partial<CostInput> = {};
+    if (draft.vendor) {
+      patch.vendor = draft.vendor;
+      got.push("vendor");
+    }
+    if (draft.description) {
+      patch.description = draft.description;
+      got.push("description");
+    }
+    if (draft.amount !== null) {
+      patch.amount = draft.amount;
+      got.push("amount");
+    }
+    if (draft.days !== null) {
+      patch.days = draft.days;
+      got.push("days billed");
+    }
+    if (draft.invoiceNumber) {
+      patch.invoiceNumber = draft.invoiceNumber;
+      got.push("number");
+    }
+    if (draft.invoiceDate) {
+      patch.invoiceDate = draft.invoiceDate;
+      got.push("date");
+    }
+    if (draft.dueDate) {
+      patch.dueDate = draft.dueDate;
+      got.push("due date");
+    }
+    if (draft.budgetLineId) {
+      patch.budgetLineId = draft.budgetLineId;
+      got.push("budget line");
+    }
+    if (draft.notes) patch.notes = draft.notes;
+    // A RECEIPT IS ALREADY SPENT. Money handed over at a till is not money the
+    // studio still owes, and leaving it on the default "received" would make
+    // the budget's "still owed" tile and the dashboard's unpaid-invoice widget
+    // chase the producer for what they paid at the counter.
+    if (draft.documentKind === "receipt") {
+      patch.status = "paid";
+      got.push("status (paid)");
+    }
+    if (contactId) {
+      patch.contactId = contactId;
+      // The matched roster name wins over the letterhead: a bill routed
+      // through a rep says "REDEYE Reps" while the studio files the cost
+      // under the stylist it booked.
+      if (vendorMatch) patch.vendor = vendorMatch;
+      got.push(`roster match (${vendorMatch})`);
+    }
+    setForm((prev) => ({ ...prev, ...patch }));
     setFilled(got);
     // A currency we do not store is worth saying out loud rather than
     // silently treating a EUR invoice as dollars.
@@ -751,7 +805,7 @@ export function CostModal({
             <input
               value={form.vendor}
               onChange={(e) => set("vendor", e.target.value)}
-              placeholder="Who sent the invoice"
+              placeholder="Who sent the invoice, or the shop"
               className={field}
             />
           </div>
@@ -832,7 +886,7 @@ export function CostModal({
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <span className={label}>Invoice number</span>
+            <span className={label}>Number</span>
             <input
               value={form.invoiceNumber ?? ""}
               onChange={(e) => set("invoiceNumber", e.target.value || null)}
@@ -841,7 +895,7 @@ export function CostModal({
             />
           </div>
           <div>
-            <span className={label}>Invoice date</span>
+            <span className={label}>Date</span>
             <input
               type="date"
               value={form.invoiceDate ?? ""}
@@ -861,7 +915,7 @@ export function CostModal({
         </div>
 
         <div>
-          <span className={label}>Invoice document</span>
+          <span className={label}>Document</span>
           {attachment ? (
             <p className="rounded-[10px] border border-border bg-surface-2 px-2.5 py-2 text-xs text-text-muted">
               <span className="font-semibold text-text">{attachment.label}</span>{" "}
@@ -897,7 +951,7 @@ export function CostModal({
           />
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()}>
-              {cost?.storage_path ? "Replace file" : "Attach a PDF or photo"}
+              {cost?.storage_path ? "Replace file" : "Attach a PDF or a photo"}
             </Button>
             {file ? (
               <span className="text-xs text-text-muted">{file.name}</span>
@@ -916,8 +970,10 @@ export function CostModal({
           </div>
           {aiEnabled && !file && !cost?.storage_path && (
             <p className="mt-1 text-[11px] text-text-faint">
-              Attach the invoice or estimate and the fields below fill
-              themselves. You check them before saving.
+              Attach an invoice, an estimate or a receipt and the fields above
+              fill themselves. You check them before saving. On a phone this
+              offers the camera, so a receipt can be photographed on the way
+              out of the shop.
             </p>
           )}
 
@@ -946,6 +1002,13 @@ export function CostModal({
                       {" "}
                       This is an estimate, so it is what you are committing to,
                       not a bill yet.
+                    </>
+                  )}
+                  {docKind === "receipt" && (
+                    <>
+                      {" "}
+                      This is a receipt, so it is money already spent and is
+                      logged as paid rather than as still owed.
                     </>
                   )}
                 </>

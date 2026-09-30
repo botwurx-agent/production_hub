@@ -9,6 +9,7 @@ import {
   attachEmailInvoice,
   type CostInput,
 } from "@/app/(app)/projects/[id]/cost-actions";
+import type { DocumentKind } from "@/lib/invoice-draft";
 import type { BudgetLine } from "@/lib/database.types";
 
 /**
@@ -36,6 +37,7 @@ export function LogCostAttachment({
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
   const [initial, setInitial] = useState<CostInput | null>(null);
+  const [docKind, setDocKind] = useState<DocumentKind | null>(null);
   const [filled, setFilled] = useState<string[] | null>(null);
   const [lines, setLines] = useState<BudgetLine[]>([]);
   const [roster, setRoster] = useState<RosterOption[]>([]);
@@ -68,25 +70,29 @@ export function LogCostAttachment({
         invoiceNumber: d?.invoiceNumber ?? null,
         invoiceDate: d?.invoiceDate ?? null,
         dueDate: d?.dueDate ?? null,
-        status: "received",
+        // A receipt is money already spent, so it must not land as owed: see
+        // the same rule in cost-ledger's readInvoice.
+        status: d?.documentKind === "receipt" ? "paid" : "received",
         notes: d?.notes ?? null,
       };
       if (d?.vendor) got.push("vendor");
       if (d?.description) got.push("description");
       if (d?.amount !== null && d?.amount !== undefined) got.push("amount");
       if (d?.days !== null && d?.days !== undefined) got.push("days billed");
-      if (d?.invoiceNumber) got.push("invoice number");
-      if (d?.invoiceDate) got.push("invoice date");
+      if (d?.invoiceNumber) got.push("number");
+      if (d?.invoiceDate) got.push("date");
       if (d?.dueDate) got.push("due date");
       if (d?.budgetLineId) got.push("budget line");
+      if (d?.documentKind === "receipt") got.push("status (paid)");
       if (res.contactId) got.push(`roster match (${res.vendorMatch})`);
 
       setInitial(draft);
+      setDocKind(d?.documentKind ?? null);
       setFilled(got);
       setOpen(true);
       if (d?.currency && d.currency.toUpperCase() !== "USD") {
         toast(
-          `That invoice is in ${d.currency.toUpperCase()}. Amounts here are USD.`,
+          `That document is in ${d.currency.toUpperCase()}. Amounts here are USD.`,
           "error"
         );
       }
@@ -112,6 +118,7 @@ export function LogCostAttachment({
           roster={roster}
           initial={initial}
           initialFilled={filled}
+          initialDocKind={docKind}
           attachment={{
             label: filename,
             // Fetched from Gmail again on save, so abandoning the form leaves
