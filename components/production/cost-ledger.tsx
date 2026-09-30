@@ -264,8 +264,12 @@ export function CostLedger({
         setEditing("new");
       }}
       label="Drop an invoice or a receipt to log a cost"
-      browse={{ text: "Drag an invoice or a receipt here, or click to browse" }}
-      hint="A PDF or a photo. Reads the vendor, the amount and the date for you."
+      // ONE WAY IN. The page used to show this dashed panel AND an "Add a
+      // cost" button, two controls for the same form that read as two
+      // different jobs. The panel moved inside that form, where it is the
+      // first thing you see; dropping a file anywhere on the page still
+      // opens the form with it attached, as a shortcut.
+      browse={false}
       disabled={Boolean(editing)}
     >
     <div>
@@ -294,8 +298,8 @@ export function CostLedger({
 
       {costs.length === 0 ? (
         <p className="rounded-[12px] border border-dashed border-border py-8 text-center text-sm text-text-faint">
-          No costs logged yet. Add an invoice, or photograph a receipt, to
-          start the running tab.
+          No costs logged yet. Add a cost from an invoice, a photo of a receipt,
+          or by hand, to start the running tab.
         </p>
       ) : (
         <div className="overflow-hidden rounded-[12px] border border-border">
@@ -601,6 +605,10 @@ export function CostModal({
   );
   const [file, setFile] = useState<File | null>(initialFile);
   const [saving, setSaving] = useState(false);
+  // A new cost starts at the DOCUMENT, because most costs arrive as one.
+  // "Enter it by hand" is the way past it, not a second button on the page.
+  const [manual, setManual] = useState(false);
+  const choosing = !cost && !attachment && !initial && !file && !manual;
   const fileRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAiEnabled();
 
@@ -762,6 +770,24 @@ export function CostModal({
     }));
   }
 
+  // The picker, the drop panel and a drop onto the open form all land here,
+  // so the three ways of handing over a document cannot behave differently.
+  function acceptFile(picked: File) {
+    if (picked.size > MAX_DOCUMENT_BYTES) {
+      toast(
+        `That file is ${formatBytes(picked.size)}, over the ${formatBytes(
+          MAX_DOCUMENT_BYTES
+        )} limit.`,
+        "error"
+      );
+      return;
+    }
+    setFile(picked);
+    // The point of the feature: attach the invoice and the form fills itself.
+    // Still a draft, still confirmed before saving.
+    if (aiEnabled) void readInvoice(picked);
+  }
+
   async function save() {
     if (!form.vendor.trim()) {
       toast("Add a vendor name.", "error");
@@ -808,6 +834,48 @@ export function CostModal({
     setSaving(false);
     router.refresh();
     onClose();
+  }
+
+  if (choosing) {
+    return (
+      <Modal open onClose={onClose} title="Add a cost" size="lg">
+        <FileDropzone
+          accept=".pdf,image/*"
+          multiple={false}
+          label="Drop to attach it to this cost"
+          browse={{ text: "Drop an invoice, an estimate or a receipt" }}
+          hint={
+            aiEnabled
+              ? "A PDF or a photo. The vendor, amount and date are read for you, and you check them before saving."
+              : "A PDF or a photo. It is kept with the cost when you save."
+          }
+          chooseLabel="Choose a file or take a photo"
+          onFiles={(files) => acceptFile(files[0])}
+          onTooLarge={(files) =>
+            toast(
+              `That file is ${formatBytes(files[0].size)}, over the ${formatBytes(
+                MAX_DOCUMENT_BYTES
+              )} limit.`,
+              "error"
+            )
+          }
+          maxBytes={MAX_DOCUMENT_BYTES}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setManual(true)}
+              className="text-sm font-semibold text-accent hover:underline"
+            >
+              No document? Enter it by hand
+            </button>
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </FileDropzone>
+      </Modal>
+    );
   }
 
   return (
@@ -966,20 +1034,7 @@ export function CostModal({
               // of the selection, so clearing first empties it.
               const picked = e.target.files?.[0] ?? null;
               e.target.value = "";
-              if (!picked) return;
-              if (picked.size > MAX_DOCUMENT_BYTES) {
-                toast(
-                  `That file is ${formatBytes(picked.size)}, over the ${formatBytes(
-                    MAX_DOCUMENT_BYTES
-                  )} limit.`,
-                  "error"
-                );
-                return;
-              }
-              setFile(picked);
-              // The point of the feature: attach the invoice and the form
-              // fills itself. Still a draft, still confirmed before saving.
-              if (aiEnabled) void readInvoice(picked);
+              if (picked) acceptFile(picked);
             }}
           />
           <div className="flex flex-wrap items-center gap-2">
