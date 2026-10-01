@@ -2077,6 +2077,30 @@ with the same "You do not have access to bill vendors".
   `user:bill_vendors:write` and the reconnect; the read message is unchanged.
   Telling somebody to check "the bill scopes" when the read half is demonstrably
   granted describes something half true and points at no action.
+- THE SCOPE THEORY IS NOW CLOSED BY EVIDENCE TOO, and it is worth stating
+  plainly because three explanations have each been asserted and withdrawn. The
+  operator ticked `user:bill_vendors:write`, saved, and RE-AUTHORIZED at 20:48
+  (a new billing_accounts row, after the scopes were saved), and `POST
+  /bill_vendors` is still 403 while `GET /bill_vendors` is 200 on that same new
+  token. So the plan carries Accounts Payable, the developer app requests the
+  scope, the grant is fresh, and the write is still refused. Repeating the
+  scope instruction at that point is the reconnect loop wearing a third
+  costume.
+- WHAT IS LEFT IS A FRESHBOOKS-SIDE QUESTION we cannot settle from code: either
+  their AP WRITE API is gated on something beyond the OAuth scope for this
+  account, or `bill_vendors` write is a beta endpoint that is allow-listed. The
+  stored scope cannot distinguish a full grant from a silent omission, since
+  grantedScope falls back to the request when FreshBooks does not report one.
+- SO THE MESSAGE CARRIES THE WAY ROUND IT INSTEAD. Reading vendors IS allowed
+  and `findVendor` matches on a NORMALISED NAME, so a vendor created once on
+  FreshBooks' own screen is found and the refused call never happens. The
+  vendor-create refusal says that, and deliberately does NOT repeat the scope
+  advice or ask for another reconnect; the generic write refusal (the BILL
+  create, which has no way round) still names both write scopes.
+  `freshbooksFailure` takes `{ vendor: true }` from that one call site.
+- WHICH ALSO TESTS THE NEXT UNKNOWN for free: `user:bills:write` has never run,
+  because the send has never got past the vendor. A vendor added by hand is the
+  cheapest way to find out whether the bill create is refused as well.
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance

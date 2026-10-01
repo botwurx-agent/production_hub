@@ -102,7 +102,7 @@ export function freshbooksReason(body: string | null | undefined): string | null
  * answer sent them to check a plan that was never the problem, which is worse
  * than naming both.
  */
-function knownCause(reason: string, write: boolean): string | null {
+function knownCause(reason: string, write: boolean, vendor: boolean): string | null {
   if (!/access to bill[ _](vendors|payments)|access to bills\b/i.test(reason)) {
     return null;
   }
@@ -112,8 +112,19 @@ function knownCause(reason: string, write: boolean): string | null {
   // check "bill scopes" as a group describes something half true and points at
   // no action. A granted read is evidence the plan carries Accounts Payable,
   // which leaves exactly one thing to check.
+  // THE VENDOR CREATE HAS A WAY ROUND IT, and that is the only thing worth
+  // saying once the scope advice has been acted on. The operator ticked
+  // user:bill_vendors:write, saved, and reconnected, and the POST was still
+  // refused while the GET returned 200, so on that account the scope is not
+  // what is withholding it. Repeating the instruction they just followed is
+  // the reconnect loop wearing a third costume. Reading vendors IS allowed,
+  // and findVendor matches on a normalised name, so a vendor created once in
+  // FreshBooks' own screen is found and the refused call never happens.
+  if (vendor) {
+    return "Reading your vendors is allowed and creating one is not. Add this vendor in FreshBooks yourself (Expenses, then Bill Pay, then Vendors), then press this again: we match on the name, so the step that is being refused is skipped.";
+  }
   if (write) {
-    return "Reading them is allowed and creating one is not, so this is the write scope. Tick user:bill_vendors:write on your FreshBooks developer app, then reconnect in Settings, since a token issued before a scope was added does not carry it.";
+    return "Reading is allowed and writing is not, so this is the write scope. Check user:bill_vendors:write and user:bills:write are ticked on your FreshBooks developer app, then reconnect in Settings, since a token issued before a scope was added does not carry it.";
   }
   // THIS USED TO END ON "then reconnect", which is the reconnect loop again
   // one step further out: the operator checked the plan, ticked every scope,
@@ -134,12 +145,14 @@ function knownCause(reason: string, write: boolean): string | null {
  * `write` says the call was CREATING something rather than reading it. The
  * caller knows which it was; the response body does not say, and FreshBooks
  * answers a refused read and a refused write with the same sentence.
+ * `vendor` narrows that to creating a VENDOR, which is the one refusal with a
+ * way round it: the vendor can be made in FreshBooks and matched by name.
  */
 export function freshbooksFailure(
   status: number,
   body: string | null | undefined,
   what: string,
-  opts: { write?: boolean } = {},
+  opts: { write?: boolean; vendor?: boolean } = {},
 ): string {
   const reason = freshbooksReason(body);
   const because = reason ? ` ${reason}` : "";
@@ -157,7 +170,7 @@ export function freshbooksFailure(
     if (!reason) {
       return `FreshBooks would not allow us to ${what} (403), and reconnecting will not help. Check that your FreshBooks plan includes bills (Accounts Payable), and that the bill scopes are ticked on your FreshBooks developer app.`;
     }
-    const cause = knownCause(reason, opts.write === true);
+    const cause = knownCause(reason, opts.write === true, opts.vendor === true);
     return cause
       ? `FreshBooks would not allow us to ${what}: ${reason} ${cause}`
       : `FreshBooks would not allow us to ${what}: ${reason} Reconnecting will not help, this is a permission on your FreshBooks account.`;

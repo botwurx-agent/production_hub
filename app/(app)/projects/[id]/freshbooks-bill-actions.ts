@@ -65,7 +65,11 @@ async function freshbooks(): Promise<Ready> {
  * toast says which step failed. It does not name FreshBooks: every sentence
  * these go into already starts with it.
  */
-function readable(e: unknown, what: string, opts: { write?: boolean } = {}): string {
+function readable(
+  e: unknown,
+  what: string,
+  opts: { write?: boolean; vendor?: boolean } = {},
+): string {
   if (e instanceof FreshbooksError) {
     return freshbooksFailure(e.status, e.body, what, opts);
   }
@@ -148,7 +152,7 @@ export async function sendCostToFreshbooks(
     } catch (e) {
       reportError(`freshbooks.vendorCreate ${costId}`, e);
       return {
-        error: `${readable(e, `add "${vendor}" as a vendor`, { write: true })} Nothing was sent.`,
+        error: `${readable(e, `add "${vendor}" as a vendor`, { write: true, vendor: true })} Nothing was sent.`,
       };
     }
   }
