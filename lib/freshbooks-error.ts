@@ -83,6 +83,25 @@ export function freshbooksReason(body: string | null | undefined): string | null
 }
 
 /**
+ * A refusal we have seen and know the cause of, explained.
+ *
+ * ONE ENTRY ONLY, and it should stay that way unless a second refusal is
+ * actually met: a list of guessed-at causes is worse than FreshBooks' own
+ * words. This one was earned on the first real bill (operator, 2026-10-01).
+ * FreshBooks answered "You do not have access to bill vendors", which names
+ * the endpoint and not the reason, so it reads as something the studio did
+ * wrong. Bills and vendors are the Accounts Payable feature, which FreshBooks
+ * sells on its Premium and Select plans, so on a Lite or Plus account the
+ * whole Bill Pay path is closed no matter what is reconnected or ticked.
+ */
+function knownCause(reason: string): string | null {
+  if (/access to bill[ _](vendors|payments)|access to bills\b/i.test(reason)) {
+    return "That is the Accounts Payable feature, which FreshBooks sells on its Premium and Select plans.";
+  }
+  return null;
+}
+
+/**
  * The sentence the producer reads when a FreshBooks call fails.
  *
  * `what` is what we were trying to do, as a verb phrase ("send this bill",
@@ -107,9 +126,13 @@ export function freshbooksFailure(
   // operator's own FreshBooks side and both checkable, so name them when
   // FreshBooks itself did not.
   if (status === 403) {
-    return reason
-      ? `FreshBooks would not allow us to ${what}: ${reason} Reconnecting will not help, this is a permission on your FreshBooks account.`
-      : `FreshBooks would not allow us to ${what} (403), and reconnecting will not help. Check that your FreshBooks plan includes bills (Accounts Payable), and that the bill scopes are ticked on your FreshBooks developer app.`;
+    if (!reason) {
+      return `FreshBooks would not allow us to ${what} (403), and reconnecting will not help. Check that your FreshBooks plan includes bills (Accounts Payable), and that the bill scopes are ticked on your FreshBooks developer app.`;
+    }
+    const cause = knownCause(reason);
+    return cause
+      ? `FreshBooks would not allow us to ${what}: ${reason} ${cause} Reconnecting will not help.`
+      : `FreshBooks would not allow us to ${what}: ${reason} Reconnecting will not help, this is a permission on your FreshBooks account.`;
   }
 
   if (status === 404) {

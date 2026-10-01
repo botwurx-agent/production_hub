@@ -1935,9 +1935,22 @@ open, so keep the two apart.
   `Api-Version: alpha` header that `apiGet` has always sent, which is an
   asymmetry rather than a decision, and bill vendors is the newest part of
   that API. Unproven, cheap either way.
-- THE NEXT ATTEMPT IS THE DIAGNOSIS. It will name which feature refused, quote
-  FreshBooks' reason, and will not mention reconnecting unless a reconnect is
-  genuinely the answer.
+- THE NEXT ATTEMPT WAS THE DIAGNOSIS, and it answered on the first press:
+  "FreshBooks would not allow us to look this vendor up: You do not have access
+  to bill vendors." So it is the bill_vendors endpoint, refused by
+  ENTITLEMENT, and candidate (a) is the answer: Accounts Payable (bills and
+  vendors) is a Premium and Select plan feature, so on Lite or Plus the whole
+  Bill Pay path is closed and no reconnect, scope tick or code change opens it.
+  That is the probe's answer, and it is the operator's call whether a plan
+  upgrade is worth it. Everything else in the slice is built and waiting.
+- SO THE ONE KNOWN REFUSAL EXPLAINS ITSELF now (`knownCause` in
+  lib/freshbooks-error.ts): FreshBooks names the endpoint and not the reason,
+  which reads as something the studio did wrong, so the message adds the plan
+  sentence. DELIBERATELY ONE ENTRY: a list of guessed causes is worse than
+  FreshBooks' own words, and the tests assert that a different 403
+  ("Insufficient scope", "The client is not active") is NOT blamed on the plan
+  and that a 401 carrying the same words stays a sign-in problem. 149
+  assertions.
 - The inline category error in the send window was `text-red` on `bg-red-bg`,
   about 1.86:1, the contrast failure recorded twice already (0109's day chips,
   ReadBanner). It now carries the diagnostic sentence, so it was measured and
