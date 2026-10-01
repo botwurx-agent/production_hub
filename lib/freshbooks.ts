@@ -469,16 +469,24 @@ function vendorKey(name: string) {
 }
 
 /**
- * The vendor with this name, or a new one. Matched on a normalised name so
- * "Jane Doe Lighting, LLC" and "jane doe lighting llc" are one vendor rather
- * than a duplicate every time a bill is sent.
+ * The vendor with this name, if FreshBooks already knows it. Null if not.
+ *
+ * SPLIT FROM THE CREATE, and the reason is the whole diagnosis this feature
+ * cost. These were one findOrCreateVendor, so the caller had one catch around
+ * a read AND a write and could only label it "look this vendor up". A refusal
+ * on the POST therefore reported itself as a failed lookup, which sent two
+ * rounds of debugging at an endpoint that was answering 200 the whole time.
+ * A function that does two things behind different permissions cannot be
+ * wrapped in one error message.
+ *
+ * Matched on a normalised name so "Jane Doe Lighting, LLC" and "jane doe
+ * lighting llc" are one vendor rather than a duplicate every time.
  */
-export async function findOrCreateVendor(
+export async function findVendor(
   accountId: string,
   token: string,
   name: string,
-  currency = "USD",
-): Promise<{ vendorId: string; created: boolean }> {
+): Promise<string | null> {
   const want = vendorKey(name);
   for (let page = 1; page <= 10; page++) {
     const data = await apiGet<VendorsResponse>(
@@ -490,10 +498,21 @@ export async function findOrCreateVendor(
       (v) => v.vis_state !== 1 && v.vendor_name && vendorKey(v.vendor_name) === want,
     );
     const id = hit?.vendorid ?? hit?.id;
-    if (id != null) return { vendorId: String(id), created: false };
+    if (id != null) return String(id);
     const pages = data.response?.result?.pages ?? 1;
     if (page >= pages || rows.length === 0) break;
   }
+  return null;
+}
+
+/** A new vendor. Behind `user:bill_vendors:write`, which is a different
+ * permission from the read above and can be refused on its own. */
+export async function createVendor(
+  accountId: string,
+  token: string,
+  name: string,
+  currency = "USD",
+): Promise<string> {
   const created = await apiSend<VendorsResponse>(
     "POST",
     `/accounting/account/${accountId}/bill_vendors/bill_vendors`,
@@ -503,7 +522,7 @@ export async function findOrCreateVendor(
   const v = created.response?.result?.bill_vendor;
   const id = v?.vendorid ?? v?.id;
   if (id == null) throw new Error("FreshBooks created the vendor but returned no id");
-  return { vendorId: String(id), created: true };
+  return String(id);
 }
 
 export type CreateBillInput = {
@@ -630,18 +649,42 @@ export function billIsPaid(bill: Pick<FbBill, "status" | "amount" | "outstanding
 export async function probeFreshbooks(
   path: string,
   token: string,
-  opts: { apiVersion?: boolean } = {},
+  opts: { apiVersion?: boolean; method?: "GET" | "PUT"; body?: unknown } = {},
 ): Promise<{ status: number; ok: boolean; body: string }> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     Accept: "application/json",
   };
   if (opts.apiVersion !== false) headers["Api-Version"] = "alpha";
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   try {
-    const res = await fetch(`${API_BASE}${path}`, { headers });
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: opts.method ?? "GET",
+      headers,
+      ...(opts.body === undefined ? {} : { body: JSON.stringify(opts.body) }),
+    });
     const body = await res.text().catch(() => "");
     return { status: res.status, ok: res.ok, body };
   } catch (e) {
     return { status: 0, ok: false, body: e instanceof Error ? e.message : "fetch failed" };
   }
+}
+
+/**
+ * Whether WRITING is allowed, asked without writing anything.
+ *
+ * A read probe cannot answer this, and the read and the write are separate
+ * permissions: the first real bill was refused on the write while every read
+ * returned 200. Creating a test vendor to find out would leave junk in the
+ * studio's real FreshBooks, so this edits a vendor id that cannot exist. The
+ * answer is in the status: 403 means the write is forbidden before FreshBooks
+ * ever looked for the row, and 404 means it was allowed and there is simply no
+ * such vendor. Nothing is created either way.
+ */
+export async function probeVendorWrite(accountId: string, token: string) {
+  return probeFreshbooks(
+    `/accounting/account/${accountId}/bill_vendors/bill_vendors/0`,
+    token,
+    { method: "PUT", body: { bill_vendor: { vendor_name: "studio flows write check" } } },
+  );
 }

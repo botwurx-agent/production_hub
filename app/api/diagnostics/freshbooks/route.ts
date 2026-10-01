@@ -20,7 +20,7 @@ import { NextResponse } from "next/server";
 import { getStudioContext } from "@/lib/studio";
 import { createClient } from "@/lib/supabase/server";
 import { getBillingAccount, getFreshbooksAuth } from "@/lib/billing";
-import { hasBillScopes, probeFreshbooks } from "@/lib/freshbooks";
+import { hasBillScopes, probeFreshbooks, probeVendorWrite } from "@/lib/freshbooks";
 import { freshbooksReason } from "@/lib/freshbooks-error";
 
 export const dynamic = "force-dynamic";
@@ -129,6 +129,23 @@ export async function GET() {
   checks.push(await check("bill vendors, no Api-Version", `${base}/bill_vendors/bill_vendors?per_page=1`, token, false));
   checks.push(await check("bills, no Api-Version", `${base}/bills/bills?per_page=1`, token, false));
 
+  // READING IS NOT WRITING, and this is what the first version of the probe
+  // missed: every read came back 200 while the send was still refused, because
+  // the send creates a vendor and creating is a separate permission. Asked
+  // without writing anything (see probeVendorWrite), so a diagnostic cannot
+  // leave a junk vendor in the studio's real FreshBooks.
+  const write = await probeVendorWrite(accountId, token);
+  checks.push({
+    what: "creating a vendor (nothing is created)",
+    path: `${base}/bill_vendors/bill_vendors/0`,
+    apiVersion: true,
+    status: write.status,
+    // 404 is the PASS here: the write was allowed and there is no vendor 0.
+    ok: write.status === 404,
+    reason: freshbooksReason(write.body),
+    ...(write.status === 404 ? {} : { body: write.body.slice(0, BODY_CHARS) }),
+  });
+
   const vendors = checks.find((c) => c.what === "bill vendors");
   const bills = checks.find((c) => c.what === "bills");
   const control = checks.find((c) => c.what.startsWith("expense categories"));
@@ -143,8 +160,12 @@ export async function GET() {
     reading = "Bills are allowed and only bill vendors are refused, so Accounts Payable is open and the beta vendor endpoint is the thing that is closed. The send could be reworked to take a vendor id instead of looking one up.";
   } else if (!bills?.ok && !vendors?.ok) {
     reading = "Both bills and bill vendors are refused while the control call works, so the token is good and the whole Accounts Payable API is closed to it. That is either the scopes on the OAuth app or an account permission, and the stored scope above says which to check first.";
+  } else if (bills?.ok && vendors?.ok && write.status === 403) {
+    reading = "Reading bills and vendors is allowed and WRITING is refused. That is why every read here passed while the send did not: the send creates the vendor. The bill scopes being ticked is not enough, so this is a write permission on the FreshBooks account or app, and the read half proves the token and the plan are fine.";
+  } else if (bills?.ok && vendors?.ok && write.status === 404) {
+    reading = "Reads and writes are both allowed on this token, so nothing standing is blocking it. Re-run the send and read the error it gives now.";
   } else if (bills?.ok && vendors?.ok) {
-    reading = "Both are allowed on this token. Whatever refused the send is not a standing permission, so re-run the send and read the error it gives now.";
+    reading = `Reads are allowed. The write check answered ${write.status}, which is neither the 403 that means refused nor the 404 that means allowed, so read its row rather than this line.`;
   } else {
     reading = "Bill vendors are allowed and bills are not, which is the reverse of what was seen. Read the rows.";
   }

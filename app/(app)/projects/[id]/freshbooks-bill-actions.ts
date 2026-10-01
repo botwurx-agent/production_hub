@@ -7,7 +7,8 @@ import { getBillingAccount, getFreshbooksAuth } from "@/lib/billing";
 import {
   billIsPaid,
   createBill,
-  findOrCreateVendor,
+  createVendor,
+  findVendor,
   FreshbooksError,
   getBill,
   hasBillScopes,
@@ -128,15 +129,28 @@ export async function sendCostToFreshbooks(
   // was no way to tell which had said no: one catch reported both as "the
   // bill". The expense categories load through a third, and that one is known
   // to work, since the send button is not enabled until it has.
-  let vendorCreated = false;
-  let vendorId: string;
+  let found: string | null;
   try {
-    const v = await findOrCreateVendor(fb.accountId, fb.token, vendor);
-    vendorCreated = v.created;
-    vendorId = v.vendorId;
+    found = await findVendor(fb.accountId, fb.token, vendor);
   } catch (e) {
-    reportError(`freshbooks.vendor ${costId}`, e);
+    reportError(`freshbooks.vendorLookup ${costId}`, e);
     return { error: `${readable(e, "look this vendor up")} Nothing was sent.` };
+  }
+
+  // THE CREATE IS ITS OWN STEP, behind its own permission. Folded into the
+  // lookup it reported a refused write as a refused read, which is how a
+  // diagnosis spent two rounds on an endpoint that was answering 200.
+  let vendorId = found ?? "";
+  const vendorCreated = found == null;
+  if (found == null) {
+    try {
+      vendorId = await createVendor(fb.accountId, fb.token, vendor);
+    } catch (e) {
+      reportError(`freshbooks.vendorCreate ${costId}`, e);
+      return {
+        error: `${readable(e, `add "${vendor}" as a vendor`)} Nothing was sent.`,
+      };
+    }
   }
 
   let bill;

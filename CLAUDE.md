@@ -2031,6 +2031,23 @@ with the same "You do not have access to bill vendors".
 - STILL UNEXERCISED: the WRITES. The probe is read-only by design, so creating
   a vendor and creating a bill have never run against the live API. That is the
   remaining unknown, and the first successful send is what closes it.
+- AND THE WRITES WERE THE ANSWER. On current code (the earlier retries were a
+  stale tab: Vercel routes an already-loaded page's Server Actions to the
+  deployment it was loaded from, so three presses ran three-deployments-old
+  code and nothing could change) the send STILL reported "look this vendor up"
+  while the probe's identical GET returned 200.
+  `findOrCreateVendor` DID BOTH, a GET loop and then a POST, under ONE catch
+  labelled "look this vendor up". So a refused WRITE reported itself as a
+  refused READ, and two rounds of diagnosis went at an endpoint that had been
+  answering 200 the whole time. THE RULE: a function that does two things
+  behind two permissions cannot be wrapped in one error message. Split into
+  findVendor + createVendor, caught separately, and the create names the
+  vendor it was adding.
+- `probeVendorWrite` asks whether writing is allowed WITHOUT WRITING: a PUT at
+  vendor id 0, which cannot exist. 403 means refused before FreshBooks looked
+  for the row, 404 means allowed and there is no such vendor. Nothing is
+  created, which is the only reason a diagnostic may test a write at all
+  against a studio's real books.
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
