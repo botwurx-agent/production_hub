@@ -104,7 +104,13 @@ export function freshbooksReason(body: string | null | undefined): string | null
  */
 function knownCause(reason: string): string | null {
   if (/access to bill[ _](vendors|payments)|access to bills\b/i.test(reason)) {
-    return "That is Accounts Payable. Check that your FreshBooks plan includes it and that the bill scopes are ticked on your FreshBooks developer app, then reconnect.";
+    // THIS USED TO END ON "then reconnect", which is the reconnect loop again
+    // one step further out: the operator checked the plan, ticked every scope,
+    // reconnected, and got the identical sentence back telling them to do all
+    // three. Advice somebody has already acted on is not advice. It names the
+    // two things to check, then points at the probe, which answers from the
+    // API rather than from a guess about which of them is at fault.
+    return "That is Accounts Payable. Check that your FreshBooks plan carries it and that the bill scopes are ticked on your FreshBooks developer app. If both are already true, open /api/diagnostics/freshbooks to see which endpoint is actually being refused.";
   }
   return null;
 }

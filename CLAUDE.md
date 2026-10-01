@@ -1970,6 +1970,39 @@ open, so keep the two apart.
   fixed the same way: words in the text colour, hue on the tint and border.
   12.70 / 11.22 / 9.52 across light, paper and dark.
 
+### Both gates were open and the bill was still refused: a probe — BUILT
+Third wrong guess avoided by building the instrument instead. The operator
+ticked every bill scope on the FreshBooks developer app (screenshotted:
+user:bills:read/write, user:bill_vendors:read/write, user:bill_payments:
+read/write, user:expenses:read/write), reconnected, and the send came back
+with the same "You do not have access to bill vendors".
+- SO BOTH NAMED GATES ARE NOW CLOSED. The plan carries Accounts Payable
+  (a real bill to a real vendor was paid through it), and the OAuth app
+  requests the scopes. The stored scope after the reconnect is our full
+  request string character for character, which is AMBIGUOUS rather than
+  reassuring: grantedScope falls back to the request when FreshBooks omits
+  the field, so it cannot distinguish a full grant from a silent omission.
+- THE EVIDENCE WAS ALWAYS ONE DATA POINT, which is why three explanations
+  fitted it equally well and two of them were asserted and wrong. One failing
+  call cannot say whether the whole AP API is shut, only the beta vendor
+  endpoint is, or the request shape is wrong.
+- `GET /api/diagnostics/freshbooks` (staff only, read-only, creates nothing) asks
+  FOUR questions side by side through the SAME headers the real calls use:
+  the expense categories as a known-good control, then bill_vendors and bills
+  SEPARATELY, then both again WITHOUT the `Api-Version: alpha` header, since
+  that header is a variable nobody has tested rather than a thing we know is
+  right. It also reports the stored scope and every business on the login with
+  its account id, because a login holding two businesses would produce exactly
+  this refusal if the calls went to the wrong one.
+- THE SEPARATION IS THE POINT: bills open and vendors shut means AP is fine
+  and only the beta endpoint is closed, which the send could route around by
+  taking a vendor id instead of looking one up. Both shut means the API is
+  closed to this token whatever the app says. The response states that reading
+  but carries the rows under it, so the reading can be checked rather than
+  believed, which is the thing the last two rounds lacked.
+- `probeFreshbooks` (lib/freshbooks.ts) never throws, deliberately: a probe
+  that falls over on the first refusal tells you less than the one it replaces.
+
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
 later, and the ledger could only express "one cost, paid once". A cost is now a

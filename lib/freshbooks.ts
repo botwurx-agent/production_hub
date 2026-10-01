@@ -612,3 +612,36 @@ export function billIsPaid(bill: Pick<FbBill, "status" | "amount" | "outstanding
   if (bill.status === "paid") return true;
   return bill.outstanding === 0 && (bill.amount ?? 0) > 0;
 }
+
+/**
+ * One raw read, reported rather than thrown.
+ *
+ * Exists because a refusal that names one endpoint cannot be reasoned about
+ * from a single failing call: "you do not have access to bill vendors" reads
+ * the same whether the whole Accounts Payable API is closed, only the beta
+ * vendor endpoint is, or the request shape is wrong. Hitting several
+ * endpoints side by side, through the SAME headers the real calls use, is the
+ * only thing that separates those. The `alpha` version header is a variable
+ * too, so the caller can send the same path both ways.
+ *
+ * Never throws: a probe that falls over on the first refusal tells you less
+ * than the one it was replacing.
+ */
+export async function probeFreshbooks(
+  path: string,
+  token: string,
+  opts: { apiVersion?: boolean } = {},
+): Promise<{ status: number; ok: boolean; body: string }> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+  if (opts.apiVersion !== false) headers["Api-Version"] = "alpha";
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { headers });
+    const body = await res.text().catch(() => "");
+    return { status: res.status, ok: res.ok, body };
+  } catch (e) {
+    return { status: 0, ok: false, body: e instanceof Error ? e.message : "fetch failed" };
+  }
+}
