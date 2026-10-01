@@ -9,6 +9,7 @@ import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { ReadBanner } from "@/components/ui/read-banner";
 import { toast } from "@/components/ui/toast";
 import {
   addCost,
@@ -1073,44 +1074,37 @@ export function CostModal({
           )}
 
           {!reading && filled && (
-            <div className="mt-2 rounded-[10px] border border-amber bg-amber-bg px-2.5 py-2 text-[11px] leading-relaxed text-amber">
-              {filled.length === 0 ? (
-                <span className="font-semibold">
-                  Nothing could be read off that document. Fill the fields in by
-                  hand.
-                </span>
-              ) : (
-                <>
-                  <span className="font-semibold">
-                    Filled from the {docKind ?? "document"}: {filled.join(", ")}.
-                  </span>{" "}
-                  Check the total against the document before saving.
-                  {docKind === "estimate" && (
-                    <>
-                      {" "}
-                      This is an estimate, so it is what you are committing to,
-                      not a bill yet.
-                    </>
-                  )}
-                  {docKind === "receipt" && (
-                    <>
-                      {" "}
-                      This is a receipt, so it is money already spent and is
-                      logged as paid rather than as still owed.
-                    </>
-                  )}
-                </>
-              )}
-              {before && (
-                <button
-                  type="button"
-                  onClick={undoRead}
-                  className="ml-1 font-semibold underline"
-                >
-                  Undo
-                </button>
-              )}
-            </div>
+            filled.length === 0 ? (
+              <ReadBanner
+                tone="warn"
+                title="Nothing could be read off that document."
+                onUndo={before ? undoRead : undefined}
+              >
+                Fill the fields in by hand.
+              </ReadBanner>
+            ) : (
+              <ReadBanner
+                tone="ok"
+                title={`Filled from the ${docKind ?? "document"}: ${filled.join(", ")}.`}
+                onUndo={before ? undoRead : undefined}
+              >
+                Check the total against the document before saving.
+                {docKind === "estimate" && (
+                  <>
+                    {" "}
+                    This is an estimate, so it is what you are committing to,
+                    not a bill yet.
+                  </>
+                )}
+                {docKind === "receipt" && (
+                  <>
+                    {" "}
+                    This is a receipt, so it is money already spent and is
+                    logged as paid rather than as still owed.
+                  </>
+                )}
+              </ReadBanner>
+            )
           )}
           </>
           )}

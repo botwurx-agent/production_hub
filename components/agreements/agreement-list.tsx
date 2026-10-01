@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { ReadBanner } from "@/components/ui/read-banner";
 import { toast } from "@/components/ui/toast";
 import {
   addAgreement,
@@ -872,36 +873,30 @@ function AgreementModal({
           )}
 
           {!reading && filled && (
-            <div className="mt-2 rounded-[10px] border border-amber bg-amber-bg px-2.5 py-2 text-[11px] leading-relaxed text-amber">
-              {filled.length === 0 ? (
-                <span className="font-semibold">
-                  Nothing could be read off that document. Fill the fields in by hand.
-                </span>
-              ) : (
-                <>
-                  <span className="font-semibold">
-                    Filled from the document: {filled.join(", ")}.
-                  </span>{" "}
-                  Check the total and the dates against the PDF before saving.
-                </>
-              )}
-              {governedByNote && (
-                <div className="mt-1">
-                  It says it is governed by:{" "}
-                  <span className="font-semibold">{governedByNote}</span>. File that
-                  on the client if it is not already there.
-                </div>
-              )}
-              {before && (
-                <button
-                  type="button"
-                  onClick={undoRead}
-                  className="ml-1 font-semibold underline"
-                >
-                  Undo
-                </button>
-              )}
-            </div>
+            filled.length === 0 ? (
+              <ReadBanner
+                tone="warn"
+                title="Nothing could be read off that document."
+                onUndo={before ? undoRead : undefined}
+              >
+                Fill the fields in by hand.
+              </ReadBanner>
+            ) : (
+              <ReadBanner
+                tone="ok"
+                title={`Filled from the document: ${filled.join(", ")}.`}
+                onUndo={before ? undoRead : undefined}
+              >
+                Check the total and the dates against the PDF before saving.
+                {governedByNote && (
+                  <span className="mt-1 block">
+                    It says it is governed by:{" "}
+                    <span className="font-semibold">{governedByNote}</span>. File
+                    that on the client if it is not already there.
+                  </span>
+                )}
+              </ReadBanner>
+            )
           )}
         </div>
 

@@ -4458,6 +4458,47 @@ Their three-day job came to 56 rows typed by hand.
   session cannot reach Supabase, so the write path has to be tried on the
   operator's machine. The renumber is the part to watch.
 
+### The read-a-document banner is green when it worked (no migration) — BUILT
+Operator, on the receipt flow: "theres a yellow confirmation window that pops
+up, which is fine. but the yellow makes it seems like its a error message vs a
+confirmation. In my opinion it should be a green window." Right, and there was
+a second problem in the same element that explains why it read as badly as it
+did.
+- AMBER IS SPENT ON SOMETHING in this app: a cost over the agreed rate, an
+  overdue payment, a crew member who has not confirmed a call sheet, a schedule
+  running past its wrap. Wearing it for a success makes every real warning mean
+  less, which is section 4.2's colour-as-signal rule read literally. The banner
+  now splits by STATE rather than being one colour: fields filled is GREEN with
+  a tick, and nothing could be read stays AMBER with an exclamation, because
+  that one genuinely is something the producer has to act on.
+- THE WORDS WERE ALSO NEARLY ILLEGIBLE, which no colour swap alone would have
+  fixed. It was the hue's text on the hue's own tint, and MEASURED from the
+  tokens that is 1.86:1 on light and 1.78:1 on paper (green would have been
+  2.43:1), far below AA for body type. CLAUDE.md had already recorded this
+  exact failure for the StatusTag pattern during migration 0109 and it was
+  still live here. The words are now the normal text colour (13.67 / 12.06 /
+  8.46 measured in Chromium) and the hue is carried by the tint, the border and
+  the icon.
+- THE ICON IS THE HUE MIXED 65% TOWARD THE TEXT COLOUR, because the bare token
+  has the same problem and a 1.86:1 tick is one nobody sees, which loses the
+  signal the change exists to give. 65% was measured across both hues and all
+  three themes (worst case 3.34:1, clearing the 3:1 bar for a meaningful
+  graphic) and is the HIGHEST ratio that does, so it keeps as much hue as it
+  can. Mixing toward TEXT rather than a fixed dark is what makes one value work
+  in dark too, where the text is near-white and the icon wants to go brighter
+  rather than darker.
+- ONE COMPONENT, components/ui/read-banner.tsx, because the same banner existed
+  twice (the cost ledger's invoice/receipt read and the agreements SOW read)
+  and had already drifted in wording. A second copy would have drifted again at
+  the next change, which is the lesson ProductionCover and CallSheetDocument
+  already taught.
+- UNTOUCHED, and deliberately: the two banners that are genuinely warnings stay
+  amber (the Drive sharing notice in the email composer, and the payment
+  schedule's "this does not add up to the commitment" line).
+- Verified in Chromium against a throwaway fixture (deleted) rendering both
+  tones in light, paper and dark: contrast as above, no page errors, and no
+  horizontal overflow at 390px.
+
 ### Photograph a receipt onto the budget (no migration) — BUILT
 Operator, straight off a real job: they were "running around and purchasing
 various things for the IQ bar shoot and collecting receipts", and wanted to
