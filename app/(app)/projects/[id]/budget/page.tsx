@@ -6,6 +6,8 @@ import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { BudgetTable } from "@/components/production/budget-table";
 import type { RosterOption } from "@/components/production/cost-ledger";
 import { loadContactRates } from "@/lib/rates";
+import { emailConfigured } from "@/lib/email";
+import { freshbooksConfigured, hasBillScopes } from "@/lib/freshbooks";
 import { computeTotals, type DocSnapshotLine } from "@/lib/billing-doc";
 import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
@@ -14,7 +16,7 @@ export default async function BudgetPage({
 }: {
   params: { id: string };
 }) {
-  await requireStudioContext();
+  const ctx = await requireStudioContext();
   const supabase = createClient();
 
   const { data: project } = await supabase
@@ -30,6 +32,7 @@ export default async function BudgetPage({
     { data: roster },
     { data: invoices },
     { data: billing },
+    { data: fbAccount },
   ] =
     await Promise.all([
       supabase
@@ -47,7 +50,7 @@ export default async function BudgetPage({
       // from someone already on the project.
       supabase
         .from("contacts")
-        .select("id, name, company, role")
+        .select("id, name, company, role, email")
         .eq("project_id", params.id)
         .order("name", { ascending: true }),
       // The billed side of margin. Only invoices count: an estimate or a
@@ -64,7 +67,20 @@ export default async function BudgetPage({
         .select("amount")
         .eq("project_id", params.id)
         .maybeSingle(),
+      // Whether costs can be sent to FreshBooks to pay. Only the scope is
+      // read; the tokens never leave the server actions.
+      supabase
+        .from("billing_accounts")
+        .select("scope")
+        .eq("studio_id", ctx.studio.id)
+        .eq("provider", "freshbooks")
+        .maybeSingle(),
     ]);
+
+  const freshbooks =
+    freshbooksConfigured() && fbAccount
+      ? { connected: true, needsReconnect: !hasBillScopes(fbAccount.scope) }
+      : null;
 
   // Payments hang off the project's costs, so they are fetched by cost id
   // rather than by project.
@@ -141,6 +157,10 @@ export default async function BudgetPage({
           billedFromInvoices={invoiceIds.length > 0}
           payments={(payments ?? []) as CostPayment[]}
           todayIso={todayIso}
+          freshbooks={freshbooks}
+          projectTitle={project.title}
+          studioName={ctx.studio.name}
+          emailEnabled={emailConfigured()}
         />
       </Card>
     </div>

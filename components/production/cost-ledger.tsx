@@ -9,6 +9,7 @@ import { FileDropzone } from "@/components/ui/file-dropzone";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { ReadBanner } from "@/components/ui/read-banner";
 import { toast } from "@/components/ui/toast";
 import {
   addCost,
@@ -31,6 +32,14 @@ import {
   type CostStatus,
 } from "@/lib/costs";
 import { PaymentSchedule } from "@/components/production/payment-schedule";
+import { RemittanceButton } from "@/components/production/remittance-button";
+import {
+  FreshbooksBillControl,
+  FreshbooksSync,
+  SendBillModal,
+  openBill,
+  type FreshbooksState,
+} from "@/components/production/freshbooks-bill";
 import type { DocumentKind } from "@/lib/invoice-draft";
 import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
@@ -40,6 +49,9 @@ export type RosterOption = {
   company: string | null;
   role: string | null;
   rate: number | null;
+  /** Optional because the email path's roster (draftCostFromAttachment) does
+   * not select it; only the budget page needs somewhere to send a remittance. */
+  email?: string | null;
 };
 
 const money = new Intl.NumberFormat("en-US", {
@@ -138,6 +150,17 @@ function overRate(c: ProjectCost, roster: RosterOption[]): boolean {
   return check?.status === "over";
 }
 
+/**
+ * Where a remittance would go, or null. A cost only has an address when it was
+ * filed against a roster contact: a till receipt from a shop has nobody to
+ * write to, which is why the control hides rather than offering a dead send.
+ */
+function vendorEmail(c: ProjectCost, roster: RosterOption[]): string | null {
+  if (!c.contact_id) return null;
+  const email = roster.find((r) => r.id === c.contact_id)?.email;
+  return email?.trim() ? email.trim() : null;
+}
+
 export function CostLedger({
   projectId,
   costs,
@@ -145,19 +168,32 @@ export function CostLedger({
   roster,
   payments,
   todayIso,
+  freshbooks,
+  projectTitle,
+  studioName,
+  emailEnabled,
 }: {
   projectId: string;
   costs: ProjectCost[];
   lines: BudgetLine[];
   roster: RosterOption[];
   payments: CostPayment[];
+  /** Named in the remittance so a vendor knows which job the money is for. */
+  projectTitle: string | null;
+  studioName: string;
+  /** False when Resend is not configured: no remittance control at all. */
+  emailEnabled: boolean;
   /** Computed on the server, so overdue cannot differ after hydration. */
   todayIso: string;
+  /** Null when FreshBooks is not connected: no pay-via controls at all. */
+  freshbooks: FreshbooksState | null;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
   const [editing, setEditing] = useState<ProjectCost | "new" | null>(null);
   const [openSchedule, setOpenSchedule] = useState<string | null>(null);
+  const [billing, setBilling] = useState<ProjectCost | null>(null);
+  const openBills = costs.filter(openBill).length;
   // A vendor invoice dropped on the ledger. It opens the add-a-cost form with
   // the document attached, which is what makes the AI read fire: filing an
   // invoice with no amount, vendor or budget line would not be a cost.
@@ -212,7 +248,11 @@ export function CostLedger({
       !window.confirm(
         `Delete the ${money.format(Number(cost.amount) || 0)} cost from ${
           cost.vendor || "this vendor"
-        }? The attached document is deleted too.`
+        }? The attached document is deleted too.${
+          cost.fb_bill_id
+            ? " Its bill stays in FreshBooks; delete it there as well if it is not going to be paid."
+            : ""
+        }`
       )
     )
       return;
@@ -248,8 +288,12 @@ export function CostLedger({
         setEditing("new");
       }}
       label="Drop an invoice or a receipt to log a cost"
-      browse={{ text: "Drag an invoice or a receipt here, or click to browse" }}
-      hint="A PDF or a photo. Reads the vendor, the amount and the date for you."
+      // ONE WAY IN. The page used to show this dashed panel AND an "Add a
+      // cost" button, two controls for the same form that read as two
+      // different jobs. The panel moved inside that form, where it is the
+      // first thing you see; dropping a file anywhere on the page still
+      // opens the form with it attached, as a shortcut.
+      browse={false}
       disabled={Boolean(editing)}
     >
     <div>
@@ -266,15 +310,20 @@ export function CostLedger({
                 }.`}
           </p>
         </div>
-        <Button size="sm" onClick={() => setEditing("new")}>
-          + Add a cost
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {freshbooks && (
+            <FreshbooksSync projectId={projectId} openCount={openBills} />
+          )}
+          <Button size="sm" onClick={() => setEditing("new")}>
+            + Add a cost
+          </Button>
+        </div>
       </div>
 
       {costs.length === 0 ? (
         <p className="rounded-[12px] border border-dashed border-border py-8 text-center text-sm text-text-faint">
-          No costs logged yet. Add an invoice, or photograph a receipt, to
-          start the running tab.
+          No costs logged yet. Add a cost from an invoice, a photo of a receipt,
+          or by hand, to start the running tab.
         </p>
       ) : (
         <div className="overflow-hidden rounded-[12px] border border-border">
@@ -348,6 +397,18 @@ export function CostLedger({
                     ? `${costPayments.filter((p) => p.paid_at).length}/${costPayments.length}`
                     : "Split"}
                 </button>
+                {freshbooks && (c.fb_bill_id || summary.owed > 0) && (
+                  <FreshbooksBillControl cost={c} onSend={() => setBilling(c)} />
+                )}
+                {emailEnabled && summary.state === "paid" && vendorEmail(c, roster) && (
+                  <RemittanceButton
+                    projectId={projectId}
+                    cost={c}
+                    email={vendorEmail(c, roster)!}
+                    projectTitle={projectTitle}
+                    studioName={studioName}
+                  />
+                )}
                 {c.storage_path && <DocButton costId={c.id} name={c.file_name} />}
                 <button
                   onClick={() => setEditing(c)}
@@ -380,6 +441,15 @@ export function CostLedger({
             );
           })}
         </div>
+      )}
+
+      {billing && freshbooks && (
+        <SendBillModal
+          projectId={projectId}
+          cost={billing}
+          state={freshbooks}
+          onClose={() => setBilling(null)}
+        />
       )}
 
       {editing && (
@@ -568,6 +638,10 @@ export function CostModal({
   );
   const [file, setFile] = useState<File | null>(initialFile);
   const [saving, setSaving] = useState(false);
+  // A new cost starts at the DOCUMENT, because most costs arrive as one.
+  // "Enter it by hand" is the way past it, not a second button on the page.
+  const [manual, setManual] = useState(false);
+  const choosing = !cost && !attachment && !initial && !file && !manual;
   const fileRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAiEnabled();
 
@@ -729,6 +803,24 @@ export function CostModal({
     }));
   }
 
+  // The picker, the drop panel and a drop onto the open form all land here,
+  // so the three ways of handing over a document cannot behave differently.
+  function acceptFile(picked: File) {
+    if (picked.size > MAX_DOCUMENT_BYTES) {
+      toast(
+        `That file is ${formatBytes(picked.size)}, over the ${formatBytes(
+          MAX_DOCUMENT_BYTES
+        )} limit.`,
+        "error"
+      );
+      return;
+    }
+    setFile(picked);
+    // The point of the feature: attach the invoice and the form fills itself.
+    // Still a draft, still confirmed before saving.
+    if (aiEnabled) void readInvoice(picked);
+  }
+
   async function save() {
     if (!form.vendor.trim()) {
       toast("Add a vendor name.", "error");
@@ -775,6 +867,48 @@ export function CostModal({
     setSaving(false);
     router.refresh();
     onClose();
+  }
+
+  if (choosing) {
+    return (
+      <Modal open onClose={onClose} title="Add a cost" size="lg">
+        <FileDropzone
+          accept=".pdf,image/*"
+          multiple={false}
+          label="Drop to attach it to this cost"
+          browse={{ text: "Drop an invoice, an estimate or a receipt" }}
+          hint={
+            aiEnabled
+              ? "A PDF or a photo. The vendor, amount and date are read for you, and you check them before saving."
+              : "A PDF or a photo. It is kept with the cost when you save."
+          }
+          chooseLabel="Choose a file or take a photo"
+          onFiles={(files) => acceptFile(files[0])}
+          onTooLarge={(files) =>
+            toast(
+              `That file is ${formatBytes(files[0].size)}, over the ${formatBytes(
+                MAX_DOCUMENT_BYTES
+              )} limit.`,
+              "error"
+            )
+          }
+          maxBytes={MAX_DOCUMENT_BYTES}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setManual(true)}
+              className="text-sm font-semibold text-accent hover:underline"
+            >
+              No document? Enter it by hand
+            </button>
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </FileDropzone>
+      </Modal>
+    );
   }
 
   return (
@@ -933,20 +1067,7 @@ export function CostModal({
               // of the selection, so clearing first empties it.
               const picked = e.target.files?.[0] ?? null;
               e.target.value = "";
-              if (!picked) return;
-              if (picked.size > MAX_DOCUMENT_BYTES) {
-                toast(
-                  `That file is ${formatBytes(picked.size)}, over the ${formatBytes(
-                    MAX_DOCUMENT_BYTES
-                  )} limit.`,
-                  "error"
-                );
-                return;
-              }
-              setFile(picked);
-              // The point of the feature: attach the invoice and the form
-              // fills itself. Still a draft, still confirmed before saving.
-              if (aiEnabled) void readInvoice(picked);
+              if (picked) acceptFile(picked);
             }}
           />
           <div className="flex flex-wrap items-center gap-2">
@@ -985,44 +1106,37 @@ export function CostModal({
           )}
 
           {!reading && filled && (
-            <div className="mt-2 rounded-[10px] border border-amber bg-amber-bg px-2.5 py-2 text-[11px] leading-relaxed text-amber">
-              {filled.length === 0 ? (
-                <span className="font-semibold">
-                  Nothing could be read off that document. Fill the fields in by
-                  hand.
-                </span>
-              ) : (
-                <>
-                  <span className="font-semibold">
-                    Filled from the {docKind ?? "document"}: {filled.join(", ")}.
-                  </span>{" "}
-                  Check the total against the document before saving.
-                  {docKind === "estimate" && (
-                    <>
-                      {" "}
-                      This is an estimate, so it is what you are committing to,
-                      not a bill yet.
-                    </>
-                  )}
-                  {docKind === "receipt" && (
-                    <>
-                      {" "}
-                      This is a receipt, so it is money already spent and is
-                      logged as paid rather than as still owed.
-                    </>
-                  )}
-                </>
-              )}
-              {before && (
-                <button
-                  type="button"
-                  onClick={undoRead}
-                  className="ml-1 font-semibold underline"
-                >
-                  Undo
-                </button>
-              )}
-            </div>
+            filled.length === 0 ? (
+              <ReadBanner
+                tone="warn"
+                title="Nothing could be read off that document."
+                onUndo={before ? undoRead : undefined}
+              >
+                Fill the fields in by hand.
+              </ReadBanner>
+            ) : (
+              <ReadBanner
+                tone="ok"
+                title={`Filled from the ${docKind ?? "document"}: ${filled.join(", ")}.`}
+                onUndo={before ? undoRead : undefined}
+              >
+                Check the total against the document before saving.
+                {docKind === "estimate" && (
+                  <>
+                    {" "}
+                    This is an estimate, so it is what you are committing to,
+                    not a bill yet.
+                  </>
+                )}
+                {docKind === "receipt" && (
+                  <>
+                    {" "}
+                    This is a receipt, so it is money already spent and is
+                    logged as paid rather than as still owed.
+                  </>
+                )}
+              </ReadBanner>
+            )
           )}
           </>
           )}

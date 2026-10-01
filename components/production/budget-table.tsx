@@ -10,6 +10,7 @@ import {
   renameBudgetCategory,
 } from "@/app/(app)/projects/[id]/production/budget-actions";
 import { CostLedger, type RosterOption } from "@/components/production/cost-ledger";
+import type { FreshbooksState } from "@/components/production/freshbooks-bill";
 import {
   lineActual as lineActualOf,
   marginOf,
@@ -46,6 +47,10 @@ export function BudgetTable({
   billedFromInvoices,
   payments,
   todayIso,
+  freshbooks,
+  projectTitle,
+  studioName,
+  emailEnabled,
 }: {
   projectId: string;
   lines: BudgetLine[];
@@ -57,6 +62,11 @@ export function BudgetTable({
   billedFromInvoices: boolean;
   payments: CostPayment[];
   todayIso: string;
+  freshbooks: FreshbooksState | null;
+  /** Passed straight to the ledger for the remittance email. */
+  projectTitle: string | null;
+  studioName: string;
+  emailEnabled: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<BudgetLine[]>(lines);
@@ -329,6 +339,10 @@ export function BudgetTable({
           roster={roster}
           payments={payments}
           todayIso={todayIso}
+          freshbooks={freshbooks}
+          projectTitle={projectTitle}
+          studioName={studioName}
+          emailEnabled={emailEnabled}
         />
       </div>
     </div>

@@ -1420,15 +1420,25 @@ optimizing the flow + IA of this whole section.
 - `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`
 - `FIGMA_CLIENT_ID`, `FIGMA_CLIENT_SECRET` (Figma app scope: `file_content:read`;
   redirect `<domain>/auth/figma/callback`)
-- `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` (billing connector, ON HOLD;
-  redirect `<domain>/auth/freshbooks/callback`, e.g.
-  production-hub-steel.vercel.app). Set in Vercel already.
+- `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` (billing connector; set in
+  Vercel). FreshBooks only accepts redirects LISTED in its Developer Portal, and
+  the callback is built from whichever host the user is on. Both
+  `https://app.studio-flows.com/auth/freshbooks/callback` and the old
+  production-hub-steel.vercel.app one are registered (the app. one was added
+  2026-09-30 after a reconnect failed with "The redirect uri included is not
+  valid"). Google, Slack and Figma build theirs the same way, so a connector that
+  refuses its redirect on a new domain is this, not a code bug.
 - AI (optional): `OPENAI_API_KEY` (+ `OPENAI_MODEL`, default gpt-5-mini) or
   `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0110. Recent: 0110 =
+files in supabase/migrations. THROUGH 0112. Recent: 0112 =
+cost_remittance_sent (project_costs.remittance_sent_at: when the studio told a
+vendor their payment was on its way, so a re-send is a deliberate repeat); 0111 =
+cost_freshbooks_bill (project_costs.fb_bill_id / fb_bill_status /
+fb_bill_outstanding / fb_synced_at: the link from a cost to the FreshBooks
+bill it was sent across as); 0110 =
 schedule_review_target (approval_target gains 'schedule', so the shooting
 schedule joins the doc-review stack and can be shared, pinned and approved
 like the shot list); 0109 =
@@ -1809,6 +1819,74 @@ is now a LEDGER, the same move that makes an Asset a file plus Versions.
   Saturation.io's ground, and the audit already said no to it).
 - Slice 4 (margin + unpaid rollup) and slice 5 (payment schedule) are BUILT,
   see below.
+
+### One way to add a cost (no migration) — BUILT
+Operator, on the budget page: the dashed "drag an invoice or receipt here"
+panel and the "+ Add a cost" button "sound like they do the same thing", and
+they did: both opened the same CostModal, one with the file attached. Two
+visible controls for one job read as two different jobs.
+- The page panel is GONE (`browse={false}` on the ledger's FileDropzone). The
+  window-wide drop still works, as a shortcut nobody has to choose between.
+- "+ Add a cost" opens the form at the DOCUMENT first: a drop panel reading
+  "Drop an invoice, an estimate or a receipt" with "Choose a file or take a
+  photo", and a quiet "No document? Enter it by hand" link that reveals the
+  fields. Most costs arrive as a document, so that is the default path and
+  typing is the exception, not an equal alternative.
+- The start step shows only for a NEW cost with no file, no email attachment
+  and no prefilled draft (`choosing` in CostModal); editing a cost, the Gmail
+  "Log as a cost" path and a page drop all go straight to the fields.
+- acceptFile is the ONE handler for the picker, the start panel and a drop, so
+  the three ways of handing over a document cannot drift apart.
+- Verified in Chromium against a throwaway fixture mounting the real
+  CostLedger (deleted): one button on the page, the start step, the manual
+  link revealing the fields, a picked file landing on the form, 390px clean.
+
+### Pay a cost through FreshBooks Bill Pay (migration 0111) — SLICE 1 BUILT, NOT YET RUN LIVE
+Operator, 2026-09-30, with real live-action bills to pay: FreshBooks now has
+Bill Pay, so do the work in Studio Flows and hand only the PAYMENT to
+FreshBooks. This reopens the 07-29 "closed again" decision on their call, and
+it is deliberately a probe: build the thinnest real version, send one real
+bill, and let that answer the questions the docs could not.
+- THE ONE API FACT THAT SHAPES IT: FreshBooks can CREATE a bill and READ its
+  status, and can only RECORD a payment, never initiate one. So the send is
+  ours, the Pay click is on FreshBooks' own screen, and paid status comes back.
+  Nothing here moves money.
+- FLOW: a cost row on the budget carries "Pay via FB" -> SendBillModal
+  (components/production/freshbooks-bill.tsx) shows exactly what goes (vendor,
+  amount, bill number, dates) plus a FreshBooks EXPENSE CATEGORY picker, because
+  every bill line must carry one. The last pick is remembered in localStorage
+  ("freshbooks.billCategory"); first time it prefers anything named contract /
+  subcontract / professional. Send -> sendCostToFreshbooks finds the vendor by a
+  normalised name or creates it (Bill Vendors API, BETA), creates a one-line
+  bill for the cost's amount, and stores fb_bill_id on the cost. The row then
+  shows an "FB unpaid" chip linking to FreshBooks.
+- READ-BACK: FreshbooksSync runs syncFreshbooksBills ONCE when the budget
+  opens (quietly) and again on the "Check FreshBooks" button. A bill FreshBooks
+  calls paid (or with nothing outstanding) flips the cost to paid: the chip if
+  there is no payment schedule, every unpaid scheduled payment if there is.
+  So "pay in FreshBooks, come back" is the whole loop. No webhook yet.
+- ONE COST, ONE BILL: a second send is refused server-side. If the bill is
+  created and the link-back write fails, the error names the FreshBooks bill id
+  and says not to send again, since a retry would create a duplicate.
+- SCOPES CHANGED: bills + bill_vendors read/write + expenses:read were added.
+  The callback now stores `scope` on billing_accounts (it was always null), and
+  hasBillScopes() uses it to show a Reconnect prompt in Settings and in the
+  send window BEFORE anything fails. Every existing connection needs one
+  reconnect. If FreshBooks' developer app has granular scopes enabled, the new
+  scopes may also need ticking there or the reconnect is refused.
+- SHAPES ARE FROM SEARCH RESULTS, NOT THE DOCS: freshbooks.com is
+  egress-blocked from Claude Code sessions, so the bill / vendor / category
+  request and response shapes in lib/freshbooks.ts were assembled from their
+  API reference as quoted by search. Parsing is tolerant; the first live send
+  is the verification. Most likely thing to be wrong: the vendor create
+  response key, or `due_offset_days` vs a plain due date.
+- NOT IN SLICE 1, deliberately, pending the live test: attaching the invoice
+  PDF to the bill (FreshBooks takes an `attachment`, which needs their upload
+  API first); a deep link to the one bill (FRESHBOOKS_BILLS_URL is the bills
+  list, since the per-bill web URL is undocumented); a deposit already paid
+  here is NOT subtracted (the bill is for the full commitment); editing a cost
+  after sending does not update the bill; deleting a cost leaves its bill in
+  FreshBooks (the confirm says so).
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
@@ -4382,6 +4460,109 @@ Their three-day job came to 56 rows typed by hand.
   session cannot reach Supabase, so the write path has to be tried on the
   operator's machine. The renumber is the part to watch.
 
+### Tell the vendor yourself: remittance (migration 0112) — BUILT
+Operator, while looking at Veronica Laramie's bill: her banking details never
+went to FreshBooks, and there is nowhere in the app to put them. Correct on
+both counts, and the thread ended somewhere better than it started.
+- BANK DETAILS ARE NOT OURS TO HOLD, and this is the decision to keep. The
+  FreshBooks vendor object takes name, address, currency, tax defaults and an
+  `account_number` (which is the studio's reference WITH the vendor, not a bank
+  account), and has NO routing or bank fields at all. That is consistent with
+  the fact already recorded here: their API can only RECORD a payment, never
+  initiate one. We cannot move money, so holding the credentials that move it
+  is pure liability: no 2FA, no audit log, Sentry inert, and NACHA requires ACH
+  credentials to be stored encrypted and unreadable. Do not add a bank field to
+  `contacts`, and do not "fix" the vendor payload to carry one.
+- WORTH KNOWING, since nobody decided it: the contact Files pane invites "W-9s",
+  and a freelancer's W-9 routinely arrives with a voided check or a deposit form
+  attached. So banking documents may already be sitting in the assets bucket as
+  ordinary files. Not acted on, flagged to the operator.
+- THE VENDOR PAYLOAD IS DELIBERATELY LEFT BARE (name, currency, language). We
+  hold the roster's email and could send it, and the operator chose NOT to, so
+  that the payment notification comes from us rather than from FreshBooks. One
+  honest limit stated at the time: withholding it does not guarantee their
+  silence, since she has to give them bank details somehow and that onboarding
+  will collect an address. Watch the first real payment rather than assuming.
+- WHY OUR SIDE IS THE BETTER SIDE, and it is not preference: FreshBooks knows a
+  bill to "Veronica Laramie" for $2,400 was paid. It does not know the money was
+  prop styling on Hint Water against invoice 1043. Naming the job is what stops
+  the follow-up email, and it works whether or not they also notify.
+- THE WORDING IS A CLAIM ABOUT MONEY, which is why lib/remittance.ts is a module
+  rather than a string in the action. `billIsPaid` is true once a payment is
+  RECORDED or INITIATED, and ACH takes several business days to land, so the
+  email says the payment has been SENT and that it takes time to arrive. It
+  never says "you have been paid". Six forbidden phrasings are asserted against.
+- A DELIBERATE PRESS, NEVER AUTOMATIC. The paid status is read back when the
+  budget page opens, so an email hanging off that would go out whenever somebody
+  browsed: days late, at eleven at night, or twice if two people open the page.
+  Outward email about money gets a human commit, the same contract Runner and
+  the meal round hold.
+- THE PAID CHECK IS RE-DERIVED SERVER-SIDE through the same `summarizePayments`
+  the tile and the dashboard use, because the button is presentation and the
+  thing that must not happen is an email about money nobody paid.
+- THE CONTROL IS NARROW BY CONSTRUCTION, so the already-crowded row does not
+  bloat: it needs the cost to read PAID, to carry a `contact_id`, for that
+  roster contact to have an email, and for Resend to be configured. A till
+  receipt from a shop has nobody to write to, so it simply has no button rather
+  than offering a dead send. Verified in Chromium across all five cases.
+- IT STAYS PRESSABLE AFTER SENDING ("they never got it", the affordance the
+  invite emails already have), but turns green and its tooltip names the date,
+  so a second press is a deliberate repeat. `project_costs.remittance_sent_at`
+  (0112) is that record, stamped ONLY after the send succeeds, so a failed send
+  leaves the row reading as untold rather than claiming it went.
+- `isEmailAddress` was exported from lib/contact.ts rather than copied, so the
+  contact form and the remittance composer cannot disagree about what counts as
+  an address. `exactMoney` is in lib/remittance.ts because lib/format money()
+  rounds to WHOLE DOLLARS, and a remittance states a figure somebody reconciles
+  against their bank.
+- 39 assertions in the scratchpad: the settlement wording, cents surviving,
+  NaN degrading to $0.00 rather than printing NaN, absent facts dropping out
+  instead of leaving dangling separators, and CRLF stripped from every field
+  that reaches the subject or the body.
+- NOT verified end to end: a dev server in a Claude Code session cannot reach
+  Supabase or Resend, so the first real send is the test.
+
+### The read-a-document banner is green when it worked (no migration) — BUILT
+Operator, on the receipt flow: "theres a yellow confirmation window that pops
+up, which is fine. but the yellow makes it seems like its a error message vs a
+confirmation. In my opinion it should be a green window." Right, and there was
+a second problem in the same element that explains why it read as badly as it
+did.
+- AMBER IS SPENT ON SOMETHING in this app: a cost over the agreed rate, an
+  overdue payment, a crew member who has not confirmed a call sheet, a schedule
+  running past its wrap. Wearing it for a success makes every real warning mean
+  less, which is section 4.2's colour-as-signal rule read literally. The banner
+  now splits by STATE rather than being one colour: fields filled is GREEN with
+  a tick, and nothing could be read stays AMBER with an exclamation, because
+  that one genuinely is something the producer has to act on.
+- THE WORDS WERE ALSO NEARLY ILLEGIBLE, which no colour swap alone would have
+  fixed. It was the hue's text on the hue's own tint, and MEASURED from the
+  tokens that is 1.86:1 on light and 1.78:1 on paper (green would have been
+  2.43:1), far below AA for body type. CLAUDE.md had already recorded this
+  exact failure for the StatusTag pattern during migration 0109 and it was
+  still live here. The words are now the normal text colour (13.67 / 12.06 /
+  8.46 measured in Chromium) and the hue is carried by the tint, the border and
+  the icon.
+- THE ICON IS THE HUE MIXED 65% TOWARD THE TEXT COLOUR, because the bare token
+  has the same problem and a 1.86:1 tick is one nobody sees, which loses the
+  signal the change exists to give. 65% was measured across both hues and all
+  three themes (worst case 3.34:1, clearing the 3:1 bar for a meaningful
+  graphic) and is the HIGHEST ratio that does, so it keeps as much hue as it
+  can. Mixing toward TEXT rather than a fixed dark is what makes one value work
+  in dark too, where the text is near-white and the icon wants to go brighter
+  rather than darker.
+- ONE COMPONENT, components/ui/read-banner.tsx, because the same banner existed
+  twice (the cost ledger's invoice/receipt read and the agreements SOW read)
+  and had already drifted in wording. A second copy would have drifted again at
+  the next change, which is the lesson ProductionCover and CallSheetDocument
+  already taught.
+- UNTOUCHED, and deliberately: the two banners that are genuinely warnings stay
+  amber (the Drive sharing notice in the email composer, and the payment
+  schedule's "this does not add up to the commitment" line).
+- Verified in Chromium against a throwaway fixture (deleted) rendering both
+  tones in light, paper and dark: contrast as above, no page errors, and no
+  horizontal overflow at 390px.
+
 ### Photograph a receipt onto the budget (no migration) — BUILT
 Operator, straight off a real job: they were "running around and purchasing
 various things for the IQ bar shoot and collecting receipts", and wanted to
@@ -5305,6 +5486,9 @@ The parked items, so they are findable WHEN friction hits (not before):
 
 BILLING/INVOICING IS ON HOLD (see the "Billing / invoicing" section above)
 pending the FreshBooks-vs-Melio decision; do not extend it until confirmed.
+EXCEPTION, on the operator's call 2026-09-30: paying VENDOR bills through
+FreshBooks Bill Pay (see "Pay a cost through FreshBooks Bill Pay"). That slice
+is a probe; what the first live bill shows decides the rest.
 Remaining roadmap if the operator asks for direction: Phase 7 (AI-video
 pipeline) is the flagship differentiator and is the one thing worth proposing
 unprompted. See docs/DEVELOPMENT.md for setup.

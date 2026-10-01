@@ -87,9 +87,11 @@ function AccountRow({ account }: { account: ConnectedAccount }) {
 function FreshbooksConnection({
   configured,
   connectedEmail,
+  needsReconnect,
 }: {
   configured: boolean;
   connectedEmail: string | null;
+  needsReconnect: boolean;
 }) {
   const [pending, start] = useTransition();
   return (
@@ -104,8 +106,9 @@ function FreshbooksConnection({
         <div>
           <div className="text-sm font-semibold text-text">FreshBooks</div>
           <div className="text-xs text-text-faint">
-            Create and send invoices from a project, then track paid status. Your
-            invoice template, payments, and books stay in FreshBooks.
+            Send a vendor&apos;s invoice from the budget to FreshBooks as a bill,
+            pay it there, and the cost is marked paid here. Your payments and
+            books stay in FreshBooks.
           </div>
         </div>
       </div>
@@ -126,6 +129,21 @@ function FreshbooksConnection({
               {pending ? "..." : "Disconnect"}
             </Button>
           </div>
+        </div>
+      )}
+
+      {connectedEmail !== null && needsReconnect && configured && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-border bg-surface-2 px-3 py-2.5">
+          <p className="min-w-0 flex-1 text-xs text-text-muted">
+            This connection was made before paying bills was possible. Reconnect
+            once to let the budget send bills to FreshBooks.
+          </p>
+          <a
+            href="/auth/freshbooks/start"
+            className="inline-flex items-center rounded-[10px] bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg transition hover:bg-accent-strong"
+          >
+            Reconnect
+          </a>
         </div>
       )}
 
@@ -155,7 +173,7 @@ export function Connections({
 }: {
   configured: Record<string, boolean>;
   accounts: ConnectedAccount[];
-  freshbooks: { connectedEmail: string | null };
+  freshbooks: { connectedEmail: string | null; needsReconnect: boolean };
 }) {
   return (
     <div className="space-y-6">
@@ -204,6 +222,7 @@ export function Connections({
       <FreshbooksConnection
         configured={Boolean(configured.freshbooks)}
         connectedEmail={freshbooks.connectedEmail}
+        needsReconnect={freshbooks.needsReconnect}
       />
     </div>
   );

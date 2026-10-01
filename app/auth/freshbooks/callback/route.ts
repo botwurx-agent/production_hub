@@ -5,6 +5,7 @@ import {
   exchangeCode,
   getIdentity,
   FRESHBOOKS_REDIRECT_PATH,
+  FRESHBOOKS_SCOPE,
 } from "@/lib/freshbooks";
 
 // Completes the FreshBooks OAuth flow: exchanges the code, resolves the
@@ -64,6 +65,7 @@ export async function GET(request: NextRequest) {
       fb_account_id: identity.accountId,
       fb_business_id: identity.businessId,
       fb_identity_email: identity.email,
+      scope: FRESHBOOKS_SCOPE,
     },
     { onConflict: "studio_id,provider" },
   );
