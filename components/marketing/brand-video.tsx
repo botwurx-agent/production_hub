@@ -37,10 +37,10 @@ const END = MONTAGE + 4000; // 28600
 export const VIDEO_MS = END + 5000; // 33600
 
 /** Deep brand ground for the type-led sections, derived from the accent. */
-const DARK = "color-mix(in oklch, var(--h-indigo) 18%, #05040c)";
-const DARK_2 = "color-mix(in oklch, var(--h-indigo) 30%, #0a0820)";
+export const DARK = "color-mix(in oklch, var(--h-indigo) 18%, #05040c)";
+export const DARK_2 = "color-mix(in oklch, var(--h-indigo) 30%, #0a0820)";
 /** The accent lifted so it reads on the dark ground. */
-const GLOW = "color-mix(in oklch, var(--h-indigo) 55%, white)";
+export const GLOW = "color-mix(in oklch, var(--h-indigo) 55%, white)";
 const easeIn = (p: number) => p * p * p;
 
 /* ------------------------------------------------------------------ TYPE */
@@ -49,7 +49,7 @@ const easeIn = (p: number) => p * p * p;
  * Words rise out of a mask one after another. The mask is a per-word
  * overflow box with a little bottom padding so descenders are not clipped.
  */
-function Words({
+export function Words({
   text,
   t,
   at,
@@ -95,7 +95,7 @@ function Words({
 }
 
 /** Fade + lift out, for a whole block leaving. */
-function leave(t: number, at: number, dur = 320, dy = -60): CSSProperties {
+export function leave(t: number, at: number, dur = 320, dy = -60): CSSProperties {
   const p = easeIn(ramp(t, at, dur));
   return { opacity: 1 - p, transform: `translateY(${p * dy}px)`, filter: p > 0 ? `blur(${p * 8}px)` : undefined };
 }
@@ -103,7 +103,7 @@ function leave(t: number, at: number, dur = 320, dy = -60): CSSProperties {
 /* ------------------------------------------------------------------ MARK */
 
 /** The SF mark as a tile, its three strokes drawing in one after another. */
-function MarkTile({ size, t, at, glow = true }: { size: number; t: number; at: number; glow?: boolean }) {
+export function MarkTile({ size, t, at, glow = true }: { size: number; t: number; at: number; glow?: boolean }) {
   const s = spring(ramp(t, at, 620));
   const unit = (size * 0.62) / MARK_BOX;
   const pad = (size - MARK_BOX * unit) / 2;

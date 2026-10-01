@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BrandVideo, H, VIDEO_MS, W } from "./brand-video";
+import { JOURNEY_MS, JourneyVideo } from "./journey-video";
+
+const FILMS = {
+  launch: { C: BrandVideo, ms: VIDEO_MS },
+  journey: { C: JourneyVideo, ms: JOURNEY_MS },
+};
 
 declare global {
   interface Window {
@@ -16,7 +22,8 @@ declare global {
  *   once that frame has painted, which is what the renderer steps through.
  * - ?t=12000: one frozen frame, for stills and the cover image.
  */
-export function BrandVideoPlayer({ capture, fixed }: { capture: boolean; fixed: number | null }) {
+export function BrandVideoPlayer({ capture, fixed, film = "launch" }: { capture: boolean; fixed: number | null; film?: keyof typeof FILMS }) {
+  const { C: Film, ms: DURATION } = FILMS[film];
   const [t, setT] = useState(fixed ?? 0);
   const [playing, setPlaying] = useState(!capture && fixed === null);
   const resolvers = useRef<(() => void)[]>([]);
@@ -28,7 +35,7 @@ export function BrandVideoPlayer({ capture, fixed }: { capture: boolean; fixed: 
   useEffect(() => {
     if (!capture) return;
     window.__BV = {
-      duration: VIDEO_MS,
+      duration: DURATION,
       set: (v: number) =>
         new Promise<void>((resolve) => {
           resolvers.current.push(resolve);
@@ -36,7 +43,7 @@ export function BrandVideoPlayer({ capture, fixed }: { capture: boolean; fixed: 
           setFrame((f) => f + 1);
         }),
     };
-  }, [capture]);
+  }, [capture, DURATION]);
 
   // Resolve pending sets after the frame with the new t has painted.
   useEffect(() => {
@@ -50,13 +57,13 @@ export function BrandVideoPlayer({ capture, fixed }: { capture: boolean; fixed: 
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      setT((v) => (v + (now - last)) % VIDEO_MS);
+      setT((v) => (v + (now - last)) % DURATION);
       last = now;
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing]);
+  }, [playing, DURATION]);
 
   useEffect(() => {
     if (capture) return;
@@ -66,20 +73,20 @@ export function BrandVideoPlayer({ capture, fixed }: { capture: boolean; fixed: 
     return () => window.removeEventListener("resize", fit);
   }, [capture]);
 
-  if (capture) return <BrandVideo t={t} />;
+  if (capture) return <Film t={t} />;
 
   return (
     <div style={{ minHeight: "100vh", background: "#111", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: 12 }}>
       <div style={{ width: W * scale, height: H * scale, overflow: "hidden", borderRadius: 12 }}>
         <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0" }}>
-          <BrandVideo t={t} />
+          <Film t={t} />
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, width: Math.max(320, W * scale), color: "#ddd", fontSize: 13, fontFamily: "system-ui" }}>
         <button onClick={() => setPlaying((p) => !p)} style={{ padding: "6px 14px", borderRadius: 8, background: "#333", color: "white" }}>
           {playing ? "Pause" : "Play"}
         </button>
-        <input type="range" min={0} max={VIDEO_MS} value={Math.round(t)} onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} style={{ flex: 1 }} />
+        <input type="range" min={0} max={DURATION} value={Math.round(t)} onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} style={{ flex: 1 }} />
         <span style={{ width: 70, textAlign: "right" }}>{(t / 1000).toFixed(1)}s</span>
       </div>
     </div>
