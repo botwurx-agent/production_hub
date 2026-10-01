@@ -112,16 +112,22 @@ function knownCause(reason: string, write: boolean, vendor: boolean): string | n
   // check "bill scopes" as a group describes something half true and points at
   // no action. A granted read is evidence the plan carries Accounts Payable,
   // which leaves exactly one thing to check.
-  // THE VENDOR CREATE HAS A WAY ROUND IT, and that is the only thing worth
-  // saying once the scope advice has been acted on. The operator ticked
-  // user:bill_vendors:write, saved, and reconnected, and the POST was still
-  // refused while the GET returned 200, so on that account the scope is not
-  // what is withholding it. Repeating the instruction they just followed is
-  // the reconnect loop wearing a third costume. Reading vendors IS allowed,
-  // and findVendor matches on a normalised name, so a vendor created once in
-  // FreshBooks' own screen is found and the refused call never happens.
+  // AND THE WAY ROUND IT WAS WRONG TOO, which is the fourth and last costume.
+  // It said to add the vendor in FreshBooks by hand, because the vendor list
+  // answered 200 and the create did not. The operator did, and it was still
+  // not found: `GET /bill_vendors` and `GET /bills` BOTH report total 0 on an
+  // account whose Bill Pay screen shows a vendor and a scheduled payment. So a
+  // 200 was never evidence the read worked, and the read/write split those two
+  // earlier messages rested on was an artifact of reading status codes.
+  //
+  // FRESHBOOKS' OWN SUPPORT EXPLAINS IT: existing bills and vendors "are not
+  // automatically shared in the Bill Pay sub-section". Bill Pay and the Bills
+  // API are SEPARATE STORES. The API reaches classic Accounts Payable, this
+  // studio works in Bill Pay, and Bill Pay has no public API. Nothing anybody
+  // ticks, reconnects or types by hand changes that, so the message stops
+  // asking and says what was found.
   if (vendor) {
-    return "Reading your vendors is allowed and creating one is not. Add this vendor in FreshBooks yourself (Expenses, then Bill Pay, then Vendors), then press this again: we look it up by name, so the refused step is skipped. The name has to be the same one shown above (case and punctuation do not matter, anything extra does). If it already exists under that exact name, open /api/diagnostics/freshbooks to see the vendors FreshBooks is showing us.";
+    return "This is not something you can fix by ticking or reconnecting anything, so please do not try again. FreshBooks reports no bills and no vendors at all on this account through its API, while your Bill Pay screen shows both, because Bill Pay and the Bills API are separate and Bill Pay has no API we can reach. Pay this one in FreshBooks directly, then mark it paid here.";
   }
   if (write) {
     return "Reading is allowed and writing is not, so this is the write scope. Check user:bill_vendors:write and user:bills:write are ticked on your FreshBooks developer app, then reconnect in Settings, since a token issued before a scope was added does not carry it.";

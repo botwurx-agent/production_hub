@@ -2120,6 +2120,48 @@ with the same "You do not have access to bill vendors".
   same press repeats forever, which is the reconnect loop wearing a fourth
   costume.
 
+### THE ANSWER: Bill Pay and the Bills API are different stores — PROBE CLOSED
+The vendor added by hand was not found, and the vendor list came back
+`total: 0`. So did the BILLS list, on an account whose Bill Pay screen shows a
+vendor and a scheduled payment to Ryan Robles. Both 200, both empty.
+- A 200 WAS NEVER EVIDENCE THE READ WORKED. `GET /bill_vendors` was failing
+  QUIETLY, returning an empty page rather than a refusal, and the probe only
+  reported its status code. Every conclusion in the four rounds above rests on
+  that split (reads allowed, writes refused) and the split was an artifact of
+  looking at a number instead of a body. THE RULE: a diagnostic that reports
+  statuses and not bodies can only find loud failures, and the quiet ones are
+  the expensive ones.
+- FRESHBOOKS' SUPPORT SAYS IT PLAINLY: existing bills and vendors "are not
+  automatically shared in the Bill Pay sub-section", and to schedule payments
+  you "should use Bill Pay instead". So the `bills` / `bill_vendors` API is
+  CLASSIC ACCOUNTS PAYABLE, Bill Pay is a separate product, and this studio
+  works entirely in Bill Pay. The 403 on creating a vendor fits the same
+  reading: we were writing into a feature the account does not use.
+- BILL PAY HAS NO PUBLIC API. So the whole premise of migration 0111 (do the
+  work here, hand the PAYMENT to FreshBooks) cannot be built against the thing
+  the operator actually pays with. This is not a scope, a plan, a token, a
+  header or a request shape, and no code on our side reaches it.
+- WHAT WAS WRONG EACH TIME, since the pattern is the point and it repeated
+  four times: the plan (asserted from a pricing page, disproved by a real
+  payment), the scopes evaluated live (asserted from a symptom whose source was
+  ambiguous, withdrawn), the write probe that could only pass (a 404 taken as
+  permission), and the add-the-vendor-by-hand workaround (built on a 200 that
+  meant nothing). Every one of them was reasoning from a signal that could not
+  distinguish between the explanations on the table. The probe only became
+  decisive when it stopped summarising and started printing what came back.
+- THE MESSAGE NOW STATES THE FINDING AND ASKS FOR NOTHING: no ticking, no
+  reconnecting, no adding by hand, no diagnostic link. It says to pay the bill
+  in FreshBooks and mark it paid here, which is what works today.
+- WHAT STILL WORKS, and it is most of the value: the cost ledger, the payment
+  schedule and deposits (0072), the rate check, the invoice and receipt
+  extractors, and the remittance email (0112). The only thing lost is the app
+  creating the bill for them.
+- STILL OPEN, for the operator: whether to remove the "Pay via FB" control and
+  the FreshBooks sync entirely, or leave it dormant in case Bill Pay ever gets
+  an API. Do not remove it unprompted. The diagnostics route stays either way:
+  it is read-only and it is how the next question of this kind gets answered in
+  one press instead of four rounds.
+
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
 later, and the ledger could only express "one cost, paid once". A cost is now a
