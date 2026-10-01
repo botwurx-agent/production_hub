@@ -2101,6 +2101,24 @@ with the same "You do not have access to bill vendors".
 - WHICH ALSO TESTS THE NEXT UNKNOWN for free: `user:bills:write` has never run,
   because the send has never got past the vendor. A vendor added by hand is the
   cheapest way to find out whether the bill create is refused as well.
+- AND THE VENDOR ADDED BY HAND WAS STILL NOT FOUND, so the create ran again and
+  was refused again. That has two causes needing opposite fixes, and a refusal
+  message cannot tell them apart: the name not normalising to the same string,
+  or the list read not carrying that vendor at all. Guessing between them is
+  what the last three rounds were.
+- SO THE PROBE READS THE ROWS. `probeVendorList` walks the first page of the
+  same endpoint `findVendor` walks and reports each row's id, name, the
+  NORMALISED KEY it matches on, and whether it is archived;
+  `/api/diagnostics/freshbooks?name=<vendor>` runs the send's own
+  normalisation against those rows and says whether it hits. Read-only,
+  creates nothing. The matching rule to know when reading it: `vendorKey`
+  lowercases and collapses every non-alphanumeric run to a space, so case and
+  punctuation do not matter and anything EXTRA does ("Veronica Laramie Prop
+  Styling" is not "Veronica Laramie").
+- The vendor-create refusal now says the name has to agree and points at the
+  diagnostic when it already exists under that exact name. Without that the
+  same press repeats forever, which is the reconnect loop wearing a fourth
+  costume.
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
