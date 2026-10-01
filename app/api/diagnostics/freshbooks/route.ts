@@ -23,6 +23,7 @@ import { getBillingAccount, getFreshbooksAuth } from "@/lib/billing";
 import {
   hasBillScopes,
   probeFreshbooks,
+  probeListRaw,
   probeVendorList,
   probeVendorWrite,
   vendorKey,
@@ -178,6 +179,19 @@ export async function GET(req: Request) {
       : {}),
   };
 
+  // THE BODIES, not just the statuses. The vendor list answered 200 with an
+  // empty array on an account that has vendors, so a 200 is not evidence the
+  // endpoint is working: it can fail quietly. An EXISTING BILL is the one AP
+  // row known to exist, so whether it comes back decides whether any of this
+  // API is really reachable or whether all of it is returning empty.
+  const RAW_CHARS = 1500;
+  const billsRaw = await probeListRaw(`${base}/bills/bills?per_page=5&page=1`, token);
+  const vendorsRaw = await probeListRaw(`${base}/bill_vendors/bill_vendors?per_page=5&page=1`, token);
+  const raw = {
+    bills: { status: billsRaw.status, body: billsRaw.body.slice(0, RAW_CHARS) },
+    billVendors: { status: vendorsRaw.status, body: vendorsRaw.body.slice(0, RAW_CHARS) },
+  };
+
   const vendors = checks.find((c) => c.what === "bill vendors");
   const bills = checks.find((c) => c.what === "bills");
   const control = checks.find((c) => c.what.startsWith("expense categories"));
@@ -193,7 +207,10 @@ export async function GET(req: Request) {
   } else if (!bills?.ok && !vendors?.ok) {
     reading = "Both bills and bill vendors are refused while the control call works, so the token is good and the whole Accounts Payable API is closed to it. That is either the scopes on the OAuth app or an account permission, and the stored scope above says which to check first.";
   } else if (bills?.ok && vendors?.ok && write.status === 403) {
-    reading = "Reading bills and vendors is allowed and WRITING is refused. That is why every read here passed while the send did not: the send creates the vendor. The bill scopes being ticked is not enough, so this is a write permission on the FreshBooks account or app, and the read half proves the token and the plan are fine.";
+    reading =
+      list.ok && list.rows.length === 0
+        ? "The vendor list answers 200 with NO ROWS, so the read is not working either, it is failing quietly instead of loudly. Read raw.bills below: if an existing bill comes back, AP data is reachable and only vendors are withheld. If bills are empty too, this token sees none of Accounts Payable whatever the status codes say, and that is a FreshBooks support question, not a scope or a plan one."
+        : "Reading bills and vendors is allowed and WRITING is refused. That is why every read here passed while the send did not: the send creates the vendor. The bill scopes being ticked is not enough, so this is a write permission on the FreshBooks account or app, and the read half proves the token and the plan are fine.";
   } else if (bills?.ok && vendors?.ok) {
     reading = `Reads are allowed and the write check answered ${write.status}, which is not a refusal, so writing is permitted too. Re-run the send and read the error it gives now.`;
   } else {
@@ -208,6 +225,7 @@ export async function GET(req: Request) {
     businesses,
     checks,
     vendorList,
+    raw,
     reading,
   });
 }

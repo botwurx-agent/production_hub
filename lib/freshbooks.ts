@@ -736,3 +736,21 @@ export async function probeVendorList(
     return { status: res.status, ok: false, rows: [] };
   }
 }
+
+/**
+ * The raw first page of an AP list, body included.
+ *
+ * Built when `GET /bill_vendors` came back 200 with ZERO rows on an account
+ * that demonstrably has vendors. A status code was the only thing the earlier
+ * probe reported, so an endpoint failing QUIETLY (200, empty) read as working.
+ * The body is the only way to tell an empty list from a list we are being
+ * shown none of, and an existing bill is the one row known to exist.
+ *
+ * Read-only and never throws, same contract as the other probes.
+ */
+export async function probeListRaw(
+  path: string,
+  token: string,
+): Promise<{ status: number; ok: boolean; body: string }> {
+  return probeFreshbooks(path, token);
+}
