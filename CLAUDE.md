@@ -2002,6 +2002,35 @@ with the same "You do not have access to bill vendors".
   believed, which is the thing the last two rounds lacked.
 - `probeFreshbooks` (lib/freshbooks.ts) never throws, deliberately: a probe
   that falls over on the first refusal tells you less than the one it replaces.
+- WHAT IT ANSWERED, first press: all five reads 200, bill_vendors and bills
+  included, with and without the alpha header. One business on the login, role
+  owner, and the account id the calls were already using. So nothing standing
+  is closed.
+- THE FINDING THAT MATTERS, and it corrects an assumption this file was built
+  on: the token that answered 200 is THE SAME TOKEN that was refused. The
+  billing_accounts row was untouched between the two (created_at = updated_at =
+  19:04:07, token_expiry unchanged), so there was no reconnect and no refresh.
+  The only thing that changed in between was the operator ticking the bill
+  scopes on the FreshBooks developer app and saving.
+  SO FRESHBOOKS EVALUATES THESE SCOPES AGAINST THE APP'S CURRENT CONFIGURATION
+  AT REQUEST TIME, not against what was frozen into the grant at authorization.
+  Ticking a scope takes effect on an existing connection immediately; no
+  reconnect is needed. That is the opposite of what the grantedScope work
+  assumed, and it is why the "reconnect and I will read the stored scope" test
+  could never have been decisive.
+- CONSEQUENCE NOT YET ACTED ON: `hasBillScopes` is a hard up-front REFUSAL
+  based on a stored string, and a stored string cannot describe a permission
+  that is evaluated live. It can now be wrong in the blocking direction, which
+  is the worse one: a connection recorded before the constant gained the bill
+  scopes would be refused by us with a reconnect prompt even where FreshBooks
+  would allow the call. The send path's error handling is good enough now that
+  the guard should become advisory rather than a stop, letting FreshBooks
+  answer. Left alone this round only because the first real bill had not yet
+  been sent and adding a variable mid-diagnosis is how the last three rounds
+  went wrong.
+- STILL UNEXERCISED: the WRITES. The probe is read-only by design, so creating
+  a vendor and creating a bill have never run against the live API. That is the
+  remaining unknown, and the first successful send is what closes it.
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
