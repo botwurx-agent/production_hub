@@ -20,7 +20,13 @@ import { NextResponse } from "next/server";
 import { getStudioContext } from "@/lib/studio";
 import { createClient } from "@/lib/supabase/server";
 import { getBillingAccount, getFreshbooksAuth } from "@/lib/billing";
-import { hasBillScopes, probeFreshbooks, probeVendorWrite } from "@/lib/freshbooks";
+import {
+  hasBillScopes,
+  probeFreshbooks,
+  probeVendorList,
+  probeVendorWrite,
+  vendorKey,
+} from "@/lib/freshbooks";
 import { freshbooksReason } from "@/lib/freshbooks-error";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +64,7 @@ async function check(
   };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const ctx = await getStudioContext();
   if (!ctx) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (ctx.isCollaborator) {
@@ -148,6 +154,30 @@ export async function GET() {
     ...(write.status === 403 ? { body: write.body.slice(0, BODY_CHARS) } : {}),
   });
 
+  // WHAT THE LOOKUP ACTUALLY SEES. A vendor added by hand in FreshBooks was
+  // still not found, and a refusal message cannot tell you whether the name
+  // failed to match or the list never carried it. `?name=` runs the send's own
+  // normalisation against these rows, so the answer is read off the data
+  // rather than reasoned toward.
+  const want = (new URL(req.url).searchParams.get("name") ?? "").trim();
+  const list = await probeVendorList(accountId, token);
+  const wantKey = want ? vendorKey(want) : null;
+  const vendorList = {
+    status: list.status,
+    ok: list.ok,
+    count: list.rows.length,
+    // The first page only. A studio with more than a hundred vendors is not
+    // the case being diagnosed, and dumping ten pages makes this unreadable.
+    rows: list.rows,
+    ...(wantKey
+      ? {
+          searchedFor: want,
+          searchedKey: wantKey,
+          match: list.rows.find((r) => !r.archived && r.key === wantKey) ?? null,
+        }
+      : {}),
+  };
+
   const vendors = checks.find((c) => c.what === "bill vendors");
   const bills = checks.find((c) => c.what === "bills");
   const control = checks.find((c) => c.what.startsWith("expense categories"));
@@ -177,6 +207,7 @@ export async function GET() {
     scopeLooksSufficient: hasBillScopes(scope),
     businesses,
     checks,
+    vendorList,
     reading,
   });
 }

@@ -464,7 +464,7 @@ type VendorsResponse = {
   };
 };
 
-function vendorKey(name: string) {
+export function vendorKey(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
@@ -692,4 +692,47 @@ export async function probeVendorWrite(accountId: string, token: string) {
     token,
     { method: "POST", body: {} },
   );
+}
+
+/**
+ * Every vendor FreshBooks will show us, as the send's own lookup sees them.
+ *
+ * Built after a vendor added by hand in FreshBooks was still not found, which
+ * has two possible causes that need opposite fixes: the name not normalising
+ * to the same string, or the list simply not carrying that vendor. Those are
+ * indistinguishable from a refusal message, and both were guessable, so this
+ * reports the rows instead.
+ *
+ * Read-only and never throws, same contract as the other probes: a probe that
+ * falls over on the first refusal tells you less than the one it replaces.
+ */
+export async function probeVendorList(
+  accountId: string,
+  token: string,
+): Promise<{ status: number; ok: boolean; rows: { id: string | null; name: string; key: string; archived: boolean }[] }> {
+  const res = await probeFreshbooks(
+    `/accounting/account/${accountId}/bill_vendors/bill_vendors?per_page=100&page=1`,
+    token,
+  );
+  if (!res.ok) return { status: res.status, ok: false, rows: [] };
+  try {
+    const parsed = JSON.parse(res.body) as VendorsResponse;
+    const rows = parsed.response?.result?.bill_vendors ?? [];
+    return {
+      status: res.status,
+      ok: true,
+      rows: rows.map((v) => {
+        const name = v.vendor_name ?? "";
+        const id = v.vendorid ?? v.id;
+        return {
+          id: id == null ? null : String(id),
+          name,
+          key: vendorKey(name),
+          archived: v.vis_state === 1,
+        };
+      }),
+    };
+  } catch {
+    return { status: res.status, ok: false, rows: [] };
+  }
 }

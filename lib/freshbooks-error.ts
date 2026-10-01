@@ -121,7 +121,7 @@ function knownCause(reason: string, write: boolean, vendor: boolean): string | n
   // and findVendor matches on a normalised name, so a vendor created once in
   // FreshBooks' own screen is found and the refused call never happens.
   if (vendor) {
-    return "Reading your vendors is allowed and creating one is not. Add this vendor in FreshBooks yourself (Expenses, then Bill Pay, then Vendors), then press this again: we match on the name, so the step that is being refused is skipped.";
+    return "Reading your vendors is allowed and creating one is not. Add this vendor in FreshBooks yourself (Expenses, then Bill Pay, then Vendors), then press this again: we look it up by name, so the refused step is skipped. The name has to be the same one shown above (case and punctuation do not matter, anything extra does). If it already exists under that exact name, open /api/diagnostics/freshbooks to see the vendors FreshBooks is showing us.";
   }
   if (write) {
     return "Reading is allowed and writing is not, so this is the write scope. Check user:bill_vendors:write and user:bills:write are ticked on your FreshBooks developer app, then reconnect in Settings, since a token issued before a scope was added does not carry it.";
