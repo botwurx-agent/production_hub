@@ -649,7 +649,7 @@ export function billIsPaid(bill: Pick<FbBill, "status" | "amount" | "outstanding
 export async function probeFreshbooks(
   path: string,
   token: string,
-  opts: { apiVersion?: boolean; method?: "GET" | "PUT"; body?: unknown } = {},
+  opts: { apiVersion?: boolean; method?: "GET" | "PUT" | "POST"; body?: unknown } = {},
 ): Promise<{ status: number; ok: boolean; body: string }> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
@@ -673,18 +673,23 @@ export async function probeFreshbooks(
 /**
  * Whether WRITING is allowed, asked without writing anything.
  *
- * A read probe cannot answer this, and the read and the write are separate
- * permissions: the first real bill was refused on the write while every read
- * returned 200. Creating a test vendor to find out would leave junk in the
- * studio's real FreshBooks, so this edits a vendor id that cannot exist. The
- * answer is in the status: 403 means the write is forbidden before FreshBooks
- * ever looked for the row, and 404 means it was allowed and there is simply no
- * such vendor. Nothing is created either way.
+ * THE FIRST VERSION OF THIS WAS WRONG AND READ AS A PASS. It edited vendor id
+ * 0 and took the 404 as proof the write was permitted. It is not: FreshBooks
+ * resolves the row BEFORE it checks the permission, so a missing row answers
+ * 404 whatever the caller is allowed to do. The real POST was refused 403
+ * minutes later. A probe that can only come back clean is worse than no probe,
+ * because it moves the diagnosis in the wrong direction.
+ *
+ * So it POSTs at the COLLECTION, which is the exact call the send makes and
+ * the one place authorization is reached before anything else. The body is an
+ * empty object carrying no `bill_vendor` envelope, so there is nothing to
+ * create from: 403 means the write is refused, and any other 4xx means it was
+ * allowed and the payload was rejected, which is the answer we want.
  */
 export async function probeVendorWrite(accountId: string, token: string) {
   return probeFreshbooks(
-    `/accounting/account/${accountId}/bill_vendors/bill_vendors/0`,
+    `/accounting/account/${accountId}/bill_vendors/bill_vendors`,
     token,
-    { method: "PUT", body: { bill_vendor: { vendor_name: "studio flows write check" } } },
+    { method: "POST", body: {} },
   );
 }

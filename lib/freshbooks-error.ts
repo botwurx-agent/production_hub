@@ -102,17 +102,26 @@ export function freshbooksReason(body: string | null | undefined): string | null
  * answer sent them to check a plan that was never the problem, which is worse
  * than naming both.
  */
-function knownCause(reason: string): string | null {
-  if (/access to bill[ _](vendors|payments)|access to bills\b/i.test(reason)) {
-    // THIS USED TO END ON "then reconnect", which is the reconnect loop again
-    // one step further out: the operator checked the plan, ticked every scope,
-    // reconnected, and got the identical sentence back telling them to do all
-    // three. Advice somebody has already acted on is not advice. It names the
-    // two things to check, then points at the probe, which answers from the
-    // API rather than from a guess about which of them is at fault.
-    return "That is Accounts Payable. Check that your FreshBooks plan carries it and that the bill scopes are ticked on your FreshBooks developer app. If both are already true, open /api/diagnostics/freshbooks to see which endpoint is actually being refused.";
+function knownCause(reason: string, write: boolean): string | null {
+  if (!/access to bill[ _](vendors|payments)|access to bills\b/i.test(reason)) {
+    return null;
   }
-  return null;
+  // A REFUSED WRITE IS A DIFFERENT SENTENCE FROM A REFUSED READ, and splitting
+  // them is what the operator's case needed: reading the vendor list answered
+  // 200 on the same token that was refused creating one, so sending them to
+  // check "bill scopes" as a group describes something half true and points at
+  // no action. A granted read is evidence the plan carries Accounts Payable,
+  // which leaves exactly one thing to check.
+  if (write) {
+    return "Reading them is allowed and creating one is not, so this is the write scope. Tick user:bill_vendors:write on your FreshBooks developer app, then reconnect in Settings, since a token issued before a scope was added does not carry it.";
+  }
+  // THIS USED TO END ON "then reconnect", which is the reconnect loop again
+  // one step further out: the operator checked the plan, ticked every scope,
+  // reconnected, and got the identical sentence back telling them to do all
+  // three. Advice somebody has already acted on is not advice. It names the
+  // two things to check, then points at the probe, which answers from the
+  // API rather than from a guess about which of them is at fault.
+  return "That is Accounts Payable. Check that your FreshBooks plan carries it and that the bill scopes are ticked on your FreshBooks developer app. If both are already true, open /api/diagnostics/freshbooks to see which endpoint is actually being refused.";
 }
 
 /**
@@ -121,11 +130,16 @@ function knownCause(reason: string): string | null {
  * `what` is what we were trying to do, as a verb phrase ("send this bill",
  * "load your expense categories"), because "something went wrong" sends the
  * next report back to us with nothing in it.
+ *
+ * `write` says the call was CREATING something rather than reading it. The
+ * caller knows which it was; the response body does not say, and FreshBooks
+ * answers a refused read and a refused write with the same sentence.
  */
 export function freshbooksFailure(
   status: number,
   body: string | null | undefined,
   what: string,
+  opts: { write?: boolean } = {},
 ): string {
   const reason = freshbooksReason(body);
   const because = reason ? ` ${reason}` : "";
@@ -143,7 +157,7 @@ export function freshbooksFailure(
     if (!reason) {
       return `FreshBooks would not allow us to ${what} (403), and reconnecting will not help. Check that your FreshBooks plan includes bills (Accounts Payable), and that the bill scopes are ticked on your FreshBooks developer app.`;
     }
-    const cause = knownCause(reason);
+    const cause = knownCause(reason, opts.write === true);
     return cause
       ? `FreshBooks would not allow us to ${what}: ${reason} ${cause}`
       : `FreshBooks would not allow us to ${what}: ${reason} Reconnecting will not help, this is a permission on your FreshBooks account.`;

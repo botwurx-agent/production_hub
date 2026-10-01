@@ -65,9 +65,9 @@ async function freshbooks(): Promise<Ready> {
  * toast says which step failed. It does not name FreshBooks: every sentence
  * these go into already starts with it.
  */
-function readable(e: unknown, what: string): string {
+function readable(e: unknown, what: string, opts: { write?: boolean } = {}): string {
   if (e instanceof FreshbooksError) {
-    return freshbooksFailure(e.status, e.body, what);
+    return freshbooksFailure(e.status, e.body, what, opts);
   }
   return `Could not ${what}. ${e instanceof Error ? e.message : "Unknown error."}`.trim();
 }
@@ -148,7 +148,7 @@ export async function sendCostToFreshbooks(
     } catch (e) {
       reportError(`freshbooks.vendorCreate ${costId}`, e);
       return {
-        error: `${readable(e, `add "${vendor}" as a vendor`)} Nothing was sent.`,
+        error: `${readable(e, `add "${vendor}" as a vendor`, { write: true })} Nothing was sent.`,
       };
     }
   }
@@ -170,7 +170,7 @@ export async function sendCostToFreshbooks(
     // once whatever it named is dealt with. A vendor created a moment ago does
     // stay behind, which is a name in a list rather than a bill, and the next
     // attempt reuses it.
-    return { error: `${readable(e, "create the bill")} Nothing was sent.` };
+    return { error: `${readable(e, "create the bill", { write: true })} Nothing was sent.` };
   }
 
   const { error } = await supabase

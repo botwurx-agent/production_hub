@@ -2048,6 +2048,35 @@ with the same "You do not have access to bill vendors".
   for the row, 404 means allowed and there is no such vendor. Nothing is
   created, which is the only reason a diagnostic may test a write at all
   against a studio's real books.
+- THAT WRITE PROBE WAS WRONG AND READ AS A PASS. It took the 404 as proof the
+  write was permitted. FreshBooks resolves the ROW BEFORE it checks the
+  permission, so a missing row answers 404 whatever the caller may do, and the
+  real POST was refused 403 minutes later. A probe that can only come back
+  clean is worse than none: it moves the diagnosis in the wrong direction. It
+  now POSTs at the COLLECTION (the exact call the send makes, and the one place
+  authorization is reached first) with an empty body carrying no `bill_vendor`
+  envelope, so there is nothing to create from. 403 is refused; any other 4xx
+  is allowed-then-rejected-on-the-payload, which is the answer wanted.
+- THE ANSWER, and it took the split to see it: `GET /bill_vendors` returns 200
+  and `POST /bill_vendors` returns 403, on the same token, same account. The
+  READ scope is granted and the WRITE scope is not.
+- SO THE "SCOPES ARE EVALUATED LIVE" FINDING ABOVE IS WITHDRAWN. It rested on
+  the same token going from refused to 200 on the vendor GET, and there is no
+  evidence that GET was ever refused: every observed failure came through the
+  combined findOrCreateVendor, so all of them could have been (and probably
+  were) the POST from the very first one. The read most likely always worked
+  and ticking the scopes changed nothing. Reasoning from a symptom whose source
+  was ambiguous is the same error this file records three times already.
+- WHICH PUTS THE RECONNECT BACK, and this time it is genuinely untested: the
+  last authorization was at 19:04, the bill scopes were ticked AFTER that, and
+  a token issued before a scope was added does not carry it. Nothing has
+  re-authorized since.
+- `freshbooksFailure` takes `{ write: true }` from the two CREATING call sites,
+  because FreshBooks answers a refused read and a refused write with the same
+  sentence and only the caller knows which it made. The write message names
+  `user:bill_vendors:write` and the reconnect; the read message is unchanged.
+  Telling somebody to check "the bill scopes" when the read half is demonstrably
+  granted describes something half true and points at no action.
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
