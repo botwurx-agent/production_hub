@@ -60,6 +60,13 @@ export type ContactInvalid = { ok: false; field: keyof ContactInput; error: stri
  */
 const EMAIL = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 
+/** The same permissive shape, for anywhere else that takes a typed address
+ * (the remittance composer). One implementation, so two surfaces cannot
+ * disagree about what counts as an address. */
+export function isEmailAddress(s: string): boolean {
+  return EMAIL.test(s.trim());
+}
+
 /**
  * A submission is rejected on the FIRST problem, naming the field, so the form
  * can put the message beside the input the person has to fix.

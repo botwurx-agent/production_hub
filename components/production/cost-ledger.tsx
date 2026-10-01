@@ -32,6 +32,7 @@ import {
   type CostStatus,
 } from "@/lib/costs";
 import { PaymentSchedule } from "@/components/production/payment-schedule";
+import { RemittanceButton } from "@/components/production/remittance-button";
 import {
   FreshbooksBillControl,
   FreshbooksSync,
@@ -48,6 +49,9 @@ export type RosterOption = {
   company: string | null;
   role: string | null;
   rate: number | null;
+  /** Optional because the email path's roster (draftCostFromAttachment) does
+   * not select it; only the budget page needs somewhere to send a remittance. */
+  email?: string | null;
 };
 
 const money = new Intl.NumberFormat("en-US", {
@@ -146,6 +150,17 @@ function overRate(c: ProjectCost, roster: RosterOption[]): boolean {
   return check?.status === "over";
 }
 
+/**
+ * Where a remittance would go, or null. A cost only has an address when it was
+ * filed against a roster contact: a till receipt from a shop has nobody to
+ * write to, which is why the control hides rather than offering a dead send.
+ */
+function vendorEmail(c: ProjectCost, roster: RosterOption[]): string | null {
+  if (!c.contact_id) return null;
+  const email = roster.find((r) => r.id === c.contact_id)?.email;
+  return email?.trim() ? email.trim() : null;
+}
+
 export function CostLedger({
   projectId,
   costs,
@@ -154,12 +169,20 @@ export function CostLedger({
   payments,
   todayIso,
   freshbooks,
+  projectTitle,
+  studioName,
+  emailEnabled,
 }: {
   projectId: string;
   costs: ProjectCost[];
   lines: BudgetLine[];
   roster: RosterOption[];
   payments: CostPayment[];
+  /** Named in the remittance so a vendor knows which job the money is for. */
+  projectTitle: string | null;
+  studioName: string;
+  /** False when Resend is not configured: no remittance control at all. */
+  emailEnabled: boolean;
   /** Computed on the server, so overdue cannot differ after hydration. */
   todayIso: string;
   /** Null when FreshBooks is not connected: no pay-via controls at all. */
@@ -376,6 +399,15 @@ export function CostLedger({
                 </button>
                 {freshbooks && (c.fb_bill_id || summary.owed > 0) && (
                   <FreshbooksBillControl cost={c} onSend={() => setBilling(c)} />
+                )}
+                {emailEnabled && summary.state === "paid" && vendorEmail(c, roster) && (
+                  <RemittanceButton
+                    projectId={projectId}
+                    cost={c}
+                    email={vendorEmail(c, roster)!}
+                    projectTitle={projectTitle}
+                    studioName={studioName}
+                  />
                 )}
                 {c.storage_path && <DocButton costId={c.id} name={c.file_name} />}
                 <button

@@ -1433,7 +1433,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0111. Recent: 0111 =
+files in supabase/migrations. THROUGH 0112. Recent: 0112 =
+cost_remittance_sent (project_costs.remittance_sent_at: when the studio told a
+vendor their payment was on its way, so a re-send is a deliberate repeat); 0111 =
 cost_freshbooks_bill (project_costs.fb_bill_id / fb_bill_status /
 fb_bill_outstanding / fb_synced_at: the link from a cost to the FreshBooks
 bill it was sent across as); 0110 =
@@ -4457,6 +4459,68 @@ Their three-day job came to 56 rows typed by hand.
   becoming a new day. NOT verified end to end: a dev server in a Claude Code
   session cannot reach Supabase, so the write path has to be tried on the
   operator's machine. The renumber is the part to watch.
+
+### Tell the vendor yourself: remittance (migration 0112) — BUILT
+Operator, while looking at Veronica Laramie's bill: her banking details never
+went to FreshBooks, and there is nowhere in the app to put them. Correct on
+both counts, and the thread ended somewhere better than it started.
+- BANK DETAILS ARE NOT OURS TO HOLD, and this is the decision to keep. The
+  FreshBooks vendor object takes name, address, currency, tax defaults and an
+  `account_number` (which is the studio's reference WITH the vendor, not a bank
+  account), and has NO routing or bank fields at all. That is consistent with
+  the fact already recorded here: their API can only RECORD a payment, never
+  initiate one. We cannot move money, so holding the credentials that move it
+  is pure liability: no 2FA, no audit log, Sentry inert, and NACHA requires ACH
+  credentials to be stored encrypted and unreadable. Do not add a bank field to
+  `contacts`, and do not "fix" the vendor payload to carry one.
+- WORTH KNOWING, since nobody decided it: the contact Files pane invites "W-9s",
+  and a freelancer's W-9 routinely arrives with a voided check or a deposit form
+  attached. So banking documents may already be sitting in the assets bucket as
+  ordinary files. Not acted on, flagged to the operator.
+- THE VENDOR PAYLOAD IS DELIBERATELY LEFT BARE (name, currency, language). We
+  hold the roster's email and could send it, and the operator chose NOT to, so
+  that the payment notification comes from us rather than from FreshBooks. One
+  honest limit stated at the time: withholding it does not guarantee their
+  silence, since she has to give them bank details somehow and that onboarding
+  will collect an address. Watch the first real payment rather than assuming.
+- WHY OUR SIDE IS THE BETTER SIDE, and it is not preference: FreshBooks knows a
+  bill to "Veronica Laramie" for $2,400 was paid. It does not know the money was
+  prop styling on Hint Water against invoice 1043. Naming the job is what stops
+  the follow-up email, and it works whether or not they also notify.
+- THE WORDING IS A CLAIM ABOUT MONEY, which is why lib/remittance.ts is a module
+  rather than a string in the action. `billIsPaid` is true once a payment is
+  RECORDED or INITIATED, and ACH takes several business days to land, so the
+  email says the payment has been SENT and that it takes time to arrive. It
+  never says "you have been paid". Six forbidden phrasings are asserted against.
+- A DELIBERATE PRESS, NEVER AUTOMATIC. The paid status is read back when the
+  budget page opens, so an email hanging off that would go out whenever somebody
+  browsed: days late, at eleven at night, or twice if two people open the page.
+  Outward email about money gets a human commit, the same contract Runner and
+  the meal round hold.
+- THE PAID CHECK IS RE-DERIVED SERVER-SIDE through the same `summarizePayments`
+  the tile and the dashboard use, because the button is presentation and the
+  thing that must not happen is an email about money nobody paid.
+- THE CONTROL IS NARROW BY CONSTRUCTION, so the already-crowded row does not
+  bloat: it needs the cost to read PAID, to carry a `contact_id`, for that
+  roster contact to have an email, and for Resend to be configured. A till
+  receipt from a shop has nobody to write to, so it simply has no button rather
+  than offering a dead send. Verified in Chromium across all five cases.
+- IT STAYS PRESSABLE AFTER SENDING ("they never got it", the affordance the
+  invite emails already have), but turns green and its tooltip names the date,
+  so a second press is a deliberate repeat. `project_costs.remittance_sent_at`
+  (0112) is that record, stamped ONLY after the send succeeds, so a failed send
+  leaves the row reading as untold rather than claiming it went.
+- `isEmailAddress` was exported from lib/contact.ts rather than copied, so the
+  contact form and the remittance composer cannot disagree about what counts as
+  an address. `exactMoney` is in lib/remittance.ts because lib/format money()
+  rounds to WHOLE DOLLARS, and a remittance states a figure somebody reconciles
+  against their bank.
+- 39 assertions in the scratchpad: the settlement wording, cents surviving,
+  NaN degrading to $0.00 rather than printing NaN, absent facts dropping out
+  instead of leaving dangling separators, and CRLF stripped from every field
+  that reaches the subject or the body.
+- NOT verified end to end: a dev server in a Claude Code session cannot reach
+  Supabase or Resend, so the first real send is the test.
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
 Operator, on the receipt flow: "theres a yellow confirmation window that pops

@@ -48,6 +48,9 @@ export function BudgetTable({
   payments,
   todayIso,
   freshbooks,
+  projectTitle,
+  studioName,
+  emailEnabled,
 }: {
   projectId: string;
   lines: BudgetLine[];
@@ -60,6 +63,10 @@ export function BudgetTable({
   payments: CostPayment[];
   todayIso: string;
   freshbooks: FreshbooksState | null;
+  /** Passed straight to the ledger for the remittance email. */
+  projectTitle: string | null;
+  studioName: string;
+  emailEnabled: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<BudgetLine[]>(lines);
@@ -333,6 +340,9 @@ export function BudgetTable({
           payments={payments}
           todayIso={todayIso}
           freshbooks={freshbooks}
+          projectTitle={projectTitle}
+          studioName={studioName}
+          emailEnabled={emailEnabled}
         />
       </div>
     </div>

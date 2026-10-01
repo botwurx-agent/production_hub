@@ -2134,6 +2134,7 @@ export type Database = {
           fb_bill_status: string | null;
           fb_bill_outstanding: number | null;
           fb_synced_at: string | null;
+          remittance_sent_at: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -2159,6 +2160,7 @@ export type Database = {
           fb_bill_status?: string | null;
           fb_bill_outstanding?: number | null;
           fb_synced_at?: string | null;
+          remittance_sent_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -2184,6 +2186,7 @@ export type Database = {
           fb_bill_status?: string | null;
           fb_bill_outstanding?: number | null;
           fb_synced_at?: string | null;
+          remittance_sent_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
