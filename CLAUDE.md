@@ -1937,20 +1937,33 @@ open, so keep the two apart.
   that API. Unproven, cheap either way.
 - THE NEXT ATTEMPT WAS THE DIAGNOSIS, and it answered on the first press:
   "FreshBooks would not allow us to look this vendor up: You do not have access
-  to bill vendors." So it is the bill_vendors endpoint, refused by
-  ENTITLEMENT, and candidate (a) is the answer: Accounts Payable (bills and
-  vendors) is a Premium and Select plan feature, so on Lite or Plus the whole
-  Bill Pay path is closed and no reconnect, scope tick or code change opens it.
-  That is the probe's answer, and it is the operator's call whether a plan
-  upgrade is worth it. Everything else in the slice is built and waiting.
-- SO THE ONE KNOWN REFUSAL EXPLAINS ITSELF now (`knownCause` in
-  lib/freshbooks-error.ts): FreshBooks names the endpoint and not the reason,
-  which reads as something the studio did wrong, so the message adds the plan
-  sentence. DELIBERATELY ONE ENTRY: a list of guessed causes is worse than
-  FreshBooks' own words, and the tests assert that a different 403
-  ("Insufficient scope", "The client is not active") is NOT blamed on the plan
-  and that a 401 carrying the same words stays a sign-in problem. 149
-  assertions.
+  to bill vendors." So it is the bill_vendors endpoint, refused on PERMISSION
+  rather than on auth: the token is good and the expense categories load on it.
+- THEN THE PLAN ANSWER WAS WRONG, and the correction is the lesson. A search
+  result says Accounts Payable is a Premium and Select feature, so candidate
+  (a) was called the answer and the app was taught to say so. The operator
+  replied that they pay vendors through FreshBooks routinely and had just paid
+  one. So the plan has the feature, and reasoning from a general pricing page
+  to THIS account was the same mistake this file already records twice (the
+  200MB PDF, where a Supabase global was blamed without the request ever
+  reaching Supabase): a documented default is not evidence about the account in
+  front of you.
+- THE SCOPES ARE A SECOND, INDEPENDENT GATE and are now the leading candidate.
+  FreshBooks grants only what the DEVELOPER APP is configured to request, so an
+  app registered before the bill scopes were added is refused on a plan that
+  has the feature, with a message that names the endpoint rather than the
+  scope. Our own note under migration 0111 warned about exactly this and it was
+  passed over.
+- THE DECISIVE TEST IS CHEAP AND IS WHAT grantedScope BOUGHT: reconnect, which
+  now stores what FreshBooks GRANTED rather than what we asked for, then read
+  `billing_accounts.scope`. Missing `user:bill_vendors:write` proves it. A
+  token refresh writes the same thing within twelve hours without anybody
+  pressing anything.
+- `knownCause` NAMES BOTH GATES AND PICKS NEITHER, which is the correction in
+  code: the first version asserted the plan and sent the operator to check the
+  one thing that was already fine. Tests assert it does not name a plan tier
+  and that reconnect is offered as the step AFTER ticking the scopes, never as
+  a thing to try blindly. 151 assertions.
 - The inline category error in the send window was `text-red` on `bg-red-bg`,
   about 1.86:1, the contrast failure recorded twice already (0109's day chips,
   ReadBanner). It now carries the diagnostic sentence, so it was measured and

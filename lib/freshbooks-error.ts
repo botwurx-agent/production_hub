@@ -83,20 +83,28 @@ export function freshbooksReason(body: string | null | undefined): string | null
 }
 
 /**
- * A refusal we have seen and know the cause of, explained.
+ * A refusal we have seen, with the places worth checking named.
  *
  * ONE ENTRY ONLY, and it should stay that way unless a second refusal is
  * actually met: a list of guessed-at causes is worse than FreshBooks' own
  * words. This one was earned on the first real bill (operator, 2026-10-01).
  * FreshBooks answered "You do not have access to bill vendors", which names
  * the endpoint and not the reason, so it reads as something the studio did
- * wrong. Bills and vendors are the Accounts Payable feature, which FreshBooks
- * sells on its Premium and Select plans, so on a Lite or Plus account the
- * whole Bill Pay path is closed no matter what is reconnected or ticked.
+ * wrong.
+ *
+ * IT NAMES TWO CAUSES AND PICKS NEITHER, which is the correction to a first
+ * version that blamed the plan outright. Bills and vendors are the Accounts
+ * Payable feature, so a plan without it is refused; but the SCOPES are a
+ * second, independent gate, and FreshBooks grants only what the developer app
+ * is configured to request, so an app registered before the bill scopes were
+ * added is refused on a plan that has the feature. The operator hit exactly
+ * that: they pay vendors in FreshBooks every week. Naming one cause as the
+ * answer sent them to check a plan that was never the problem, which is worse
+ * than naming both.
  */
 function knownCause(reason: string): string | null {
   if (/access to bill[ _](vendors|payments)|access to bills\b/i.test(reason)) {
-    return "That is the Accounts Payable feature, which FreshBooks sells on its Premium and Select plans.";
+    return "That is Accounts Payable. Check that your FreshBooks plan includes it and that the bill scopes are ticked on your FreshBooks developer app, then reconnect.";
   }
   return null;
 }
@@ -131,7 +139,7 @@ export function freshbooksFailure(
     }
     const cause = knownCause(reason);
     return cause
-      ? `FreshBooks would not allow us to ${what}: ${reason} ${cause} Reconnecting will not help.`
+      ? `FreshBooks would not allow us to ${what}: ${reason} ${cause}`
       : `FreshBooks would not allow us to ${what}: ${reason} Reconnecting will not help, this is a permission on your FreshBooks account.`;
   }
 
