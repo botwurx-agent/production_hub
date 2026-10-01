@@ -4,8 +4,8 @@ import { connectingStudioId } from "@/lib/active-studio";
 import {
   exchangeCode,
   getIdentity,
+  grantedScope,
   FRESHBOOKS_REDIRECT_PATH,
-  FRESHBOOKS_SCOPE,
 } from "@/lib/freshbooks";
 
 // Completes the FreshBooks OAuth flow: exchanges the code, resolves the
@@ -65,7 +65,9 @@ export async function GET(request: NextRequest) {
       fb_account_id: identity.accountId,
       fb_business_id: identity.businessId,
       fb_identity_email: identity.email,
-      scope: FRESHBOOKS_SCOPE,
+      // What FreshBooks says it granted, not what we asked for: see
+      // grantedScope. Storing the request made the scope check unable to fail.
+      scope: grantedScope(tokens),
     },
     { onConflict: "studio_id,provider" },
   );

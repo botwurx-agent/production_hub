@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { refreshTokens } from "@/lib/freshbooks";
+import { grantedScope, refreshTokens } from "@/lib/freshbooks";
 import type { BillingAccount, Database } from "@/lib/database.types";
 
 // Server-side FreshBooks connection helpers. Kept separate from lib/freshbooks.ts
@@ -47,6 +47,12 @@ export async function getFreshbooksAuth(
         access_token: t.access_token,
         refresh_token: t.refresh_token,
         token_expiry: expiry,
+        // A refresh reports the granted scope too, so a connection stored
+        // before grantedScope existed (holding the scope we REQUESTED, which
+        // could not fail a check) corrects itself on the next refresh. Only
+        // when FreshBooks names one: an omitted field means granular scopes
+        // are off, and overwriting with the request would tell us nothing new.
+        ...(t.scope?.trim() ? { scope: grantedScope(t) } : {}),
       })
       .eq("id", account.id);
     return { token: t.access_token, accountId: account.fb_account_id };

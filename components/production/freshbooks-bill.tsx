@@ -276,7 +276,16 @@ export function SendBillModal({
               FreshBooks expense category
             </label>
             {loadError ? (
-              <p className="rounded-[10px] bg-red-bg px-3 py-2 text-sm text-red">{loadError}</p>
+              // The words are in the text colour, not the hue: red on red-bg
+              // measures about 1.86:1, and this line now carries the one
+              // sentence that says why FreshBooks refused. Same conclusion as
+              // ReadBanner and the schedule's day-kind chips.
+              <p
+                className="rounded-[10px] px-3 py-2 text-sm leading-relaxed text-text"
+                style={{ background: "var(--h-red-bg)", border: "1px solid var(--h-red)" }}
+              >
+                {loadError}
+              </p>
             ) : categories === null ? (
               <p className="text-sm text-text-faint">Loading from FreshBooks...</p>
             ) : (

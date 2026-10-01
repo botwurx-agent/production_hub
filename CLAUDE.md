@@ -1888,6 +1888,62 @@ bill, and let that answer the questions the docs could not.
   after sending does not update the bill; deleting a cost leaves its bill in
   FreshBooks (the confirm says so).
 
+### The first real bill was refused, and the app sent them in a circle — FIXED
+The live test the Bill Pay probe was built for happened (operator, 2026-10-01,
+a $3,959.83 cost on Hint Dessert Flavors) and the send was refused. What it
+found was mostly OUR bug, and the FreshBooks question underneath it is still
+open, so keep the two apart.
+- THE TOAST WAS A LOOP WITH NO EXIT. `readable()` mapped every 401 AND every
+  403 onto "FreshBooks needs one reconnect to allow bills". For a 401 that is
+  right. For a 403 it is a lie: the call was authenticated and is not
+  permitted, so reconnecting changes nothing and the same message comes back
+  forever. They reconnected, and were told to reconnect.
+- THE UP-FRONT SCOPE CHECK COULD NOT FAIL, which is why it passed while the
+  send was refused. The callback stored `scope: FRESHBOOKS_SCOPE`, OUR OWN
+  CONSTANT, and ignored the `scope` the token response reports. So
+  `hasBillScopes` compared the constant against itself. The one thing it could
+  catch was a connection older than the constant (what it was built for, and
+  that part worked); the thing it LOOKED like it caught, a scope FreshBooks
+  declined to grant, was invisible to it. `grantedScope(tokens)` now stores
+  what was granted, falling back to the request when FreshBooks omits the
+  field (it does when granular scopes are off on the app, where access is
+  broad). A refresh corrects a row stored the old way, so existing connections
+  heal without a reconnect. hasBillScopes is STILL only as good as what was
+  stored, so the send path must handle a refusal regardless.
+- FRESHBOOKS' OWN MESSAGE WAS BEING THROWN AWAY IN BOTH DIRECTIONS: it was
+  flattened into an Error message nobody read, and `reportError` sent it to
+  Sentry, which is INERT here (NEXT_PUBLIC_SENTRY_DSN has never been set). So
+  the single sentence naming the cause reached no one. FreshbooksError now
+  carries `body`, and lib/freshbooks-error.ts (pure, not server-only, 132
+  assertions) reads a reason out of the three shapes they answer with and
+  writes the sentence, status code included, so a screenshot is a diagnosis.
+  Bug the tests caught: a bare `error` slug ("unauthenticated") was being
+  appended to the real description, so a good message picked up a slug on the
+  end of it. The slug is a fallback, never an addition.
+- THE VENDOR AND THE BILL ARE CAUGHT SEPARATELY NOW. One try/catch wrapped
+  both, so a refusal could not say whether `bill_vendors` or `bills` said no,
+  which is the axis the remaining question turns on.
+- WHAT THE EVIDENCE NARROWS IT TO, since this still is not answered: the
+  expense categories LOADED (the Send button is disabled without a category),
+  so the token is good, `expenses:read` works, and a blanket 401 is ruled out.
+  `fb_bill_id` stayed null, so no bill was created and nothing was sent. That
+  leaves a 403 on the bill_vendors or bills endpoints specifically, which is
+  either (a) the FreshBooks PLAN not including Accounts Payable, or (b)
+  granular scopes on their developer app not having the bill scopes ticked.
+  Both are on the operator's side and both are checkable. A third candidate is
+  OURS and was fixed on spec rather than on evidence: `apiSend` never sent the
+  `Api-Version: alpha` header that `apiGet` has always sent, which is an
+  asymmetry rather than a decision, and bill vendors is the newest part of
+  that API. Unproven, cheap either way.
+- THE NEXT ATTEMPT IS THE DIAGNOSIS. It will name which feature refused, quote
+  FreshBooks' reason, and will not mention reconnecting unless a reconnect is
+  genuinely the answer.
+- The inline category error in the send window was `text-red` on `bg-red-bg`,
+  about 1.86:1, the contrast failure recorded twice already (0109's day chips,
+  ReadBanner). It now carries the diagnostic sentence, so it was measured and
+  fixed the same way: words in the text colour, hue on the tint and border.
+  12.70 / 11.22 / 9.52 across light, paper and dark.
+
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
 later, and the ledger could only express "one cost, paid once". A cost is now a

@@ -14,6 +14,7 @@ import {
   listExpenseCategories,
   type FbCategory,
 } from "@/lib/freshbooks";
+import { freshbooksFailure } from "@/lib/freshbooks-error";
 import { logWrite, reportError } from "@/lib/log";
 
 // Hand a cost to FreshBooks to be PAID, and learn when it was.
@@ -49,11 +50,25 @@ async function freshbooks(): Promise<Ready> {
   }
 }
 
-function readable(e: unknown, fallback: string): string {
-  if (e instanceof FreshbooksError && (e.status === 401 || e.status === 403)) {
-    return RECONNECT;
+/**
+ * What went wrong, in words the producer can act on.
+ *
+ * THIS USED TO ANSWER "RECONNECT" FOR BOTH 401 AND 403, which is a loop with
+ * no exit on a 403: the call was authenticated, reconnecting changes nothing,
+ * and the same message comes back next time. It is the bug the operator hit on
+ * the first real bill. lib/freshbooks-error.ts splits the two and quotes
+ * FreshBooks' own reason, which was previously only reaching Sentry, and
+ * Sentry is inert here.
+ *
+ * `what` is the verb phrase for the call being made, so a screenshot of the
+ * toast says which step failed. It does not name FreshBooks: every sentence
+ * these go into already starts with it.
+ */
+function readable(e: unknown, what: string): string {
+  if (e instanceof FreshbooksError) {
+    return freshbooksFailure(e.status, e.body, what);
   }
-  return fallback;
+  return `Could not ${what}. ${e instanceof Error ? e.message : "Unknown error."}`.trim();
 }
 
 /** The expense categories a bill line can be filed under. Loaded when the send
@@ -71,7 +86,7 @@ export async function getBillCategories(): Promise<
     return { categories };
   } catch (e) {
     reportError("freshbooks.categories", e);
-    return { error: readable(e, "Could not load categories from FreshBooks.") };
+    return { error: readable(e, "load your expense categories") };
   }
 }
 
@@ -107,13 +122,27 @@ export async function sendCostToFreshbooks(
 
   const issueDate = cost.invoice_date || new Date().toISOString().slice(0, 10);
 
+  // THE VENDOR AND THE BILL ARE CAUGHT SEPARATELY, so a refusal names which
+  // one. They are different FreshBooks features behind different scopes
+  // (bill_vendors and bills), and when the first real send was refused there
+  // was no way to tell which had said no: one catch reported both as "the
+  // bill". The expense categories load through a third, and that one is known
+  // to work, since the send button is not enabled until it has.
   let vendorCreated = false;
-  let bill;
+  let vendorId: string;
   try {
     const v = await findOrCreateVendor(fb.accountId, fb.token, vendor);
     vendorCreated = v.created;
+    vendorId = v.vendorId;
+  } catch (e) {
+    reportError(`freshbooks.vendor ${costId}`, e);
+    return { error: `${readable(e, "look this vendor up")} Nothing was sent.` };
+  }
+
+  let bill;
+  try {
     bill = await createBill(fb.accountId, fb.token, {
-      vendorId: v.vendorId,
+      vendorId,
       categoryId,
       issueDate,
       dueDate: cost.due_date,
@@ -123,7 +152,11 @@ export async function sendCostToFreshbooks(
     });
   } catch (e) {
     reportError(`freshbooks.sendBill ${costId}`, e);
-    return { error: readable(e, "FreshBooks did not accept the bill. Nothing was sent.") };
+    // Nothing is linked, so nothing is owed in FreshBooks and a retry is safe
+    // once whatever it named is dealt with. A vendor created a moment ago does
+    // stay behind, which is a name in a list rather than a bill, and the next
+    // attempt reuses it.
+    return { error: `${readable(e, "create the bill")} Nothing was sent.` };
   }
 
   const { error } = await supabase
@@ -171,7 +204,9 @@ export async function syncFreshbooksBills(projectId: string): Promise<
   const now = new Date().toISOString();
   let newlyPaid = 0;
   let failed = 0;
-  let scopeProblem = false;
+  // The reason every read was refused, when they all were. A boolean here used
+  // to become the reconnect message, with the same 403 loop as the send path.
+  let blocked: string | null = null;
 
   await Promise.all(
     open.map(async (c) => {
@@ -181,7 +216,7 @@ export async function syncFreshbooksBills(projectId: string): Promise<
       } catch (e) {
         failed++;
         if (e instanceof FreshbooksError && (e.status === 401 || e.status === 403)) {
-          scopeProblem = true;
+          blocked = readable(e, "read your bills back");
         }
         reportError(`freshbooks.syncBill ${c.id}`, e);
         return;
@@ -213,7 +248,9 @@ export async function syncFreshbooksBills(projectId: string): Promise<
     }),
   );
 
-  if (scopeProblem && failed === open.length) return { error: RECONNECT };
+  // Only when NOTHING could be read: one refused bill among many is reported
+  // as a count, since it is probably that one bill rather than the connection.
+  if (blocked && failed === open.length) return { error: blocked };
   revalidatePath(`/projects/${projectId}/budget`);
   if (newlyPaid > 0) revalidatePath(`/projects/${projectId}`);
   return { ok: true, checked: open.length, newlyPaid, failed };

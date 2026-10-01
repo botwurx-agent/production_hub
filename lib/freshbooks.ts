@@ -22,6 +22,11 @@ export type FreshbooksTokens = {
   // seconds until the access token expires (typically ~43200 = 12h)
   expires_in: number;
   created_at?: number;
+  /** The scope FreshBooks GRANTED, which is not always the scope we asked
+   * for: an app with granular scopes enabled grants only what is ticked on
+   * it. Absent when granular scopes are off, in which case access is broad
+   * and the request is the best record we have. */
+  scope?: string;
 };
 
 function clientId() {
@@ -61,11 +66,36 @@ const SCOPES = [
   "user:expenses:read",
 ];
 
-/** Stored on billing_accounts.scope at connect time, so the app can tell a
- * connection made before bills existed and ask for a reconnect up front
- * rather than letting the first send fail. */
+/** What we ASK for. What gets stored on billing_accounts.scope is what
+ * FreshBooks says it GRANTED, with this as the fallback when it does not say
+ * (see grantedScope). */
 export const FRESHBOOKS_SCOPE = SCOPES.join(" ");
 
+/**
+ * The scope to record for a connection.
+ *
+ * THE CALLBACK USED TO STORE FRESHBOOKS_SCOPE, our own constant, which made
+ * hasBillScopes a tautology: it compared the constant against itself and
+ * passed for every connection made after the constant gained the bill scopes.
+ * So the one thing it could catch was a connection older than the constant,
+ * which is what it was built for, and the thing it LOOKED like it caught, a
+ * scope FreshBooks declined to grant, it could never see. The up-front check
+ * therefore said the connection was fine and the send was refused anyway.
+ *
+ * Falls back to the request when FreshBooks omits the field, which it does
+ * when the app has granular scopes off, because then access is broad and
+ * recording nothing would read as a connection with no permissions at all.
+ */
+export function grantedScope(tokens: FreshbooksTokens): string {
+  const granted = (tokens.scope ?? "").trim();
+  return granted || FRESHBOOKS_SCOPE;
+}
+
+/** Whether a stored scope covers paying bills. Only as good as what was
+ * stored: a connection recorded before grantedScope existed holds the
+ * requested scope, so it can report bills as allowed and still be refused.
+ * The send path has to handle a refusal regardless, which is what
+ * lib/freshbooks-error.ts is for. */
 export function hasBillScopes(scope: string | null | undefined): boolean {
   if (!scope) return false;
   const granted = new Set(scope.split(/\s+/));
@@ -123,7 +153,11 @@ export function refreshTokens(refreshToken: string) {
 /** A FreshBooks refusal with its HTTP status, so a caller can tell "this
  * connection lacks the scope" (401/403) from anything else. */
 export class FreshbooksError extends Error {
-  constructor(message: string, readonly status: number) {
+  /** `body` is FreshBooks' own response, kept separately from the message so
+   * lib/freshbooks-error.ts can read the reason out of it. It used to be
+   * flattened into the message and then dropped on the floor, which is why a
+   * refused bill could only ever say "something went wrong". */
+  constructor(message: string, readonly status: number, readonly body = "") {
     super(message);
   }
 }
@@ -141,6 +175,7 @@ async function apiGet<T>(path: string, token: string): Promise<T> {
     throw new FreshbooksError(
       `FreshBooks GET ${path} failed (${res.status}): ${text}`,
       res.status,
+      text,
     );
   }
   return (await res.json()) as T;
@@ -158,6 +193,12 @@ async function apiSend<T>(
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
       "Content-Type": "application/json",
+      // The read helper has always sent this and the write helper never did,
+      // which is an asymmetry rather than a decision: bill vendors and bill
+      // payments are the newest part of this API, so a write is at least as
+      // likely to need the header as a read. A CANDIDATE cause of the refused
+      // bill, not a proven one, and cheap either way.
+      "Api-Version": "alpha",
     },
     body: JSON.stringify(body),
   });
@@ -166,6 +207,7 @@ async function apiSend<T>(
     throw new FreshbooksError(
       `FreshBooks ${method} ${path} failed (${res.status}): ${text}`,
       res.status,
+      text,
     );
   }
   return (await res.json()) as T;
