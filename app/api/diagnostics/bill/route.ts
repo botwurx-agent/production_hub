@@ -5,14 +5,20 @@
 // AFTER four rounds of guessing, and the thing that finally answered it was
 // printing the RESPONSE BODY rather than the status code: their vendor list
 // returned 200 with an empty array for a week while we read that as working.
-// So this prints every body from the first press, on success as well as on
-// failure, and catches every step SEPARATELY so a refusal names which call
-// was refused. One try/catch around a read and a write is what sent two days
-// of diagnosis at an endpoint that had been fine the whole time.
+// BILL does the same in its own way, answering HTTP 200 with
+// `response_status: 1` and the real error inside, so a status code is worth
+// even less here. Every body is printed, success included, and every step is
+// caught SEPARATELY so a refusal names which call was refused.
 //
-// SANDBOX ONLY, AND NOT CONFIGURABLE. The hosts below are hard-coded rather
-// than read from the environment, so no setting, typo or stray variable can
-// point this at the real books. gateway.prod and api.bill.com are real money.
+// IT FINDS ITS OWN ENVIRONMENT. BILL's sandbox and production share no data
+// and need different developer keys, and their sign-up does not make clear
+// which you have ended up with. So step one asks BOTH hosts which
+// organizations the key can see. That is a read: it creates nothing, on
+// either side.
+//
+// WRITES ARE SANDBOX ONLY, AS AN INVARIANT RATHER THAN A SETTING. If the key
+// turns out to be a production key, the create and pay steps are refused by
+// this file no matter what is in the URL.
 //
 // Staff only, same gate as the FreshBooks probe.
 import { NextResponse } from "next/server";
@@ -21,28 +27,34 @@ import { getStudioContext } from "@/lib/studio";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// The sandbox. Never the production hosts, and never from env.
-const API = "https://gateway.stage.bill.com/connect";
-const LIST_ORGS = "https://api-stage.bill.com/api/v2/ListOrgs.json";
+const HOSTS = {
+  sandbox: { api: "https://gateway.stage.bill.com/connect", orgs: "https://api-stage.bill.com/api/v2/ListOrgs.json" },
+  production: { api: "https://gateway.prod.bill.com/connect", orgs: "https://api.bill.com/api/v2/ListOrgs.json" },
+} as const;
+
+type Env = keyof typeof HOSTS;
 
 // Enough body to diagnose from, not so much that a stack of them is a wall.
 const BODY_CHARS = 1500;
 
-type Step = {
-  what: string;
-  request: string;
-  status: number;
-  ok: boolean;
-  body: string;
-};
+type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
-/** A session id in a body is a live credential, so it never leaves here. */
+/** A session id or a password in a body is a live credential, so it never
+ *  leaves here, even though only the operator can open this page. */
 function redact(text: string, secrets: string[]) {
   let out = text;
-  for (const s of secrets) {
-    if (s && s.length > 6) out = out.split(s).join("[redacted]");
-  }
+  for (const s of secrets) if (s && s.length > 6) out = out.split(s).join("[redacted]");
   return out;
+}
+
+/** BILL answers 200 and puts the failure in the body, so "did it work" is a
+ *  question about the body, never about the status. */
+function billOk(text: string) {
+  try {
+    const j = JSON.parse(text) as { response_status?: number };
+    if (typeof j.response_status === "number") return j.response_status === 0;
+  } catch {}
+  return true;
 }
 
 export async function GET(req: Request) {
@@ -56,22 +68,16 @@ export async function GET(req: Request) {
   const username = process.env.BILL_USERNAME ?? "";
   const password = process.env.BILL_PASSWORD ?? "";
   const orgId = process.env.BILL_ORG_ID ?? "";
-
   const missing = [
     !devKey && "BILL_DEV_KEY",
     !username && "BILL_USERNAME",
     !password && "BILL_PASSWORD",
   ].filter(Boolean);
   if (missing.length) {
-    return NextResponse.json(
-      { error: `Not set in this environment: ${missing.join(", ")}` },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: `Not set here: ${missing.join(", ")}` }, { status: 400 });
   }
 
   const url = new URL(req.url);
-  // Writes and the payment are each a separate deliberate press, even in a
-  // sandbox: a payment is worth asking for on purpose.
   const write = url.searchParams.get("write") === "1";
   const pay = url.searchParams.get("pay") === "1";
 
@@ -79,19 +85,71 @@ export async function GET(req: Request) {
   const secrets = [password, devKey];
   let sessionId = "";
 
-  /** One call. Never throws: a probe that falls over on the first refusal
+  function record(what: string, request: string, status: number, ok: boolean, text: string) {
+    steps.push({
+      what,
+      request,
+      status,
+      ok,
+      // ALWAYS, success included. An empty list behind a 200 is the failure
+      // mode that cost the last round, and only the body shows it.
+      body: redact(text, [...secrets, sessionId]).slice(0, BODY_CHARS),
+    });
+  }
+
+  /** Which organizations can this key see on this host? Read only. */
+  async function askOrgs(env: Env) {
+    let status = 0;
+    let text = "";
+    try {
+      const res = await fetch(HOSTS[env].orgs, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ devKey, userName: username, password }),
+      });
+      status = res.status;
+      text = await res.text();
+    } catch (e) {
+      text = `NETWORK FAILURE: ${e instanceof Error ? e.message : "unknown"}`;
+    }
+    const ok = status === 200 && billOk(text);
+    record(`is this a ${env} key?`, `POST ${HOSTS[env].orgs}`, status, ok, text);
+    return ok;
+  }
+
+  // STEP 0. Ask both, because their sign-up does not say which you got.
+  const sandboxOk = await askOrgs("sandbox");
+  const prodOk = sandboxOk ? false : await askOrgs("production");
+  const env: Env | null = sandboxOk ? "sandbox" : prodOk ? "production" : null;
+
+  if (!env) {
+    return NextResponse.json({
+      environment: "unknown",
+      reading:
+        "Neither host accepted this developer key. Read the two bodies: 'Developer key is invalid' on both means the key is not active yet or was copied with a stray character. Nothing was created.",
+      steps,
+    });
+  }
+
+  const API = HOSTS[env].api;
+
+  if (!orgId) {
+    return NextResponse.json({
+      environment: env,
+      reading:
+        `The key works and it is a ${env.toUpperCase()} key. The body above lists the organizations it can see; an organization id begins with 008. Add it as BILL_ORG_ID in Vercel and press this again.` +
+        (env === "production"
+          ? " NOTE: this is production, so this probe will READ only and will refuse to create or pay anything."
+          : ""),
+      steps,
+    });
+  }
+
+  /** One API call. Never throws: a probe that falls over on the first refusal
    *  tells you less than the one it replaces. */
-  async function call(
-    what: string,
-    method: "GET" | "POST",
-    path: string,
-    body?: unknown,
-  ): Promise<{ status: number; ok: boolean; json: unknown }> {
+  async function call(what: string, method: "GET" | "POST", path: string, body?: unknown) {
     const target = `${API}/v3${path}`;
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      devKey,
-    };
+    const headers: Record<string, string> = { "Content-Type": "application/json", devKey };
     if (sessionId) headers.sessionId = sessionId;
     let status = 0;
     let ok = false;
@@ -103,59 +161,19 @@ export async function GET(req: Request) {
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       status = res.status;
-      ok = res.ok;
       text = await res.text();
+      // After the body, never before: with BILL the body is what says whether
+      // the call worked, and res.ok alone is close to meaningless.
+      ok = res.ok && billOk(text);
     } catch (e) {
       text = `NETWORK FAILURE: ${e instanceof Error ? e.message : "unknown"}`;
     }
-    steps.push({
-      what,
-      request: `${method} ${target}`,
-      status,
-      ok,
-      // ALWAYS, success included. An empty list behind a 200 is the failure
-      // mode that cost the last round, and only the body shows it.
-      body: redact(text, [...secrets, sessionId]).slice(0, BODY_CHARS),
-    });
+    record(what, `${method} ${target}`, status, ok, text);
     let json: unknown = null;
     try {
       json = JSON.parse(text);
     } catch {}
     return { status, ok, json };
-  }
-
-  // STEP 0: which organizations does this login have? Only when we have not
-  // been told, so nobody has to hunt for an id in their UI. It lives on the
-  // older v2 host and takes form encoding, so it is not a call() above.
-  if (!orgId) {
-    let status = 0;
-    let ok = false;
-    let text = "";
-    try {
-      const res = await fetch(LIST_ORGS, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ devKey, userName: username, password }),
-      });
-      status = res.status;
-      ok = res.ok;
-      text = await res.text();
-    } catch (e) {
-      text = `NETWORK FAILURE: ${e instanceof Error ? e.message : "unknown"}`;
-    }
-    steps.push({
-      what: "which organizations does this login have?",
-      request: `POST ${LIST_ORGS}`,
-      status,
-      ok,
-      body: redact(text, secrets).slice(0, BODY_CHARS),
-    });
-    return NextResponse.json({
-      environment: "SANDBOX",
-      reading:
-        "BILL_ORG_ID is not set, so this only asked which organizations exist. An organization id begins with 008. Add the SANDBOX one as BILL_ORG_ID in Vercel, redeploy, and press this again.",
-      steps,
-    });
   }
 
   // STEP 1: sign in. Nothing below means anything without this.
@@ -165,13 +183,11 @@ export async function GET(req: Request) {
     organizationId: orgId,
     devKey,
   });
-  const loginJson = login.json as { sessionId?: string } | null;
-  sessionId = loginJson?.sessionId ?? "";
+  sessionId = (login.json as { sessionId?: string } | null)?.sessionId ?? "";
   if (!sessionId) {
     return NextResponse.json({
-      environment: "SANDBOX",
-      reading:
-        "No sessionId came back, so nothing else could run. If the body names a field, that is the answer.",
+      environment: env,
+      reading: "No sessionId came back, so nothing else could run. The body names the reason.",
       steps,
     });
   }
@@ -180,20 +196,29 @@ export async function GET(req: Request) {
   // BEFORE the payment is the difference between a diagnosis and a mystery.
   await call("session details (is it MFA trusted?)", "GET", "/session");
 
-  // STEP 3: reads, separately, so one being shut cannot hide the other.
+  // STEP 3: the reads, separately, so one being shut cannot hide the other.
   await call("list vendors", "GET", "/vendors?max=5");
   await call("list bills", "GET", "/bills?max=5");
 
-  if (!write) {
+  // THE INVARIANT. Production never writes from here, whatever the URL says.
+  if (env === "production") {
     return NextResponse.json({
-      environment: "SANDBOX",
+      environment: env,
       reading:
-        "Signed in and read. Add ?write=1 to the URL to create a test vendor and a test bill in the sandbox.",
+        "Read only, because this is your real account. The vendor and bill bodies above answer the FreshBooks question: whether a list comes back with your actual rows in it, or empty. Creating and paying need a SANDBOX key.",
       steps,
     });
   }
 
-  // STEP 4: create a vendor. This is the step retyped on every job today.
+  if (!write) {
+    return NextResponse.json({
+      environment: env,
+      reading: "Signed in and read. Add ?write=1 to create a test vendor and a test bill in the sandbox.",
+      steps,
+    });
+  }
+
+  // STEP 4: create a vendor. The step retyped on every job today.
   const stamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
   const vendor = await call("create a vendor", "POST", "/vendors", {
     name: `Studio Flows probe ${stamp}`,
@@ -201,7 +226,7 @@ export async function GET(req: Request) {
   const vendorId = (vendor.json as { id?: string } | null)?.id ?? "";
   if (!vendorId) {
     return NextResponse.json({
-      environment: "SANDBOX",
+      environment: env,
       reading:
         "Stopped at the vendor. If the body lists the fields it wants, that IS the spec, and it is the documentation this session cannot reach.",
       steps,
@@ -221,7 +246,8 @@ export async function GET(req: Request) {
   const billId = (bill.json as { id?: string } | null)?.id ?? "";
   if (!billId) {
     return NextResponse.json({
-      environment: "SANDBOX",
+      environment: env,
+      vendorId,
       reading: "Vendor created. Stopped at the bill, and its body names the shape it wants.",
       steps,
     });
@@ -229,11 +255,10 @@ export async function GET(req: Request) {
 
   if (!pay) {
     return NextResponse.json({
-      environment: "SANDBOX",
+      environment: env,
       vendorId,
       billId,
-      reading:
-        "Vendor and bill both created in the sandbox. Add &pay=1 to try paying it. Sandbox money is not real.",
+      reading: "Vendor and bill both created in the sandbox. Add &pay=1 to try paying it. Sandbox money is not real.",
       steps,
     });
   }
@@ -246,11 +271,11 @@ export async function GET(req: Request) {
   });
 
   return NextResponse.json({
-    environment: "SANDBOX",
+    environment: env,
     vendorId,
     billId,
     reading:
-      "Read the payment body. A refusal naming MFA is a GOOD result: it means the call is permitted and the session needs trusting, which is a flow question rather than a wall.",
+      "Read the payment body. A refusal naming MFA is a GOOD result: the call is permitted and the session needs trusting, which is a flow question rather than a wall.",
     steps,
   });
 }
