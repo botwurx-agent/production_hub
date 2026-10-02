@@ -315,8 +315,8 @@ export async function GET(req: Request) {
     invoice: {
       invoiceNumber: `PROBE-${stamp}`,
       invoiceDate: today,
-      dueDate: due,
     },
+    dueDate: due,
     billLineItems: [{ amount: 12.34, description: "Studio Flows sandbox probe" }],
   });
   const billId = (bill.json as { id?: string } | null)?.id ?? "";
