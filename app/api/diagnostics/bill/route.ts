@@ -250,7 +250,7 @@ export async function GET(req: Request) {
       city: "Los Angeles",
       stateOrProvince: "CA",
       zipOrPostalCode: "90001",
-      country: "USA",
+      country: "US",
     },
   });
   const vendorId = (vendor.json as { id?: string } | null)?.id ?? "";
