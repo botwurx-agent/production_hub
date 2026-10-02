@@ -230,13 +230,18 @@ export async function GET(req: Request) {
   const challengeId = (url.searchParams.get("challengeid") ?? "").trim();
 
   if (mfaAsk) {
-    await call("ask BILL for an MFA challenge", "POST", "/mfa/challenge", {});
+    const ch = await call("ask BILL for an MFA challenge", "POST", "/mfa/challenge", {});
+    const id = (ch.json as { challengeId?: string } | null)?.challengeId ?? "";
     return NextResponse.json({
       fingerprint,
       environment: env,
       mfaTrusted: trusted,
-      reading:
-        "Read the body. If it names a challengeId and says a code was sent, take the code from your phone and press /api/diagnostics/bill?mfacode=<code>&challengeid=<id>. If it names required fields instead, that IS the spec.",
+      nextUrl: id
+        ? `${url.origin}/api/diagnostics/bill?challengeid=${encodeURIComponent(id)}&mfacode=PUT_CODE_HERE`
+        : null,
+      reading: id
+        ? "A code is on its way. Open nextUrl, replace PUT_CODE_HERE with the code, and press it. These expire in minutes, so do it straight away rather than pasting the response anywhere first."
+        : "No challengeId came back. If the body names required fields instead, that IS the spec.",
       steps,
     });
   }
