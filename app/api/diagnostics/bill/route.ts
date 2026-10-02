@@ -195,11 +195,16 @@ export async function GET(req: Request) {
   }
 
   // STEP 1: sign in. Nothing below means anything without this.
+  const rememberMeId = (process.env.BILL_REMEMBER_ME_ID ?? "").trim();
+  const device = (process.env.BILL_DEVICE_ID ?? "studio-flows-server").trim();
   const login = await call("sign in", "POST", "/login", {
     username,
     password,
     organizationId: orgId,
     devKey,
+    // Presenting a remembered MFA id is what makes a session TRUSTED, which
+    // paying a bill requires. Sent only once one has been obtained.
+    ...(rememberMeId ? { rememberMeId, device } : {}),
   });
   sessionId = (login.json as { sessionId?: string } | null)?.sessionId ?? "";
   if (!sessionId) {
@@ -215,6 +220,44 @@ export async function GET(req: Request) {
   // version called /v3/session for this and got a 404: there is no such path,
   // and the LOGIN response already carries it, so read it from there.
   const trusted = (login.json as { trusted?: boolean } | null)?.trusted === true;
+
+  // MFA, on request only. ?mfa=1 asks BILL to send a challenge code, and
+  // ?mfacode=... validates it with rememberMe set, which is what mints the
+  // remembered id. Separate presses because the first SENDS A TEXT, and a
+  // probe that fires one on every press is a probe nobody presses.
+  const mfaAsk = url.searchParams.get("mfa") === "1";
+  const mfaCode = (url.searchParams.get("mfacode") ?? "").trim();
+  const challengeId = (url.searchParams.get("challengeid") ?? "").trim();
+
+  if (mfaAsk) {
+    await call("ask BILL for an MFA challenge", "POST", "/mfa/challenge", {});
+    return NextResponse.json({
+      fingerprint,
+      environment: env,
+      mfaTrusted: trusted,
+      reading:
+        "Read the body. If it names a challengeId and says a code was sent, take the code from your phone and press /api/diagnostics/bill?mfacode=<code>&challengeid=<id>. If it names required fields instead, that IS the spec.",
+      steps,
+    });
+  }
+
+  if (mfaCode) {
+    await call("validate the MFA code and remember this device", "POST", "/mfa/challenge/validate", {
+      ...(challengeId ? { challengeId } : {}),
+      token: mfaCode,
+      // The point of the whole exercise: a remembered id that later sign-ins
+      // can present to come back trusted.
+      rememberMe: true,
+      device,
+    });
+    return NextResponse.json({
+      fingerprint,
+      environment: env,
+      reading:
+        "If the body carries a rememberMeId, that is the answer: add it to Vercel as BILL_REMEMBER_ME_ID, redeploy, and the next plain press should report mfaTrusted true. Treat it as a credential, since it is what lets this server hold a payment-capable session.",
+      steps,
+    });
+  }
 
   // STEP 3: the reads, separately, so one being shut cannot hide the other.
   await call("list vendors", "GET", "/vendors?max=5");
