@@ -269,9 +269,11 @@ export async function GET(req: Request) {
   const due = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
   const bill = await call("create a bill", "POST", "/bills", {
     vendorId,
-    invoiceNumber: `PROBE-${stamp}`,
-    invoiceDate: today,
-    dueDate: due,
+    invoice: {
+      invoiceNumber: `PROBE-${stamp}`,
+      invoiceDate: today,
+      dueDate: due,
+    },
     billLineItems: [{ amount: 12.34, description: "Studio Flows sandbox probe" }],
   });
   const billId = (bill.json as { id?: string } | null)?.id ?? "";
