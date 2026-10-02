@@ -245,6 +245,13 @@ export async function GET(req: Request) {
   const stamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
   const vendor = await call("create a vendor", "POST", "/vendors", {
     name: `Studio Flows probe ${stamp}`,
+    address: {
+      line1: "1 Test Street",
+      city: "Los Angeles",
+      stateOrProvince: "CA",
+      zipOrPostalCode: "90001",
+      country: "USA",
+    },
   });
   const vendorId = (vendor.json as { id?: string } | null)?.id ?? "";
   if (!vendorId) {
