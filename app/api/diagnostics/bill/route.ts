@@ -64,10 +64,26 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not available on this account." }, { status: 403 });
   }
 
-  const devKey = process.env.BILL_DEV_KEY ?? "";
-  const username = process.env.BILL_USERNAME ?? "";
-  const password = process.env.BILL_PASSWORD ?? "";
-  const orgId = process.env.BILL_ORG_ID ?? "";
+  const raw = {
+    devKey: process.env.BILL_DEV_KEY ?? "",
+    username: process.env.BILL_USERNAME ?? "",
+    password: process.env.BILL_PASSWORD ?? "",
+    orgId: process.env.BILL_ORG_ID ?? "",
+  };
+  const devKey = raw.devKey.trim();
+  const username = raw.username.trim();
+  const password = raw.password.trim();
+  const orgId = raw.orgId.trim();
+
+  // Never the values. Enough shape to see whether what reached the function
+  // is the same thing as last time, which is the one question a repeated
+  // "Developer key is invalid" cannot answer on its own.
+  const fingerprint = {
+    devKey: `${devKey.length} chars, ends ${devKey.slice(-4) || "?"}${raw.devKey !== devKey ? ", HAD WHITESPACE" : ""}`,
+    username: `${username.length} chars, ${username.split("@")[1] ?? "no domain"}${raw.username !== username ? ", HAD WHITESPACE" : ""}`,
+    password: `${password.length} chars${raw.password !== password ? ", HAD WHITESPACE" : ""}`,
+    orgId: orgId ? `${orgId.length} chars, ends ${orgId.slice(-4)}` : "not set",
+  };
   const missing = [
     !devKey && "BILL_DEV_KEY",
     !username && "BILL_USERNAME",
@@ -124,6 +140,7 @@ export async function GET(req: Request) {
 
   if (!env) {
     return NextResponse.json({
+      fingerprint,
       environment: "unknown",
       reading:
         "Neither host accepted this developer key. Read the two bodies: 'Developer key is invalid' on both means the key is not active yet or was copied with a stray character. Nothing was created.",
@@ -135,6 +152,7 @@ export async function GET(req: Request) {
 
   if (!orgId) {
     return NextResponse.json({
+      fingerprint,
       environment: env,
       reading:
         `The key works and it is a ${env.toUpperCase()} key. The body above lists the organizations it can see; an organization id begins with 008. Add it as BILL_ORG_ID in Vercel and press this again.` +
@@ -186,15 +204,17 @@ export async function GET(req: Request) {
   sessionId = (login.json as { sessionId?: string } | null)?.sessionId ?? "";
   if (!sessionId) {
     return NextResponse.json({
+      fingerprint,
       environment: env,
       reading: "No sessionId came back, so nothing else could run. The body names the reason.",
       steps,
     });
   }
 
-  // STEP 2: is this session MFA trusted? Paying a bill needs one, so knowing
-  // BEFORE the payment is the difference between a diagnosis and a mystery.
-  await call("session details (is it MFA trusted?)", "GET", "/session");
+  // STEP 2: is this session MFA trusted? Paying a bill needs one. An earlier
+  // version called /v3/session for this and got a 404: there is no such path,
+  // and the LOGIN response already carries it, so read it from there.
+  const trusted = (login.json as { trusted?: boolean } | null)?.trusted === true;
 
   // STEP 3: the reads, separately, so one being shut cannot hide the other.
   await call("list vendors", "GET", "/vendors?max=5");
@@ -203,6 +223,7 @@ export async function GET(req: Request) {
   // THE INVARIANT. Production never writes from here, whatever the URL says.
   if (env === "production") {
     return NextResponse.json({
+      fingerprint,
       environment: env,
       reading:
         "Read only, because this is your real account. The vendor and bill bodies above answer the FreshBooks question: whether a list comes back with your actual rows in it, or empty. Creating and paying need a SANDBOX key.",
@@ -212,7 +233,9 @@ export async function GET(req: Request) {
 
   if (!write) {
     return NextResponse.json({
+      fingerprint,
       environment: env,
+      mfaTrusted: trusted,
       reading: "Signed in and read. Add ?write=1 to create a test vendor and a test bill in the sandbox.",
       steps,
     });
@@ -226,6 +249,7 @@ export async function GET(req: Request) {
   const vendorId = (vendor.json as { id?: string } | null)?.id ?? "";
   if (!vendorId) {
     return NextResponse.json({
+      fingerprint,
       environment: env,
       reading:
         "Stopped at the vendor. If the body lists the fields it wants, that IS the spec, and it is the documentation this session cannot reach.",
@@ -246,6 +270,7 @@ export async function GET(req: Request) {
   const billId = (bill.json as { id?: string } | null)?.id ?? "";
   if (!billId) {
     return NextResponse.json({
+      fingerprint,
       environment: env,
       vendorId,
       reading: "Vendor created. Stopped at the bill, and its body names the shape it wants.",
@@ -255,6 +280,7 @@ export async function GET(req: Request) {
 
   if (!pay) {
     return NextResponse.json({
+      fingerprint,
       environment: env,
       vendorId,
       billId,
@@ -271,9 +297,11 @@ export async function GET(req: Request) {
   });
 
   return NextResponse.json({
+    fingerprint,
     environment: env,
     vendorId,
     billId,
+    mfaTrusted: trusted,
     reading:
       "Read the payment body. A refusal naming MFA is a GOOD result: the call is permitted and the session needs trusting, which is a flow question rather than a wall.",
     steps,
