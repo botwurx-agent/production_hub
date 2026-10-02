@@ -2162,6 +2162,66 @@ vendor and a scheduled payment to Ryan Robles. Both 200, both empty.
   it is read-only and it is how the next question of this kind gets answered in
   one press instead of four rounds.
 
+### BILL (bill.com) does what FreshBooks could not — PROVEN IN SANDBOX, not built
+Operator, after the FreshBooks dead end: the tedium is not the payment, it is
+"going into FreshBooks and having to add people as vendors each and every time
+and then processing the payment information". That is a RAIL problem, not a
+payments problem, and Bill Pay happens to be the one part of FreshBooks with no
+API at all. BILL exposes all three steps.
+- PROVEN, by pressing it, in BILL's sandbox against a Studio Flows org:
+  `POST /v3/vendors` 201, `POST /v3/bills` 201, and `POST /v3/payments` reached
+  on an MFA-TRUSTED session and refused only for `fundingAccount` and
+  `processingOptions` being null. FreshBooks answered 403 on the equivalent
+  vendor create and no payload could have fixed it.
+- THE PROBE WAS BUILT FIRST THIS TIME, which is the whole lesson of the
+  FreshBooks round carried forward. `/api/diagnostics/bill` (staff only) prints
+  EVERY response body, success included, and catches each step separately. It
+  paid for itself on the first press: BILL answers HTTP 200 with
+  `response_status: 1` and the real error inside, so a dead developer key read
+  as a success until the body was printed.
+- FIELD SHAPES, learned one refusal at a time and each named explicitly by the
+  API: a vendor REQUIRES an `address`; `country` is ISO 3166-1 alpha-2 (`US`,
+  not `USA`, and the refusal listed every accepted value); a bill nests
+  `invoice` (number + date) but carries `dueDate` at the top level.
+- MFA: paying needs a trusted session and `trusted` comes back on the LOGIN
+  response (there is no `/v3/session`; that was a 404 guess). `POST
+  /v3/mfa/challenge` then `/mfa/challenge/validate` with `rememberMe: true`
+  returns a `rememberMeId`, which a later login presents alongside `device` to
+  come back `trusted: true`. VERIFIED end to end. The challenge is NOT
+  session-bound (a validate on a fresh login found it) but the code expires in
+  minutes, so the challenge response hands back a finished URL rather than
+  making anyone copy an id by hand.
+- THAT rememberMeId IS A STANDING CREDENTIAL: it is what lets a server
+  authenticate as payment-capable with no human present. The product decision
+  (operator agreed) is to hold it and still require a deliberate press naming
+  the vendor and the amount, the same contract as the remittance email and
+  Runner's cards. Having the capability is not a reason to use it unattended.
+- THE ADDRESS COMES OFF THE INVOICE (operator's idea, and it is the right one):
+  the extractor already reads the document, and a freelancer's invoice prints
+  their address, so it costs no typing. Two things to get right when building
+  it: not every document has one (a shop receipt does not), so the send window
+  asks once and remembers; and a freelancer's address is usually their HOME
+  address, so it belongs in a STUDIO-ONLY side table, never on `contacts` or
+  `contact_profiles`, which are deliberately collaborator-readable. Same rule
+  as 0074's day rates, applied before the leak rather than after.
+- CREDENTIAL WHITESPACE COST A ROUND and is worth a permanent habit: the stored
+  dev key had a trailing character, invisible in Vercel's UI, and BILL reported
+  it as "Developer key is invalid" intermittently. Every credential read from
+  env in that route is trimmed, and the probe reports the SHAPE of what arrived
+  (length, last four, whether it had whitespace) so "the value changed" can be
+  told apart from "the API refused us", which one message covers in both cases.
+- BILL'S ERRORS NAME THE WRONG THING TWICE, so do not take them at face value:
+  "Developer key is invalid" was really the USERNAME belonging to another
+  environment, and sandbox and production share no data and need separate keys.
+- STILL UNKNOWN, and all of it is on the operator's side rather than ours: a
+  funding account and `processingOptions` to complete a payment, the price of
+  BILL, and the big one for selling this to other studios, which is that the
+  API signs in with USERNAME AND PASSWORD rather than OAuth. Asking a customer
+  for their BILL password is a non-starter, so a partner or OAuth path has to
+  exist before this is a product feature rather than the operator's own
+  workflow. NOTHING IS BUILT into the app: the probe is a diagnostic, and the
+  feature is a separate decision.
+
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
 later, and the ledger could only express "one cost, paid once". A cost is now a
