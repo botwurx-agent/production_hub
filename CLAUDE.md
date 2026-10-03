@@ -2662,6 +2662,68 @@ and a check is never written.
 - THE REST OF THE CHAIN ALREADY EXISTS: the invoice arrives by email, "Log as a
   cost" reads it into the ledger, the payment schedule holds net 30, and the
   pay press is built. This one step is the gap.
+- SLICES 1 AND 2 ARE BUILT, which is the half that stops a cheque going out by
+  surprise. lib/bill-payable.ts reads the rail off the vendor rather than
+  assuming it: ONLY `payByType` grants one, since a vendor with a bank account
+  can still be set to virtual card, and the bank status can only ever WITHHOLD,
+  the same direction lib/bill-settled takes with an outstanding amount. UNKNOWN
+  IS NEITHER ACH NOR CHECK: it is reported as unknown and warned about, because
+  a field BILL renames would otherwise either block every payment or quietly
+  post cheques, and the one thing it must never do is read as ACH. The send
+  window prints "Pays by" beside the amount, and PAY IS REFUSED, in the
+  component and again server-side, when the rail is an explicit cheque. The
+  bill can still be added, which is the honest split: adding it is useful, and
+  the payment is the part that would go out wrong. 36 assertions, and the
+  contrast was measured in Chromium (12.70 / 11.22 / 9.52 for the refusal
+  across light, paper and dark), since this is the ReadBanner lesson a third
+  time: words in the text colour, hue on the tint and the border. GOTCHA that
+  cost a round: `border-red-border` and its kind DO NOT EXIST in this setup and
+  compile to nothing, the same silent class as `bg-surface-2/50`.
+- A VENDOR THE LIST ANSWERS THINLY IS READ IN FULL. `findBillVendor` returns
+  list rows, and a list row may omit the two fields the rail is decided from,
+  so `billPayContext` falls back to `readBillVendor` when both come back null.
+  Without that, every existing vendor would report as "BILL did not say".
+- SLICE 3 IS THE INVITE and is NOT built, deliberately, because the endpoint's
+  payload is not known and writing it from a remembered shape is exactly how
+  the FreshBooks rounds went. TWO ENDPOINTS EXIST AND THE DOCS BLUR THEM:
+  `POST /v3/network/invitation/vendor/{id}` is documented as taking a
+  `networkId` from a search of companies ALREADY IN the BILL network, which a
+  freelancer who has never heard of BILL cannot be, while `SendVendorInvite` is
+  titled "invite a vendor not in the BILL network", which is the case that
+  matters, and it lives on the OLDER API, so there is a second unknown
+  underneath the first: whether a v3 session is accepted there at all.
+- SO THE PROBE WAS EXTENDED FIRST, the FreshBooks lesson carried forward.
+  `?invite=<vendorId>` reads the vendor (which also checks `payByType` and
+  `bankAccountStatus` against what bill-payable whitelists, on live values),
+  searches the network, then attempts the v3 invitation with an EMPTY BODY and
+  `SendVendorInvite` TWICE, once on the v3 session and once on a session from
+  the older API's own login. Nothing is created and nobody is emailed: neither
+  attempt carries an address, so the refusal naming the missing fields IS the
+  spec, which is how the payment payload was assembled over five refusals. The
+  two sessions are tried SEPARATELY because "the shape is wrong" and "the
+  session is wrong" point in opposite directions, and one message covering both
+  is the mistake findOrCreateVendor made for two rounds.
+- `?stored=1` SIGNS IN AS THE STUDIO, and this is the part worth copying. The
+  probe read its login from BILL_USERNAME / BILL_PASSWORD / BILL_ORG_ID, those
+  were the sandbox values and were deleted when the deployment moved to
+  production, and BILL_PROD_* never existed, so the invite probe could not be
+  pressed at all. Putting a real banking password into Vercel to run a
+  diagnostic is the wrong trade when the app already holds it encrypted under a
+  key the database never sees, so stored mode goes through
+  `billSessionForStudio`, the one door that decrypts, and only BILL_DEV_KEY has
+  to be in the environment (ours, identifying the integration rather than any
+  studio). `billV2SessionForStudio` is the same borrowing one layer down, and
+  it exists for the feature as well as the probe: if the invite needs a session
+  on the older API, the app will need exactly that function. Its host, form
+  encoding and `response_data` envelope are the ones `listBillOrgs` already
+  proves against a live account; `Login.json` itself is UNEXERCISED, so it
+  returns null on anything unexpected rather than throwing, and the comparison
+  runs either way.
+- bill_connections is ADMINS ONLY, so a plain member's read comes back empty and
+  stored mode reports as not connected, which is the truth from their side.
+- THE CHEAPEST TEST STILL NOT RUN, and it bounds what the API could ever offer:
+  open a vendor in BILL's own interface and read its Actions menu. What their
+  product offers this account is the ceiling on what their API offers it.
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
