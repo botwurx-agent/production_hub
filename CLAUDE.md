@@ -1351,7 +1351,24 @@ now offer link + email + PDF. NEXT (if wanted): moodboard + asset review email,
 and a forced-light wrapper on the present views (they print from light theme
 today).
 
-### Billing / invoicing — FreshBooks/payment paths BUILT BUT ON HOLD (payments deferred, see decision above)
+### FreshBooks is DELETED (2026-10-03). The sections below are history
+Operator: "Freshbooks doesnt belong on the app. Theres no need for a connection
+option as well." Nine files went whole (the OAuth routes, lib/freshbooks,
+lib/freshbooks-error, lib/billing, the diagnostics probe, both bill actions,
+the send-bill window, and the invoicing panel, which was already dead behind
+BILLING_ENABLED), plus the Settings card and the budget's pay-via controls.
+NOTHING imports any of it now. The FreshBooks sections that follow are kept
+because the REASONING is still worth having (how the probe was built, why a
+200 was never evidence, how four explanations were each asserted and
+withdrawn), but none of it describes live code. BILL replaced it: see "BILL is
+the rail now" below.
+DORMANT, NOT DROPPED: billing_accounts, project_invoices and the 0111 fb_*
+columns on project_costs. Retired tables are parked here rather than dropped
+(leads, ai_looks), and a drop is a migration of its own.
+KEPT ON PURPOSE: the PDF import still says "already made in FreshBooks?",
+which is a true sentence about an exported PDF and not a connection.
+
+### Billing / invoicing — FreshBooks/payment paths DELETED (history below)
 Two invoicing paths were built and are deployed on `main`, but the whole area is
 PAUSED pending a decision on the billing platform. Both are non-intrusive (see
 below); leave them parked. The operator wants to choose the integration before
@@ -1420,20 +1437,29 @@ optimizing the flow + IA of this whole section.
 - `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`
 - `FIGMA_CLIENT_ID`, `FIGMA_CLIENT_SECRET` (Figma app scope: `file_content:read`;
   redirect `<domain>/auth/figma/callback`)
-- `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` (billing connector; set in
-  Vercel). FreshBooks only accepts redirects LISTED in its Developer Portal, and
-  the callback is built from whichever host the user is on. Both
-  `https://app.studio-flows.com/auth/freshbooks/callback` and the old
-  production-hub-steel.vercel.app one are registered (the app. one was added
-  2026-09-30 after a reconnect failed with "The redirect uri included is not
-  valid"). Google, Slack and Figma build theirs the same way, so a connector that
-  refuses its redirect on a new domain is this, not a code bug.
+- `BILL_DEV_KEY`, `BILL_CRED_KEY`, `BILL_ENV` (BILL, the vendor-payment rail,
+  which replaced FreshBooks). The DEV KEY is OURS and identifies the
+  integration rather than any studio; each studio supplies its own BILL login
+  in Settings. Sandbox and production are separate systems needing SEPARATE dev
+  keys, and using one against the other reports as "developer key is invalid",
+  which is the same message as a stray character on the key. `BILL_CRED_KEY` is
+  64 hex characters (`openssl rand -hex 32`) and encrypts the stored password;
+  without it a studio cannot connect, deliberately. `BILL_ENV` omitted means
+  PRODUCTION; set it to `sandbox` to opt in.
+  (The FreshBooks pair is gone with the connector.)
 - AI (optional): `OPENAI_API_KEY` (+ `OPENAI_MODEL`, default gpt-5-mini) or
   `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0112. Recent: 0112 =
+files in supabase/migrations. THROUGH 0114. Recent: 0114 =
+cost_bill_payment (project_costs.bill_vendor_id / bill_bill_id /
+bill_payment_id / bill_status / bill_synced_at: what BILL did with a cost.
+Mirrors what the deleted 0111 did for FreshBooks); 0113 =
+bill_connections (a studio's BILL login, ADMINS ONLY, with the password and
+the remembered-device id encrypted by the app under a key held in the
+environment and never in the database, because BILL has no OAuth and a
+connection is the credential itself); 0112 =
 cost_remittance_sent (project_costs.remittance_sent_at: when the studio told a
 vendor their payment was on its way, so a re-send is a deliberate repeat); 0111 =
 cost_freshbooks_bill (project_costs.fb_bill_id / fb_bill_status /
@@ -2290,6 +2316,99 @@ API at all. BILL exposes all three steps.
   has to exist before this is a product feature rather than the operator's own
   workflow. NOTHING IS BUILT into the app: the probe is a diagnostic, and the
   feature is a separate decision.
+
+### BILL is the rail now: connect it, and pay a cost with it (0113, 0114) — BUILT
+Operator, 2026-10-03, settling it: "Freshbooks doesnt belong on the app... To
+start we should have the connection option in settings for bill.com. Then we
+can build the pay by bill option in costs." Built in that order, in one go.
+
+THE ONE THING TO KNOW BEFORE TOUCHING THIS: BILL HAS NO OAUTH. Its API signs
+in with a username and a password, so a connection is the studio's own
+credential rather than a scoped token somebody issued us. Every decision below
+follows from that, and it is also why this is still not safe to SELL to other
+studios: asking a customer for their BILL password is a non-starter, and a
+partner or OAuth path has to exist first. For the operator's own studio, their
+own credential in their own app, it is theirs to choose and they did.
+- `bill_connections` (0113) is ADMINS ONLY, not is_studio_member. Every other
+  connector is per-user or studio-wide because reading mail is ordinary work;
+  this one can move money, so it sits with the money tables. One row per studio.
+- THE SECRETS ARE ENCRYPTED BEFORE THEY REACH POSTGRES (lib/bill-crypto.ts,
+  AES-256-GCM) under a key in the deployment environment and NEVER in the
+  database, so a database leak is not a leak of a banking login: reading one
+  needs the row and the key, held by different systems. A compromise of the
+  running server still reaches both, and the module says so rather than calling
+  itself secure. GCM rather than CBC so a tampered row fails to decrypt instead
+  of decrypting to something else. 34 assertions: a fresh nonce per value,
+  tamper detection on nonce, tag and ciphertext separately, a wrong key throwing
+  rather than returning junk, every junk shape out of storage refused, the
+  Vercel whitespace trap, and no secret in any error message. A MISSING KEY
+  REFUSES THE CONNECTION rather than storing a password in the clear.
+- lib/bill-error.ts reads BILL's own sentence out of the three shapes it answers
+  with, the FreshBooks lesson carried forward. The one that matters: the v2 path
+  (ListOrgs) answers HTTP 200 WITH THE FAILURE INSIDE, so `billSucceeded` asks
+  the body, never the status. 28 assertions, including that it never invents a
+  reason it does not have and that each known code advises the thing that would
+  actually help (BDC_1151 points at the bank, not at a reconnect).
+- lib/bill.ts is the client, and EVERY FIELD IN IT WAS PROVEN BY PRESSING IT
+  through /api/diagnostics/bill, not read from a doc, since developer.bill.com
+  is egress-blocked from a session. Do not "fix" a name from memory.
+- THE SETTINGS CARD STATES WHAT IT IS WAITING FOR. Paying needs a 2-step code
+  once, so a connection without one reads "Needs one more step" with the button
+  right there, rather than failing later at the moment somebody tries to pay a
+  vendor. Before the password field it says out loud that BILL has no connect
+  button, that the password is encrypted, and that only admins can see it:
+  somebody typing a banking password is entitled to know why they are being
+  asked. Six states verified in Chromium at 1280 and 390.
+- PAYING (0114, bill_* columns on project_costs, which is is_studio_member ONLY
+  so a collaborator cannot read who was paid what). The window names the vendor,
+  the amount in EXACT money (lib/format money() rounds to whole dollars and the
+  cents are the point here, the same call lib/remittance made), the invoice
+  number, the due date and the bank account, then says paying cannot be undone.
+  TWO BUTTONS on purpose: "Just add the bill" queues it for a net-30 payment
+  somebody makes later, and only the pay button moves money. It stays disabled
+  until a VERIFIED funding account is chosen and the studio is 2-step trusted,
+  and the window says which is missing instead of failing on the press.
+- ONE COST, ONE BILL, and the bill id is written THE MOMENT THE BILL EXISTS,
+  before the payment is attempted. A duplicate bill is how a vendor gets paid
+  twice. If that write fails, the error names the BILL id and says not to send
+  again.
+- ADMINS ONLY on the pay path, stated rather than emergent: bill_connections is
+  admin-gated, so a plain member's read came back empty and every action would
+  have reported "BILL is not connected", which is false and unfixable from their
+  side.
+- A SERVER ACTION RESOLVES TO UNDEFINED when the session has expired, so
+  `if ("error" in res)` throws a TypeError and the surface crashes to an error
+  boundary. Found by rendering the payment window, which is the worst place for
+  it: somebody is left not knowing whether money moved. lib/action-result.ts
+  `actionError` reports an absent result as what it is, and every call site in
+  both new surfaces goes through it. WORTH COPYING: this pattern is wrong
+  everywhere it appears in this codebase, not just here.
+- THE VENDOR ADDRESS is asked once per vendor, in the window, because BILL
+  refuses to create a vendor without one. NOT YET BUILT and the better answer:
+  the invoice extractor already reads the document and a freelancer's invoice
+  prints their address, so it could be lifted. When that is built, it goes in a
+  STUDIO-ONLY SIDE TABLE and never on `contacts` or `contact_profiles`, which
+  are deliberately collaborator-readable: a freelancer's address is usually
+  their home address. The 0074 rule, applied before the leak rather than after.
+- NOT YET RUN AGAINST A REAL BILL ACCOUNT. The payloads are the proven ones but
+  this path has never created a vendor or a bill from the app. The first real
+  press is the test, and the thing most likely to surface is the vendor lookup,
+  which tries a POST list endpoint and falls back to a GET.
+- APPLYING 0113 FOUND A SUPABASE MCP FAILURE MODE worth knowing: the write path
+  went into a state where every statement that ADDED an object succeeded and
+  every one that DROPPED timed out, repeatably, with no lock and no stuck
+  transaction visible in pg_stat_activity. A half-made `bill_accounts` could not
+  be removed, so the real table took a clean name rather than waiting. LITTER
+  STILL IN THE LIVE DATABASE, to drop when removal works again and referenced by
+  nothing: `bill_accounts`, `zz_probe_tmp`, `zz_probe_b`, `zz_probe_c`,
+  `zz_probe_d`. Also: a multi-statement batch timed out where the same
+  statements sent one at a time went through, so send DDL one statement per call
+  and verify each with a read.
+- NEW ENV: `BILL_DEV_KEY` (ours, identifies the integration rather than a
+  studio), `BILL_CRED_KEY` (64 hex characters, `openssl rand -hex 32`), and
+  `BILL_ENV` (omit for production; `sandbox` opts in). Defaulting to production
+  is deliberate: a deployment serving a real studio means real books, and a
+  sandbox default would be a connection that silently does nothing.
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
