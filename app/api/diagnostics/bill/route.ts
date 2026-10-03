@@ -48,7 +48,7 @@ const BODY_CHARS = 1500;
 // BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
 // a build that had not finished deploying, which is indistinguishable from a
 // real answer unless the response says which code produced it.
-const PROBE = "2026-10-03-d";
+const PROBE = "2026-10-03-e";
 
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
@@ -292,9 +292,10 @@ export async function GET(req: Request) {
   // sandbox org may already ship with a funding account, in which case
   // nothing needs creating and the payment can go straight through.
   const banks = await call("list bank accounts money can come from", "GET", "/funding-accounts/banks");
-  // The refusal on this one named the parameter it wanted, so it is sent.
-  // Cards are a side question here; the bank list is the one that matters.
-  await call("list cards money can come from", "GET", "/funding-accounts/cards?cardUserStatus=ACTIVE");
+  // THE CARD LIST IS GONE ON PURPOSE. It wanted a cardUserStatus whose
+  // accepted values are not documented anywhere reachable from here, so it
+  // put a red row in every response for a question that does not matter: a
+  // vendor bill is paid from a bank account, not from a card.
 
   // Tolerant about the WRAPPER, strict about the ROW. Tolerant because the
   // list shape is not known here and a key guessed wrong would read as "no
@@ -402,20 +403,36 @@ export async function GET(req: Request) {
     });
   }
 
-  // Verifying it, if BILL asks for micro deposits. Amount comes from the URL
-  // because only the operator can see what the sandbox posted.
+  // Verifying it. Amount comes from the URL because only the operator can see
+  // what the sandbox posted, if it posted anything at all.
   if (verifyAmount) {
-    const bankId = (url.searchParams.get("bankid") ?? "").trim() || fundingId;
+    // Default to the most recent row rather than to a verified one, since by
+    // definition nothing is verified yet when this is being pressed.
+    const newest = allBanks.length ? allBanks[allBanks.length - 1] : null;
+    const bankId = (url.searchParams.get("bankid") ?? "").trim() || (newest ? String(newest.id) : "");
     if (!bankId) {
       return NextResponse.json({
+        probe: PROBE,
         fingerprint,
         environment: env,
         reading: "Nothing to verify: no bank account was found. Press ?bank=1 first.",
         steps,
       });
     }
-    await call("verify the bank account", "POST", `/funding-accounts/banks/${bankId}/verify`, {
-      depositAmount: Number(verifyAmount),
+    const amount = Number(verifyAmount);
+    // Read the one row first: it may carry a verification state or a next
+    // step the list view trims out.
+    await call("read this one bank account", "GET", `/funding-accounts/banks/${bankId}`);
+    // Two plausible paths, SEPARATELY, because a 404 means there is no such
+    // route while a 400 or a 422 means the route is there and the payload is
+    // wrong, and those point in opposite directions. One catch over both
+    // could not tell them apart, which is exactly how findOrCreateVendor
+    // reported a refused write as a refused read for two rounds.
+    await call("verify it (singular path)", "POST", `/funding-accounts/banks/${bankId}/verify`, {
+      depositAmount: amount,
+    });
+    await call("verify it (plural path)", "POST", `/funding-accounts/banks/${bankId}/verifications`, {
+      depositAmount: amount,
     });
     return NextResponse.json({
       probe: PROBE,
@@ -423,7 +440,7 @@ export async function GET(req: Request) {
       environment: env,
       bankId,
       reading:
-        "Read the body. A refusal naming the field it wanted is the spec; a refusal on the amount means the deposit figure is wrong rather than the call being shut.",
+        "Compare the two verify bodies. A 404 on BOTH means there is no API verification route, so a bank account can only be verified in BILL's own screen against a real bank. A 400 or 422 means the route exists and the payload or the amount is wrong, which is a shape question rather than a wall. The amount is almost certainly wrong either way, since no micro deposit was ever posted to an invented account.",
       steps,
     });
   }
@@ -509,10 +526,18 @@ export async function GET(req: Request) {
 
   // STEP 6: pay it. The question FreshBooks could never answer.
   //
-  // `processingOptions` is sent EMPTY on purpose. It was refused for being
-  // null, so an empty object clears that check and the refusal that follows
-  // names the children it actually wants, which is the cheapest way to learn
-  // a shape the docs cannot be read for from here.
+  // THE POINT OF PRESSING THIS IN A SANDBOX IS NOT TO MOVE MONEY. A funding
+  // account cannot be verified against an invented bank, so this is expected
+  // to be refused. What it buys is the PAYLOAD: every field shape in this
+  // file was learned from a refusal naming what was missing, so learning the
+  // rest of the payment body here means the first attempt on a real account
+  // is one press rather than four. Pass ?fundingid=<id> to attach an
+  // unverified account deliberately and get past the null check to whatever
+  // is underneath it.
+  //
+  // `processingOptions` is sent EMPTY for the same reason. It was refused for
+  // being null, so an empty object clears that check and the refusal that
+  // follows names the children it actually wants.
   await call("pay the bill", "POST", "/payments", {
     vendorId,
     processDate: today,
@@ -532,9 +557,9 @@ export async function GET(req: Request) {
     banks: bankSummary,
     reading:
       (fundingId
-        ? "A verified funding account was sent with the payment."
-        : "NO funding account was sent, because none of the ones here is usable, so expect the same 'must not be null' refusal. Read the banks list and press ?bank=1 first.") +
-      " Read the payment body: a refusal naming MFA or naming a field it wants is a GOOD result, since the call is permitted and only the shape or the session is wrong.",
+        ? "A funding account was sent with the payment."
+        : "NO funding account was sent, because none of the ones here is verified. Pass ?fundingid=<id> from the banks list to attach an unverified one on purpose: the refusal that comes back is the payload spec, which is what this press is for.") +
+      " Read the payment body: a refusal naming a field it wants is a GOOD result, since the call is permitted and only the shape is wrong. A refusal about the account being unverified is the expected end of the sandbox road.",
     steps,
   });
 }
