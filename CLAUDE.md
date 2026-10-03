@@ -2426,11 +2426,43 @@ own credential in their own app, it is theirs to choose and they did.
   stored remembered id. Verified in the database rather than from the screen:
   `device_id` 19 characters, `mfa_trusted_at` stamped, `remember_me_cipher`
   present.
-- PAYING IS NOT YET RUN FROM THE APP, against sandbox or production. The
-  payloads are the proven ones but this path has never created a vendor or a
-  bill outside the probe. The first press is the test, and the thing most
-  likely to surface is the vendor lookup, which tries a POST list endpoint and
-  falls back to a GET.
+- CREATING A VENDOR AND A BILL IS PROVEN FROM THE APP (sandbox, 2026-10-03).
+  One press of "Just add the bill" on a real $3,959.83 cost created vendor
+  `00901ZBGDSZ...` and bill `00n01XFDCX...`, with the address prompt and the
+  one-cost-one-bill guard both working. PAYING is still unexercised: no
+  `/v3/payments` call has ever been made from the app.
+- AND THAT FIRST PRESS MARKED AN UNPAID BILL PAID, which is the entry to read
+  before touching the read-back. The row came back "BILL paid" AND the COST
+  itself was flipped to paid, which is not a label: a paid cost leaves "Still
+  owed", leaves the dashboard's unpaid widget, and becomes eligible for the
+  remittance email that tells a vendor their money is on its way. It never
+  reached her (`remittance_sent_at` was null), which is the only reason this
+  was recoverable.
+  ONE LINE, WRONG TWO INDEPENDENT WAYS, either of which marks EVERY bill paid:
+  `const paid = /paid/i.test(state.paymentStatus) || state.dueAmount <= 0;`
+  `/paid/i` MATCHES "UNPAID", a substring test against a word that contains it
+  (so does "PARTIALLY_PAID"). And `Number(b.dueAmount ?? 0) || 0` turned an
+  ABSENT field into 0, where `0 <= 0` reads as nothing outstanding. THIRD TIME
+  THIS CODEBASE HAS TREATED AN ABSENCE AS EVIDENCE, after the FreshBooks 200
+  carrying an empty list and the storage ceiling inferred from nothing large
+  ever having been stored.
+  lib/bill-settled.ts is the test now, pure and FAIL CLOSED: only a status BILL
+  states explicitly settles a bill, matched against a whitelist after
+  normalising rather than by pattern, so an unfamiliar or empty value leaves
+  the cost owed until somebody looks. The outstanding amount can only ever
+  WITHHOLD, never grant, and readBillBill reports an absent amount as NULL
+  rather than zero so the two cannot be confused again. 52 assertions.
+  An UNREADABLE amount (NaN) is an absence rather than a contradiction and
+  leaves the status to decide: the stricter reading would let one junk field
+  permanently block a genuinely paid bill from ever syncing. The first draft of
+  the tests assumed the opposite and had to be corrected against the module.
+  WHY IT LOOKED LIKE THE SEND DID IT: the send never writes the cost's status.
+  It revalidates the budget page, the page reopens, and `BillSync` runs its
+  read-back once on open. Same instant from the operator's seat.
+  `paymentStatus` and `dueAmount` ARE STILL ASSUMED NAMES. A create had been
+  pressed; a READ never had, which is how both readings went unexamined. The
+  probe gained `?bill=<id>`, which prints a whole bill as BILL states it, so
+  the real field is observed rather than guessed at.
 - APPLYING 0113 FOUND A SUPABASE MCP FAILURE MODE worth knowing: the write path
   went into a state where every statement that ADDED an object succeeded and
   every one that DROPPED timed out, repeatably, with no lock and no stuck
