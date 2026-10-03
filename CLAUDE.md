@@ -2390,10 +2390,47 @@ own credential in their own app, it is theirs to choose and they did.
   STUDIO-ONLY SIDE TABLE and never on `contacts` or `contact_profiles`, which
   are deliberately collaborator-readable: a freelancer's address is usually
   their home address. The 0074 rule, applied before the leak rather than after.
-- NOT YET RUN AGAINST A REAL BILL ACCOUNT. The payloads are the proven ones but
-  this path has never created a vendor or a bill from the app. The first real
-  press is the test, and the thing most likely to surface is the vendor lookup,
-  which tries a POST list endpoint and falls back to a GET.
+- THE DEVICE ID HAS A LENGTH BILL WILL NOT EXCEED, and finding that out cost a
+  round because BILL named something else. Connecting worked and every 2-step
+  code came back `BDC_1356 2-Step Verification token has expired`, which sent
+  three attempts at the clock and the code. It was the `device` field.
+  `newBillDeviceId` (lib/bill.ts) now mints `sf-<16 hex>`, 19 characters,
+  matching `studio-flows-server`, the value proven end to end through the
+  probe. The first version was `studio-flows-${randomUUID()}`, 49 characters.
+  The exact ceiling is unknown and was deliberately not hunted: matching a
+  known-good length is not a guess about the limit, it is declining to go near
+  it.
+  THE PROBE ANSWERED IT IN ONE PAIR OF PRESSES, which is the whole return on
+  having built it first. It gained `device=` (override the one field) and
+  `fresh=1` (withhold BILL_REMEMBER_ME_ID so it signs in UNTRUSTED like the app
+  does, without which the comparison is not like-for-like). Same account, same
+  challenge, same code, one variable moved: `studio-flows-server` mints a
+  remembered id, the app's id answers `400 BDC_1143 Invalid entity data.
+  deviceId.` A diagnostic that can only be pressed in one configuration cannot
+  isolate anything.
+  THIRD TIME BILL HAS NAMED THE WRONG THING. The others: a username belonging
+  to another environment reported as an invalid developer key, and a refused
+  POST reported as a refused read. Treat its message as where to start looking,
+  never as the diagnosis.
+  `confirmBillMfa` REPAIRS a row carrying a long id rather than refusing it,
+  and only while `remember_me_cipher` is null, which is safe precisely because
+  nothing is bound to the old value yet. Once a remembered id exists the device
+  must NEVER change, or a trusted sign-in stops coming back trusted. The new id
+  is written before it is used, so a failed write cannot leave a remembered id
+  minted against a device the row does not know. 610 assertions.
+  Found while reading the probe: its login step was recorded BEFORE `sessionId`
+  was known, so the redaction list did not yet hold it and a live session id
+  was printed in the response. Every step is swept again once it is known.
+- CONNECTING IS PROVEN FROM THE APP (sandbox, 2026-10-03): sign-in, org
+  resolution, the encrypted password, the 2-step code, the repair above, and a
+  stored remembered id. Verified in the database rather than from the screen:
+  `device_id` 19 characters, `mfa_trusted_at` stamped, `remember_me_cipher`
+  present.
+- PAYING IS NOT YET RUN FROM THE APP, against sandbox or production. The
+  payloads are the proven ones but this path has never created a vendor or a
+  bill outside the probe. The first press is the test, and the thing most
+  likely to surface is the vendor lookup, which tries a POST list endpoint and
+  falls back to a GET.
 - APPLYING 0113 FOUND A SUPABASE MCP FAILURE MODE worth knowing: the write path
   went into a state where every statement that ADDED an object succeeded and
   every one that DROPPED timed out, repeatably, with no lock and no stuck
