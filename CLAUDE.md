@@ -2162,17 +2162,33 @@ vendor and a scheduled payment to Ryan Robles. Both 200, both empty.
   it is read-only and it is how the next question of this kind gets answered in
   one press instead of four rounds.
 
-### BILL (bill.com) does what FreshBooks could not — PROVEN IN SANDBOX, not built
+### BILL (bill.com) does what FreshBooks could not — WHOLE CHAIN PROVEN, not built
 Operator, after the FreshBooks dead end: the tedium is not the payment, it is
 "going into FreshBooks and having to add people as vendors each and every time
 and then processing the payment information". That is a RAIL problem, not a
 payments problem, and Bill Pay happens to be the one part of FreshBooks with no
 API at all. BILL exposes all three steps.
-- PROVEN, by pressing it, in BILL's sandbox against a Studio Flows org:
-  `POST /v3/vendors` 201, `POST /v3/bills` 201, and `POST /v3/payments` reached
-  on an MFA-TRUSTED session and refused only for `fundingAccount` and
-  `processingOptions` being null. FreshBooks answered 403 on the equivalent
-  vendor create and no payload could have fixed it.
+- PROVEN, by pressing it, in BILL's sandbox against a Studio Flows org, every
+  step of it: an MFA-TRUSTED sign-in with nobody present, `POST /v3/vendors`
+  201, `POST /v3/bills` 201, `POST /v3/funding-accounts/banks` 201, and
+  `POST /v3/payments` ACCEPTING THE WHOLE PAYLOAD and refusing only with
+  `422 BDC_1151 Cannot make online payments with the specified bank account`,
+  which is the invented bank rather than anything we send. FreshBooks answered
+  403 on the equivalent vendor create and no payload could ever have fixed it.
+- THE PAYMENT PAYLOAD, which took five refusals to assemble and is the thing
+  not to re-derive: `vendorId`, `processDate`, `amount`, `billId`,
+  `createBill: false`, `fundingAccount: {id, type: "BANK_ACCOUNT"}` and
+  `processingOptions: {}`. An EMPTY options object is accepted, which is worth
+  knowing because it was first refused for being null and the obvious reading
+  was that it carried required children. `amount` and `billId` live at the TOP
+  LEVEL: a `billPayments: [{billId, amount}]` array is ignored silently. The
+  tell was in the error style rather than in any doc: this API reports a nested
+  problem with a dotted path (`address.country: invalid value`), so two bare
+  names meant top level. `createBill` was revealed by its own refusal, which
+  said billId is required when createBill is false.
+- 422 BDC_1151 IS THE END OF THE SANDBOX ROAD, and it is a PASS. Read it as
+  "the payload is right, the bank is not", never as a failure of the
+  integration.
 - THE PROBE WAS BUILT FIRST THIS TIME, which is the whole lesson of the
   FreshBooks round carried forward. `/api/diagnostics/bill` (staff only) prints
   EVERY response body, success included, and catches each step separately. It
@@ -2182,7 +2198,41 @@ API at all. BILL exposes all three steps.
 - FIELD SHAPES, learned one refusal at a time and each named explicitly by the
   API: a vendor REQUIRES an `address`; `country` is ISO 3166-1 alpha-2 (`US`,
   not `USA`, and the refusal listed every accepted value); a bill nests
-  `invoice` (number + date) but carries `dueDate` at the top level.
+  `invoice` (number + date) but carries `dueDate` at the top level; a funding
+  account takes `nameOnAccount`, `routingNumber`, `accountNumber`, `type`
+  (CHECKING, and NOT `accountType`, which an earlier draft sent), `ownerType`
+  and `bankName`, that last one being required and un-guessable.
+- A FUNDING ACCOUNT CANNOT BE COMPLETED IN A SANDBOX, and this closes a
+  question rather than leaving one open. The create is permitted (201) but the
+  row comes back `status: PENDING` and `archived: true`, because BILL verifies
+  ownership with micro deposits posted to the bank. A stage environment moves
+  no money, so no deposit ever arrives, with invented numbers OR with a real
+  account: the operator entered their own Wells Fargo details by hand after
+  Plaid failed, in the sandbox org, and that row will sit PENDING forever. Tell
+  anyone in that position to stop waiting, and to delete the row rather than
+  leave real account numbers in a test org. Verification is also a ONE-TIME
+  STUDIO SETUP STEP (one to three business days even in production), so the app
+  should never try to do it per payment.
+- PRESENCE IS NOT USABILITY, the same mistake as reading a FreshBooks 200 as a
+  working list, one layer in. The first version of the probe took the first row
+  of the bank list and reported a funding account; the row was archived and
+  PENDING and could pay nothing. A row now has to be unarchived AND VERIFIED to
+  count, and every row is printed with its status so a reading can be checked
+  rather than believed.
+- THE VENDOR'S OWN BANK IS BILL'S PROBLEM, NOT OURS, which is the answer to the
+  liability question 0112 raised. A created vendor comes back
+  `bankAccountStatus: "NO_ACCOUNT"` and `payByType: "CHECK"`, so BILL MAILS A
+  PAPER CHECK until the vendor connects their own bank to BILL through its
+  network. Studio Flows never collects, stores or transmits a freelancer's bank
+  details in either case, which is exactly the outcome the remittance work
+  wanted and FreshBooks could not give.
+- SAY WHICH BUILD ANSWERED. Three rounds were lost to a response that looked
+  like a real answer and was not: twice a Vercel deploy had not finished, and
+  once the BROWSER served a cached GET (identical session id and timestamps in
+  a second paste, which is how it was spotted). Every response now carries a
+  `probe` version constant, bumped with every change to the file, and the
+  operator presses with a throwaway `&x=N` parameter they increment. Any
+  long-running diagnostic pressed by hand needs both.
 - MFA: paying needs a trusted session and `trusted` comes back on the LOGIN
   response (there is no `/v3/session`; that was a 404 guess). `POST
   /v3/mfa/challenge` then `/mfa/challenge/validate` with `rememberMe: true`
@@ -2213,12 +2263,31 @@ API at all. BILL exposes all three steps.
 - BILL'S ERRORS NAME THE WRONG THING TWICE, so do not take them at face value:
   "Developer key is invalid" was really the USERNAME belonging to another
   environment, and sandbox and production share no data and need separate keys.
-- STILL UNKNOWN, and all of it is on the operator's side rather than ours: a
-  funding account and `processingOptions` to complete a payment, the price of
-  BILL, and the big one for selling this to other studios, which is that the
-  API signs in with USERNAME AND PASSWORD rather than OAuth. Asking a customer
-  for their BILL password is a non-starter, so a partner or OAuth path has to
-  exist before this is a product feature rather than the operator's own
+- THE REAL ACCOUNT IS READABLE AND NOT WRITABLE. `?env=production` reads its
+  own `BILL_PROD_*` variables rather than swapping the sandbox ones, for two
+  reasons: the sandbox keeps working so shapes can still be learned for free,
+  and BILL's developer keys are per environment so these are different values
+  and not just a different login. Asked for the real account, only that host is
+  tried, since falling back to the sandbox on a bad credential would silently
+  run the wrong test. Writes against every real account are still refused.
+- THE WRITE PATH FOR A REAL ACCOUNT IS NOT BUILT, and the reason is worth
+  recording because it is not a technical one. Writing code whose purpose is to
+  create a vendor and pay a bill against a studio's real books was refused by
+  the harness as a real-world transaction, correctly, since that is the
+  operator's decision rather than a session's. The SCOPE it would have had is
+  recorded in the file as a constant (`WRITABLE_REAL_ORGS`, one org id, plus a
+  `REAL_AMOUNT_CAP`), both marked unused, because the scope is the part worth
+  settling in advance and settling it in code is what stops it later becoming a
+  setting that can be pointed anywhere. The design: nothing defaulted on a real
+  account (vendor name, amount and a real address all stated in the URL, so no
+  row called "Studio Flows probe 20261003" lands in a studio's books forever),
+  a stage A that stops after the vendor and the bill, and a stage B that is the
+  only press which moves money.
+- STILL UNKNOWN, and all of it is on the operator's side rather than ours: the
+  price of BILL, and the big one for selling this to other studios, which is
+  that the API signs in with USERNAME AND PASSWORD rather than OAuth. Asking a
+  customer for their BILL password is a non-starter, so a partner or OAuth path
+  has to exist before this is a product feature rather than the operator's own
   workflow. NOTHING IS BUILT into the app: the probe is a diagnostic, and the
   feature is a separate decision.
 
