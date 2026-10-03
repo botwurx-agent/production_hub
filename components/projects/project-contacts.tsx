@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import { PaymentReadinessButton } from "@/components/production/payment-readiness-panel";
 import { IconTile } from "@/components/ui/icon-tile";
 import {
   CATEGORIES,
@@ -70,6 +71,7 @@ export function ProjectContacts({
   clientId,
   clientName,
   canSeeRates = true,
+  canSeePayments = false,
 }: {
   projectId: string;
   projectContacts: ContactRow[];
@@ -82,6 +84,15 @@ export function ProjectContacts({
    * (migration 0074), so removing this prop leaks nothing.
    */
   canSeeRates?: boolean;
+  /**
+   * Whether to offer the "Payment setup" window, which asks BILL how each
+   * person on the job would be paid. Decided on the SERVER, since it needs
+   * both an admin (bill_connections is admin-gated by RLS) and a deployment
+   * with BILL configured at all. Unlike canSeeRates this is not cosmetic: the
+   * action refuses a non-admin, so an unchecked caller would be a button that
+   * only ever reports a refusal.
+   */
+  canSeePayments?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("all");
   const [editing, setEditing] = useState<ContactRow | null>(null);
@@ -166,6 +177,7 @@ export function ProjectContacts({
           })}
         </div>
         <div className="flex items-center gap-2">
+          {canSeePayments && <PaymentReadinessButton projectId={projectId} />}
           {clientContacts.length > 0 && (
             <Button variant="secondary" onClick={() => setPickClient(true)}>
               + From {clientName ?? "client"}

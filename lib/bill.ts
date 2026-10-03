@@ -388,12 +388,12 @@ export function vendorKey(name: string): string {
  * endpoint that was answering fine, because a read and a write sat under one
  * catch and a refused write reported itself as a refused read.
  */
-export async function findBillVendor(
-  session: BillSession,
-  name: string
-): Promise<BillVendor | null> {
-  const want = vendorKey(name);
-  if (!want) return null;
+/**
+ * One page of the vendor list, as rows. Shared by the by-name lookup and the
+ * whole-list read so the two WALK THE SAME ROWS IN THE SAME ORDER: the roster
+ * panel must not report "not at BILL" about a vendor the send then finds.
+ */
+async function vendorPage(session: BillSession): Promise<unknown[]> {
   const res = await v3<{ results?: unknown }>(
     "/vendors/list",
     { max: 100 },
@@ -409,16 +409,50 @@ export async function findBillVendor(
     if (!billSucceeded(r.status, parsed)) throw new BillError(r.status, parsed);
     return parsed as { results?: unknown };
   });
+  return Array.isArray(res.results) ? res.results : [];
+}
 
-  const rows = Array.isArray(res.results) ? res.results : [];
-  for (const row of rows) {
-    const v = row as { id?: unknown; name?: unknown; archived?: unknown };
-    if (v.archived === true) continue;
-    if (typeof v.id === "string" && typeof v.name === "string" && vendorKey(v.name) === want) {
-      return { id: v.id, name: v.name, ...vendorPayFields(row) };
-    }
+/** A row that is a usable vendor, or null. Archived rows are not vendors. */
+function vendorOf(row: unknown): BillVendor | null {
+  const v = (row ?? {}) as { id?: unknown; name?: unknown; archived?: unknown };
+  if (v.archived === true) return null;
+  if (typeof v.id !== "string" || typeof v.name !== "string") return null;
+  return { id: v.id, name: v.name, ...vendorPayFields(row) };
+}
+
+export async function findBillVendor(
+  session: BillSession,
+  name: string
+): Promise<BillVendor | null> {
+  const want = vendorKey(name);
+  if (!want) return null;
+  for (const row of await vendorPage(session)) {
+    const v = vendorOf(row);
+    if (v && vendorKey(v.name) === want) return v;
   }
   return null;
+}
+
+/**
+ * EVERY vendor BILL holds, once. The roster panel joins twenty people against
+ * this in memory rather than making twenty lookups: BILL has no token cache,
+ * so each round trip carries its own cost, and the answer to "who can I pay"
+ * should not be twenty times more expensive than the answer about one person.
+ *
+ * ONE PAGE, which is a real limit rather than an oversight: `vendorPage` asks
+ * for 100 and BILL's paging shape has never been exercised from here. A studio
+ * past that would see its oldest vendors read as "not at BILL yet", which is
+ * the safe direction (it over-reports work rather than claiming somebody is
+ * payable), and the panel says how many rows it read so the ceiling is visible
+ * rather than silent.
+ */
+export async function listBillVendors(session: BillSession): Promise<BillVendor[]> {
+  const out: BillVendor[] = [];
+  for (const row of await vendorPage(session)) {
+    const v = vendorOf(row);
+    if (v) out.push(v);
+  }
+  return out;
 }
 
 /**

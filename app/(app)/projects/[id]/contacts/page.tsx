@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { loadContactRates } from "@/lib/rates";
+import { billConfigured } from "@/lib/bill";
 import {
   loadContactProfiles,
   loadContactFilesByContact,
@@ -123,6 +124,14 @@ export default async function ProjectContactsPage({
         clientId={project.client_id}
         clientName={clientName}
         canSeeRates={!ctx.isCollaborator}
+        // ADMINS ONLY, and only where BILL exists at all: bill_connections is
+        // admin-gated by RLS, so a member's read comes back empty and the
+        // window would report "not connected", which is false from their side.
+        canSeePayments={
+          !ctx.isCollaborator &&
+          (ctx.role === "owner" || ctx.role === "admin") &&
+          billConfigured()
+        }
       />
     </div>
   );

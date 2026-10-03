@@ -2724,6 +2724,65 @@ and a check is never written.
 - THE CHEAPEST TEST STILL NOT RUN, and it bounds what the API could ever offer:
   open a vendor in BILL's own interface and read its Actions menu. What their
   product offers this account is the ceiling on what their API offers it.
+- THE READ HALF OF SLICE 3 IS BUILT, which is everything that does not depend
+  on the unknown invite payload. "Payment setup" on the project contacts page
+  asks BILL how each person on the job would be paid and says who cannot be
+  reached by ACH yet. THE POINT IS THE TIMING: the send window refuses a cheque
+  at the moment of paying, which is correct and far too late (net 30, invoice in
+  hand), and this is the same fact at WRAP, with a month left to fix it.
+- `lib/payment-details.ts` is the pure join (57 assertions). `absent` IS NOT A
+  RAIL: BILL never having heard of somebody is a different problem from BILL
+  knowing them and posting a cheque, and the next step differs, so they are
+  kept apart rather than both reading as "not ready". CLIENTS ARE EXCLUDED by
+  category, since they are the ones paying, and a test asserts a client never
+  appears even when a BILL vendor matches their name.
+- ONE VENDOR READ, NOT ONE PER PERSON. `listBillVendors` shares its page walk
+  with `findBillVendor` through `vendorPage`, so the panel and the send WALK THE
+  SAME ROWS IN THE SAME ORDER: without that the panel could say "not at BILL"
+  about a vendor the send then finds. A roster of twenty would otherwise be
+  twenty round trips, and BILL has no token cache so each carries a sign-in.
+  ONE PAGE of 100 is a real ceiling (BILL's paging has never been exercised
+  from here), and the panel PRINTS how many rows it read so the limit is
+  visible rather than silent; past it, a vendor reads as "not at BILL yet",
+  which over-reports work rather than claiming somebody is payable.
+- `matchKey` DUPLICATES `vendorKey` because lib/bill.ts is `server-only` and
+  this module must stay testable. IF ONE CHANGES, CHANGE BOTH.
+- A DELIBERATE PRESS, not a page load: the read costs a BILL sign-in plus a
+  vendor list read, and most people opening the roster came for a phone number.
+  Admins only and only where BILL is configured, decided on the SERVER, since
+  bill_connections is admin-gated by RLS and a member's read would report "not
+  connected", which is false from their side. Unlike `canSeeRates` that prop is
+  NOT cosmetic: the action refuses a non-admin, so an unchecked caller would be
+  a button that only ever reports a refusal.
+- THE LEAD SENTENCE OVERSTATED BY TWO ROWS in its first draft, found by reading
+  what it rendered rather than by eye: "a payment to any of the others would
+  post a paper check" is FALSE for a virtual-card vendor and UNKNOWN for one
+  whose method BILL did not name. A window whose whole purpose is stating how
+  money will travel cannot be wrong by one row, so each count now carries only
+  the claim it is true of. Same class as `/paid/i` matching "UNPAID".
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  `ReadinessBody`, which was SPLIT OUT as presentational for exactly that
+  reason: a session here reaches neither Supabase nor BILL, so without the
+  split the only states ever seen would be "loading" and "failed", which is how
+  a layout ships unchecked. All five row states plus the all-ready and empty
+  cases, no page errors, no overflow at 390px, and the explanatory sentences
+  measured at 13.98 to 15.83 across light, paper and dark (they are in the text
+  colour; only the state chips carry hue, which is the StatusTag idiom and
+  correct, since these are states).
+- STILL NOT BUILT, and waiting on the probe rather than on a decision: the
+  SEND. Also not built, and next after it: the OFFER when a project moves to
+  post, naming how many people cannot be paid by ACH yet.
+  `readinessSummary` exists for exactly that line and returns null when there
+  is nothing to say, so the caller hides itself rather than printing "0 people
+  need anything" on every job that is already sorted.
+- MARKETING, asked for and DECLINED FOR NOW (operator, 2026-10-03: "I want to
+  start including it in our marketing material as a feature. I think this is a
+  big one."). The pricing-page rule is that a row only ships when the thing it
+  names is built and reachable today, and no `/v3/payments` call has ever been
+  made from the app in either environment, so the ACH claim is a promise rather
+  than a feature. What IS true today and could be said is narrower: see how
+  BILL will pay each vendor before pressing pay, and never post a check by
+  accident. The full claim earns its place the day one real ACH payment lands.
 
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
