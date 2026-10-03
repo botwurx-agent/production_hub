@@ -481,7 +481,7 @@ export async function readBillBill(
   });
   const parsed = await readJson(r);
   if (!billSucceeded(r.status, parsed)) return null;
-  const b = parsed as { paymentStatus?: unknown; dueAmount?: unknown };
+  const b = parsed as { paymentStatus?: unknown; dueAmount?: unknown; payments?: unknown };
   // NULL WHEN ABSENT, never 0. An earlier version coerced a missing field to
   // zero and the caller read zero as "nothing outstanding", which marked every
   // bill paid. See lib/bill-settled.ts.
@@ -493,5 +493,9 @@ export async function readBillBill(
     paymentStatus: typeof b.paymentStatus === "string" ? b.paymentStatus : "",
     // numeric comes back as a string from plenty of APIs, this one included.
     dueAmount: due !== null && Number.isFinite(due) ? due : null,
+    // OBSERVED on a real bill: `payments` is an array, empty while nothing has
+    // been paid. NULL when absent, never 0, for the same reason as dueAmount:
+    // an absence must not be able to say anything.
+    paymentCount: Array.isArray(b.payments) ? b.payments.length : null,
   };
 }

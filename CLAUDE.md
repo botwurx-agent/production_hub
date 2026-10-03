@@ -2442,10 +2442,15 @@ own credential in their own app, it is theirs to choose and they did.
   `const paid = /paid/i.test(state.paymentStatus) || state.dueAmount <= 0;`
   `/paid/i` MATCHES "UNPAID", a substring test against a word that contains it
   (so does "PARTIALLY_PAID"). And `Number(b.dueAmount ?? 0) || 0` turned an
-  ABSENT field into 0, where `0 <= 0` reads as nothing outstanding. THIRD TIME
-  THIS CODEBASE HAS TREATED AN ABSENCE AS EVIDENCE, after the FreshBooks 200
-  carrying an empty list and the storage ceiling inferred from nothing large
-  ever having been stored.
+  ABSENT field into 0, where `0 <= 0` reads as nothing outstanding.
+  CORRECTION, since the second was written up here as a co-cause before the
+  bill had been read: ONLY THE SUBSTRING BUG EVER FIRED. The real body carries
+  `dueAmount: 3959.83`, present and exactly the bill's amount, so that half was
+  false throughout. Asserting two causes on evidence for one is the error this
+  file keeps recording; the absent-field case stays guarded as a latent hazard.
+  THE FIELD NAMES WERE RIGHT ALL ALONG. An unpaid bill reads
+  `paymentStatus: "UNPAID"`, `dueAmount` equal to `amount`, `scheduledAmount` 0
+  and `payments: []`. A PAID one has still never been read.
   lib/bill-settled.ts is the test now, pure and FAIL CLOSED: only a status BILL
   states explicitly settles a bill, matched against a whitelist after
   normalising rather than by pattern, so an unfamiliar or empty value leaves
@@ -2459,10 +2464,18 @@ own credential in their own app, it is theirs to choose and they did.
   WHY IT LOOKED LIKE THE SEND DID IT: the send never writes the cost's status.
   It revalidates the budget page, the page reopens, and `BillSync` runs its
   read-back once on open. Same instant from the operator's seat.
-  `paymentStatus` and `dueAmount` ARE STILL ASSUMED NAMES. A create had been
-  pressed; a READ never had, which is how both readings went unexamined. The
-  probe gained `?bill=<id>`, which prints a whole bill as BILL states it, so
-  the real field is observed rather than guessed at.
+  The probe gained `?bill=<id>`, which prints a whole bill as BILL states it.
+  That one press is what corrected the diagnosis above, and it was needed
+  because a create had been pressed while a READ never had, which is how both
+  readings went unexamined in the first place.
+  A SECOND ROUTE TO SETTLED exists because the whitelist is still a guess in
+  the one direction nobody has observed: if BILL's paid word is not in it, the
+  sync fails closed FOREVER and the feature silently never completes. That
+  route needs TWO facts, both PRESENT and specific: `dueAmount` at or below
+  zero AND at least one row in `payments`. Neither can be produced by an
+  absence, and together they cannot fire on the unpaid bill that was read,
+  which is what makes it safe to add on a single observation. 60 assertions,
+  including that real body as a regression test.
 - APPLYING 0113 FOUND A SUPABASE MCP FAILURE MODE worth knowing: the write path
   went into a state where every statement that ADDED an object succeeded and
   every one that DROPPED timed out, repeatably, with no lock and no stuck

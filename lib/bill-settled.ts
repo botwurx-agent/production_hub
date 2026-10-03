@@ -9,10 +9,13 @@
 //
 //   (1) `/paid/i` MATCHES "UNPAID". It is a substring test, and both "UNPAID"
 //       and "PARTIALLY_PAID" contain it.
-//   (2) AN ABSENT FIELD READ AS SETTLED. dueAmount came through
-//       `Number(b.dueAmount ?? 0) || 0`, so a bill object that does not carry
-//       that field at all arrived as 0, and 0 <= 0 is true. Treating an absence
-//       as evidence is the mistake this codebase has now made three times.
+//   (2) AN ABSENT FIELD WOULD READ AS SETTLED. dueAmount came through
+//       `Number(b.dueAmount ?? 0) || 0`, so a bill not carrying that field at
+//       all arrived as 0, and 0 <= 0 is true. CORRECTION, recorded because it
+//       was first written up as a co-cause: this one did NOT fire on the real
+//       incident. The body was later read and carried `dueAmount: 3959.83`,
+//       present and exactly the bill's amount, so only (1) ever ran. It stays
+//       guarded as a latent hazard, not as an explanation.
 //
 // It cost a false "paid" on a real $3,959.83 bill to a real freelancer, which
 // is not a cosmetic bug: a paid cost leaves "Still owed", leaves the dashboard's
@@ -29,6 +32,9 @@ export type BillBillState = {
   /** What is still owed, or NULL when BILL did not report it. Never coerce an
    *  absent value to a number here: that is bug (2) above. */
   dueAmount: number | null;
+  /** How many payments BILL has recorded against the bill, or NULL when it did
+   *  not report the array. Corroboration only, see below. */
+  paymentCount: number | null;
 };
 
 /** Lower-cased with every non-alphanumeric character removed, so PAID,
@@ -51,11 +57,25 @@ const SETTLED = new Set([
 ]);
 
 export function billSettled(state: BillBillState): boolean {
-  // A stated outstanding balance is the one thing that can overrule the status.
-  // It is never what grants the verdict, so an absent or unreadable amount
-  // changes nothing rather than meaning zero.
+  // A stated outstanding balance is the one thing that can overrule everything
+  // below. It is never what grants the verdict, so an absent or unreadable
+  // amount changes nothing rather than meaning zero.
   if (state.dueAmount !== null && Number.isFinite(state.dueAmount) && state.dueAmount > 0) {
     return false;
   }
-  return SETTLED.has(normalizeBillStatus(state.paymentStatus));
+  if (SETTLED.has(normalizeBillStatus(state.paymentStatus))) return true;
+
+  // SECOND ROUTE, because the whitelist is still a guess in one direction. An
+  // UNPAID bill has been read in full (dueAmount equal to the amount, an empty
+  // payments array, paymentStatus "UNPAID"); a PAID one never has, so if BILL's
+  // settled word is not in the set above this would fail closed forever and the
+  // feature would silently never complete.
+  //
+  // It needs TWO facts that must both be PRESENT and specific: nothing left to
+  // pay, AND at least one payment actually recorded. Neither can be produced by
+  // an absence, which is what makes this safe to add on one observation, and
+  // together they cannot fire on the unpaid bill that was read.
+  const owesNothing = state.dueAmount !== null && Number.isFinite(state.dueAmount) && state.dueAmount <= 0;
+  const hasPayment = state.paymentCount !== null && state.paymentCount > 0;
+  return owesNothing && hasPayment;
 }
