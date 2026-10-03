@@ -67,7 +67,7 @@ const BODY_CHARS = 1500;
 // BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
 // a build that had not finished deploying, which is indistinguishable from a
 // real answer unless the response says which code produced it.
-const PROBE = "2026-10-03-g";
+const PROBE = "2026-10-03-h";
 
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
@@ -252,8 +252,22 @@ export async function GET(req: Request) {
   }
 
   // STEP 1: sign in. Nothing below means anything without this.
-  const rememberMeId = (process.env.BILL_REMEMBER_ME_ID ?? "").trim();
-  const device = (process.env.BILL_DEVICE_ID ?? "studio-flows-server").trim();
+  // `fresh=1` WITHHOLDS the remembered id, so this signs in UNTRUSTED, which is
+  // the state the app's own connect flow is always in. Without it the probe
+  // presents BILL_REMEMBER_ME_ID, comes back trusted, and is therefore not a
+  // like-for-like comparison with the thing being diagnosed.
+  const fresh = url.searchParams.get("fresh") === "1";
+  const rememberMeId = fresh ? "" : (process.env.BILL_REMEMBER_ME_ID ?? "").trim();
+  // `device=...` overrides the device string sent on validate, so the ONE
+  // remaining difference between this working path and the app's failing one
+  // can be tested on its own. The app sends a 49-character id; this has always
+  // sent 19, and BILL has twice now reported a problem by naming something
+  // other than its real cause.
+  const device = (
+    url.searchParams.get("device") ??
+    process.env.BILL_DEVICE_ID ??
+    "studio-flows-server"
+  ).trim();
   const login = await call("sign in", "POST", "/login", {
     username,
     password,
@@ -277,6 +291,11 @@ export async function GET(req: Request) {
   // STEP 2: is this session MFA trusted? Paying a bill needs one. An earlier
   // version called /v3/session for this and got a 404: there is no such path,
   // and the LOGIN response already carries it, so read it from there.
+  // The login step's body was recorded BEFORE sessionId was known, so the
+  // redaction list did not yet contain it and a live session id was printed.
+  // Sweep every step already taken now that it is.
+  for (const st of steps) st.body = redact(st.body, [sessionId]);
+
   const trusted = (login.json as { trusted?: boolean } | null)?.trusted === true;
 
   // MFA, on request only. ?mfa=1 asks BILL to send a challenge code, and
@@ -296,7 +315,9 @@ export async function GET(req: Request) {
       environment: env,
       mfaTrusted: trusted,
       nextUrl: id
-        ? `${url.origin}/api/diagnostics/bill?challengeid=${encodeURIComponent(id)}&mfacode=PUT_CODE_HERE`
+        ? `${url.origin}/api/diagnostics/bill?challengeid=${encodeURIComponent(id)}&mfacode=PUT_CODE_HERE` +
+          (fresh ? "&fresh=1" : "") +
+          (url.searchParams.get("device") ? `&device=${encodeURIComponent(device)}` : "")
         : null,
       reading: id
         ? "A code is on its way. Open nextUrl, replace PUT_CODE_HERE with the code, and press it. These expire in minutes, so do it straight away rather than pasting the response anywhere first."
