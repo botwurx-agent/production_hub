@@ -2310,11 +2310,23 @@ API at all. BILL exposes all three steps.
   a stage A that stops after the vendor and the bill, and a stage B that is the
   only press which moves money.
 - STILL UNKNOWN, and all of it is on the operator's side rather than ours: the
-  price of BILL, and the big one for selling this to other studios, which is
-  that the API signs in with USERNAME AND PASSWORD rather than OAuth. Asking a
-  customer for their BILL password is a non-starter, so a partner or OAuth path
-  has to exist before this is a product feature rather than the operator's own
-  workflow. NOTHING IS BUILT into the app: the probe is a diagnostic, and the
+  price of BILL, and how a SECOND studio would connect, since the path proven
+  here signs in with a USERNAME AND PASSWORD rather than OAuth. CORRECTED
+  2026-10-03, after that was repeated for several rounds as though it were a
+  finding: BILL HAS A PARTNER PROGRAM, and `developer.bill.com/reference/
+  partnerlogin` is in their public reference. A partner session carries
+  partner-level permissions including creating an organization and managing its
+  users, which is the embedded shape a software vendor needs. We had never
+  looked, because developer.bill.com is egress-blocked from a session and the
+  direct login was what the probe happened to prove first. Reasoning from
+  "the endpoint we used needs a password" to "there is no other endpoint" is
+  exactly the error this file records four times over FreshBooks.
+  THE OPEN QUESTION IS FOR BILL, NOT FOR CODE: the partner endpoints are
+  described in terms of CREATING an organization, and what a studio already
+  paying through BILL needs is to LINK the one they have. Whether partner auth
+  covers that, plus what the program costs and requires, is a conversation with
+  their partner team and should happen before this is priced.
+  NOTHING IS BUILT into the app: the probe is a diagnostic, and the
   feature is a separate decision.
 
 ### BILL is the rail now: connect it, and pay a cost with it (0113, 0114) — BUILT
@@ -2325,10 +2337,18 @@ can build the pay by bill option in costs." Built in that order, in one go.
 THE ONE THING TO KNOW BEFORE TOUCHING THIS: BILL HAS NO OAUTH. Its API signs
 in with a username and a password, so a connection is the studio's own
 credential rather than a scoped token somebody issued us. Every decision below
-follows from that, and it is also why this is still not safe to SELL to other
-studios: asking a customer for their BILL password is a non-starter, and a
-partner or OAuth path has to exist first. For the operator's own studio, their
-own credential in their own app, it is theirs to choose and they did.
+follows from that. For the operator's own studio, their own credential in their
+own app, it is theirs to choose and they did.
+FOR A SECOND STUDIO THE ANSWER IS THE PARTNER PATH, not this one, and the two
+should not be confused: BILL publishes a PARTNER LOGIN endpoint whose session
+carries partner-level permissions over organizations and their users. That was
+written up here for several rounds as "no OAuth, therefore unsellable", which
+was an assumption nobody had checked rather than something the probe found.
+What is genuinely unsettled is whether partner auth can LINK a studio's
+existing organization rather than only create one, and that is a question for
+BILL's partner team. Whatever it answers, it changes `billLogin` and the
+Settings card and nothing else: the client, the cost ledger wiring, the send
+window and the read-back all sit above the auth layer.
 - `bill_connections` (0113) is ADMINS ONLY, not is_studio_member. Every other
   connector is per-user or studio-wide because reading mail is ordinary work;
   this one can move money, so it sits with the money tables. One row per studio.
