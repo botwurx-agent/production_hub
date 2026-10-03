@@ -67,7 +67,7 @@ const BODY_CHARS = 1500;
 // BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
 // a build that had not finished deploying, which is indistinguishable from a
 // real answer unless the response says which code produced it.
-const PROBE = "2026-10-03-f";
+const PROBE = "2026-10-03-g";
 
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
@@ -583,6 +583,18 @@ export async function GET(req: Request) {
     processDate: today,
     ...(fundingId ? { fundingAccount: { id: fundingId, type: "BANK_ACCOUNT" } } : {}),
     processingOptions: {},
+    // READ OFF THE REFUSAL, not remembered. It named `amount` and `billId`
+    // as bare words, and this API reports a nested problem with a dotted
+    // path (`address.country: invalid value`), so bare means top level and
+    // the array was being ignored. `createBill` is a flag the refusal itself
+    // revealed: it said billId is required when createBill is false, and
+    // false is what we want, since the bill already exists.
+    amount: 12.34,
+    billId,
+    createBill: false,
+    // The array stays too, deliberately. If it turns out to be the real
+    // shape then the top-level fields are the extras and BILL will say so.
+    // Either way one press learns more than two.
     billPayments: [{ billId, amount: 12.34 }],
   });
 
