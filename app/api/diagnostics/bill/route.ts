@@ -31,6 +31,8 @@
 // Staff only, same gate as the FreshBooks probe.
 import { NextResponse } from "next/server";
 import { getStudioContext } from "@/lib/studio";
+import { createClient } from "@/lib/supabase/server";
+import { billEnv, billSessionForStudio, billV2SessionForStudio } from "@/lib/bill";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -131,14 +133,33 @@ export async function GET(req: Request) {
     password: `${password.length} chars${raw.password !== password ? ", HAD WHITESPACE" : ""}`,
     orgId: orgId ? `${orgId.length} chars, ends ${orgId.slice(-4)}` : "not set",
   };
+  // SIGN IN AS THE STUDIO, using the credential it already stored, rather than
+  // out of environment variables. This is how a question gets asked about the
+  // REAL account without anybody pasting a banking password into Vercel: the
+  // app holds it encrypted, lib/bill is the only thing that decrypts it, and
+  // this borrows that one door. bill_connections is admins only, so a plain
+  // member's read comes back empty and this reports as not connected, which is
+  // the truth from their side.
+  const stored = url.searchParams.get("stored") === "1";
+
   const prefix = real ? "BILL_PROD_" : "BILL_";
   const missing = [
     !devKey && `${prefix}DEV_KEY`,
-    !username && `${prefix}USERNAME`,
-    !password && `${prefix}PASSWORD`,
+    // The developer key is OURS and identifies the integration; the login is
+    // the studio's. In stored mode the second comes from the connection, so
+    // only the first has to be in the environment.
+    !stored && !username && `${prefix}USERNAME`,
+    !stored && !password && `${prefix}PASSWORD`,
   ].filter(Boolean);
   if (missing.length) {
-    return NextResponse.json({ error: `Not set here: ${missing.join(", ")}` }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: `Not set here: ${missing.join(", ")}`,
+        hint:
+          "Add ?stored=1 to sign in as this studio with the credential it already stored, which needs only BILL_DEV_KEY in the environment. A banking password does not belong in an environment variable.",
+      },
+      { status: 400 }
+    );
   }
 
   const write = url.searchParams.get("write") === "1";
@@ -186,12 +207,21 @@ export async function GET(req: Request) {
   // because a fallback to the sandbox on a bad credential would silently run
   // the wrong test. Otherwise both are asked, since BILL's sign-up does not
   // say which kind of key you ended up with.
-  const sandboxOk = real ? false : await askOrgs("sandbox");
+  // Stored mode asks neither host: the connection already names its
+  // organization, and which BILL it belongs to is the deployment's own
+  // setting, so probing for it would be a different question answered loudly.
+  const sandboxOk = real || stored ? false : await askOrgs("sandbox");
   // Reads as before: production is asked only when the sandbox did not
   // answer, which is always the case when the real account was asked for,
   // since the sandbox is not tried at all then.
-  const prodOk = sandboxOk ? false : await askOrgs("production");
-  const env: Env | null = sandboxOk ? "sandbox" : prodOk ? "production" : null;
+  const prodOk = sandboxOk || stored ? false : await askOrgs("production");
+  const env: Env | null = stored
+    ? (billEnv() as Env)
+    : sandboxOk
+      ? "sandbox"
+      : prodOk
+        ? "production"
+        : null;
 
   if (!env) {
     return NextResponse.json({
@@ -212,7 +242,7 @@ export async function GET(req: Request) {
   // freelancer, lives there and has no v3 equivalent we can see.
   const V2 = HOSTS[env].orgs.replace(/ListOrgs\.json$/, "");
 
-  if (!orgId) {
+  if (!orgId && !stored) {
     return NextResponse.json({
       probe: PROBE,
       fingerprint,
@@ -326,16 +356,61 @@ export async function GET(req: Request) {
     process.env.BILL_DEVICE_ID ??
     "studio-flows-server"
   ).trim();
-  const login = await call("sign in", "POST", "/login", {
-    username,
-    password,
-    organizationId: orgId,
-    devKey,
-    // Presenting a remembered MFA id is what makes a session TRUSTED, which
-    // paying a bill requires. Sent only once one has been obtained.
-    ...(rememberMeId ? { rememberMeId, device } : {}),
-  });
-  sessionId = (login.json as { sessionId?: string } | null)?.sessionId ?? "";
+  let login: { json: unknown } = { json: null };
+  let storedTrusted = false;
+  if (stored) {
+    // The app's own door, so nothing here ever holds the password. A failure
+    // is recorded as a step like any other rather than thrown, since a probe
+    // that falls over on its first refusal tells you less than the one it
+    // replaces.
+    try {
+      const signed = await billSessionForStudio(createClient(), ctx.studio.id);
+      if (signed) {
+        sessionId = signed.session.sessionId;
+        storedTrusted = signed.session.trusted;
+        secrets.push(sessionId);
+        record(
+          "sign in as the studio, with its stored credential",
+          `POST ${API}/v3/login (via lib/bill)`,
+          200,
+          true,
+          JSON.stringify({
+            org: signed.conn.org_name ?? signed.conn.org_id,
+            trusted: storedTrusted,
+            device: `${signed.conn.device_id.length} chars`,
+            remembered: Boolean(signed.conn.remember_me_cipher),
+          })
+        );
+      } else {
+        record(
+          "sign in as the studio, with its stored credential",
+          "read bill_connections",
+          0,
+          false,
+          "No connection row for this studio, or this account is not an admin (bill_connections is admins only). Connect BILL in Settings first."
+        );
+      }
+    } catch (e) {
+      record(
+        "sign in as the studio, with its stored credential",
+        `POST ${API}/v3/login (via lib/bill)`,
+        0,
+        false,
+        e instanceof Error ? e.message : "unknown failure"
+      );
+    }
+  } else {
+    login = await call("sign in", "POST", "/login", {
+      username,
+      password,
+      organizationId: orgId,
+      devKey,
+      // Presenting a remembered MFA id is what makes a session TRUSTED, which
+      // paying a bill requires. Sent only once one has been obtained.
+      ...(rememberMeId ? { rememberMeId, device } : {}),
+    });
+    sessionId = (login.json as { sessionId?: string } | null)?.sessionId ?? "";
+  }
   if (!sessionId) {
     return NextResponse.json({
       probe: PROBE,
@@ -354,7 +429,9 @@ export async function GET(req: Request) {
   // Sweep every step already taken now that it is.
   for (const st of steps) st.body = redact(st.body, [sessionId]);
 
-  const trusted = (login.json as { trusted?: boolean } | null)?.trusted === true;
+  const trusted = stored
+    ? storedTrusted
+    : (login.json as { trusted?: boolean } | null)?.trusted === true;
 
   // MFA, on request only. ?mfa=1 asks BILL to send a challenge code, and
   // ?mfacode=... validates it with rememberMe set, which is what mints the
@@ -448,7 +525,21 @@ export async function GET(req: Request) {
     await v2call("v2 SendVendorInvite, v3 session", "SendVendorInvite", sessionId, {
       vendorId: inviteVendorId,
     });
-    const v2session = await v2login();
+    const v2session = stored
+      ? await billV2SessionForStudio(createClient(), ctx.studio.id).catch(() => null)
+      : await v2login();
+    if (stored) {
+      record(
+        "sign in to the older API as the studio",
+        `POST ${V2}Login.json (via lib/bill)`,
+        v2session ? 200 : 0,
+        Boolean(v2session),
+        v2session
+          ? "A session on the older API came back."
+          : "No session came back from the older API. Either Login.json is not the shape lib/bill sends, or this login cannot use it. The v3-session attempt above still answers whether the endpoint itself is permitted."
+      );
+      if (v2session) secrets.push(v2session);
+    }
     if (v2session) {
       await v2call("v2 SendVendorInvite, v2 session", "SendVendorInvite", v2session, {
         vendorId: inviteVendorId,

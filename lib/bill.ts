@@ -280,6 +280,55 @@ export async function billSessionForStudio(
 
 export { encryptSecret };
 
+/**
+ * A session on BILL'S OLDER API, for the studio, from the credential it
+ * stored. Separate from the v3 one above because the two are different
+ * systems: a different host, form encoding, and the failure inside a 200.
+ *
+ * WHY IT EXISTS. The endpoint titled "invite a vendor not in the BILL
+ * network", which is every freelancer the studio hires, has no v3 equivalent
+ * we can see. Whether it accepts a v3 session is unknown, so the alternative
+ * has to be reachable in order to tell "the shape is wrong" from "the session
+ * is wrong". It also means the probe can ask that question WITHOUT a password
+ * being pasted into an environment variable: decryption stays in here, as it
+ * does for every other caller.
+ *
+ * THE SHAPE IS HALF PROVEN. The host, the form encoding and the
+ * `response_data` envelope are the ones listBillOrgs already uses against a
+ * live account. `Login.json` itself and its `sessionId` field have NOT been
+ * exercised, so this returns null on anything unexpected rather than throwing:
+ * a caller comparing two sessions wants the comparison to run either way.
+ */
+export async function billV2SessionForStudio(
+  supabase: SupabaseClient<Database>,
+  studioId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("bill_connections")
+    .select("username, password_cipher, org_id")
+    .eq("studio_id", studioId)
+    .maybeSingle();
+  if (!data) return null;
+  const conn = data as { username: string; password_cipher: string; org_id: string };
+  const base = HOSTS[billEnv()].orgs.replace(/ListOrgs\.json$/, "");
+  const res = await fetch(`${base}Login.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      devKey: devKey(),
+      userName: conn.username,
+      password: decryptSecret(conn.password_cipher),
+      orgId: conn.org_id,
+    }),
+    cache: "no-store",
+  }).catch(() => null);
+  if (!res) return null;
+  const parsed = await readJson(res);
+  if (!billSucceeded(res.status, parsed)) return null;
+  const sid = (parsed as { response_data?: { sessionId?: unknown } }).response_data?.sessionId;
+  return typeof sid === "string" && sid ? sid : null;
+}
+
 // --- Paying a vendor bill ---------------------------------------------------
 //
 // THE PAYLOADS BELOW WERE EACH LEARNED FROM A REFUSAL NAMING WHAT WAS MISSING,
