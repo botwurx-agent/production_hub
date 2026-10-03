@@ -42,13 +42,32 @@ const HOSTS = {
 
 type Env = keyof typeof HOSTS;
 
+// THE ONE REAL ACCOUNT THIS MAY TOUCH, written here rather than read from a
+// setting. The whole point is that no environment variable, no URL and no
+// later edit elsewhere can point the writing half of this probe at somebody
+// else's books: an organization id that is not in this list gets the
+// read-only branch, exactly as before. Botwurx LLC is the operator's own
+// studio, standing in for a customer of Studio Flows.
+// NOT YET USED. The write path for a real account is not built: the
+// read-only branch below still refuses every real organization, this list
+// included. It is here because the SCOPE is the part worth deciding in
+// advance, and deciding it in a constant is what stops it later becoming a
+// setting somebody can point anywhere.
+const WRITABLE_REAL_ORGS = ["00802ZJVYBVTJQZ2y1xh"];
+void WRITABLE_REAL_ORGS;
+
+// A probe is not a payment tool. A real-account press over this is refused,
+// so a mistyped amount cannot become a four-figure one.
+const REAL_AMOUNT_CAP = 10000;
+void REAL_AMOUNT_CAP;
+
 // Enough body to diagnose from, not so much that a stack of them is a wall.
 const BODY_CHARS = 1500;
 
 // BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
 // a build that had not finished deploying, which is indistinguishable from a
 // real answer unless the response says which code produced it.
-const PROBE = "2026-10-03-e";
+const PROBE = "2026-10-03-f";
 
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
@@ -77,12 +96,27 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Not available on this account." }, { status: 403 });
   }
 
-  const raw = {
-    devKey: process.env.BILL_DEV_KEY ?? "",
-    username: process.env.BILL_USERNAME ?? "",
-    password: process.env.BILL_PASSWORD ?? "",
-    orgId: process.env.BILL_ORG_ID ?? "",
-  };
+  const url = new URL(req.url);
+
+  // REACHING THE REAL ACCOUNT TAKES ITS OWN URL AND ITS OWN VARIABLES. A
+  // separate set rather than swapping the existing ones, for two reasons: the
+  // sandbox keeps working, so a shape can still be learned for free, and
+  // BILL's developer keys are per environment, so these are different values
+  // and not just a different login.
+  const real = url.searchParams.get("env") === "production";
+  const raw = real
+    ? {
+        devKey: process.env.BILL_PROD_DEV_KEY ?? "",
+        username: process.env.BILL_PROD_USERNAME ?? "",
+        password: process.env.BILL_PROD_PASSWORD ?? "",
+        orgId: process.env.BILL_PROD_ORG_ID ?? "",
+      }
+    : {
+        devKey: process.env.BILL_DEV_KEY ?? "",
+        username: process.env.BILL_USERNAME ?? "",
+        password: process.env.BILL_PASSWORD ?? "",
+        orgId: process.env.BILL_ORG_ID ?? "",
+      };
   const devKey = raw.devKey.trim();
   const username = raw.username.trim();
   const password = raw.password.trim();
@@ -97,16 +131,16 @@ export async function GET(req: Request) {
     password: `${password.length} chars${raw.password !== password ? ", HAD WHITESPACE" : ""}`,
     orgId: orgId ? `${orgId.length} chars, ends ${orgId.slice(-4)}` : "not set",
   };
+  const prefix = real ? "BILL_PROD_" : "BILL_";
   const missing = [
-    !devKey && "BILL_DEV_KEY",
-    !username && "BILL_USERNAME",
-    !password && "BILL_PASSWORD",
+    !devKey && `${prefix}DEV_KEY`,
+    !username && `${prefix}USERNAME`,
+    !password && `${prefix}PASSWORD`,
   ].filter(Boolean);
   if (missing.length) {
     return NextResponse.json({ error: `Not set here: ${missing.join(", ")}` }, { status: 400 });
   }
 
-  const url = new URL(req.url);
   const write = url.searchParams.get("write") === "1";
   const pay = url.searchParams.get("pay") === "1";
   const addBank = url.searchParams.get("bank") === "1";
@@ -148,8 +182,14 @@ export async function GET(req: Request) {
     return ok;
   }
 
-  // STEP 0. Ask both, because their sign-up does not say which you got.
-  const sandboxOk = await askOrgs("sandbox");
+  // STEP 0. Which host. Asked for the real account, only that host is tried,
+  // because a fallback to the sandbox on a bad credential would silently run
+  // the wrong test. Otherwise both are asked, since BILL's sign-up does not
+  // say which kind of key you ended up with.
+  const sandboxOk = real ? false : await askOrgs("sandbox");
+  // Reads as before: production is asked only when the sandbox did not
+  // answer, which is always the case when the real account was asked for,
+  // since the sandbox is not tried at all then.
   const prodOk = sandboxOk ? false : await askOrgs("production");
   const env: Env | null = sandboxOk ? "sandbox" : prodOk ? "production" : null;
 
