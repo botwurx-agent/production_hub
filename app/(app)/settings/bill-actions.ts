@@ -14,7 +14,6 @@
 //
 // NOTHING SECRET IS EVER RETURNED. These actions hand back a status, an org
 // name, or a sentence BILL said. The password goes one way.
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
@@ -25,10 +24,12 @@ import {
   billConfigured,
   billEnv,
   billLogin,
+  billDeviceIdOk,
   billMfaChallenge,
   billMfaValidate,
   encryptSecret,
   listBillOrgs,
+  newBillDeviceId,
   type BillOrg,
 } from "@/lib/bill";
 import { billSessionForStudio } from "@/lib/bill";
@@ -129,8 +130,8 @@ export async function connectBill(
 
   // A device id per studio, not per sign-in, because BILL remembers the pair
   // of (remembered id, device) and a new device each time would make every
-  // session untrusted.
-  const device = `studio-flows-${randomUUID()}`;
+  // session untrusted. Its SHAPE is load-bearing: see newBillDeviceId.
+  const device = newBillDeviceId();
 
   try {
     const session = await billLogin({ username: user, password, orgId: org });
@@ -211,10 +212,32 @@ export async function confirmBillMfa(
     const signed = await billSessionForStudio(supabase, ctx.studio.id);
     if (!signed) return { error: "BILL is not connected yet." };
 
+    // A connection made before BILL's `BDC_1143 Invalid entity data. deviceId.`
+    // was understood carries a 49-character device id that BILL will not
+    // accept. Repair it rather than refusing: there is no remembered id yet
+    // (that is the whole point of this step), so nothing is bound to the old
+    // value and changing it costs nothing. Once one EXISTS the device must
+    // never change, or a trusted sign-in stops coming back trusted.
+    let device = signed.conn.device_id;
+    if (!signed.conn.remember_me_cipher && !billDeviceIdOk(device)) {
+      device = newBillDeviceId();
+      // Written BEFORE it is used. The other order would mint a remembered id
+      // against a device this row does not know, and every later sign-in would
+      // present a pair BILL never issued.
+      const { error: deviceError } = await supabase
+        .from("bill_connections")
+        .update({ device_id: device, updated_at: new Date().toISOString() })
+        .eq("studio_id", ctx.studio.id);
+      if (deviceError) {
+        reportError("confirmBillMfa/device", deviceError);
+        return { error: "Could not update this connection. Try again in a moment." };
+      }
+    }
+
     const rememberMeId = await billMfaValidate(signed.session, {
       challengeId: id,
       code: entered,
-      device: signed.conn.device_id,
+      device,
     });
 
     const { error: writeError } = await supabase

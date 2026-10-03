@@ -21,6 +21,7 @@
 // the studio supplies its own login. Proven incidentally: one developer key
 // listed a different company's organization using that company's username.
 import "server-only";
+import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { billFailure, billSucceeded } from "@/lib/bill-error";
 import { billCryptoReady, decryptSecret, encryptSecret } from "@/lib/bill-crypto";
@@ -184,6 +185,36 @@ export async function billMfaChallenge(session: BillSession): Promise<string> {
   const id = typeof res.challengeId === "string" ? res.challengeId : "";
   if (!id) throw new BillError(200, res);
   return id;
+}
+
+/**
+ * The device identifier this server presents to BILL. It is stable per studio
+ * and has to be, because a remembered id is bound to the device it was minted
+ * for, so changing it later would silently stop a trusted session coming back
+ * trusted.
+ *
+ * SHORT ON PURPOSE, and this was learned from a refusal rather than a doc. The
+ * first version was `studio-flows-${randomUUID()}`, 49 characters, and BILL
+ * answered the validate with `400 BDC_1143 Invalid entity data. deviceId.`
+ * What made it expensive is what it said through the APP's own path: there it
+ * came back as `2-Step Verification token has expired`, which sent three
+ * rounds at the code and the clock instead of at the field. Third time BILL
+ * has named something other than the real cause.
+ *
+ * 19 characters, matching `studio-flows-server`, which is the value proven to
+ * work end to end through the probe. The exact ceiling is unknown and is not
+ * worth another SMS round to find: matching a known-good length is not a guess
+ * about the limit, it is declining to go near it.
+ */
+export function newBillDeviceId(): string {
+  return `sf-${randomBytes(8).toString("hex")}`;
+}
+
+/** Whether a stored device id is one `newBillDeviceId` would mint today. A row
+ *  written before that refusal was understood carries a long one, which BILL
+ *  will not accept, so the connect flow repairs it rather than failing. */
+export function billDeviceIdOk(device: string): boolean {
+  return /^sf-[0-9a-f]{16}$/.test(device);
 }
 
 /** Validates the code and remembers this device, which is the point. */
