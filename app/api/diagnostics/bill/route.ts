@@ -45,6 +45,11 @@ type Env = keyof typeof HOSTS;
 // Enough body to diagnose from, not so much that a stack of them is a wall.
 const BODY_CHARS = 1500;
 
+// BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
+// a build that had not finished deploying, which is indistinguishable from a
+// real answer unless the response says which code produced it.
+const PROBE = "2026-10-03-d";
+
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
 /** A session id or a password in a body is a live credential, so it never
@@ -150,6 +155,7 @@ export async function GET(req: Request) {
 
   if (!env) {
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: "unknown",
       reading:
@@ -162,6 +168,7 @@ export async function GET(req: Request) {
 
   if (!orgId) {
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       reading:
@@ -219,6 +226,7 @@ export async function GET(req: Request) {
   sessionId = (login.json as { sessionId?: string } | null)?.sessionId ?? "";
   if (!sessionId) {
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       reading: "No sessionId came back, so nothing else could run. The body names the reason.",
@@ -243,6 +251,7 @@ export async function GET(req: Request) {
     const ch = await call("ask BILL for an MFA challenge", "POST", "/mfa/challenge", {});
     const id = (ch.json as { challengeId?: string } | null)?.challengeId ?? "";
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       mfaTrusted: trusted,
@@ -266,6 +275,7 @@ export async function GET(req: Request) {
       device,
     });
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       reading:
@@ -336,6 +346,7 @@ export async function GET(req: Request) {
   // THE INVARIANT. Production never writes from here, whatever the URL says.
   if (env === "production") {
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       fundingId: fundingId || null,
@@ -363,6 +374,11 @@ export async function GET(req: Request) {
       accountNumber: "1234567890",
       type: "CHECKING",
       ownerType: "BUSINESS",
+      // Required, which the refusal said and no amount of reasoning would
+      // have. It is the bank behind routing 021000021, written the way BILL
+      // writes the one it looked up for the existing row, in case it checks
+      // the pair rather than just storing what it is handed.
+      bankName: "JPMORGAN CHASE BANK NATIONAL ASSOCIATION",
     });
     const after = await call("read the bank list back", "GET", "/funding-accounts/banks");
     const afterRows = bankRows(after.json);
@@ -370,6 +386,7 @@ export async function GET(req: Request) {
     const newRow = afterRows.find((r) => String(r.id) === madeId) ?? afterRows.find((r) => r.archived !== true);
     const newId = madeId || (newRow ? String(newRow.id) : "");
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       mfaTrusted: trusted,
@@ -401,6 +418,7 @@ export async function GET(req: Request) {
       depositAmount: Number(verifyAmount),
     });
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       bankId,
@@ -412,6 +430,7 @@ export async function GET(req: Request) {
 
   if (!write) {
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       mfaTrusted: trusted,
@@ -443,6 +462,7 @@ export async function GET(req: Request) {
   const vendorId = (vendor.json as { id?: string } | null)?.id ?? "";
   if (!vendorId) {
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       reading:
@@ -466,6 +486,7 @@ export async function GET(req: Request) {
   const billId = (bill.json as { id?: string } | null)?.id ?? "";
   if (!billId) {
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       vendorId,
@@ -476,6 +497,7 @@ export async function GET(req: Request) {
 
   if (!pay) {
     return NextResponse.json({
+      probe: PROBE,
       fingerprint,
       environment: env,
       vendorId,
@@ -500,6 +522,7 @@ export async function GET(req: Request) {
   });
 
   return NextResponse.json({
+    probe: PROBE,
     fingerprint,
     environment: env,
     vendorId,
