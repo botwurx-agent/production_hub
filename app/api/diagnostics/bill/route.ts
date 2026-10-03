@@ -20,6 +20,14 @@
 // turns out to be a production key, the create and pay steps are refused by
 // this file no matter what is in the URL.
 //
+// THE FUNDING ACCOUNT IS THE LAST UNKNOWN. A payment was refused for
+// `fundingAccount: must not be null` and `processingOptions: must not be
+// null`, and a sandbox org cannot have a real bank account attached to it. So
+// three questions, each its own step and its own body: does the org already
+// carry a funding account, can a dummy one be created, and does BILL insist
+// on verifying it before it will pay. None of those can be answered from the
+// docs, which are egress blocked from here.
+//
 // Staff only, same gate as the FreshBooks probe.
 import { NextResponse } from "next/server";
 import { getStudioContext } from "@/lib/studio";
@@ -96,6 +104,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const write = url.searchParams.get("write") === "1";
   const pay = url.searchParams.get("pay") === "1";
+  const addBank = url.searchParams.get("bank") === "1";
+  const verifyAmount = (url.searchParams.get("verify") ?? "").trim();
 
   const steps: Step[] = [];
   const secrets = [password, devKey];
@@ -268,13 +278,94 @@ export async function GET(req: Request) {
   await call("list vendors", "GET", "/vendors?max=5");
   await call("list bills", "GET", "/bills?max=5");
 
+  // STEP 3b: what can money come OUT of? Read before writing, because a
+  // sandbox org may already ship with a funding account, in which case
+  // nothing needs creating and the payment can go straight through.
+  const banks = await call("list bank accounts money can come from", "GET", "/funding-accounts/banks");
+  await call("list cards money can come from", "GET", "/funding-accounts/cards");
+
+  // Tolerant on purpose: the list shape is not known here, and a wrapper key
+  // guessed wrong would read as "no funding account" when there is one.
+  function firstId(j: unknown): string {
+    const o = j as Record<string, unknown> | null;
+    const rows = Array.isArray(o)
+      ? o
+      : Array.isArray(o?.results)
+        ? o.results
+        : Array.isArray(o?.data)
+          ? o.data
+          : Array.isArray(o?.fundingAccounts)
+            ? o.fundingAccounts
+            : [];
+    for (const r of rows as { id?: unknown }[]) if (typeof r?.id === "string") return r.id;
+    return "";
+  }
+  const fundingId = (url.searchParams.get("fundingid") ?? "").trim() || firstId(banks.json);
+
   // THE INVARIANT. Production never writes from here, whatever the URL says.
   if (env === "production") {
     return NextResponse.json({
       fingerprint,
       environment: env,
+      fundingId: fundingId || null,
       reading:
-        "Read only, because this is your real account. The vendor and bill bodies above answer the FreshBooks question: whether a list comes back with your actual rows in it, or empty. Creating and paying need a SANDBOX key.",
+        "Read only, because this is your real account. The vendor and bill bodies above answer the FreshBooks question: whether a list comes back with your actual rows in it, or empty, and the funding bodies say whether a real bank account is attached. Creating and paying need a SANDBOX key.",
+      steps,
+    });
+  }
+
+  // A DUMMY BANK ACCOUNT, on its own press. Separate from ?write=1 because a
+  // funding account belongs to the ORG rather than to a throwaway test row:
+  // it is the one write here that somebody might not want repeated, so it is
+  // never a side effect of asking for a vendor and a bill.
+  if (addBank) {
+    // The body is DELIBERATELY MINIMAL. Every field shape in this file so far
+    // was learned from a refusal naming what was missing (the vendor address,
+    // the nested invoice, the top-level dueDate), and that has been faster and
+    // more accurate than guessing a full payload. 021000021 is a real, valid
+    // routing number, so a checksum check passes; the account number is not.
+    const made = await call("add a dummy bank account", "POST", "/funding-accounts/banks", {
+      name: "Studio Flows sandbox checking",
+      nameOnAccount: "Studio Flows Sandbox",
+      routingNumber: "021000021",
+      accountNumber: "1234567890",
+      accountType: "CHECKING",
+    });
+    const after = await call("read the bank list back", "GET", "/funding-accounts/banks");
+    const newId = (made.json as { id?: string } | null)?.id ?? firstId(after.json);
+    return NextResponse.json({
+      fingerprint,
+      environment: env,
+      mfaTrusted: trusted,
+      bankId: newId || null,
+      reading: newId
+        ? "A bank account exists now. Read its body for a verification status: if BILL wants micro deposits confirmed, paying will be refused until that is done, and ?verify=<amount> tries that. If it reads as usable, go straight to ?write=1&pay=1."
+        : "No bank id came back. If the body lists the fields it wants, that IS the spec. If it refuses the endpoint outright, a sandbox org cannot hold a funding account and a payment cannot be completed here at all, which is itself the answer.",
+      steps,
+    });
+  }
+
+  // Verifying it, if BILL asks for micro deposits. Amount comes from the URL
+  // because only the operator can see what the sandbox posted.
+  if (verifyAmount) {
+    const bankId = (url.searchParams.get("bankid") ?? "").trim() || fundingId;
+    if (!bankId) {
+      return NextResponse.json({
+        fingerprint,
+        environment: env,
+        reading: "Nothing to verify: no bank account was found. Press ?bank=1 first.",
+        steps,
+      });
+    }
+    await call("verify the bank account", "POST", `/funding-accounts/banks/${bankId}/verify`, {
+      depositAmount: Number(verifyAmount),
+    });
+    return NextResponse.json({
+      fingerprint,
+      environment: env,
+      bankId,
+      reading:
+        "Read the body. A refusal naming the field it wanted is the spec; a refusal on the amount means the deposit figure is wrong rather than the call being shut.",
       steps,
     });
   }
@@ -284,7 +375,12 @@ export async function GET(req: Request) {
       fingerprint,
       environment: env,
       mfaTrusted: trusted,
-      reading: "Signed in and read. Add ?write=1 to create a test vendor and a test bill in the sandbox.",
+      fundingId: fundingId || null,
+      reading:
+        (fundingId
+          ? "Signed in, and a funding account is already here, so a payment has something to come from."
+          : "Signed in, and NO funding account was found, which is the thing a payment was refused for. Press ?bank=1 to try creating a dummy one.") +
+        " Add ?write=1 to create a test vendor and a test bill in the sandbox.",
       steps,
     });
   }
@@ -347,9 +443,16 @@ export async function GET(req: Request) {
   }
 
   // STEP 6: pay it. The question FreshBooks could never answer.
+  //
+  // `processingOptions` is sent EMPTY on purpose. It was refused for being
+  // null, so an empty object clears that check and the refusal that follows
+  // names the children it actually wants, which is the cheapest way to learn
+  // a shape the docs cannot be read for from here.
   await call("pay the bill", "POST", "/payments", {
     vendorId,
     processDate: today,
+    ...(fundingId ? { fundingAccount: { id: fundingId, type: "BANK_ACCOUNT" } } : {}),
+    processingOptions: {},
     billPayments: [{ billId, amount: 12.34 }],
   });
 
@@ -359,8 +462,12 @@ export async function GET(req: Request) {
     vendorId,
     billId,
     mfaTrusted: trusted,
+    fundingId: fundingId || null,
     reading:
-      "Read the payment body. A refusal naming MFA is a GOOD result: the call is permitted and the session needs trusting, which is a flow question rather than a wall.",
+      (fundingId
+        ? "A funding account was sent with the payment."
+        : "NO funding account was sent, because none was found, so expect the same 'must not be null' refusal. Press ?bank=1 first.") +
+      " Read the payment body: a refusal naming MFA or naming a field it wants is a GOOD result, since the call is permitted and only the shape or the session is wrong.",
     steps,
   });
 }
