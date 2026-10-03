@@ -67,7 +67,7 @@ const BODY_CHARS = 1500;
 // BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
 // a build that had not finished deploying, which is indistinguishable from a
 // real answer unless the response says which code produced it.
-const PROBE = "2026-10-03-h";
+const PROBE = "2026-10-03-i";
 
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
@@ -322,6 +322,23 @@ export async function GET(req: Request) {
       reading: id
         ? "A code is on its way. Open nextUrl, replace PUT_CODE_HERE with the code, and press it. These expire in minutes, so do it straight away rather than pasting the response anywhere first."
         : "No challengeId came back. If the body names required fields instead, that IS the spec.",
+      steps,
+    });
+  }
+
+  // READ ONE BILL, by id, and print the whole body. This exists because the
+  // sync decided a bill was settled from `paymentStatus` and `dueAmount`,
+  // names that were assumed rather than observed, and both readings were
+  // wrong. A create has been pressed; a READ never had. Nothing is written.
+  const readBillId = (url.searchParams.get("bill") ?? "").trim();
+  if (readBillId) {
+    await call("read one bill", "GET", `/bills/${encodeURIComponent(readBillId)}`);
+    return NextResponse.json({
+      probe: PROBE,
+      fingerprint,
+      environment: env,
+      reading:
+        "The body above is the whole bill as BILL states it. What matters is the exact name and value of whatever reports settlement, since the sync was reading `paymentStatus` and `dueAmount` on an assumption. A bill nobody has paid must NOT carry a value that reads as paid.",
       steps,
     });
   }

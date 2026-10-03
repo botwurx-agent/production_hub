@@ -24,6 +24,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { billFailure, billSucceeded } from "@/lib/bill-error";
+import type { BillBillState } from "@/lib/bill-settled";
 import { billCryptoReady, decryptSecret, encryptSecret } from "@/lib/bill-crypto";
 import type { Database } from "@/lib/database.types";
 
@@ -473,7 +474,7 @@ export async function createBillPayment(
 export async function readBillBill(
   session: BillSession,
   billId: string
-): Promise<{ paymentStatus: string; dueAmount: number } | null> {
+): Promise<BillBillState | null> {
   const r = await fetch(`${HOSTS[billEnv()].gateway}/bills/${encodeURIComponent(billId)}`, {
     headers: { "Content-Type": "application/json", devKey: devKey(), sessionId: session.sessionId },
     cache: "no-store",
@@ -481,9 +482,16 @@ export async function readBillBill(
   const parsed = await readJson(r);
   if (!billSucceeded(r.status, parsed)) return null;
   const b = parsed as { paymentStatus?: unknown; dueAmount?: unknown };
+  // NULL WHEN ABSENT, never 0. An earlier version coerced a missing field to
+  // zero and the caller read zero as "nothing outstanding", which marked every
+  // bill paid. See lib/bill-settled.ts.
+  const due =
+    b.dueAmount === null || b.dueAmount === undefined || b.dueAmount === ""
+      ? null
+      : Number(b.dueAmount);
   return {
     paymentStatus: typeof b.paymentStatus === "string" ? b.paymentStatus : "",
     // numeric comes back as a string from plenty of APIs, this one included.
-    dueAmount: Number(b.dueAmount ?? 0) || 0,
+    dueAmount: due !== null && Number.isFinite(due) ? due : null,
   };
 }

@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
 import { allow } from "@/lib/rate-limit";
+import { billSettled } from "@/lib/bill-settled";
 import {
   BillError,
   billConfigured,
@@ -308,8 +309,11 @@ export async function syncBillCosts(projectId: string): Promise<{ checked: numbe
       const state = await readBillBill(signed.session, c.bill_bill_id as string);
       if (!state) continue;
       checked += 1;
-      const paid = /paid/i.test(state.paymentStatus) || state.dueAmount <= 0;
-      if (!paid) continue;
+      // FAIL CLOSED. This test used to be `/paid/i.test(status) || dueAmount <= 0`,
+      // which matched "UNPAID" and read an absent amount as nothing owed, so it
+      // marked a real unpaid bill as paid and flipped the cost with it. See
+      // lib/bill-settled.ts for both halves.
+      if (!billSettled(state)) continue;
       await supabase
         .from("project_costs")
         .update({ bill_status: "paid", status: "paid", bill_synced_at: new Date().toISOString() })
