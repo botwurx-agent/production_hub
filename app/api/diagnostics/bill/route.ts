@@ -67,7 +67,7 @@ const BODY_CHARS = 1500;
 // BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
 // a build that had not finished deploying, which is indistinguishable from a
 // real answer unless the response says which code produced it.
-const PROBE = "2026-10-03-i";
+const PROBE = "2026-10-03-j";
 
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
@@ -205,6 +205,12 @@ export async function GET(req: Request) {
   }
 
   const API = HOSTS[env].api;
+  // THE OLDER API, which is a different host and a different encoding rather
+  // than a different path: form encoded, one endpoint per file name, and the
+  // failure inside a 200. The invite probe below needs it because the endpoint
+  // titled "invite a vendor not in the BILL network", which is every
+  // freelancer, lives there and has no v3 equivalent we can see.
+  const V2 = HOSTS[env].orgs.replace(/ListOrgs\.json$/, "");
 
   if (!orgId) {
     return NextResponse.json({
@@ -249,6 +255,58 @@ export async function GET(req: Request) {
       json = JSON.parse(text);
     } catch {}
     return { status, ok, json };
+  }
+
+  /** One v2 call. Form encoded, payload as a JSON string in `data`, and the
+   *  real answer inside a 200, so `ok` asks the body exactly as above. */
+  async function v2call(what: string, endpoint: string, session: string, data: unknown) {
+    const target = `${V2}${endpoint}.json`;
+    let status = 0;
+    let ok = false;
+    let text = "";
+    try {
+      const res = await fetch(target, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ devKey, sessionId: session, data: JSON.stringify(data) }),
+      });
+      status = res.status;
+      text = await res.text();
+      ok = res.ok && billOk(text);
+    } catch (e) {
+      text = `NETWORK FAILURE: ${e instanceof Error ? e.message : "unknown"}`;
+    }
+    record(what, `POST ${target}`, status, ok, text);
+    return { status, ok, body: text };
+  }
+
+  /** A v2 session, which may or may not be the same thing as a v3 one. That
+   *  question is half of what the invite probe exists to answer, so it is
+   *  asked rather than assumed. */
+  async function v2login() {
+    let status = 0;
+    let text = "";
+    try {
+      const res = await fetch(`${V2}Login.json`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ devKey, userName: username, password, orgId }),
+      });
+      status = res.status;
+      text = await res.text();
+    } catch (e) {
+      text = `NETWORK FAILURE: ${e instanceof Error ? e.message : "unknown"}`;
+    }
+    const ok = status === 200 && billOk(text);
+    let id = "";
+    try {
+      const j = JSON.parse(text) as { response_data?: { sessionId?: unknown } };
+      const sid = j.response_data?.sessionId;
+      if (typeof sid === "string") id = sid;
+    } catch {}
+    if (id) secrets.push(id);
+    record("sign in to the older API", `POST ${V2}Login.json`, status, ok, text);
+    return id;
   }
 
   // STEP 1: sign in. Nothing below means anything without this.
@@ -339,6 +397,70 @@ export async function GET(req: Request) {
       environment: env,
       reading:
         "The body above is the whole bill as BILL states it. What matters is the exact name and value of whatever reports settlement, since the sync was reading `paymentStatus` and `dueAmount` on an assumption. A bill nobody has paid must NOT carry a value that reads as paid.",
+      steps,
+    });
+  }
+
+  // CAN BILL ASK A FREELANCER FOR THEIR OWN ACH DETAILS? The step the studio
+  // does by hand today, and the one thing standing between "add the bill" and
+  // "pay by ACH in one press": a vendor we create comes back
+  // `payByType: CHECK` with no bank account, and pressing Pay on that posts a
+  // paper cheque, which is not how this studio pays anybody.
+  //
+  // WHY A PROBE AND NOT CODE. Two endpoints exist and the docs blur them.
+  // `POST /v3/network/invitation/vendor/{id}` is documented as taking a
+  // networkId from a search of companies ALREADY IN the BILL network, which a
+  // freelancer who has never heard of BILL cannot be. `SendVendorInvite` is
+  // titled "invite a vendor not in the BILL network", which is the case that
+  // matters, and it lives on the OLDER API, so there is a second unknown
+  // underneath the first: whether a v3 session is accepted there at all.
+  // Writing either from a remembered shape is how the FreshBooks rounds went.
+  //
+  // NOTHING IS CREATED AND NOBODY IS EMAILED. The v3 attempt carries an EMPTY
+  // BODY and the v2 attempt carries only the vendor id, so neither has an
+  // address to send anything to: the refusal naming the missing fields IS the
+  // answer, which is exactly how the payment payload was assembled. It runs
+  // on the REAL account deliberately, ahead of the production refusal below,
+  // because the vendor whose rail we need to change is on the real account.
+  const inviteVendorId = (url.searchParams.get("invite") ?? "").trim();
+  if (inviteVendorId) {
+    // The vendor as BILL states it. This also checks the two fields the send
+    // window now reads, `payByType` and `bankAccountStatus`, against what
+    // lib/bill-payable whitelists: a value outside those sets reports as
+    // "BILL did not say" rather than as a rail.
+    await call("read the vendor", "GET", `/vendors/${encodeURIComponent(inviteVendorId)}`);
+
+    // Is this company in the BILL network at all? An empty result is the
+    // evidence that the v3 invitation is the wrong endpoint for a stranger.
+    await call("search the BILL network", "GET", "/network?max=5");
+
+    await call(
+      "v3 network invitation, empty body",
+      "POST",
+      `/network/invitation/vendor/${encodeURIComponent(inviteVendorId)}`,
+      {}
+    );
+
+    // The same question on the older API, twice: once on the v3 session we
+    // already hold, once on a session from v2's own login. Separately, because
+    // "the shape is wrong" and "the session is wrong" point in opposite
+    // directions and one message covers both.
+    await v2call("v2 SendVendorInvite, v3 session", "SendVendorInvite", sessionId, {
+      vendorId: inviteVendorId,
+    });
+    const v2session = await v2login();
+    if (v2session) {
+      await v2call("v2 SendVendorInvite, v2 session", "SendVendorInvite", v2session, {
+        vendorId: inviteVendorId,
+      });
+    }
+
+    return NextResponse.json({
+      probe: PROBE,
+      fingerprint,
+      environment: env,
+      reading:
+        "Read the five bodies in order. The vendor body gives the LIVE values of payByType and bankAccountStatus, which is what the send window reads. The network search says whether this person is in BILL's network: empty means the v3 invitation cannot reach them. Then the two SendVendorInvite attempts: a refusal naming required fields is a GOOD result, since the endpoint is permitted and only the shape is missing, and that refusal is the spec. 'Invalid session' on the v3-session attempt but not the v2-session one means the older API needs its own login, which is a known cost rather than a wall. A flat refusal of the endpoint on both sessions means this account cannot invite a vendor through the API, and the answer is BILL's own screen. Nothing was created and nobody was emailed: neither attempt carried an address.",
       steps,
     });
   }
