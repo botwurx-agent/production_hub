@@ -2451,6 +2451,51 @@ window and the read-back all sit above the auth layer.
   `00901ZBGDSZ...` and bill `00n01XFDCX...`, with the address prompt and the
   one-cost-one-bill guard both working. PAYING is still unexercised: no
   `/v3/payments` call has ever been made from the app.
+- THE REAL ACCOUNT IS CONNECTED AND TAKES A VENDOR AND A BILL (production,
+  2026-10-03). The deployment was pointed at production by putting the
+  production developer key in `BILL_DEV_KEY` and DELETING `BILL_ENV`, and the
+  Botwurx studio connected on its own BILL login: org `00802ZJVYBVTJQZ2y1xh`,
+  a 19-character device id, an encrypted password, a 2-step code and a stored
+  remembered device, all verified in the database rather than from the screen.
+  One press of "Just add the bill" on the same $3,959.83 Veronica Laramie cost
+  created vendor `00902NXZGJ...` and bill `00n02BOALA...`.
+- AND THE FALSE-PAID BUG IS FIXED AGAINST A REAL BILL, which is the result
+  worth more than the ids. `bill_synced_at` came back stamped with
+  `bill_status` unpaid and the cost still `received`, so the read-back RAN and
+  `billSettled` refused to settle it. The same sequence on the same cost two
+  days earlier reported "BILL paid" and flipped the cost, because `/paid/i`
+  matches "UNPAID".
+- WHAT THIS TEST COULD NOT ANSWER, stated so nobody later reads it as proven:
+  the production account had NO vendors at all, so `findVendor` had nothing to
+  collide with and the match path is still untested. It gets its first real
+  exercise when a SECOND bill goes to a vendor BILL already holds. The empty
+  list is also the reason "will be added to BILL" was correct here rather than
+  the FreshBooks failure it resembles, where a 200 carried `total: 0` on an
+  account that genuinely had vendors.
+- THE VENDOR CAME BACK "Check" AND "Not Connected", exactly as the probe
+  predicted: BILL mails a paper check until the vendor connects their own bank
+  to BILL's network. Studio Flows never collects, stores or transmits a
+  freelancer's bank details, which is the outcome the remittance work wanted
+  and FreshBooks could not give.
+- A SANDBOX ID ON A COST IS LITTER AFTER THE SWITCH, and it has to be cleared
+  by hand: the one-cost-one-bill guard refuses to send a cost that already
+  carries a `bill_bill_id`, and that id names a bill in a system the
+  deployment no longer talks to. Clearing the four bill_* columns is safe
+  (readBillBill returns null on an id BILL does not recognise and syncBillCosts
+  skips it, so nothing is ever written from a stale pointer), but the cost
+  cannot be sent again until somebody does it.
+- A STALE BUILD IS STILL THE FIRST THING TO SUSPECT. The Settings card showed
+  the amber sandbox banner after the env vars were changed, which read as the
+  change not having applied; the newest deployment simply had not finished
+  building. A hard reload once it was READY cleared it. Note the weakness that
+  made this ambiguous: production is signalled by the ABSENCE of the sandbox
+  banner, and this session has been misled by absences repeatedly. The card
+  should state the environment in both directions.
+- PAYING IS STILL UNEXERCISED. No `/v3/payments` call has ever been made from
+  the app, in either environment. The production account now has a verified
+  funding account and a trusted device, so the Pay button is live, which is
+  exactly why the window keeps "Just add the bill" and "Pay" as separate
+  presses.
 - AND THAT FIRST PRESS MARKED AN UNPAID BILL PAID, which is the entry to read
   before touching the read-back. The row came back "BILL paid" AND the COST
   itself was flipped to paid, which is not a label: a paid cost leaves "Still
