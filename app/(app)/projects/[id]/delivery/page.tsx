@@ -5,7 +5,6 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { DeliveryPanel } from "@/components/production/delivery-panel";
-import { InvoicingPanel } from "@/components/production/invoicing-panel";
 import type {
   Deliverable,
   ProjectBilling,
@@ -34,7 +33,7 @@ export default async function DeliveryPage({
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: deliverables }, { data: billing }, { data: invoices }, { data: billingAccount }, { data: rosterContacts }] =
+  const [{ data: deliverables }, { data: billing }, { data: rosterContacts }] =
     await Promise.all([
       supabase
         .from("deliverables")
@@ -45,17 +44,6 @@ export default async function DeliveryPage({
         .from("project_billing")
         .select("*")
         .eq("project_id", params.id)
-        .maybeSingle(),
-      supabase
-        .from("project_invoices")
-        .select("*")
-        .eq("project_id", params.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("billing_accounts")
-        .select("id")
-        .eq("studio_id", ctx.studio.id)
-        .eq("provider", "freshbooks")
         .maybeSingle(),
       supabase
         .from("contacts")
@@ -91,9 +79,11 @@ export default async function DeliveryPage({
     rate: pricing.get(d.id) ?? null,
   }));
 
-  // Billing/invoicing is on hold pending the FreshBooks-vs-Melio decision (see
-  // CLAUDE.md). Both entry points are hidden for beta; the DB tables and panels
-  // stay wired so this flips back on with one line once the platform is picked.
+  // The native document generator is reachable at /projects/<id>/invoices and
+  // works; this flag only hides the ENTRY POINT to it from this page, which it
+  // has done since the billing area was paused. The FreshBooks half of that
+  // pause is now resolved by deletion, so whether this link comes back is a
+  // product question rather than a platform one.
   const BILLING_ENABLED = false;
 
   return (
@@ -120,8 +110,8 @@ export default async function DeliveryPage({
               Build an invoice or estimate in the app
             </p>
             <p className="text-xs text-text-muted">
-              A branded, editable invoice/estimate with per-line tax, notes, and
-              terms. No FreshBooks required.
+              A branded, editable invoice or estimate with per-line tax,
+              notes and terms.
             </p>
           </div>
           <a
@@ -130,22 +120,6 @@ export default async function DeliveryPage({
           >
             Open invoice generator
           </a>
-        </Card>
-      )}
-
-      {BILLING_ENABLED && (
-        <Card className="p-5">
-          <InvoicingPanel
-            projectId={project.id}
-            invoices={(invoices ?? []) as ProjectInvoice[]}
-            freshbooksConnected={Boolean(billingAccount)}
-            contacts={contacts}
-            deliverables={deliverableList.map((d) => ({
-              name: d.name,
-              rate: d.rate,
-              qty: d.qty,
-            }))}
-          />
         </Card>
       )}
 
