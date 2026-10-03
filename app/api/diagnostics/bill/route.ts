@@ -282,11 +282,20 @@ export async function GET(req: Request) {
   // sandbox org may already ship with a funding account, in which case
   // nothing needs creating and the payment can go straight through.
   const banks = await call("list bank accounts money can come from", "GET", "/funding-accounts/banks");
-  await call("list cards money can come from", "GET", "/funding-accounts/cards");
+  // The refusal on this one named the parameter it wanted, so it is sent.
+  // Cards are a side question here; the bank list is the one that matters.
+  await call("list cards money can come from", "GET", "/funding-accounts/cards?cardUserStatus=ACTIVE");
 
-  // Tolerant on purpose: the list shape is not known here, and a wrapper key
-  // guessed wrong would read as "no funding account" when there is one.
-  function firstId(j: unknown): string {
+  // Tolerant about the WRAPPER, strict about the ROW. Tolerant because the
+  // list shape is not known here and a key guessed wrong would read as "no
+  // funding account" on an org that has one. Strict because the first version
+  // of this took the first row and called it a funding account, and the row
+  // it found was archived and PENDING, which cannot pay anything: presence is
+  // not usability, and reporting presence as usability is the same mistake as
+  // reading a FreshBooks 200 as a working list.
+  type BankRow = { id?: unknown; archived?: unknown; status?: unknown; nameOnAccount?: unknown };
+
+  function bankRows(j: unknown): BankRow[] {
     const o = j as Record<string, unknown> | null;
     const rows = Array.isArray(o)
       ? o
@@ -297,10 +306,32 @@ export async function GET(req: Request) {
           : Array.isArray(o?.fundingAccounts)
             ? o.fundingAccounts
             : [];
-    for (const r of rows as { id?: unknown }[]) if (typeof r?.id === "string") return r.id;
-    return "";
+    return (rows as BankRow[]).filter((r) => typeof r?.id === "string");
   }
-  const fundingId = (url.searchParams.get("fundingid") ?? "").trim() || firstId(banks.json);
+
+  /** What a row is, in one line, so a reading can be checked rather than
+   *  believed. */
+  function describe(r: BankRow) {
+    const bits = [
+      String(r.id),
+      typeof r.nameOnAccount === "string" ? r.nameOnAccount : null,
+      typeof r.status === "string" ? r.status : "no status",
+      r.archived === true ? "ARCHIVED" : null,
+    ].filter(Boolean);
+    return bits.join(", ");
+  }
+
+  /** Archived is out, and anything not VERIFIED is out. PENDING means BILL is
+   *  still waiting on verification, so it is not something money leaves from. */
+  function usable(r: BankRow) {
+    return r.archived !== true && String(r.status ?? "").toUpperCase() === "VERIFIED";
+  }
+
+  const allBanks = bankRows(banks.json);
+  const good = allBanks.find(usable);
+  const fundingOverride = (url.searchParams.get("fundingid") ?? "").trim();
+  const fundingId = fundingOverride || (good ? String(good.id) : "");
+  const bankSummary = allBanks.map(describe);
 
   // THE INVARIANT. Production never writes from here, whatever the URL says.
   if (env === "production") {
@@ -308,6 +339,7 @@ export async function GET(req: Request) {
       fingerprint,
       environment: env,
       fundingId: fundingId || null,
+      banks: bankSummary,
       reading:
         "Read only, because this is your real account. The vendor and bill bodies above answer the FreshBooks question: whether a list comes back with your actual rows in it, or empty, and the funding bodies say whether a real bank account is attached. Creating and paying need a SANDBOX key.",
       steps,
@@ -319,28 +351,36 @@ export async function GET(req: Request) {
   // it is the one write here that somebody might not want repeated, so it is
   // never a side effect of asking for a vendor and a bill.
   if (addBank) {
-    // The body is DELIBERATELY MINIMAL. Every field shape in this file so far
-    // was learned from a refusal naming what was missing (the vendor address,
-    // the nested invoice, the top-level dueDate), and that has been faster and
-    // more accurate than guessing a full payload. 021000021 is a real, valid
-    // routing number, so a checksum check passes; the account number is not.
+    // THE FIELD NAMES COME FROM THE READ, not from a guess: the existing row
+    // carries `type`, `ownerType`, `nameOnAccount`, `routingNumber` and
+    // `accountNumber`, so those are what go out. An earlier draft of this sent
+    // `accountType`, which the list shape says is wrong. 021000021 is a real,
+    // valid routing number so a checksum check passes; the account number is
+    // deliberately not.
     const made = await call("add a dummy bank account", "POST", "/funding-accounts/banks", {
-      name: "Studio Flows sandbox checking",
       nameOnAccount: "Studio Flows Sandbox",
       routingNumber: "021000021",
       accountNumber: "1234567890",
-      accountType: "CHECKING",
+      type: "CHECKING",
+      ownerType: "BUSINESS",
     });
     const after = await call("read the bank list back", "GET", "/funding-accounts/banks");
-    const newId = (made.json as { id?: string } | null)?.id ?? firstId(after.json);
+    const afterRows = bankRows(after.json);
+    const madeId = (made.json as { id?: string } | null)?.id ?? "";
+    const newRow = afterRows.find((r) => String(r.id) === madeId) ?? afterRows.find((r) => r.archived !== true);
+    const newId = madeId || (newRow ? String(newRow.id) : "");
     return NextResponse.json({
       fingerprint,
       environment: env,
       mfaTrusted: trusted,
       bankId: newId || null,
-      reading: newId
-        ? "A bank account exists now. Read its body for a verification status: if BILL wants micro deposits confirmed, paying will be refused until that is done, and ?verify=<amount> tries that. If it reads as usable, go straight to ?write=1&pay=1."
-        : "No bank id came back. If the body lists the fields it wants, that IS the spec. If it refuses the endpoint outright, a sandbox org cannot hold a funding account and a payment cannot be completed here at all, which is itself the answer.",
+      bankState: newRow ? describe(newRow) : null,
+      banks: afterRows.map(describe),
+      reading: !newId
+        ? "No bank id came back. If the body lists the fields it wants, that IS the spec. If it refuses the endpoint outright, a sandbox org cannot hold a funding account at all, and a payment can never be completed here, which is itself the answer."
+        : newRow && usable(newRow)
+          ? "A usable bank account exists. Go to ?write=1&pay=1."
+          : "A bank account was created but it is not usable yet: read bankState. PENDING means BILL is waiting on verification, which normally means micro deposits it posts to the account, and in a sandbox those may never arrive. If the body names a verification call, ?verify=<amount> tries it. If verification can only happen against a real bank, that is the answer: the payment leg cannot be proven in the sandbox.",
       steps,
     });
   }
@@ -376,10 +416,13 @@ export async function GET(req: Request) {
       environment: env,
       mfaTrusted: trusted,
       fundingId: fundingId || null,
+      banks: bankSummary,
       reading:
         (fundingId
-          ? "Signed in, and a funding account is already here, so a payment has something to come from."
-          : "Signed in, and NO funding account was found, which is the thing a payment was refused for. Press ?bank=1 to try creating a dummy one.") +
+          ? "Signed in, and a VERIFIED funding account is here, so a payment has something to come from."
+          : allBanks.length
+            ? "Signed in. Bank accounts exist but NONE is usable: read the banks list, where each row carries its status and whether it is archived. An archived or PENDING account cannot pay. Press ?bank=1 to try adding a dummy one."
+            : "Signed in, and NO funding account was found, which is the thing a payment was refused for. Press ?bank=1 to try creating a dummy one.") +
         " Add ?write=1 to create a test vendor and a test bill in the sandbox.",
       steps,
     });
@@ -463,10 +506,11 @@ export async function GET(req: Request) {
     billId,
     mfaTrusted: trusted,
     fundingId: fundingId || null,
+    banks: bankSummary,
     reading:
       (fundingId
-        ? "A funding account was sent with the payment."
-        : "NO funding account was sent, because none was found, so expect the same 'must not be null' refusal. Press ?bank=1 first.") +
+        ? "A verified funding account was sent with the payment."
+        : "NO funding account was sent, because none of the ones here is usable, so expect the same 'must not be null' refusal. Read the banks list and press ?bank=1 first.") +
       " Read the payment body: a refusal naming MFA or naming a field it wants is a GOOD result, since the call is permitted and only the shape or the session is wrong.",
     steps,
   });
