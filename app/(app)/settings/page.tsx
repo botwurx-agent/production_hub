@@ -9,6 +9,11 @@ import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/status-tag";
 import { Appearance } from "@/components/settings/appearance";
 import { Connections } from "@/components/settings/connections";
+import {
+  BillConnection,
+  type BillConnectionView,
+} from "@/components/settings/bill-connection";
+import { BILL_PUBLIC_COLUMNS, billConfigured, billEnv } from "@/lib/bill";
 import { LogoUpload } from "@/components/settings/logo-upload";
 import { StudioName } from "@/components/settings/studio-name";
 import { BillingProfileForm } from "@/components/settings/billing-profile";
@@ -69,6 +74,22 @@ export default async function SettingsPage({
         .select("id, provider, email")
         .order("created_at"),
     ]);
+
+  // Only ever the public columns: an encrypted password has no reason to
+  // travel to a page, and a select list is the cheapest way to keep it that
+  // way as read sites multiply.
+  const { data: billRow } = await supabase
+    .from("bill_connections")
+    .select(BILL_PUBLIC_COLUMNS)
+    .eq("studio_id", ctx.studio.id)
+    .maybeSingle();
+  const billConnection: BillConnectionView | null = billRow
+    ? {
+        username: billRow.username,
+        orgName: billRow.org_name,
+        mfaTrustedAt: billRow.mfa_trusted_at,
+      }
+    : null;
 
   const { data: billingProfile } = await supabase
     .from("billing_profiles")
@@ -178,6 +199,15 @@ export default async function SettingsPage({
             }}
             accounts={accounts ?? []}
           />
+
+          <div className="mt-6 border-t border-border pt-6">
+            <BillConnection
+              configured={billConfigured()}
+              sandbox={billEnv() === "sandbox"}
+              connection={billConnection}
+              canEdit={ctx.role === "owner" || ctx.role === "admin"}
+            />
+          </div>
         </Card>
 
         <Card className="p-5">

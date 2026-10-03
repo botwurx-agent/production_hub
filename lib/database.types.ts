@@ -844,6 +844,54 @@ export type Database = {
         };
         Relationships: [];
       };
+      // A studio's BILL (bill.com) login (migration 0113). The two *_cipher
+      // columns are encrypted by the app under a key held in the environment,
+      // never in the database, because BILL has no OAuth and a connection is
+      // the credential itself. Admins only.
+      bill_connections: {
+        Row: {
+          id: string;
+          studio_id: string;
+          username: string;
+          org_id: string;
+          org_name: string | null;
+          password_cipher: string;
+          remember_me_cipher: string | null;
+          device_id: string;
+          mfa_trusted_at: string | null;
+          last_ok_at: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          username: string;
+          org_id: string;
+          org_name?: string | null;
+          password_cipher: string;
+          remember_me_cipher?: string | null;
+          device_id: string;
+          mfa_trusted_at?: string | null;
+          last_ok_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          username?: string;
+          org_id?: string;
+          org_name?: string | null;
+          password_cipher?: string;
+          remember_me_cipher?: string | null;
+          device_id?: string;
+          mfa_trusted_at?: string | null;
+          last_ok_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       billing_accounts: {
         Row: {
           id: string;
