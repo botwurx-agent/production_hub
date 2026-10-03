@@ -297,7 +297,31 @@ export { encryptSecret };
 // The end of that road was `422 BDC_1151`, which is the funding account rather
 // than the payload, and is therefore a PASS for everything above it.
 
-export type BillVendor = { id: string; name: string };
+export type BillVendor = {
+  id: string;
+  name: string;
+  /**
+   * HOW BILL WOULD PAY THEM. Null when the body did not carry it, which is a
+   * real case: the list endpoint returns a thinner row than the create does.
+   * lib/bill-payable.ts turns the pair into a rail and NEVER reads an absence
+   * as ACH.
+   */
+  payByType: string | null;
+  bankAccountStatus: string | null;
+};
+
+/**
+ * The payment fields off any vendor body. One reader for the list row, the
+ * create response and the single-vendor read, so the three cannot drift into
+ * disagreeing about how somebody gets paid.
+ */
+function vendorPayFields(row: unknown): Pick<BillVendor, "payByType" | "bankAccountStatus"> {
+  const v = (row ?? {}) as { payByType?: unknown; bankAccountStatus?: unknown };
+  return {
+    payByType: typeof v.payByType === "string" ? v.payByType : null,
+    bankAccountStatus: typeof v.bankAccountStatus === "string" ? v.bankAccountStatus : null,
+  };
+}
 
 /**
  * How a vendor name is matched. Lower-cased with every run of non-alphanumeric
@@ -342,10 +366,40 @@ export async function findBillVendor(
     const v = row as { id?: unknown; name?: unknown; archived?: unknown };
     if (v.archived === true) continue;
     if (typeof v.id === "string" && typeof v.name === "string" && vendorKey(v.name) === want) {
-      return { id: v.id, name: v.name };
+      return { id: v.id, name: v.name, ...vendorPayFields(row) };
     }
   }
   return null;
+}
+
+/**
+ * One vendor, by id. Exists because the LIST row is thinner than the create
+ * response, so a vendor found by name may arrive with no payment fields and
+ * the send window would then have to say it could not tell. Shaped on
+ * readBillBill, which is the proven sibling: same gateway, same GET, same
+ * body-not-status success test.
+ *
+ * Returns null rather than throwing on a refusal: a window that cannot read
+ * the rail should say so, not fall over.
+ */
+export async function readBillVendor(
+  session: BillSession,
+  vendorId: string
+): Promise<BillVendor | null> {
+  const r = await fetch(`${HOSTS[billEnv()].gateway}/vendors/${encodeURIComponent(vendorId)}`, {
+    headers: { "Content-Type": "application/json", devKey: devKey(), sessionId: session.sessionId },
+    cache: "no-store",
+  }).catch(() => null);
+  if (!r) return null;
+  const parsed = await readJson(r);
+  if (!billSucceeded(r.status, parsed)) return null;
+  const v = parsed as { id?: unknown; name?: unknown };
+  if (typeof v.id !== "string") return null;
+  return {
+    id: v.id,
+    name: typeof v.name === "string" ? v.name : "",
+    ...vendorPayFields(parsed),
+  };
 }
 
 export type BillAddress = {
@@ -372,7 +426,11 @@ export async function createBillVendor(
     { sessionId: session.sessionId }
   );
   if (typeof res.id !== "string") throw new BillError(200, res);
-  return { id: res.id, name: typeof res.name === "string" ? res.name : args.name };
+  return {
+    id: res.id,
+    name: typeof res.name === "string" ? res.name : args.name,
+    ...vendorPayFields(res),
+  };
 }
 
 /**

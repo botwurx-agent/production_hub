@@ -25,6 +25,7 @@ import { actionError } from "@/lib/action-result";
 // this window states the figure that will leave a bank account, where the
 // cents are the point. Same reason the remittance email uses it.
 import { exactMoney } from "@/lib/remittance";
+import { payRefused, railLabel, railWarning, type PayRail } from "@/lib/bill-payable";
 import type { ProjectCost } from "@/lib/database.types";
 
 /** Null when BILL is not connected: no pay controls appear at all. */
@@ -147,6 +148,15 @@ export function SendBillModal({
   const vendor = (cost.vendor ?? "").trim();
   const usable = (ctx?.fundingAccounts ?? []).filter((f) => f.usable);
   const needsAddress = Boolean(ctx && !ctx.existingVendorId);
+
+  // HOW THE MONEY WOULD TRAVEL. A vendor that does not exist at BILL yet is a
+  // known quantity rather than an unknown one: a freshly created vendor comes
+  // back with no bank account and `payByType: CHECK`, observed on the real
+  // account. So creating and paying in one press POSTS A CHEQUE, and saying
+  // "BILL did not say" there would be worse than useless.
+  const rail: PayRail = !ctx ? "unknown" : ctx.existingVendorId ? ctx.rail : "check";
+  const refused = payRefused(rail);
+  const warning = ctx ? railWarning(rail, vendor || "this vendor") : "";
   const addressDone =
     !needsAddress || Boolean(addr.line1.trim() && addr.city.trim() && addr.state.trim() && addr.zip.trim());
 
@@ -207,7 +217,27 @@ export function SendBillModal({
             <Row label="Amount">{exactMoney(amount)}</Row>
             <Row label="Invoice">{(cost.invoice_number ?? "").trim() || "no number on the cost"}</Row>
             <Row label="Due">{(cost.due_date ?? "").slice(0, 10) || "today"}</Row>
+            <Row label="Pays by">{railLabel(rail)}</Row>
           </dl>
+
+          {warning && (
+            // THE WORDS STAY IN THE TEXT COLOUR and the hue is carried by the
+            // tint and the border, which is what ReadBanner concluded after
+            // measuring: a hue on its own -bg tint is about 1.8:1, far below
+            // AA for body type. Inline vars rather than Tailwind classes
+            // because `border-red-border` and its kind DO NOT EXIST in this
+            // setup and compile to nothing, which is the same silent class as
+            // `bg-surface-2/50`.
+            <p
+              className="rounded-[10px] px-3 py-2 text-sm leading-relaxed text-text"
+              style={{
+                background: `var(--h-${refused ? "red" : "amber"}-bg)`,
+                border: `1px solid var(--h-${refused ? "red" : "amber"})`,
+              }}
+            >
+              {warning}
+            </p>
+          )}
 
           {needsAddress && (
             <div className="space-y-2 rounded-[12px] border border-border bg-surface-2 p-3">
@@ -292,7 +322,7 @@ export function SendBillModal({
               {pending ? "..." : "Just add the bill"}
             </Button>
             <Button
-              disabled={pending || !addressDone || !fundingId || !ctx.trusted}
+              disabled={pending || !addressDone || !fundingId || !ctx.trusted || refused}
               onClick={() => run(true)}
             >
               {pending ? "Sending..." : `Pay ${exactMoney(amount)}`}

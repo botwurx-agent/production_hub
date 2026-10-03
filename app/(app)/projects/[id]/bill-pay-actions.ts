@@ -24,6 +24,8 @@ import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
 import { allow } from "@/lib/rate-limit";
 import { billSettled } from "@/lib/bill-settled";
+import { payRail, payRefused, type PayRail } from "@/lib/bill-payable";
+import { isEmailAddress } from "@/lib/contact";
 import {
   BillError,
   billConfigured,
@@ -34,6 +36,7 @@ import {
   findBillVendor,
   listBillFundingAccounts,
   readBillBill,
+  readBillVendor,
   type BillAddress,
   type BillFundingAccount,
 } from "@/lib/bill";
@@ -49,6 +52,15 @@ export type BillPayContext = {
   /** Set when the vendor already exists at BILL, so no address is asked for. */
   existingVendorId: string | null;
   existingVendorName: string | null;
+  /**
+   * HOW BILL WOULD PAY THEM. "unknown" when the vendor is new (nothing exists
+   * to read) or when BILL's body did not carry the field. The window states it
+   * either way rather than leaving the rail unmentioned, which is how a press
+   * came to post a paper cheque without saying so.
+   */
+  rail: PayRail;
+  /** The vendor's email at BILL, so the window can say it is missing. */
+  vendorEmail: string | null;
 };
 
 /**
@@ -89,6 +101,29 @@ function today(): string {
 }
 
 /**
+ * The vendor's email, off the project roster. BILL needs it to be able to
+ * invite somebody onto ACH later, and the roster is where a studio already
+ * keeps it, so nobody retypes anything.
+ *
+ * Null is a normal answer, not a failure: a till receipt from a shop carries
+ * no contact at all, and a vendor with no email is exactly what BILL has
+ * today. It is never a reason to refuse the send.
+ */
+async function vendorEmail(
+  supabase: ReturnType<typeof createClient>,
+  contactId: string | null
+): Promise<string | null> {
+  if (!contactId) return null;
+  const { data } = await supabase
+    .from("contacts")
+    .select("email")
+    .eq("id", contactId)
+    .maybeSingle();
+  const email = (data?.email ?? "").trim();
+  return isEmailAddress(email) ? email : null;
+}
+
+/**
  * Everything the send window needs, in one round trip: whether BILL can pay at
  * all, what it can pay from, and whether this vendor is already known to it.
  */
@@ -98,7 +133,7 @@ export async function billPayContext(
 ): Promise<BillPayContext | Fail> {
   const { ctx, error } = await requirePayer();
   if (!ctx) return { error };
-  if (!billConfigured()) return { connected: false, trusted: false, fundingAccounts: [], existingVendorId: null, existingVendorName: null };
+  if (!billConfigured()) return { connected: false, trusted: false, fundingAccounts: [], existingVendorId: null, existingVendorName: null, rail: "unknown", vendorEmail: null };
 
   const supabase = createClient();
   const { data: cost } = await supabase
@@ -112,20 +147,32 @@ export async function billPayContext(
   try {
     const signed = await billSessionForStudio(supabase, ctx.studio.id);
     if (!signed) {
-      return { connected: false, trusted: false, fundingAccounts: [], existingVendorId: null, existingVendorName: null };
+      return { connected: false, trusted: false, fundingAccounts: [], existingVendorId: null, existingVendorName: null, rail: "unknown", vendorEmail: null };
     }
     // Both reads are independent, so they genuinely run together here: this is
     // the server, not the browser, where Next would queue them.
-    const [funding, vendor] = await Promise.all([
+    const [funding, found] = await Promise.all([
       listBillFundingAccounts(signed.session),
       cost.vendor ? findBillVendor(signed.session, cost.vendor) : Promise.resolve(null),
     ]);
+
+    // THE LIST ROW IS THINNER THAN THE RECORD. A vendor found by name can come
+    // back with no payment fields at all, and "we could not tell" is a poor
+    // thing to show about a cheque, so the full record is read when the list
+    // did not carry them. One extra round trip, only when it is needed.
+    let vendor = found;
+    if (vendor && vendor.payByType === null && vendor.bankAccountStatus === null) {
+      vendor = (await readBillVendor(signed.session, vendor.id)) ?? vendor;
+    }
+
     return {
       connected: true,
       trusted: signed.session.trusted,
       fundingAccounts: funding,
       existingVendorId: vendor?.id ?? null,
       existingVendorName: vendor?.name ?? null,
+      rail: vendor ? payRail(vendor) : "unknown",
+      vendorEmail: null,
     };
   } catch (e) {
     return { error: readable(e, "billPayContext") };
@@ -195,9 +242,16 @@ export async function sendCostToBill(
     // write that failed.
     let vendorId = cost.bill_vendor_id ?? null;
     let vendorSource: "existing" | "created" = "existing";
-    if (!vendorId) {
+    let vendorPay: { payByType: string | null; bankAccountStatus: string | null } | null = null;
+    if (vendorId) {
+      vendorPay = await readBillVendor(signed.session, vendorId);
+    } else {
       const found = await findBillVendor(signed.session, vendorName);
       vendorId = found?.id ?? null;
+      vendorPay = found;
+      if (vendorId && vendorPay && vendorPay.payByType === null && vendorPay.bankAccountStatus === null) {
+        vendorPay = (await readBillVendor(signed.session, vendorId)) ?? vendorPay;
+      }
     }
     if (!vendorId) {
       if (!opts.address) {
@@ -208,8 +262,17 @@ export async function sendCostToBill(
       const made = await createBillVendor(signed.session, {
         name: vendorName,
         address: opts.address,
+        // THE EMAIL IS LOAD-BEARING, and withholding it was inherited from the
+        // FreshBooks era (0112), where a bare payload stopped the platform
+        // sending a notification that competed with ours. BILL CANNOT INVITE A
+        // VENDOR IT HAS NO EMAIL FOR, so leaving it out blocks the one thing
+        // that gets a freelancer onto ACH. The two messages do not compete:
+        // BILL's says sign up to be paid electronically, ours names the
+        // payment, the job and the invoice number.
+        email: await vendorEmail(supabase, cost.contact_id),
       });
       vendorId = made.id;
+      vendorPay = made;
       vendorSource = "created";
     }
 
@@ -245,6 +308,18 @@ export async function sendCostToBill(
     if (!opts.pay) {
       revalidatePath(`/projects/${projectId}/budget`);
       return { ok: true, billId, paid: false };
+    }
+
+    // NEVER POST A CHEQUE FROM A PRESS THAT SAID "PAY". The window states the
+    // rail and disables the button, but the button is presentation: this is
+    // the check that counts. The BILL is deliberately left in place, since a
+    // queued bill is useful and only the payment is wrong.
+    const rail = vendorPay ? payRail(vendorPay) : "unknown";
+    if (payRefused(rail)) {
+      revalidatePath(`/projects/${projectId}/budget`);
+      return {
+        error: `The bill was added to BILL, but nothing was paid: BILL has no bank details for ${vendorName}, so paying would post a paper check. Add their bank details at BILL, or ask them for their payment details, then pay.`,
+      };
     }
 
     const fundingAccountId = (opts.fundingAccountId ?? "").trim();
