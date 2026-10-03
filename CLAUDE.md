@@ -2585,14 +2585,38 @@ and a check is never written.
   connection request, and the flow has three states (request sent, invite
   accepted, bank account added). Accepting is not the same as payable, so the
   app must read the third rather than the second.
-- ONE CAVEAT NOT YET SETTLED, and it decides the shape: that invitation is
-  documented as taking a `networkId` from `GET /v3/network`, a search of
-  companies ALREADY IN the BILL Network, and a freelancer who has never heard
-  of BILL is not in it. BILL's Vendor setup Element (an embeddable component
-  where the vendor enters their own details) may be the path for a stranger,
-  and may be separately sold. CHEAPEST TEST, free and not yet run: open a
-  vendor in BILL's own interface and read its Actions menu. What their product
-  offers bounds what their API could offer this account.
+- THE CAVEAT IS ANSWERED, by reading BILL's own vendor page rather than more
+  documentation. There are TWO mechanisms and the docs blur them:
+  (1) ALREADY IN THE NETWORK. The vendor page's "Payment network ID: Search &
+  Enter" is `GET /v3/network`, and `POST /v3/network/invitation/vendor/{id}`
+  with that `networkId` connects to them. It also emails an invitation when the
+  vendor organization has auto-connections off.
+  (2) A STRANGER, which is every freelancer. The vendor page carries a banner
+  reading "Pay this vendor 3-4 days faster with ACH. Ask your vendor to sign up
+  for BILL to get secure ACH deposits directly to their selected bank account",
+  with an EDITABLE EMAIL and an INVITES TAB beside Overview and Bills. So an
+  invite is a tracked object, not a fire-and-forget mail, which is what the app
+  would read to know whether somebody has connected. The API for it is
+  `POST /v2/SendVendorInvite.json`, titled "Invite a vendor not in the BILL
+  network" in their reference. A v2 endpoint costs us nothing: lib/bill.ts
+  already speaks v2 for ListOrgs and `billSucceeded` exists because v2 answers
+  HTTP 200 with the failure inside.
+  A request EXPIRES AFTER 60 DAYS and can be deleted and re-sent, which is the
+  same "they never got it" affordance the invite emails already have.
+- WHAT THE VENDOR ROW ACTIONS MENU OFFERS, since it is where anybody would look
+  first and it is the wrong place: Enter bill, Pay vendor, and Invite vendor to
+  virtual card. VIRTUAL CARD IS A THIRD RAIL, not ACH (BILL emails a card number
+  and earns interchange), and BILL pushes it hard with a banner and a "May
+  accept virtual card" tag. Do not mistake it for the thing being built here.
+- SO WE HAVE TO SEND THE VENDOR'S EMAIL, which REVERSES a decision made under
+  FreshBooks. `createBillVendor` accepts an email and the call site
+  (bill-pay-actions.ts) never passes one, inherited from 0112, where the payload
+  was left bare on purpose so the payment notification came from us rather than
+  from the platform. BILL CANNOT INVITE A VENDOR IT HAS NO EMAIL FOR, so that
+  choice blocks the whole feature. The two notifications are not competing
+  either: BILL's says "sign up to get paid by ACH", ours names the payment, the
+  job and the invoice number, which is what stops the follow-up email and is
+  the reason 0112 wanted to own it.
 - ONE PATH WE REFUSE even though it would work today:
   `POST /v3/vendors/{vendorId}/bank-account` lets US send BILL a vendor's
   routing and account numbers. That recreates exactly the liability this
