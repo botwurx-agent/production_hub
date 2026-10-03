@@ -2643,6 +2643,22 @@ and a check is never written.
   connects once, so "has this person connected" is a fact about the BILL vendor
   that we read. A local flag would drift, which is the rule this codebase
   follows for every derived value.
+- SOMEBODY WHOSE DETAILS THE STUDIO ALREADY HOLDS IS NOT INVITED. Veronica sent
+  her routing and account number for this job the old way, so the operator
+  enters them in BILL'S OWN INTERFACE and pays by ACH without asking her twice.
+  THAT IS NOT THE THING WE REFUSED: the numbers go from her email into BILL and
+  never through Studio Flows, which is the whole distinction. What stays refused
+  is `POST /v3/vendors/{id}/bank-account` FROM OUR APP. The invite flow is for
+  the NEXT freelancer, not for anybody already on file, and a feature that made
+  the studio re-ask would be worse than the thing it replaces.
+- CONFIRMED RATHER THAN HYPOTHETICAL, and 0112 flagged it: a freelancer's
+  invoice routinely prints their routing and account number, and hers is
+  attached to the cost in the assets bucket. Not a problem to fix: project_costs
+  is is_studio_member only so a collaborator cannot reach it, the bucket is
+  private with per-studio folders, and a cost document is signed on CLICK rather
+  than on page load, so it sits at the same tier as the rest of the money layer.
+  It is the strongest argument for the invite flow on future jobs, since that is
+  what stops new copies accumulating.
 - THE REST OF THE CHAIN ALREADY EXISTS: the invoice arrives by email, "Log as a
   cost" reads it into the ledger, the payment schedule holds net 30, and the
   pay press is built. This one step is the gap.
