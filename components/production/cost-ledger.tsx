@@ -33,6 +33,12 @@ import {
 } from "@/lib/costs";
 import { PaymentSchedule } from "@/components/production/payment-schedule";
 import { RemittanceButton } from "@/components/production/remittance-button";
+import {
+  BillPayControl,
+  BillSync,
+  SendBillModal,
+  type BillPayState,
+} from "@/components/production/bill-pay";
 import type { DocumentKind } from "@/lib/invoice-draft";
 import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
@@ -161,6 +167,7 @@ export function CostLedger({
   roster,
   payments,
   todayIso,
+  bill,
   projectTitle,
   studioName,
   emailEnabled,
@@ -177,11 +184,16 @@ export function CostLedger({
   emailEnabled: boolean;
   /** Computed on the server, so overdue cannot differ after hydration. */
   todayIso: string;
+  /** Null when BILL is not connected: no pay-via controls at all. */
+  bill: BillPayState | null;
 }) {
+  // Bills already at BILL and not yet paid, which is what the read-back checks.
+  const openAtBill = costs.filter((c) => c.bill_bill_id && c.bill_status !== "paid").length;
   const router = useRouter();
   const [busy, start] = useTransition();
   const [editing, setEditing] = useState<ProjectCost | "new" | null>(null);
   const [openSchedule, setOpenSchedule] = useState<string | null>(null);
+  const [billing, setBilling] = useState<ProjectCost | null>(null);
   // A vendor invoice dropped on the ledger. It opens the add-a-cost form with
   // the document attached, which is what makes the AI read fire: filing an
   // invoice with no amount, vendor or budget line would not be a cost.
@@ -295,6 +307,7 @@ export function CostLedger({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {bill && <BillSync projectId={projectId} openCount={openAtBill} />}
           <Button size="sm" onClick={() => setEditing("new")}>
             + Add a cost
           </Button>
@@ -366,7 +379,11 @@ export function CostLedger({
                   />
                 )}
               </div>
-              <div className="flex items-center gap-1">
+              {/* WRAPS, because this group grew another control. A fixed row
+                  here is how the budget and gear tables once dropped their
+                  text columns on a phone: not an overflow somebody can scroll
+                  to, just content that is not there. */}
+              <div className="flex flex-wrap items-center justify-end gap-1">
                 <button
                   onClick={() => setOpenSchedule(scheduleOpen ? null : c.id)}
                   title="Payment schedule"
@@ -378,6 +395,9 @@ export function CostLedger({
                     ? `${costPayments.filter((p) => p.paid_at).length}/${costPayments.length}`
                     : "Split"}
                 </button>
+                {bill && (c.bill_bill_id || summary.owed > 0) && (
+                  <BillPayControl cost={c} onSend={() => setBilling(c)} />
+                )}
                 {emailEnabled && summary.state === "paid" && vendorEmail(c, roster) && (
                   <RemittanceButton
                     projectId={projectId}
@@ -419,6 +439,14 @@ export function CostLedger({
             );
           })}
         </div>
+      )}
+
+      {billing && bill && (
+        <SendBillModal
+          projectId={projectId}
+          cost={billing}
+          onClose={() => setBilling(null)}
+        />
       )}
 
       {editing && (

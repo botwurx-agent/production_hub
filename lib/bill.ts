@@ -247,3 +247,212 @@ export async function billSessionForStudio(
 }
 
 export { encryptSecret };
+
+// --- Paying a vendor bill ---------------------------------------------------
+//
+// THE PAYLOADS BELOW WERE EACH LEARNED FROM A REFUSAL NAMING WHAT WAS MISSING,
+// which is the only documentation available from here. The payment one took
+// five rounds, so it is the one least worth rewriting from memory:
+//   - `amount` and `billId` are TOP LEVEL. A `billPayments: [{...}]` array is
+//     accepted and then silently ignored. The tell was the error style: BILL
+//     reports a nested problem with a dotted path (`address.country: ...`), so
+//     two bare names meant top level.
+//   - `createBill: false` says the bill already exists. Its own refusal
+//     revealed it ("billId must be provided if createBill is false").
+//   - `processingOptions` must be present and MAY BE EMPTY. It was first
+//     refused for being null, which read as though it carried required
+//     children; it does not.
+// The end of that road was `422 BDC_1151`, which is the funding account rather
+// than the payload, and is therefore a PASS for everything above it.
+
+export type BillVendor = { id: string; name: string };
+
+/**
+ * How a vendor name is matched. Lower-cased with every run of non-alphanumeric
+ * characters collapsed to one space, so case and punctuation do not matter and
+ * anything EXTRA does: "Veronica Laramie Prop Styling" is not "Veronica
+ * Laramie". Exported because a refusal has to be able to explain the rule.
+ */
+export function vendorKey(name: string): string {
+  return (name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * Look for an existing vendor by normalised name. SEPARATE from creating one,
+ * and this is not tidiness: FreshBooks spent two rounds of diagnosis on an
+ * endpoint that was answering fine, because a read and a write sat under one
+ * catch and a refused write reported itself as a refused read.
+ */
+export async function findBillVendor(
+  session: BillSession,
+  name: string
+): Promise<BillVendor | null> {
+  const want = vendorKey(name);
+  if (!want) return null;
+  const res = await v3<{ results?: unknown }>(
+    "/vendors/list",
+    { max: 100 },
+    { sessionId: session.sessionId }
+  ).catch(async () => {
+    // Some deployments expose the list as a GET. Try that before giving up,
+    // and let a real refusal surface from the second attempt.
+    const r = await fetch(`${HOSTS[billEnv()].gateway}/vendors?max=100`, {
+      headers: { "Content-Type": "application/json", devKey: devKey(), sessionId: session.sessionId },
+      cache: "no-store",
+    });
+    const parsed = await readJson(r);
+    if (!billSucceeded(r.status, parsed)) throw new BillError(r.status, parsed);
+    return parsed as { results?: unknown };
+  });
+
+  const rows = Array.isArray(res.results) ? res.results : [];
+  for (const row of rows) {
+    const v = row as { id?: unknown; name?: unknown; archived?: unknown };
+    if (v.archived === true) continue;
+    if (typeof v.id === "string" && typeof v.name === "string" && vendorKey(v.name) === want) {
+      return { id: v.id, name: v.name };
+    }
+  }
+  return null;
+}
+
+export type BillAddress = {
+  line1: string;
+  city: string;
+  stateOrProvince: string;
+  zipOrPostalCode: string;
+  /** ISO 3166-1 alpha-2. `US`, never `USA`, which BILL refuses by name. */
+  country: string;
+};
+
+/** Creating a vendor. An address is REQUIRED; BILL refuses without one. */
+export async function createBillVendor(
+  session: BillSession,
+  args: { name: string; address: BillAddress; email?: string | null }
+): Promise<BillVendor> {
+  const res = await v3<{ id?: string; name?: string }>(
+    "/vendors",
+    {
+      name: args.name,
+      address: args.address,
+      ...(args.email ? { email: args.email } : {}),
+    },
+    { sessionId: session.sessionId }
+  );
+  if (typeof res.id !== "string") throw new BillError(200, res);
+  return { id: res.id, name: typeof res.name === "string" ? res.name : args.name };
+}
+
+/**
+ * Creating a bill. The invoice number and date NEST inside `invoice`; the due
+ * date does NOT, it is top level. Both learned from refusals.
+ */
+export async function createBillBill(
+  session: BillSession,
+  args: {
+    vendorId: string;
+    amount: number;
+    invoiceNumber: string;
+    invoiceDate: string;
+    dueDate: string;
+    description: string;
+  }
+): Promise<string> {
+  const res = await v3<{ id?: string }>(
+    "/bills",
+    {
+      vendorId: args.vendorId,
+      invoice: { invoiceNumber: args.invoiceNumber, invoiceDate: args.invoiceDate },
+      dueDate: args.dueDate,
+      billLineItems: [{ amount: args.amount, description: args.description }],
+    },
+    { sessionId: session.sessionId }
+  );
+  if (typeof res.id !== "string") throw new BillError(200, res);
+  return res.id;
+}
+
+export type BillFundingAccount = {
+  id: string;
+  name: string;
+  status: string;
+  archived: boolean;
+  /** Only a VERIFIED, unarchived account can actually pay. */
+  usable: boolean;
+};
+
+/**
+ * Where money can come from. PRESENCE IS NOT USABILITY: the first version of
+ * this read the first row and called it a funding account, and the row was
+ * archived and PENDING and could pay nothing. A row has to be unarchived AND
+ * verified to count, and every row is returned with its state so a caller can
+ * say WHY rather than just refusing.
+ */
+export async function listBillFundingAccounts(
+  session: BillSession
+): Promise<BillFundingAccount[]> {
+  const r = await fetch(`${HOSTS[billEnv()].gateway}/funding-accounts/banks`, {
+    headers: { "Content-Type": "application/json", devKey: devKey(), sessionId: session.sessionId },
+    cache: "no-store",
+  });
+  const parsed = await readJson(r);
+  if (!billSucceeded(r.status, parsed)) throw new BillError(r.status, parsed);
+  const rows = (parsed as { results?: unknown }).results;
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    const b = row as { id?: unknown; nameOnAccount?: unknown; bankName?: unknown; status?: unknown; archived?: unknown };
+    const status = typeof b.status === "string" ? b.status : "";
+    const archived = b.archived === true;
+    return {
+      id: typeof b.id === "string" ? b.id : "",
+      name:
+        (typeof b.nameOnAccount === "string" && b.nameOnAccount) ||
+        (typeof b.bankName === "string" && b.bankName) ||
+        "Bank account",
+      status,
+      archived,
+      usable: !archived && status.toUpperCase() === "VERIFIED",
+    };
+  }).filter((b) => b.id);
+}
+
+/** Submitting the payment. This is the call that moves money. */
+export async function createBillPayment(
+  session: BillSession,
+  args: { vendorId: string; billId: string; amount: number; fundingAccountId: string; processDate: string }
+): Promise<string> {
+  const res = await v3<{ id?: string }>(
+    "/payments",
+    {
+      vendorId: args.vendorId,
+      processDate: args.processDate,
+      amount: args.amount,
+      billId: args.billId,
+      createBill: false,
+      fundingAccount: { id: args.fundingAccountId, type: "BANK_ACCOUNT" },
+      processingOptions: {},
+    },
+    { sessionId: session.sessionId }
+  );
+  if (typeof res.id !== "string") throw new BillError(200, res);
+  return res.id;
+}
+
+/** What BILL says about a bill now, for reading paid status back. */
+export async function readBillBill(
+  session: BillSession,
+  billId: string
+): Promise<{ paymentStatus: string; dueAmount: number } | null> {
+  const r = await fetch(`${HOSTS[billEnv()].gateway}/bills/${encodeURIComponent(billId)}`, {
+    headers: { "Content-Type": "application/json", devKey: devKey(), sessionId: session.sessionId },
+    cache: "no-store",
+  });
+  const parsed = await readJson(r);
+  if (!billSucceeded(r.status, parsed)) return null;
+  const b = parsed as { paymentStatus?: unknown; dueAmount?: unknown };
+  return {
+    paymentStatus: typeof b.paymentStatus === "string" ? b.paymentStatus : "",
+    // numeric comes back as a string from plenty of APIs, this one included.
+    dueAmount: Number(b.dueAmount ?? 0) || 0,
+  };
+}

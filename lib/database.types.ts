@@ -2178,6 +2178,11 @@ export type Database = {
           storage_path: string | null;
           file_name: string | null;
           notes: string | null;
+          bill_vendor_id: string | null;
+          bill_bill_id: string | null;
+          bill_payment_id: string | null;
+          bill_status: string | null;
+          bill_synced_at: string | null;
           fb_bill_id: string | null;
           fb_bill_status: string | null;
           fb_bill_outstanding: number | null;
@@ -2204,6 +2209,11 @@ export type Database = {
           storage_path?: string | null;
           file_name?: string | null;
           notes?: string | null;
+          bill_vendor_id?: string | null;
+          bill_bill_id?: string | null;
+          bill_payment_id?: string | null;
+          bill_status?: string | null;
+          bill_synced_at?: string | null;
           fb_bill_id?: string | null;
           fb_bill_status?: string | null;
           fb_bill_outstanding?: number | null;
@@ -2230,6 +2240,11 @@ export type Database = {
           storage_path?: string | null;
           file_name?: string | null;
           notes?: string | null;
+          bill_vendor_id?: string | null;
+          bill_bill_id?: string | null;
+          bill_payment_id?: string | null;
+          bill_status?: string | null;
+          bill_synced_at?: string | null;
           fb_bill_id?: string | null;
           fb_bill_status?: string | null;
           fb_bill_outstanding?: number | null;

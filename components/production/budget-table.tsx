@@ -10,6 +10,7 @@ import {
   renameBudgetCategory,
 } from "@/app/(app)/projects/[id]/production/budget-actions";
 import { CostLedger, type RosterOption } from "@/components/production/cost-ledger";
+import type { BillPayState } from "@/components/production/bill-pay";
 import {
   lineActual as lineActualOf,
   marginOf,
@@ -46,6 +47,7 @@ export function BudgetTable({
   billedFromInvoices,
   payments,
   todayIso,
+  bill,
   projectTitle,
   studioName,
   emailEnabled,
@@ -60,6 +62,7 @@ export function BudgetTable({
   billedFromInvoices: boolean;
   payments: CostPayment[];
   todayIso: string;
+  bill: BillPayState | null;
   /** Passed straight to the ledger for the remittance email. */
   projectTitle: string | null;
   studioName: string;
@@ -336,6 +339,7 @@ export function BudgetTable({
           roster={roster}
           payments={payments}
           todayIso={todayIso}
+          bill={bill}
           projectTitle={projectTitle}
           studioName={studioName}
           emailEnabled={emailEnabled}

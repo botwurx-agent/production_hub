@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusTag } from "@/components/status-tag";
 import { toast } from "@/components/ui/toast";
+import { actionError } from "@/lib/action-result";
 
 export type BillConnectionView = {
   username: string;
@@ -56,23 +57,26 @@ export function BillConnection({
   function lookUp() {
     start(async () => {
       const res = await findBillOrgs(username, password);
-      if ("error" in res) {
-        toast(res.error, "error");
+      const err = actionError(res);
+      if (err) {
+        toast(err, "error");
         return;
       }
+      const orgsFound = (res as { orgs: Org[] }).orgs;
       // One company is the normal case, so it is chosen rather than offered.
-      if (res.orgs.length === 1) {
-        await save(res.orgs[0]);
+      if (orgsFound.length === 1) {
+        await save(orgsFound[0]);
         return;
       }
-      setOrgs(res.orgs);
+      setOrgs(orgsFound);
     });
   }
 
   async function save(org: Org) {
     const res = await connectBill(username, password, org.orgId, org.orgName);
-    if ("error" in res) {
-      toast(res.error, "error");
+    const err = actionError(res);
+    if (err) {
+      toast(err, "error");
       return;
     }
     // The password is dropped from the form the moment it is stored, so it is
@@ -80,7 +84,7 @@ export function BillConnection({
     setPassword("");
     setOrgs(null);
     toast(
-      res.trusted
+      (res as { trusted: boolean }).trusted
         ? "BILL is connected."
         : "BILL is connected. One more step before it can pay a bill.",
       "success"
@@ -90,11 +94,12 @@ export function BillConnection({
   function sendCode() {
     start(async () => {
       const res = await startBillMfa();
-      if ("error" in res) {
-        toast(res.error, "error");
+      const err = actionError(res);
+      if (err) {
+        toast(err, "error");
         return;
       }
-      setChallengeId(res.challengeId);
+      setChallengeId((res as { challengeId: string }).challengeId);
       toast("BILL is sending you a code. Enter it below.", "success");
     });
   }
@@ -102,8 +107,9 @@ export function BillConnection({
   function confirmCode() {
     start(async () => {
       const res = await confirmBillMfa(challengeId ?? "", code);
-      if ("error" in res) {
-        toast(res.error, "error");
+      const err = actionError(res);
+      if (err) {
+        toast(err, "error");
         return;
       }
       setChallengeId(null);
@@ -161,7 +167,8 @@ export function BillConnection({
                   onClick={() =>
                     start(async () => {
                       const res = await disconnectBill();
-                      if ("error" in res) toast(res.error, "error");
+                      const err = actionError(res);
+                      if (err) toast(err, "error");
                       else toast("BILL disconnected.", "success");
                     })
                   }

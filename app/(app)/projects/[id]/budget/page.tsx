@@ -7,6 +7,7 @@ import { BudgetTable } from "@/components/production/budget-table";
 import type { RosterOption } from "@/components/production/cost-ledger";
 import { loadContactRates } from "@/lib/rates";
 import { emailConfigured } from "@/lib/email";
+import { billConfigured } from "@/lib/bill";
 import { computeTotals, type DocSnapshotLine } from "@/lib/billing-doc";
 import type { BudgetLine, CostPayment, ProjectCost } from "@/lib/database.types";
 
@@ -66,6 +67,20 @@ export default async function BudgetPage({
         .eq("project_id", params.id)
         .maybeSingle(),
     ]);
+  // Whether the pay-via controls appear at all. Only the PRESENCE of a
+  // connection is read here, never the credential: signing in to BILL happens
+  // in the server action, when somebody has actually pressed something.
+  // `trusted` is read from the stored row rather than by signing in, because a
+  // page load must not cost a round trip to BILL.
+  const { data: billRow } = await supabase
+    .from("bill_connections")
+    .select("id, mfa_trusted_at")
+    .eq("studio_id", ctx.studio.id)
+    .maybeSingle();
+  const bill = billConfigured() && billRow
+    ? { connected: true, trusted: Boolean(billRow.mfa_trusted_at) }
+    : null;
+
   // Payments hang off the project's costs, so they are fetched by cost id
   // rather than by project.
   const costIds = (costs ?? []).map((c) => c.id);
@@ -141,6 +156,7 @@ export default async function BudgetPage({
           billedFromInvoices={invoiceIds.length > 0}
           payments={(payments ?? []) as CostPayment[]}
           todayIso={todayIso}
+          bill={bill}
           projectTitle={project.title}
           studioName={ctx.studio.name}
           emailEnabled={emailConfigured()}
