@@ -2557,6 +2557,72 @@ window and the read-back all sit above the auth layer.
   is deliberate: a deployment serving a real studio means real books, and a
   sandbox default would be a connection that silently does nothing.
 
+### Ask the freelancer for their payment details, once (NOT BUILT, design settled)
+Operator, after the first production bill: their protocol today is that a
+freelancer emails an invoice and a W-9 after wrap, then at net 30 the operator
+TYPES THAT PERSON'S ROUTING AND ACCOUNT NUMBER IN BY HAND and sends an ACH.
+They have done that on FreshBooks and on Melio. "99.9% of the time" it is ACH
+and a check is never written.
+- THE PRIZE IS NOT THE AUTOMATION, it is that the studio stops touching bank
+  details at all. Today those numbers pass through their inbox and sit on their
+  screen. In the flow below the freelancer gives them to BILL and never to the
+  studio or to us, which is the same decision 0112 made when it refused to put
+  a bank field on `contacts`.
+- THE DEFAULT IS A PAPER CHECK UNTIL THEY CONNECT. A vendor we create comes back
+  `payByType: CHECK`, `bankAccountStatus: NO_ACCOUNT`, network status Not
+  Connected, confirmed on the real account. BILL's own documentation says a US
+  vendor's method is set to ACH once they are connected to the BILL Network. So
+  pressing Pay on an unconnected vendor MAILS A CHECK, which is not how this
+  studio pays anybody.
+- WE PARSE NONE OF THAT TODAY. `payByType` and the bank status appear in the
+  bodies the probe prints and nothing in lib/bill.ts reads them, so the send
+  window cannot say how the money will travel. That window's whole premise is
+  stating exactly what goes before anything happens, and the rail is the one
+  thing it omits. FIRST SLICE: read both with the vendor, show them beside the
+  amount, and refuse PAY when the method is Check while still allowing the bill
+  to be added.
+- THE ENDPOINT EXISTS: `POST /v3/network/invitation/vendor/{vendorId}` sends a
+  connection request, and the flow has three states (request sent, invite
+  accepted, bank account added). Accepting is not the same as payable, so the
+  app must read the third rather than the second.
+- ONE CAVEAT NOT YET SETTLED, and it decides the shape: that invitation is
+  documented as taking a `networkId` from `GET /v3/network`, a search of
+  companies ALREADY IN the BILL Network, and a freelancer who has never heard
+  of BILL is not in it. BILL's Vendor setup Element (an embeddable component
+  where the vendor enters their own details) may be the path for a stranger,
+  and may be separately sold. CHEAPEST TEST, free and not yet run: open a
+  vendor in BILL's own interface and read its Actions menu. What their product
+  offers bounds what their API could offer this account.
+- ONE PATH WE REFUSE even though it would work today:
+  `POST /v3/vendors/{vendorId}/bank-account` lets US send BILL a vendor's
+  routing and account numbers. That recreates exactly the liability this
+  removes and puts freelancers' bank details through Studio Flows. Do not reach
+  for it as a shortcut.
+- W-9, NOT 1099 (worth getting right in the copy): the freelancer sends a W-9,
+  the studio issues a 1099 in January. BILL carries a W-9 status column and a
+  Share W-9 section of its own, so collecting it may come free with the same
+  invitation.
+- THE TRIGGER IS WRAP, NOT BOOKING (operator agreed, and said asking for
+  banking details before the job is done is odd). Not the project stage alone
+  either: a job moving to post does not mean everyone is finished, since the
+  editor is just starting and a one-day crew member finished on day one.
+- SO THE OBJECT IS THE ROSTER, which already knows who worked the job and in
+  what category. A per-person "Request payment details", a bulk version on the
+  contacts page, and an OFFER when the project moves to post naming how many
+  people have no details with BILL yet.
+- AN OFFER, NEVER AN AUTOMATIC SEND. Two reasons: outward email about money
+  takes a human press here (the remittance email and the meal round both do),
+  and an unprompted email asking a freelancer for banking information is
+  phishing-shaped, so it should go when the producer decided it goes.
+- DEFAULT TO crew, talent, extras and vendors. Clients do not get paid.
+- THE STATE LIVES IN BILL, NOT IN OUR DATABASE. A DP booked four times a year
+  connects once, so "has this person connected" is a fact about the BILL vendor
+  that we read. A local flag would drift, which is the rule this codebase
+  follows for every derived value.
+- THE REST OF THE CHAIN ALREADY EXISTS: the invoice arrives by email, "Log as a
+  cost" reads it into the ledger, the payment schedule holds net 30, and the
+  pay press is built. This one step is the gap.
+
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
 later, and the ledger could only express "one cost, paid once". A cost is now a
