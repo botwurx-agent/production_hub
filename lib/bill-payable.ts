@@ -24,9 +24,9 @@
 export type PayRail = "ach" | "check" | "card" | "unknown";
 
 export type VendorPayment = {
-  /** BILL's own field. OBSERVED value on a fresh vendor: "CHECK". */
+  /** BILL's own field. OBSERVED: "CHECK" fresh, "WALLET" once connected. */
   payByType: string | null;
-  /** OBSERVED value on a fresh vendor: "NO_ACCOUNT". */
+  /** OBSERVED: "NO_ACCOUNT" fresh, "NET_LINKED_ACCOUNT" once connected. */
   bankAccountStatus: string | null;
 };
 
@@ -38,7 +38,17 @@ function norm(v: unknown): string {
 // is a substring of nothing useful, but the lesson from `/paid/i` matching
 // "UNPAID" is that a pattern test against a money decision is how a silent
 // disaster ships.
-const ACH = new Set(["ach", "achcredit", "directdeposit", "epayment", "eft"]);
+//
+// `wallet` IS BILL'S WORD FOR A CONNECTED VENDOR and is the one value here
+// OBSERVED on a real payable vendor rather than reasoned about. A freelancer
+// who took the invite and linked their own bank comes back
+// `payByType: "WALLET"` with `bankAccountStatus: "NET_LINKED_ACCOUNT"` and a
+// VERIFIED bank account under `paymentInformation.bankAccount`, against
+// `CHECK` / `NO_ACCOUNT` / `NOT_CONNECTED` on a vendor who has not. Without
+// it the person this whole flow exists to reach reads as "BILL did not say",
+// which is how it was found: an ACH-ready freelancer sat on the readiness
+// panel as a gap.
+const ACH = new Set(["ach", "achcredit", "directdeposit", "epayment", "eft", "wallet"]);
 const CHECK = new Set(["check", "papercheck", "mailedcheck"]);
 const CARD = new Set(["virtualcard", "card", "vcard"]);
 

@@ -5668,9 +5668,38 @@ paying in bill, which doesn't make sense."
   details at BILL -> the panel reads "ACH ready" (the in-app indication they
   asked for) -> log the cost -> Pay -> ACH, and the remittance email goes from
   the same press.
-- STILL UNEXERCISED, and these are the two tests left in that order: no invite
-  has ever been SENT, and no `/v3/payments` call has ever been made from the
-  app. The second gates the ACH marketing claim.
+- THE INVITE HAS NOW BEEN SENT, AND IT WORKED (2026-10-04, the first one ever).
+  Steve Nazari was created as a vendor from the readiness panel, BILL emailed
+  him, and he linked his own bank. Studio Flows never saw the account number,
+  which is the whole point of the flow. Only `/v3/payments` is left unexercised.
+- AND HE READ AS A GAP ANYWAY, which is the bug that outing found. The panel
+  said "BILL did not say how they get paid" about a freelancer who was by then
+  fully ACH ready, because `payRail`'s whitelist did not know BILL's word for
+  it. A CONNECTED VENDOR READS `payByType: "WALLET"`, with
+  `bankAccountStatus: "NET_LINKED_ACCOUNT"` and a VERIFIED account under
+  `paymentInformation.bankAccount`, against `CHECK` / `NO_ACCOUNT` /
+  `NOT_CONNECTED` on one who has not connected. `wallet` joined the ACH set.
+- THE FAIL-CLOSED DEFAULT WAS RIGHT AND IS WHY THIS WAS CHEAP. An unfamiliar
+  word read as unknown rather than as ACH, so the cost was one row reading as a
+  gap for a few hours instead of a payment going out on a rail nobody checked.
+  Keep that direction: a value this module has not seen must never read as ACH.
+- `wallet` IS THE ONE VALUE IN THAT WHITELIST OBSERVED ON A REAL PAYABLE
+  VENDOR rather than reasoned about, and the two real bodies are now kept
+  VERBATIM as regression tests (30 assertions): Steve's reads `ach` through
+  `vendorPayment` and `payRail` together, Veronica's still reads `check` and is
+  still refused, a linked account ALONE never grants ACH (payByType grants,
+  the bank status only withholds), and "WALLETS_PENDING" and "e-wallet" stay
+  unknown so the whitelist cannot drift into a pattern test.
+- THE PROBE GAINED `?vendors=1` (and `?name=`), which walks the same vendor
+  page the panel walks, prints every row verbatim, prints what our own readers
+  make of each, and reads any unknown row IN FULL so the list row and the whole
+  vendor sit side by side. It was not what answered this one: the operator
+  pressed the OLD build, whose default branch printed the bodies anyway, and
+  the answer was visible in them. That is the lesson holding rather than a new
+  one, since what settled it was a printed body rather than a status.
+- STILL UNEXERCISED: no `/v3/payments` call has ever been made from the app.
+  That one gates the ACH marketing claim, and the path to it is now clear:
+  Steve is ACH ready, the funding account is VERIFIED, the device is trusted.
 
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
