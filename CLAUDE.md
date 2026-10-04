@@ -5496,6 +5496,81 @@ both counts, and the thread ended somewhere better than it started.
 - NOT verified end to end: a dev server in a Claude Code session cannot reach
   Supabase or Resend, so the first real send is the test.
 
+### The vendor is told from the pay press itself (no migration) — BUILT
+Operator, after the first production bill: "When a payment is made via studio
+flows there should be a payment confirmation email that goes out to the person
+that just got paid. Saying something like Thank you for being on the recent
+<blank> shoot. A payment has been paid towards your invoice # xxx."
+- MOST OF IT ALREADY EXISTED and had never fired, which is the useful half of
+  the answer. 0112 built the email, the exact-cents figure, the job name, the
+  invoice number and the `remittance_sent_at` record, behind a MANUAL BUTTON on
+  a paid cost row. The operator read the gap as "I have not paid through Studio
+  Flows yet". That is true and it is not the whole reason: nothing was wired to
+  the pay press either, so the first real payment would also have sent nothing.
+- THE RULE IT LOOKED LIKE IT BROKE, and why it does not. 0112 refused an
+  automatic send because the paid status is READ BACK WHEN THE BUDGET PAGE
+  OPENS, so an email hanging off that would go out whenever somebody browsed:
+  days late, at eleven at night, or twice if two people opened the page. That
+  was a rule about a PAGE LOAD. The Pay press is the opposite: a human already
+  naming the vendor, the amount, the invoice and the bank account. Attaching
+  the remittance there SATISFIES the rule rather than bending it, and the thing
+  genuinely refused (an email nobody asked for, at a time nobody chose) is
+  untouched.
+- "PAID" BECAME "SENT", and it is the one word in the request that could not be
+  taken literally. ACH takes several business days to land, so lib/remittance
+  asserts against six settlement phrasings; the sentence is now "<studio> has
+  sent a payment towards your invoice #1043 for Prop styling, 3 days."
+- TOWARDS, not for, and it is not a hedge: a cost can be settled as a deposit
+  and a balance (cost_payments), so a payment is routinely one of two against
+  the same invoice. "Towards" is true of both cases where "for" is true of one.
+- THE THANK-YOU NAMES WHO THEY ARE. A crew member or a performer was ON the
+  shoot; a rental house or a prop shop worked WITH the studio on it, and
+  thanking a truck company for being on the shoot reads as a mail merge. The
+  roster category already records which, so `remittanceThanks` follows it:
+  person gets the operator's own wording, company gets "Thank you for your work
+  on <project>". With no project there is no greeting at all, since a bare
+  thank-you is filler.
+- A BARE INVOICE NUMBER GETS THE HASH somebody would say out loud (#1043), and
+  one carrying its own prefix (INV-204) is left exactly as printed. The details
+  line uses the same helper, so the sentence and the reconciliation row cannot
+  write the same number two ways.
+- IT CAN NEVER FAIL THE PAYMENT. The money has already moved by then, so a
+  failed send is caught and swallowed inside the action's own try: surfacing it
+  would read as the payment having failed, which is the single worst thing this
+  surface could say. A failed send leaves `remittance_sent_at` null, so the row
+  still reads as untold and the manual button on it is the retry.
+- NOTHING IS EMAILED BY "Just add the bill". A queued bill is a promise to pay
+  on its due date, and telling somebody a payment has been sent three weeks
+  before it is would manufacture the chase this exists to end.
+- lib/remittance-send.ts is the ONE sender, because there are now two presses.
+  Two copies of "assemble the facts, send, stamp" would drift the first time
+  either changed, and what they would drift about is a claim about money. It
+  also holds `remittanceTarget`, the one roster read, which replaced a
+  duplicate contact lookup in bill-pay-actions: BILL needs the address to
+  invite somebody onto ACH and the remittance needs it to write to them, and
+  the two must not disagree about who that is.
+- THE WINDOW SAYS IT BEFORE THE PRESS ("Veronica Laramie will be emailed at
+  <address> to say the payment is on its way", or "Nobody will be emailed: this
+  cost has no contact with an email address"). A window whose whole job is
+  stating what will happen cannot leave out the message it sends on somebody
+  else's behalf. A send that then fails is named in the toast, because the row
+  shows that half as nothing rather than as missing.
+- `SendBillBody` was SPLIT OUT as presentational for the reason ReadinessBody
+  was: a session here reaches neither Supabase nor BILL, so without the split
+  the only states ever seen are "Checking with BILL..." and the failure one,
+  which is how a window about somebody's money ships unchecked. Verified in
+  Chromium against a throwaway fixture (deleted) across ACH, no-email, cheque
+  and new-vendor: the right sentence in each, Pay disabled on the two that
+  refuse, no page errors, no overflow at 390.
+- 64 assertions (was 39), including the greeting ordering (greeting, then the
+  producer's own note, then the figures, which is the shape of a letter), the
+  six forbidden settlement phrasings re-checked with a note in the body, and
+  both invoice-number shapes.
+- STILL UNEXERCISED, and it is the same gate as the ACH marketing claim: no
+  `/v3/payments` call has ever been made from the app, so this email has never
+  gone out from a real payment. The first one is the test.
+
+
 ### The read-a-document banner is green when it worked (no migration) — BUILT
 Operator, on the receipt flow: "theres a yellow confirmation window that pops
 up, which is fine. but the yellow makes it seems like its a error message vs a

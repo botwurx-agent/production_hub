@@ -3,22 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { logWrite, reportError } from "@/lib/log";
-import { emailConfigured, sendEmail } from "@/lib/email";
-import { renderEmail } from "@/lib/email-template";
-import { isEmailAddress, singleLine } from "@/lib/contact";
-import { remittanceEmail, remittanceSubject } from "@/lib/remittance";
+import { deliverRemittance, remittanceTarget } from "@/lib/remittance-send";
 import { summarizePayments } from "@/lib/costs";
 
 /**
  * Tells a vendor their payment is on its way.
  *
- * A DELIBERATE PRESS, NEVER AUTOMATIC. The paid status is read back from
- * FreshBooks when the budget page opens, so an email hanging off that would go
- * out whenever somebody happened to browse: possibly days late, possibly at
+ * THIS PRESS IS THE RETRY AND THE AFTERTHOUGHT. A payment made through BILL
+ * now sends the same email from the Pay press itself, which is where it
+ * belongs: the producer is already naming the vendor and the amount there. The
+ * button stays for the two cases that press cannot cover, both real: a cost
+ * paid outside Studio Flows and marked paid here, and "they never got it".
+ *
+ * WHAT IS STILL REFUSED is an email hanging off a PAGE LOAD. The paid status is
+ * read back from BILL when the budget opens, so a send attached to that would
+ * go out whenever somebody happened to browse: possibly days late, possibly at
  * eleven at night, possibly twice if two people open the page. Outward email
- * about money gets a human commit, the same contract Runner and the meal round
- * already hold.
+ * about money follows a press that meant it.
  *
  * THE PAID CHECK IS RE-DERIVED HERE rather than trusted from the browser. The
  * button is only offered on a paid cost, but a button is presentation; the
@@ -31,17 +32,13 @@ export async function sendRemittance(
   input: { to: string; subject: string; message: string },
 ): Promise<{ error: string } | { ok: true }> {
   const ctx = await requireStudioContext();
-  if (!emailConfigured()) {
-    return { error: "Email is not set up here, so nothing can be sent." };
-  }
-
-  const to = singleLine(input.to).toLowerCase();
-  if (!isEmailAddress(to)) return { error: "That is not a valid email address." };
 
   const supabase = createClient();
   const { data: cost } = await supabase
     .from("project_costs")
-    .select("id, vendor, description, amount, invoice_number, status, project_id")
+    .select(
+      "id, vendor, description, amount, invoice_number, contact_id, status, project_id",
+    )
     .eq("id", costId)
     .eq("project_id", projectId)
     .maybeSingle();
@@ -62,39 +59,24 @@ export async function sendRemittance(
     };
   }
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("title")
-    .eq("id", projectId)
-    .maybeSingle();
+  const [{ data: project }, target] = await Promise.all([
+    supabase.from("projects").select("title").eq("id", projectId).maybeSingle(),
+    remittanceTarget(supabase, cost),
+  ]);
 
-  const facts = {
-    studio: ctx.studio.name,
+  const res = await deliverRemittance(supabase, {
+    cost,
+    // The composer's address wins: the producer may be sending it on to an
+    // agent or a bookkeeper rather than to the person on the roster.
+    to: input.to,
     amount: summary.committed,
-    description: cost.description,
-    invoiceNumber: cost.invoice_number,
-    project: project?.title ?? null,
+    studioName: ctx.studio.name,
+    projectTitle: project?.title ?? null,
+    recipient: target.recipient,
     note: input.message,
-  };
-  const subject = singleLine(input.subject) || remittanceSubject(facts);
-  const { html, text } = renderEmail(remittanceEmail(facts));
-
-  const res = await sendEmail({ to, subject, html, text });
-  if (!res.ok) {
-    const why = res.error ?? "The email did not send.";
-    reportError(`remittance.send ${costId}`, new Error(why));
-    // Nothing is stamped on a failure, so the row still reads as untold and
-    // the producer can try again rather than believing it went.
-    return { error: why };
-  }
-
-  await logWrite(
-    "remittance.stamp",
-    supabase
-      .from("project_costs")
-      .update({ remittance_sent_at: new Date().toISOString() })
-      .eq("id", costId),
-  );
+    subject: input.subject,
+  });
+  if ("error" in res) return res;
 
   revalidatePath(`/projects/${projectId}/budget`);
   return { ok: true };

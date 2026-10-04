@@ -26,6 +26,7 @@ import { actionError } from "@/lib/action-result";
 // cents are the point. Same reason the remittance email uses it.
 import { exactMoney } from "@/lib/remittance";
 import { payRefused, railLabel, railWarning, type PayRail } from "@/lib/bill-payable";
+import type { BillAddress as BillAddressInput } from "@/lib/bill";
 import type { ProjectCost } from "@/lib/database.types";
 
 /** Null when BILL is not connected: no pay controls appear at all. */
@@ -122,27 +123,95 @@ export function SendBillModal({
   const [pending, start] = useTransition();
   const [ctx, setCtx] = useState<BillPayContext | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [fundingId, setFundingId] = useState("");
-  const [addr, setAddr] = useState({ line1: "", city: "", state: "", zip: "" });
 
   useEffect(() => {
     let alive = true;
     void billPayContext(projectId, cost.id).then((res) => {
       if (!alive) return;
       const err = actionError(res);
-      if (err) {
-        setLoadError(err);
-        return;
-      }
-      const ok = res as BillPayContext;
-      setCtx(ok);
-      const usable = ok.fundingAccounts.filter((f) => f.usable);
-      if (usable.length === 1) setFundingId(usable[0].id);
+      if (err) setLoadError(err);
+      else setCtx(res as BillPayContext);
     });
     return () => {
       alive = false;
     };
   }, [projectId, cost.id]);
+
+  return (
+    <SendBillBody
+      cost={cost}
+      ctx={ctx}
+      loadError={loadError}
+      pending={pending}
+      onClose={onClose}
+      onRun={(pay, fundingAccountId, address) =>
+        start(async () => {
+          const res = await sendCostToBill(projectId, cost.id, {
+            pay,
+            fundingAccountId: pay ? fundingAccountId : null,
+            address,
+          });
+          const err = actionError(res);
+          if (err) {
+            toast(err, "error");
+            router.refresh();
+            return;
+          }
+          const done = res as { paid: boolean; notified: boolean };
+          const vendor = (cost.vendor ?? "").trim();
+          const notifyTo = ctx?.vendorEmail ?? null;
+          // A FAILED REMITTANCE IS SAID OUT LOUD, because the payment
+          // succeeded and the row will not show that half as missing: it just
+          // stays unstamped. Naming it here is what sends the producer to the
+          // mail button on the row.
+          const toldThem = done.notified
+            ? " They have been emailed."
+            : notifyTo
+              ? " The email to them did not send: use the mail button on the row."
+              : "";
+          toast(
+            done.paid
+              ? `Sent ${exactMoney(Number(cost.amount) || 0)} to ${vendor} through BILL.${toldThem}`
+              : `${vendor} and this bill are now at BILL. Nothing has been paid.`,
+            done.paid && notifyTo && !done.notified ? "error" : "success"
+          );
+          router.refresh();
+          onClose();
+        })
+      }
+    />
+  );
+}
+
+/**
+ * The window itself, SPLIT OUT AS PRESENTATIONAL so it can be driven in a
+ * browser. A session that cannot reach Supabase or BILL can otherwise only
+ * ever see "Checking with BILL..." and the failure state, which is how a
+ * window that states what will happen to somebody's money ships unchecked.
+ */
+export function SendBillBody({
+  cost,
+  ctx,
+  loadError,
+  pending,
+  onClose,
+  onRun,
+}: {
+  cost: ProjectCost;
+  ctx: BillPayContext | null;
+  loadError: string | null;
+  pending: boolean;
+  onClose: () => void;
+  onRun: (pay: boolean, fundingAccountId: string, address: BillAddressInput | null) => void;
+}) {
+  const [fundingId, setFundingId] = useState("");
+  const [addr, setAddr] = useState({ line1: "", city: "", state: "", zip: "" });
+
+  // One usable account is not a choice, so it is made.
+  useEffect(() => {
+    const usable = (ctx?.fundingAccounts ?? []).filter((f) => f.usable);
+    if (usable.length === 1) setFundingId(usable[0].id);
+  }, [ctx]);
 
   const amount = Number(cost.amount) || 0;
   const vendor = (cost.vendor ?? "").trim();
@@ -157,39 +226,27 @@ export function SendBillModal({
   const rail: PayRail = !ctx ? "unknown" : ctx.existingVendorId ? ctx.rail : "check";
   const refused = payRefused(rail);
   const warning = ctx ? railWarning(rail, vendor || "this vendor") : "";
+  // Stated before the press, not discovered after it: paying emails this
+  // person, and a window whose whole job is saying what will happen cannot
+  // leave out the message it sends on somebody's behalf.
+  const notifyTo = ctx?.vendorEmail ?? null;
   const addressDone =
     !needsAddress || Boolean(addr.line1.trim() && addr.city.trim() && addr.state.trim() && addr.zip.trim());
 
   function run(pay: boolean) {
-    start(async () => {
-      const res = await sendCostToBill(projectId, cost.id, {
-        pay,
-        fundingAccountId: pay ? fundingId : null,
-        address: needsAddress
-          ? {
-              line1: addr.line1.trim(),
-              city: addr.city.trim(),
-              stateOrProvince: addr.state.trim(),
-              zipOrPostalCode: addr.zip.trim(),
-              country: "US",
-            }
-          : null,
-      });
-      const err = actionError(res);
-      if (err) {
-        toast(err, "error");
-        router.refresh();
-        return;
-      }
-      toast(
-        (res as { paid: boolean }).paid
-          ? `Sent ${exactMoney(amount)} to ${vendor} through BILL.`
-          : `${vendor} and this bill are now at BILL. Nothing has been paid.`,
-        "success"
-      );
-      router.refresh();
-      onClose();
-    });
+    onRun(
+      pay,
+      fundingId,
+      needsAddress
+        ? {
+            line1: addr.line1.trim(),
+            city: addr.city.trim(),
+            stateOrProvince: addr.state.trim(),
+            zipOrPostalCode: addr.zip.trim(),
+            country: "US",
+          }
+        : null
+    );
   }
 
   return (
@@ -328,8 +385,12 @@ export function SendBillModal({
               {pending ? "Sending..." : `Pay ${exactMoney(amount)}`}
             </Button>
           </div>
-          <p className="text-right text-xs text-text-faint">
+          <p className="text-right text-xs leading-relaxed text-text-faint">
             Paying sends money from the account above. It cannot be undone here.
+            <br />
+            {notifyTo
+              ? `${vendor || "They"} will be emailed at ${notifyTo} to say the payment is on its way.`
+              : "Nobody will be emailed: this cost has no contact with an email address."}
           </p>
         </div>
       )}

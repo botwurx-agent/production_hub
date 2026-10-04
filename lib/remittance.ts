@@ -30,6 +30,15 @@ export function exactMoney(amount: number): string {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+/**
+ * WHO IS BEING THANKED. A crew member or a performer was ON the shoot; a
+ * rental house or a prop shop worked WITH the studio on it, and telling a
+ * truck company thank you for being on the shoot reads as a mail merge. The
+ * project roster already records which of the two somebody is, so the line
+ * follows it rather than guessing.
+ */
+export type RemittanceRecipient = "person" | "company";
+
 export type RemittanceFacts = {
   /** The studio doing the paying, for the From line of the sentence. */
   studio: string;
@@ -37,14 +46,38 @@ export type RemittanceFacts = {
   description: string | null;
   invoiceNumber: string | null;
   project: string | null;
-  /** Anything the producer typed in the composer, shown first. */
+  /** Anything the producer typed in the composer, shown under the greeting. */
   note?: string | null;
+  /** Defaults to a person, which is who a roster contact nearly always is. */
+  recipient?: RemittanceRecipient | null;
 };
 
 const clean = (s: string | null | undefined): string | null => {
   const t = (s ?? "").replace(/[\r\n]+/g, " ").trim();
   return t ? t : null;
 };
+
+/**
+ * A bare number reads as a stray figure in a sentence, so a printed invoice
+ * number that is only digits gets the hash somebody would say out loud. One
+ * carrying its own prefix (INV-204, EST-3) is left exactly as printed.
+ */
+function invoiceLabel(n: string): string {
+  return /^\d+$/.test(n) ? `#${n}` : n;
+}
+
+/**
+ * The greeting, and the reason this email does not read as a bank
+ * notification: it names the job. Null when no project is known, since there
+ * is nothing to thank anybody for by name and a bare "thank you" is filler.
+ */
+export function remittanceThanks(f: RemittanceFacts): string | null {
+  const project = clean(f.project);
+  if (!project) return null;
+  return f.recipient === "company"
+    ? `Thank you for your work on ${project}.`
+    : `Thank you for being on the ${project} shoot.`;
+}
 
 /** The subject somebody scans in an inbox: what happened, how much, which job. */
 export function remittanceSubject(f: RemittanceFacts): string {
@@ -63,19 +96,33 @@ export function remittanceEmail(f: RemittanceFacts): EmailContent {
   // read as a form, and this is a note between two people.
   const details = [
     exactMoney(f.amount),
-    invoice ? `Invoice ${invoice}` : null,
+    invoice ? `Invoice ${invoiceLabel(invoice)}` : null,
     project,
   ]
     .filter(Boolean)
     .join(" · ");
 
+  // TOWARDS, not for, and it is not a hedge: a cost can be settled in a
+  // deposit and a balance (cost_payments), so a payment is routinely one of
+  // two against the same invoice. "Towards" is true of both cases where "for"
+  // is only true of one.
+  const against = invoice
+    ? description
+      ? `your invoice ${invoiceLabel(invoice)} for ${description}`
+      : `your invoice ${invoiceLabel(invoice)}`
+    : description
+      ? description
+      : "your invoice";
+
+  const thanks = remittanceThanks(f);
+
   return {
     heading: "Payment sent",
     lines: [
+      // The greeting leads, then anything the producer wrote, then the figures.
+      ...(thanks ? [thanks] : []),
       ...(note ? [note] : []),
-      description
-        ? `${studio} has sent payment for ${description}.`
-        : `${studio} has sent payment for your invoice.`,
+      `${studio} has sent a payment towards ${against}.`,
       details,
       // Never "you have been paid": see the module comment.
       "Payments can take a few business days to arrive, depending on the method used.",

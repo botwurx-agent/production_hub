@@ -25,7 +25,7 @@ import { reportError } from "@/lib/log";
 import { allow } from "@/lib/rate-limit";
 import { billSettled } from "@/lib/bill-settled";
 import { payRail, payRefused, type PayRail } from "@/lib/bill-payable";
-import { isEmailAddress } from "@/lib/contact";
+import { deliverRemittance, remittanceTarget } from "@/lib/remittance-send";
 import {
   BillError,
   billConfigured,
@@ -59,7 +59,11 @@ export type BillPayContext = {
    * came to post a paper cheque without saying so.
    */
   rail: PayRail;
-  /** The vendor's email at BILL, so the window can say it is missing. */
+  /**
+   * WHO GETS TOLD when the money moves, off the project roster. The window
+   * states it before the press, because paying also emails this person: a
+   * confirmation that does not mention the email it sends is not one.
+   */
   vendorEmail: string | null;
 };
 
@@ -101,27 +105,15 @@ function today(): string {
 }
 
 /**
- * The vendor's email, off the project roster. BILL needs it to be able to
- * invite somebody onto ACH later, and the roster is where a studio already
- * keeps it, so nobody retypes anything.
+ * The vendor's email and whether they are a person or a company both come off
+ * the project roster, through lib/remittance-send's one reader. BILL needs the
+ * address to be able to invite somebody onto ACH later, and the remittance
+ * needs it to tell them the money is on its way, so the two cannot disagree
+ * about who that is.
  *
  * Null is a normal answer, not a failure: a till receipt from a shop carries
- * no contact at all, and a vendor with no email is exactly what BILL has
- * today. It is never a reason to refuse the send.
+ * no contact at all. It is never a reason to refuse the send.
  */
-async function vendorEmail(
-  supabase: ReturnType<typeof createClient>,
-  contactId: string | null
-): Promise<string | null> {
-  if (!contactId) return null;
-  const { data } = await supabase
-    .from("contacts")
-    .select("email")
-    .eq("id", contactId)
-    .maybeSingle();
-  const email = (data?.email ?? "").trim();
-  return isEmailAddress(email) ? email : null;
-}
 
 /**
  * Everything the send window needs, in one round trip: whether BILL can pay at
@@ -138,7 +130,7 @@ export async function billPayContext(
   const supabase = createClient();
   const { data: cost } = await supabase
     .from("project_costs")
-    .select("id, vendor")
+    .select("id, vendor, contact_id")
     .eq("id", costId)
     .eq("project_id", projectId)
     .maybeSingle();
@@ -151,9 +143,10 @@ export async function billPayContext(
     }
     // Both reads are independent, so they genuinely run together here: this is
     // the server, not the browser, where Next would queue them.
-    const [funding, found] = await Promise.all([
+    const [funding, found, target] = await Promise.all([
       listBillFundingAccounts(signed.session),
       cost.vendor ? findBillVendor(signed.session, cost.vendor) : Promise.resolve(null),
+      remittanceTarget(supabase, cost),
     ]);
 
     // THE LIST ROW IS THINNER THAN THE RECORD. A vendor found by name can come
@@ -172,7 +165,7 @@ export async function billPayContext(
       existingVendorId: vendor?.id ?? null,
       existingVendorName: vendor?.name ?? null,
       rail: vendor ? payRail(vendor) : "unknown",
-      vendorEmail: null,
+      vendorEmail: target.email,
     };
   } catch (e) {
     return { error: readable(e, "billPayContext") };
@@ -193,7 +186,7 @@ export async function sendCostToBill(
     /** Required only when the vendor is not already at BILL. */
     address?: BillAddress | null;
   }
-): Promise<{ ok: true; billId: string; paid: boolean } | Fail> {
+): Promise<{ ok: true; billId: string; paid: boolean; notified: boolean } | Fail> {
   const { ctx, error } = await requirePayer();
   if (!ctx) return { error };
   if (!billConfigured()) return { error: "BILL is not set up on this deployment." };
@@ -223,6 +216,9 @@ export async function sendCostToBill(
 
   const amount = cents(cost.amount);
   if (amount <= 0) return { error: "A cost with no amount cannot be sent to BILL." };
+  // Read once, used twice: BILL wants the address to be able to invite them
+  // onto ACH, and the remittance below wants it to tell them the money moved.
+  const target = await remittanceTarget(supabase, cost);
   const vendorName = (cost.vendor ?? "").trim();
   if (!vendorName) return { error: "Give this cost a vendor name before sending it to BILL." };
 
@@ -269,7 +265,7 @@ export async function sendCostToBill(
         // that gets a freelancer onto ACH. The two messages do not compete:
         // BILL's says sign up to be paid electronically, ours names the
         // payment, the job and the invoice number.
-        email: await vendorEmail(supabase, cost.contact_id),
+        email: target.email,
       });
       vendorId = made.id;
       vendorPay = made;
@@ -306,8 +302,11 @@ export async function sendCostToBill(
     }
 
     if (!opts.pay) {
+      // NOTHING IS EMAILED HERE, deliberately. A queued bill is a promise to
+      // pay on its due date, and telling somebody a payment has been sent
+      // three weeks before it is would manufacture the chase this is for.
       revalidatePath(`/projects/${projectId}/budget`);
-      return { ok: true, billId, paid: false };
+      return { ok: true, billId, paid: false, notified: false };
     }
 
     // NEVER POST A CHEQUE FROM A PRESS THAT SAID "PAY". The window states the
@@ -350,9 +349,43 @@ export async function sendCostToBill(
       })
       .eq("id", costId);
 
+    // THE VENDOR IS TOLD FROM THIS PRESS. The standing rule is that outward
+    // email about money follows a deliberate press, and this press IS that
+    // press: it named the vendor, the amount and the invoice, and the window
+    // said the email would go. Making the producer press a second button on
+    // the same row afterwards is not consent, it is a chore, and the one that
+    // gets forgotten is the one the freelancer chases about.
+    //
+    // IT CAN NEVER FAIL THE PAYMENT. The money has already moved, so an
+    // unreachable mail provider must not surface as "something went wrong":
+    // that would read as the payment having failed, which is the single worst
+    // thing this surface could say. A failed send leaves remittance_sent_at
+    // null, so the row still reads as untold and the button on it is a retry.
+    let notified = false;
+    if (target.email && !cost.remittance_sent_at) {
+      try {
+        const { data: project } = await supabase
+          .from("projects")
+          .select("title")
+          .eq("id", projectId)
+          .maybeSingle();
+        const told = await deliverRemittance(supabase, {
+          cost,
+          to: target.email,
+          amount,
+          studioName: ctx.studio.name,
+          projectTitle: project?.title ?? null,
+          recipient: target.recipient,
+        });
+        notified = "ok" in told;
+      } catch (e) {
+        reportError("sendCostToBill/remittance", e);
+      }
+    }
+
     revalidatePath(`/projects/${projectId}/budget`);
     void vendorSource;
-    return { ok: true, billId, paid: true };
+    return { ok: true, billId, paid: true, notified };
   } catch (e) {
     return { error: readable(e, "sendCostToBill") };
   }
