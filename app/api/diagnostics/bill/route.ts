@@ -33,6 +33,8 @@ import { NextResponse } from "next/server";
 import { getStudioContext } from "@/lib/studio";
 import { createClient } from "@/lib/supabase/server";
 import { billEnv, billSessionForStudio, billV2SessionForStudio } from "@/lib/bill";
+import { payRail } from "@/lib/bill-payable";
+import { matchKey, vendorPayment } from "@/lib/payment-details";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -69,7 +71,7 @@ const BODY_CHARS = 1500;
 // BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
 // a build that had not finished deploying, which is indistinguishable from a
 // real answer unless the response says which code produced it.
-const PROBE = "2026-10-03-j";
+const PROBE = "2026-10-04-a";
 
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
@@ -474,6 +476,81 @@ export async function GET(req: Request) {
       environment: env,
       reading:
         "The body above is the whole bill as BILL states it. What matters is the exact name and value of whatever reports settlement, since the sync was reading `paymentStatus` and `dueAmount` on an assumption. A bill nobody has paid must NOT carry a value that reads as paid.",
+      steps,
+    });
+  }
+
+  // WHAT DOES BILL ACTUALLY SAY ABOUT EACH VENDOR, and does the panel read it
+  // the same way? The readiness panel reported "BILL did not say how they get
+  // paid" for a vendor it had just created, and a rail that reads unknown has
+  // two causes needing opposite fixes: the LIST ROW omitting the fields (ours
+  // to re-read, and there is a fallback for exactly that), or BILL genuinely
+  // not stating a method on this vendor (not ours at all). A refusal message
+  // cannot tell those apart, and neither can a status code: the FreshBooks
+  // round was lost to reading a 200 instead of a body.
+  //
+  // So this walks the SAME page the panel walks, prints every row verbatim,
+  // and prints what our own readers make of each one. Any row whose rail reads
+  // unknown is then read in FULL, so the list row and the whole vendor sit
+  // side by side and the difference is visible rather than argued about.
+  // Read-only: nothing is created and nobody is emailed.
+  const listVendors = url.searchParams.get("vendors") === "1";
+  const lookFor = (url.searchParams.get("name") ?? "").trim();
+  if (listVendors) {
+    const page = await call("list the vendors, the page the panel walks", "POST", "/vendors/list", {
+      max: 100,
+    });
+    const rows = Array.isArray((page.json as { results?: unknown })?.results)
+      ? ((page.json as { results: unknown[] }).results as Record<string, unknown>[])
+      : [];
+
+    const derived = rows.map((r) => {
+      const fields = vendorPayment(r);
+      return {
+        id: typeof r.id === "string" ? r.id : null,
+        name: typeof r.name === "string" ? r.name : null,
+        matchKey: typeof r.name === "string" ? matchKey(r.name) : null,
+        readFromListRow: fields,
+        railFromListRow: payRail(fields),
+      };
+    });
+
+    // The full read, for the ones the list answered thinly. Capped, since this
+    // is a round trip each and the question is answered by one example.
+    const thin = derived.filter((d) => d.railFromListRow === "unknown" && d.id).slice(0, 5);
+    const full: unknown[] = [];
+    for (const t of thin) {
+      const one = await call(`read ${t.name ?? t.id} in full`, "GET", `/vendors/${t.id}`);
+      const fields = vendorPayment(one.json);
+      full.push({
+        id: t.id,
+        name: t.name,
+        readFromFullVendor: fields,
+        railFromFullVendor: payRail(fields),
+      });
+    }
+
+    const wanted = lookFor ? matchKey(lookFor) : null;
+    const hit = wanted ? derived.find((d) => d.matchKey === wanted) ?? null : null;
+
+    return NextResponse.json({
+      probe: PROBE,
+      fingerprint,
+      environment: env,
+      vendorsRead: rows.length,
+      derived,
+      fullReads: full,
+      lookup: lookFor ? { name: lookFor, matchKey: wanted, matched: hit } : null,
+      reading:
+        "Compare railFromListRow against railFromFullVendor for the same vendor." +
+        " If the list row reads unknown and the full read names a method, the" +
+        " list is thin and the panel's re-read is what to check. If BOTH read" +
+        " unknown, BILL states no payment method on this vendor at all, which" +
+        " is not something our code can fix and means `unknown` has to be" +
+        " treated as a gap rather than as a method somebody already has." +
+        " readFromListRow prints the three field values exactly as they" +
+        " arrived, so a renamed field shows up as nulls rather than as a" +
+        " conclusion. Nothing was created and nobody was emailed.",
       steps,
     });
   }
