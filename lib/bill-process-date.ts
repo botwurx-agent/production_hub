@@ -105,6 +105,9 @@ export function isBankingDay(iso: string): boolean {
  * The first banking day on or after the US date right now. Capped at a short
  * walk: the longest run of closed days is four, so ten is far past any real
  * calendar and exists only so a wrong holiday list cannot loop.
+ *
+ * NOT THE DATE TO SEND. BILL will not process on the first banking day, only
+ * the one after it: see earliestProcessDate.
  */
 export function nextBankingDay(now: Date = new Date()): string {
   let iso = usToday(now);
@@ -113,6 +116,37 @@ export function nextBankingDay(now: Date = new Date()): string {
     d.setUTCDate(d.getUTCDate() + 1);
     iso = isoOf(d);
   }
+  return iso;
+}
+
+/**
+ * THE EARLIEST DAY BILL WILL ACTUALLY PROCESS, which is one banking day after
+ * the next one, not the next one itself.
+ *
+ * READ OFF BILL'S OWN PAYMENT SCREEN rather than inferred from a refusal,
+ * which is what finally settled this. Their date picker for October 2026,
+ * opened on Sunday the 4th, greys out every Saturday and Sunday (so the
+ * banking-day rule was right), greys Monday the 12th, which is Columbus Day
+ * (so the holiday list was right), and greys MONDAY THE 5TH, an ordinary
+ * banking day. The first day it offers is Tuesday the 6th. That one greyed
+ * Monday is the whole finding: BILL wants a full banking day of notice, and
+ * sending the next banking day was refused twice for exactly that reason.
+ *
+ * THE LESSON IS THE ONE THIS REPO KEEPS RECORDING: what their product offers
+ * is the ceiling on what their API offers, and one screenshot of their picker
+ * answered in a second what two rounds of reasoning from a refusal could not.
+ * Ask the product before theorising about the API.
+ *
+ * STILL UNKNOWN, and deliberately not guessed: whether a CUTOFF TIME moves
+ * this later in the day. The picker was read on a Sunday, where no cutoff can
+ * apply. If one exists, a press late in the afternoon would be refused and the
+ * producer moves the date on a field that is right there, which is the whole
+ * reason that field exists.
+ */
+export function earliestProcessDate(now: Date = new Date()): string {
+  const first = nextBankingDay(now);
+  let iso = plusDays(first, 1);
+  for (let i = 0; i < 10 && !isBankingDay(iso); i++) iso = plusDays(iso, 1);
   return iso;
 }
 
@@ -136,20 +170,21 @@ export function latestProcessDate(now: Date = new Date()): string {
 /**
  * THE DATE TO ACTUALLY SEND, from whatever the window offered.
  *
- * The process date is a field somebody can set, because BILL refused
- * `2026-10-05` (a Monday, and a banking day by this module's own reading), so
- * there is a second constraint on it that is not ours to guess. Rather than
- * guess a fourth time, the window states the date and lets the producer move
- * it, and this is the trust boundary on the way back in: the browser sends a
- * string, and a string is not a date.
+ * The process date is a field somebody can set, because BILL refused a date
+ * this module had every reason to think was fine, twice. It now knows why
+ * (see earliestProcessDate), and the field stays, because a cutoff time or
+ * any other rule of theirs can still move the floor and a window that states
+ * the day is better than one that assumes it.
  *
- * ANYTHING UNUSABLE FALLS BACK rather than refusing, because the fallback is
- * the value the field was defaulted to anyway. Refused: a wrong shape, a day
- * that does not exist (2026-02-31 must not roll into March), a date already
- * past in the US, a closed day, and anything absurdly far out.
+ * THIS IS THE TRUST BOUNDARY on the way back in: the browser sends a string,
+ * and a string is not a date. ANYTHING UNUSABLE FALLS BACK rather than
+ * refusing, because the fallback is the value the field was defaulted to
+ * anyway. Refused: a wrong shape, a day that does not exist (2026-02-31 must
+ * not roll into March), anything earlier than BILL will process, a closed
+ * day, and anything absurdly far out.
  */
 export function processDateFor(input: unknown, now: Date = new Date()): string {
-  const fallback = nextBankingDay(now);
+  const fallback = earliestProcessDate(now);
   if (typeof input !== "string") return fallback;
   const iso = input.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return fallback;
@@ -158,7 +193,7 @@ export function processDateFor(input: unknown, now: Date = new Date()): string {
   const d = atUtcMidnight(iso);
   if (!Number.isFinite(d.getTime()) || isoOf(d) !== iso) return fallback;
   // ISO dates compare correctly as strings, so no parsing is needed here.
-  if (iso < usToday(now)) return fallback;
+  if (iso < earliestProcessDate(now)) return fallback;
   if (iso > latestProcessDate(now)) return fallback;
   if (!isBankingDay(iso)) return fallback;
   return iso;

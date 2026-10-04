@@ -5794,6 +5794,31 @@ ours to guess.
   that bill in BILL's own interface and read the earliest date its payment
   screen offers. What their product allows is the ceiling on what their API
   allows, the same move that was never made during the FreshBooks rounds.
+- AND THAT WAS DONE, AND IT ANSWERED IN ONE SCREENSHOT. BILL's own payment
+  screen for the test bill, opened on Sunday 2026-10-04, defaults its Process
+  date to TUESDAY 10/06 and its calendar greys: every Saturday and Sunday (so
+  the banking-day rule was right), Monday the 12th, which is Columbus Day (so
+  the holiday list was right), and MONDAY THE 5TH, an ordinary banking day.
+  That one greyed Monday is the finding: BILL wants a FULL BANKING DAY of
+  notice, which is exactly the date the app had been sending, twice.
+- SO THE RULE IS `earliestProcessDate`: the first banking day on or after the
+  US date, then one banking day further. Checked against every day of their
+  October calendar in the tests, including that Friday the 9th reaches past
+  the weekend AND Columbus Day to the 13th. 1,744 assertions.
+- ASK THE PRODUCT BEFORE THEORISING ABOUT THE API. One screenshot of their
+  picker settled in a second what two rounds of reasoning from a refusal could
+  not, and the same move was never made in any of the four FreshBooks rounds.
+  A date refusal cannot say whether a date is too soon, too late or wrong some
+  other way; a calendar that greys out the days shows the whole rule at once.
+- THE FIELD STAYS, now that it knows the floor. A CUTOFF TIME may still move
+  it later in the day (the picker was read on a Sunday, where no cutoff can
+  apply), and a window that states the day beats one that assumes it. If a
+  cutoff exists, a late press is refused and the producer moves the date on a
+  control that is right there.
+- Their screen also shows the payment arriving three business days after the
+  process date (10/06 -> 10/09) and the method as ePayment. NOT modelled: one
+  observation is not an SLA, so the window says "a few business days" rather
+  than printing a date we would then be wrong about.
 
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT

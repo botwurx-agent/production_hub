@@ -30,10 +30,9 @@ import { payRefused, railLabel, railWarning, type PayRail } from "@/lib/bill-pay
 // so the window can state the default date and bound the picker with the
 // same rules the action validates against.
 import {
+  earliestProcessDate,
   isBankingDay,
   latestProcessDate,
-  nextBankingDay,
-  usToday,
 } from "@/lib/bill-process-date";
 import type { BillAddress as BillAddressInput } from "@/lib/bill";
 import type { ProjectCost } from "@/lib/database.types";
@@ -232,14 +231,16 @@ export function SendBillBody({
 }) {
   const [fundingId, setFundingId] = useState("");
   const [addr, setAddr] = useState({ line1: "", city: "", state: "", zip: "" });
-  // THE DATE IS A FIELD, not a constant, because BILL refused a Monday that
-  // this app had every reason to think was fine. Rather than guess at its
-  // hidden rule, the window says which day the money moves and lets the
-  // producer move it. Lazily initialised so the default is read once, when
-  // the window opens.
-  const [payOn, setPayOn] = useState(() => nextBankingDay());
+  // THE DATE IS A FIELD, not a constant. It became one because BILL refused a
+  // Monday this app had every reason to think was fine, and it stays one now
+  // that their own picker has explained why (a full banking day of notice):
+  // a cutoff time or any other rule of theirs can still move the floor, and a
+  // window that states the day beats one that assumes it. Lazily initialised,
+  // so the default is read once when the window opens.
+  const [payOn, setPayOn] = useState(() => earliestProcessDate());
+  const earliest = earliestProcessDate();
   const payOnClosed = !isBankingDay(payOn);
-  const payOnPast = payOn < usToday();
+  const payOnTooSoon = !payOnClosed && payOn < earliest;
 
   // One usable account is not a choice, so it is made.
   useEffect(() => {
@@ -413,7 +414,7 @@ export function SendBillBody({
               type="date"
               className={field}
               value={payOn}
-              min={usToday()}
+              min={earliest}
               max={latestProcessDate()}
               onChange={(e) => setPayOn(e.target.value)}
             />
@@ -421,7 +422,7 @@ export function SendBillBody({
               The day BILL processes the payment. ACH takes a few business days
               to land after that.
             </p>
-            {(payOnClosed || payOnPast) && (
+            {(payOnClosed || payOnTooSoon) && (
               // Stated and refused here rather than silently corrected on the
               // server: the whole premise of this window is that the date on
               // screen is the date that happens.
@@ -432,8 +433,8 @@ export function SendBillBody({
                   border: "1px solid var(--h-amber)",
                 }}
               >
-                {payOnPast
-                  ? "That day has passed. Pick today or later."
+                {payOnTooSoon
+                  ? `BILL needs a full business day of notice, so the earliest it will process this is ${earliest}.`
                   : "BILL does not process payments at weekends or on bank holidays. Pick a business day."}
               </p>
             )}
@@ -468,7 +469,7 @@ export function SendBillBody({
                 !ctx.trusted ||
                 refused ||
                 payOnClosed ||
-                payOnPast
+                payOnTooSoon
               }
               onClick={() => run(true)}
             >
