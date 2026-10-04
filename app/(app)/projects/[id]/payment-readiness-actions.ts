@@ -28,16 +28,20 @@ import {
   billSessionForStudio,
   findBillVendor,
   listBillVendors,
+  readBillVendor,
   sendBillVendorInvite,
 } from "@/lib/bill";
 import { isEmailAddress } from "@/lib/contact";
 import {
+  applyVendorDetail,
   matchReadiness,
   readinessTally,
+  thinVendorIds,
   type Readiness,
   type ReadinessTally,
   type RosterPerson,
 } from "@/lib/payment-details";
+import type { VendorPayment } from "@/lib/bill-payable";
 
 type Fail = { error: string };
 
@@ -103,7 +107,21 @@ export async function loadPaymentReadiness(
       return { connected: false, rows: [], tally: readinessTally([]), vendorsRead: 0 };
     }
     const vendors = await listBillVendors(signed.session);
-    const rows = matchReadiness(roster, vendors);
+    let rows = matchReadiness(roster, vendors);
+
+    // A list row that omitted the payment fields reads as "unclear", which is
+    // the one answer this panel must not give about somebody who HAS
+    // connected. Those are re-read in full, in parallel, and only those.
+    const thin = thinVendorIds(rows);
+    if (thin.length) {
+      const reads = await Promise.all(
+        thin.map(async (id) => [id, await readBillVendor(signed.session, id)] as const)
+      );
+      const detail = new Map<string, VendorPayment>();
+      for (const [id, full] of reads) if (full) detail.set(id, full);
+      rows = applyVendorDetail(rows, detail);
+    }
+
     return {
       connected: true,
       rows,

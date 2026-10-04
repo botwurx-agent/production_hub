@@ -241,3 +241,38 @@ export function matchRosterVendor(
   );
   return hits.length === 1 ? hits[0] : null;
 }
+
+/**
+ * RE-READ THE ONES THE LIST ANSWERED THINLY. `listBillVendors` returns LIST
+ * rows, and a list row may omit the two fields the rail is decided from, in
+ * which case `payRail` correctly reports `unknown`. The send window already
+ * falls back to a full vendor read for exactly this; the readiness panel did
+ * not, so a vendor who HAD connected could still read "Unclear" here, which
+ * is the one answer this panel exists to give.
+ *
+ * Applied only to rows that came back unknown WITH a vendor, so a fat list
+ * costs nothing and a thin one costs one read per matched person. The caller
+ * caps how many it is willing to make.
+ */
+export function applyVendorDetail(
+  rows: Readiness[],
+  detail: Map<string, VendorPayment>,
+): Readiness[] {
+  return (rows ?? []).map((r) => {
+    if (r.state !== "unknown" || !r.vendorId) return r;
+    const full = detail.get(r.vendorId);
+    if (!full) return r;
+    const state = payRail(full);
+    return { ...r, state, label: stateLabel(state) };
+  });
+}
+
+/** Which vendors are worth a second read, in roster order. */
+export function thinVendorIds(rows: Readiness[], cap = 10): string[] {
+  const out: string[] = [];
+  for (const r of rows ?? []) {
+    if (r.state === "unknown" && r.vendorId && !out.includes(r.vendorId)) out.push(r.vendorId);
+    if (out.length >= cap) break;
+  }
+  return out;
+}

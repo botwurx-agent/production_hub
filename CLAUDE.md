@@ -5597,6 +5597,24 @@ that just got paid. Saying something like Thank you for being on the recent
 - It also reaches BILL: the same target supplies the email on a vendor create,
   so an unlinked cost can now get its freelancer invited onto ACH.
 
+### The readiness panel re-reads a vendor BILL answered thinly (no migration)
+Found while planning the end-to-end test rather than from a failure, and it
+sits directly in that test's path. `listBillVendors` returns LIST rows, and a
+list row may omit `payByType` and `bankAccountStatus`, in which case `payRail`
+correctly reports `unknown` and the panel prints "Unclear". The send window has
+had a full-vendor fallback for exactly this since slice 2; the PANEL did not.
+- SO A FREELANCER WHO HAD CONNECTED COULD STILL READ "Unclear" on the one
+  surface that exists to answer whether they are ACH-ready, and during the
+  invite test that would read as the invite having failed rather than as our
+  read being thin. The list row's shape has never been printed, so this is
+  insurance either way: a fat list costs nothing.
+- Only a row that came back UNKNOWN **with** a matched vendor is re-read, in
+  parallel, capped at ten. An explicit CHECK is an answer rather than a gap and
+  is never re-read; somebody BILL has never heard of has no id to read.
+- `applyVendorDetail` + `thinVendorIds` are pure and tested (11 assertions):
+  a thin list reads as unclear and then resolves, a fat list costs no reads, a
+  failed second read never invents a rail, and the cap holds in roster order.
+
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
 Operator, on the receipt flow: "theres a yellow confirmation window that pops
