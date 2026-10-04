@@ -24,6 +24,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
 import { allow } from "@/lib/rate-limit";
 import { billSettled } from "@/lib/bill-settled";
+import { nextBankingDay, usToday } from "@/lib/bill-process-date";
 import { payRail, payRefused, type PayRail } from "@/lib/bill-payable";
 import { deliverRemittance, remittanceTarget } from "@/lib/remittance-send";
 import {
@@ -65,6 +66,13 @@ export type BillPayContext = {
    * confirmation that does not mention the email it sends is not one.
    */
   vendorEmail: string | null;
+  /**
+   * SET WHEN THE BILL ALREADY EXISTS AT BILL AND IS STILL UNPAID, which is
+   * what a payment refused after the bill was created leaves behind. The
+   * window then offers only Pay, since adding a second bill is how a vendor
+   * gets paid twice.
+   */
+  existingBillId: string | null;
 };
 
 /**
@@ -78,7 +86,8 @@ async function requirePayer() {
   const ctx = await requireStudioContext();
   // project_costs is is_studio_member only, so a collaborator cannot see a
   // cost at all; refusing here states it rather than relying on an empty read.
-  if (ctx.isCollaborator) return { ctx: null, error: "Not available on this account." as const };
+  if (ctx.isCollaborator)
+    return { ctx: null, error: "Not available on this account." as const };
   if (ctx.role !== "owner" && ctx.role !== "admin") {
     return {
       ctx: null,
@@ -91,17 +100,15 @@ async function requirePayer() {
 function readable(e: unknown, where: string): string {
   if (e instanceof BillError) return e.message;
   reportError(where, e);
-  return e instanceof Error && e.message ? e.message : "Something went wrong reaching BILL.";
+  return e instanceof Error && e.message
+    ? e.message
+    : "Something went wrong reaching BILL.";
 }
 
 /** Money as BILL wants it: a number of dollars, rounded to cents. */
 function cents(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
-}
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 /**
@@ -121,16 +128,26 @@ function today(): string {
  */
 export async function billPayContext(
   projectId: string,
-  costId: string
+  costId: string,
 ): Promise<BillPayContext | Fail> {
   const { ctx, error } = await requirePayer();
   if (!ctx) return { error };
-  if (!billConfigured()) return { connected: false, trusted: false, fundingAccounts: [], existingVendorId: null, existingVendorName: null, rail: "unknown", vendorEmail: null };
+  if (!billConfigured())
+    return {
+      connected: false,
+      trusted: false,
+      fundingAccounts: [],
+      existingVendorId: null,
+      existingVendorName: null,
+      rail: "unknown",
+      vendorEmail: null,
+      existingBillId: null,
+    };
 
   const supabase = createClient();
   const { data: cost } = await supabase
     .from("project_costs")
-    .select("id, vendor, contact_id, project_id")
+    .select("id, vendor, contact_id, project_id, bill_bill_id, bill_payment_id")
     .eq("id", costId)
     .eq("project_id", projectId)
     .maybeSingle();
@@ -139,13 +156,24 @@ export async function billPayContext(
   try {
     const signed = await billSessionForStudio(supabase, ctx.studio.id);
     if (!signed) {
-      return { connected: false, trusted: false, fundingAccounts: [], existingVendorId: null, existingVendorName: null, rail: "unknown", vendorEmail: null };
+      return {
+        connected: false,
+        trusted: false,
+        fundingAccounts: [],
+        existingVendorId: null,
+        existingVendorName: null,
+        rail: "unknown",
+        vendorEmail: null,
+        existingBillId: null,
+      };
     }
     // Both reads are independent, so they genuinely run together here: this is
     // the server, not the browser, where Next would queue them.
     const [funding, found, target] = await Promise.all([
       listBillFundingAccounts(signed.session),
-      cost.vendor ? findBillVendor(signed.session, cost.vendor) : Promise.resolve(null),
+      cost.vendor
+        ? findBillVendor(signed.session, cost.vendor)
+        : Promise.resolve(null),
       remittanceTarget(supabase, cost),
     ]);
 
@@ -154,7 +182,11 @@ export async function billPayContext(
     // thing to show about a cheque, so the full record is read when the list
     // did not carry them. One extra round trip, only when it is needed.
     let vendor = found;
-    if (vendor && vendor.payByType === null && vendor.bankAccountStatus === null) {
+    if (
+      vendor &&
+      vendor.payByType === null &&
+      vendor.bankAccountStatus === null
+    ) {
       vendor = (await readBillVendor(signed.session, vendor.id)) ?? vendor;
     }
 
@@ -166,6 +198,9 @@ export async function billPayContext(
       existingVendorName: vendor?.name ?? null,
       rail: vendor ? payRail(vendor) : "unknown",
       vendorEmail: target.email,
+      existingBillId: cost.bill_payment_id
+        ? null
+        : (cost.bill_bill_id ?? "").trim() || null,
     };
   } catch (e) {
     return { error: readable(e, "billPayContext") };
@@ -185,11 +220,14 @@ export async function sendCostToBill(
     fundingAccountId?: string | null;
     /** Required only when the vendor is not already at BILL. */
     address?: BillAddress | null;
-  }
-): Promise<{ ok: true; billId: string; paid: boolean; notified: boolean } | Fail> {
+  },
+): Promise<
+  { ok: true; billId: string; paid: boolean; notified: boolean } | Fail
+> {
   const { ctx, error } = await requirePayer();
   if (!ctx) return { error };
-  if (!billConfigured()) return { error: "BILL is not set up on this deployment." };
+  if (!billConfigured())
+    return { error: "BILL is not set up on this deployment." };
 
   // A payment is not something to allow in a tight loop, whatever the UI does.
   if (!allow(`billpay:${ctx.studio.id}`, 6, 60_000)) {
@@ -205,26 +243,42 @@ export async function sendCostToBill(
     .maybeSingle();
   if (!cost) return { error: "That cost is no longer here." };
 
-  // ONE COST, ONE BILL. A second send would create a duplicate at BILL, and a
-  // duplicate bill is how a vendor gets paid twice.
-  if (cost.bill_bill_id) {
-    return {
-      error:
-        "This cost has already been sent to BILL. Open it there to pay or change it, rather than sending it again.",
-    };
+  // ONE COST, ONE BILL, and that rule is about CREATING one. A second create
+  // is a duplicate, and a duplicate bill is how a vendor gets paid twice.
+  //
+  // PAYING A BILL THAT ALREADY EXISTS IS NOT A SECOND SEND, and treating it as
+  // one was a real dead end: the bill id is written the moment the bill
+  // exists, before the payment is attempted, so a payment refused for any
+  // reason (the first real one was a weekend process date) left the cost
+  // carrying a bill this guard then refused to pay forever. The only way out
+  // was BILL's own screen, which is the hand-off this feature exists to remove.
+  const existingBillId = (cost.bill_bill_id ?? "").trim() || null;
+  if (existingBillId) {
+    if (cost.bill_payment_id) {
+      return { error: "This cost has already been paid through BILL." };
+    }
+    if (!opts.pay) {
+      return {
+        error:
+          "This cost is already a bill at BILL, waiting to be paid. Pay it from here, or open it at BILL.",
+      };
+    }
   }
 
   const amount = cents(cost.amount);
-  if (amount <= 0) return { error: "A cost with no amount cannot be sent to BILL." };
+  if (amount <= 0)
+    return { error: "A cost with no amount cannot be sent to BILL." };
   // Read once, used twice: BILL wants the address to be able to invite them
   // onto ACH, and the remittance below wants it to tell them the money moved.
   const target = await remittanceTarget(supabase, cost);
   const vendorName = (cost.vendor ?? "").trim();
-  if (!vendorName) return { error: "Give this cost a vendor name before sending it to BILL." };
+  if (!vendorName)
+    return { error: "Give this cost a vendor name before sending it to BILL." };
 
   try {
     const signed = await billSessionForStudio(supabase, ctx.studio.id);
-    if (!signed) return { error: "BILL is not connected. Connect it in Settings." };
+    if (!signed)
+      return { error: "BILL is not connected. Connect it in Settings." };
 
     if (opts.pay && !signed.session.trusted) {
       return {
@@ -238,15 +292,24 @@ export async function sendCostToBill(
     // write that failed.
     let vendorId = cost.bill_vendor_id ?? null;
     let vendorSource: "existing" | "created" = "existing";
-    let vendorPay: { payByType: string | null; bankAccountStatus: string | null } | null = null;
+    let vendorPay: {
+      payByType: string | null;
+      bankAccountStatus: string | null;
+    } | null = null;
     if (vendorId) {
       vendorPay = await readBillVendor(signed.session, vendorId);
     } else {
       const found = await findBillVendor(signed.session, vendorName);
       vendorId = found?.id ?? null;
       vendorPay = found;
-      if (vendorId && vendorPay && vendorPay.payByType === null && vendorPay.bankAccountStatus === null) {
-        vendorPay = (await readBillVendor(signed.session, vendorId)) ?? vendorPay;
+      if (
+        vendorId &&
+        vendorPay &&
+        vendorPay.payByType === null &&
+        vendorPay.bankAccountStatus === null
+      ) {
+        vendorPay =
+          (await readBillVendor(signed.session, vendorId)) ?? vendorPay;
       }
     }
     if (!vendorId) {
@@ -272,41 +335,47 @@ export async function sendCostToBill(
       vendorSource = "created";
     }
 
-    const invoiceNumber = (cost.invoice_number ?? "").trim() || `SF-${costId.slice(0, 8)}`;
-    const billId = await createBillBill(signed.session, {
-      vendorId,
-      amount,
-      invoiceNumber,
-      invoiceDate: (cost.invoice_date ?? "").slice(0, 10) || today(),
-      dueDate: (cost.due_date ?? "").slice(0, 10) || today(),
-      description: (cost.description ?? "").trim() || vendorName,
-    });
+    // The bill, unless this cost already has one. A retry after a refused
+    // payment pays the bill that is already there rather than making another.
+    let billId = existingBillId;
+    if (!billId) {
+      const invoiceNumber =
+        (cost.invoice_number ?? "").trim() || `SF-${costId.slice(0, 8)}`;
+      billId = await createBillBill(signed.session, {
+        vendorId,
+        amount,
+        invoiceNumber,
+        invoiceDate: (cost.invoice_date ?? "").slice(0, 10) || usToday(),
+        dueDate: (cost.due_date ?? "").slice(0, 10) || usToday(),
+        description: (cost.description ?? "").trim() || vendorName,
+      });
 
-    // WRITTEN NOW, before any payment is attempted. If the payment below fails
-    // or this request dies, the bill still exists at BILL and this row is what
-    // stops a retry creating a second one.
-    const { error: linkError } = await supabase
-      .from("project_costs")
-      .update({
-        bill_vendor_id: vendorId,
-        bill_bill_id: billId,
-        bill_status: "unpaid",
-        bill_synced_at: new Date().toISOString(),
-      })
-      .eq("id", costId);
-    if (linkError) {
-      reportError("sendCostToBill/link", linkError);
-      return {
-        error: `The bill was created at BILL (id ${billId}) but saving that here failed. Do NOT send this cost again: open BILL and work from the bill that is already there.`,
-      };
-    }
+      // WRITTEN NOW, before any payment is attempted. If the payment below fails
+      // or this request dies, the bill still exists at BILL and this row is what
+      // stops a retry creating a second one.
+      const { error: linkError } = await supabase
+        .from("project_costs")
+        .update({
+          bill_vendor_id: vendorId,
+          bill_bill_id: billId,
+          bill_status: "unpaid",
+          bill_synced_at: new Date().toISOString(),
+        })
+        .eq("id", costId);
+      if (linkError) {
+        reportError("sendCostToBill/link", linkError);
+        return {
+          error: `The bill was created at BILL (id ${billId}) but saving that here failed. Do NOT send this cost again: open BILL and work from the bill that is already there.`,
+        };
+      }
 
-    if (!opts.pay) {
-      // NOTHING IS EMAILED HERE, deliberately. A queued bill is a promise to
-      // pay on its due date, and telling somebody a payment has been sent
-      // three weeks before it is would manufacture the chase this is for.
-      revalidatePath(`/projects/${projectId}/budget`);
-      return { ok: true, billId, paid: false, notified: false };
+      if (!opts.pay) {
+        // NOTHING IS EMAILED HERE, deliberately. A queued bill is a promise to
+        // pay on its due date, and telling somebody a payment has been sent
+        // three weeks before it is would manufacture the chase this is for.
+        revalidatePath(`/projects/${projectId}/budget`);
+        return { ok: true, billId, paid: false, notified: false };
+      }
     }
 
     // NEVER POST A CHEQUE FROM A PRESS THAT SAID "PAY". The window states the
@@ -335,7 +404,10 @@ export async function sendCostToBill(
       billId,
       amount,
       fundingAccountId,
-      processDate: today(),
+      // NEVER "today". ACH does not settle at weekends or on Federal Reserve
+      // holidays, and the first real payment press was refused with
+      // `Invalid Process Date : 2026-10-04`, which was a Sunday.
+      processDate: nextBankingDay(),
     });
 
     await supabase
@@ -395,7 +467,9 @@ export async function sendCostToBill(
  * Read back what BILL says about this project's sent bills. A read only: it
  * never pays anything, which is what makes it safe to run when a page opens.
  */
-export async function syncBillCosts(projectId: string): Promise<{ checked: number } | Fail> {
+export async function syncBillCosts(
+  projectId: string,
+): Promise<{ checked: number } | Fail> {
   const { ctx, error } = await requirePayer();
   if (!ctx) return { error };
   if (!billConfigured()) return { checked: 0 };
@@ -414,7 +488,10 @@ export async function syncBillCosts(projectId: string): Promise<{ checked: numbe
     if (!signed) return { checked: 0 };
     let checked = 0;
     for (const c of open) {
-      const state = await readBillBill(signed.session, c.bill_bill_id as string);
+      const state = await readBillBill(
+        signed.session,
+        c.bill_bill_id as string,
+      );
       if (!state) continue;
       checked += 1;
       // FAIL CLOSED. This test used to be `/paid/i.test(status) || dueAmount <= 0`,
@@ -424,7 +501,11 @@ export async function syncBillCosts(projectId: string): Promise<{ checked: numbe
       if (!billSettled(state)) continue;
       await supabase
         .from("project_costs")
-        .update({ bill_status: "paid", status: "paid", bill_synced_at: new Date().toISOString() })
+        .update({
+          bill_status: "paid",
+          status: "paid",
+          bill_synced_at: new Date().toISOString(),
+        })
         .eq("id", c.id);
     }
     if (checked) revalidatePath(`/projects/${projectId}/budget`);

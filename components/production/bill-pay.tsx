@@ -277,6 +277,16 @@ export function SendBillBody({
             <Row label="Pays by">{railLabel(rail)}</Row>
           </dl>
 
+          {ctx.existingBillId && (
+            // A payment refused after the bill was created leaves exactly this
+            // state, and without saying so the window reads as though pressing
+            // Pay would add a second bill.
+            <p className="rounded-[10px] border border-border bg-surface-2 px-3 py-2 text-sm leading-relaxed text-text">
+              This bill is already at BILL and has not been paid. Paying now
+              pays that bill; nothing new is added.
+            </p>
+          )}
+
           {warning && (
             // THE WORDS STAY IN THE TEXT COLOUR and the hue is carried by the
             // tint and the border, which is what ReadBanner concluded after
@@ -370,14 +380,16 @@ export function SendBillBody({
             <Button variant="secondary" onClick={onClose} disabled={pending}>
               Cancel
             </Button>
-            <Button
-              variant="secondary"
-              disabled={pending || !addressDone}
-              onClick={() => run(false)}
-              title="Create the vendor and the bill at BILL, and pay it there later"
-            >
-              {pending ? "..." : "Just add the bill"}
-            </Button>
+            {!ctx.existingBillId && (
+              <Button
+                variant="secondary"
+                disabled={pending || !addressDone}
+                onClick={() => run(false)}
+                title="Create the vendor and the bill at BILL, and pay it there later"
+              >
+                {pending ? "..." : "Just add the bill"}
+              </Button>
+            )}
             <Button
               disabled={pending || !addressDone || !fundingId || !ctx.trusted || refused}
               onClick={() => run(true)}

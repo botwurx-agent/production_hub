@@ -5697,9 +5697,50 @@ paying in bill, which doesn't make sense."
   pressed the OLD build, whose default branch printed the bodies anyway, and
   the answer was visible in them. That is the lesson holding rather than a new
   one, since what settled it was a printed body rather than a status.
-- STILL UNEXERCISED: no `/v3/payments` call has ever been made from the app.
-  That one gates the ACH marketing claim, and the path to it is now clear:
-  Steve is ACH ready, the funding account is VERIFIED, the device is trusted.
+- THE FIRST `/v3/payments` CALL WAS MADE, and BILL refused it:
+  `Invalid Process Date : 2026-10-04`. That was a SUNDAY. ACH does not settle
+  at weekends or on Federal Reserve holidays, and `processDate` was
+  `new Date().toISOString().slice(0,10)`, which is bounded to neither.
+- TWO INDEPENDENT BUGS IN THAT ONE LINE, and only the first was observed. It
+  could name a closed day, which BILL refuses outright; and it was UTC, so at
+  20:00 in Los Angeles it already names TOMORROW. A Friday evening press would
+  have sent Saturday, and a date BILL considers PAST is refused the same way.
+- lib/bill-process-date.ts resolves the day in NEW YORK, deliberately the
+  LATEST US date, then walks forward to the first banking day. Reading it in
+  Pacific would risk naming a date the rest of the country has finished, and
+  one day early is never wrong here while one day late is.
+- THE HOLIDAY LIST EARNS ITS PLACE because the error direction is asymmetric:
+  skipping a day BILL would have taken delays a payment, while naming a day it
+  will not take fails the press in front of somebody mid-flow. If this list and
+  BILL's calendar ever disagree, prefer adding a day.
+- THE FED'S OBSERVANCE RULE IS ASYMMETRIC and is the part calendars get wrong:
+  a fixed-date holiday on SUNDAY is observed the Monday, one on SATURDAY is not
+  observed at all, since Federal Reserve Banks are open the Friday before.
+  833 assertions, including the real refused Sunday, Columbus Day 2026, both
+  observance directions, and a 400-day sweep asserting the result is never
+  earlier than the US day and is always itself a banking day.
+- THE REFUSAL ALSO EXPOSED A DEAD END, and that is the more important half. The
+  bill id is written THE MOMENT THE BILL EXISTS, before the payment is
+  attempted, which is right (it is what stops a duplicate). But the
+  one-cost-one-bill guard then refused the cost ENTIRELY, so a payment refused
+  for any reason left a bill nobody could pay from the app, and the only way
+  out was BILL's own screen, which is the hand-off this feature exists to
+  remove.
+- SO THE GUARD IS ABOUT CREATING, NOT PAYING. A cost that already carries a
+  bill and no payment skips the create and pays the bill that is there; a cost
+  with a payment is refused as already paid; and "Just add the bill" on a cost
+  that already has one is still refused, since a second add is the duplicate
+  the rule exists for.
+- THE WINDOW SAYS SO rather than leaving it to be inferred: `existingBillId` is
+  carried on BillPayContext, the "Just add the bill" button is dropped, and a
+  line reads "This bill is already at BILL and has not been paid. Paying now
+  pays that bill; nothing new is added." Without it the window reads as though
+  Pay would add a second bill. Verified in Chromium against a throwaway fixture
+  (deleted) in both states: queued shows the note and only Pay, fresh shows
+  both buttons and no note, no page errors, no overflow at 390 or 1280.
+- STILL UNEXERCISED: a payment has never SUCCEEDED. The payload reached BILL
+  and was refused on one field, which is further than it had ever been, and
+  that field is now the only thing that changed.
 
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
