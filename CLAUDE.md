@@ -5616,6 +5616,63 @@ had a full-vendor fallback for exactly this since slice 2; the PANEL did not.
   failed second read never invents a rail, and the cap holds in roster order.
 
 
+### The invite reaches somebody BILL has never met (no migration) — BUILT
+Operator, correcting a test runbook that had them paying inside BILL: "a
+project is now wrapped ... a specific person gets sent an email. They connect
+their account. And I then am able to pay via ACH. Or I should have some sort of
+indication in the app that their account information has been received. ...
+what you're explaining to me doesn't seem like we follow that protocol. we're
+paying in bill, which doesn't make sense."
+- THEY WERE RIGHT, AND THE BLOCKER WAS ONE LINE. `requestPaymentDetails`
+  refused anybody `findBillVendor` could not find, with "not a vendor at BILL
+  yet. Add their bill first." A vendor is only created when a bill is added, so
+  at WRAP, which is the moment this panel exists for and weeks before an
+  invoice arrives, the invite could not be sent to anybody at all. The one
+  person it worked for was somebody already paid once, which is exactly who
+  does not need asking.
+- SO THE PANEL CREATES THE VENDOR ITSELF, and the instruction that used to read
+  "add their bill first" is gone. Telling a producer to invent a bill to unlock
+  an email is a workaround wearing the shape of a feature.
+- THE ADDRESS IS ASKED ONCE PER PERSON EVER AND IS NOT STORED. BILL refuses to
+  create a vendor without a postal address; once the vendor exists it is never
+  needed again, so it passes through and is forgotten. That is a STRONGER
+  version of the 0074 rule than a studio-only side table: a freelancer's
+  address is usually their home address, and the safest place for it is not our
+  database. It costs nothing, because the vendor persists across every job
+  after this one, so a second booking asks for nothing.
+- THE FORM SAYS WHERE TO FIND IT ("usually printed on their invoice", "asked
+  once, not per job", "Studio Flows does not keep it"). At wrap a producer
+  routinely does not have a crew member's address in front of them, and an
+  unexplained form is where a flow stops.
+- TWO INVITABLE STATES, FOR TWO REASONS, and only one of them can be done in
+  bulk. CHECK means BILL knows them and would post a paper cheque, so nothing
+  further is needed and the "Ask all N" button takes exactly those. ABSENT
+  means BILL has never met them, which needs a form per person, so those keep
+  their own row button rather than stacking twelve forms behind one press.
+  `readyToAsk` is the bulk predicate and `invitable` the row one.
+- CARD AND UNKNOWN ARE STILL NOT INVITABLE: both HAVE a method, so asking for
+  bank details is the wrong move. Never without an email, which is what BILL
+  writes to.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  `ReadinessBody` and `AddressAsk`: the absent row with an email opens the
+  ADDRESS FORM rather than sending, the cheque row sends straight away, the ACH
+  and no-email rows offer no button, the bulk button is correctly absent with
+  one askable row, Send stays disabled until all four fields are filled, Cancel
+  sends nothing, and a filled form hands over the TRIMMED address with
+  `country: "US"` under BILL's own field names (`stateOrProvince`,
+  `zipOrPostalCode`, proven by the probe). No page errors, no overflow at 390
+  or 1280.
+- THE FLOW IT COMPLETES, which is the one the operator asked to test and is now
+  all inside Studio Flows: wrap -> Payment setup on the project contacts page
+  -> Request payment details -> BILL emails them -> they add their own bank
+  details at BILL -> the panel reads "ACH ready" (the in-app indication they
+  asked for) -> log the cost -> Pay -> ACH, and the remittance email goes from
+  the same press.
+- STILL UNEXERCISED, and these are the two tests left in that order: no invite
+  has ever been SENT, and no `/v3/payments` call has ever been made from the
+  app. The second gates the ACH marketing claim.
+
+
 ### The read-a-document banner is green when it worked (no migration) — BUILT
 Operator, on the receipt flow: "theres a yellow confirmation window that pops
 up, which is fine. but the yellow makes it seems like its a error message vs a

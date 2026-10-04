@@ -26,10 +26,12 @@ import {
   BillError,
   billConfigured,
   billSessionForStudio,
+  createBillVendor,
   findBillVendor,
   listBillVendors,
   readBillVendor,
   sendBillVendorInvite,
+  type BillAddress,
 } from "@/lib/bill";
 import { isEmailAddress } from "@/lib/contact";
 import {
@@ -146,13 +148,20 @@ export type InviteResult = {
  * ASK THESE PEOPLE FOR THEIR OWN PAYMENT DETAILS. BILL emails each one, they
  * give their bank details to BILL, and the studio never holds them.
  *
- * THE VENDOR HAS TO EXIST AT BILL FIRST, which is a real constraint rather
- * than an oversight: the invite is addressed to a vendor id, and BILL refuses
- * to create a vendor without a postal address we do not have on the roster. In
- * practice that is the right order anyway, since a vendor is created the first
- * time their bill is added, which is at or just after wrap. Somebody BILL has
- * never heard of is REPORTED rather than silently skipped, so the producer
- * knows the next step is adding the bill.
+ * THE INVITE IS ADDRESSED TO A VENDOR ID, so somebody BILL has never met has
+ * to be created first. That used to be reported as "add their bill first",
+ * which is the wrong instruction at the moment it is read: the whole point of
+ * this panel is WRAP, weeks before an invoice exists, and telling a producer
+ * to go and invent a bill to unlock an email is a workaround wearing the
+ * shape of a feature. So this creates the vendor itself when an address is
+ * supplied for them.
+ *
+ * THE ADDRESS IS NOT STORED HERE, deliberately. BILL requires one to create a
+ * vendor, and once the vendor exists it is never needed again, so it passes
+ * through and is forgotten. A freelancer's address is usually their home
+ * address, and the 0074 rule says a studio-only side table at minimum; not
+ * holding it at all is strictly better, and it costs nothing because the
+ * vendor persists across every job after this one.
  *
  * PARTIAL SUCCESS IS THE NORMAL CASE and is reported per person, the same
  * shape the Higgsfield link import uses: twelve people on a roster will not
@@ -161,7 +170,9 @@ export type InviteResult = {
  */
 export async function requestPaymentDetails(
   projectId: string,
-  contactIds: string[]
+  contactIds: string[],
+  /** Keyed by contact id, for the people BILL has never met. */
+  addresses?: Record<string, BillAddress>
 ): Promise<InviteResult | Fail> {
   const { ctx, error } = await requireAdmin();
   if (!ctx) return { error };
@@ -204,10 +215,20 @@ export async function requestPaymentDetails(
       continue;
     }
     try {
-      const vendor = await findBillVendor(session, person.name);
+      let vendor = await findBillVendor(session, person.name);
       if (!vendor) {
-        skipped.push(`${person.name}: not a vendor at BILL yet. Add their bill first.`);
-        continue;
+        const address = addresses?.[person.id];
+        if (!address) {
+          // Not a failure, a missing fact. The panel asks for it and presses
+          // again; naming the person is what makes that obvious.
+          skipped.push(`${person.name}: BILL needs their address before it can write to them.`);
+          continue;
+        }
+        // The EMAIL goes on the vendor as well as on the invite. BILL shows it
+        // on the vendor record and uses it for everything after this one
+        // message, so a vendor created without it is one that can never be
+        // chased again.
+        vendor = await createBillVendor(session, { name: person.name, address, email });
       }
       await sendBillVendorInvite(session, { vendorId: vendor.id, email });
       sent += 1;

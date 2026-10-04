@@ -26,6 +26,10 @@ import { confirmAction, type ConfirmRequest } from "@/components/ui/confirm";
 import { toast } from "@/components/ui/toast";
 import { categoryLabel } from "@/lib/crew-positions";
 import type { Readiness } from "@/lib/payment-details";
+import type { BillAddress } from "@/lib/bill";
+
+const field =
+  "w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition focus:border-accent";
 
 /** Color as signal: these are states, so they wear the status-chip idiom. */
 const STATE: Record<Readiness["state"], { hue: Hue; chip: string }> = {
@@ -44,23 +48,36 @@ const STATE: Record<Readiness["state"], { hue: Hue; chip: string }> = {
 function nextStep(r: Readiness): string {
   if (r.state === "ach") return "";
   if (r.state === "check")
-    return "BILL holds no bank details for them, so a payment today would post a paper check. Open them in BILL and send the ACH sign-up invite.";
+    return "BILL holds no bank details for them, so a payment today would post a paper check. Ask them to add their own, and they can be paid by ACH.";
   if (r.state === "absent")
-    return "BILL has never heard of them. They are added the first time you pay them, and the ACH invite goes after that.";
+    return "BILL has never met them. Adding their address here lets BILL email them to collect their bank details, so they can be paid by ACH.";
   if (r.state === "card")
     return "BILL is set to pay them by virtual card rather than ACH. Change it in BILL if that is not what you want.";
   return "BILL did not say how they get paid. Check their payment method in BILL before paying.";
 }
 
 /**
- * WHO AN INVITE CAN GO TO, and the narrowness is the point. Only an explicit
- * CHECK: a vendor BILL has never heard of has no vendor id to address the
- * invite to (they are created when their bill is added), and one already set
- * to card or to a method BILL did not name has a method, so asking them for
- * bank details is the wrong move. An address is needed either way.
+ * WHO AN INVITE CAN GO TO. Two states, for two different reasons, and both are
+ * the normal case at WRAP.
+ *
+ * ABSENT: BILL has never met them, which is true of every freelancer on a
+ * first job. The invite is addressed to a vendor id, so one is created first,
+ * and BILL requires an address to do that. Those rows ask for it.
+ *
+ * CHECK: BILL knows them and would post a paper cheque, so they are exactly
+ * who this exists for, and no address is needed since the vendor is there.
+ *
+ * Deliberately NOT card or unknown: both HAVE a method, so asking them for
+ * bank details is the wrong move. Never without an email, which is what BILL
+ * writes to.
  */
 function invitable(r: Readiness): boolean {
-  return r.state === "check" && !r.needsEmail;
+  return (r.state === "check" || r.state === "absent") && !r.needsEmail;
+}
+
+/** The ones an invite can reach with nothing further from the producer. */
+function readyToAsk(r: Readiness): boolean {
+  return invitable(r) && r.state === "check";
 }
 
 /**
@@ -113,6 +130,7 @@ function PaymentReadinessPanel({
   const [data, setData] = useState<PaymentReadiness | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState<Readiness | null>(null);
 
   function load() {
     return loadPaymentReadiness(projectId).then((res) => {
@@ -135,13 +153,17 @@ function PaymentReadinessPanel({
     };
   }, [projectId]);
 
-  async function request(rows: Readiness[]) {
+  async function request(rows: Readiness[], addresses?: Record<string, BillAddress>) {
     if (rows.length === 0 || busy) return;
     const ok = await confirmAction(inviteConfirm(rows));
     if (!ok) return;
 
     setBusy(true);
-    const res = await requestPaymentDetails(projectId, rows.map((r) => r.contactId));
+    const res = await requestPaymentDetails(
+      projectId,
+      rows.map((r) => r.contactId),
+      addresses
+    );
     const err = actionError(res);
     if (err) {
       toast(err, "error");
@@ -168,7 +190,25 @@ function PaymentReadinessPanel({
           this page can then say how each person on the job gets paid.
         </p>
       ) : (
-        <ReadinessBody data={data} onRequest={request} busy={busy} />
+        <ReadinessBody
+          data={data}
+          onRequest={request}
+          onAddress={setAsking}
+          busy={busy}
+        />
+      )}
+
+      {asking && (
+        <AddressAsk
+          row={asking}
+          busy={busy}
+          onClose={() => setAsking(null)}
+          onSend={(address) => {
+            const row = asking;
+            setAsking(null);
+            void request([row], { [row.contactId]: address });
+          }}
+        />
       )}
 
       <div className="flex justify-end pt-4">
@@ -189,14 +229,20 @@ function PaymentReadinessPanel({
 export function ReadinessBody({
   data,
   onRequest,
+  onAddress,
   busy,
 }: {
   data: PaymentReadiness;
   /** Omitted in a read-only context; without it no invite is offered. */
   onRequest?: (rows: Readiness[]) => void;
+  /** Asked for the people BILL has never met, who need one to be created. */
+  onAddress?: (row: Readiness) => void;
   busy?: boolean;
 }) {
-  const askable = data.rows.filter(invitable);
+  // The bulk press only takes the ones needing nothing further. Somebody
+  // BILL has never met needs an address, which is a form per person, so
+  // those keep their own button rather than stacking twelve forms.
+  const askable = data.rows.filter(readyToAsk);
   const waiting = data.tally.check + data.tally.absent;
   if (data.rows.length === 0) {
     return (
@@ -275,7 +321,7 @@ export function ReadinessBody({
                         size="sm"
                         variant="secondary"
                         disabled={busy}
-                        onClick={() => onRequest([r])}
+                        onClick={() => (r.state === "absent" ? onAddress?.(r) : onRequest([r]))}
                         title={`BILL emails ${r.email} and asks for their bank details`}
                       >
                         Request payment details
@@ -293,5 +339,95 @@ export function ReadinessBody({
             })}
           </ul>
         </div>
+  );
+}
+
+/**
+ * THE ONE THING BILL NEEDS BEFORE IT CAN WRITE TO A STRANGER. A vendor cannot
+ * be created without a postal address, and the invite is addressed to a vendor,
+ * so this is asked ONCE PER PERSON EVER: the vendor persists across every job
+ * after this one, so the second booking asks for nothing.
+ *
+ * IT SAYS WHERE TO FIND IT, because at wrap a producer often does not have a
+ * crew member's address in front of them and an unexplained form is where a
+ * flow stops. An invoice prints it, and an invoice is what arrives next.
+ *
+ * NOTHING IS STORED HERE. It goes to BILL with the vendor and is forgotten,
+ * which is a stronger version of the 0074 rule: a freelancer's address is
+ * usually their home address, and the safest place for it is not our database.
+ */
+function AddressAsk({
+  row,
+  busy,
+  onClose,
+  onSend,
+}: {
+  row: Readiness;
+  busy: boolean;
+  onClose: () => void;
+  onSend: (address: BillAddress) => void;
+}) {
+  const [a, setA] = useState({ line1: "", city: "", state: "", zip: "" });
+  const done = Boolean(a.line1.trim() && a.city.trim() && a.state.trim() && a.zip.trim());
+
+  return (
+    <Modal open onClose={onClose} title={`Add ${row.name} to BILL`} size="md">
+      <div className="space-y-3">
+        <p className="text-sm leading-relaxed text-text">
+          BILL has not met {row.name} yet, and it needs a postal address to add
+          them before it can email {row.email} about their bank details. It is
+          usually printed on their invoice. This is asked once, not per job.
+        </p>
+        <input
+          className={field}
+          placeholder="Street address"
+          value={a.line1}
+          onChange={(e) => setA({ ...a, line1: e.target.value })}
+        />
+        <div className="grid grid-cols-3 gap-2">
+          <input
+            className={field}
+            placeholder="City"
+            value={a.city}
+            onChange={(e) => setA({ ...a, city: e.target.value })}
+          />
+          <input
+            className={field}
+            placeholder="State"
+            value={a.state}
+            onChange={(e) => setA({ ...a, state: e.target.value })}
+          />
+          <input
+            className={field}
+            placeholder="ZIP"
+            value={a.zip}
+            onChange={(e) => setA({ ...a, zip: e.target.value })}
+          />
+        </div>
+        <p className="text-xs leading-relaxed text-text-faint">
+          Their address goes to BILL with the vendor record. Studio Flows does
+          not keep it, and never asks anybody for bank details.
+        </p>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            disabled={busy || !done}
+            onClick={() =>
+              onSend({
+                line1: a.line1.trim(),
+                city: a.city.trim(),
+                stateOrProvince: a.state.trim(),
+                zipOrPostalCode: a.zip.trim(),
+                country: "US",
+              })
+            }
+          >
+            Add and send the request
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
