@@ -5820,6 +5820,50 @@ ours to guess.
   observation is not an SLA, so the window says "a few business days" rather
   than printing a date we would then be wrong about.
 
+### The date was right, and the vendor's bank was not (no migration)
+The next press sent `processDate: 2026-10-06`, BILL's own earliest, and the
+process date was accepted: the payload reached the payment engine and was
+refused on something else entirely. `This vendor is unable to receive
+ePayments, because their bank account is not setup correctly. Please contact
+your vendor and request that they complete account setup.`
+- NOTHING HAPPENED, checked in the database rather than inferred from the
+  screen: `bill_payment_id` null, the cost still `received`, and
+  `remittance_sent_at` null, so no money moved and nobody was told it had. The
+  guards held, which is what the two-press split is for.
+- SO `earliestProcessDate` IS CONFIRMED by the only test that could confirm
+  it. Three readings of that field have now been refused and the fourth was
+  taken.
+- AND OUR READ OF THE VENDOR DISAGREES WITH BILL'S OWN PAYMENT ENGINE, which
+  is the real finding. The window printed "Pays by: ACH deposit" because this
+  vendor reads `payByType: WALLET` and `bankAccountStatus: NET_LINKED_ACCOUNT`
+  (both observed on his real body hours earlier, and both in the whitelist for
+  the right reason). BILL then refused the payment to that same vendor. A
+  window whose whole premise is stating how money will travel cannot be wrong
+  about that, so something in the body says "not finished" and we do not read
+  it.
+- WHICH FIELD IT IS HAS NOT BEEN GUESSED, and that is deliberate: this file
+  records four FreshBooks rounds and two process-date rounds lost to reasoning
+  from a signal that could not separate the explanations. The body for a
+  vendor that reads as PAYABLE has never been printed, because `?vendors=1`
+  reads a row in full only when its rail came back unknown, which is exactly
+  the case this is not.
+- SO THE PROBE GAINED `?vendor=<id>`: one GET, the whole body printed as BILL
+  sent it, plus what our readers make of it. Read-only, creates nothing, pays
+  nothing, emails nobody.
+- THE OTHER HALF IS NOT OURS AND MAY BE THE WHOLE ANSWER. BILL's sentence is a
+  plain statement about the vendor's own setup, and he linked his bank the same
+  day: a bank added to BILL is verified by micro deposits, which take one to
+  three business days, exactly as the studio's own funding account did. So
+  "complete account setup" may be literally true and simply unfinished. Reading
+  his vendor page in BILL answers that in ten seconds, which is the
+  ask-the-product move that settled the process date.
+- NOT CHANGED YET, pending that body: whether `NET_LINKED_ACCOUNT` should stop
+  granting ACH on its own. It cannot be narrowed on a guess, since the failure
+  direction matters: reading a payable vendor as unpayable blocks real
+  payments, and reading an unpayable one as ACH is what just happened. The
+  fail-closed rule still holds for an UNFAMILIAR value; this is a familiar one
+  that turned out to be insufficient.
+
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
 Operator, on the receipt flow: "theres a yellow confirmation window that pops

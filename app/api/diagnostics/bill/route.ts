@@ -71,7 +71,7 @@ const BODY_CHARS = 1500;
 // BUMP THIS WITH EVERY CHANGE. Two rounds were spent reading a response from
 // a build that had not finished deploying, which is indistinguishable from a
 // real answer unless the response says which code produced it.
-const PROBE = "2026-10-04-a";
+const PROBE = "2026-10-04-b";
 
 type Step = { what: string; request: string; status: number; ok: boolean; body: string };
 
@@ -494,6 +494,42 @@ export async function GET(req: Request) {
   // unknown is then read in FULL, so the list row and the whole vendor sit
   // side by side and the difference is visible rather than argued about.
   // Read-only: nothing is created and nobody is emailed.
+  // ONE VENDOR, PRINTED WHOLE, and this one exists because of a real refusal.
+  // The first payment to clear the process date was refused with "This vendor
+  // is unable to receive ePayments, because their bank account is not setup
+  // correctly", on a vendor our own reader calls ACH ready (`payByType:
+  // WALLET`, `bankAccountStatus: NET_LINKED_ACCOUNT`). So BILL's vendor object
+  // and BILL's payment engine disagree, and the field that separates them is
+  // not one we have ever seen printed.
+  //
+  // GUESSING WHICH FIELD IT IS would be the fifth time this file records that
+  // mistake. `?vendors=1` reads a row in FULL only when its rail came back
+  // unknown, which is exactly the case this is not, so the whole body has
+  // never been printed for a vendor that reads as payable. This prints it,
+  // and nothing else: a GET, no invite, no payment, nothing created.
+  const oneVendorId = (url.searchParams.get("vendor") ?? "").trim();
+  if (oneVendorId) {
+    const one = await call(`read vendor ${oneVendorId} in full`, "GET", `/vendors/${oneVendorId}`);
+    const fields = vendorPayment(one.json);
+    return NextResponse.json({
+      probe: PROBE,
+      fingerprint,
+      environment: env,
+      vendorId: oneVendorId,
+      readByOurCode: fields,
+      railByOurCode: payRail(fields),
+      reading:
+        "The WHOLE body is in steps, printed exactly as BILL sent it. The" +
+        " question it answers: which field says this vendor cannot receive an" +
+        " ePayment, when payByType and bankAccountStatus both read as" +
+        " payable. Look under paymentInformation.bankAccount for a status," +
+        " and for any field naming a verification or a setup step that is" +
+        " not finished. Read-only: nothing was created, nothing was paid and" +
+        " nobody was emailed.",
+      steps,
+    });
+  }
+
   const listVendors = url.searchParams.get("vendors") === "1";
   const lookFor = (url.searchParams.get("name") ?? "").trim();
   if (listVendors) {
