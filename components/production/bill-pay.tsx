@@ -44,14 +44,25 @@ export function BillPayControl({
   cost: ProjectCost;
   onSend: () => void;
 }) {
+  const action =
+    "rounded-[7px] px-2 py-1 text-xs font-semibold text-text-faint transition hover:bg-surface-2 hover:text-text";
+
   if (cost.bill_bill_id) {
     const paid = cost.bill_status === "paid";
     return (
-      <span
-        title={paid ? "Paid through BILL" : "Added to BILL, not paid yet"}
-        className="inline-flex items-center"
-      >
+      <span className="inline-flex items-center gap-1">
         <StatusTag hue={paid ? "green" : "amber"}>{paid ? "BILL paid" : "At BILL"}</StatusTag>
+        {/* AN UNPAID BILL IS WAITING, NOT FINISHED, and the chip alone read as
+            the end of the road: a payment refused after the bill was created
+            (the first real one was a weekend process date) left the row with
+            nothing to press, so the only way to pay was BILL's own screen.
+            The chip states what IS, the button does what is left. A paid bill
+            has nothing left, so it keeps the chip on its own. */}
+        {!paid && (
+          <button type="button" onClick={onSend} title="Pay the bill already at BILL" className={action}>
+            Pay
+          </button>
+        )}
       </span>
     );
   }
@@ -60,7 +71,7 @@ export function BillPayControl({
       type="button"
       onClick={onSend}
       title="Add this to BILL as a bill, and pay it"
-      className="rounded-[7px] px-2 py-1 text-xs font-semibold text-text-faint transition hover:bg-surface-2 hover:text-text"
+      className={action}
     >
       Pay via BILL
     </button>

@@ -5738,6 +5738,22 @@ paying in bill, which doesn't make sense."
   Pay would add a second bill. Verified in Chromium against a throwaway fixture
   (deleted) in both states: queued shows the note and only Pay, fresh shows
   both buttons and no note, no page errors, no overflow at 390 or 1280.
+- AND THE ROW STILL COULD NOT BE PRESSED, which is the same dead end one layer
+  out and was missed because the WINDOW was fixed without checking the way IN.
+  `BillPayControl` swapped the button for an inert "At BILL" chip the moment a
+  bill existed, so the reopened pay path had no door. An unpaid bill is WAITING,
+  not finished: the chip states what is, and a "Pay" button beside it does what
+  is left. A paid bill keeps the chip alone, since nothing is left.
+  THE LESSON: fixing an action without walking the surface that reaches it is
+  half a fix, and the operator finds the other half.
+- A STALE `.next` MADE THE FIRST VERIFICATION MEANINGLESS, and it is worth
+  knowing how it presents: the page SERVER-RENDERS fine, so element counts and
+  text all read correctly, but the client JS 404s, React never hydrates, and
+  every click silently does nothing. A structural check passes and an
+  interaction check reads as a broken handler. The tell is 404s in the console,
+  not anything on the page. Kill the dev server BY PID, delete .next, restart.
+  (`pkill -f` matched this call's own command line and killed the shell, the
+  third time that has happened; kill by pid, in a call of its own.)
 - STILL UNEXERCISED: a payment has never SUCCEEDED. The payload reached BILL
   and was refused on one field, which is further than it had ever been, and
   that field is now the only thing that changed.
