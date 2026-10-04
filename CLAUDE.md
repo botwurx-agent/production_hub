@@ -1527,8 +1527,8 @@ parent (it predated project-level contacts and was rejecting them).
 
 ### Working notes for a fresh session
 - Dev branch: whichever `claude/...` branch the session is assigned (most
-  recently `claude/agent-creation-continue-7j6opc`; before that
-  `claude/production-hub-phase-1-km1k0k`). Deploy = get the commit onto `main`,
+  recently `claude/mobile-layout-responsive-0ddrvo`; before that
+  `claude/agent-creation-continue-7j6opc`). Deploy = get the commit onto `main`,
   which Vercel auto-deploys.
 - The reliable way to deploy is `git push origin <dev-branch>:main`, NOT a local
   merge. The dev branch is cut from `origin/main`, so this is a clean
@@ -5966,6 +5966,99 @@ Steve Nazari, a green ePay badge on the vendor, from Wells Fargo, process date
   earlier. Two of the last three answers came from a screenshot of BILL's own
   screen rather than from reasoning about its API, and both took seconds.
 
+### The freelancer had to open a BILL account (DISCUSSED, nothing built)
+The operator ran the invite from the FREELANCER'S side and reported the real
+cost of it: to hand over bank details they had to sign up for a free BILL
+account, which was "a bit of a lengthy process". A pop-up offered continuing as
+a GUEST with no account, which they believe was paid. Their preference: "I
+would rather the freelancer to not have to open an account to provide their
+info." Recorded because it is a live product question and nothing is decided.
+- THERE ARE EXACTLY THREE WAYS their details can reach BILL: they open an
+  account and link their bank (today, free to them, lengthy); whatever that
+  guest path is (cost unknown, and who pays is unknown); or somebody TYPES the
+  numbers in, either the operator in BILL's own interface (what happened for
+  Veronica, and fine) or us through `POST /v3/vendors/{id}/bank-account`.
+- WHAT THEY WANT SITS ON THE PATH WE REFUSED, which is the whole tension: the
+  only form that gets a freelancer out of an account is OURS, and that puts
+  routing and account numbers through Studio Flows.
+- THE REFUSAL IS NARROWER THAN IT IS WRITTEN UP, and this is the one thing to
+  carry forward honestly. TRANSITING bank details (a form that posts straight
+  to BILL and writes nothing to our database) is a smaller exposure than
+  STORING them, and the leaks are mundane rather than exotic: a Sentry
+  breadcrumb, an error echoing a payload, a crash dump, a function log. It is
+  not zero, Sentry being inert here is luck rather than design, and it is the
+  operator's call. It is NOT the thing the original refusal was written
+  against, which was a bank field on `contacts`.
+- THE STRONGEST ARGUMENT FOR LEAVING IT ALONE, and it needs confirming rather
+  than assuming: a BILL vendor identity looks NETWORK-WIDE (the vendor row
+  carries a `paymentNetworkId` and BILL's pitch to vendors is connect once, get
+  paid by anyone on the network). If that holds, the signup is a ONCE-EVER cost
+  for that person across their whole career, not per job and not per studio,
+  which reframes it from paperwork we impose on every freelancer to a toll the
+  first person onto the network pays.
+- THREE CHEAP THINGS TO LOOK AT, all in BILL's own interface, which is where
+  the last two answers came from in seconds: the ACH INFO TAB on a vendor page
+  (never opened, and the one place a payer-side accountless route could live),
+  the INVITE DIALOG itself (a "send them a secure form" variant would be the
+  whole answer and BILL's liability rather than ours), and WHAT THE GUEST PATH
+  CHARGES AND TO WHOM. That last is the disqualifier if it lands wrong:
+  charging a freelancer to receive their own money is something the studio
+  would be imposing on crew.
+- WORTH CHECKING AT THE SAME TIME, since the plan is changing anyway: whether
+  the tier above Basic Receivables offers more vendor-onboarding options. Not
+  asserted, just free to notice.
+- ONE THING THAT IS OURS EITHER WAY AND IS NOT BUILT: part of "lengthy" is
+  surprise. BILL's invite arrives cold, asks for banking information, and reads
+  like the thing everyone is warned about. We cannot change their email, but we
+  can send ours FIRST, through lib/remittance-send.ts and Resend, which already
+  exist: an email from the studio saying BILL's is coming, what it is, that it
+  is free, and that this is how they get paid by ACH. That does not remove the
+  account, it removes the part where somebody stops halfway through.
+- MY RECOMMENDATION, for the record: keep the account path, send the warm-up
+  email, and look at those three things before building a form. If "no account,
+  ever" turns out to be hard, that is an argument about the RAIL rather than
+  about this feature, and BILL may be wrong for a first payment while right for
+  repeats. Not proposed, only named so it is not discovered later.
+
+
+### Budget keeps its name, its subheadings do not (no migration) — BUILT
+Operator: "the term budget is kind of misleading or doesn't describe well what's
+happening in that section of the site... maybe we can add something to it." They
+were right about the problem and chose to fix the SUBHEADING rather than the
+name, which is the smaller and better change.
+- THE PAGE DOES FOUR JOBS: the estimate by category, the cost ledger (every
+  vendor invoice and receipt with its document, rate checks, payment schedules
+  and deposits), PAYING people (BILL, the remittance email, who is still owed),
+  and MARGIN. "Budget" names the first. In this industry it specifically means
+  the AICP bid, which is exactly why it misled: nothing in it suggested this is
+  where you pay a freelancer.
+- THERE WERE THREE SUBHEADINGS AND ALL THREE SAID THE ESTIMATE HALF ONLY: the
+  page subhead ("Track the estimate against actual spend, line by line"), the
+  left-nav sub and the hub card sub (both "Bid vs actual"). Fixing one would
+  have left the other two lying, which is the drift this started as.
+- Now: the page reads "The estimate against what the job really cost, who is
+  still owed, and what it made" (four jobs, in the order you meet them), and
+  the nav and the card both read "Bid vs actual, costs, payments". Identical to
+  each other ON PURPOSE. The familiar phrase stays in front because it is what
+  a producer looks for; the two words after it are the halves that were
+  invisible from outside the page.
+- MARKETING COPY DELIBERATELY UNTOUCHED. lib/marketing/features.ts still says
+  "Bid against actual, line by line", and that file's rule is that a row only
+  ships when the thing it names is reachable today: no payment has yet
+  succeeded through BILL, so "payments" cannot go on the site. The day one
+  lands, that line and the ACH claim earn their place together.
+- THE ROUTE STAYS `/budget`. A label is not a URL, and changing it would break
+  bookmarks and every revalidatePath for no gain.
+- NAMES CONSIDERED AND NOT TAKEN, so this is not re-argued: "Budget & costs"
+  (which is ALREADY what lib/marketing/features.ts calls it in its `nav`, under
+  a section comment reading `/* Money */`, so the product and the site still
+  disagree by one word); "Money", refused because three pages hold money and
+  this is only the outgoing half, so it would send somebody to the wrong one of
+  three; and "Cost report", which is the industry's own term and what an agency
+  asks for at wrap, refused because "report" reads read-only. Keep that last
+  one in reserve for an EXPORT, since it would name the thing in the client's
+  own language.
+
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
 Operator, on the receipt flow: "theres a yellow confirmation window that pops
@@ -6725,7 +6818,16 @@ and only build when something actually gets in the way (section 4.5 / section
 8). Do not open a session by proposing features off the list below. Ask what
 got in the way, or work on what is asked.
 
-THREE THINGS ARE GENUINELY WAITING ON THE OPERATOR, though, and all three are
+THE BILL CHAIN IS WAITING ON ONE THING ONLY, and it is not code: the account
+is on a Basic Receivables plan that does not include making payments, so the
+pay press is refused however correct the payload is. Upgrade it and press Pay
+again; the process date already defaults to the next day BILL will take. Until
+then nothing about the rail can be verified and the ACH marketing claim stays
+gated. Open beside it, and theirs rather than ours: whether a freelancer should
+have to open a BILL account at all (see "The freelancer had to open a BILL
+account" above, which carries the three cheap checks and the recommendation).
+
+FOUR OTHER THINGS ARE GENUINELY WAITING ON THE OPERATOR, and all of them are
 theirs to answer rather than ours to start:
 - THE MCP CONNECTOR, and whether Runner goes with it. Parked 2026-09-18 with
   the whole analysis written up (see "DECISION (operator, 2026-09-17)" above):
