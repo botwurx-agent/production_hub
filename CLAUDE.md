@@ -5889,6 +5889,34 @@ your vendor and request that they complete account setup.`
   them. It matters because the advice is appended AFTER the problems, so a
   doubled sentence pushed it off the end of a long red box at the moment
   somebody most needs to read it.
+- AND THE WHOLE BODY SAYS THE VENDOR IS READY. `?vendor=` printed it:
+  `payByType: "WALLET"`, `bankAccountStatus: "NET_LINKED_ACCOUNT"`,
+  `networkStatus: "CONNECTED"`, a `paymentNetworkId`, and under
+  `paymentInformation.bankAccount` a real checking account ending 8017 with
+  `status: "VERIFIED"`. There is NO field in it that says unfinished.
+- SO OUR READ WAS RIGHT, AND NOTHING SHOULD BE NARROWED. The open question was
+  whether `NET_LINKED_ACCOUNT` should stop granting ACH on its own; the answer
+  is no, and tightening the whitelist on this evidence would have been the
+  wrong move in the expensive direction, blocking real payments to vendors BILL
+  itself describes as verified. The fail-closed rule covers an UNFAMILIAR
+  value. This was a familiar one that was accurate.
+- THE DISAGREEMENT IS INSIDE BILL. Its vendor object says payable, its payment
+  engine refuses, and its payer-facing vendor page sides with the object
+  ("Connected", "ePayment"). No code on our side can detect that, which is a
+  real limit rather than a gap: the only signal available to us says yes.
+- THE ONE FACT THE BODY CARRIES that could explain it is the clock. The vendor
+  was created at 03:15 and the whole sequence (vendor, bank link, bill,
+  payment) happened inside two hours. A newly linked account may not be usable
+  for an ePayment the same hour it reads VERIFIED. NOT asserted: `updatedTime`
+  moved at 04:45:58 and so did `balance.lastUpdatedDate`, so that timestamp is
+  the BILL landing rather than the bank linking, and the body cannot date the
+  link. The cheap test is to press Pay again tomorrow, since the process date
+  is already the 6th.
+- IF IT REFUSES AGAIN IT IS A QUESTION FOR BILL, with the vendor id, that body
+  and the exact sentence, since every one of our own readings now agrees with
+  theirs. UNEXPLAINED and worth naming to them: top-level `accountType: "NONE"`
+  on a vendor whose bank account is `ownerType: "PERSONAL"`. No evidence it is
+  the cause, so it is not a theory, just the one field nobody can account for.
 
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
