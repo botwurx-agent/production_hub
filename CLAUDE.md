@@ -5863,6 +5863,32 @@ your vendor and request that they complete account setup.`
   payments, and reading an unpayable one as ACH is what just happened. The
   fail-closed rule still holds for an UNFAMILIAR value; this is a familiar one
   that turned out to be insufficient.
+- BILL'S OWN PAYER PAGE MAKES THE SAME CLAIM OUR WINDOW DID, which narrows
+  this a long way. Steve's vendor page reads "Connected", "ePayment" and
+  carries a Payment network ID, with no bank details anywhere on it, and his
+  payment was still refused. So this is NOT a field we failed to read on the
+  payer side: BILL does not show the payer whether the vendor finished their
+  own setup, because the vendor's bank details belong to the vendor. That is
+  the outcome the whole invite flow was built for, and it has a cost nobody
+  priced: the payer cannot see the last step and finds out at the press.
+- THE REMAINING STEP IS THE VENDOR'S, in BILL's own words ("contact your
+  vendor and request that they complete account setup"). A bank added to BILL
+  is verified by micro deposits over one to three business days, exactly as
+  the studio's own funding account was, and he linked his the same day.
+- THE BANKING SECTION IS A TAB, not a missing panel: ACH info, in the vendor
+  page's tab strip beside History. Worth opening before concluding anything,
+  since it is the one place the payer side could carry a status.
+- THE TOAST SAID IT TWICE, fixed. BILL answers a refused payment with its
+  reason plainly AND again keyed by the id of the bill that failed, and
+  `billProblems` deduped on the exact string, which cannot see that those are
+  one sentence. It now dedupes on the sentence with an id prefix stripped,
+  keeping the FIRST form, so a lone id-prefixed problem still names which bill
+  failed. The floor is eight characters (a real BILL id is twenty), which is
+  what keeps "Invalid Process Date : 2026-10-05", "Note:" and "address.country
+  : invalid value" out of the rule. 15 assertions, the real refused body among
+  them. It matters because the advice is appended AFTER the problems, so a
+  doubled sentence pushed it off the end of a long red box at the moment
+  somebody most needs to read it.
 
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT

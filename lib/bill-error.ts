@@ -40,9 +40,24 @@ function str(v: unknown): string {
  */
 export function billProblems(body: unknown): string[] {
   const out: string[] = [];
+  // DEDUPE ON THE SENTENCE, NOT THE STRING. BILL answers a refused payment
+  // with its reason twice: once plainly, and once more keyed by the id of the
+  // thing that failed ("00n02... : This vendor is unable to receive
+  // ePayments..."). Exact-string dedupe cannot see that they are the same
+  // sentence, so the toast said it twice and pushed the advice off the end of
+  // a long red box, at the moment somebody most needs to read it.
+  //
+  // THE FIRST FORM WINS, whichever it is: an id-prefixed problem arriving on
+  // its own is kept whole, since the id names which bill failed and nothing
+  // else would.
+  const seen = new Set<string>();
   const push = (v: unknown) => {
     const s = str(v);
-    if (s && !out.includes(s)) out.push(s);
+    if (!s) return;
+    const key = s.replace(/^[0-9A-Za-z]{8,40}\s*:\s*(?=\S)/, "");
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(s);
   };
 
   const visit = (node: unknown, depth = 0) => {
