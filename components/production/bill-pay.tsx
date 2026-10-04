@@ -26,6 +26,15 @@ import { actionError } from "@/lib/action-result";
 // cents are the point. Same reason the remittance email uses it.
 import { exactMoney } from "@/lib/remittance";
 import { payRefused, railLabel, railWarning, type PayRail } from "@/lib/bill-payable";
+// Client-safe on purpose (lib/bill-process-date carries no "server-only"),
+// so the window can state the default date and bound the picker with the
+// same rules the action validates against.
+import {
+  isBankingDay,
+  latestProcessDate,
+  nextBankingDay,
+  usToday,
+} from "@/lib/bill-process-date";
 import type { BillAddress as BillAddressInput } from "@/lib/bill";
 import type { ProjectCost } from "@/lib/database.types";
 
@@ -155,12 +164,13 @@ export function SendBillModal({
       loadError={loadError}
       pending={pending}
       onClose={onClose}
-      onRun={(pay, fundingAccountId, address) =>
+      onRun={(pay, fundingAccountId, address, processDate) =>
         start(async () => {
           const res = await sendCostToBill(projectId, cost.id, {
             pay,
             fundingAccountId: pay ? fundingAccountId : null,
             address,
+            processDate: pay ? processDate : null,
           });
           const err = actionError(res);
           if (err) {
@@ -213,10 +223,23 @@ export function SendBillBody({
   loadError: string | null;
   pending: boolean;
   onClose: () => void;
-  onRun: (pay: boolean, fundingAccountId: string, address: BillAddressInput | null) => void;
+  onRun: (
+    pay: boolean,
+    fundingAccountId: string,
+    address: BillAddressInput | null,
+    processDate: string,
+  ) => void;
 }) {
   const [fundingId, setFundingId] = useState("");
   const [addr, setAddr] = useState({ line1: "", city: "", state: "", zip: "" });
+  // THE DATE IS A FIELD, not a constant, because BILL refused a Monday that
+  // this app had every reason to think was fine. Rather than guess at its
+  // hidden rule, the window says which day the money moves and lets the
+  // producer move it. Lazily initialised so the default is read once, when
+  // the window opens.
+  const [payOn, setPayOn] = useState(() => nextBankingDay());
+  const payOnClosed = !isBankingDay(payOn);
+  const payOnPast = payOn < usToday();
 
   // One usable account is not a choice, so it is made.
   useEffect(() => {
@@ -256,7 +279,8 @@ export function SendBillBody({
             zipOrPostalCode: addr.zip.trim(),
             country: "US",
           }
-        : null
+        : null,
+      payOn
     );
   }
 
@@ -380,6 +404,41 @@ export function SendBillBody({
             )}
           </div>
 
+          <div>
+            <label className={label} htmlFor="bill-payon">
+              Pay on
+            </label>
+            <input
+              id="bill-payon"
+              type="date"
+              className={field}
+              value={payOn}
+              min={usToday()}
+              max={latestProcessDate()}
+              onChange={(e) => setPayOn(e.target.value)}
+            />
+            <p className="mt-1 text-xs leading-relaxed text-text-faint">
+              The day BILL processes the payment. ACH takes a few business days
+              to land after that.
+            </p>
+            {(payOnClosed || payOnPast) && (
+              // Stated and refused here rather than silently corrected on the
+              // server: the whole premise of this window is that the date on
+              // screen is the date that happens.
+              <p
+                className="mt-2 rounded-[10px] px-3 py-2 text-sm leading-relaxed text-text"
+                style={{
+                  background: "var(--h-amber-bg)",
+                  border: "1px solid var(--h-amber)",
+                }}
+              >
+                {payOnPast
+                  ? "That day has passed. Pick today or later."
+                  : "BILL does not process payments at weekends or on bank holidays. Pick a business day."}
+              </p>
+            )}
+          </div>
+
           {!ctx.trusted && (
             <p className="rounded-[10px] bg-yellow-bg px-3 py-2 text-sm text-text">
               BILL will not let this studio pay until a 2-step code is confirmed
@@ -402,7 +461,15 @@ export function SendBillBody({
               </Button>
             )}
             <Button
-              disabled={pending || !addressDone || !fundingId || !ctx.trusted || refused}
+              disabled={
+                pending ||
+                !addressDone ||
+                !fundingId ||
+                !ctx.trusted ||
+                refused ||
+                payOnClosed ||
+                payOnPast
+              }
               onClick={() => run(true)}
             >
               {pending ? "Sending..." : `Pay ${exactMoney(amount)}`}

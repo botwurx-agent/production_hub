@@ -24,7 +24,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
 import { allow } from "@/lib/rate-limit";
 import { billSettled } from "@/lib/bill-settled";
-import { nextBankingDay, usToday } from "@/lib/bill-process-date";
+import { processDateFor, usToday } from "@/lib/bill-process-date";
 import { payRail, payRefused, type PayRail } from "@/lib/bill-payable";
 import { deliverRemittance, remittanceTarget } from "@/lib/remittance-send";
 import {
@@ -220,6 +220,13 @@ export async function sendCostToBill(
     fundingAccountId?: string | null;
     /** Required only when the vendor is not already at BILL. */
     address?: BillAddress | null;
+    /**
+     * The day BILL should process the payment, as the window states it. A
+     * string from the browser, so processDateFor is the boundary: anything
+     * unusable falls back to the next banking day, which is what the field
+     * was defaulted to anyway.
+     */
+    processDate?: string | null;
   },
 ): Promise<
   { ok: true; billId: string; paid: boolean; notified: boolean } | Fail
@@ -404,10 +411,14 @@ export async function sendCostToBill(
       billId,
       amount,
       fundingAccountId,
-      // NEVER "today". ACH does not settle at weekends or on Federal Reserve
-      // holidays, and the first real payment press was refused with
-      // `Invalid Process Date : 2026-10-04`, which was a Sunday.
-      processDate: nextBankingDay(),
+      // NEVER "today", and no longer ours to decide alone. ACH does not
+      // settle at weekends or on Federal Reserve holidays, and the first real
+      // press was refused with `Invalid Process Date : 2026-10-04`, a Sunday.
+      // Fixing that got the next press refused with `2026-10-05`, a Monday
+      // and a banking day, so BILL holds a constraint we cannot see. The
+      // window states the date and lets the producer move it rather than this
+      // guessing a third time; processDateFor is what makes their string safe.
+      processDate: processDateFor(opts.processDate),
     });
 
     await supabase

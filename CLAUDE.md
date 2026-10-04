@@ -5758,6 +5758,43 @@ paying in bill, which doesn't make sense."
   and was refused on one field, which is further than it had ever been, and
   that field is now the only thing that changed.
 
+### The process date is a field, because BILL refused a Monday (no migration)
+The banking-day fix moved the date from 2026-10-04 (a Sunday) to 2026-10-05,
+and BILL refused that too: `Invalid Process Date : 2026-10-05`, on a Monday
+that is a banking day by every rule we can see. So there is a second
+constraint on that field, most likely a lead time or a cutoff, and it is not
+ours to guess.
+- GUESSING A THIRD TIME IS THE MISTAKE THIS FILE RECORDS FOUR TIMES over
+  FreshBooks: reasoning from a signal that cannot distinguish between the
+  explanations on the table. One refusal naming a date cannot say whether the
+  date is too soon, too late, or wrong in some other way, and there is no
+  probe that could settle it without POSTing a real payment against a real
+  studio's books.
+- SO THE WINDOW SAYS WHICH DAY AND LETS THE PRODUCER MOVE IT. That also closes
+  a genuine omission rather than only working around BILL: a window whose
+  whole premise is stating exactly what happens never said WHEN the money
+  moves. "Pay on" defaults to the next banking day, bounds itself to today and
+  a year out, and each attempt costs a press rather than a deploy.
+- THE DATE IS REFUSED IN THE WINDOW, not silently corrected on the server. A
+  weekend, a Federal Reserve holiday or a past day disables Pay and says which
+  it is, because the date on screen has to be the date that happens; a server
+  that quietly substituted another day would pay on a day nobody chose.
+- `processDateFor` is the trust boundary on the way back, since the browser
+  sends a string and a string is not a date: a wrong shape, a day that does
+  not exist (2026-02-31 must not roll into March), a date already past in the
+  US, a closed day and anything past the bound all FALL BACK to the next
+  banking day, which is what the field was seeded with anyway. 875 assertions,
+  including that whatever comes out is always a banking day and never in the
+  past.
+- `lib/bill-process-date.ts` carries no `server-only` deliberately, so the
+  window states the default and bounds the picker with the SAME rules the
+  action validates against. Two copies of that calendar would disagree about a
+  payment date.
+- THE CHEAPEST THING STILL NOT DONE, and it bounds the whole question: open
+  that bill in BILL's own interface and read the earliest date its payment
+  screen offers. What their product allows is the ceiling on what their API
+  allows, the same move that was never made during the FreshBooks rounds.
+
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
 Operator, on the receipt flow: "theres a yellow confirmation window that pops

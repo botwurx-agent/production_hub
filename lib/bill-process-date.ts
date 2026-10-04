@@ -115,3 +115,51 @@ export function nextBankingDay(now: Date = new Date()): string {
   }
   return iso;
 }
+
+/**
+ * How far ahead a process date may be set. A year is far past any real net
+ * term and exists only so a typo in the year cannot queue a payment for 2126.
+ */
+const MAX_DAYS_AHEAD = 365;
+
+function plusDays(iso: string, days: number): string {
+  const d = atUtcMidnight(iso);
+  d.setUTCDate(d.getUTCDate() + days);
+  return isoOf(d);
+}
+
+/** The latest date the window will accept, so the picker can bound itself. */
+export function latestProcessDate(now: Date = new Date()): string {
+  return plusDays(usToday(now), MAX_DAYS_AHEAD);
+}
+
+/**
+ * THE DATE TO ACTUALLY SEND, from whatever the window offered.
+ *
+ * The process date is a field somebody can set, because BILL refused
+ * `2026-10-05` (a Monday, and a banking day by this module's own reading), so
+ * there is a second constraint on it that is not ours to guess. Rather than
+ * guess a fourth time, the window states the date and lets the producer move
+ * it, and this is the trust boundary on the way back in: the browser sends a
+ * string, and a string is not a date.
+ *
+ * ANYTHING UNUSABLE FALLS BACK rather than refusing, because the fallback is
+ * the value the field was defaulted to anyway. Refused: a wrong shape, a day
+ * that does not exist (2026-02-31 must not roll into March), a date already
+ * past in the US, a closed day, and anything absurdly far out.
+ */
+export function processDateFor(input: unknown, now: Date = new Date()): string {
+  const fallback = nextBankingDay(now);
+  if (typeof input !== "string") return fallback;
+  const iso = input.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return fallback;
+  // atUtcMidnight rolls an impossible day forward, so the round trip is the
+  // check: 2026-02-31 comes back as 2026-03-03 and does not match.
+  const d = atUtcMidnight(iso);
+  if (!Number.isFinite(d.getTime()) || isoOf(d) !== iso) return fallback;
+  // ISO dates compare correctly as strings, so no parsing is needed here.
+  if (iso < usToday(now)) return fallback;
+  if (iso > latestProcessDate(now)) return fallback;
+  if (!isBankingDay(iso)) return fallback;
+  return iso;
+}
