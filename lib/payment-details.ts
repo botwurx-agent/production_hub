@@ -195,3 +195,49 @@ export function readinessSummary(t: ReadinessTally): string | null {
   const who = waiting === 1 ? "1 person" : `${waiting} people`;
   return `${who} on this job cannot be paid by ACH yet`;
 }
+
+/**
+ * WHO A COST'S VENDOR NAME IS, when nothing linked it to the roster.
+ *
+ * A cost carries `contact_id` only when the vendor was PICKED from the roster.
+ * One typed by hand, or drafted from an emailed invoice whose vendor matching
+ * found nothing, carries a NAME and no link. Without this the app says "nobody
+ * will be emailed" about somebody whose address it is holding on the same
+ * project's roster.
+ *
+ * WHAT THE REAL DATA SAYS, checked rather than assumed: all five costs on the
+ * operator's own books are linked and carry a real email, so the common path
+ * was already covered and this is the edge. The four unlinked ones are the
+ * DEMO studio's seed rows. The gap is real anyway, because the two ways to
+ * produce an unlinked cost (typing a vendor name, and an invoice draft whose
+ * vendor matching returns null, which it does by design rather than guess) are
+ * both ordinary.
+ *
+ * THE MATCH IS DELIBERATELY STRICTER THAN THE INVOICE EXTRACTOR'S. That one
+ * takes containment, so "Jane Doe" matches "Jane Doe Lighting LLC", which is
+ * fine for filing a cost against a budget line and is NOT fine here: the
+ * consequence of a wrong match is telling a stranger money is on its way to
+ * them. So:
+ *   - exact equality on the normalised key, never containment,
+ *   - exactly one candidate, since two people with the same name is a question
+ *     for a human rather than a coin toss,
+ *   - payable categories only, so a client contact can never be told the
+ *     studio has paid them,
+ *   - and an address is required, because a match with no email answers
+ *     nothing.
+ * Anything short of that returns null and the cost reads as having nobody to
+ * write to, which is the safe direction.
+ */
+export function matchRosterVendor(
+  vendorName: string | null | undefined,
+  roster: RosterPerson[],
+): RosterPerson | null {
+  const key = matchKey(vendorName ?? "");
+  // A one or two character key is not a name, it is whatever survived
+  // normalising punctuation, and it would match far too much.
+  if (key.length < 3) return null;
+  const hits = payablePeople(roster).filter(
+    (p) => matchKey(p.name) === key && (p.email ?? "").trim(),
+  );
+  return hits.length === 1 ? hits[0] : null;
+}

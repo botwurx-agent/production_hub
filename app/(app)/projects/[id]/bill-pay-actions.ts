@@ -130,7 +130,7 @@ export async function billPayContext(
   const supabase = createClient();
   const { data: cost } = await supabase
     .from("project_costs")
-    .select("id, vendor, contact_id")
+    .select("id, vendor, contact_id, project_id")
     .eq("id", costId)
     .eq("project_id", projectId)
     .maybeSingle();

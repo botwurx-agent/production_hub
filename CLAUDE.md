@@ -5569,6 +5569,33 @@ that just got paid. Saying something like Thank you for being on the recent
 - STILL UNEXERCISED, and it is the same gate as the ACH marketing claim: no
   `/v3/payments` call has ever been made from the app, so this email has never
   gone out from a real payment. The first one is the test.
+- AND THE ADDRESS IS ALMOST ALWAYS THERE, which the operator said they were
+  confident of and the data agrees with: all FIVE costs on their own books
+  carry `contact_id` and a real email, because the vendor was picked from the
+  roster that the call sheets and the meal rounds already email. Checked
+  against the live database rather than assumed.
+- THE WEAK LINK IS ONE STEP EARLIER THAN THE EMAIL, and it is `contact_id`
+  rather than the address. A cost gets one only when the vendor was PICKED;
+  typing a name, or drafting from an emailed invoice whose vendor matching
+  returns null (which it does BY DESIGN, since filing a cost against the wrong
+  crew member is worse than leaving it blank), produces a cost with a name and
+  no link. The four unlinked rows in the database are all the DEMO studio's
+  seed, so this is the edge rather than the common path, and the two ways to
+  reach it are both ordinary.
+- SO AN UNLINKED COST FALLS BACK TO THE ROSTER BY NAME
+  (`matchRosterVendor`, lib/payment-details). It is STRICTER THAN THE INVOICE
+  EXTRACTOR'S matcher on purpose: that one takes containment, so "Jane Doe"
+  matches "Jane Doe Lighting LLC", which is right for filing a cost and wrong
+  here, because the consequence of a wrong match is telling a stranger money is
+  on its way to them. Exact normalised equality only, exactly one candidate
+  (two people with one name is a question for a human), payable categories only
+  (so a client is never told the studio paid them), and an address required. 30
+  assertions, including every one of those refusals.
+- NOTHING IS WRITTEN BACK onto the cost. Filling a field in as a side effect of
+  reading it is how a wrong match becomes permanent; the match is re-derived
+  each time and the pay window prints the address it found, which is the check.
+- It also reaches BILL: the same target supplies the email on a vendor create,
+  so an unlinked cost can now get its freelancer invited onto ACH.
 
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT

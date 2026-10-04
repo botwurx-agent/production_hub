@@ -4,6 +4,7 @@ import type { Database } from "@/lib/database.types";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-template";
 import { isEmailAddress, singleLine } from "@/lib/contact";
+import { matchRosterVendor } from "@/lib/payment-details";
 import { logWrite, reportError } from "@/lib/log";
 import {
   remittanceEmail,
@@ -33,6 +34,8 @@ export type RemittanceCost = {
   description: string | null;
   invoice_number: string | null;
   contact_id: string | null;
+  /** Needed only to look a hand-typed vendor name up on the job's roster. */
+  project_id?: string | null;
   remittance_sent_at?: string | null;
 };
 
@@ -46,24 +49,60 @@ export type RemittanceTarget = {
  * Who gets told, off the project roster. A till receipt from a shop carries no
  * contact at all, so null is ordinary and never an error.
  *
+ * TWO WAYS IN, because only one of them was ever wired. A cost carries
+ * `contact_id` when its vendor was PICKED from the roster; one typed by hand,
+ * or drafted from an emailed invoice whose vendor matching found nothing,
+ * carries a NAME and no link. So an unlinked cost falls back to a strict name
+ * match
+ * (lib/payment-details matchRosterVendor: exact, unique, payable, with an
+ * address), rather than reporting that there is nobody to write to.
+ *
+ * NOTHING IS WRITTEN BACK. The link stays absent on the cost, because filling
+ * a field in as a side effect of reading it is how a wrong match becomes
+ * permanent. The match is re-derived each time and the pay window prints the
+ * address it found, which is the check.
+ *
  * The roster category decides the greeting: a vendor is a company and everyone
  * else on a job is a person.
  */
 export async function remittanceTarget(
   supabase: SupabaseClient<Database>,
-  cost: Pick<RemittanceCost, "contact_id">,
+  cost: Pick<RemittanceCost, "contact_id" | "vendor" | "project_id">,
 ): Promise<RemittanceTarget> {
-  if (!cost.contact_id) return { email: null, recipient: "person" };
-  const { data } = await supabase
+  if (cost.contact_id) {
+    const { data } = await supabase
+      .from("contacts")
+      .select("email, type")
+      .eq("id", cost.contact_id)
+      .maybeSingle();
+    const email = singleLine(data?.email ?? "").toLowerCase();
+    return {
+      email: isEmailAddress(email) ? email : null,
+      recipient: companyOrPerson(data?.type),
+    };
+  }
+
+  const name = (cost.vendor ?? "").trim();
+  if (!name || !cost.project_id) return { email: null, recipient: "person" };
+
+  // Scoped to THIS project's roster. A client's own contacts hang off the
+  // client rather than the project, so they are out of reach here as well as
+  // being excluded by category.
+  const { data: roster } = await supabase
     .from("contacts")
-    .select("email, type")
-    .eq("id", cost.contact_id)
-    .maybeSingle();
-  const email = singleLine(data?.email ?? "").toLowerCase();
+    .select("id, name, email, type")
+    .eq("project_id", cost.project_id);
+  const hit = matchRosterVendor(name, roster ?? []);
+  if (!hit) return { email: null, recipient: "person" };
+  const email = singleLine(hit.email ?? "").toLowerCase();
   return {
     email: isEmailAddress(email) ? email : null,
-    recipient: (data?.type ?? "").trim().toLowerCase() === "vendor" ? "company" : "person",
+    recipient: companyOrPerson(hit.type),
   };
+}
+
+function companyOrPerson(type: string | null | undefined): RemittanceRecipient {
+  return (type ?? "").trim().toLowerCase() === "vendor" ? "company" : "person";
 }
 
 /**
