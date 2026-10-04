@@ -138,6 +138,24 @@ export function billFailure(status: number, body: unknown): string {
   } else if (code === BILL_CODES.NO_ONLINE_PAYMENT) {
     advice =
       " The bank account BILL is being asked to pay from cannot make online payments. Check in BILL that it is verified and enabled for payments.";
+  } else if (/unable to receive ePayments/i.test(said)) {
+    // NAMES BOTH AND PICKS NEITHER, the shape the FreshBooks round arrived at
+    // after asserting a plan tier on a pricing page and being wrong.
+    //
+    // BILL's own sentence says the vendor's bank is not set up, and on the one
+    // real refusal of this feature that was FALSE: the vendor read
+    // payByType WALLET, bankAccountStatus NET_LINKED_ACCOUNT, networkStatus
+    // CONNECTED and carried a VERIFIED checking account, and BILL's own
+    // payer-facing vendor page said Connected and ePayment. What the refusal
+    // actually was, found by opening the same payment in BILL's own interface:
+    // "this payment isn't included with your current Basic Receivables plan".
+    //
+    // So the sentence points at the one party who cannot fix it. One
+    // observation is not a mapping, though, and a vendor bank genuinely can be
+    // unfinished, so this says to check the plan FIRST because that check is
+    // free and ours to make, without claiming it is the cause.
+    advice =
+      " BILL says this is the vendor's bank setup. It said exactly that once when the real cause was the BILL PLAN not including payments, which the vendor cannot fix, so open this bill on BILL's own Pay screen first: it states a plan limit plainly. If the plan is fine, then it is the vendor's own account setup at BILL.";
   } else if (status === 401) {
     advice = " The sign-in was refused, so the stored username or password is no longer right. Reconnect BILL.";
   }

@@ -5918,6 +5918,54 @@ your vendor and request that they complete account setup.`
   on a vendor whose bank account is `ownerType: "PERSONAL"`. No evidence it is
   the cause, so it is not a theory, just the one field nobody can account for.
 
+### THE ANSWER: a plan gate, and BILL blamed the vendor for it
+The operator stopped theorising and did the one cheap thing: pressed Pay on the
+same bill in BILL's own interface. Its review step says, in a banner over a
+greyed Send payment button, "Sorry, this payment isn't included with your
+current Basic Receivables plan. To make a payment, you can upgrade your account
+now." Everything else on that screen is correct and ready: USD 1.00 ePayment to
+Steve Nazari, a green ePay badge on the vendor, from Wells Fargo, process date
+10/06/26, arrival 10/09/26.
+- SO THE VENDOR'S BANK WAS NEVER THE PROBLEM, and the refusal sentence
+  ("their bank account is not setup correctly. Please contact your vendor")
+  pointed at the one party who could not fix it. FOURTH TIME BILL HAS NAMED THE
+  WRONG THING. The others: a username belonging to the other environment
+  reported as an invalid developer key, a refused POST reported as a refused
+  read, and a too-long device id reported as an expired 2-step token. Treat its
+  message as where to start looking, never as the diagnosis.
+- EVERY OBSERVATION NOW FITS ONE CAUSE, which is what a real answer looks like
+  after six rounds of partial ones: the vendor body reading WALLET /
+  NET_LINKED_ACCOUNT / CONNECTED with a VERIFIED checking account, BILL's own
+  payer-facing vendor page reading Connected and ePayment, and our rail read
+  saying ACH. All three were right. The gate is on the PAYER'S OWN BILL PLAN.
+- AND NOT NARROWING THE WHITELIST IS VINDICATED TWICE OVER. The open question
+  was whether `NET_LINKED_ACCOUNT` should stop granting ACH on its own;
+  tightening it on that refusal would have blocked real payments to vendors
+  BILL itself calls verified, to work around a problem that was never on the
+  vendor's side. The fail-closed rule is for an UNFAMILIAR value, not for a
+  familiar one that disagrees with a refusal.
+- THE REFUSAL MESSAGE NAMES BOTH AND PICKS NEITHER (lib/bill-error.ts, keyed on
+  the sentence rather than a code, since this refusal carried none). It leads
+  with BILL's own words, then says the same sentence has once meant a plan
+  limit, and sends the producer to BILL's own Pay screen FIRST because that
+  check is free and theirs to make. It does NOT assert the plan: one observation
+  is not a mapping and a vendor's bank genuinely can be unfinished. 22
+  assertions, including that no cause is asserted and that an unrelated refusal
+  gets no plan advice.
+- A SECOND SCREENSHOT shows the same review step with the banner dismissed and
+  Send payment ENABLED. Not read as the gate having lifted: dismissing a notice
+  re-enabling a button is far likelier a UI quirk than a plan change, and the
+  API refusal is the authority.
+- WHAT IS LEFT IS ON THE OPERATOR'S SIDE: upgrade the BILL plan to one that
+  includes making payments, then press Pay in the app again. The process date
+  already defaults to the next day BILL will take, so nothing else changes.
+- PAYING IS STILL UNEXERCISED, and the ACH marketing claim stays gated. The
+  payload has now reached BILL's payment engine twice and been refused on a
+  field and then on a plan, which is as far as it can go without the plan.
+- ASK THE PRODUCT, AGAIN. The same move settled the process date one round
+  earlier. Two of the last three answers came from a screenshot of BILL's own
+  screen rather than from reasoning about its API, and both took seconds.
+
 
 ### The read-a-document banner is green when it worked (no migration) — BUILT
 Operator, on the receipt flow: "theres a yellow confirmation window that pops
