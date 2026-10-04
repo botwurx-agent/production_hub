@@ -26,6 +26,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { billFailure, billSucceeded } from "@/lib/bill-error";
 import type { BillBillState } from "@/lib/bill-settled";
 import { billCryptoReady, decryptSecret, encryptSecret } from "@/lib/bill-crypto";
+import { vendorPayment } from "@/lib/payment-details";
 import type { Database } from "@/lib/database.types";
 
 const HOSTS = {
@@ -357,19 +358,30 @@ export type BillVendor = {
    */
   payByType: string | null;
   bankAccountStatus: string | null;
+  /**
+   * Whether they are joined to BILL's network, which is what decides whether
+   * ACH is even available to them. OBSERVED value on a vendor we created and
+   * never invited: "NOT_CONNECTED". No other value has been seen, so nothing
+   * here maps it onto an invite state: a value we have not observed is
+   * reported as itself rather than interpreted.
+   */
+  networkStatus: string | null;
 };
 
 /**
  * The payment fields off any vendor body. One reader for the list row, the
  * create response and the single-vendor read, so the three cannot drift into
  * disagreeing about how somebody gets paid.
+ *
+ * The parsing itself lives in lib/payment-details.ts, which is NOT
+ * `server-only`, so the field names can be asserted against the real body the
+ * probe printed. A first version read `payByType` at the top level; it is
+ * nested under `paymentInformation`, and that module says so at length.
  */
-function vendorPayFields(row: unknown): Pick<BillVendor, "payByType" | "bankAccountStatus"> {
-  const v = (row ?? {}) as { payByType?: unknown; bankAccountStatus?: unknown };
-  return {
-    payByType: typeof v.payByType === "string" ? v.payByType : null,
-    bankAccountStatus: typeof v.bankAccountStatus === "string" ? v.bankAccountStatus : null,
-  };
+function vendorPayFields(
+  row: unknown
+): Pick<BillVendor, "payByType" | "bankAccountStatus" | "networkStatus"> {
+  return vendorPayment(row);
 }
 
 /**
@@ -483,6 +495,53 @@ export async function readBillVendor(
     name: typeof v.name === "string" ? v.name : "",
     ...vendorPayFields(parsed),
   };
+}
+
+/**
+ * ASK A FREELANCER FOR THEIR OWN PAYMENT DETAILS. BILL emails them, they give
+ * their bank details to BILL, and the studio never touches them. That is the
+ * whole point: today those numbers arrive in the producer's inbox and are
+ * retyped by hand at net 30.
+ *
+ * THE ENDPOINT AND THE PAYLOAD WERE BOTH PROVEN BY PRESSING IT through
+ * /api/diagnostics/bill?invite=, not read from a doc:
+ *   - It is the OLDER API. `POST /v3/network/invitation/vendor/{id}` refused an
+ *     empty body with "networkId: must not be blank" and "networkType: must
+ *     not be null", so that one connects to a company ALREADY IN the network
+ *     (its networkId comes from a search), which a freelancer who has never
+ *     heard of BILL cannot be.
+ *   - `SendVendorInvite` with ONLY a vendorId answered
+ *     `BDC_1117 Missing required data for: email.` So the endpoint is
+ *     permitted, the payload is {vendorId, email}, and the refusal named the
+ *     one field it wanted.
+ *   - THE v3 SESSION IS ACCEPTED HERE. It did not complain about the session,
+ *     it complained about the email, so no second login is needed. That was
+ *     the unknown underneath the unknown, and it answered itself.
+ *
+ * A SECOND REFUSAL NAMING ANOTHER FIELD IS A GOOD RESULT, not a failure: only
+ * `email` has been proven missing, so BILL's own sentence is carried through
+ * rather than flattened, exactly as the bill and payment payloads were
+ * assembled one refusal at a time.
+ */
+export async function sendBillVendorInvite(
+  session: BillSession,
+  args: { vendorId: string; email: string }
+): Promise<void> {
+  const base = HOSTS[billEnv()].orgs.replace(/ListOrgs\.json$/, "");
+  const res = await fetch(`${base}SendVendorInvite.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      devKey: devKey(),
+      sessionId: session.sessionId,
+      data: JSON.stringify({ vendorId: args.vendorId, email: args.email }),
+    }),
+    cache: "no-store",
+  });
+  const parsed = await readJson(res);
+  // The older API answers HTTP 200 with the failure inside, which is why this
+  // asks the body rather than the status. billSucceeded exists for exactly it.
+  if (!billSucceeded(res.status, parsed)) throw new BillError(res.status, parsed);
 }
 
 export type BillAddress = {

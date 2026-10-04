@@ -2784,6 +2784,84 @@ and a check is never written.
   BILL will pay each vendor before pressing pay, and never post a check by
   accident. The full claim earns its place the day one real ACH payment lands.
 
+### The invite probe answered in ONE press, and found a bug in the day's work
+`?invite=` was pressed on the real Veronica Laramie vendor (2026-10-03). Every
+unknown closed, and the whole return on having built the instrument first.
+- PAY-BY-TYPE IS NESTED, and reading it at the top level is the bug slices 1
+  and 2 had shipped hours earlier. The real body is
+  `paymentInformation: { payByType: "CHECK" }` with `bankAccountStatus` and
+  `networkStatus` at the TOP level, so the three siblings genuinely sit at
+  different depths. IT WAS INVISIBLE because the rail fell through to the
+  `NO_ACCOUNT` backstop and still said "check": the cheque refusal worked FOR
+  THE WRONG REASON, and an ACH-ready vendor would have read "BILL did not say",
+  which nobody would have noticed until the day it mattered. A backstop that
+  covers for a broken primary read is the most expensive kind of passing test.
+- SO THE READER MOVED to `vendorPayment` in lib/payment-details.ts, which is
+  NOT `server-only`, and the REAL BODY is kept verbatim as a regression test
+  (15 further assertions, 72 in all): the nested read, the top-level fallback
+  for the unprinted list-row shape, nested winning when both carry a string,
+  every junk shape reading as null rather than as a rail, and a nested ACH
+  vendor reading `ach` rather than `unknown`. Field names off an external body
+  belong where they can be asserted, not inside server-only code where a probe
+  is the only way to check them.
+- THE TWO INVITE ENDPOINTS ARE NOW SETTLED BY EVIDENCE rather than by reading.
+  `POST /v3/network/invitation/vendor/{id}` with an empty body refused with
+  `networkId: must not be blank` and `networkType: must not be null`, and
+  `GET /v3/network` refused with `Required QueryValue [name] not specified`. So
+  that pair is a SEARCH plus a connect for a company ALREADY IN the network,
+  which a freelancer who has never heard of BILL cannot be.
+- `POST /v2/SendVendorInvite.json` WITH ONLY A vendorId answered
+  `BDC_1117 Missing required data for: email.` That one refusal is the whole
+  spec: the endpoint is permitted and the payload is {vendorId, email}. Nothing
+  was created and nobody was emailed, which is why an empty-bodied POST was the
+  right question to ask.
+- AND THE v3 SESSION IS ACCEPTED ON THE OLDER API. It complained about the
+  email, never about the session, so no second login is needed and the unknown
+  underneath the unknown answered itself. `billV2SessionForStudio` stays
+  because the probe uses it and it is how the next v2 question gets asked, but
+  the feature does not need it.
+- SO THE SEND IS BUILT: `sendBillVendorInvite` (lib/bill.ts, form-encoded, the
+  body asked rather than the status since v2 answers 200 with the failure
+  inside) and `requestPaymentDetails` (payment-readiness-actions.ts). Only
+  `email` is PROVEN required, so BILL's own sentence is carried through: a
+  second refusal naming another field is the next piece of the spec, not a
+  dead end.
+- THE VENDOR MUST EXIST AT BILL FIRST, which is a real constraint rather than
+  an oversight: the invite is addressed to a vendor id, and BILL refuses to
+  create a vendor without a postal address the roster does not hold. That is
+  the right order anyway, since a vendor is created when their bill is added,
+  at or just after wrap. Somebody BILL has never heard of is REPORTED ("add
+  their bill first") rather than silently skipped.
+- PARTIAL SUCCESS IS THE NORMAL CASE and is reported per person, the shape the
+  Higgsfield link import uses: twelve people on a roster are never in the same
+  state, and one missing email must not fail the other eleven. Capped at 50,
+  because this sends EMAIL to real people and a request for a thousand is a
+  mistake rather than a roster.
+- THE OFFER IS NARROW BY CONSTRUCTION: only an explicit CHECK with an email on
+  file. A vendor BILL has never heard of has no id to address, and one already
+  on card or on a method BILL did not name HAS a method, so asking them for
+  bank details is the wrong move.
+- `inviteConfirm` IS A PURE EXPORTED FUNCTION, and the reason is worth keeping:
+  the confirm lived inline in the fetching panel, so a fixture mounting the
+  presentational body bypassed it entirely and the dialog could not be
+  exercised. The wording is a claim about what is about to happen to named
+  people, so it belongs in a function that can be driven, the same call
+  lib/remittance.ts made about the remittance sentence.
+- Verified in Chromium against a throwaway fixture (deleted) whose vendor rows
+  carry the REAL nested shape: the button is offered to exactly the two cheque
+  rows and to nobody in a read-only context, the confirm names the person and
+  their address, CANCEL SENDS NOTHING, confirming sends exactly that contact,
+  and the bulk press names the count and sends both. No page errors, no
+  overflow at 390 or 1280.
+- WORTH FIXING ON THE OPERATOR'S SIDE: the probe's fingerprint reported
+  `BILL_DEV_KEY` as "20 chars, HAD WHITESPACE". Every read trims it so nothing
+  is broken, and that trim exists because the same stray character cost a whole
+  round once. Clean the value in Vercel anyway.
+- STILL UNEXERCISED: the invite has never been SENT (the probe deliberately
+  carried no address), and no `/v3/payments` call has ever been made from the
+  app. The first real invite and the first real ACH payment are the two tests
+  left, in that order.
+
 ### Budget slice 5: payment schedule / deposits (migration 0072) — BUILT
 Came straight out of real use: a CGI vendor wanted 25% up front and the balance
 later, and the ledger could only express "one cost, paid once". A cost is now a

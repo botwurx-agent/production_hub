@@ -40,6 +40,42 @@ export type RosterPerson = {
   role?: string | null;
 };
 
+/**
+ * READ THE PAYMENT FIELDS OFF A BILL VENDOR BODY. Here rather than in
+ * lib/bill.ts because that module is `server-only` and these field names are
+ * the kind of thing that has to be ASSERTED against a real body: a first
+ * version read `payByType` at the top level and it is nested.
+ *
+ * THE SHAPE, printed by /api/diagnostics/bill?invite= on a real vendor:
+ *   { "paymentInformation": { "payByType": "CHECK", ... },
+ *     "bankAccountStatus": "NO_ACCOUNT",
+ *     "networkStatus": "NOT_CONNECTED" }
+ * so the three really do sit at different depths. The top level is still read
+ * as a FALLBACK rather than removed, since the LIST row's shape has not been
+ * printed and may be flatter; nested wins when both carry a string.
+ *
+ * WHY THE BUG WAS INVISIBLE: with payByType unreadable the rail fell to the
+ * NO_ACCOUNT backstop and still said "check", so the cheque refusal worked for
+ * the wrong reason. An ACH-ready vendor would have read "BILL did not say".
+ */
+export function vendorPayment(row: unknown): VendorRowFields {
+  const v = (row ?? {}) as {
+    payByType?: unknown;
+    bankAccountStatus?: unknown;
+    networkStatus?: unknown;
+    paymentInformation?: { payByType?: unknown } | null;
+  };
+  const nested = v.paymentInformation?.payByType;
+  return {
+    payByType:
+      typeof nested === "string" ? nested : typeof v.payByType === "string" ? v.payByType : null,
+    bankAccountStatus: typeof v.bankAccountStatus === "string" ? v.bankAccountStatus : null,
+    networkStatus: typeof v.networkStatus === "string" ? v.networkStatus : null,
+  };
+}
+
+export type VendorRowFields = VendorPayment & { networkStatus: string | null };
+
 /** A BILL vendor, as the list endpoint gives it. */
 export type VendorRow = VendorPayment & { id: string; name: string };
 
