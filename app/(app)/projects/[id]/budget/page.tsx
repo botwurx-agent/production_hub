@@ -139,7 +139,7 @@ export default async function BudgetPage({
         projectTitle={project.title}
         section="Budget"
         hue="indigo"
-        subtitle="Track the estimate against actual spend, line by line."
+        subtitle="The estimate against what the job really cost, who is still owed, and what it made."
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />

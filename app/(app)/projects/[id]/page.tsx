@@ -957,7 +957,7 @@ export default async function ProjectDetailPage({
               href={`/projects/${project.id}/budget`}
               hue="indigo"
               title="Budget"
-              sub="Bid vs actual"
+              sub="Bid vs actual, costs, payments"
               footer={
                 budgetEstimated > 0
                   ? `${money(budgetEstimated - budgetActual)} remaining`
