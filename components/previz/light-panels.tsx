@@ -10,7 +10,7 @@ import {
 } from "@/lib/previz/lighting";
 import { GRIP_NAMES, type GripKind, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
 import type { Contribution, Reading } from "@/lib/previz/meter";
-import { Chip, Field, Readout } from "./ui";
+import { Chip, Field, Readout, TrashIcon } from "./ui";
 
 type Fmt = (m: number) => string;
 type Target = { id: string; name: string };
@@ -21,6 +21,7 @@ const ndLabel = (nd: number) => (nd === 0 ? "None" : nd.toFixed(1));
 function Header({ eyebrow, title, onDelete, on, onToggle }: {
   eyebrow: string; title: string; onDelete?: () => void; on?: boolean; onToggle?: () => void;
 }) {
+  const what = eyebrow.toLowerCase();
   return (
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
@@ -38,8 +39,14 @@ function Header({ eyebrow, title, onDelete, on, onToggle }: {
           </button>
         ) : null}
         {onDelete ? (
-          <button type="button" onClick={onDelete} className="rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-text-muted hover:text-text">
-            Remove
+          <button
+            type="button"
+            onClick={onDelete}
+            title={`Delete this ${what} (Delete key)`}
+            className="flex items-center gap-1 rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-text-muted hover:border-border-strong hover:text-text"
+          >
+            <TrashIcon />
+            Delete
           </button>
         ) : null}
       </div>

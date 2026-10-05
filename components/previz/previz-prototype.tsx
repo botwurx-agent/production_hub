@@ -31,7 +31,7 @@ import {
   bounceCandela, collectOccluders, emitterFromSource, nearFieldScale, readMeter, roomLuxFrom, type Board, type Emitter, type Reading,
 } from "@/lib/previz/meter";
 import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, WindowInspector } from "./light-panels";
-import { Chip, Field, Info, RailGroup, RailItem, Readout, Seg, Thumb, Toggle } from "./ui";
+import { Chip, Field, Info, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 
 type Vec3 = { x: number; y: number; z: number };
 type Shot = {
@@ -854,11 +854,34 @@ export function PrevizPrototype() {
     setGrips((all) => [...all, spec]);
     setSel({ kind: "grip", id });
   };
+  const removeLight = (id: string) => {
+    setLights((all) => all.filter((l) => l.id !== id));
+    if (sel.kind === "light" && sel.id === id) setSel({ kind: "camera" });
+  };
+  const removeGrip = (id: string) => {
+    setGrips((all) => all.filter((g) => g.id !== id));
+    if (sel.kind === "grip" && sel.id === id) setSel({ kind: "camera" });
+  };
+  // A shot IS its camera, so deleting either deletes both. One always stays:
+  // the viewport is always looking through a camera. A shot carries a board
+  // and a framing somebody worked on, so it asks first; a light does not,
+  // since putting one back is a single pick from the list.
+  const removeShot = (id: string) => {
+    if (shots.length <= 1) return;
+    const s = shots.find((x) => x.id === id);
+    if (!s || !window.confirm(`Delete shot ${s.code} ${s.title} and its camera?`)) return;
+    const i = shots.findIndex((x) => x.id === id);
+    const rest = shots.filter((x) => x.id !== id);
+    setShots(rest);
+    if (id === activeId) {
+      setActiveId(rest[Math.min(i, rest.length - 1)].id);
+      setSel({ kind: "camera" });
+    }
+  };
   const removeSelected = () => {
-    if (sel.kind === "light") setLights((all) => all.filter((l) => l.id !== sel.id));
-    else if (sel.kind === "grip") setGrips((all) => all.filter((g) => g.id !== sel.id));
+    if (sel.kind === "light") removeLight(sel.id);
+    else if (sel.kind === "grip") removeGrip(sel.id);
     else return false;
-    setSel({ kind: "camera" });
     return true;
   };
   const targets = [...talent.map((t) => ({ id: t.id, name: t.name })), { id: "bottle", name: "Bottle" }];
@@ -866,7 +889,9 @@ export function PrevizPrototype() {
   const fmt = (m: number) => dist(m, units);
 
   const addShot = () => {
-    const n = shots.length;
+    // The next letter nobody is using, so a deleted 1B is not reissued twice.
+    let n = 0;
+    while (shots.some((x) => x.code === `1${String.fromCharCode(65 + n)}`)) n++;
     const code = `1${String.fromCharCode(65 + n)}`;
     const copy: Shot = { ...active, id: `s${Date.now()}`, code, title: "New shot", board: null };
     setShots((all) => [...all, copy]);
@@ -987,6 +1012,8 @@ export function PrevizPrototype() {
                 active={sel.kind === "light" && sel.id === l.id}
                 onClick={() => setSel({ kind: "light", id: l.id })}
                 dot={l.on ? "#e4b94a" : "#5b6068"}
+                onDelete={() => removeLight(l.id)}
+                deleteLabel={`Delete ${l.role} light`}
                 label={`${l.role}`}
                 sub={l.on ? `${fixtureOf(l).name.replace(/^(Aputure|ARRI|Astera) /, "")}, ${Math.round(l.dimmer * 100)}%` : "off"}
               />
@@ -1009,6 +1036,7 @@ export function PrevizPrototype() {
                 onClick={() => setSel({ kind: "grip", id: g.id })}
                 dot={g.kind === "flag" ? "#1d1d1f" : g.kind === "silver" ? "#c8ccd2" : "#f2f2ee"}
                 label={GRIP_NAMES[g.kind]}
+                onDelete={() => removeGrip(g.id)}
                 sub={`${g.sizeFt}x${g.sizeFt}${g.aimAt ? `, on ${targets.find((t) => t.id === g.aimAt)?.name ?? ""}` : ""}`}
               />
             ))}
@@ -1025,6 +1053,8 @@ export function PrevizPrototype() {
                 onClick={() => { setActiveId(s.id); setSel({ kind: "camera" }); }}
                 dot={SHOT_HUES[i % SHOT_HUES.length]}
                 label={`${s.code} ${s.title}`}
+                onDelete={shots.length > 1 ? () => removeShot(s.id) : undefined}
+                deleteLabel={`Delete shot ${s.code} and its camera`}
                 sub={`${(BODIES.find((b) => b.id === s.bodyId) ?? BODIES[0]).name}, ${s.focal}mm, ${(SUPPORTS.find((k) => k.id === s.support) ?? SUPPORTS[0]).name}`}
               />
             ))}
@@ -1126,6 +1156,7 @@ export function PrevizPrototype() {
               talent={talent}
               readouts={{ hfov, vfov, near: dof.near, far: dof.far, hyper: dof.hyperfocal, size, angle }}
               onChange={(p) => updateShot(active.id, p)}
+              onDelete={shots.length > 1 ? () => removeShot(active.id) : undefined}
               onBoardFile={onBoardFile}
               exposure={
                 <ExposurePanel
@@ -1188,8 +1219,8 @@ export function PrevizPrototype() {
           const f = effectiveFocus(s, talent, bottle);
           const isActive = s.id === activeId;
           return (
+            <div key={s.id} className="group relative shrink-0">
             <button
-              key={s.id}
               type="button"
               onClick={() => { setActiveId(s.id); setSel({ kind: "camera" }); setView("lens"); }}
               className={`flex shrink-0 flex-col gap-1.5 rounded-[12px] border p-2 text-left transition ${
@@ -1209,6 +1240,18 @@ export function PrevizPrototype() {
                 {s.focal}mm · f/{s.stop} · {shotSize((a.h * f) / s.focal)}
               </div>
             </button>
+            {shots.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => removeShot(s.id)}
+                aria-label={`Delete shot ${s.code}`}
+                title={`Delete shot ${s.code} and its camera`}
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-[7px] border border-border bg-surface text-text-muted opacity-0 shadow-sm hover:text-text focus:opacity-100 group-hover:opacity-100"
+              >
+                <TrashIcon />
+              </button>
+            ) : null}
+            </div>
           );
         })}
         <button
@@ -1227,7 +1270,7 @@ export function PrevizPrototype() {
 // ---------------------------------------------------------------- inspector
 
 function CameraInspector({
-  shot, units, focus, focusName, talent, readouts, onChange, onBoardFile, exposure,
+  shot, units, focus, focusName, talent, readouts, onChange, onDelete, onBoardFile, exposure,
 }: {
   shot: Shot;
   units: Units;
@@ -1236,6 +1279,7 @@ function CameraInspector({
   talent: TalentSpec[];
   readouts: { hfov: number; vfov: number; near: number; far: number; hyper: number; size: string; angle: string };
   onChange: (p: Partial<Shot>) => void;
+  onDelete?: () => void;
   onBoardFile: (f: File | undefined) => void;
   exposure: React.ReactNode;
 }) {
@@ -1246,9 +1290,22 @@ function CameraInspector({
   const fromSlider = (v: number) => 0.3 * Math.pow(30 / 0.3, v);
   return (
     <div className="space-y-5">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">Camera</p>
-        <h2 className="font-display text-base font-bold">{shot.code} · {shot.title}</h2>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">Camera</p>
+          <h2 className="truncate font-display text-base font-bold">{shot.code} · {shot.title}</h2>
+        </div>
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            title="Delete this shot and its camera"
+            className="flex shrink-0 items-center gap-1 rounded-[8px] border border-border px-2 py-1 text-xs font-semibold text-text-muted hover:border-border-strong hover:text-text"
+          >
+            <TrashIcon />
+            Delete shot
+          </button>
+        ) : null}
       </div>
 
       <Field label="Body">
@@ -1706,7 +1763,7 @@ function HelpCard({ onClose }: { onClose: () => void }) {
     ["B", "storyboard overlay"],
     ["Map", "drag people, the bottle, cameras, lights and boards; drag a white dot to aim"],
     ["Z", "zebras: stripes where the picture clips"],
-    ["Delete", "remove the selected light or board"],
+    ["Delete", "delete the selected light, bounce or flag (a shot: its bin)"],
   ];
   return (
     <div className="absolute left-3 top-14 w-[330px] rounded-[12px] border border-border bg-surface p-4 text-sm shadow-lg">

@@ -67,19 +67,42 @@ export function RailGroup({ title, children }: { title: string; children: React.
   );
 }
 
-export function RailItem({ active, onClick, dot, label, sub }: { active: boolean; onClick: () => void; dot: string; label: string; sub: string }) {
+export function RailItem({ active, onClick, dot, label, sub, onDelete, deleteLabel }: {
+  active: boolean; onClick: () => void; dot: string; label: string; sub: string; onDelete?: () => void; deleteLabel?: string;
+}) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-start gap-2 rounded-[10px] px-2 py-1.5 text-left transition ${active ? "bg-accent-soft" : "hover:bg-surface-2"}`}
-    >
-      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} />
-      <span className="min-w-0">
-        <span className={`block truncate text-sm font-semibold ${active ? "text-accent" : ""}`}>{label}</span>
-        <span className="block truncate text-xs text-text-muted">{sub}</span>
-      </span>
-    </button>
+    <div className={`group relative flex items-start rounded-[10px] transition ${active ? "bg-accent-soft" : "hover:bg-surface-2"}`}>
+      <button type="button" onClick={onClick} className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1.5 text-left">
+        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} />
+        <span className="min-w-0">
+          <span className={`block truncate text-sm font-semibold ${active ? "text-accent" : ""}`}>{label}</span>
+          <span className="block truncate text-xs text-text-muted">{sub}</span>
+        </span>
+      </button>
+      {onDelete ? (
+        // Shown on hover and on the selected row, so a row you are looking at
+        // always says how to get rid of it.
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={deleteLabel ?? `Delete ${label}`}
+          title={deleteLabel ?? `Delete ${label}`}
+          className={`mr-1 mt-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] text-text-muted hover:bg-surface hover:text-text ${
+            active ? "opacity-100" : "opacity-0 focus:opacity-100 group-hover:opacity-100"
+          }`}
+        >
+          <TrashIcon />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.2a1 1 0 0 0 1 .8h4.6a1 1 0 0 0 1-.8L12 4M6.8 7v4.2M9.2 7v4.2" />
+    </svg>
   );
 }
 
