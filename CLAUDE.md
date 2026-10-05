@@ -6956,6 +6956,28 @@ reach for it during real prep.
   clear of people: a key three-quarter camera right, a fill or a bounce
   opposite the key, a flag on the key side. The first version used fixed
   spots and dropped a flag straight across the two-shot.
+  RECOGNISABLE GEAR (2026-10-05, operator: "better representation of the
+  lights with actual 3D renders of the brand of light or at least close to
+  it", and the same for the camera). lib/previz/gear-models.ts draws each
+  fixture at its real size and in its real colourway: the finned Aputure COB
+  with its Bowens mount, control box and every modifier (hyper reflector,
+  sixteen-sided Light Dome with rods, square softbox, stripbox, lantern), the
+  slim SkyPanel in its wide yoke with an egg-crate grid, the M18 with its
+  ballast on the floor, the blue 650 Fresnel with four-leaf barn doors, the
+  Titan on a centre clamp, a China ball on a boom. lib/previz/camera-model.ts
+  builds each body the way it would be dressed (ARRI and Venice and RED with
+  matte box, follow focus, V-mount, top handle and a monitor on an arm;
+  FX6, C70 and Pocket as compact bodies) on sticks with a fluid head, a pan
+  bar and a spreader, dropping to a hi-hat for a low lens.
+  DRAWN, NOT DOWNLOADED, deliberately: manufacturer CAD and marketplace models
+  are licensed rather than ours to ship, and those sites are egress-blocked
+  from a session anyway. Primitives load instantly and cost nothing. No logos
+  are drawn; the colourway and the shape carry the recognition.
+  THE YOKE PANS AND THE HEAD TILTS INSIDE IT now (LightRig gained `yoke`),
+  rather than one group taking both, which is what lets a yoke stay level
+  while the head tips. Legs never rotate with a camera or a light.
+  `Object3D.position` is NOT reassignable in three.js (Object.assign on it
+  throws at runtime); both modules use an `at()` helper for that reason.
   READ IT AS RELATIVE (a stop hotter, much softer), never as a meter on set:
   lumen figures are per fixture class, room bounce is one averaged number,
   diffusion is transmission plus spread rather than the fabric's real curve.

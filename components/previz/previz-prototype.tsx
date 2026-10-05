@@ -19,6 +19,7 @@ import {
   type PropSpec, type TalentSpec,
 } from "@/lib/previz/scene-build";
 import { SAMPLE_BOARDS } from "@/lib/previz/boards";
+import { bodyDrop, buildSupport } from "@/lib/previz/camera-model";
 import {
   FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, exposureScale, resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
@@ -650,7 +651,10 @@ export function PrevizPrototype() {
   useEffect(() => {
     const e = engine.current;
     if (!e) return;
-    e.world.rigs.clear();
+    for (const old of [...e.world.rigs.children]) {
+      e.world.rigs.remove(old);
+      disposeTree(old);
+    }
     shots.forEach((s, i) => {
       const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
       const a = imagedArea(b, aspect.ratio);
@@ -660,11 +664,21 @@ export function PrevizPrototype() {
         fovDeg(a.h, s.focal),
         effectiveFocus(s, talent, bottle),
         `${s.code} ${s.focal}mm`,
+        s.bodyId,
+        s.focal,
       );
-      rig.position.set(s.pos.x, s.pos.y, s.pos.z);
+      // The camera pans and tilts; its legs stay on the floor.
+      const unit = new THREE.Group();
+      unit.position.set(s.pos.x, 0, s.pos.z);
+      const legs = buildSupport(s.pos.y, bodyDrop(s.bodyId));
+      legs.rotation.y = rad(s.yaw);
+      legs.traverse((o) => (o.userData.noOcclude = true));
+      unit.add(legs);
+      rig.position.set(0, s.pos.y, 0);
       rig.rotation.order = "YXZ";
       rig.rotation.set(rad(s.pitch), rad(s.yaw), 0);
-      e.world.rigs.add(rig);
+      unit.add(rig);
+      e.world.rigs.add(unit);
     });
   }, [shots, activeId, aspect.ratio, talent, bottle]);
 

@@ -7,6 +7,7 @@
 // Conventions: metres, Y up. The room's back wall is toward -Z, the camera side
 // is +Z. A figure faces its local +Z, and `facing` (degrees) turns it about Y.
 import * as THREE from "three";
+import { buildCameraBody } from "./camera-model";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
 export type Pose = "standing" | "seated";
@@ -398,15 +399,11 @@ export function buildRig(
   vfovDeg: number,
   focusM: number,
   label: string,
+  bodyId: string,
+  focalMm: number,
 ): THREE.Group {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.26), mat("#1e1f22", 0.5));
-  body.position.z = 0.13;
-  g.add(body);
-  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.12, 20), mat("#2a2b2f", 0.4));
-  lens.rotation.x = Math.PI / 2;
-  lens.position.z = -0.04;
-  g.add(lens);
+  g.add(buildCameraBody(bodyId, focalMm));
   const d = Math.max(focusM, 0.3);
   const hx = Math.tan(((hfovDeg / 2) * Math.PI) / 180) * d;
   const hy = Math.tan(((vfovDeg / 2) * Math.PI) / 180) * d;
@@ -450,7 +447,7 @@ function labelSprite(text: string, color: string): THREE.Sprite {
   t.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false }));
   s.scale.set(0.42, 0.16, 1);
-  s.position.set(0, 0.24, 0.1);
+  s.position.set(0, 0.34, 0.1);
   return s;
 }
 

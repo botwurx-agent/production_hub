@@ -11,6 +11,9 @@ import * as THREE from "three";
 import {
   FT, FIXTURES, MODIFIERS, shadowBlur, spotCone, type FrameSpec, type SourceResult,
 } from "./lighting";
+import { buildFixture, buildStand, faceMaterial } from "./gear-models";
+
+export { faceMaterial };
 
 export type LightSpec = {
   id: string;
@@ -54,17 +57,6 @@ function mat(color: string, roughness = 0.6, metalness = 0.2) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
 
-/** A glowing face. Its brightness is set every frame from real nits. */
-export function faceMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color: "#000000",
-    emissive: "#ffffff",
-    emissiveIntensity: 1,
-    roughness: 1,
-    side: THREE.DoubleSide,
-  });
-}
-
 function tag(o: THREE.Object3D) {
   o.traverse((c) => {
     c.userData.noOcclude = true;
@@ -76,32 +68,21 @@ function tag(o: THREE.Object3D) {
   return o;
 }
 
-/** A C-stand: three legs and a riser to the head height. */
-function stand(height: number): THREE.Group {
-  const g = new THREE.Group();
-  const metal = mat("#3a3c40", 0.5, 0.7);
-  const riser = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.02, Math.max(0.1, height), 10), metal);
-  riser.position.y = Math.max(0.1, height) / 2;
-  g.add(riser);
-  for (let i = 0; i < 3; i++) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.55, 8), metal);
-    const a = (i / 3) * Math.PI * 2;
-    leg.position.set(Math.cos(a) * 0.22, 0.12, Math.sin(a) * 0.22);
-    leg.rotation.set(0, -a, 0);
-    leg.rotateZ(Math.PI / 2 - 0.45);
-    g.add(leg);
-  }
-  return g;
-}
-
 export type LightRig = {
-  /** Unrotated: holds the stand. */
+  /** Unrotated: holds the stand and anything on the floor. */
   group: THREE.Group;
-  /** Rotated by yaw and pitch: holds the head, modifier, frame and the light. */
+  /** Pans (yaw only): the yoke. */
+  yoke: THREE.Group;
+  /** Tilts inside the yoke (pitch only): body, modifier, frame and the light. */
   head: THREE.Group;
   standHolder: THREE.Group;
+  base: THREE.Group;
   light: THREE.SpotLight | THREE.PointLight;
   faces: THREE.MeshStandardMaterial[];
+  faceZ: number;
+  yokeDrop: number;
+  heavy: boolean;
+  ownStand: boolean;
   structureKey: string;
 };
 
@@ -111,9 +92,10 @@ export function structureKey(s: LightSpec): string {
 }
 
 /**
- * Builds the fixture, its modifier and its frame. Position, aim, intensity and
- * colour are applied separately by updateLightRig, so dragging a light never
- * rebuilds geometry or reallocates its shadow map.
+ * Builds the fixture (lib/previz/gear-models.ts), its modifier and its frame.
+ * Position, aim, intensity and colour are applied separately by
+ * updateLightRig, so dragging a light never rebuilds geometry or reallocates
+ * its shadow map.
  */
 export function buildLightRig(s: LightSpec): LightRig {
   const fixture = FIXTURES.find((f) => f.id === s.fixtureId) ?? FIXTURES[0];
@@ -122,83 +104,13 @@ export function buildLightRig(s: LightSpec): LightRig {
   group.name = `light:${s.id}`;
   const standHolder = new THREE.Group();
   group.add(standHolder);
-  const head = new THREE.Group();
-  head.rotation.order = "YXZ";
-  group.add(head);
-  const faces: THREE.MeshStandardMaterial[] = [];
-  const body = mat("#202124", 0.45, 0.4);
-
-  const addFace = (geo: THREE.BufferGeometry, z: number) => {
-    const m = faceMaterial();
-    faces.push(m);
-    const mesh = new THREE.Mesh(geo, m);
-    mesh.position.z = z;
-    head.add(mesh);
-    return mesh;
-  };
-
-  if (fixture.kind === "tube") {
-    const tube = addFace(new THREE.CylinderGeometry(0.025, 0.025, fixture.faceH, 16), 0);
-    tube.rotation.set(0, 0, 0);
-  } else if (fixture.kind === "lantern" || mod.omni) {
-    const r = (mod.faceW ?? fixture.faceW) / 2;
-    addFace(new THREE.SphereGeometry(r, 24, 16), -r);
-    if (fixture.kind !== "lantern") {
-      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.22, 16), body);
-      can.rotation.x = Math.PI / 2;
-      can.position.z = 0.12;
-      head.add(can);
-    }
-  } else if (fixture.kind === "panel") {
-    const box = new THREE.Mesh(new THREE.BoxGeometry(fixture.faceW + 0.04, fixture.faceH + 0.04, 0.08), body);
-    box.position.z = 0.05;
-    head.add(box);
-    addFace(new THREE.PlaneGeometry(fixture.faceW, fixture.faceH), -0.0);
-    if (s.modifierId === "grid") {
-      const grid = new THREE.Mesh(
-        new THREE.BoxGeometry(fixture.faceW + 0.04, fixture.faceH + 0.04, 0.08),
-        new THREE.MeshStandardMaterial({ color: "#111", wireframe: true }),
-      );
-      grid.position.z = -0.04;
-      head.add(grid);
-    }
-  } else {
-    // Point-source heads: a body, then the modifier in front of it.
-    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.28, 18), body);
-    can.rotation.x = Math.PI / 2;
-    can.position.z = 0.14;
-    head.add(can);
-    if (s.modifierId === "reflector") {
-      const refl = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.09, 0.16, 24, 1, true), mat("#cfd2d6", 0.25, 0.9));
-      refl.rotation.x = Math.PI / 2;
-      refl.position.z = -0.08;
-      head.add(refl);
-      addFace(new THREE.CircleGeometry(0.06, 20), -0.02);
-    } else if (s.modifierId === "fresnel") {
-      addFace(new THREE.CircleGeometry(0.09, 24), -0.005);
-    } else {
-      // Dome, softbox or stripbox: a frustum out to a glowing face.
-      const w = mod.faceW ?? 0.9;
-      const h = mod.faceH ?? 0.9;
-      const depth = s.modifierId === "dome" ? 0.55 : 0.4;
-      const round = s.modifierId === "dome";
-      const shell = new THREE.Mesh(
-        round
-          ? new THREE.CylinderGeometry(w / 2, 0.12, depth, 16, 1, true)
-          : new THREE.CylinderGeometry(Math.SQRT1_2 * Math.max(w, h), 0.12, depth, 4, 1, true),
-        new THREE.MeshStandardMaterial({ color: "#151517", roughness: 0.9, side: THREE.DoubleSide }),
-      );
-      shell.rotation.x = Math.PI / 2;
-      if (!round) shell.rotation.y = Math.PI / 4;
-      shell.position.z = -depth / 2;
-      if (!round) shell.scale.set(w / Math.max(w, h), 1, h / Math.max(w, h));
-      head.add(shell);
-      addFace(round ? new THREE.CircleGeometry(w / 2, 24) : new THREE.PlaneGeometry(w, h), -depth);
-    }
-  }
+  const model = buildFixture(fixture, mod ? s.modifierId : fixture.defaultModifier);
+  const { yoke, head, base, faces } = model;
+  group.add(yoke);
+  group.add(base);
 
   // A diffusion frame: four pipes and a cloth, square to the light.
-  if (s.frame && !mod.omni) {
+  if (s.frame && !mod?.omni && fixture.kind !== "lantern") {
     const side = s.frame.sizeFt * FT;
     const pipe = mat("#9aa0a6", 0.4, 0.8);
     const frame = new THREE.Group();
@@ -219,7 +131,7 @@ export function buildLightRig(s: LightSpec): LightRig {
   }
 
   let light: THREE.SpotLight | THREE.PointLight;
-  if (fixture.kind === "lantern" || mod.omni) {
+  if (fixture.kind === "lantern" || mod?.omni) {
     const p = new THREE.PointLight("#ffffff", 0, 0, 2);
     p.castShadow = true;
     p.shadow.mapSize.set(512, 512);
@@ -242,7 +154,11 @@ export function buildLightRig(s: LightSpec): LightRig {
   }
   head.add(light);
   tag(group);
-  return { group, head, standHolder, light, faces, structureKey: structureKey(s) };
+  return {
+    group, yoke, head, standHolder, base, light, faces,
+    faceZ: model.faceZ, yokeDrop: model.yokeDrop, heavy: model.heavy, ownStand: model.ownStand,
+    structureKey: structureKey(s),
+  };
 }
 
 /** Applies placement, aim, intensity, colour and softness to a built rig. */
@@ -256,11 +172,26 @@ export function updateLightRig(
   castShadow: boolean,
 ) {
   rig.group.position.set(s.x, 0, s.z);
-  rig.head.position.set(0, s.y, 0);
-  rig.head.rotation.set(aim.pitch * R, aim.yaw * R, 0);
+  rig.yoke.position.set(0, s.y, 0);
+  rig.yoke.rotation.set(0, aim.yaw * R, 0);
+  rig.head.rotation.set(aim.pitch * R, 0, 0);
   if (rig.standHolder.userData.h !== s.y) {
     rig.standHolder.clear();
-    rig.standHolder.add(tag(stand(s.y - 0.12)));
+    if (rig.ownStand) {
+      // A boom: the stand goes up behind the light to the arm's height.
+      const boom = rig.yoke.userData.boom as { y: number; z: number } | undefined;
+      const stand = buildStand(s.y + (boom?.y ?? 0.5), false);
+      stand.name = "boomstand";
+      rig.yoke.getObjectByName("boomstand")?.removeFromParent();
+      stand.position.set(0, -s.y, boom?.z ?? 1);
+      rig.yoke.add(tag(stand));
+    } else {
+      rig.standHolder.add(tag(buildStand(s.y - rig.yokeDrop - 0.03, rig.heavy)));
+    }
+    // A control box rides on the stand at a working height.
+    rig.base.traverse((o) => {
+      if (typeof o.userData.onStand === "number") o.position.set(0, Math.min(o.userData.onStand, Math.max(0.3, s.y - 0.5)), 0.06);
+    });
     rig.standHolder.userData.h = s.y;
   }
   const frame = rig.head.getObjectByName("frame");
@@ -271,7 +202,8 @@ export function updateLightRig(
   rig.light.color.copy(c);
   rig.light.intensity = src.candela * lit;
   rig.light.castShadow = castShadow && s.on;
-  rig.light.position.set(0, 0, -src.offsetM - 0.03);
+  // The source sits on the glowing face, or on the frame when there is one.
+  rig.light.position.set(0, 0, Math.min(rig.faceZ, -src.offsetM) - 0.03);
   if ((rig.light as THREE.SpotLight).isSpotLight) {
     const sp = rig.light as THREE.SpotLight;
     const cone = spotCone(src.beamDeg);
@@ -349,7 +281,7 @@ export function updateGripRig(
   const holder = rig.group.getObjectByName("stand") as THREE.Group;
   if (holder.userData.h !== g.y) {
     holder.clear();
-    holder.add(tag(stand(g.y - (g.sizeFt * FT) / 2)));
+    holder.add(tag(buildStand(g.y - (g.sizeFt * FT) / 2, false)));
     holder.userData.h = g.y;
   }
   if (rig.light) {
