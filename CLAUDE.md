@@ -6810,6 +6810,98 @@ indistinguishable from nothing happening.
   clipboard (items=0). So routing the in-app card paste through the paste event
   rather than the keydown is sound, and Cmd+V needs no clipboard write.
 
+### Scene Setup: 3D previz (DECIDED DIRECTION, 2026-10-05) — NOTHING BUILT
+Operator's idea, discussed at length and confirmed as a fit: a real 3D scene
+layout where a setup is built (set, talent, props, camera, lighting) and the
+camera, lens, lights and diffusion are controlled for real. They had seen
+top-down versions and called them basic and unimpressive. Their own framing of
+why it belongs here: it is the "all under one roof" objective, not a side tool.
+NOTE THE PROVENANCE, since this file's standing rule is that builds come from
+friction: this one came from conviction, not from something breaking on a job.
+The operator decided it anyway, knowingly. Judge each slice by whether they
+reach for it during real prep.
+- SCOPE IS EVERY KIND OF PRODUCTION, live action included (operator, explicit).
+  Tabletop food/bev is ONE good first test case, not the definition. So talent
+  and blocking are core (an early slice, not the last), sets mean rooms with
+  windows and practicals, the lighting catalogue runs from tabletop strips to
+  HMIs and 20x20 frames, and camera support (dolly, crane, Steadicam paths)
+  matters. Sun position is a natural win: schedule_days already carries each
+  shoot day's date and location.
+- THE MODEL: A SETUP HOLDS SEVERAL CAMERAS. One scene setup (set, talent,
+  props, lights, built once) serves several shots from different camera
+  positions, which is how a day is actually lit and how the schedule already
+  thinks (setup rows between shots). Each camera ties to a STORYBOARD FRAME
+  (what it aims to match, shown as a see-through overlay on the viewport) and a
+  SHOT LIST ROW (whose size, type and movement seed its starting position).
+  Shot rows and storyboard frames are already linked by number on import, so
+  either is a way in. It also runs in REVERSE: on a job with no boards, a
+  camera's render becomes the storyboard frame and fills the row's lens and
+  movement. A light changed in a setup updates every shot that uses it, and the
+  gaffer gets one diagram per setup, not per shot.
+- LOOK (operator confirmed): STYLED REAL for working (textured sets, real
+  product labels, convincing glass and metal, STYLISED people with real
+  proportions and no faces, deliberately, to avoid the uncanny valley and the
+  question of whose likeness it is), a near-photoreal "Render this frame" still
+  on demand (path traced in the browser, seconds to a minute, where bounce,
+  wrap and real soft light only look right), and a one-click CLAY view that
+  strips colour to read the light alone.
+- LAYOUT (operator confirmed): the main view is ALWAYS THROUGH A CAMERA (free
+  roam is one key away), with the storyboard frame overlaid; a live top-down
+  map in a corner (it is the gaffer's lighting diagram, generated rather than
+  drawn); scene contents in a left rail (Set / Talent / Props / Lights /
+  Cameras); an inspector on the right speaking PRODUCTION LANGUAGE (fixture
+  name, frame size, diffusion grade, distance, colour temperature, never raw
+  engine numbers); a shots strip along the bottom where each card shows the
+  storyboard frame beside what that camera currently sees.
+- WE OWN THE VIEWPORT. three.js in the browser (no three.js dependency in the
+  repo yet). Camera truth is maths, not guesswork: focal length + sensor size
+  (Alexa Mini, full frame, Super 35) gives the exact field of view, aperture +
+  focus distance gives depth of field. Diffusion is modelled as SOURCE SIZE
+  relative to distance plus spread and transmission (silk, grid cloth grades,
+  muslin), with inverse-square falloff. Set the accuracy expectation as
+  RELATIVE ("softer", "falls off faster"), never as exposure readings: a DP
+  catches a claimed stop on day one. Desktop only is acceptable.
+- HIGGSFIELD, TESTED 2026-10-05, and the findings are worth not re-deriving:
+  (1) 3D JUTSU, their scene builder, is Blender running on their servers,
+  edited by submitted scripts against revisions with multi-second waits. It
+  cannot drive a live viewport. Its own tool docs also say only point, sun and
+  spot lights reliably survive GLB export, and AREA LIGHTS ARE EXACTLY WHAT
+  DIFFUSION IS, so the feature's differentiator would be the part that breaks.
+  Not the engine. (2) PHOTO TO 3D MODEL WORKS: a labelled bottle photo through
+  their connector gave textured GLBs from Tripo H3.1 (9 credits, about 2.5
+  min, auto-sized to real dimensions) and Meshy 7 (38 credits, about 2.5 min,
+  PBR); Hunyuan3D v3 (15) ran past five minutes; SAM 3 3D (1) failed at once.
+  They also offer multi-angle to 3D, text to 3D, humanoid rigging with about
+  678 animation clips, and "3D Body" (Meta), which rebuilds a person's pose
+  from ONE PHOTO, the strongest live-action find (match a reference frame's
+  pose). (3) BUT NONE OF THE 3D MODELS ARE IN THEIR PUBLIC REST API (launched
+  2026-09-17): the operator searched the full docs index for 3d, mesh and glb
+  with no match. The API is image, video and audio only. Revisit when they add
+  it, or call Meshy or Tripo directly, both of which sell their own APIs.
+  (4) PREVIZ FRAME TO VIDEO IS CONFIRMED in their API: Seedance, Kling, Wan and
+  MiniMax all take a start frame, which is the hand-off into the AI pipeline.
+  Cinema Studio 4.0 ("camera and style controls") is the closest model to a
+  previz hand-off and worth a look. Credits: a studio's own key, stored
+  encrypted like the BILL login, keeps per-use cost off our books.
+- THE PRODUCT FROM A PHOTO, until an API exists: start with PARAMETRIC shapes
+  (bottle, can, box, pouch) at real dimensions with the actual label image
+  wrapped on. That carries most of what a lighting decision depends on and
+  costs nothing per use.
+- OUTPUTS, which are the reason it belongs in this app rather than a
+  standalone tool: lens and movement onto the shot list row, the render into
+  the storyboard, the fixtures and diffusion into Gear & crew, the diagram onto
+  the call sheet, the setup to the client through the existing doc-review
+  portal (a new DocKind, minding the hand-named kind branches noted under
+  props and schedule), and the frame into the AI pipeline as a start frame.
+- SLICE ORDER: (1) camera and lens truth with the storyboard overlay and "save
+  frame to storyboard"; (2) talent and blocking; (3) lighting, modifiers,
+  diffusion and the rendered still; (4) sets and set pieces, then sun position
+  and camera moves; (5) the outputs above. Each slice usable on a real job
+  before the next.
+- NEXT, pending the operator's go: a THROWAWAY prototype of slice one at a /dev
+  page (no database, no app wiring) so they can judge how it feels to drive
+  before anything real is built, per their confirm-the-design-first pattern.
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
