@@ -165,6 +165,7 @@ export function TopDownMap({
 
   return (
     <div
+      data-previz-map
       className={`absolute bottom-3 right-3 overflow-hidden rounded-[12px] border border-white/10 bg-[#f4f1ea] shadow-lg ${
         size === "big" ? "w-[460px]" : size === "small" ? "w-[230px]" : "w-[150px]"
       }`}
@@ -399,7 +400,9 @@ export function TopDownMap({
               <path d={`M${s.pos.x} ${s.pos.z} L${ray(half)} L${ray(-half)} Z`} fill={col} fillOpacity={isA ? 0.16 : 0.07} stroke={col} strokeWidth={0.02 * k} pointerEvents="none" />
               <line x1={s.pos.x} y1={s.pos.z} x2={hx} y2={hz} stroke={col} strokeWidth={0.03 * k} />
               <circle cx={hx} cy={hz} r={0.09 * k} fill="#fff" stroke={col} strokeWidth={0.03 * k} className="cursor-crosshair" onPointerDown={start({ kind: "camera", id: s.id, aim: true })} />
-              <g transform={`translate(${s.pos.x} ${s.pos.z}) rotate(${-s.yaw}) scale(${k})`} className="cursor-move" onPointerDown={start({ kind: "camera", id: s.id }, { x: s.pos.x, z: s.pos.z })}>
+              <g transform={`translate(${s.pos.x} ${s.pos.z}) rotate(${-s.yaw}) scale(${k})`} className="cursor-move" data-map-camera={s.id} onPointerDown={start({ kind: "camera", id: s.id }, { x: s.pos.x, z: s.pos.z })}>
+                {/* The body is a few pixels on a small map; this is what you actually grab. */}
+                <circle r={0.38} fill="transparent" />
                 <rect x={-0.14} y={-0.05} width={0.28} height={0.32} rx={0.04} fill={col} stroke="#1d1d1f" strokeWidth={isA ? 0.04 : 0.02} />
                 <rect x={-0.07} y={-0.15} width={0.14} height={0.12} fill="#1d1d1f" />
               </g>

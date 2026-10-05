@@ -485,7 +485,22 @@ export function PrevizPrototype() {
         }
         const next = { ...s, ...rest };
         const move = (rest.move === undefined ? s.move : rest.move);
-        return move ? { ...next, move: { ...move, end: constrainEnd(next.support, camKey(next), end, move.trackYaw) } } : next;
+        if (!move) return next;
+        let fixed = constrainEnd(next.support, camKey(next), end, move.trackYaw);
+        // Whatever the support cannot carry out during the move (any travel
+        // on sticks, sideways on a Fisher, off the rail on a Dana) moves the
+        // whole setup instead. Without this, dragging the camera at the end of
+        // a locked-off shot snapped it straight back and it looked stuck.
+        if ("pos" in p) {
+          const dx = end.pos.x - fixed.pos.x;
+          const dy = end.pos.y - fixed.pos.y;
+          const dz = end.pos.z - fixed.pos.z;
+          if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 1e-6) {
+            next.pos = { x: next.pos.x + dx, y: Math.max(0.1, next.pos.y + dy), z: next.pos.z + dz };
+            fixed = constrainEnd(next.support, camKey(next), end, move.trackYaw);
+          }
+        }
+        return { ...next, move: { ...move, end: fixed } };
       }
       const next = { ...s, ...(typeof patch === "function" ? patch(s) : patch) };
       if (next.move) next.move = { ...next.move, end: constrainEnd(next.support, camKey(next), next.move.end, next.move.trackYaw) };
@@ -1386,12 +1401,50 @@ export function PrevizPrototype() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
-  const onWheel = (e: React.WheelEvent) => {
-    if (view !== "lens") return;
-    const step = -Math.sign(e.deltaY) * Math.min(0.25, Math.abs(e.deltaY) * 0.002) * Math.max(1, focus * 0.5);
+  // The wheel and a trackpad pinch dolly the lens. A Mac pinch arrives as a
+  // wheel event with ctrlKey set, and the browser zooms the WHOLE PAGE unless
+  // the event is cancelled, which React's onWheel cannot do (it is passive).
+  // So this is a native, non-passive listener on the whole stage: the frame,
+  // the margins round it and the map all keep a pinch to themselves.
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
+  wheelRef.current = (e: WheelEvent) => {
+    const onCanvas = e.target === canvasRef.current;
+    const onMap = (e.target as Element | null)?.closest?.("[data-previz-map]");
+    if (view === "free") {
+      // OrbitControls zooms (and cancels) on the canvas itself; elsewhere on
+      // the stage only the page zoom needs stopping.
+      if (!onCanvas && e.ctrlKey) e.preventDefault();
+      return;
+    }
+    if (onMap) {
+      if (e.ctrlKey) e.preventDefault();
+      return;
+    }
+    e.preventDefault();
+    const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    const dy = e.deltaY * scale;
+    // A pinch sends small deltas many times a second; a mouse notch sends one big one.
+    const rate = e.ctrlKey ? 0.012 : 0.002;
+    const step = -Math.sign(dy) * Math.min(0.25, Math.abs(dy) * rate) * Math.max(1, focus * 0.5);
+    if (!step) return;
     const f = forward(active.yaw, active.pitch);
     updateShot(active.id, (s) => ({ pos: { x: s.pos.x + f.x * step, y: Math.max(0.1, s.pos.y + f.y * step), z: s.pos.z + f.z * step } }));
   };
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const wheel = (e: WheelEvent) => wheelRef.current(e);
+    // Safari also fires its own gesture events for a pinch and zooms the page from them.
+    const gesture = (e: Event) => e.preventDefault();
+    el.addEventListener("wheel", wheel, { passive: false });
+    el.addEventListener("gesturestart", gesture);
+    el.addEventListener("gesturechange", gesture);
+    return () => {
+      el.removeEventListener("wheel", wheel);
+      el.removeEventListener("gesturestart", gesture);
+      el.removeEventListener("gesturechange", gesture);
+    };
+  }, []);
 
   // Frame everything: free view backs off until every set piece, person,
   // light and camera is in shot. The stage floor is left out, since it is
@@ -2306,7 +2359,6 @@ export function PrevizPrototype() {
               onPointerMove={onCanvasMove}
               onPointerUp={onCanvasUp}
               onPointerCancel={() => { drag.current = null; press.current = null; }}
-              onWheel={onWheel}
               onContextMenu={(e) => e.preventDefault()}
               className={`block h-full w-full ${view === "lens" ? "cursor-grab active:cursor-grabbing" : "cursor-move"}`}
               style={{ width: box.w, height: box.h }}

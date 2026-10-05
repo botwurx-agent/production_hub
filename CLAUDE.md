@@ -7142,6 +7142,20 @@ reach for it during real prep.
   F (or "Frame all") fits every set piece, person, light, room wall and camera
   in free view from the current direction, never from below the floor; the
   stage floor is left out of the box since it is effectively endless.
+- PINCH AND THE STUCK MAP CAMERA (2026-10-05, operator on a Mac). A trackpad
+  pinch arrives as a `wheel` event with ctrlKey set, and the browser zooms the
+  WHOLE PAGE unless it is cancelled. React's onWheel is PASSIVE and cannot
+  cancel it, so the stage now carries a native `{ passive: false }` wheel
+  listener (plus Safari's gesturestart/gesturechange): through the lens a
+  pinch dollies, in free view OrbitControls zooms on the canvas and cancels it
+  itself, and the margins and the map just swallow the page zoom. THE MAP
+  CAMERA HAD TWO CAUSES: the body was about 6px on the small map (now a 0.38 m
+  invisible grab circle), and on a shot with a move and the playhead at the
+  end, a drag edits the END frame, which the support then constrains back (on
+  sticks the end cannot travel at all), so the camera snapped back every
+  frame. updateShot now moves the WHOLE SETUP by whatever the support cannot
+  carry during the move, so sticks moves the camera, a Dana moves the rig off
+  its rail axis and slides along it, and a Fisher moves sideways as a whole.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,
