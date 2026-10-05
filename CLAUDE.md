@@ -6898,9 +6898,28 @@ reach for it during real prep.
   diffusion and the rendered still; (4) sets and set pieces, then sun position
   and camera moves; (5) the outputs above. Each slice usable on a real job
   before the next.
-- NEXT, pending the operator's go: a THROWAWAY prototype of slice one at a /dev
-  page (no database, no app wiring) so they can judge how it feels to drive
-  before anything real is built, per their confirm-the-design-first pattern.
+- PROTOTYPE OF SLICE ONE IS BUILT (2026-10-05) at /dev/scene-setup, a
+  THROWAWAY with no database and no app wiring, for the operator to judge how
+  it drives. lib/previz/optics.ts is the pure maths (bodies as recording areas,
+  FOV from imaged area per delivery aspect, circle of confusion as
+  diagonal/1500, thin-lens DOF limits and blur diameter, shot size and angle in
+  the SHOT LIST'S OWN VOCABULARY), checked against standard DOF calculators.
+  lib/previz/scene-build.ts is the kitchen set, faceless figures at true
+  proportions, the bottle, basic lights, free-view camera rigs (frustum out to
+  the focus plane) and the depth of field shader, which draws the lens's own
+  circle of confusion per pixel rather than a tuned blur. lib/previz/boards.ts
+  holds sketch boards placed slightly off the default cameras so there is
+  something to match. components/previz/previz-prototype.tsx is the confirmed
+  layout. Verified in headless Chromium: pan, tilt, dolly, lens and stop
+  change, focus following a person as the camera or the person moves, map
+  drags, free view, clay, thumbnails, no page errors, production build clean
+  (three.js is 156 kB on that route only).
+  KNOWN ROUGH EDGES, all deliberate for a prototype: a seated figure moved away
+  from its chair stays seated in mid-air; lights are three fixed sources;
+  9:16 is a sensor crop, not a rotated camera; nothing persists.
+  HIGGSFIELD IS NOT NEEDED UNTIL SLICE 5 (previz frame to video), or earlier
+  only if photo-to-3D appears in their public API. Slices 1 to 4 run entirely
+  in the browser.
 
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
