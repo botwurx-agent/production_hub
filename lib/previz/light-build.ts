@@ -190,7 +190,11 @@ export function updateLightRig(
     }
     // A control box rides on the stand at a working height.
     rig.base.traverse((o) => {
-      if (typeof o.userData.onStand === "number") o.position.set(0, Math.min(o.userData.onStand, Math.max(0.3, s.y - 0.5)), 0.06);
+      if (typeof o.userData.onStand === "number") {
+        // A box too heavy to hang sits on the floor beside the stand instead.
+        if (o.userData.onStand < 0.3) o.position.set(0.32, o.userData.onStand, 0.18);
+        else o.position.set(0, Math.min(o.userData.onStand, Math.max(0.3, s.y - 0.5)), 0.06);
+      }
     });
     rig.standHolder.userData.h = s.y;
   }

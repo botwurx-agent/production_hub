@@ -180,6 +180,7 @@ export function buildCameraBody(bodyId: string, focalMm: number): THREE.Group {
   // The pan bar, out the back and down, on the operator's side; it tilts with
   // the head, which is why it is part of the camera rather than the legs.
   const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.5, 10), black);
+  bar.name = "panbar"; // hidden on a motion control arm, which has no operator
   bar.position.set(-0.07, -s.h / 2 - 0.1, s.d + 0.18);
   bar.rotation.set(-(Math.PI / 2 - 0.35), 0, 0.35);
   g.add(bar);
@@ -187,18 +188,210 @@ export function buildCameraBody(bodyId: string, focalMm: number): THREE.Group {
   return g;
 }
 
+export type SupportKind = "sticks" | "dana" | "fisher" | "robot";
+
+/** `lens` is the lens height range in metres each support can actually put a camera at. */
+export const SUPPORTS: { id: SupportKind; name: string; note: string; lens: [number, number] }[] = [
+  { id: "sticks", name: "Sticks", note: "Tripod and fluid head, dropping to a hi-hat for a low lens. Locked off, pans and tilts.", lens: [0.15, 2.2] },
+  { id: "dana", name: "Dana Dolly", note: "8 ft of speed rail on two stands, or on apple boxes for a low lens. A short, smooth lateral slide.", lens: [0.35, 2.0] },
+  { id: "fisher", name: "Fisher dolly", note: "Fisher 11 on 12 ft of straight track along the lens axis, so it pushes in and pulls out. The arm booms the lens about 0.6 to 1.9 m.", lens: [0.6, 1.9] },
+  { id: "robot", name: "Motion control arm", note: "A Bolt-style robotic arm: repeatable moves to the frame, the high-speed food and liquid shot. Reaches a lens height of about 0.2 to 2.4 m.", lens: [0.2, 2.4] },
+];
+
+/** Where the support's footprint sits, in the camera's own frame (lens looks -Z). */
+export function supportFootprint(kind: SupportKind, lensHeight: number, drop: number):
+  { track?: { axis: "x" | "z"; from: number; to: number; gauge: number }; base?: { z: number; r: number } } {
+  if (kind === "dana") return { track: { axis: "x", from: -1.22, to: 1.22, gauge: 0.25 } };
+  if (kind === "fisher") return { track: { axis: "z", from: -1.4, to: 2.26, gauge: 0.62 } };
+  if (kind === "robot") return { base: { z: robotReach(lensHeight, drop).baseZ, r: 0.3 } };
+  return {};
+}
+
+const ROBOT = { shoulderY: 0.78, upper: 1.05, fore: 0.95, flangeZ: 0.2 };
+
+/** Where a robot arm's base goes so it can reach the camera without straining. */
+function robotReach(lensHeight: number, drop: number) {
+  const ty = Math.max(0.12, lensHeight - drop - 0.04);
+  const dy = ty - ROBOT.shoulderY;
+  const maxR = ROBOT.upper + ROBOT.fore - 0.12;
+  // About 1.1 m behind the camera, closer in when the lens is very high or low.
+  const D = Math.max(0.35, Math.min(1.1, Math.sqrt(Math.max(0.12, maxR * maxR - dy * dy))));
+  return { baseZ: ROBOT.flangeZ + D, ty };
+}
+
+/** A beam or tube from a to b. */
+function segment(a: THREE.Vector3, b: THREE.Vector3, w: number, mat: THREE.Material, round = true) {
+  const len = a.distanceTo(b);
+  const mesh = new THREE.Mesh(round ? new THREE.CylinderGeometry(w, w, len, 14) : new THREE.BoxGeometry(w, len, w), mat);
+  mesh.position.copy(a.clone().add(b).multiplyScalar(0.5));
+  mesh.lookAt(b);
+  mesh.rotateX(Math.PI / 2);
+  return mesh;
+}
+
+/** The fluid head's bowl, which every support but the robot carries. */
+function bowl(y: number) {
+  return at(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.07, 20), m("#1d1e21", 0.5, 0.4)), 0, y + 0.035, 0);
+}
+
 /**
- * The support under a camera at `lensHeight`: a hi-hat on the floor or a
- * table for a low lens, sticks with a mid-level spreader otherwise. Drawn in
- * world-up, so it never tips with the head.
+ * What the camera is on, drawn in world-up so it never tips with the head:
+ * sticks (or a hi-hat), a Dana Dolly, a Fisher dolly on track, or a motion
+ * control arm. The lens looks down -Z; the group is only ever yawed.
  */
-export function buildSupport(lensHeight: number, drop: number): THREE.Group {
+export function buildSupport(kind: SupportKind, lensHeight: number, drop: number): THREE.Group {
+  if (kind === "dana") return buildDana(lensHeight, drop);
+  if (kind === "fisher") return buildFisher(lensHeight, drop);
+  if (kind === "robot") return buildRobot(lensHeight, drop);
+  return buildSticks(lensHeight, drop);
+}
+
+/** Dana Dolly: two speed rails across the lens axis, a carriage on skate wheels. */
+function buildDana(lensHeight: number, drop: number): THREE.Group {
+  const g = new THREE.Group();
+  const alu = m("#b9bec5", 0.35, 0.85);
+  const black = m("#1b1c1f", 0.6, 0.3);
+  const wood = m("#b98a55", 0.8, 0);
+  const bowlY = Math.max(0.2, lensHeight - drop - 0.08);
+  const railY = Math.min(1.7, Math.max(0.12, bowlY - 0.2));
+  const half = 1.22;
+  for (const z of [-0.125, 0.125]) {
+    g.add(segment(new THREE.Vector3(-half, railY, z), new THREE.Vector3(half, railY, z), 0.019, alu));
+  }
+  for (const x of [-half + 0.08, half - 0.08]) {
+    // End brackets tying the two rails together.
+    g.add(box(0.06, 0.04, 0.34, black, x, railY - 0.01, 0));
+    if (railY > 0.32) {
+      // A stand under each end, its riser up to the bracket.
+      const stand = buildStandLite(railY - 0.03);
+      stand.position.set(x, 0, 0);
+      g.add(stand);
+    } else {
+      // Low: the rails sit on apple boxes.
+      g.add(box(0.3, railY - 0.02, 0.46, wood, x, (railY - 0.02) / 2, 0));
+    }
+  }
+  // The carriage: a plate riding on four skate wheels, a riser to the head.
+  g.add(box(0.3, 0.025, 0.36, black, 0, railY + 0.045, 0));
+  for (const x of [-0.11, 0.11]) for (const z of [-0.125, 0.125]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.02, 14), m("#e3e3e3", 0.5, 0.1));
+    w.rotation.x = Math.PI / 2;
+    w.position.set(x, railY + 0.03, z);
+    g.add(w);
+  }
+  if (bowlY > railY + 0.07) g.add(segment(new THREE.Vector3(0, railY + 0.055, 0), new THREE.Vector3(0, bowlY, 0), 0.03, black));
+  g.add(bowl(bowlY));
+  return g;
+}
+
+/** A light-duty stand for the rails: riser and three legs. */
+function buildStandLite(h: number): THREE.Group {
+  const g = new THREE.Group();
+  const metal = m("#9aa0a7", 0.4, 0.8);
+  g.add(segment(new THREE.Vector3(0, 0.25, 0), new THREE.Vector3(0, h, 0), 0.016, metal));
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.5;
+    g.add(segment(new THREE.Vector3(Math.cos(a) * 0.32, 0.02, Math.sin(a) * 0.32), new THREE.Vector3(0, 0.28, 0), 0.011, metal));
+  }
+  return g;
+}
+
+/** Fisher 11: a heavy wheeled chassis on straight track, its hydraulic arm booming the head. */
+function buildFisher(lensHeight: number, drop: number): THREE.Group {
+  const g = new THREE.Group();
+  const grey = m("#5d6168", 0.45, 0.6);
+  const dark = m("#22252a", 0.55, 0.4);
+  const chrome = m("#d6dade", 0.2, 0.95);
+  const rail = m("#a7adb4", 0.35, 0.85);
+  const wood = m("#8a6a45", 0.85, 0);
+  // Track: two round rails at the Fisher gauge on wooden sleepers.
+  const fp = supportFootprint("fisher", lensHeight, drop).track!;
+  for (let z = fp.from + 0.15; z < fp.to; z += 0.6) g.add(box(0.85, 0.035, 0.1, wood, 0, 0.018, z));
+  for (const x of [-fp.gauge / 2, fp.gauge / 2]) {
+    g.add(segment(new THREE.Vector3(x, 0.06, fp.from), new THREE.Vector3(x, 0.06, fp.to), 0.02, rail));
+  }
+  // Chassis behind the camera, on four wheels riding the rails.
+  const cz = 0.45;
+  const top = 0.38;
+  g.add(box(0.62, 0.22, 1.05, grey, 0, top - 0.11 + 0.0, cz));
+  g.add(box(0.66, 0.03, 1.09, dark, 0, top + 0.01, cz));
+  for (const x of [-0.31, 0.31]) for (const z of [cz - 0.42, cz + 0.42]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 18), dark);
+    w.rotation.z = Math.PI / 2;
+    w.position.set(x, 0.155, z);
+    g.add(w);
+  }
+  // Steering / push bar at the back.
+  for (const x of [-0.2, 0.2]) g.add(segment(new THREE.Vector3(x, top, cz + 0.5), new THREE.Vector3(x, 1.0, cz + 0.62), 0.014, chrome));
+  g.add(segment(new THREE.Vector3(-0.22, 1.0, cz + 0.62), new THREE.Vector3(0.22, 1.0, cz + 0.62), 0.016, chrome));
+  // The arm: pivots on the chassis, its front end carrying the head. Clamped
+  // to roughly the range a Fisher 11 arm booms through.
+  const bowlY = Math.max(0.5, Math.min(1.9, lensHeight - drop - 0.08));
+  const pivot = new THREE.Vector3(0, top + 0.12, cz + 0.15);
+  const front = new THREE.Vector3(0, bowlY - 0.12, 0);
+  g.add(box(0.12, 0.12, 0.16, dark, pivot.x, pivot.y, pivot.z));
+  g.add(segment(pivot, front, 0.09, grey, false));
+  // Hydraulic strut from the chassis to mid-arm.
+  g.add(segment(new THREE.Vector3(0, top + 0.02, cz - 0.3), pivot.clone().lerp(front, 0.55), 0.022, chrome));
+  // The leveling head and a riser up to the bowl.
+  g.add(box(0.16, 0.06, 0.16, dark, front.x, front.y, front.z));
+  g.add(segment(front, new THREE.Vector3(0, bowlY, 0), 0.03, dark));
+  g.add(bowl(bowlY));
+  // The dolly grip's seat on the side.
+  g.add(segment(new THREE.Vector3(0.33, top - 0.05, cz + 0.1), new THREE.Vector3(0.62, 0.55, cz + 0.1), 0.015, chrome));
+  g.add(box(0.26, 0.05, 0.26, dark, 0.66, 0.57, cz + 0.1));
+  return g;
+}
+
+/** A Bolt-style motion control arm on a floor base, reaching in from behind. */
+function buildRobot(lensHeight: number, drop: number): THREE.Group {
+  const g = new THREE.Group();
+  const body = m("#1d1f23", 0.4, 0.5);
+  const joint = m("#c9cdd3", 0.35, 0.7);
+  const accent = m("#e0662a", 0.5, 0.2);
+  const { baseZ, ty } = robotReach(lensHeight, drop);
+  // Base plate and turret.
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.36, 0.06, 28), body), 0, 0.03, baseZ));
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.4, 28), body), 0, 0.26, baseZ));
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.225, 0.03, 28), accent), 0, 0.47, baseZ));
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.26, 24), body), 0, 0.62, baseZ));
+  // Two-link IK in the vertical plane through the camera: shoulder to flange.
+  const S = new THREE.Vector3(0, ROBOT.shoulderY, baseZ);
+  const T = new THREE.Vector3(0, ty, ROBOT.flangeZ);
+  const d = Math.min(S.distanceTo(T), ROBOT.upper + ROBOT.fore - 0.02);
+  const dir = T.clone().sub(S).normalize();
+  const reach = S.clone().add(dir.clone().multiplyScalar(d));
+  const a = Math.atan2(dir.y, dir.z);
+  const cosB = (ROBOT.upper ** 2 + d * d - ROBOT.fore ** 2) / (2 * ROBOT.upper * d);
+  const b = Math.acos(Math.max(-1, Math.min(1, cosB)));
+  const e1 = new THREE.Vector3(0, S.y + Math.sin(a + b) * ROBOT.upper, S.z + Math.cos(a + b) * ROBOT.upper);
+  const e2 = new THREE.Vector3(0, S.y + Math.sin(a - b) * ROBOT.upper, S.z + Math.cos(a - b) * ROBOT.upper);
+  const E = e1.y > e2.y ? e1 : e2; // elbow up, out of the frame
+  // Shoulder and elbow joints, the two links, and the wrist at the flange.
+  for (const [p, r] of [[S, 0.17], [E, 0.13]] as const) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.3, 24), joint);
+    c.rotation.z = Math.PI / 2;
+    c.position.copy(p);
+    g.add(c);
+  }
+  g.add(segment(S, E, 0.12, body, false));
+  g.add(segment(E, reach, 0.095, body, false));
+  g.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.09, 18, 12), joint), reach.x, reach.y, reach.z));
+  // Wrist plate up to the camera's baseplate.
+  const plateY = lensHeight - drop - 0.06;
+  g.add(segment(reach, new THREE.Vector3(0, plateY, ROBOT.flangeZ - 0.05), 0.045, body));
+  g.add(box(0.16, 0.03, 0.26, joint, 0, plateY, 0.1));
+  return g;
+}
+
+/** Sticks and a fluid head, dropping to a hi-hat for a low lens. */
+function buildSticks(lensHeight: number, drop: number): THREE.Group {
   const g = new THREE.Group();
   const legMat = m("#2b2d31", 0.5, 0.5);
   const alu = m("#9aa0a7", 0.4, 0.8);
   const bowlY = Math.max(0.05, lensHeight - drop - 0.08);
   // The fluid head's bowl.
-  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.07, 20), m("#1d1e21", 0.5, 0.4)), 0, bowlY + 0.035, 0));
+  g.add(bowl(bowlY));
   if (bowlY < 0.25) {
     // Hi-hat: three short feet.
     for (let i = 0; i < 3; i++) {

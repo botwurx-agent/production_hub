@@ -228,22 +228,28 @@ function bowensModifier(head: THREE.Group, p: Pal, faces: THREE.MeshStandardMate
 
 // ------------------------------------------------------------ heads
 
-/** Aputure LS 600d / 300x: a finned COB head with a Bowens mount and a fan grille. */
+/**
+ * Aputure LS 1200d / 600d / 300x: a finned COB head with a modifier mount and a
+ * fan grille. The 1200d is the same family a size up, on the larger Pro mount,
+ * with a bigger control box and a second fan.
+ */
 function cobHead(f: Fixture, modifierId: string, p: Pal, faces: THREE.MeshStandardMaterial[]): Partial<FixtureModel> & { faceZ: number } {
   const head = new THREE.Group();
   const yoke = new THREE.Group();
   const base = new THREE.Group();
-  const big = f.id === "ls600d";
-  const r = big ? 0.115 : 0.095;
-  const len = big ? 0.29 : 0.23;
+  const huge = f.id === "ls1200d";
+  const big = huge || f.id === "ls600d";
+  const r = huge ? 0.15 : big ? 0.115 : 0.095;
+  const len = huge ? 0.37 : big ? 0.29 : 0.23;
   const zc = 0.03 + len / 2;
   const body = cylZ(r, r, len, p.grey, 32);
   body.position.z = zc;
   head.add(body);
   // Heat-sink fins.
-  for (let i = 0; i < 9; i++) {
+  const fins = huge ? 12 : 9;
+  for (let i = 0; i < fins; i++) {
     const fin = cylZ(r + 0.012, r + 0.012, 0.006, p.black, 32);
-    fin.position.z = 0.06 + i * (len - 0.07) / 8;
+    fin.position.z = 0.06 + i * (len - 0.07) / (fins - 1);
     head.add(fin);
   }
   // Rear fan grille.
@@ -259,10 +265,16 @@ function cobHead(f: Fixture, modifierId: string, p: Pal, faces: THREE.MeshStanda
   const bezel = cylZ(r, r * 0.92, 0.035, p.black, 32);
   bezel.position.z = 0.012;
   head.add(bezel);
-  const bowens = cylZ(0.082, 0.082, 0.02, p.alu, 32);
+  const bowens = cylZ(huge ? 0.1 : 0.082, huge ? 0.1 : 0.082, 0.02, p.alu, 32);
   bowens.position.z = -0.012;
   head.add(bowens);
-  const chip = discZ(big ? 0.032 : 0.026, faceMaterial(), -0.01, 24);
+  const chip = discZ(huge ? 0.042 : big ? 0.032 : 0.026, faceMaterial(), -0.01, 24);
+  if (huge) {
+    // The 1200d's yellow-ringed Pro mount, and its second handle.
+    const ring = cylZ(0.104, 0.104, 0.006, m("#d9a21b", 0.45, 0.4), 32);
+    ring.position.z = -0.004;
+    head.add(ring);
+  }
   faces.push(chip.material as THREE.MeshStandardMaterial);
   head.add(chip);
   head.add(topHandle(p, r + 0.01, zc, len * 0.7));
@@ -271,12 +283,41 @@ function cobHead(f: Fixture, modifierId: string, p: Pal, faces: THREE.MeshStanda
   yoke.add(yokeU(p, r + 0.02, drop));
   // The separate control box, hung on the stand, with its screen.
   const ctrl = new THREE.Group();
-  ctrl.add(box(big ? 0.21 : 0.17, big ? 0.15 : 0.12, 0.08, p.black));
+  ctrl.add(box(huge ? 0.3 : big ? 0.21 : 0.17, huge ? 0.2 : big ? 0.15 : 0.12, huge ? 0.12 : 0.08, p.black));
   ctrl.add(box(0.07, 0.03, 0.002, m("#1f3b4f", 0.2, 0.2), -0.04, 0.03, -0.041));
   for (let i = 0; i < 2; i++) ctrl.add(at(cylZ(0.012, 0.012, 0.012, p.rubber, 12), 0.05 + i * 0.03, 0.03, -0.045));
   ctrl.userData.onStand = 0.9;
   base.add(ctrl);
+  if (huge) {
+    // The 1200d's head cable runs to a control box too heavy to hang, so it
+    // sits on the floor at the foot of the stand instead.
+    ctrl.userData.onStand = 0.12;
+  }
   return { head, yoke, base, faceZ, yokeDrop: drop, heavy: big };
+}
+
+/**
+ * Aputure MC Pro: a palm-sized RGB panel with its little screen and buttons
+ * on the back, on a mini ball head rather than a yoke.
+ */
+function miniHead(f: Fixture, p: Pal, faces: THREE.MeshStandardMaterial[]): Partial<FixtureModel> & { faceZ: number } {
+  const head = new THREE.Group();
+  const yoke = new THREE.Group();
+  const w = 0.147, h = 0.085, d = 0.033;
+  head.add(box(w, h, d, m("#202226", 0.5, 0.35), 0, 0, d / 2));
+  // Rounded corners read as the MC: thin bumpers down the short sides.
+  for (const s of [-1, 1]) head.add(box(0.006, h * 0.9, d * 0.9, p.rubber, (s * w) / 2, 0, d / 2));
+  head.add(box(0.05, 0.03, 0.002, m("#1f3b4f", 0.2, 0.2), -0.03, 0.01, d + 0.001));
+  for (let i = 0; i < 3; i++) head.add(at(cylZ(0.005, 0.005, 0.004, p.grey, 10), 0.025 + i * 0.016, -0.018, d + 0.002));
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(f.faceW, f.faceH), faceMaterial());
+  face.position.z = -0.001;
+  faces.push(face.material as THREE.MeshStandardMaterial);
+  head.add(face);
+  // The ball head: a ball at the tilt axis on a short post down to the stand.
+  const drop = h / 2 + 0.06;
+  yoke.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.016, 14, 10), p.black), 0, -h / 2 - 0.02, d / 2));
+  yoke.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.012, 0.045, 10), p.black), 0, -drop + 0.022, d / 2));
+  return { head, yoke, faceZ: -0.001, yokeDrop: drop };
 }
 
 /** ARRI SkyPanel: a slim rectangular soft panel in a wide yoke. */
@@ -485,6 +526,7 @@ export function buildFixture(f: Fixture, modifierId: string): FixtureModel {
   else if (f.kind === "fresnel") part = fresnelHead(p, faces);
   else if (f.kind === "tube") part = tubeHead(f, p, faces);
   else if (f.kind === "lantern") part = chinaBall(f, p, faces);
+  else if (f.kind === "mini") part = miniHead(f, p, faces);
   else part = cobHead(f, modifierId, p, faces);
   const yoke = part.yoke ?? new THREE.Group();
   const head = part.head ?? new THREE.Group();

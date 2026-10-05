@@ -6981,6 +6981,22 @@ reach for it during real prep.
   READ IT AS RELATIVE (a stop hotter, much softer), never as a meter on set:
   lumen figures are per fixture class, room bounce is one averaged number,
   diffusion is transmission plus spread rather than the fabric's real curve.
+  WHAT THE CAMERA IS ON (2026-10-05, operator): each shot carries a
+  `support`, one of Sticks (dropping to a hi-hat for a low lens), Dana Dolly
+  (8 ft of speed rail across the lens axis on two stands, or apple boxes when
+  low), Fisher dolly (a Fisher 11 on 12 ft of straight track ALONG the lens
+  axis, its arm booming the head) and a Bolt-style motion control arm (a floor
+  base behind the camera, a two-link IK to the camera's baseplate, elbow up
+  and out of frame, no pan bar). Built in lib/previz/camera-model.ts
+  `buildSupport(kind, lensHeight, drop)`; `supportFootprint` gives the track or
+  base in the camera's own frame so the top-down map draws it. Each support has
+  a LENS HEIGHT RANGE and the inspector says so when the lens is outside it,
+  rather than moving the camera and changing the frame.
+  The fixture list gained the Aputure LS 1200d Pro (the COB family a size up:
+  bigger head, Pro mount ring, its control box on the floor) and the MC Pro (a
+  palm-sized RGB panel on a ball head, placed close and low as a kicker).
+  New gear is added as the operator names it; a variant in an existing family
+  is a catalogue line, a new family is a model.
   HIGGSFIELD IS NOT NEEDED UNTIL SLICE 5 (previz frame to video), or earlier
   only if photo-to-3D appears in their public API. Slices 1 to 4 run entirely
   in the browser.

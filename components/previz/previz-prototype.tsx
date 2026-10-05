@@ -19,7 +19,7 @@ import {
   type PropSpec, type TalentSpec,
 } from "@/lib/previz/scene-build";
 import { SAMPLE_BOARDS } from "@/lib/previz/boards";
-import { bodyDrop, buildSupport } from "@/lib/previz/camera-model";
+import { SUPPORTS, bodyDrop, buildSupport, supportFootprint, type SupportKind } from "@/lib/previz/camera-model";
 import {
   FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, exposureScale, resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
@@ -39,6 +39,7 @@ type Shot = {
   code: string;
   title: string;
   bodyId: string;
+  support: SupportKind;
   focal: number;
   stop: number;
   pos: Vec3;
@@ -89,14 +90,14 @@ const INITIAL_TALENT: TalentSpec[] = [
 const INITIAL_BOTTLE: PropSpec = { id: "bottle", name: "Hero bottle", x: 0.18, z: -0.52 };
 
 function initialShots(): Shot[] {
-  const mk = (id: string, code: string, title: string, focal: number, stop: number, nd: number, pos: Vec3, look: Vec3, focusOn: string | null, focusM: number): Shot => ({
-    id, code, title, bodyId: "alexamini", focal, stop, pos, ...aim(pos, look), focusM, focusOn, board: SAMPLE_BOARDS[code] ?? null,
+  const mk = (id: string, code: string, title: string, support: SupportKind, focal: number, stop: number, nd: number, pos: Vec3, look: Vec3, focusOn: string | null, focusM: number): Shot => ({
+    id, code, title, bodyId: "alexamini", support, focal, stop, pos, ...aim(pos, look), focusM, focusOn, board: SAMPLE_BOARDS[code] ?? null,
     iso: 640, nd, wb: 5600,
   });
   return [
-    mk("a", "1A", "Wide", 25, 4, 0.3, { x: 0.4, y: 1.55, z: 3.6 }, { x: -0.1, y: 0.95, z: -0.8 }, "leo", 4),
-    mk("b", "1B", "Two shot", 40, 2.8, 0.6, { x: 0.1, y: 1.35, z: 1.9 }, { x: -0.3, y: 1.15, z: -0.8 }, "leo", 3),
-    mk("c", "1C", "Product close-up", 85, 2, 0.9, { x: 0.45, y: 0.92, z: 0.55 }, { x: 0.18, y: 0.84, z: -0.52 }, "bottle", 1),
+    mk("a", "1A", "Wide", "sticks", 25, 4, 0.3, { x: 0.4, y: 1.55, z: 3.6 }, { x: -0.1, y: 0.95, z: -0.8 }, "leo", 4),
+    mk("b", "1B", "Two shot", "fisher", 40, 2.8, 0.6, { x: 0.1, y: 1.35, z: 1.9 }, { x: -0.3, y: 1.15, z: -0.8 }, "leo", 3),
+    mk("c", "1C", "Product close-up", "robot", 85, 2, 0.9, { x: 0.45, y: 0.92, z: 0.55 }, { x: 0.18, y: 0.84, z: -0.52 }, "bottle", 1),
   ];
 }
 
@@ -670,7 +671,9 @@ export function PrevizPrototype() {
       // The camera pans and tilts; its legs stay on the floor.
       const unit = new THREE.Group();
       unit.position.set(s.pos.x, 0, s.pos.z);
-      const legs = buildSupport(s.pos.y, bodyDrop(s.bodyId));
+      const legs = buildSupport(s.support, s.pos.y, bodyDrop(s.bodyId));
+      const bar = rig.getObjectByName("panbar");
+      if (bar) bar.visible = s.support !== "robot";
       legs.rotation.y = rad(s.yaw);
       legs.traverse((o) => (o.userData.noOcclude = true));
       unit.add(legs);
@@ -827,10 +830,13 @@ export function PrevizPrototype() {
     // fill on the other side from the key. Either way, out of frame.
     const key = lights.find((l) => l.role === "Key");
     const side = key ? -keySideOf(key) : 1;
-    const at = findSpot(active, hfov, subjectAt, side, key ? 45 : 55, key ? 2.2 : 2.6, 0.5, occupied);
+    // A palm-sized MC goes in close and low, the way it gets used: a kicker
+    // or an eye light just out of frame, not a key from across the room.
+    const mini = f.kind === "mini";
+    const at = findSpot(active, hfov, subjectAt, side, key ? 45 : 55, mini ? 0.9 : key ? 2.2 : 2.6, mini ? 0.2 : 0.5, occupied);
     const spec: LightSpec = {
-      id, role: key ? "Fill" : "Key", fixtureId: f.id, modifierId: f.defaultModifier, beamDeg: null, dimmer: 0.5,
-      cct: f.cctDefault, ...at, y: Math.max(1.6, subjectAt.y + 0.8), yaw: 0, pitch: 0, aimAt: subjectId, frame: null, on: true,
+      id, role: mini ? "Kicker" : key ? "Fill" : "Key", fixtureId: f.id, modifierId: f.defaultModifier, beamDeg: null, dimmer: mini ? 1 : 0.5,
+      cct: f.cctDefault, ...at, y: mini ? subjectAt.y + 0.2 : Math.max(1.6, subjectAt.y + 0.8), yaw: 0, pitch: 0, aimAt: subjectId, frame: null, on: true,
     };
     setLights((all) => [...all, spec]);
     setSel({ kind: "light", id });
@@ -1019,7 +1025,7 @@ export function PrevizPrototype() {
                 onClick={() => { setActiveId(s.id); setSel({ kind: "camera" }); }}
                 dot={SHOT_HUES[i % SHOT_HUES.length]}
                 label={`${s.code} ${s.title}`}
-                sub={`${(BODIES.find((b) => b.id === s.bodyId) ?? BODIES[0]).name}, ${s.focal}mm`}
+                sub={`${(BODIES.find((b) => b.id === s.bodyId) ?? BODIES[0]).name}, ${s.focal}mm, ${(SUPPORTS.find((k) => k.id === s.support) ?? SUPPORTS[0]).name}`}
               />
             ))}
           </RailGroup>
@@ -1253,6 +1259,30 @@ function CameraInspector({
         >
           {BODIES.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.format})</option>)}
         </select>
+      </Field>
+
+      <Field label="On">
+        <div className="flex flex-wrap gap-1">
+          {SUPPORTS.map((k) => (
+            <Chip key={k.id} on={shot.support === k.id} onClick={() => onChange({ support: k.id })}>{k.name}</Chip>
+          ))}
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-text-muted">
+          {(SUPPORTS.find((k) => k.id === shot.support) ?? SUPPORTS[0]).note}
+        </p>
+        {(() => {
+          // Say so when the lens is somewhere this support cannot put it,
+          // rather than quietly moving the camera and changing the frame.
+          const sp = SUPPORTS.find((k) => k.id === shot.support) ?? SUPPORTS[0];
+          const [lo, hi] = sp.lens;
+          if (shot.pos.y >= lo && shot.pos.y <= hi) return null;
+          return (
+            <p className="mt-1.5 flex gap-1.5 rounded-[8px] border border-[var(--h-amber)] bg-[var(--h-amber-bg)] px-2 py-1.5 text-xs leading-relaxed text-text">
+              <span aria-hidden className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--h-amber)]" />
+              The lens is at {dist(shot.pos.y, units)}. {sp.name} range: {dist(lo, units)} to {dist(hi, units)}. Boom it into range or pick another support.
+            </p>
+          );
+        })()}
       </Field>
 
       <Field label={`Lens · ${shot.focal}mm`}>
@@ -1606,8 +1636,24 @@ function TopDownMap({
           const isA = s.id === activeId;
           const hx = s.pos.x - Math.sin(y) * 0.7;
           const hz = s.pos.z - Math.cos(y) * 0.7;
+          // What it is on: a dolly's track or a robot's base, in the camera's frame.
+          const fp = supportFootprint(s.support, s.pos.y, bodyDrop(s.bodyId));
+          const loc = (lx: number, lz: number) => ({ x: s.pos.x + lx * Math.cos(y) + lz * Math.sin(y), z: s.pos.z - lx * Math.sin(y) + lz * Math.cos(y) });
+          const rails = fp.track
+            ? [-fp.track.gauge / 2, fp.track.gauge / 2].map((o) => {
+                const t = fp.track!;
+                const a = t.axis === "x" ? loc(t.from, o) : loc(o, t.from);
+                const b = t.axis === "x" ? loc(t.to, o) : loc(o, t.to);
+                return { a, b };
+              })
+            : [];
+          const base = fp.base ? loc(0, fp.base.z) : null;
           return (
             <g key={s.id} opacity={isA ? 1 : 0.55}>
+              {rails.map((r, k) => (
+                <line key={k} x1={r.a.x} y1={r.a.z} x2={r.b.x} y2={r.b.z} stroke="#6f747b" strokeWidth={0.035} strokeLinecap="round" pointerEvents="none" />
+              ))}
+              {base && fp.base ? <circle cx={base.x} cy={base.z} r={fp.base.r} fill="#2a2c30" fillOpacity={0.35} stroke="#2a2c30" strokeWidth={0.02} pointerEvents="none" /> : null}
               <path d={`M${s.pos.x} ${s.pos.z} L${ray(half)} L${ray(-half)} Z`} fill={col} fillOpacity={isA ? 0.16 : 0.07} stroke={col} strokeWidth={0.02} />
               <line x1={s.pos.x} y1={s.pos.z} x2={hx} y2={hz} stroke={col} strokeWidth={0.03} />
               <circle cx={hx} cy={hz} r={0.09} fill="#fff" stroke={col} strokeWidth={0.03} className="cursor-crosshair" onPointerDown={start({ kind: "camera", id: s.id, aim: true })} />

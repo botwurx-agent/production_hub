@@ -15,7 +15,7 @@
 // passes and how much it spreads, not as the fabric's real scattering curve.
 // Read results as RELATIVE ("a stop hotter", "much softer"), never as gospel.
 
-export type FixtureKind = "cob" | "panel" | "fresnel" | "hmi" | "tube" | "lantern";
+export type FixtureKind = "cob" | "panel" | "fresnel" | "hmi" | "tube" | "lantern" | "mini";
 
 export type Fixture = {
   id: string;
@@ -34,12 +34,14 @@ export type Fixture = {
 };
 
 export const FIXTURES: Fixture[] = [
+  { id: "ls1200d", name: "Aputure LS 1200d Pro", kind: "cob", lumens: 80000, cctMin: 5600, cctMax: 5600, cctDefault: 5600, faceW: 0.22, faceH: 0.22, modifiers: ["reflector", "dome", "softbox", "strip", "lantern"], defaultModifier: "dome" },
   { id: "ls600d", name: "Aputure LS 600d Pro", kind: "cob", lumens: 40000, cctMin: 5600, cctMax: 5600, cctDefault: 5600, faceW: 0.18, faceH: 0.18, modifiers: ["reflector", "dome", "softbox", "strip", "lantern"], defaultModifier: "dome" },
   { id: "ls300x", name: "Aputure LS 300x", kind: "cob", lumens: 18000, cctMin: 2700, cctMax: 6500, cctDefault: 5600, faceW: 0.15, faceH: 0.15, modifiers: ["reflector", "dome", "softbox", "strip", "lantern"], defaultModifier: "reflector" },
   { id: "s60", name: "ARRI SkyPanel S60-C", kind: "panel", lumens: 12000, cctMin: 2800, cctMax: 10000, cctDefault: 5600, faceW: 0.65, faceH: 0.3, modifiers: ["diffuser", "grid"], defaultModifier: "diffuser" },
   { id: "s30", name: "ARRI SkyPanel S30-C", kind: "panel", lumens: 6000, cctMin: 2800, cctMax: 10000, cctDefault: 5600, faceW: 0.33, faceH: 0.3, modifiers: ["diffuser", "grid"], defaultModifier: "diffuser" },
   { id: "m18", name: "ARRI M18 HMI", kind: "hmi", lumens: 150000, cctMin: 5600, cctMax: 5600, cctDefault: 5600, faceW: 0.42, faceH: 0.42, modifiers: ["reflector", "fresnel"], defaultModifier: "reflector" },
   { id: "arri650", name: "ARRI 650 Plus (tungsten)", kind: "fresnel", lumens: 14000, cctMin: 3200, cctMax: 3200, cctDefault: 3200, faceW: 0.16, faceH: 0.16, modifiers: ["fresnel"], defaultModifier: "fresnel" },
+  { id: "mcpro", name: "Aputure MC Pro", kind: "mini", lumens: 450, cctMin: 2000, cctMax: 10000, cctDefault: 5600, faceW: 0.12, faceH: 0.065, modifiers: ["bare", "diffuser"], defaultModifier: "bare" },
   { id: "titan", name: "Astera Titan Tube", kind: "tube", lumens: 2000, cctMin: 1750, cctMax: 20000, cctDefault: 5600, faceW: 0.05, faceH: 1.0, modifiers: ["bare"], defaultModifier: "bare" },
   { id: "chinaball", name: "China ball (26\")", kind: "lantern", lumens: 4000, cctMin: 3200, cctMax: 3200, cctDefault: 3200, faceW: 0.66, faceH: 0.66, modifiers: ["bare"], defaultModifier: "bare" },
 ];
