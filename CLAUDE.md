@@ -7097,6 +7097,28 @@ reach for it during real prep.
   frustum lines running through the set swallowed every press on a person;
   the raycaster's Line threshold is now 3 cm. Not built: rotate in 3D (the
   map's handle and the inspector still do it).
+- DIFFUSION WAS BROKEN, found by the operator testing grade by grade
+  (2026-10-05). THE LIGHT TURNED ROUND: with a frame, the renderer moves the
+  light to the frame, but its spot target stayed fixed 1 m in front of the
+  fixture, so any frame further out than that put the light past its own aim
+  point and pointed it back at the fixture. Sam went flat and dark with no
+  shadow, which read as "diffusion costs four stops". The target now travels
+  with the light. Two model errors sat under it: the whole source was treated
+  as starting AT THE FRAME (so once it pointed the right way, opal read
+  brighter than no diffusion), and opal's scattered share was spread evenly
+  over a hemisphere (so it cost 0.8 stop rather than the third of a stop a DP
+  expects). A framed light is now TWO SOURCES (`SourceResult.through`, a
+  second SpotLight on the rig, `emittersFromSource` in the meter): the beam
+  that goes straight through, still at the fixture, and the glow off the
+  cloth, at the frame. `DiffusionMaterial.through` (replacing `spread`) is the
+  share of transmitted light that keeps the beam; transmission is still the
+  rated loss. The meter merges the two into one line with a light-weighted
+  softness. Operator's test setup (1200d, reflector, 50%, 4x4 at 3' 11",
+  subject 10' 3"): opal -0.43, 1/4 -0.86, 1/2 -1.73, silk -1.62, 216 -2.32,
+  full grid -2.75 stops. Heavy grades lose MORE than their rated stop at the
+  subject, and that is physics rather than a bug: the frame turns a 55-degree
+  beam into a broad glowing card. Still not modelled: highlight size on shiny
+  surfaces (lights are points), and blur stops growing past about 53 degrees.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

@@ -30,7 +30,7 @@ import {
   type GripKind, type GripRig, type GripSpec, type LightRig, type LightSpec,
 } from "@/lib/previz/light-build";
 import {
-  bounceCandela, collectOccluders, emitterFromSource, nearFieldScale, readMeter, roomLuxFrom, type Board, type Emitter, type Reading,
+  bounceCandela, collectOccluders, emittersFromSource, nearFieldScale, readMeter, roomLuxFrom, type Board, type Emitter, type Reading,
 } from "@/lib/previz/meter";
 import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, WindowInspector } from "./light-panels";
 import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
@@ -305,7 +305,7 @@ function buildEmitters(lights: LightSpec[], win: WinState, sc: Scene, windows: W
     const s = effLight(raw, sc);
     const src = resolveSource(fixtureOf(s), s.modifierId, s.dimmer, s.beamDeg, s.frame);
     const a = aimOf(s, sc);
-    out.push(emitterFromSource(s.id, lightLabel(s), new THREE.Vector3(s.x, s.y, s.z), forward(a.yaw, a.pitch), src));
+    out.push(...emittersFromSource(s.id, lightLabel(s), new THREE.Vector3(s.x, s.y, s.z), forward(a.yaw, a.pitch), src));
   }
   if (win.on) {
     const nits = WINDOW_SKIES[win.sky].skyNits * Math.pow(10, -win.nd);
@@ -565,13 +565,26 @@ export function PrevizPrototype() {
         const src = resolveSource(fixtureOf(s), s.modifierId, s.dimmer, s.beamDeg, s.frame);
         const a = aimOf(s, sc);
         const t = s.aimAt ? targetPoint(s.aimAt, sc) : null;
-        const d = t ? Math.max(0.3, t.distanceTo(new THREE.Vector3(s.x, s.y, s.z)) - src.offsetM) : 2;
+        const dFix = t ? Math.max(0.3, t.distanceTo(new THREE.Vector3(s.x, s.y, s.z))) : 2;
+        const d = Math.max(0.3, dFix - src.offsetM);
         const size = Math.max(src.sourceW, src.sourceH);
         const soft = apparentSizeDeg(size, d);
         const cast = s.on && shadows < 5;
         if (cast) shadows++;
         const lit = { ...src, candela: src.candela * nearFieldScale(size, d) };
-        updateLightRig(rig, s, a, lit, soft, cameraColor(s.cct, wb), cast);
+        // The beam through a diffusion frame is its own light, at the fixture.
+        let through: { candela: number; beamDeg: number; softDeg: number; cast: boolean } | null = null;
+        if (src.through) {
+          const castT = s.on && shadows < 5;
+          if (castT) shadows++;
+          through = {
+            candela: src.through.candela * nearFieldScale(src.through.sizeM, dFix),
+            beamDeg: src.through.beamDeg,
+            softDeg: apparentSizeDeg(src.through.sizeM, dFix),
+            cast: castT,
+          };
+        }
+        updateLightRig(rig, s, a, lit, soft, cameraColor(s.cct, wb), cast, through);
       }
       for (const [id, rig] of lightRigs) {
         if (seen.has(id)) continue;

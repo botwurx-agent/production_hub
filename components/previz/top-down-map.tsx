@@ -320,7 +320,7 @@ export function TopDownMap({
           const y = rad(a.yaw);
           const f = FIXTURES.find((x) => x.id === l.fixtureId) ?? FIXTURES[0];
           const src = resolveSource(f, l.modifierId, l.dimmer, l.beamDeg, l.frame);
-          const half = rad(Math.min(src.omni ? 180 : src.beamDeg, 150) / 2);
+          const half = rad(Math.min(src.omni ? 180 : src.shownBeamDeg, 150) / 2);
           const R = (src.omni ? 0.7 : 1.5) * k;
           const ray = (q: number) => `${l.x - Math.sin(y + q) * R} ${l.z - Math.cos(y + q) * R}`;
           const hx = l.x - Math.sin(y) * 0.7 * k;

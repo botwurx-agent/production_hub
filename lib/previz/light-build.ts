@@ -78,6 +78,9 @@ export type LightRig = {
   standHolder: THREE.Group;
   base: THREE.Group;
   light: THREE.SpotLight | THREE.PointLight;
+  /** With a diffusion frame: the beam that goes straight through the cloth,
+   * kept at the fixture. `light` is then the glow off the frame. */
+  through: THREE.SpotLight | null;
   faces: THREE.MeshStandardMaterial[];
   faceZ: number;
   yokeDrop: number;
@@ -153,9 +156,24 @@ export function buildLightRig(s: LightSpec): LightRig {
     light = sp;
   }
   head.add(light);
+  let through: THREE.SpotLight | null = null;
+  if (s.frame && !(fixture.kind === "lantern" || mod?.omni)) {
+    through = new THREE.SpotLight("#ffffff", 0, 0, 0.5, 0.45, 2);
+    through.shadow.mapSize.set(1024, 1024);
+    through.shadow.camera.near = 0.1;
+    through.shadow.camera.far = 25;
+    through.shadow.bias = -0.0006;
+    through.shadow.blurSamples = 16;
+    const t = new THREE.Object3D();
+    t.position.set(0, 0, model.faceZ - 1);
+    head.add(t);
+    through.target = t;
+    through.position.set(0, 0, model.faceZ - 0.03);
+    head.add(through);
+  }
   tag(group);
   return {
-    group, yoke, head, standHolder, base, light, faces,
+    group, yoke, head, standHolder, base, light, through, faces,
     faceZ: model.faceZ, yokeDrop: model.yokeDrop, heavy: model.heavy, ownStand: model.ownStand,
     structureKey: structureKey(s),
   };
@@ -170,6 +188,7 @@ export function updateLightRig(
   softDeg: number,
   color: [number, number, number],
   castShadow: boolean,
+  through: { candela: number; beamDeg: number; softDeg: number; cast: boolean } | null = null,
 ) {
   rig.group.position.set(s.x, 0, s.z);
   rig.yoke.position.set(0, s.y, 0);
@@ -207,13 +226,28 @@ export function updateLightRig(
   rig.light.intensity = src.candela * lit;
   rig.light.castShadow = castShadow && s.on;
   // The source sits on the glowing face, or on the frame when there is one.
-  rig.light.position.set(0, 0, Math.min(rig.faceZ, -src.offsetM) - 0.03);
+  const z = Math.min(rig.faceZ, -src.offsetM) - 0.03;
+  rig.light.position.set(0, 0, z);
   if ((rig.light as THREE.SpotLight).isSpotLight) {
     const sp = rig.light as THREE.SpotLight;
+    // The aim point travels with the light. It used to stay a metre in front
+    // of the fixture, so a frame further out than that put the light past its
+    // own target and turned it round to face the fixture.
+    sp.target.position.set(0, 0, z - 1);
     const cone = spotCone(src.beamDeg);
     sp.angle = cone.angle;
     sp.penumbra = cone.penumbra;
     sp.shadow.radius = shadowBlur(softDeg);
+  }
+  if (rig.through) {
+    const t = rig.through;
+    t.color.copy(c);
+    t.intensity = (through?.candela ?? 0) * lit;
+    t.castShadow = !!through?.cast && s.on;
+    const cone = spotCone(through?.beamDeg ?? 60);
+    t.angle = cone.angle;
+    t.penumbra = cone.penumbra;
+    t.shadow.radius = shadowBlur(through?.softDeg ?? 1);
   }
   // The face glows at the brightness a viewer would see: the fixture's own
   // face, or the cloth when a frame is in front of it.

@@ -80,7 +80,7 @@ function AimChips({ aimAt, targets, onChange }: { aimAt: string | null; targets:
 function AtSubject({ c, total, targetName, fmt }: { c: Contribution | undefined; total: number; targetName: string; fmt: Fmt }) {
   if (!c) return null;
   const share = total > 0 ? Math.round((c.lux / total) * 100) : 0;
-  const deg = c.sizeM > 0 && Number.isFinite(c.distM) ? apparentSizeDeg(c.sizeM, c.distM) : 0;
+  const deg = c.deg ?? (c.sizeM > 0 && Number.isFinite(c.distM) ? apparentSizeDeg(c.sizeM, c.distM) : 0);
   return (
     <div className="rounded-[12px] border border-border bg-surface-2 p-3">
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">At {targetName}</p>

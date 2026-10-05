@@ -20,6 +20,10 @@ export type Emitter = {
   /** Apparent size, for the softness readout. */
   sizeM: number;
   flux: number;
+  /** The light this belongs to, when one light is several emitters (a
+   * diffusion frame: the beam through the cloth and the glow off it). The
+   * meter reports them as one line. */
+  group?: string;
 };
 
 export type Board = {
@@ -32,7 +36,12 @@ export type Board = {
   reflectance: number;
 };
 
-export type Contribution = { id: string; label: string; lux: number; sizeM: number; distM: number };
+export type Contribution = {
+  id: string; label: string; lux: number; sizeM: number; distM: number;
+  /** Apparent size in degrees, weighted by how much light each part gives,
+   * when a light reaches the subject as more than one source. */
+  deg?: number;
+};
 
 /** The area term of the near-field correction, for a source `sizeM` across. */
 export function nearField(sizeM: number): number {
@@ -49,14 +58,20 @@ export function nearFieldScale(sizeM: number, distM: number): number {
   return d2 / (d2 + nearField(sizeM));
 }
 
-export function emitterFromSource(
+/**
+ * A light as the meter sees it. With a diffusion frame that is TWO sources:
+ * the glow off the cloth, at the frame, and the part of the beam that goes
+ * straight through, still at the fixture. They share `group` so the reading
+ * shows one line for the light.
+ */
+export function emittersFromSource(
   id: string,
   label: string,
   head: THREE.Vector3,
   fwd: THREE.Vector3,
   src: SourceResult,
-): Emitter {
-  return {
+): Emitter[] {
+  const glow: Emitter = {
     id,
     label,
     pos: head.clone().addScaledVector(fwd, src.offsetM),
@@ -66,7 +81,21 @@ export function emitterFromSource(
     omni: src.omni,
     sizeM: Math.max(src.sourceW, src.sourceH),
     flux: src.flux,
+    group: id,
   };
+  if (!src.through) return [glow];
+  return [glow, {
+    id: `${id}#through`,
+    label,
+    pos: head.clone(),
+    fwd: fwd.clone(),
+    candela: src.through.candela,
+    beamDeg: src.through.beamDeg,
+    omni: false,
+    sizeM: src.through.sizeM,
+    flux: 0,
+    group: id,
+  }];
 }
 
 /** Meshes that can block light: everything not tagged as fixture drawing. */
@@ -166,16 +195,25 @@ export function readMeter(
 ): Reading {
   const toCam = camera.clone().sub(p).normalize();
   const contributions: Contribution[] = [];
+  const byGroup = new Map<string, Contribution & { degLux: number }>();
   for (const em of emitters) {
     const { lux, dir, d } = luxFrom(em, p);
-    if (lux <= 0) {
-      contributions.push({ id: em.id, label: em.label, lux: 0, sizeM: em.sizeM, distM: d });
+    let got = 0;
+    if (lux > 0 && clear(p, em.pos, occluders)) got = lux * ((1 + dir.dot(toCam)) / 2);
+    const deg = em.sizeM > 0 ? (2 * Math.atan(em.sizeM / 2 / Math.max(0.05, d)) * 180) / Math.PI : 0;
+    const key = em.group ?? em.id;
+    const prev = byGroup.get(key);
+    if (!prev) {
+      byGroup.set(key, { id: key, label: em.label, lux: got, sizeM: em.sizeM, distM: d, degLux: deg * got, deg });
       continue;
     }
-    const blocked = !clear(p, em.pos, occluders);
-    const dome = (1 + dir.dot(toCam)) / 2;
-    contributions.push({ id: em.id, label: em.label, lux: blocked ? 0 : lux * dome, sizeM: em.sizeM, distM: d });
+    // The line reports the part giving most of the light for size and distance.
+    if (got > prev.lux) { prev.sizeM = em.sizeM; prev.distM = d; }
+    prev.lux += got;
+    prev.degLux += deg * got;
+    prev.deg = prev.lux > 0 ? prev.degLux / prev.lux : Math.max(prev.deg ?? 0, deg);
   }
+  for (const { degLux: _drop, ...c } of byGroup.values()) contributions.push(c);
   if (sun && sun.lux > 0) {
     const ok = clear(p, p.clone().addScaledVector(sun.dir, 30), occluders);
     const dome = (1 + sun.dir.dot(toCam)) / 2;

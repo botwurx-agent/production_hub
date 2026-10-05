@@ -76,20 +76,22 @@ export const MODIFIERS: Record<string, Modifier> = {
 export type DiffusionMaterial = {
   id: string;
   name: string;
-  /** Share of light that gets through. */
+  /** Share of light that gets through: the material's rated loss. */
   transmission: number;
-  /** 0 to 1: how fully it turns the frame into an even glowing source rather
-   * than letting the fixture show through as a hot spot. */
-  spread: number;
+  /** Of what gets through, the share that keeps going in the fixture's own
+   * beam (the hot spot you see through it). The rest is scattered and leaves
+   * the frame as an even glowing card. Opal keeps most of the beam, which is
+   * why it softens only a little; full grid keeps none of it. */
+  through: number;
 };
 
 export const DIFFUSIONS: DiffusionMaterial[] = [
-  { id: "opal", name: "Opal", transmission: 0.8, spread: 0.35 },
-  { id: "quarter-grid", name: "1/4 Grid", transmission: 0.72, spread: 0.6 },
-  { id: "half-grid", name: "1/2 Grid", transmission: 0.5, spread: 0.85 },
-  { id: "silk", name: "Silk", transmission: 0.5, spread: 0.8 },
-  { id: "216", name: "216", transmission: 0.36, spread: 0.95 },
-  { id: "full-grid", name: "Full Grid", transmission: 0.28, spread: 1 },
+  { id: "opal", name: "Opal", transmission: 0.8, through: 0.85 },
+  { id: "quarter-grid", name: "1/4 Grid", transmission: 0.72, through: 0.5 },
+  { id: "half-grid", name: "1/2 Grid", transmission: 0.5, through: 0.15 },
+  { id: "silk", name: "Silk", transmission: 0.5, through: 0.25 },
+  { id: "216", name: "216", transmission: 0.36, through: 0.05 },
+  { id: "full-grid", name: "Full Grid", transmission: 0.28, through: 0 },
 ];
 
 /** Frame sizes in feet, as they are ordered from a grip house. */
@@ -159,6 +161,16 @@ export type SourceResult = {
   flux: number;
   /** How bright the glowing face looks, for drawing it (nits). */
   faceNits: number;
+  /**
+   * With a diffusion frame, the part of the beam that goes straight through
+   * the cloth. It still starts AT THE FIXTURE (offset 0), so it falls off over
+   * the full distance to the subject, while the glow above starts at the
+   * frame. Treating both as starting at the frame made diffusion read
+   * brighter than no diffusion at all.
+   */
+  through: { candela: number; beamDeg: number; sizeM: number } | null;
+  /** The beam to draw on the map: the fixture's when most light goes through. */
+  shownBeamDeg: number;
 };
 
 /**
@@ -170,7 +182,7 @@ export type SourceResult = {
  * patch becomes the source: pull the frame away from the light and the patch
  * grows (softer, dimmer per square foot); push it in and it shrinks (harder,
  * brighter). A weak diffuser lets part of the fixture show through as a hot
- * spot, which is what `spread` carries. Beam spilling round a frame too small
+ * spot, which is what `through` carries. Beam spilling round a frame too small
  * for it is not modelled; the readout says so.
  */
 export function resolveSource(
@@ -194,7 +206,10 @@ export function resolveSource(
   const cd = axisCandela(flux, beam, omni);
 
   if (!frame || omni) {
-    return { candela: cd, beamDeg: omni ? 360 : beam, omni, sourceW: w, sourceH: h, offsetM: 0, flux, faceNits: cd / Math.max(0.01, w * h) };
+    return {
+      candela: cd, beamDeg: omni ? 360 : beam, omni, sourceW: w, sourceH: h, offsetM: 0, flux,
+      faceNits: cd / Math.max(0.01, w * h), through: null, shownBeamDeg: omni ? 360 : beam,
+    };
   }
 
   const mat = DIFFUSIONS.find((d) => d.id === frame.materialId) ?? DIFFUSIONS[2];
@@ -211,18 +226,21 @@ export function resolveSource(
   const half = litSide / 2;
   const omega = 4 * Math.asin((half * half) / (half * half + d * d));
   const caught = Math.min(eFrame * litArea, cd * omega, flux);
-  const scattered = (mat.spread * mat.transmission * caught) / Math.PI;
-  const direct = (1 - mat.spread) * mat.transmission * cd;
-  const size = mat.spread * litSide + (1 - mat.spread) * Math.max(w, h);
+  // What is scattered leaves the cloth as an even (Lambertian) glow; what
+  // keeps going stays in the fixture's beam, from the fixture's position.
+  const scattered = ((1 - mat.through) * mat.transmission * caught) / Math.PI;
+  const direct = mat.through * mat.transmission * cd;
   return {
-    candela: scattered + direct,
-    beamDeg: mat.spread > 0.5 ? 180 : beam,
+    candela: scattered,
+    beamDeg: 180,
     omni: false,
-    sourceW: size,
-    sourceH: size,
+    sourceW: litSide,
+    sourceH: litSide,
     offsetM: d,
     flux: flux * mat.transmission,
     faceNits: (mat.transmission * caught) / (Math.PI * litArea),
+    through: direct > 0 ? { candela: direct, beamDeg: beam, sizeM: Math.max(w, h) } : null,
+    shownBeamDeg: direct > scattered ? beam : 180,
   };
 }
 
