@@ -1,6 +1,7 @@
 "use client";
 
 // Small controls shared by the Scene Setup prototype's panels.
+import { useEffect, useState } from "react";
 import type React from "react";
 
 export function Thumb({ src, label }: { src: string | null; label: string }) {
@@ -135,5 +136,55 @@ export function Toggle({ on, onClick, label, hint }: { on: boolean; onClick: () 
     >
       {label}
     </button>
+  );
+}
+
+/**
+ * A measurement typed in the units the setup is using (feet or metres) and
+ * kept in metres. It commits on Enter or when the box loses focus, so a half
+ * typed "1." is never applied as one metre.
+ */
+export function NumField({ label, value, units, onChange, min = 0, max = 100, compact }: {
+  label: string; value: number; units: "ft" | "m"; onChange: (m: number) => void; min?: number; max?: number; compact?: boolean;
+}) {
+  const toU = (m: number) => (units === "ft" ? m / 0.3048 : m);
+  const fmt = (m: number) => {
+    const u = toU(m);
+    return (Math.round(u * 100) / 100).toString();
+  };
+  const [text, setText] = useState(fmt(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setText(fmt(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, units, focused]);
+  const commit = () => {
+    const n = Number(text);
+    if (text.trim() !== "" && Number.isFinite(n)) {
+      const m = units === "ft" ? n * 0.3048 : n;
+      onChange(Math.max(min, Math.min(max, m)));
+    } else setText(fmt(value));
+  };
+  return (
+    <label className={`flex min-w-0 flex-col gap-1 ${compact ? "" : "flex-1"}`}>
+      <span className="text-[11px] font-semibold text-text-muted">{label}</span>
+      <span className="flex items-center rounded-[8px] border border-border bg-surface pr-1.5 focus-within:border-accent">
+        <input
+          aria-label={label}
+          inputMode="decimal"
+          value={text}
+          onFocus={() => setFocused(true)}
+          onBlur={() => { setFocused(false); commit(); }}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            if (e.key === "Escape") { setText(fmt(value)); (e.target as HTMLInputElement).blur(); }
+            e.stopPropagation();
+          }}
+          className="w-full min-w-0 bg-transparent px-2 py-1 text-sm text-text focus:outline-none"
+        />
+        <span className="text-[11px] text-text-faint">{units}</span>
+      </span>
+    </label>
   );
 }

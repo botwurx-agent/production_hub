@@ -7029,10 +7029,62 @@ reach for it during real prep.
   and writes VP9 into an mp4 box that QuickTime cannot open. Falls back to WebM.
   SAVING: localStorage (previz.setup.v2, debounced), retrying without large
   storyboard images if refused, plus download/open as .previz.json.
-  NOT BUILT: talent moving on the timeline, a real space from measurements or a
-  scout photo (honest answer: true dimensions need a LiDAR scan exported as GLB,
-  a photo gives a rough room), product from a photo, CAD import (STL/OBJ/GLB
-  load in a browser, STEP needs heavy wasm).
+  All four of the then-unbuilt items (talent on the timeline, a real space,
+  product from a photo, CAD import) are built below. STILL NOT: STEP files
+  (heavy wasm), and a photo only ever gives a rough room; true dimensions need
+  measurements or a LiDAR scan exported as GLB.
+- A FREE-FORM SET (2026-10-05, operator: "I need to freely add and subtract
+  backdrops, props, furniture etc."). The kitchen, the paper and the bottle were
+  hardcoded; everything on the set is now an ITEM (lib/previz/catalog.ts, pure,
+  no three.js so the server action can import it; drawn by
+  lib/previz/set-items.ts). An item is placed by the centre of its footprint,
+  faces +Z, and carries w/d/h in metres plus optional colour, label photo,
+  model, light (practicals) and raise. About 45 kinds in five groups:
+  backdrops (seamless at the real roll widths, cyc, muslin, flat, V-flat), set
+  pieces (wall, window and door flats, riser, apple box, plinth, rug),
+  furniture, practicals and props. "+ Add to the set" searches the catalogue;
+  every item can be resized, turned, recoloured, duplicated (Cmd+D) and deleted.
+  STACKING IS DERIVED, not stored: only an item with a larger footprint whose
+  `surface` holds can carry a smaller one, so a glass dragged onto a table
+  stands on it and a table dragged onto a glass does not. People stand on
+  standable items (riser, apple box, plinth) and hold any prop in the right hand.
+  NEW PIECES FIND A CLEAR SPOT inside the walls rather than all landing on the
+  subject, because the stacking rule then piled the sofa onto the table; a prop
+  still lands near the subject on purpose. New people avoid furniture too.
+- A ROOM FROM MEASUREMENTS (lib/previz/room.ts). Width, depth, ceiling, which
+  of four walls exist, wall colour, floor, and windows and doors placed by their
+  centre along a wall. Walls are see-through from outside in free view and solid
+  from a camera inside. Each window carries daylight (and the sun through the
+  first). Set is "stage" (black, no daylight, low bounce) or "room"; a frame
+  with nothing lit says so rather than reading as broken.
+- PRODUCT FROM A PHOTO: a front-on photo wrapped onto a bottle, can or jar
+  (front 160 degrees, the back filled with the photo's average colour) or onto
+  the face of a carton or pouch. Height stays the catalogue's; width follows the
+  photo, capped for round shapes since a landscape snapshot is a photo with
+  room round it, not a fat bottle.
+- MODELS: GLB/GLTF/OBJ/STL up to 150 MB, centred and sat on the floor. STL is
+  assumed Z-up and millimetres when its biggest side is over 30 units, and the
+  inspector can change both (swapping Z-up also swaps height and depth). A
+  LiDAR room scan exported as GLB arrives at true size. Draco GLB is refused
+  with a sentence. Photos and models live in IndexedDB; localStorage holds only
+  keys, and a downloaded setup file embeds them so it opens on another machine.
+- TALENT WALKS TO A MARK during the move (lib/previz/talent-walk.ts), facing
+  the way they walk and turning to the mark's facing on arrival, with the pace
+  stated. "Play the action, camera locked off" gives a shot a timeline without
+  a camera move.
+- CLICK TO SELECT anything in either view. The top-down map is its own
+  component now (components/previz/top-down-map.tsx) with walls, openings,
+  items with a rotate handle, and marks.
+- AI SCOUT: "Build a room from a scout photo" (app/dev/scene-setup/actions.ts,
+  staff only, AI-key gated) returns a draft clamped by lib/previz/room-draft.ts
+  (a model reading one photo will happily return a 400 m sofa) that the
+  producer checks before anything is built, plus a camera matching the photo
+  with the photo as its board overlay. NOT RUN against a live model: no key
+  exists outside Vercel. Read the result as a rough start, not a survey.
+- Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
+  migrates on load. Verified in headless Chromium: add, place, stack, product
+  photo, STL import, walk and record, click select, download and open,
+  migration, both presets; production build clean (232 kB on that route).
 
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the

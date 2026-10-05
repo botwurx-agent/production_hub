@@ -21,7 +21,7 @@ export type BackdropSpec = {
   rot: number;
 };
 
-export type SetSpec = { kind: SetKind; backdrop: BackdropSpec };
+export type LegacySetSpec = { kind: SetKind; backdrop: BackdropSpec };
 
 export const ROLL_WIDTHS: { inches: number; label: string }[] = [
   { inches: 53, label: "53 in (4.4 ft)" },
@@ -43,11 +43,12 @@ export const PAPER_COLORS: { name: string; hex: string }[] = [
 
 export const DEFAULT_BACKDROP: BackdropSpec = { widthIn: 107, color: "#f4f4f1", sweepM: 2.4, x: 0, z: -2.1, rot: 0 };
 
-const TOP = 2.95; // the crossbar's height
 const CURVE = 0.55; // radius of the curve where the paper meets the floor
 
 /** Paper, in the backdrop's own frame: up the back, round the curve, out across the floor. */
-function paperGeometry(w: number, sweep: number): THREE.BufferGeometry {
+export function paperGeometry(w: number, sweep: number, top = 2.95, curve = CURVE): THREE.BufferGeometry {
+  const CURVE = Math.min(curve, sweep - 0.06, top - 0.1);
+  const TOP = top + 0.05;
   // The profile, as (z, y) points from the top of the roll down and forward.
   const prof: [number, number][] = [];
   prof.push([0, TOP - 0.05]);
@@ -91,13 +92,17 @@ function cyl(r: number, h: number, mat: THREE.Material) {
   return m;
 }
 
-/** The backdrop: paper, the roll and crossbar at the top, and two stands. */
-export function buildBackdrop(b: BackdropSpec): THREE.Group {
+/**
+ * A seamless: paper, the roll and crossbar at the top, and two stands. In the
+ * backdrop's own frame: the foot line (where the paper meets the floor) runs
+ * along X at z 0, and the paper comes out toward +Z.
+ */
+export function buildSeamless(w: number, sweep: number, color: string, top = 2.95): THREE.Group {
+  const TOP = top;
   const g = new THREE.Group();
   g.name = "backdrop";
-  const w = b.widthIn * 0.0254;
-  const paperMat = new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.97, side: THREE.DoubleSide });
-  const paper = new THREE.Mesh(paperGeometry(w, b.sweepM), paperMat);
+  const paperMat = new THREE.MeshStandardMaterial({ color, roughness: 0.97, side: THREE.DoubleSide });
+  const paper = new THREE.Mesh(paperGeometry(w, sweep, top), paperMat);
   paper.receiveShadow = true;
   paper.castShadow = true;
   g.add(paper);
@@ -132,8 +137,6 @@ export function buildBackdrop(b: BackdropSpec): THREE.Group {
     bag.position.set(x + s * 0.25, 0.05, -0.06);
     g.add(bag);
   }
-  g.position.set(b.x, 0, b.z);
-  g.rotation.y = (b.rot * Math.PI) / 180;
   return g;
 }
 
@@ -149,10 +152,13 @@ export function buildStageFloor(): THREE.Mesh {
   return floor;
 }
 
-/** The paper's footprint on the map: its corners, in world x/z. */
-export function backdropFootprint(b: BackdropSpec): { x: number; z: number }[] {
-  const w = b.widthIn * 0.0254;
-  const r = (b.rot * Math.PI) / 180;
-  const pt = (lx: number, lz: number) => ({ x: b.x + lx * Math.cos(r) + lz * Math.sin(r), z: b.z - lx * Math.sin(r) + lz * Math.cos(r) });
-  return [pt(-w / 2, 0), pt(w / 2, 0), pt(w / 2, b.sweepM), pt(-w / 2, b.sweepM)];
+/** A hard cyc: a painted wall that curves into the floor, no stands. */
+export function buildCyc(w: number, sweep: number, color: string, top: number): THREE.Group {
+  const g = new THREE.Group();
+  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.9, side: THREE.DoubleSide });
+  const cyc = new THREE.Mesh(paperGeometry(w, sweep, top, 1.1), m);
+  cyc.receiveShadow = true;
+  cyc.castShadow = true;
+  g.add(cyc);
+  return g;
 }

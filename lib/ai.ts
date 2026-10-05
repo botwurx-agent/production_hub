@@ -797,3 +797,40 @@ export async function extractShotDoc(
 
   return parseShotDocDraft(raw);
 }
+
+const ROOM_SYSTEM = `You look at ONE photograph of a location (a room someone is scouting for a commercial shoot) and estimate the room so a producer can block the shoot in a 3D previz. Your estimate is a starting point they will correct, so be useful rather than precise, and never invent things you cannot see.
+
+Coordinates, in metres. The BACK wall is the wall the photo is pointed at. LEFT and RIGHT are as seen in the photo. x is measured from the LEFT wall toward the right; z is measured from the BACK wall toward the camera. If a side wall is not visible, still estimate the room's width from what you can see, and set that wall to false.
+
+Estimate sizes from things of known size: doors are about 2.03 m tall and 0.8 to 0.9 m wide, kitchen counters are 0.9 m tall and 0.6 m deep, dining tables 0.75 m tall, chair seats 0.45 m, light switches about 1.2 m up, ceilings usually 2.4 to 3 m in a home.
+
+Return ONLY a JSON object, no prose, no code fences:
+{
+  "room": { "width": number, "depth": number, "height": number, "wallColor": "#rrggbb", "floor": "wood" | "concrete" | "tile" | "carpet" },
+  "walls": { "back": boolean, "left": boolean, "right": boolean },
+  "openings": [ { "wall": "back" | "left" | "right", "kind": "window" | "door", "at": number, "width": number, "sill": number, "top": number } ],
+  "items": [ { "kind": string, "name": string, "x": number, "z": number, "rot": number, "w": number, "d": number, "h": number, "color": "#rrggbb" } ],
+  "camera": { "x": number, "z": number, "height": number, "yaw": number, "focal": number },
+  "confidence": "low" | "medium" | "high",
+  "notes": string
+}
+
+Rules:
+- "at" is the CENTRE of the opening along its wall: on the back wall measured from the left corner, on a side wall measured from the back corner. sill and top are heights of the bottom and top of the opening (a door's sill is 0).
+- items: only furniture and large objects you can actually see, at most 25. "kind" MUST be one of: KINDS. Use the nearest kind (an armchair for any single upholstered seat, "box" for an object that fits nothing else). x and z are the CENTRE of its footprint; rot is degrees it is turned, 0 when its front faces the camera; w, d, h are its width, depth and height.
+- camera: where the photo was taken from. yaw is degrees the camera is turned, 0 straight at the back wall, positive turning left. focal is a 35mm-equivalent focal length estimate (a phone's main camera is about 24 to 26).
+- confidence: how sure you are of the room's size.
+- notes: one or two sentences a producer would want: what you could not see, and which measurement to check first. No em dashes.`;
+
+/**
+ * Estimates a room from a single location scout photo, as a DRAFT the
+ * producer reviews before anything is built. Nothing here writes anything.
+ */
+export async function extractRoomFromPhoto(doc: AiDocument, kinds: string[]): Promise<string> {
+  const provider = aiProvider();
+  const system = ROOM_SYSTEM.replace("KINDS", kinds.join(", "));
+  const user = "Estimate this room and return the JSON described in the instructions.";
+  if (provider === "openai") return openaiReadDocument(system, user, doc, 6000);
+  if (provider === "anthropic") return anthropicReadDocument(system, user, doc, 6000);
+  throw new Error("No AI provider configured.");
+}

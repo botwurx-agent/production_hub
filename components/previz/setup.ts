@@ -1,14 +1,21 @@
-// The Scene Setup prototype's document: everything a setup holds, the two
-// setups it can start from, and keeping it in this browser so closing the tab
-// does not lose an afternoon's work. Nothing here reaches a server: the real
-// build stores setups in the database, and this is the stand-in until then.
+// The Scene Setup prototype's document: everything a setup holds, the setups
+// it can start from, and keeping it in this browser so closing the tab does
+// not lose an afternoon's work. Nothing here reaches a server: the real build
+// stores setups in the database, and this is the stand-in until then.
+//
+// Version 3 made the set free-form: a room built from measurements (or an
+// open stage) plus any number of placed items. A version 2 setup (a fixed
+// kitchen or one backdrop, and a single hero bottle) is converted on load.
 import type { Move } from "@/lib/previz/camera-move";
 import type { SupportKind } from "@/lib/previz/camera-model";
 import type { GripSpec, LightSpec } from "@/lib/previz/light-build";
-import type { PropSpec, TalentSpec } from "@/lib/previz/scene-build";
-import { DEFAULT_BACKDROP, type SetSpec } from "@/lib/previz/studio-set";
+import type { TalentSpec } from "@/lib/previz/scene-build";
+import type { BackdropSpec, LegacySetSpec } from "@/lib/previz/studio-set";
+import { newItem, type ItemSpec } from "@/lib/previz/catalog";
+import { KITCHEN_ROOM, emptyRoom, type SetSpec } from "@/lib/previz/room";
 import { SAMPLE_BOARDS } from "@/lib/previz/boards";
 import type { WindowSky } from "@/lib/previz/lighting";
+import type { EmbeddedAsset } from "@/lib/previz/asset-store";
 
 export type Vec3 = { x: number; y: number; z: number };
 export type Shot = {
@@ -23,7 +30,7 @@ export type Shot = {
   yaw: number; // degrees, 0 looks toward the back wall (-Z), positive turns left
   pitch: number; // degrees, positive tilts up
   focusM: number;
-  focusOn: string | null; // a talent id or "bottle": focus follows it
+  focusOn: string | null; // a talent or item id: focus follows it
   board: string | null;
   iso: number;
   nd: number;
@@ -32,23 +39,23 @@ export type Shot = {
   move: Move | null;
 };
 export type WinState = { sky: WindowSky; nd: number; on: boolean };
-export type PracticalState = { on: boolean; dimmer: number; cct: number };
 export type Units = "ft" | "m";
 
 export type Setup = {
-  v: 2;
+  v: 3;
   name: string;
   set: SetSpec;
+  items: ItemSpec[];
   shots: Shot[];
   activeId: string;
   talent: TalentSpec[];
-  bottle: PropSpec;
   lights: LightSpec[];
   grips: GripSpec[];
   win: WinState;
-  practical: PracticalState;
   units: Units;
   aspectId: string;
+  /** Only in a downloaded file: the photos and models the items use. */
+  assets?: Record<string, EmbeddedAsset>;
 };
 
 const deg = (r: number) => (r * 180) / Math.PI;
@@ -69,12 +76,30 @@ function shot(
   };
 }
 
+function item(kind: string, id: string, x: number, z: number, p: Partial<ItemSpec> = {}): ItemSpec {
+  return { ...newItem(kind, x, z, id), ...p };
+}
+
+/** The kitchen's furniture, as items anybody can move or delete. */
+function kitchenItems(pendant?: { on: boolean; dimmer: number; cct: number }): ItemSpec[] {
+  return [
+    item("counter", "k-counter", 0.6, -2.19, { w: 3.4, d: 0.62, h: 0.9 }),
+    item("wall-cabinet", "k-upper", 0.6, -2.38, { w: 3.4, d: 0.36, h: 0.7, raise: 1.7 }),
+    item("plant", "k-plant", 1.85, -2.15, { w: 0.44, d: 0.44, h: 0.62 }),
+    item("dining-table", "k-table", 0, -0.6),
+    item("chair", "k-chair1", 0.35, -1.3),
+    item("chair", "k-chair2", -0.45, -1.3),
+    item("pendant", "k-pendant", 0, -0.6, { raise: 1.94, light: { on: pendant?.on ?? true, dimmer: pendant?.dimmer ?? 1, cct: pendant?.cct ?? 2700, lumens: 800 } }),
+  ];
+}
+
 /** The kitchen the prototype has always opened on. */
 export function kitchenSetup(): Setup {
   return {
-    v: 2,
+    v: 3,
     name: "Kitchen, morning",
-    set: { kind: "kitchen", backdrop: { ...DEFAULT_BACKDROP } },
+    set: { kind: "room", room: KITCHEN_ROOM },
+    items: [...kitchenItems(), item("bottle", "bottle", 0.18, -0.52, { name: "Hero bottle" })],
     shots: [
       shot("a", "1A", "Wide", "sticks", 25, 4, 0.3, { x: 0.4, y: 1.55, z: 3.6 }, { x: -0.1, y: 0.95, z: -0.8 }, "leo", 4, SAMPLE_BOARDS["1A"] ?? null),
       shot("b", "1B", "Two shot", "fisher", 40, 2.8, 0.6, { x: 0.1, y: 1.35, z: 1.9 }, { x: -0.3, y: 1.15, z: -0.8 }, "leo", 3, SAMPLE_BOARDS["1B"] ?? null),
@@ -85,14 +110,12 @@ export function kitchenSetup(): Setup {
       { id: "maya", name: "Maya", heightM: 1.68, pose: "standing", x: -1.15, z: -0.35, facing: 70, top: "#9b5a3d", bottom: "#33373f" },
       { id: "leo", name: "Leo", heightM: 1.83, pose: "seated", x: 0.35, z: -1.3, facing: 0, top: "#3f5c7c", bottom: "#857a62" },
     ],
-    bottle: { id: "bottle", name: "Hero bottle", x: 0.18, z: -0.52 },
     lights: [
       { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "dome", beamDeg: null, dimmer: 0.6, cct: 5600, x: 2.6, y: 2.3, z: 0.3, yaw: 0, pitch: 0, aimAt: "leo", frame: null, on: true },
       { id: "rim", role: "Rim", fixtureId: "titan", modifierId: "bare", beamDeg: null, dimmer: 1, cct: 5600, x: 3.2, y: 1.7, z: -1.6, yaw: 0, pitch: 0, aimAt: "leo", frame: null, on: true },
     ],
     grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: -2.2, y: 1.2, z: 0.8, yaw: 0, pitch: 0, aimAt: "leo" }],
     win: { sky: "overcast", nd: 0, on: true },
-    practical: { on: true, dimmer: 1, cct: 2700 },
     units: "ft",
     aspectId: "16x9",
   };
@@ -114,9 +137,13 @@ export function studioSetup(): Setup {
     trackYaw: twoShot.yaw,
   };
   return {
-    v: 2,
+    v: 3,
     name: "Studio, talent on seamless",
-    set: { kind: "studio", backdrop: { ...DEFAULT_BACKDROP } },
+    set: { kind: "stage", room: emptyRoom() },
+    items: [
+      item("seamless", "paper", 0, -0.9),
+      item("bottle", "bottle", 0.5, 0.1, { name: "Hero bottle" }),
+    ],
     shots: [
       shot("a", "1A", "Wide", "sticks", 32, 4, 0, { x: 0, y: 1.5, z: 4.4 }, { x: 0, y: 1.0, z: -0.4 }, "ava", 4.6, null, 800),
       twoShot,
@@ -127,29 +154,76 @@ export function studioSetup(): Setup {
       { id: "ava", name: "Ava", heightM: 1.7, pose: "standing", x: -0.45, z: -0.2, facing: 8, top: "#c4553d", bottom: "#2f3542" },
       { id: "sam", name: "Sam", heightM: 1.83, pose: "holding", x: 0.45, z: -0.25, facing: -12, top: "#3d6c8c", bottom: "#d6d0c4", holding: "bottle" },
     ],
-    bottle: { id: "bottle", name: "Hero bottle", x: 0.5, z: 0.1 },
     lights: [
       { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "dome", beamDeg: null, dimmer: 0.55, cct: 5600, x: 1.9, y: 2.2, z: 1.5, yaw: 0, pitch: 0, aimAt: "ava", frame: null, on: true },
       { id: "back", role: "Back", fixtureId: "ls300x", modifierId: "reflector", beamDeg: null, dimmer: 0.35, cct: 5600, x: -1.7, y: 2.4, z: -1.3, yaw: 0, pitch: 0, aimAt: "sam", frame: null, on: true },
     ],
     grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: -1.9, y: 1.2, z: 1.1, yaw: 0, pitch: 0, aimAt: "ava" }],
     win: { sky: "overcast", nd: 0, on: false },
-    practical: { on: false, dimmer: 1, cct: 2700 },
     units: "ft",
     aspectId: "16x9",
   };
 }
 
+/** A blank room built from measurements, with nobody in it yet. */
+export function blankSetup(width: number, depth: number, height: number): Setup {
+  const s = studioSetup();
+  return {
+    ...s,
+    name: "Untitled setup",
+    set: { kind: "room", room: emptyRoom(width, depth, height) },
+    items: [],
+    talent: [],
+    lights: [],
+    grips: [],
+    shots: [shot("a", "1A", "Wide", "sticks", 24, 4, 0, { x: 0, y: 1.5, z: depth * 0.5 }, { x: 0, y: 1.0, z: -depth * 0.3 }, null, depth * 0.6, null, 800)],
+    activeId: "a",
+    win: { sky: "overcast", nd: 0, on: true },
+  };
+}
+
 export const STORAGE_KEY = "previz.setup.v2";
+
+type V2 = Omit<Setup, "v" | "set" | "items"> & {
+  v: 2;
+  set: LegacySetSpec;
+  bottle: { id: string; name: string; x: number; z: number };
+  practical?: { on: boolean; dimmer: number; cct: number };
+};
+
+/** A version 2 setup, rebuilt as version 3: same scene, now made of items. */
+function fromV2(s: V2): Setup {
+  const bottle = item("bottle", "bottle", s.bottle?.x ?? 0, s.bottle?.z ?? 0, { name: s.bottle?.name ?? "Hero bottle" });
+  let set: SetSpec;
+  let items: ItemSpec[];
+  if (s.set?.kind === "kitchen") {
+    set = { kind: "room", room: KITCHEN_ROOM };
+    items = [...kitchenItems(s.practical), bottle];
+  } else {
+    const b: BackdropSpec = s.set?.backdrop ?? { widthIn: 107, color: "#f4f4f1", sweepM: 2.4, x: 0, z: -2.1, rot: 0 };
+    const r = (b.rot * Math.PI) / 180;
+    // v2 placed paper by its foot line; an item is placed by its middle.
+    const cx = b.x + (b.sweepM / 2) * Math.sin(r);
+    const cz = b.z + (b.sweepM / 2) * Math.cos(r);
+    set = { kind: "stage", room: emptyRoom() };
+    items = [item("seamless", "paper", cx, cz, { w: b.widthIn * 0.0254, d: b.sweepM, rot: b.rot, color: b.color }), bottle];
+  }
+  const { bottle: _b, practical: _p, ...rest } = s;
+  return { ...rest, v: 3, set, items };
+}
 
 /** A loose check that a parsed file is a setup this build can open. */
 export function asSetup(x: unknown): Setup | null {
   if (!x || typeof x !== "object") return null;
-  const s = x as Partial<Setup>;
-  if (s.v !== 2 || !Array.isArray(s.shots) || !s.shots.length || !Array.isArray(s.talent) || !Array.isArray(s.lights)) return null;
-  if (!s.set || !s.bottle || !s.win || !s.practical || !Array.isArray(s.grips)) return null;
+  const raw = x as Omit<Partial<Setup>, "v"> & { v?: number; items?: unknown };
+  if (!Array.isArray(raw.shots) || !raw.shots.length || !Array.isArray(raw.talent) || !Array.isArray(raw.lights)) return null;
+  if (!raw.set || !raw.win || !Array.isArray(raw.grips)) return null;
+  let s: Setup;
+  if (raw.v === 2) s = fromV2(raw as unknown as V2);
+  else if (raw.v === 3 && Array.isArray(raw.items)) s = raw as unknown as Setup;
+  else return null;
   const shots = s.shots.map((sh) => ({ ...sh, move: sh.move ?? null }));
-  return { ...(s as Setup), shots, activeId: shots.some((sh) => sh.id === s.activeId) ? s.activeId! : shots[0].id };
+  return { ...s, shots, activeId: shots.some((sh) => sh.id === s.activeId) ? s.activeId : shots[0].id };
 }
 
 export function loadSetup(): Setup | null {
@@ -164,15 +238,17 @@ export function loadSetup(): Setup | null {
 /**
  * Saves the setup in this browser. Uploaded storyboard frames are pictures and
  * can be large; if the browser refuses the whole thing, it is saved again
- * without them and the caller is told, rather than saving nothing.
+ * without them and the caller is told, rather than saving nothing. Product
+ * photos and models are not in here at all: they live in IndexedDB.
  */
 export function saveSetup(s: Setup): "ok" | "without-boards" | "failed" {
+  const { assets: _a, ...plain } = s;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(plain));
     return "ok";
   } catch {
     try {
-      const lean = { ...s, shots: s.shots.map((x) => ({ ...x, board: x.board && x.board.length < 60000 ? x.board : null })) };
+      const lean = { ...plain, shots: plain.shots.map((x) => ({ ...x, board: x.board && x.board.length < 60000 ? x.board : null })) };
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(lean));
       return "without-boards";
     } catch {
@@ -182,10 +258,20 @@ export function saveSetup(s: Setup): "ok" | "without-boards" | "failed" {
 }
 
 export function downloadSetup(s: Setup) {
-  const blob = new Blob([JSON.stringify(s, null, 1)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(s)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${s.name.replace(/[^\w\- ]+/g, "").trim() || "setup"}.previz.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/** The asset keys a setup's items use. */
+export function assetKeys(items: ItemSpec[]): string[] {
+  const out: string[] = [];
+  for (const i of items) {
+    if (i.label) out.push(i.label);
+    if (i.model?.key) out.push(i.model.key);
+  }
+  return out;
 }

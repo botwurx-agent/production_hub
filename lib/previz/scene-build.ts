@@ -1,8 +1,7 @@
-// The 3D world for the Scene Setup PROTOTYPE (app/dev/scene-setup). Builds a
-// styled-real kitchen set, stylised talent and props, basic motivated lighting,
-// the camera rigs shown in free view, and the depth of field pass. Lighting is
-// deliberately simple here: modifiers and diffusion are slice 3, and this file
-// only has to make slice 1 (camera and lens) judgeable.
+// The 3D world for the Scene Setup PROTOTYPE (app/dev/scene-setup): the empty
+// stage and its light roots, stylised talent, the camera rigs shown in free
+// view, and the depth of field pass. The room is lib/previz/room.ts and
+// everything placed on the set is lib/previz/set-items.ts.
 //
 // Conventions: metres, Y up. The room's back wall is toward -Z, the camera side
 // is +Z. A figure faces its local +Z, and `facing` (degrees) turns it about Y.
@@ -23,17 +22,12 @@ export type TalentSpec = {
   facing: number;
   top: string;
   bottom: string;
-  /** A prop held in the right hand ("bottle"), or nothing. */
+  /** A prop held in the right hand (an item id), or nothing. */
   holding?: string | null;
-};
-export type PropSpec = {
-  id: string;
-  name: string;
-  x: number;
-  z: number;
-  /** Resolved at runtime: the base's height, and who is holding it. Not saved. */
+  /** Where they walk to as the shot plays, if anywhere. */
+  mark?: { x: number; z: number; facing: number } | null;
+  /** Resolved at runtime, never saved: lifted by a riser or an apple box. */
   y?: number;
-  heldBy?: string | null;
 };
 
 const mat = (color: string, roughness = 0.8, metalness = 0) =>
@@ -45,70 +39,6 @@ function box(w: number, h: number, d: number, m: THREE.Material, x: number, y: n
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
-}
-
-/** Wide boards with grain-ish variation, drawn once into a canvas. */
-function plankTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = 1024;
-  c.height = 1024;
-  const g = c.getContext("2d")!;
-  const rows = 8;
-  for (let r = 0; r < rows; r++) {
-    let x = -((r * 173) % 400);
-    while (x < 1024) {
-      const len = 300 + ((x * 7 + r * 131) % 260);
-      const l = 46 + ((r * 37 + x) % 9);
-      g.fillStyle = `hsl(30 32% ${l}%)`;
-      g.fillRect(x, r * 128, len, 128);
-      for (let i = 0; i < 14; i++) {
-        g.strokeStyle = `hsla(28 30% ${l - 8}% / 0.35)`;
-        g.lineWidth = 1 + (i % 3);
-        g.beginPath();
-        const y = r * 128 + 8 + i * 8.5;
-        g.moveTo(x, y);
-        g.bezierCurveTo(x + len * 0.3, y + 3, x + len * 0.6, y - 3, x + len, y + 1);
-        g.stroke();
-      }
-      g.fillStyle = "rgba(40,25,15,0.55)";
-      g.fillRect(x, r * 128, 3, 128);
-      x += len;
-    }
-    g.fillStyle = "rgba(40,25,15,0.6)";
-    g.fillRect(0, r * 128, 1024, 3);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(3, 3);
-  t.anisotropy = 8;
-  return t;
-}
-
-/** A label for the hero bottle. Invented brand, never a real one. */
-function labelTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = 1024;
-  c.height = 256;
-  const g = c.getContext("2d")!;
-  g.fillStyle = "#f3efe6";
-  g.fillRect(0, 0, 1024, 256);
-  g.fillStyle = "#2f6f62";
-  g.fillRect(0, 0, 1024, 26);
-  g.fillRect(0, 230, 1024, 26);
-  for (const cx of [256, 768]) {
-    g.fillStyle = "#2f6f62";
-    g.font = "bold 92px Helvetica, Arial, sans-serif";
-    g.textAlign = "center";
-    g.fillText("SPRING", cx, 140);
-    g.fillStyle = "#c46a3b";
-    g.font = "600 34px Helvetica, Arial, sans-serif";
-    g.fillText("sparkling water", cx, 192);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
 }
 
 function capsule(radius: number, length: number, m: THREE.Material) {
@@ -191,90 +121,43 @@ export function buildFigure(t: TalentSpec): THREE.Group {
     g.add(hand);
   }
 
-  g.position.set(t.x, 0, t.z);
+  g.position.set(t.x, t.y ?? 0, t.z);
   g.rotation.y = (t.facing * Math.PI) / 180;
   return g;
 }
 
 /** Eye-line height of a figure, where "focus on" pulls to. */
 export function eyeHeight(t: TalentSpec): number {
-  return eyeY(poseDef(t.pose), t.heightM);
+  return (t.y ?? 0) + eyeY(poseDef(t.pose), t.heightM);
 }
 
 /** Where the right hand is in the world: a held prop sits in it. */
 export function handWorld(t: TalentSpec): { x: number; y: number; z: number } {
   const [hx, hy, hz] = rightHand(poseDef(t.pose), t.heightM);
   const r = (t.facing * Math.PI) / 180;
-  return { x: t.x + hx * Math.cos(r) + hz * Math.sin(r), y: hy, z: t.z - hx * Math.sin(r) + hz * Math.cos(r) };
-}
-
-export const BOTTLE_TOP_Y = 0.75; // the table top the bottle stands on
-
-function buildBottle(): THREE.Group {
-  const g = new THREE.Group();
-  g.name = "bottle";
-  const pts: THREE.Vector2[] = [];
-  const prof: [number, number][] = [
-    [0, 0], [0.034, 0.002], [0.036, 0.01], [0.036, 0.15], [0.033, 0.175],
-    [0.02, 0.205], [0.0125, 0.225], [0.0125, 0.25], [0.014, 0.252], [0, 0.252],
-  ];
-  for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y));
-  const glass = new THREE.MeshPhysicalMaterial({
-    color: "#dff2ee", roughness: 0.04, transmission: 0.92, thickness: 0.02, ior: 1.5,
-  });
-  const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 48), glass);
-  body.castShadow = true;
-  g.add(body);
-  const liquid = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.15, 40), mat("#cfe9e1", 0.1));
-  (liquid.material as THREE.MeshStandardMaterial).transparent = true;
-  (liquid.material as THREE.MeshStandardMaterial).opacity = 0.45;
-  liquid.position.y = 0.083;
-  g.add(liquid);
-  const label = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.0368, 0.0368, 0.085, 64, 1, true),
-    new THREE.MeshStandardMaterial({ map: labelTexture(), roughness: 0.55 }),
-  );
-  label.position.y = 0.085;
-  label.rotation.y = -Math.PI / 2;
-  g.add(label);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.02, 24), mat("#2f6f62", 0.4, 0.3));
-  cap.position.y = 0.258;
-  cap.castShadow = true;
-  g.add(cap);
-  return g;
+  return { x: t.x + hx * Math.cos(r) + hz * Math.sin(r), y: (t.y ?? 0) + hy, z: t.z - hx * Math.sin(r) + hz * Math.cos(r) };
 }
 
 export type Built = {
   scene: THREE.Scene;
   figures: Map<string, THREE.Group>;
-  bottle: THREE.Group;
   rigs: THREE.Group;
   /** Holds the movable fixtures, flags and bounce boards. */
   lightsRoot: THREE.Group;
-  /** Daylight through the window: a soft sky source, plus direct sun. */
-  windowLight: THREE.SpotLight;
+  /** The open stage's floor, shown when the set is a stage rather than a room. */
+  stage: THREE.Group;
+  /** The room shell (rebuilt when its measurements change). */
+  roomRoot: THREE.Group;
+  /** Everything placed on the set. */
+  itemsRoot: THREE.Group;
+  /** Daylight from outside each window, made per window. */
+  windowsRoot: THREE.Group;
   sun: THREE.DirectionalLight;
-  sky: THREE.MeshStandardMaterial;
-  pendant: THREE.PointLight;
-  bulb: THREE.MeshStandardMaterial;
   /** Light bouncing round the set, as one averaged level. */
   bounce: THREE.HemisphereLight;
-  /** The two sets: only one is visible at a time. */
-  kitchen: THREE.Group;
-  studio: THREE.Group;
 };
 
-/** The window opening, so the meter can find the sky. */
-export const WINDOW = { x: -4.06, z: -0.4, w: 1.7, sill: 0.9, top: 2.4 };
-export const WINDOW_AREA = WINDOW.w * (WINDOW.top - WINDOW.sill);
-/** The practical over the table: a 60W-equivalent bulb. */
-export const PENDANT = { x: 0, y: 1.94, z: -0.6, lumens: 800 };
-
-function glow(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color: "#000000", emissive: "#ffffff", emissiveIntensity: 1, roughness: 1 });
-}
-
-/** The kitchen set. Returned groups are the things the UI moves. */
+/** The empty world: a dark stage, the light roots, sun and room bounce. */
 export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   const scene = new THREE.Scene();
   // Beyond the set is a dark stage, which is what a real set has around it.
@@ -283,123 +166,24 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0;
 
-  // The kitchen lives in its own group so the studio can take its place.
-  const kitchen = new THREE.Group();
-  kitchen.name = "kitchen";
-  scene.add(kitchen);
-  const studio = new THREE.Group();
-  studio.name = "studio";
-  studio.visible = false;
-  studio.add(buildStageFloor());
-  scene.add(studio);
-
-  const plaster = mat("#d8d0c3", 0.95);
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(9, 9),
-    new THREE.MeshStandardMaterial({ map: plankTexture(), roughness: 0.62 }),
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0, 0.5);
-  floor.receiveShadow = true;
-  kitchen.add(floor);
-
-  // Back wall, and a left wall with a window cut into it
-  kitchen.add(box(9, 3.2, 0.12, plaster, 0, 1.6, -2.56));
-  const wx = WINDOW.x;
-  const win = WINDOW;
-  kitchen.add(box(0.12, 3.2, win.z - win.w / 2 + 2.56, plaster, wx, 1.6, (-2.56 + win.z - win.w / 2) / 2));
-  kitchen.add(box(0.12, 3.2, 4.94 - (win.z + win.w / 2), plaster, wx, 1.6, (win.z + win.w / 2 + 4.94) / 2));
-  kitchen.add(box(0.12, win.sill, win.w, plaster, wx, win.sill / 2, win.z));
-  kitchen.add(box(0.12, 3.2 - win.top, win.w, plaster, wx, (win.top + 3.2) / 2, win.z));
-  const frame = mat("#f2efe8", 0.6);
-  kitchen.add(box(0.14, 0.05, win.w, frame, wx, win.sill, win.z));
-  kitchen.add(box(0.14, 0.05, win.w, frame, wx, win.top, win.z));
-  kitchen.add(box(0.14, win.top - win.sill, 0.04, frame, wx, (win.sill + win.top) / 2, win.z));
-  // The sky seen through the window glows at real sky brightness, so it
-  // blows out unless the window is gelled, exactly as it does on a set.
-  const skyMat = glow();
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), skyMat);
-  sky.position.set(wx - 1.5, 1.7, win.z);
-  sky.rotation.y = Math.PI / 2;
-  sky.userData.noOcclude = true;
-  kitchen.add(sky);
-
-  // Counter run along the back wall, with a plant on it
-  const cab = mat("#7f9182", 0.7);
-  kitchen.add(box(3.4, 0.86, 0.62, cab, 0.6, 0.43, -2.19));
-  kitchen.add(box(3.46, 0.04, 0.66, mat("#ece8e1", 0.35), 0.6, 0.88, -2.19));
-  kitchen.add(box(3.4, 0.7, 0.36, cab, 0.6, 2.05, -2.32));
-  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.2, 24), mat("#b5643f", 0.8));
-  pot.position.set(1.85, 1.0, -2.15);
-  pot.castShadow = true;
-  kitchen.add(pot);
-  const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 1), mat("#4e6e45", 0.9));
-  leaves.position.set(1.85, 1.28, -2.15);
-  leaves.castShadow = true;
-  kitchen.add(leaves);
-
-  // Table and two chairs
-  const walnut = mat("#6a4a34", 0.5);
-  kitchen.add(box(1.6, 0.05, 0.9, walnut, 0, 0.725, -0.6));
-  for (const [lx, lz] of [[-0.72, -0.98], [0.72, -0.98], [-0.72, -0.22], [0.72, -0.22]])
-    kitchen.add(box(0.05, 0.7, 0.05, walnut, lx, 0.35, lz));
-  const chair = (x: number, z: number, rot: number) => {
-    const c = new THREE.Group();
-    c.add(box(0.44, 0.04, 0.42, walnut, 0, 0.45, 0));
-    c.add(box(0.44, 0.45, 0.03, walnut, 0, 0.7, -0.2));
-    for (const [lx, lz] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]])
-      c.add(box(0.035, 0.45, 0.035, walnut, lx, 0.225, lz));
-    c.position.set(x, 0, z);
-    c.rotation.y = rot;
-    kitchen.add(c);
-  };
-  chair(0.35, -1.3, 0);
-  chair(-0.45, -1.3, 0);
-
-  const bottle = buildBottle();
-  scene.add(bottle);
-
-  // Pendant practical over the table
-  const shade = new THREE.Mesh(
-    new THREE.ConeGeometry(0.2, 0.18, 32, 1, true),
-    new THREE.MeshStandardMaterial({ color: "#2b2b2b", roughness: 0.5, side: THREE.DoubleSide }),
-  );
-  shade.position.set(0, 2.05, -0.6);
-  kitchen.add(shade);
-  kitchen.add(box(0.008, 1.05, 0.008, mat("#222"), 0, 2.67, -0.6));
-  const bulbMat = glow();
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), bulbMat);
-  bulb.position.set(0, 1.98, -0.6);
-  bulb.userData.noOcclude = true;
-  kitchen.add(bulb);
-  const pendant = new THREE.PointLight("#ffffff", 0, 0, 2);
-  pendant.position.set(PENDANT.x, PENDANT.y, PENDANT.z);
-  scene.add(pendant);
-
-  // Daylight. The sky source sits OUTSIDE the wall, so the wall itself shapes
-  // the patch of light on the floor the way a real window does.
-  const windowLight = new THREE.SpotLight("#ffffff", 0, 0, 89 * (Math.PI / 180), 1, 2);
-  windowLight.position.set(wx - 0.35, (win.sill + win.top) / 2, win.z);
-  windowLight.target.position.set(wx + 3, (win.sill + win.top) / 2 - 0.4, win.z);
-  windowLight.castShadow = true;
-  windowLight.shadow.mapSize.set(1024, 1024);
-  windowLight.shadow.camera.near = 0.1;
-  windowLight.shadow.camera.far = 20;
-  windowLight.shadow.bias = -0.0006;
-  windowLight.shadow.radius = 18;
-  windowLight.shadow.blurSamples = 16;
-  scene.add(windowLight, windowLight.target);
+  const stage = new THREE.Group();
+  stage.name = "stage";
+  stage.add(buildStageFloor());
+  scene.add(stage);
+  const roomRoot = new THREE.Group();
+  roomRoot.name = "roomRoot";
+  scene.add(roomRoot);
+  const itemsRoot = new THREE.Group();
+  itemsRoot.name = "items";
+  scene.add(itemsRoot);
+  const windowsRoot = new THREE.Group();
+  windowsRoot.name = "windows";
+  scene.add(windowsRoot);
 
   const sun = new THREE.DirectionalLight("#ffffff", 0);
-  sun.position.set(-9, 4.8, -0.2);
-  sun.target.position.set(0, 0.7, -0.6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -5;
-  sun.shadow.camera.right = 5;
-  sun.shadow.camera.top = 5;
-  sun.shadow.camera.bottom = -5;
-  sun.shadow.camera.far = 25;
+  sun.shadow.camera.far = 40;
   sun.shadow.bias = -0.0004;
   sun.shadow.radius = 1.5;
   scene.add(sun, sun.target);
@@ -415,9 +199,7 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   rigs.name = "rigs";
   scene.add(rigs);
 
-  return {
-    scene, figures: new Map(), bottle, rigs, lightsRoot, windowLight, sun, sky: skyMat, pendant, bulb: bulbMat, bounce, kitchen, studio,
-  };
+  return { scene, figures: new Map(), rigs, lightsRoot, stage, roomRoot, itemsRoot, windowsRoot, sun, bounce };
 }
 
 /**

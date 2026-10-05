@@ -1,12 +1,17 @@
 "use client";
 
-// Scene Setup PROTOTYPE, slice 1: camera and lens truth. A throwaway at
-// /dev/scene-setup with no database and no app wiring, built so the operator
-// can judge how it feels to drive before anything real is built (see
-// CLAUDE.md, "Scene Setup: 3D previz"). The layout is the one they confirmed:
-// through-the-lens main view, live top-down map in the corner, scene contents
-// on the left, a production-language inspector on the right, shots along the
-// bottom with each storyboard frame beside what its camera sees.
+// Scene Setup PROTOTYPE: a throwaway at /dev/scene-setup with no database and
+// no app wiring, built so the operator can judge how it feels to drive before
+// anything real is built (see CLAUDE.md, "Scene Setup: 3D previz"). The
+// layout is the one they confirmed: through-the-lens main view, live top-down
+// map in the corner, scene contents on the left, a production-language
+// inspector on the right, shots along the bottom with each storyboard frame
+// beside what its camera sees.
+//
+// The set is free-form: a room built from measurements (or an open stage) and
+// any number of items on it (backdrops, flats, risers, furniture, practicals,
+// props, products from photos, imported models), plus talent who can walk to
+// a mark while the camera moves.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -14,14 +19,9 @@ import {
   ASPECTS, BODIES, PRIMES, STOPS, cameraAngle, circleOfConfusion, dofLimits, feet,
   fovDeg, imagedArea, metres, shotSize,
 } from "@/lib/previz/optics";
-import {
-  BOTTLE_TOP_Y, PENDANT, WINDOW, WINDOW_AREA, buildFigure, buildRig, buildWorld, dofMaterial, eyeHeight, handWorld,
-  type PropSpec, type TalentSpec,
-} from "@/lib/previz/scene-build";
+import { buildFigure, buildRig, buildWorld, dofMaterial, eyeHeight, handWorld, type TalentSpec } from "@/lib/previz/scene-build";
 import { SAMPLE_BOARDS } from "@/lib/previz/boards";
-import {
-  SUPPORTS, bodyDrop, buildSupport, robotBaseLocal, supportFootprint, type SupportKind, type SupportOpts,
-} from "@/lib/previz/camera-model";
+import { SUPPORTS, bodyDrop, buildSupport, robotBaseLocal, type SupportOpts } from "@/lib/previz/camera-model";
 import {
   FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, exposureScale, resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
@@ -33,32 +33,43 @@ import {
   bounceCandela, collectOccluders, emitterFromSource, nearFieldScale, readMeter, roomLuxFrom, type Board, type Emitter, type Reading,
 } from "@/lib/previz/meter";
 import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, WindowInspector } from "./light-panels";
-import { Chip, Field, Info, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
+import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 import {
-  aim, asSetup, downloadSetup, kitchenSetup, loadSetup, saveSetup, studioSetup,
-  type PracticalState, type Setup, type Shot, type Units, type Vec3, type WinState,
+  aim, asSetup, assetKeys, blankSetup, downloadSetup, kitchenSetup, loadSetup, saveSetup, studioSetup,
+  type Setup, type Shot, type Units, type Vec3, type WinState,
 } from "./setup";
 import { Timeline } from "./timeline";
 import {
-  camAt, constrainEnd, fromLocal, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
+  camAt, constrainEnd, ease, fromLocal, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
 } from "@/lib/previz/camera-move";
-import {
-  PAPER_COLORS, ROLL_WIDTHS, backdropFootprint, buildBackdrop, type BackdropSpec, type SetSpec,
-} from "@/lib/previz/studio-set";
 import { POSES } from "@/lib/previz/poses";
+import {
+  CATEGORIES, bulbLocal, buildItem, catalogOf, containsPoint, itemShapeKey, itemToWorld, newItem, stackHeights, standHeight,
+  type ItemSpec, type LabelArt,
+} from "@/lib/previz/set-items";
+import { buildRoom, roomBounds, roomWindows, type SetSpec, type WindowInfo } from "@/lib/previz/room";
+import { embedAssets, getAsset, prepareLabel, putAsset, restoreAssets } from "@/lib/previz/asset-store";
+import { MAX_MODEL_BYTES, UNITS, guessUnit, loadModel, modelFormat, rawSize } from "@/lib/previz/model-import";
+import { strideSide, walkSpeed, walkerAt } from "@/lib/previz/talent-walk";
+import { AddMenu, ItemInspector, RoomInspector, ScoutDialog, type ScoutChoices } from "./set-panels";
+import { SHOT_HUES, TopDownMap, type MapPick } from "./top-down-map";
+import { readScoutPhoto } from "@/app/dev/scene-setup/actions";
+import type { RoomDraft } from "@/lib/previz/room-draft";
 
 type Selection =
   | { kind: "camera" }
   | { kind: "talent"; id: string }
-  | { kind: "prop" }
+  | { kind: "item"; id: string }
   | { kind: "light"; id: string }
-  | { kind: "window" }
-  | { kind: "practical" }
+  | { kind: "daylight" }
   | { kind: "grip"; id: string }
   | { kind: "set" };
 
+/** Everything that stands on the set, placed: heights resolved, held props in hand. */
+type Scene = { talent: TalentSpec[]; items: ItemSpec[]; walk: Map<string, { walking: boolean; walked: number }> };
+
 const STAGE_BG = "#131416"; // neutral and fixed: the frame is judged here
-const SHOT_HUES = ["#6b7cff", "#e0884f", "#3fb68b", "#c26be0", "#d6b03a", "#3bb2d0"];
+const UP = new THREE.Vector3(0, 1, 0);
 
 const rad = (d: number) => (d * Math.PI) / 180;
 const deg = (r: number) => (r * 180) / Math.PI;
@@ -69,33 +80,48 @@ function forward(yaw: number, pitch: number): THREE.Vector3 {
   return new THREE.Vector3(-Math.sin(y) * Math.cos(p), Math.sin(p), -Math.cos(y) * Math.cos(p));
 }
 
-/** Where a focus target sits in the world. */
-function targetPoint(id: string, talent: TalentSpec[], bottle: PropSpec): THREE.Vector3 | null {
-  if (id === "bottle") return new THREE.Vector3(bottle.x, (bottle.y ?? bottleBaseY(bottle)) + 0.1, bottle.z);
-  const t = talent.find((x) => x.id === id);
-  return t ? new THREE.Vector3(t.x, eyeHeight(t), t.z) : null;
-}
 /**
- * The bottle where it really is: in somebody's hand when they are holding it,
- * otherwise standing on whatever surface is under it (the studio has none).
+ * Talent and items where they really are at `k` (0 to 1) through the action:
+ * people part way to their marks and lifted by a riser or an apple box under
+ * them, items stacked on whatever is under them, and anything somebody holds
+ * in their right hand.
  */
-function placeBottle(b: PropSpec, talent: TalentSpec[], set: SetSpec): PropSpec {
-  const holder = talent.find((t) => t.holding === "bottle" && t.pose === "holding");
-  if (holder) {
-    const h = handWorld(holder);
-    return { ...b, x: h.x, y: h.y - 0.12, z: h.z, heldBy: holder.id };
-  }
-  return { ...b, y: set.kind === "kitchen" ? bottleBaseY(b) : 0, heldBy: null };
+function placeScene(rawTalent: TalentSpec[], rawItems: ItemSpec[], k: number): Scene {
+  const heights = stackHeights(rawItems);
+  const walk = new Map<string, { walking: boolean; walked: number }>();
+  const talent = rawTalent.map((raw) => {
+    const w = walkerAt(raw, k);
+    walk.set(raw.id, { walking: w.walking, walked: w.walked });
+    const { walking: _a, walked: _b, ...t } = w;
+    return { ...t, y: t.pose === "seated" ? 0 : standHeight(rawItems, heights, t.x, t.z) };
+  });
+  const items = rawItems.map((i) => {
+    const holder = talent.find((t) => t.holding === i.id && t.pose === "holding");
+    if (holder && catalogOf(i.kind).holdable) {
+      const h = handWorld(holder);
+      return { ...i, x: h.x, y: h.y - i.h * 0.45, z: h.z, rot: holder.facing, heldBy: holder.id };
+    }
+    return { ...i, y: heights.get(i.id) ?? 0, heldBy: null };
+  });
+  return { talent, items, walk };
 }
-function bottleBaseY(b: PropSpec): number {
-  if (b.x > -0.78 && b.x < 0.78 && b.z > -1.03 && b.z < -0.17) return BOTTLE_TOP_Y;
-  if (b.x > -1.1 && b.x < 2.3 && b.z < -1.86) return 0.9;
-  return 0;
+
+/** Where a focus or aim target sits in the world. */
+function targetPoint(id: string, sc: Scene): THREE.Vector3 | null {
+  const t = sc.talent.find((x) => x.id === id);
+  if (t) return new THREE.Vector3(t.x, eyeHeight(t), t.z);
+  const i = sc.items.find((x) => x.id === id);
+  if (i) return new THREE.Vector3(i.x, (i.y ?? 0) + i.h * (catalogOf(i.kind).surface === 1 ? 1 : 0.55), i.z);
+  return null;
+}
+function targetName(id: string | null, sc: Scene): string | null {
+  if (!id) return null;
+  return sc.talent.find((t) => t.id === id)?.name ?? sc.items.find((i) => i.id === id)?.name ?? null;
 }
 /** Focus distance is measured to the focus PLANE, along the lens axis. */
-function effectiveFocus(s: Shot, talent: TalentSpec[], bottle: PropSpec): number {
+function effectiveFocus(s: Shot, sc: Scene): number {
   if (!s.focusOn) return s.focusM;
-  const p = targetPoint(s.focusOn, talent, bottle);
+  const p = targetPoint(s.focusOn, sc);
   if (!p) return s.focusM;
   const d = p.sub(new THREE.Vector3(s.pos.x, s.pos.y, s.pos.z)).dot(forward(s.yaw, s.pitch));
   return Math.max(0.25, d);
@@ -127,14 +153,14 @@ function camKey(s: Shot): CamKey {
  * two people pulls focus smoothly from one distance to the other, measured
  * from wherever the camera is at that moment.
  */
-function viewShot(s: Shot, t: number, talent: TalentSpec[], bottle: PropSpec): Shot {
+function viewShot(s: Shot, t: number, sc: Scene): Shot {
   if (!s.move || t <= 0) return s;
   const c = camAt(camKey(s), s.move, t);
   const base: Shot = { ...s, pos: c.pos, yaw: c.yaw, pitch: c.pitch, focal: c.focal };
   const e = s.move.end;
   if (s.focusOn === e.focusOn) return { ...base, focusOn: s.focusOn, focusM: c.focusM };
-  const fa = effectiveFocus({ ...base, focusOn: s.focusOn, focusM: s.focusM }, talent, bottle);
-  const fb = effectiveFocus({ ...base, focusOn: e.focusOn, focusM: e.focusM }, talent, bottle);
+  const fa = effectiveFocus({ ...base, focusOn: s.focusOn, focusM: s.focusM }, sc);
+  const fb = effectiveFocus({ ...base, focusOn: e.focusOn, focusM: e.focusM }, sc);
   return { ...base, focusOn: null, focusM: fa + (fb - fa) * c.mix };
 }
 /**
@@ -157,25 +183,30 @@ function supportPose(s: Shot, at: Vec3): { yaw: number; opts: SupportOpts } {
 }
 
 const WINDOW_CCT: Record<WindowSky, number> = { overcast: 6500, bright: 6000, sun: 5600 };
-const SUN_FROM = new THREE.Vector3(-9, 4.8, -0.2);
-const SUN_TO = new THREE.Vector3(0, 0.7, -0.6);
-const SUN_DIR = SUN_FROM.clone().sub(SUN_TO).normalize();
-const WINDOW_MID = new THREE.Vector3(WINDOW.x + 0.08, (WINDOW.sill + WINDOW.top) / 2, WINDOW.z);
-const PENDANT_R = 0.045;
+const BULB_R = 0.045;
+
+/** Toward the sun: low and outside the first window, coming in at a slant. */
+function sunDirection(windows: WindowInfo[]): THREE.Vector3 | null {
+  const w = windows[0];
+  if (!w) return null;
+  const el = rad(24);
+  const out = w.inward.clone().negate().applyAxisAngle(UP, rad(15)).multiplyScalar(Math.cos(el));
+  return out.add(new THREE.Vector3(0, Math.sin(el), 0)).normalize();
+}
 
 type Placed = { x: number; y: number; z: number; yaw: number; pitch: number; aimAt: string | null };
 /** Where a light or a board points: at its target if it has one. */
-function aimOf(p: Placed, talent: TalentSpec[], bottle: PropSpec): { yaw: number; pitch: number } {
+function aimOf(p: Placed, sc: Scene): { yaw: number; pitch: number } {
   if (p.aimAt) {
-    const t = targetPoint(p.aimAt, talent, bottle);
+    const t = targetPoint(p.aimAt, sc);
     if (t) return aim({ x: p.x, y: p.y, z: p.z }, t);
   }
   return { yaw: p.yaw, pitch: p.pitch };
 }
 /** Where the meter is held for a shot: on the focus target, or on the focus plane. */
-function meterPoint(s: Shot, talent: TalentSpec[], bottle: PropSpec): THREE.Vector3 {
+function meterPoint(s: Shot, sc: Scene): THREE.Vector3 {
   if (s.focusOn) {
-    const t = targetPoint(s.focusOn, talent, bottle);
+    const t = targetPoint(s.focusOn, sc);
     if (t) return t;
   }
   return new THREE.Vector3(s.pos.x, s.pos.y, s.pos.z).addScaledVector(forward(s.yaw, s.pitch), s.focusM);
@@ -190,10 +221,7 @@ function besideSubject(s: Shot, subject: THREE.Vector3, deg: number, m: number):
   const a = rad(deg);
   const x = toCam.x * Math.cos(a) + toCam.z * Math.sin(a);
   const z = -toCam.x * Math.sin(a) + toCam.z * Math.cos(a);
-  return {
-    x: Math.max(-3.8, Math.min(4.2, subject.x + x * m)),
-    z: Math.max(-2.3, Math.min(4.8, subject.z + z * m)),
-  };
+  return { x: subject.x + x * m, z: subject.z + z * m };
 }
 /** True when a thing `halfM` wide at (x, z) sits outside the shot's frame. */
 function outOfFrame(s: Shot, hfov: number, x: number, z: number, halfM: number): boolean {
@@ -234,9 +262,9 @@ function findSpot(
  * A light with its diffusion frame kept in front of whatever it is aimed at:
  * a frame slid past the subject would be lighting the back of their head.
  */
-function effLight(s: LightSpec, talent: TalentSpec[], bottle: PropSpec): LightSpec {
+function effLight(s: LightSpec, sc: Scene): LightSpec {
   if (!s.frame || !s.aimAt) return s;
-  const t = targetPoint(s.aimAt, talent, bottle);
+  const t = targetPoint(s.aimAt, sc);
   if (!t) return s;
   const max = Math.max(0.3, t.distanceTo(new THREE.Vector3(s.x, s.y, s.z)) - 0.5);
   return s.frame.distM > max ? { ...s, frame: { ...s.frame, distM: max } } : s;
@@ -247,8 +275,10 @@ function fixtureOf(s: LightSpec) {
 function lightLabel(s: LightSpec) {
   return `${s.role} · ${fixtureOf(s).name.replace(/^(Aputure|ARRI|Astera) /, "")}`;
 }
+/** Frees GPU memory under an object, leaving a loaded model's shared geometry alone. */
 function disposeTree(o: THREE.Object3D) {
   o.traverse((c) => {
+    if (c.userData.shared) return;
     const m = c as THREE.Mesh;
     m.geometry?.dispose?.();
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
@@ -257,43 +287,76 @@ function disposeTree(o: THREE.Object3D) {
     (c as THREE.Light).dispose?.();
   });
 }
+function clearGroup(g: THREE.Group) {
+  for (const c of [...g.children]) {
+    g.remove(c);
+    disposeTree(c);
+  }
+}
+/** A practical's light, as lumens out of the bulb. */
+function lampFlux(i: ItemSpec): number {
+  return i.light?.on ? i.light.lumens * i.light.dimmer : 0;
+}
 /** Every source in the scene, as the meter sees it. */
-function buildEmitters(
-  lights: LightSpec[], win: WinState, practical: PracticalState, talent: TalentSpec[], bottle: PropSpec, kitchen: boolean,
-): Emitter[] {
+function buildEmitters(lights: LightSpec[], win: WinState, sc: Scene, windows: WindowInfo[]): Emitter[] {
   const out: Emitter[] = [];
   for (const raw of lights) {
     if (!raw.on) continue;
-    const s = effLight(raw, talent, bottle);
+    const s = effLight(raw, sc);
     const src = resolveSource(fixtureOf(s), s.modifierId, s.dimmer, s.beamDeg, s.frame);
-    const a = aimOf(s, talent, bottle);
+    const a = aimOf(s, sc);
     out.push(emitterFromSource(s.id, lightLabel(s), new THREE.Vector3(s.x, s.y, s.z), forward(a.yaw, a.pitch), src));
   }
-  if (win.on && kitchen) {
+  if (win.on) {
     const nits = WINDOW_SKIES[win.sky].skyNits * Math.pow(10, -win.nd);
-    out.push({
-      id: "window", label: "Window", pos: WINDOW_MID.clone(), fwd: new THREE.Vector3(1, 0, 0),
-      candela: nits * WINDOW_AREA, beamDeg: 180, omni: false, sizeM: WINDOW.w, flux: nits * WINDOW_AREA * Math.PI,
-    });
+    windows.forEach((w, i) => out.push({
+      id: `window:${w.id}`, label: windows.length > 1 ? `Window ${i + 1}` : "Window", pos: w.centre.clone(), fwd: w.inward.clone(),
+      candela: nits * w.area, beamDeg: 180, omni: false, sizeM: w.width, flux: nits * w.area * Math.PI,
+    }));
   }
-  if (practical.on && kitchen) {
-    const flux = PENDANT.lumens * practical.dimmer;
+  for (const i of sc.items) {
+    const flux = lampFlux(i);
+    if (flux <= 0) continue;
     out.push({
-      id: "practical", label: "Pendant", pos: new THREE.Vector3(PENDANT.x, PENDANT.y, PENDANT.z), fwd: new THREE.Vector3(0, -1, 0),
-      candela: flux / (4 * Math.PI), beamDeg: 360, omni: true, sizeM: PENDANT_R * 2, flux,
+      id: i.id, label: i.name, pos: itemToWorld(i, bulbLocal(i)), fwd: new THREE.Vector3(0, -1, 0),
+      candela: flux / (4 * Math.PI), beamDeg: 360, omni: true, sizeM: BULB_R * 2, flux,
     });
   }
   return out;
 }
 
+/** A camera-side photo, made small: a data URL for an overlay, base64 for the reader. */
+async function shrinkPhoto(file: File, maxSide: number, quality: number): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("That file is not a photo this browser can read."));
+      i.src = url;
+    });
+    const s = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(img.width * s));
+    c.height = Math.max(1, Math.round(img.height * s));
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", quality);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+type ModelEntry = { obj: THREE.Object3D; raw: { x: number; y: number; z: number } } | "loading" | "missing";
+type ArtEntry = (LabelArt & { aspect: number }) | "loading" | "missing";
+
 export function PrevizPrototype() {
   const [initial] = useState(kitchenSetup);
   const [name, setName] = useState(initial.name);
   const [set, setSet] = useState<SetSpec>(initial.set);
+  const [items, setItems] = useState<ItemSpec[]>(initial.items);
   const [shots, setShots] = useState<Shot[]>(initial.shots);
   const [activeId, setActiveId] = useState(initial.activeId);
   const [talent, setTalent] = useState<TalentSpec[]>(initial.talent);
-  const [rawBottle, setRawBottle] = useState<PropSpec>(initial.bottle);
   const [aspectId, setAspectId] = useState(initial.aspectId);
   const [view, setView] = useState<"lens" | "free">("lens");
   const [clay, setClay] = useState(false);
@@ -308,7 +371,6 @@ export function PrevizPrototype() {
   const [lights, setLights] = useState<LightSpec[]>(initial.lights);
   const [grips, setGrips] = useState<GripSpec[]>(initial.grips);
   const [win, setWin] = useState<WinState>(initial.win);
-  const [practical, setPractical] = useState<PracticalState>(initial.practical);
   const [zebra, setZebra] = useState(false);
   const [meter, setMeter] = useState<Reading | null>(null);
   // The move timeline: where the playhead sits (0 start, 1 end), and playback.
@@ -317,20 +379,29 @@ export function PrevizPrototype() {
   const [recording, setRecording] = useState(false);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [scout, setScout] = useState(false);
+  // Bumped when a product photo or a model finishes loading, so the set rebuilds.
+  const [assetTick, setAssetTick] = useState(0);
 
-  const bottle = useMemo(() => placeBottle(rawBottle, talent, set), [rawBottle, talent, set]);
   const rawActive = shots.find((s) => s.id === activeId) ?? shots[0];
+  // Talent walk to their marks over the active shot's move, with its ease.
+  const actionK = rawActive.move ? ease(rawActive.move.ease, playhead) : 0;
+  const scene = useMemo(() => placeScene(talent, items, actionK), [talent, items, actionK]);
   // What the camera sees right now: the start, the end, or a moment between.
-  const active = viewShot(rawActive, playhead, talent, bottle);
+  const active = viewShot(rawActive, playhead, scene);
   const aspect = ASPECTS.find((a) => a.id === aspectId) ?? ASPECTS[0];
   const body = BODIES.find((b) => b.id === active.bodyId) ?? BODIES[0];
   const area = imagedArea(body, aspect.ratio);
-  const focus = effectiveFocus(active, talent, bottle);
+  const focus = effectiveFocus(active, scene);
+  const windows = useMemo(() => (set.kind === "room" ? roomWindows(set.room) : []), [set]);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const live = useRef({ shots, activeId, talent, bottle, aspect, view, clay, lights, grips, win, practical, zebra, set, playhead });
-  live.current = { shots, activeId, talent, bottle, aspect, view, clay, lights, grips, win, practical, zebra, set, playhead };
+  const live = useRef({ shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead });
+  live.current = { shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead };
+  // The scene as last posed by the render loop, which the light rigs aim from.
+  const poseRef = useRef<Scene>(scene);
   // Playback runs in the render loop, not in React: `t0` is when the move
   // started, and a recording composites each frame onto `comp` for the clip.
   const playRef = useRef<{
@@ -344,6 +415,15 @@ export function PrevizPrototype() {
   // What the meter worked out and the renderer needs: light thrown back by
   // each bounce board, and the averaged room bounce.
   const levels = useRef<{ bounce: Map<string, number>; roomLux: number }>({ bounce: new Map(), roomLux: 0 });
+  // The 3D objects the React state turns into, kept by id.
+  const figs = useRef(new Map<string, { base: THREE.Group; walk: [THREE.Group, THREE.Group] | null }>());
+  const itemObjs = useRef(new Map<string, { group: THREE.Group; key: string }>());
+  const windowLights = useRef<{ info: WindowInfo; light: THREE.SpotLight }[]>([]);
+  const skies = useRef(new Map<string, THREE.MeshStandardMaterial>());
+  const sunDir = useRef<THREE.Vector3 | null>(null);
+  // Loaded product photos and models, by asset key.
+  const art = useRef(new Map<string, ArtEntry>());
+  const models = useRef(new Map<string, ModelEntry>());
   const engine = useRef<{
     renderer: THREE.WebGLRenderer;
     world: ReturnType<typeof buildWorld>;
@@ -358,11 +438,16 @@ export function PrevizPrototype() {
     lightRigs: Map<string, LightRig>;
     gripRigs: Map<string, GripRig>;
     syncRigs: (wb: number) => void;
+    pose: (sc: Scene) => void;
   } | null>(null);
   const captureQueue = useRef<string[]>([]);
   const lastChange = useRef(0);
   const activeDirty = useRef(true);
   const saveFrame = useRef(false);
+  const dirty = () => {
+    activeDirty.current = true;
+    lastChange.current = performance.now();
+  };
 
   /**
    * Changes a shot. With a move, a camera change lands on whichever frame the
@@ -435,9 +520,9 @@ export function PrevizPrototype() {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     const world = buildWorld(renderer);
-    const shotCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.05, 60);
+    const shotCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.05, 80);
     shotCam.rotation.order = "YXZ";
-    const freeCam = new THREE.PerspectiveCamera(50, 16 / 9, 0.05, 100);
+    const freeCam = new THREE.PerspectiveCamera(50, 16 / 9, 0.05, 200);
     freeCam.position.set(5.5, 5.2, 6.5);
     const controls = new OrbitControls(freeCam, canvas);
     controls.target.set(-0.2, 0.8, -0.6);
@@ -463,21 +548,23 @@ export function PrevizPrototype() {
     // every frame; geometry is rebuilt only when a fixture or modifier changes.
     const syncRigs = (wb: number) => {
       const L = live.current;
+      const sc = poseRef.current;
       const seen = new Set<string>();
       let shadows = 0;
       for (const raw of L.lights) {
-        const s = effLight(raw, L.talent, L.bottle);
+        const s = effLight(raw, sc);
         seen.add(s.id);
         let rig = lightRigs.get(s.id);
         if (!rig || rig.structureKey !== structureKey(s)) {
           if (rig) { world.lightsRoot.remove(rig.group); disposeTree(rig.group); }
           rig = buildLightRig(s);
+          rig.group.userData.pick = { kind: "light", id: s.id };
           world.lightsRoot.add(rig.group);
           lightRigs.set(s.id, rig);
         }
         const src = resolveSource(fixtureOf(s), s.modifierId, s.dimmer, s.beamDeg, s.frame);
-        const a = aimOf(s, L.talent, L.bottle);
-        const t = s.aimAt ? targetPoint(s.aimAt, L.talent, L.bottle) : null;
+        const a = aimOf(s, sc);
+        const t = s.aimAt ? targetPoint(s.aimAt, sc) : null;
         const d = t ? Math.max(0.3, t.distanceTo(new THREE.Vector3(s.x, s.y, s.z)) - src.offsetM) : 2;
         const size = Math.max(src.sourceW, src.sourceH);
         const soft = apparentSizeDeg(size, d);
@@ -501,13 +588,14 @@ export function PrevizPrototype() {
           if (rig) { world.lightsRoot.remove(rig.group); disposeTree(rig.group); }
           rig = buildGripRig(g);
           rig.group.userData.key = key;
+          rig.group.userData.pick = { kind: "grip", id: g.id };
           world.lightsRoot.add(rig.group);
           gripRigs.set(g.id, rig);
         }
-        const gt = g.aimAt ? targetPoint(g.aimAt, L.talent, L.bottle) : null;
+        const gt = g.aimAt ? targetPoint(g.aimAt, sc) : null;
         const gd = gt ? Math.max(0.3, gt.distanceTo(new THREE.Vector3(g.x, g.y, g.z))) : 2;
         const cd = (levels.current.bounce.get(g.id) ?? 0) * nearFieldScale(g.sizeFt * FT, gd);
-        updateGripRig(rig, g, aimOf(g, L.talent, L.bottle), cd, cameraColor(5600, wb));
+        updateGripRig(rig, g, aimOf(g, sc), cd, cameraColor(5600, wb));
       }
       for (const [id, rig] of gripRigs) {
         if (seen.has(id)) continue;
@@ -516,25 +604,33 @@ export function PrevizPrototype() {
         gripRigs.delete(id);
       }
 
-      // Daylight: the sky through the glass, and the sun when there is one.
+      // Daylight: the sky through each window, and the sun through the first.
       const sky = WINDOW_SKIES[L.win.sky];
-      const kitchen = L.set.kind === "kitchen";
-      const tau = Math.pow(10, -L.win.nd) * (L.win.on && kitchen ? 1 : 0);
+      const roomOn = L.set.kind === "room";
+      const tau = Math.pow(10, -L.win.nd) * (L.win.on && roomOn ? 1 : 0);
       const dayCol = cameraColor(WINDOW_CCT[L.win.sky], wb);
-      world.windowLight.color.setRGB(...dayCol);
-      world.windowLight.intensity = sky.skyNits * WINDOW_AREA * tau;
-      world.sky.emissive.setRGB(...dayCol);
-      world.sky.emissiveIntensity = sky.skyNits * tau + (L.win.on ? 0 : 30);
+      for (const { info, light } of windowLights.current) {
+        light.color.setRGB(...dayCol);
+        light.intensity = sky.skyNits * info.area * tau;
+      }
+      for (const m of skies.current.values()) {
+        m.emissive.setRGB(...dayCol);
+        m.emissiveIntensity = sky.skyNits * tau + (L.win.on ? 0 : 30);
+      }
       world.sun.color.setRGB(...cameraColor(5600, wb));
-      world.sun.intensity = sky.sunLux * tau;
-      // The pendant: a bare bulb, its glass at the brightness it really has.
-      const P = L.practical;
-      const flux = P.on && kitchen ? PENDANT.lumens * P.dimmer : 0;
-      const pCol = cameraColor(P.cct, wb);
-      world.pendant.color.setRGB(...pCol);
-      world.pendant.intensity = flux / (4 * Math.PI);
-      world.bulb.emissive.setRGB(...pCol);
-      world.bulb.emissiveIntensity = flux / (4 * Math.PI * Math.PI * PENDANT_R * PENDANT_R);
+      world.sun.intensity = sunDir.current ? sky.sunLux * tau : 0;
+      // Practicals: bare bulbs, the glass at the brightness it really has.
+      for (const it of sc.items) {
+        const lamp = itemObjs.current.get(it.id)?.group.userData.extras?.lamp as
+          | { light: THREE.PointLight; bulb: THREE.MeshStandardMaterial } | undefined;
+        if (!lamp) continue;
+        const flux = lampFlux(it);
+        const col = cameraColor(it.light?.cct ?? 2700, wb);
+        lamp.light.color.setRGB(...col);
+        lamp.light.intensity = flux / (4 * Math.PI);
+        lamp.bulb.emissive.setRGB(...col);
+        lamp.bulb.emissiveIntensity = flux / (4 * Math.PI * Math.PI * BULB_R * BULB_R);
+      }
       // Room bounce: one averaged level, warm from the plaster and the floor.
       const room = levels.current.roomLux;
       world.bounce.color.setRGB(...cameraColor(5000, wb));
@@ -542,7 +638,35 @@ export function PrevizPrototype() {
       world.scene.environmentIntensity = (room * 0.2) / Math.PI;
     };
 
-    engine.current = { renderer, world, shotCam, freeCam, controls, rt, quad, quadScene, quadCam, clayMat, lightRigs, gripRigs, syncRigs };
+    // Puts every person and item where the scene says, this frame: a walker
+    // takes the leg that is leading, and a held prop rides in the hand.
+    const pose = (sc: Scene) => {
+      for (const t of sc.talent) {
+        const f = figs.current.get(t.id);
+        if (!f) continue;
+        const w = sc.walk.get(t.id);
+        const walking = !!f.walk && !!w?.walking;
+        const all = f.walk ? [f.base, ...f.walk] : [f.base];
+        for (const g of all) {
+          g.position.set(t.x, t.y ?? 0, t.z);
+          g.rotation.y = rad(t.facing);
+        }
+        f.base.visible = !walking;
+        if (f.walk) {
+          const side = strideSide(w?.walked ?? 0);
+          f.walk[0].visible = walking && side === 0;
+          f.walk[1].visible = walking && side === 1;
+        }
+      }
+      for (const it of sc.items) {
+        const o = itemObjs.current.get(it.id);
+        if (!o) continue;
+        o.group.position.set(it.x, it.y ?? 0, it.z);
+        o.group.rotation.y = rad(it.rot);
+      }
+    };
+
+    engine.current = { renderer, world, shotCam, freeCam, controls, rt, quad, quadScene, quadCam, clayMat, lightRigs, gripRigs, syncRigs, pose };
     captureQueue.current = live.current.shots.map((s) => s.id);
 
     let raf = 0;
@@ -577,7 +701,7 @@ export function PrevizPrototype() {
       u.tDepth.value = rt.depthTexture;
       u.cNear.value = shotCam.near;
       u.cFar.value = shotCam.far;
-      u.focusM.value = effectiveFocus(s, L.talent, L.bottle);
+      u.focusM.value = effectiveFocus(s, poseRef.current);
       u.focalMm.value = s.focal;
       u.stop.value = s.stop;
       u.imgWmm.value = a.w;
@@ -605,7 +729,11 @@ export function PrevizPrototype() {
         finished = el - (1 - P.from) * raw.move.durationS > P.hold;
         tickRef.current?.(t);
       }
-      const view = viewShot(raw, t, L.talent, L.bottle);
+      // The people and the props, as they are at this moment of the action.
+      const sc = placeScene(L.talent, L.items, raw.move ? ease(raw.move.ease, t) : 0);
+      poseRef.current = sc;
+      pose(sc);
+      const view = viewShot(raw, t, sc);
 
       if (L.view === "free") {
         // A dolly travelling in free view: rebuild just the moving camera.
@@ -634,7 +762,7 @@ export function PrevizPrototype() {
         if (s) {
           renderShot(s);
           const url = grab(360);
-          setThumbs((t) => ({ ...t, [queued]: url }));
+          setThumbs((th) => ({ ...th, [queued]: url }));
         }
       }
       const s = view;
@@ -666,7 +794,7 @@ export function PrevizPrototype() {
       if (!P.on && activeDirty.current && performance.now() - lastChange.current > 300) {
         activeDirty.current = false;
         const url = grab(360);
-        setThumbs((t) => ({ ...t, [s.id]: url }));
+        setThumbs((th) => ({ ...th, [s.id]: url }));
       }
     };
     loop();
@@ -685,55 +813,198 @@ export function PrevizPrototype() {
     const e = engine.current;
     if (!e) return;
     e.renderer.setSize(box.w, box.h, false);
-    activeDirty.current = true;
-    lastChange.current = performance.now();
+    dirty();
   }, [box.w, box.h]);
 
-  // ----- Talent: rebuilt when anything about a person changes.
+  // ----- Talent: rebuilt when anything about a person changes. Somebody with
+  // a mark also gets a walking figure, one for each leg leading.
   useEffect(() => {
     const e = engine.current;
     if (!e) return;
-    for (const g of e.world.figures.values()) e.world.scene.remove(g);
-    e.world.figures.clear();
-    for (const t of talent) {
-      const g = buildFigure(t);
-      e.world.scene.add(g);
-      e.world.figures.set(t.id, g);
+    for (const f of figs.current.values()) {
+      for (const g of f.walk ? [f.base, ...f.walk] : [f.base]) { e.world.scene.remove(g); disposeTree(g); }
     }
-    activeDirty.current = true;
-    lastChange.current = performance.now();
+    figs.current.clear();
+    for (const t of talent) {
+      const base = buildFigure(t);
+      base.userData.pick = { kind: "talent", id: t.id };
+      e.world.scene.add(base);
+      let walk: [THREE.Group, THREE.Group] | null = null;
+      if (t.mark && t.pose !== "seated" && !(t.pose === "holding" && t.holding)) {
+        const a = buildFigure({ ...t, pose: "walking" });
+        const b = buildFigure({ ...t, pose: "walking" });
+        b.scale.x = -1; // the other leg forward
+        for (const g of [a, b]) {
+          g.userData.pick = { kind: "talent", id: t.id };
+          g.visible = false;
+          e.world.scene.add(g);
+        }
+        walk = [a, b];
+      }
+      figs.current.set(t.id, { base, walk });
+    }
+    e.pose(scene);
+    dirty();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [talent]);
 
+  // ----- Assets: product photos and imported models, loaded once each.
+  useEffect(() => {
+    let alive = true;
+    const bump = () => { if (alive) setAssetTick((n) => n + 1); };
+    for (const it of items) {
+      if (it.label && !art.current.has(it.label)) {
+        const key = it.label;
+        art.current.set(key, "loading");
+        void (async () => {
+          const a = await getAsset(key);
+          if (!a) { art.current.set(key, "missing"); setSaveNote("A product photo this setup uses is not in this browser"); bump(); return; }
+          await cacheArt(key, a.blob);
+          bump();
+        })();
+      }
+      if (it.model) {
+        const ck = `${it.model.key}|${it.model.upZ}`;
+        if (!models.current.has(ck)) {
+          const m = it.model;
+          models.current.set(ck, "loading");
+          void (async () => {
+            const a = await getAsset(m.key);
+            if (!a) { models.current.set(ck, "missing"); setSaveNote(`${m.fileName} is not in this browser: open the setup file it came in`); bump(); return; }
+            try {
+              const obj = await loadModel(await a.blob.arrayBuffer(), m.fileName, m.upZ);
+              const r = rawSize(obj);
+              models.current.set(ck, { obj, raw: { x: r.x, y: r.y, z: r.z } });
+            } catch (err) {
+              models.current.set(ck, "missing");
+              setSaveNote(err instanceof Error ? err.message : "Could not read that model");
+            }
+            bump();
+          })();
+        }
+      }
+    }
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
+  /** Decodes a product photo for wrapping, with its average colour. */
+  const cacheArt = async (key: string, blob: Blob, avg?: string) => {
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = () => reject(new Error("bad image"));
+        i.src = url;
+      });
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext("2d")!.drawImage(img, 0, 0);
+      let colour = avg;
+      if (!colour) {
+        const one = document.createElement("canvas");
+        one.width = one.height = 1;
+        one.getContext("2d")!.drawImage(c, 0, 0, 1, 1);
+        const [r, g, b] = one.getContext("2d")!.getImageData(0, 0, 1, 1).data;
+        colour = `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+      }
+      art.current.set(key, { image: c, avg: colour, aspect: img.width / img.height });
+    } catch {
+      art.current.set(key, "missing");
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  // ----- Items: rebuilt only when their shape changes; moving one is just a
+  // new position, applied every frame by the loop.
   useEffect(() => {
     const e = engine.current;
     if (!e) return;
-    e.world.bottle.position.set(bottle.x, bottle.y ?? 0, bottle.z);
-    // Held, the label turns with the person holding it, toward the camera they face.
-    const holder = talent.find((t) => t.id === bottle.heldBy);
-    e.world.bottle.rotation.y = holder ? rad(holder.facing) : 0;
-    activeDirty.current = true;
-    lastChange.current = performance.now();
-  }, [bottle]);
+    const seen = new Set<string>();
+    for (const it of items) {
+      seen.add(it.id);
+      const a = it.label ? art.current.get(it.label) : undefined;
+      const artReady = !!a && typeof a === "object";
+      const m = it.model ? models.current.get(`${it.model.key}|${it.model.upZ}`) : undefined;
+      const modelReady = !!m && typeof m === "object";
+      const key = itemShapeKey(it, artReady, modelReady);
+      const prev = itemObjs.current.get(it.id);
+      if (prev && prev.key === key) continue;
+      if (prev) { e.world.itemsRoot.remove(prev.group); disposeTree(prev.group); }
+      const g = buildItem(it, artReady ? (a as LabelArt) : null, modelReady ? (m as { obj: THREE.Object3D }).obj : null);
+      g.userData.pick = { kind: "item", id: it.id };
+      e.world.itemsRoot.add(g);
+      itemObjs.current.set(it.id, { group: g, key });
+    }
+    for (const [id, o] of itemObjs.current) {
+      if (seen.has(id)) continue;
+      e.world.itemsRoot.remove(o.group);
+      disposeTree(o.group);
+      itemObjs.current.delete(id);
+    }
+    e.pose(poseRef.current);
+    dirty();
+  }, [items, assetTick]);
+
+  // ----- The room: its shell, the daylight from outside each window, the sun.
+  useEffect(() => {
+    const e = engine.current;
+    if (!e) return;
+    const W = e.world;
+    W.stage.visible = set.kind === "stage";
+    clearGroup(W.roomRoot);
+    clearGroup(W.windowsRoot);
+    windowLights.current = [];
+    skies.current = new Map();
+    sunDir.current = null;
+    if (set.kind === "room") {
+      const built = buildRoom(set.room);
+      W.roomRoot.add(built.group);
+      skies.current = built.skies;
+      // Each window's sky source sits OUTSIDE the wall, so the wall itself
+      // shapes the patch of light on the floor the way a real window does.
+      roomWindows(set.room).forEach((info, i) => {
+        const l = new THREE.SpotLight("#ffffff", 0, 0, rad(89), 1, 2);
+        l.position.copy(info.centre).addScaledVector(info.inward, -0.35);
+        l.target.position.copy(info.centre).addScaledVector(info.inward, 3).add(new THREE.Vector3(0, -0.4, 0));
+        l.castShadow = i < 2;
+        l.shadow.mapSize.set(1024, 1024);
+        l.shadow.camera.near = 0.1;
+        l.shadow.camera.far = 30;
+        l.shadow.bias = -0.0006;
+        l.shadow.radius = 18;
+        l.shadow.blurSamples = 16;
+        W.windowsRoot.add(l, l.target);
+        windowLights.current.push({ info, light: l });
+      });
+      const dir = sunDirection(roomWindows(set.room));
+      sunDir.current = dir;
+      const r = set.room;
+      const mid = new THREE.Vector3(r.x + r.width / 2, 0.7, r.z + r.depth / 2);
+      if (dir) {
+        W.sun.target.position.copy(mid);
+        W.sun.position.copy(mid).addScaledVector(dir, 14);
+        const half = Math.max(r.width, r.depth) / 2 + 1;
+        const cam = W.sun.shadow.camera;
+        cam.left = -half;
+        cam.right = half;
+        cam.top = half;
+        cam.bottom = -half;
+        cam.updateProjectionMatrix();
+      }
+    }
+    dirty();
+    captureQueue.current = live.current.shots.map((x) => x.id);
+  }, [set]);
 
   // A different shot starts at its own start frame.
   useEffect(() => {
     finishRef.current(0);
     setPlayhead(0);
   }, [activeId]);
-
-  // ----- The set: the kitchen, or the stage with a paper backdrop.
-  useEffect(() => {
-    const e = engine.current;
-    if (!e) return;
-    e.world.kitchen.visible = set.kind === "kitchen";
-    e.world.studio.visible = set.kind === "studio";
-    const old = e.world.studio.getObjectByName("backdrop");
-    if (old) { e.world.studio.remove(old); disposeTree(old); }
-    if (set.kind === "studio") e.world.studio.add(buildBackdrop(set.backdrop));
-    activeDirty.current = true;
-    lastChange.current = performance.now();
-    captureQueue.current = live.current.shots.map((x) => x.id);
-  }, [set]);
 
   // ----- The light meter. Runs when anything that moves light changes, not
   // every frame, because it casts shadow rays. It also works out what each
@@ -742,17 +1013,21 @@ export function PrevizPrototype() {
     const e = engine.current;
     if (!e) return;
     const t = window.setTimeout(() => {
-      const s = viewShot(shots.find((x) => x.id === activeId) ?? shots[0], playhead, talent, bottle);
+      const s = viewShot(shots.find((x) => x.id === activeId) ?? shots[0], playhead, scene);
+      poseRef.current = scene;
+      e.pose(scene);
       e.syncRigs(s.wb);
       e.world.scene.updateMatrixWorld(true);
       const occ = collectOccluders(e.world.scene);
-      const kitchen = set.kind === "kitchen";
-      const emitters = buildEmitters(lights, win, practical, talent, bottle, kitchen);
-      const tau = win.on && kitchen ? Math.pow(10, -win.nd) : 0;
+      const roomOn = set.kind === "room";
+      const ws = roomOn ? windows : [];
+      const emitters = buildEmitters(lights, win, scene, ws);
+      const tau = win.on && roomOn ? Math.pow(10, -win.nd) : 0;
       const sunLux = WINDOW_SKIES[win.sky].sunLux * tau;
-      const sun = sunLux > 0 ? { dir: SUN_DIR, lux: sunLux, label: "Sun through the window" } : null;
+      const dir = roomOn ? sunDirection(ws) : null;
+      const sun = sunLux > 0 && dir ? { dir, lux: sunLux, label: "Sun through the window" } : null;
       const boards: Board[] = grips.map((g) => {
-        const a = aimOf(g, talent, bottle);
+        const a = aimOf(g, scene);
         const side = g.sizeFt * FT;
         return {
           id: g.id, label: GRIP_NAMES[g.kind], pos: new THREE.Vector3(g.x, g.y, g.z), normal: forward(a.yaw, a.pitch),
@@ -767,26 +1042,25 @@ export function PrevizPrototype() {
         all.push({ id: b.id, label: b.label, pos: b.pos.clone().addScaledVector(b.normal, 0.06), fwd: b.normal, candela: cd, beamDeg: 180, omni: false, sizeM: b.sizeM, flux: cd * Math.PI });
       }
       // Sun landing on the floor through the glass adds to the room too.
-      const flux = emitters.reduce((n, x) => n + x.flux, 0) + sunLux * WINDOW_AREA * 0.8;
+      const flux = emitters.reduce((n, x) => n + x.flux, 0) + (sun ? sunLux * (ws[0]?.area ?? 0) * 0.8 : 0);
       // A stage has black walls a long way off: far less comes back than in a
-      // plaster kitchen, and most of what does is off the paper.
-      const roomLux = roomLuxFrom(flux) * (kitchen ? 1 : 0.35);
+      // plaster room, and most of what does is off the paper.
+      const roomLux = roomLuxFrom(flux) * (roomOn ? 1 : 0.35);
       levels.current = { bounce, roomLux };
-      const p = meterPoint(s, talent, bottle);
+      const p = meterPoint(s, scene);
       setMeter(readMeter(p, new THREE.Vector3(s.pos.x, s.pos.y, s.pos.z), all, occ, sun, roomLux));
     }, 40);
     return () => window.clearTimeout(t);
-  }, [shots, activeId, lights, grips, win, practical, talent, bottle, set, playhead]);
+  }, [shots, activeId, lights, grips, win, scene, set, windows, playhead, assetTick]);
 
-  // Light changes every shot, so every thumbnail is stale (once it settles).
+  // Light and the set change every shot, so every thumbnail is stale (once it settles).
   useEffect(() => {
     const t = window.setTimeout(() => {
       captureQueue.current = live.current.shots.map((x) => x.id).filter((id) => id !== live.current.activeId);
-      activeDirty.current = true;
-      lastChange.current = performance.now();
+      dirty();
     }, 400);
     return () => window.clearTimeout(t);
-  }, [lights, grips, win, practical, set, talent]);
+  }, [lights, grips, win, set, talent, items, assetTick]);
 
   // ----- Camera rigs, seen only in free view. Each is a "unit": the camera
   // pans and tilts on its head, and what it is on stays on the floor, turned
@@ -800,13 +1074,14 @@ export function PrevizPrototype() {
       s.id === L.activeId ? "#ffffff" : SHOT_HUES[i % SHOT_HUES.length],
       fovDeg(a.w, at.focal),
       fovDeg(a.h, at.focal),
-      effectiveFocus(at, L.talent, L.bottle),
+      effectiveFocus(at, poseRef.current),
       `${s.code} ${Math.round(at.focal)}mm`,
       s.bodyId,
       at.focal,
     );
     const unit = new THREE.Group();
     unit.name = `unit:${s.id}`;
+    unit.userData.pick = { kind: "camera", id: s.id };
     unit.position.set(at.pos.x, 0, at.pos.z);
     const sp = supportPose(s, at.pos);
     const legs = buildSupport(s.support, at.pos.y, bodyDrop(s.bodyId), sp.opts);
@@ -824,12 +1099,9 @@ export function PrevizPrototype() {
   useEffect(() => {
     const e = engine.current;
     if (!e) return;
-    for (const old of [...e.world.rigs.children]) {
-      e.world.rigs.remove(old);
-      disposeTree(old);
-    }
+    clearGroup(e.world.rigs);
     for (const s of shots) {
-      const at = s.id === activeId ? viewShot(s, playhead, talent, bottle) : s;
+      const at = s.id === activeId ? viewShot(s, playhead, scene) : s;
       e.world.rigs.add(unitRef.current(s, at));
       if (s.move) {
         const p0 = s.pos;
@@ -842,7 +1114,7 @@ export function PrevizPrototype() {
         e.world.rigs.add(line);
       }
     }
-  }, [shots, activeId, aspect.ratio, talent, bottle, playhead]);
+  }, [shots, activeId, aspect.ratio, scene, playhead]);
 
   useEffect(() => {
     const e = engine.current;
@@ -857,13 +1129,15 @@ export function PrevizPrototype() {
 
   // ----- Through-the-lens controls: drag pans and tilts like a fluid head,
   // shift or right drag trucks and booms, the wheel dollies. Long lenses move
-  // slower per pixel, because they would on a real head.
+  // slower per pixel, because they would on a real head. A click that does not
+  // drag selects whatever is under it, in either view.
   const drag = useRef<{ x: number; y: number; mode: "pan" | "truck" } | null>(null);
+  const press = useRef<{ x: number; y: number } | null>(null);
   const onCanvasDown = (e: React.PointerEvent) => {
+    press.current = { x: e.clientX, y: e.clientY };
     if (view !== "lens") return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     drag.current = { x: e.clientX, y: e.clientY, mode: e.button === 2 || e.shiftKey ? "truck" : "pan" };
-    setSel({ kind: "camera" });
   };
   const onCanvasMove = (e: React.PointerEvent) => {
     const d = drag.current;
@@ -872,6 +1146,7 @@ export function PrevizPrototype() {
     const dy = e.clientY - d.y;
     d.x = e.clientX;
     d.y = e.clientY;
+    if (sel.kind !== "camera" && press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 4) setSel({ kind: "camera" });
     const vfov = fovDeg(area.h, active.focal);
     if (d.mode === "pan") {
       const k = vfov / box.h;
@@ -891,7 +1166,37 @@ export function PrevizPrototype() {
       }));
     }
   };
-  const onCanvasUp = () => (drag.current = null);
+  const onCanvasUp = (e: React.PointerEvent) => {
+    drag.current = null;
+    const p = press.current;
+    press.current = null;
+    if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) return;
+    pickAt(e.clientX, e.clientY);
+  };
+  const ray = useMemo(() => new THREE.Raycaster(), []);
+  const pickAt = (cx: number, cy: number) => {
+    const e = engine.current;
+    const canvas = canvasRef.current;
+    if (!e || !canvas) return;
+    const r = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, view === "lens" ? e.shotCam : e.freeCam);
+    const roots: THREE.Object3D[] = [e.world.itemsRoot, e.world.lightsRoot, ...Array.from(figs.current.values()).flatMap((f) => (f.walk ? [f.base, ...f.walk] : [f.base]))];
+    if (view === "free") roots.push(e.world.rigs);
+    for (const hit of ray.intersectObjects(roots, true)) {
+      let o: THREE.Object3D | null = hit.object;
+      while (o && !o.userData.pick) o = o.parent;
+      if (!o || !o.visible) continue;
+      const pk = o.userData.pick as { kind: string; id: string };
+      if (pk.kind === "item") setSel({ kind: "item", id: pk.id });
+      else if (pk.kind === "talent") setSel({ kind: "talent", id: pk.id });
+      else if (pk.kind === "light") setSel({ kind: "light", id: pk.id });
+      else if (pk.kind === "grip") setSel({ kind: "grip", id: pk.id });
+      else if (pk.kind === "camera") { setActiveId(pk.id); setSel({ kind: "camera" }); }
+      return;
+    }
+    if (view === "lens") setSel({ kind: "camera" });
+  };
   const onWheel = (e: React.WheelEvent) => {
     if (view !== "lens") return;
     const step = -Math.sign(e.deltaY) * Math.min(0.25, Math.abs(e.deltaY) * 0.002) * Math.max(1, focus * 0.5);
@@ -905,8 +1210,13 @@ export function PrevizPrototype() {
       const t = e.target as HTMLElement;
       if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
       const k = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && k === "d") {
+        if (sel.kind === "item") { e.preventDefault(); duplicateItem(sel.id); }
+        return;
+      }
+      if (e.metaKey || e.ctrlKey) return;
       if (k === "v") return setView((v) => (v === "lens" ? "free" : "lens"));
-      if (k === "c" && !e.metaKey && !e.ctrlKey) return setClay((c) => !c);
+      if (k === "c") return setClay((c) => !c);
       if (k === "b") return setShowBoard((b) => !b);
       if (k === "?") return setHelp((h) => !h);
       if (k === "z") return setZebra((z) => !z);
@@ -944,7 +1254,7 @@ export function PrevizPrototype() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, active, shots, updateShot, sel]);
+  }, [view, active, shots, updateShot, sel, items]);
 
   // ----- Readouts
   const hfov = fovDeg(area.w, active.focal);
@@ -953,8 +1263,7 @@ export function PrevizPrototype() {
   const frameH = (area.h * focus) / active.focal;
   const size = shotSize(frameH);
   const angle = cameraAngle(active.pitch, active.pos.y);
-  const focusName =
-    active.focusOn === "bottle" ? "the bottle" : talent.find((t) => t.id === active.focusOn)?.name ?? null;
+  const focusName = targetName(active.focusOn, scene);
 
   // ----- Lights and grip. Letting go of a target keeps the head where it was
   // pointing, so "by hand" starts from the current aim, not from zero.
@@ -962,7 +1271,7 @@ export function PrevizPrototype() {
     setLights((all) => all.map((l) => {
       if (l.id !== id) return l;
       const next = { ...l, ...patch };
-      if (patch.aimAt === null && l.aimAt) Object.assign(next, aimOf(l, talent, bottle));
+      if (patch.aimAt === null && l.aimAt) Object.assign(next, aimOf(l, scene));
       if (patch.fixtureId && patch.fixtureId !== l.fixtureId) {
         const f = FIXTURES.find((x) => x.id === patch.fixtureId) ?? FIXTURES[0];
         next.modifierId = f.defaultModifier;
@@ -975,13 +1284,13 @@ export function PrevizPrototype() {
     setGrips((all) => all.map((g) => {
       if (g.id !== id) return g;
       const next = { ...g, ...patch };
-      if (patch.aimAt === null && g.aimAt) Object.assign(next, aimOf(g, talent, bottle));
+      if (patch.aimAt === null && g.aimAt) Object.assign(next, aimOf(g, scene));
       return next;
     }));
   const subjectId = active.focusOn ?? talent[0]?.id ?? null;
-  const subjectAt = meterPoint(active, talent, bottle);
+  const subjectAt = meterPoint(active, scene);
   const occupied = [
-    ...talent, ...lights, ...grips, ...shots.map((x) => ({ x: x.pos.x, z: x.pos.z })), { x: bottle.x, z: bottle.z },
+    ...talent, ...lights, ...grips, ...shots.map((x) => ({ x: x.pos.x, z: x.pos.z })),
   ].map((o) => ({ x: o.x, z: o.z }));
   /** Which side of the subject a light is on, seen from the camera: 1 right, -1 left. */
   const keySideOf = (l: LightSpec) =>
@@ -1041,14 +1350,164 @@ export function PrevizPrototype() {
       setSel({ kind: "camera" });
     }
   };
+
+  // ----- Items on the set
+  /**
+   * Where a new thing goes, facing the camera: a prop by the subject (it lands
+   * on whatever they are at), a backdrop behind them, anything else beside
+   * them. Nudged along if something the same size is already there.
+   */
+  const placeFor = (kind: string): { x: number; z: number; rot: number } => {
+    const c = catalogOf(kind);
+    const f = forward(active.yaw, 0);
+    const right = { x: Math.cos(rad(active.yaw)), z: -Math.sin(rad(active.yaw)) };
+    const rot = Math.round(deg(Math.atan2(-f.x, -f.z)) / 15) * 15;
+    let p: { x: number; z: number };
+    if (c.category === "prop") p = { x: subjectAt.x - f.x * 0.25, z: subjectAt.z - f.z * 0.25 };
+    else if (c.category === "backdrop") p = { x: subjectAt.x + f.x * (c.d / 2 + 1.6), z: subjectAt.z + f.z * (c.d / 2 + 1.6) };
+    else p = { x: subjectAt.x + right.x * (c.w / 2 + 0.8), z: subjectAt.z + right.z * (c.w / 2 + 0.8) };
+    // A prop is meant to land on whatever is there (that is how it gets onto
+    // a table). Anything else must not land on another piece, or the stacking
+    // puts the new sofa on top of the table already standing there.
+    const reach = (o: { w: number; d: number }) => Math.max(o.w, o.d) / 2;
+    const rb = set.kind === "room" ? roomBounds(set.room) : null;
+    const outside = (q: { x: number; z: number }) =>
+      !!rb && c.category !== "backdrop" &&
+      (q.x - reach(c) < rb.minX || q.x + reach(c) > rb.maxX || q.z - reach(c) < rb.minZ || q.z + reach(c) > rb.maxZ);
+    const clash = (q: { x: number; z: number }) => outside(q) || items.some((o) => {
+      const oc = catalogOf(o.kind).category;
+      if (c.category === "prop") return o.kind === kind && Math.hypot(o.x - q.x, o.z - q.z) < Math.max(0.12, c.w * 0.6);
+      if (oc === "prop" || oc === "backdrop" || o.kind === "rug") return false;
+      if (c.category === "backdrop") return false;
+      return Math.hypot(o.x - q.x, o.z - q.z) < (reach(o) + reach(c)) * 0.85;
+    });
+    const start = p;
+    const step = Math.max(0.3, reach(c) * 2 + 0.15);
+    for (let i = 1; i <= 16 && clash(p); i++) {
+      // Walk out to the right, then the left, then further back.
+      const side = i % 2 ? 1 : -1;
+      const n = Math.ceil(i / 2);
+      const back = Math.floor((n - 1) / 4);
+      const along = ((n - 1) % 4) + 1;
+      p = {
+        x: start.x + right.x * side * step * along + f.x * back * step,
+        z: start.z + right.z * side * step * along + f.z * back * step,
+      };
+    }
+    // Nowhere free inside the walls: fall back to the first spot, clamped in.
+    if (clash(p)) {
+      p = start;
+      if (rb) p = { x: Math.min(rb.maxX - reach(c), Math.max(rb.minX + reach(c), p.x)), z: Math.min(rb.maxZ - reach(c), Math.max(rb.minZ + reach(c), p.z)) };
+    }
+    return { ...p, rot };
+  };
+  const addItem = (kind: string) => {
+    const at = placeFor(kind);
+    const it = { ...newItem(kind, at.x, at.z), rot: at.rot };
+    setItems((all) => [...all, it]);
+    setSel({ kind: "item", id: it.id });
+    setAdding(false);
+  };
+  const updateItem = (id: string, p: Partial<ItemSpec>) => setItems((all) => all.map((i) => (i.id === id ? { ...i, ...p } : i)));
+  const removeItem = (id: string) => {
+    setItems((all) => all.filter((i) => i.id !== id));
+    setTalent((all) => all.map((t) => (t.holding === id ? { ...t, holding: null } : t)));
+    if (sel.kind === "item" && sel.id === id) setSel({ kind: "camera" });
+  };
+  const duplicateItem = (id: string) => {
+    const src = items.find((i) => i.id === id);
+    if (!src) return;
+    const r = rad(src.rot);
+    const step = src.w + 0.15;
+    const copy: ItemSpec = { ...src, id: newItem(src.kind, 0, 0).id, x: src.x + Math.cos(r) * step, z: src.z - Math.sin(r) * step };
+    setItems((all) => [...all, copy]);
+    setSel({ kind: "item", id: copy.id });
+  };
+  /** Puts an item in somebody's hand (and takes it from whoever had it), or sets it down. */
+  const holdItem = (itemId: string, talentId: string | null) =>
+    setTalent((all) => all.map((t) => {
+      if (t.id === talentId) return { ...t, pose: "holding", holding: itemId };
+      return t.holding === itemId ? { ...t, holding: null } : t;
+    }));
+  const addProduct = async (shape: string, file: File) => {
+    setAdding(false);
+    try {
+      const p = await prepareLabel(file);
+      const key = await putAsset(p.blob, file.name);
+      await cacheArt(key, p.blob, p.avg);
+      const c = catalogOf(shape);
+      const at = placeFor(shape);
+      // A round product photographed wider than it is tall is almost always a
+      // photo with room round it, not a product that shape: cap it so a
+      // landscape snapshot does not make a bottle as fat as a bucket.
+      const w = Math.max(0.02, c.h * Math.min(c.round ? 0.9 : 2.5, Math.max(0.12, p.aspect)));
+      const it: ItemSpec = {
+        ...newItem(shape, at.x, at.z), rot: at.rot, label: key,
+        name: file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 40) || c.name,
+        ...(c.round ? { w, d: w } : { w }),
+      };
+      setItems((all) => [...all, it]);
+      setSel({ kind: "item", id: it.id });
+      setSaveNote("Product added. Set its real height: the width follows the photo.");
+    } catch (e) {
+      setSaveNote(e instanceof Error ? e.message : "Could not use that photo");
+    }
+  };
+  const setItemLabel = async (id: string, file: File) => {
+    try {
+      const p = await prepareLabel(file);
+      const key = await putAsset(p.blob, file.name);
+      await cacheArt(key, p.blob, p.avg);
+      updateItem(id, { label: key });
+    } catch (e) {
+      setSaveNote(e instanceof Error ? e.message : "Could not use that photo");
+    }
+  };
+  const importModel = async (file: File) => {
+    setAdding(false);
+    const fmt = modelFormat(file.name);
+    if (!fmt) return setSaveNote("Use a GLB, GLTF, OBJ or STL file");
+    if (file.size > MAX_MODEL_BYTES) return setSaveNote(`That model is ${Math.round(file.size / 1e6)} MB: keep it under ${Math.round(MAX_MODEL_BYTES / 1e6)} MB`);
+    setSaveNote(`Reading ${file.name}...`);
+    try {
+      // CAD exports (STL) are usually Z-up; GLB and OBJ are Y-up.
+      const upZ = fmt === "stl";
+      const obj = await loadModel(await file.arrayBuffer(), file.name, upZ);
+      const raw = rawSize(obj);
+      const unit = guessUnit(file.name, raw);
+      const m = UNITS.find((u) => u.id === unit)?.m ?? 1;
+      const key = await putAsset(file, file.name);
+      models.current.set(`${key}|${upZ}`, { obj, raw: { x: raw.x, y: raw.y, z: raw.z } });
+      const big = Math.max(raw.x, raw.z) * m > 4;
+      const at = placeFor("model");
+      const centre = set.kind === "room" ? { x: set.room.x + set.room.width / 2, z: set.room.z + set.room.depth / 2 } : { x: 0, z: 0 };
+      const it: ItemSpec = {
+        ...newItem("model", big ? centre.x : at.x, big ? centre.z : at.z),
+        rot: big ? 0 : at.rot,
+        name: file.name.replace(/\.[^.]+$/, "").slice(0, 40),
+        w: raw.x * m, h: raw.y * m, d: raw.z * m,
+        model: { key, fileName: file.name, upZ, unit },
+      };
+      setItems((all) => [...all, it]);
+      setSel({ kind: "item", id: it.id });
+      setSaveNote(`${file.name}: ${dist(it.w, units)} wide, ${dist(it.h, units)} tall. Check the units if that is wrong.`);
+    } catch (e) {
+      setSaveNote(e instanceof Error ? e.message : "Could not read that model");
+    }
+  };
+
   const removeSelected = () => {
     if (sel.kind === "light") removeLight(sel.id);
     else if (sel.kind === "grip") removeGrip(sel.id);
+    else if (sel.kind === "item") removeItem(sel.id);
     else return false;
     return true;
   };
-  const targets = [...talent.map((t) => ({ id: t.id, name: t.name })), { id: "bottle", name: "Bottle" }];
-  const targetName = focusName ?? "the focus point";
+  const targets = [
+    ...talent.map((t) => ({ id: t.id, name: t.name })),
+    ...items.filter((i) => ["prop", "furniture", "set"].includes(catalogOf(i.kind).category)).map((i) => ({ id: i.id, name: i.name })),
+  ];
+  const meterTargetName = focusName ?? "the focus point";
   const fmt = (m: number) => dist(m, units);
 
   const addShot = () => {
@@ -1069,6 +1528,7 @@ export function PrevizPrototype() {
   }, []);
   const support = SUPPORTS.find((k) => k.id === rawActive.support) ?? SUPPORTS[0];
   const stats = rawActive.move ? moveStats(rawActive.support, camKey(rawActive), rawActive.move) : null;
+  const walkers = talent.filter((t) => t.mark && Math.hypot(t.mark.x - t.x, t.mark.z - t.z) > 0.05);
   const moveWarnings: string[] = [];
   if (rawActive.move && stats) {
     const [lo, hi] = support.lens;
@@ -1078,6 +1538,10 @@ export function PrevizPrototype() {
     if (dolly && stats.peak > 1.2) moveWarnings.push("Fast for a dolly grip to land cleanly: give it more time");
     if (rawActive.support === "robot" && stats.peak > 2.5) moveWarnings.push("Near the top speed of a motion control arm");
     if (rawActive.support === "dana" && stats.trackM && stats.trackM > 3.66) moveWarnings.push("Longer than Dana rails usually run (12 ft): a Fisher on track would do it");
+    for (const w of walkers) {
+      const v = walkSpeed(w, rawActive.move.durationS);
+      if (v > 2.2) moveWarnings.push(`${w.name} would have to run (${dist(v, units)}/s): lengthen the move or bring the mark closer`);
+    }
   }
   const supportHints: Record<string, string> = {
     sticks: "pans, tilts and zooms only. Pick a dolly or the arm to travel.",
@@ -1174,6 +1638,13 @@ export function PrevizPrototype() {
     updateShot(rawActive.id, { move: { end, durationS: 4, ease: "smooth", trackYaw: k.yaw } });
     setPlayhead(1);
   };
+  /** A timeline with the camera locked off, so the talent's action can play on its own. */
+  const addAction = () => {
+    const k = camKey(rawActive);
+    const longest = Math.max(0, ...walkers.map((w) => Math.hypot(w.mark!.x - w.x, w.mark!.z - w.z)));
+    updateShot(rawActive.id, { move: { end: { ...k }, durationS: Math.max(2, Math.round((longest / 1.2) * 2) / 2 + 1), ease: "smooth", trackYaw: k.yaw } });
+    setPlayhead(0);
+  };
   const removeMove = () => {
     updateShot(rawActive.id, { move: null });
     setPlayhead(0);
@@ -1182,21 +1653,18 @@ export function PrevizPrototype() {
 
   // ----- The setup: kept in this browser, and openable from a file.
   const snapshot = (): Setup => ({
-    v: 2, name, set, shots, activeId, talent,
-    bottle: { id: rawBottle.id, name: rawBottle.name, x: rawBottle.x, z: rawBottle.z },
-    lights, grips, win, practical, units, aspectId,
+    v: 3, name, set, items, shots, activeId, talent, lights, grips, win, units, aspectId,
   });
   const applySetup = (x: Setup) => {
     setName(x.name);
     setSet(x.set);
+    setItems(x.items);
     setShots(x.shots);
     setActiveId(x.activeId);
     setTalent(x.talent);
-    setRawBottle(x.bottle);
     setLights(x.lights);
     setGrips(x.grips);
     setWin(x.win);
-    setPractical(x.practical);
     setUnits(x.units);
     setAspectId(x.aspectId);
     setPlayhead(0);
@@ -1219,24 +1687,34 @@ export function PrevizPrototype() {
     }, 600);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, name, set, shots, activeId, talent, rawBottle, lights, grips, win, practical, units, aspectId]);
+  }, [loaded, name, set, items, shots, activeId, talent, lights, grips, win, units, aspectId]);
   useEffect(() => {
     if (!saveNote) return;
-    const t = window.setTimeout(() => setSaveNote(null), 5000);
+    const t = window.setTimeout(() => setSaveNote(null), 6000);
     return () => window.clearTimeout(t);
   }, [saveNote]);
-  const newSetup = (which: "studio" | "kitchen") => {
+  const newSetup = (which: "studio" | "kitchen" | "blank") => {
     if (!window.confirm("Start a new setup? This one is replaced in this browser. Download it first if you want to keep it.")) return;
-    applySetup(which === "studio" ? studioSetup() : kitchenSetup());
+    applySetup(which === "studio" ? studioSetup() : which === "kitchen" ? kitchenSetup() : blankSetup(5, 6, 2.8));
+    if (which === "blank") setSel({ kind: "set" });
+  };
+  const download = async () => {
+    const keys = assetKeys(items);
+    if (keys.length) setSaveNote("Packing the photos and models into the file...");
+    const assets = keys.length ? await embedAssets(keys) : undefined;
+    downloadSetup({ ...snapshot(), ...(assets ? { assets } : {}) });
+    setSaveNote("Downloaded");
   };
   const openFile = (file: File | undefined) => {
     if (!file) return;
-    file.text().then((txt) => {
-      let parsed: Setup | null = null;
-      try { parsed = asSetup(JSON.parse(txt)); } catch { parsed = null; }
+    file.text().then(async (txt) => {
+      let raw: unknown = null;
+      try { raw = JSON.parse(txt); } catch { raw = null; }
+      const parsed = asSetup(raw);
       if (!parsed) { window.alert("That file is not a scene setup this page can open."); return; }
+      const n = await restoreAssets((raw as Setup).assets);
       applySetup(parsed);
-      setSaveNote(`Opened ${parsed.name}`);
+      setSaveNote(`Opened ${parsed.name}${n ? ` with ${n} photo${n === 1 ? "" : "s"} and model${n === 1 ? "" : "s"}` : ""}`);
     });
   };
   const setupFileRef = useRef<HTMLInputElement>(null);
@@ -1247,11 +1725,33 @@ export function PrevizPrototype() {
     const id = `t${Date.now()}`;
     const n = talent.length + 1;
     const near = talent[talent.length - 1];
-    const x = near ? Math.min(3, near.x + 0.8) : 0;
-    const z = near ? near.z : set.kind === "studio" ? -0.2 : 0;
+    // Somewhere clear of the furniture and inside the walls: a person dropped
+    // into an armchair reads as standing on it.
+    const right = { x: Math.cos(rad(active.yaw)), z: -Math.sin(rad(active.yaw)) };
+    const toCam = { x: active.pos.x - subjectAt.x, z: active.pos.z - subjectAt.z };
+    const tl = Math.hypot(toCam.x, toCam.z) || 1;
+    const fwd = { x: toCam.x / tl, z: toCam.z / tl };
+    const base = near ? { x: near.x + right.x * 0.8, z: near.z + right.z * 0.8 } : subjectAt;
+    const rb = set.kind === "room" ? roomBounds(set.room) : null;
+    const blocked = (q: { x: number; z: number }) =>
+      (!!rb && (q.x < rb.minX + 0.3 || q.x > rb.maxX - 0.3 || q.z < rb.minZ + 0.3 || q.z > rb.maxZ - 0.3)) ||
+      items.some((o) => {
+        const k = catalogOf(o.kind);
+        return k.category !== "prop" && k.category !== "backdrop" && o.kind !== "rug" && !k.standable && containsPoint(o, q.x, q.z, 0.25);
+      }) ||
+      talent.some((t) => Math.hypot(t.x - q.x, t.z - q.z) < 0.45);
+    let spot = base;
+    outer: for (let ring = 1; ring <= 6 && blocked(spot); ring++) {
+      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [1, 1], [-1, 1], [0, -1]]) {
+        const q = { x: base.x + (right.x * a + fwd.x * b) * 0.5 * ring, z: base.z + (right.z * a + fwd.z * b) * 0.5 * ring };
+        if (!blocked(q)) { spot = q; break outer; }
+      }
+    }
+    const x = spot.x;
+    const z = spot.z;
     const hues = ["#7a5c99", "#3f7a5c", "#99683f", "#3f5f99", "#993f55"];
     setTalent((all) => [...all, {
-      id, name: `Person ${n}`, heightM: 1.75, pose: "standing", x, z, facing: 0,
+      id, name: `Person ${n}`, heightM: 1.75, pose: "standing", x, z, facing: Math.round(deg(Math.atan2(active.pos.x - x, active.pos.z - z))),
       top: hues[n % hues.length], bottom: "#34363b",
     }]);
     setSel({ kind: "talent", id });
@@ -1263,12 +1763,10 @@ export function PrevizPrototype() {
   const updatePerson = (id: string, p: Partial<TalentSpec>) =>
     setTalent((all) => all.map((t) => {
       if (t.id !== id) {
-        // One bottle: handing it to someone takes it from whoever had it.
-        return p.holding === "bottle" && t.holding === "bottle" ? { ...t, holding: null } : t;
+        // One prop in one hand: handing it to someone takes it from whoever had it.
+        return p.holding && t.holding === p.holding ? { ...t, holding: null } : t;
       }
-      const next = { ...t, ...p };
-      if (p.pose === "holding" && !all.some((o) => o.id !== id && o.holding === "bottle" && o.pose === "holding")) next.holding = "bottle";
-      return next;
+      return { ...t, ...p };
     }));
 
   const onBoardFile = (file: File | undefined) => {
@@ -1277,6 +1775,89 @@ export function PrevizPrototype() {
     r.onload = () => updateShot(active.id, { board: String(r.result) });
     r.readAsDataURL(file);
   };
+
+  // ----- Scout photo to room
+  const readPhoto = async (file: File) => {
+    try {
+      const forReader = await shrinkPhoto(file, 1600, 0.85);
+      const photo = await shrinkPhoto(file, 1280, 0.8);
+      const res = await readScoutPhoto({ base64: forReader.split(",")[1] ?? "", mediaType: "image/jpeg", fileName: file.name });
+      if (!res) return { error: "Your session has ended. Reload the page and sign in again." };
+      if ("error" in res) return res;
+      return { draft: res.draft, photo };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Could not read the photo." };
+    }
+  };
+  const buildFromDraft = (d: RoomDraft, photo: string, c: ScoutChoices) => {
+    let x0 = set.room.x;
+    let z0 = set.room.z;
+    if (c.replaceRoom) {
+      x0 = -d.width / 2;
+      z0 = -d.depth * 0.55;
+      setSet({
+        kind: "room",
+        room: {
+          x: x0, z: z0, width: d.width, depth: d.depth, height: d.height, wallColor: d.wallColor, floor: d.floor,
+          walls: { back: d.walls.back, left: d.walls.left, right: d.walls.right, front: false },
+          openings: d.openings.map((o, i) => ({ ...o, id: `s${Date.now()}${i}` })),
+        },
+      });
+    }
+    const added = d.items.filter((_, i) => c.items[i] !== false).map((it) => ({
+      ...newItem(it.kind, x0 + it.x, z0 + it.z),
+      name: it.name,
+      rot: Math.round(it.rot),
+      ...(it.w ? { w: it.w } : {}),
+      ...(it.d ? { d: it.d } : {}),
+      ...(it.h ? { h: it.h } : {}),
+      ...(it.color ? { color: it.color } : {}),
+    }));
+    setItems((all) => [...(c.clearSet ? [] : all), ...added]);
+    if (c.addCamera && d.camera) {
+      let n = 0;
+      while (shots.some((x) => x.code === `1${String.fromCharCode(65 + n)}`)) n++;
+      const cam: Shot = {
+        ...active,
+        id: `s${Date.now()}`,
+        code: `1${String.fromCharCode(65 + n)}`,
+        title: "Scout photo",
+        // A full-frame body, so the photo's 35mm-equivalent focal length is the lens.
+        bodyId: "venice2",
+        support: "sticks",
+        focal: Math.round(d.camera.focal),
+        pos: { x: x0 + d.camera.x, y: d.camera.height, z: z0 + d.camera.z },
+        yaw: d.camera.yaw,
+        pitch: -4,
+        focusOn: null,
+        focusM: Math.max(1, d.depth * 0.5),
+        board: photo,
+        move: null,
+      };
+      setShots((all) => [...all, cam]);
+      setActiveId(cam.id);
+      setShowBoard(true);
+      setBoardOpacity(0.5);
+      setView("lens");
+    }
+    setScout(false);
+    setSel({ kind: "set" });
+    setSaveNote(`Room built from the photo (${d.confidence} confidence). Check its measurements in the room panel.`);
+  };
+
+  const selItem = sel.kind === "item" ? items.find((i) => i.id === sel.id) ?? null : null;
+  const placedSel = selItem ? scene.items.find((i) => i.id === selItem.id) ?? null : null;
+  const standsOn = (() => {
+    if (!placedSel || !placedSel.y) return null;
+    const under = scene.items
+      .filter((o) => o.id !== placedSel.id && o.w * o.d > placedSel.w * placedSel.d && containsPoint(o, placedSel.x, placedSel.z))
+      .sort((a, b) => (b.y ?? 0) + b.h - ((a.y ?? 0) + a.h))[0];
+    return under ? `the ${under.name.toLowerCase()}` : null;
+  })();
+  const selArt = selItem?.label ? art.current.get(selItem.label) : undefined;
+  const selModel = selItem?.model ? models.current.get(`${selItem.model.key}|${selItem.model.upZ}`) : undefined;
+  const sortedItems = [...items].sort((a, b) =>
+    CATEGORIES.findIndex((c) => c.id === catalogOf(a.kind).category) - CATEGORIES.findIndex((c) => c.id === catalogOf(b.kind).category));
 
   return (
     <div className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-bg text-text">
@@ -1304,15 +1885,17 @@ export function PrevizPrototype() {
             </button>
             <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">Prototype</span>
           </div>
-          <p className="px-1 text-xs text-text-muted">
-            {saveNote ?? `${shots.length} shot${shots.length === 1 ? "" : "s"} · saved in this browser`}
+          <p className="max-w-[420px] truncate px-1 text-xs text-text-muted">
+            {saveNote ?? `${shots.length} shot${shots.length === 1 ? "" : "s"} · ${items.length} thing${items.length === 1 ? "" : "s"} on the set · saved in this browser`}
           </p>
           {menu ? (
-            <div className="absolute left-0 top-full z-30 mt-1 w-[260px] rounded-[12px] border border-border bg-surface p-1.5 shadow-lg" onMouseLeave={() => setMenu(false)}>
+            <div className="absolute left-0 top-full z-30 mt-1 w-[280px] rounded-[12px] border border-border bg-surface p-1.5 shadow-lg" onMouseLeave={() => setMenu(false)}>
               {[
-                { l: "New: talent on seamless", d: "Studio, paper backdrop, two people", f: () => newSetup("studio") },
-                { l: "New: kitchen sample", d: "The room the prototype opened on", f: () => newSetup("kitchen") },
-                { l: "Download this setup", d: "A file you can open on another computer", f: () => downloadSetup(snapshot()) },
+                { l: "New: empty room", d: "5 x 6 m, one window: build from here", f: () => newSetup("blank") },
+                { l: "New: talent on seamless", d: "Stage, paper backdrop, two people", f: () => newSetup("studio") },
+                { l: "New: kitchen sample", d: "A furnished kitchen with daylight", f: () => newSetup("kitchen") },
+                { l: "Build a room from a scout photo", d: "The AI estimates it, you check it", f: () => setScout(true) },
+                { l: "Download this setup", d: "A file with its photos and models, for another computer", f: () => void download() },
                 { l: "Open a setup file", d: "One you downloaded before", f: () => setupFileRef.current?.click() },
               ].map((o) => (
                 <button
@@ -1384,19 +1967,42 @@ export function PrevizPrototype() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[210px_minmax(0,1fr)_300px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_300px]">
         {/* Left rail: what is in the scene */}
         <aside className="min-h-0 overflow-y-auto border-r border-border bg-surface p-3 text-sm">
           <RailGroup title="Set">
-            {set.kind === "kitchen" ? (
-              <RailItem active={sel.kind === "set"} onClick={() => setSel({ kind: "set" })} dot="#a89a86" label="Kitchen" sub="room, window, counter, table" />
-            ) : (
+            <RailItem
+              active={sel.kind === "set"} onClick={() => setSel({ kind: "set" })} dot={set.kind === "room" ? set.room.wallColor : "#2b2c2e"}
+              label={set.kind === "room" ? "Room" : "Open stage"}
+              sub={set.kind === "room" ? `${dist(set.room.width, units)} x ${dist(set.room.depth, units)}, ${dist(set.room.height, units)} ceiling` : "black, no walls"}
+            />
+            {windows.length ? (
               <RailItem
-                active={sel.kind === "set"} onClick={() => setSel({ kind: "set" })} dot={set.backdrop.color}
-                label="Studio backdrop"
-                sub={`${set.backdrop.widthIn} in ${PAPER_COLORS.find((c) => c.hex === set.backdrop.color)?.name.toLowerCase() ?? "custom"} seamless`}
+                active={sel.kind === "daylight"} onClick={() => setSel({ kind: "daylight" })} dot={win.on ? "#8fc2f0" : "#5b6068"}
+                label="Daylight" sub={win.on ? `${windows.length} window${windows.length === 1 ? "" : "s"}, ${WINDOW_SKIES[win.sky].name.toLowerCase()}${win.nd ? `, ND ${win.nd.toFixed(1)}` : ""}` : "off"}
               />
-            )}
+            ) : null}
+          </RailGroup>
+          <RailGroup title="On the set">
+            {sortedItems.map((it) => {
+              const placed = scene.items.find((x) => x.id === it.id);
+              const holder = placed?.heldBy ? talent.find((t) => t.id === placed.heldBy) : null;
+              return (
+                <RailItem
+                  key={it.id}
+                  active={sel.kind === "item" && sel.id === it.id}
+                  onClick={() => setSel({ kind: "item", id: it.id })}
+                  dot={it.light ? (it.light.on ? "#ffc879" : "#5b6068") : it.color}
+                  label={it.name}
+                  onDelete={() => removeItem(it.id)}
+                  deleteLabel={`Delete ${it.name}`}
+                  sub={holder ? `in ${holder.name}'s hand` : it.light ? `${it.light.on ? `on, ${Math.round(it.light.dimmer * 100)}%` : "off"}` : `${dist(it.w, units)} x ${dist(it.d, units)} x ${dist(it.h, units)}`}
+                />
+              );
+            })}
+            <button type="button" onClick={() => setAdding(!adding)} className="mt-1 w-full rounded-[8px] border border-dashed border-border px-2 py-1 text-xs font-semibold text-text-muted hover:text-text">
+              + Add to the set
+            </button>
           </RailGroup>
           <RailGroup title="Talent">
             {talent.map((t) => (
@@ -1408,30 +2014,12 @@ export function PrevizPrototype() {
                 label={t.name}
                 onDelete={() => removePerson(t.id)}
                 deleteLabel={`Remove ${t.name}`}
-                sub={`${dist(t.heightM, units)} · ${(POSES.find((p) => p.id === t.pose)?.name ?? t.pose).toLowerCase()}`}
+                sub={`${dist(t.heightM, units)} · ${(POSES.find((p) => p.id === t.pose)?.name ?? t.pose).toLowerCase()}${t.mark ? " · walks" : ""}`}
               />
             ))}
             <button type="button" onClick={addPerson} className="mt-1 w-full rounded-[8px] border border-dashed border-border px-2 py-1 text-xs font-semibold text-text-muted hover:text-text">+ Add a person</button>
           </RailGroup>
-          <RailGroup title="Props">
-            <RailItem
-              active={sel.kind === "prop"} onClick={() => setSel({ kind: "prop" })} dot="#2f6f62" label="Hero bottle"
-              sub={bottle.heldBy ? `in ${talent.find((t) => t.id === bottle.heldBy)?.name ?? "a"}'s hand` : (bottle.y ?? 0) > 0 ? "on a surface" : "on the floor"}
-            />
-          </RailGroup>
           <RailGroup title="Lights">
-            {set.kind === "kitchen" ? (
-              <>
-                <RailItem
-                  active={sel.kind === "window"} onClick={() => setSel({ kind: "window" })} dot={win.on ? "#8fc2f0" : "#5b6068"}
-                  label="Window" sub={win.on ? `${WINDOW_SKIES[win.sky].name.toLowerCase()}${win.nd ? `, ND ${win.nd.toFixed(1)}` : ""}` : "off"}
-                />
-                <RailItem
-                  active={sel.kind === "practical"} onClick={() => setSel({ kind: "practical" })} dot={practical.on ? "#ffc879" : "#5b6068"}
-                  label="Pendant" sub={practical.on ? `practical, ${Math.round(practical.dimmer * 100)}%` : "off"}
-                />
-              </>
-            ) : null}
             {lights.map((l) => (
               <RailItem
                 key={l.id}
@@ -1481,7 +2069,7 @@ export function PrevizPrototype() {
                 label={`${s.code} ${s.title}`}
                 onDelete={shots.length > 1 ? () => removeShot(s.id) : undefined}
                 deleteLabel={`Delete shot ${s.code} and its camera`}
-                sub={`${(BODIES.find((b) => b.id === s.bodyId) ?? BODIES[0]).name}, ${s.focal}mm, ${(SUPPORTS.find((k) => k.id === s.support) ?? SUPPORTS[0]).name}`}
+                sub={`${(BODIES.find((b) => b.id === s.bodyId) ?? BODIES[0]).name}, ${Math.round(s.focal)}mm, ${(SUPPORTS.find((k) => k.id === s.support) ?? SUPPORTS[0]).name}`}
               />
             ))}
           </RailGroup>
@@ -1500,7 +2088,7 @@ export function PrevizPrototype() {
               onPointerDown={onCanvasDown}
               onPointerMove={onCanvasMove}
               onPointerUp={onCanvasUp}
-              onPointerCancel={onCanvasUp}
+              onPointerCancel={() => { drag.current = null; press.current = null; }}
               onWheel={onWheel}
               onContextMenu={(e) => e.preventDefault()}
               className={`block h-full w-full ${view === "lens" ? "cursor-grab active:cursor-grabbing" : "cursor-move"}`}
@@ -1532,49 +2120,61 @@ export function PrevizPrototype() {
               </div>
             ) : (
               <div className="pointer-events-none absolute left-3 top-3 rounded-[8px] bg-black/55 px-2.5 py-1.5 text-[11px] text-white/90">
-                Free view · drag to orbit, scroll to zoom · press V for the lens
+                Free view · drag to orbit, scroll to zoom · click a thing to select it · V for the lens
               </div>
             )}
+            {!lights.some((l) => l.on) && !items.some((i) => i.light?.on) && !(set.kind === "room" && windows.length && win.on) ? (
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
+                <div className="rounded-[10px] bg-black/60 px-3 py-2 text-center text-xs text-white/90">
+                  {set.kind === "room" ? "Nothing is lit. Add a light from the rail, or a window to the room." : "Nothing is lit. A stage has no daylight: add a light from the rail."}
+                </div>
+              </div>
+            ) : null}
           </div>
+
+          {adding ? (
+            <div className="absolute left-3 top-3 z-40">
+              <AddMenu onAdd={addItem} onProductPhoto={(s, f) => void addProduct(s, f)} onModelFile={(f) => void importModel(f)} onClose={() => setAdding(false)} />
+            </div>
+          ) : null}
 
           <TopDownMap
             talent={talent}
-            bottle={bottle}
+            items={scene.items}
             shots={shots.map((x) => (x.id === activeId ? active : x))}
             rawShots={shots}
-            set={set}
-            supportOf={(x, at) => supportPose(x, at)}
-            onBackdrop={(x, z) => setSet((st) => ({ ...st, backdrop: { ...st.backdrop, x, z } }))}
             activeId={activeId}
             aspectRatio={aspect.ratio}
-            onTalent={(id, x, z) => setTalent((all) => all.map((t) => (t.id === id ? { ...t, x, z } : t)))}
-            onBottle={(x, z) => {
-              // Picking the bottle up off the map takes it out of anyone's hand.
-              setRawBottle((b) => ({ ...b, x, z }));
-              if (bottle.heldBy) setTalent((all) => all.map((t) => (t.holding === "bottle" ? { ...t, holding: null } : t)));
-            }}
-            onCamera={(id, x, z) => updateShot(id, (s) => ({ pos: { ...s.pos, x, z } }))}
-            onAim={(id, yaw) => updateShot(id, { yaw })}
+            set={set}
+            winOn={win.on}
             lights={lights}
             grips={grips}
-            winOn={win.on}
-            practicalOn={practical.on}
             selected={sel}
-            aimOfLight={(l) => aimOf(l, talent, bottle)}
-            effLight={(l) => effLight(l, talent, bottle)}
+            supportOf={(x, at) => supportPose(x, at)}
+            aimOfLight={(l) => aimOf(l, scene)}
+            effLight={(l) => effLight(l, scene)}
+            onTalent={(id, x, z) => setTalent((all) => all.map((t) => (t.id === id ? { ...t, x, z } : t)))}
+            onMark={(id, x, z) => setTalent((all) => all.map((t) => (t.id === id && t.mark ? { ...t, mark: { ...t.mark, x, z } } : t)))}
+            onItem={(id, x, z) => {
+              // Picking up something held takes it out of the hand.
+              setItems((all) => all.map((i) => (i.id === id ? { ...i, x, z } : i)));
+              if (scene.items.find((i) => i.id === id)?.heldBy) setTalent((all) => all.map((t) => (t.holding === id ? { ...t, holding: null } : t)));
+            }}
+            onItemRot={(id, rot) => updateItem(id, { rot })}
+            onCamera={(id, x, z) => updateShot(id, (s) => ({ pos: { ...s.pos, x, z } }))}
+            onAim={(id, yaw) => updateShot(id, { yaw })}
             onLight={(id, x, z) => setLights((all) => all.map((l) => (l.id === id ? { ...l, x, z } : l)))}
-            onLightAim={(id, yaw) => setLights((all) => all.map((l) => (l.id === id ? { ...l, ...aimOf(l, talent, bottle), yaw, aimAt: null } : l)))}
+            onLightAim={(id, yaw) => setLights((all) => all.map((l) => (l.id === id ? { ...l, ...aimOf(l, scene), yaw, aimAt: null } : l)))}
             onGrip={(id, x, z) => setGrips((all) => all.map((g) => (g.id === id ? { ...g, x, z } : g)))}
-            onGripAim={(id, yaw) => setGrips((all) => all.map((g) => (g.id === id ? { ...g, ...aimOf(g, talent, bottle), yaw, aimAt: null } : g)))}
-            onPick={(k) => {
+            onGripAim={(id, yaw) => setGrips((all) => all.map((g) => (g.id === id ? { ...g, ...aimOf(g, scene), yaw, aimAt: null } : g)))}
+            onPick={(k: MapPick) => {
               if (k.kind === "camera") { setActiveId(k.id); setSel({ kind: "camera" }); }
-              else if (k.kind === "talent") setSel({ kind: "talent", id: k.id });
+              else if (k.kind === "talent" || k.kind === "mark") setSel({ kind: "talent", id: k.id });
               else if (k.kind === "light") setSel({ kind: "light", id: k.id });
               else if (k.kind === "grip") setSel({ kind: "grip", id: k.id });
-              else if (k.kind === "window") setSel({ kind: "window" });
-              else if (k.kind === "practical") setSel({ kind: "practical" });
-              else if (k.kind === "backdrop") setSel({ kind: "set" });
-              else setSel({ kind: "prop" });
+              else if (k.kind === "item") setSel({ kind: "item", id: k.id });
+              else if (k.kind === "daylight") setSel({ kind: "daylight" });
+              else setSel({ kind: "set" });
             }}
           />
 
@@ -1597,6 +2197,8 @@ export function PrevizPrototype() {
           onRemove={removeMove}
           onChange={changeMove}
           onRecord={() => play(true)}
+          onAddAction={walkers.length ? addAction : undefined}
+          walkers={walkers.map((w) => w.name)}
           fmtDist={(m) => dist(m, units)}
           fmtSpeed={(v) => (units === "ft" ? `${(v / 0.3048).toFixed(1)} ft/s` : `${v.toFixed(2)} m/s`)}
           canRecord={canRecord}
@@ -1611,7 +2213,10 @@ export function PrevizPrototype() {
               units={units}
               focus={focus}
               focusName={focusName}
-              talent={talent}
+              focusTargets={[
+                ...talent.map((t) => ({ id: t.id, name: t.name })),
+                ...items.filter((i) => catalogOf(i.kind).category === "prop").map((i) => ({ id: i.id, name: i.name })),
+              ]}
               readouts={{ hfov, vfov, near: dof.near, far: dof.far, hyper: dof.hyperfocal, size, angle }}
               onChange={(p) => updateShot(active.id, p)}
               onDelete={shots.length > 1 ? () => removeShot(active.id) : undefined}
@@ -1619,7 +2224,7 @@ export function PrevizPrototype() {
               exposure={
                 <ExposurePanel
                   stop={active.stop} iso={active.iso} nd={active.nd} wb={active.wb}
-                  reading={meter} targetName={targetName}
+                  reading={meter} targetName={meterTargetName}
                   onChange={(p) => updateShot(active.id, p)}
                 />
               }
@@ -1628,43 +2233,55 @@ export function PrevizPrototype() {
             <TalentInspector
               t={talent.find((x) => x.id === sel.id)!}
               units={units}
+              props={items.filter((i) => catalogOf(i.kind).holdable)}
+              moveSeconds={rawActive.move?.durationS ?? null}
               onChange={(p) => updatePerson(sel.id, p)}
               onDelete={() => removePerson(sel.id)}
             />
-          ) : sel.kind === "prop" ? (
-            <Info title="Hero bottle" lines={[
-              bottle.heldBy
-                ? `In ${talent.find((t) => t.id === bottle.heldBy)?.name ?? "someone"}'s right hand. Drag it on the map to put it down.`
-                : `Standing ${bottle.y === BOTTLE_TOP_Y ? "on the table" : (bottle.y ?? 0) > 0 ? "on the counter" : "on the floor"}. Drag it on the map to move it.`,
-              "To put it in someone's hand, give them the Holding product pose.",
-              "A real product comes in as its actual size with your label wrapped on.",
-            ]} />
+          ) : selItem ? (
+            <ItemInspector
+              item={selItem}
+              units={units}
+              talent={talent}
+              standsOn={standsOn}
+              labelAspect={selArt && typeof selArt === "object" ? selArt.aspect : null}
+              modelRaw={selModel && typeof selModel === "object" ? selModel.raw : null}
+              lamp={selItem.light ? (
+                <PracticalInspector
+                  id={selItem.id}
+                  dimmer={selItem.light.dimmer} cct={selItem.light.cct} on={selItem.light.on}
+                  reading={meter} targetName={meterTargetName} fmt={fmt}
+                  onChange={(p) => updateItem(selItem.id, { light: { ...selItem.light!, ...p } })}
+                />
+              ) : null}
+              onChange={(p) => updateItem(selItem.id, p)}
+              onDelete={() => removeItem(selItem.id)}
+              onDuplicate={() => duplicateItem(selItem.id)}
+              onLabelFile={(f) => void setItemLabel(selItem.id, f)}
+              onClearLabel={() => updateItem(selItem.id, { label: null })}
+              onHold={(tid) => holdItem(selItem.id, tid)}
+            />
           ) : sel.kind === "light" && lights.some((l) => l.id === sel.id) ? (
             <LightInspector
               s={lights.find((l) => l.id === sel.id)!}
-              targets={targets} reading={meter} targetName={targetName} fmt={fmt}
+              targets={targets} reading={meter} targetName={meterTargetName} fmt={fmt}
               onChange={(p) => updateLight(sel.id, p)}
               onDelete={removeSelected}
             />
           ) : sel.kind === "grip" && grips.some((g) => g.id === sel.id) ? (
             <GripInspector
               g={grips.find((g) => g.id === sel.id)!}
-              targets={targets} reading={meter} targetName={targetName} fmt={fmt}
+              targets={targets} reading={meter} targetName={meterTargetName} fmt={fmt}
               onChange={(p) => updateGrip(sel.id, p)}
               onDelete={removeSelected}
             />
-          ) : sel.kind === "window" ? (
+          ) : sel.kind === "daylight" ? (
             <WindowInspector
-              sky={win.sky} nd={win.nd} on={win.on} reading={meter} targetName={targetName} fmt={fmt}
+              sky={win.sky} nd={win.nd} on={win.on} reading={meter} targetName={meterTargetName} fmt={fmt}
               onChange={(p) => setWin((w) => ({ ...w, ...p }))}
             />
-          ) : sel.kind === "practical" ? (
-            <PracticalInspector
-              dimmer={practical.dimmer} cct={practical.cct} on={practical.on} reading={meter} targetName={targetName} fmt={fmt}
-              onChange={(p) => setPractical((x) => ({ ...x, ...p }))}
-            />
           ) : (
-            <SetInspector set={set} talent={talent} units={units} onChange={setSet} />
+            <RoomInspector set={set} units={units} onChange={setSet} onScout={() => setScout(true)} />
           )}
         </aside>
       </div>
@@ -1674,7 +2291,7 @@ export function PrevizPrototype() {
         {shots.map((s, i) => {
           const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
           const a = imagedArea(b, aspect.ratio);
-          const f = effectiveFocus(s, talent, bottle);
+          const f = effectiveFocus(s, scene);
           const isActive = s.id === activeId;
           return (
             <div key={s.id} className="group relative shrink-0">
@@ -1695,7 +2312,7 @@ export function PrevizPrototype() {
                 <span className="truncate text-xs text-text-muted">{s.title}</span>
               </div>
               <div className="px-0.5 text-[11px] text-text-muted">
-                {s.focal}mm · f/{s.stop} · {shotSize((a.h * f) / s.focal)}
+                {Math.round(s.focal)}mm · f/{s.stop} · {shotSize((a.h * f) / s.focal)}
               </div>
             </button>
             {shots.length > 1 ? (
@@ -1721,6 +2338,10 @@ export function PrevizPrototype() {
           Shot from here
         </button>
       </footer>
+
+      {scout ? (
+        <ScoutDialog units={units} read={readPhoto} onBuild={buildFromDraft} onClose={() => setScout(false)} />
+      ) : null}
     </div>
   );
 }
@@ -1728,13 +2349,13 @@ export function PrevizPrototype() {
 // ---------------------------------------------------------------- inspector
 
 function CameraInspector({
-  shot, units, focus, focusName, talent, readouts, onChange, onDelete, onBoardFile, exposure,
+  shot, units, focus, focusName, focusTargets, readouts, onChange, onDelete, onBoardFile, exposure,
 }: {
   shot: Shot;
   units: Units;
   focus: number;
   focusName: string | null;
-  talent: TalentSpec[];
+  focusTargets: { id: string; name: string }[];
   readouts: { hfov: number; vfov: number; near: number; far: number; hyper: number; size: string; angle: string };
   onChange: (p: Partial<Shot>) => void;
   onDelete?: () => void;
@@ -1751,7 +2372,14 @@ function CameraInspector({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">Camera</p>
-          <h2 className="truncate font-display text-base font-bold">{shot.code} · {shot.title}</h2>
+          <input
+            aria-label="Shot title"
+            value={shot.title}
+            onChange={(e) => onChange({ title: e.target.value })}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="w-full rounded-[6px] border border-transparent bg-transparent font-display text-base font-bold hover:border-border focus:border-border focus:outline-none"
+          />
+          <p className="text-xs text-text-muted">Shot {shot.code}</p>
         </div>
         {onDelete ? (
           <button
@@ -1800,10 +2428,10 @@ function CameraInspector({
         })()}
       </Field>
 
-      <Field label={`Lens · ${shot.focal}mm`}>
+      <Field label={`Lens · ${Math.round(shot.focal)}mm`}>
         <div className="flex flex-wrap gap-1">
           {PRIMES.map((f) => (
-            <Chip key={f} on={shot.focal === f} onClick={() => onChange({ focal: f })}>{f}</Chip>
+            <Chip key={f} on={Math.round(shot.focal) === f} onClick={() => onChange({ focal: f })}>{f}</Chip>
           ))}
         </div>
         <input
@@ -1826,10 +2454,9 @@ function CameraInspector({
 
       <Field label={`Focus · ${dist(focus, units)}${focusName ? ` on ${focusName}` : ""}`}>
         <div className="flex flex-wrap gap-1">
-          {talent.map((t) => (
+          {focusTargets.map((t) => (
             <Chip key={t.id} on={shot.focusOn === t.id} onClick={() => onChange({ focusOn: t.id })}>{t.name}</Chip>
           ))}
-          <Chip on={shot.focusOn === "bottle"} onClick={() => onChange({ focusOn: "bottle" })}>Bottle</Chip>
         </div>
         <input
           aria-label="Focus distance"
@@ -1838,7 +2465,7 @@ function CameraInspector({
           className="mt-2 w-full accent-[var(--accent)]"
         />
         <p className="mt-1 text-xs text-text-muted">
-          {focusName ? "Focus follows them as the camera moves. Drag the slider to pull by hand." : "Pulled by hand."}
+          {focusName ? "Focus follows them as the camera or they move. Drag the slider to pull by hand." : "Pulled by hand."}
         </p>
       </Field>
 
@@ -1871,7 +2498,7 @@ function CameraInspector({
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">Would fill shot list row {shot.code}</p>
         <Readout k="Shot size" v={readouts.size} />
         <Readout k="Shot type" v={readouts.angle} />
-        <Readout k="Lens" v={`${shot.focal}mm at f/${shot.stop}`} />
+        <Readout k="Lens" v={`${Math.round(shot.focal)}mm at f/${shot.stop}`} />
         <p className="mt-2 text-xs text-text-muted">Not wired up in the prototype. The real build writes these to the row.</p>
       </div>
 
@@ -1893,17 +2520,26 @@ function CameraInspector({
               Back to sample
             </button>
           ) : null}
+          {shot.board ? (
+            <button type="button" onClick={() => onChange({ board: null })} className="rounded-[10px] px-2 py-1.5 text-xs font-semibold text-text-muted hover:text-text">
+              Remove
+            </button>
+          ) : null}
         </div>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => onBoardFile(e.target.files?.[0])} />
-        <p className="mt-1 text-xs text-text-muted">Stays in this browser tab. Nothing is uploaded.</p>
+        <p className="mt-1 text-xs text-text-muted">Stays in this browser. Nothing is uploaded.</p>
       </Field>
     </div>
   );
 }
 
-function TalentInspector({ t, units, onChange, onDelete }: {
-  t: TalentSpec; units: Units; onChange: (p: Partial<TalentSpec>) => void; onDelete: () => void;
+function TalentInspector({ t, units, props, moveSeconds, onChange, onDelete }: {
+  t: TalentSpec; units: Units; props: ItemSpec[]; moveSeconds: number | null;
+  onChange: (p: Partial<TalentSpec>) => void; onDelete: () => void;
 }) {
+  const walk = t.mark ? Math.hypot(t.mark.x - t.x, t.mark.z - t.z) : 0;
+  const speed = moveSeconds ? walk / moveSeconds : null;
+  const pace = speed === null ? null : speed < 0.6 ? "a slow stroll" : speed < 1.6 ? "a natural walk" : speed < 2.2 ? "a brisk walk" : "a run";
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-2">
@@ -1913,6 +2549,7 @@ function TalentInspector({ t, units, onChange, onDelete }: {
             aria-label="Name"
             value={t.name}
             onChange={(e) => onChange({ name: e.target.value })}
+            onKeyDown={(e) => e.stopPropagation()}
             className="w-full rounded-[6px] border border-transparent bg-transparent font-display text-base font-bold hover:border-border focus:border-border focus:outline-none"
           />
         </div>
@@ -1937,19 +2574,17 @@ function TalentInspector({ t, units, onChange, onDelete }: {
             <Chip key={p.id} on={t.pose === p.id} onClick={() => onChange({ pose: p.id })}>{p.name}</Chip>
           ))}
         </div>
-        {t.pose === "holding" ? (
-          <label className="mt-2 flex items-center gap-2 text-xs text-text-muted">
-            <input
-              type="checkbox"
-              checked={t.holding === "bottle"}
-              onChange={(e) => onChange({ holding: e.target.checked ? "bottle" : null })}
-              className="accent-[var(--accent)]"
-            />
-            Holding the hero bottle
-          </label>
+        {t.pose === "holding" && props.length ? (
+          <div className="mt-2">
+            <p className="mb-1 text-xs text-text-muted">In the right hand</p>
+            <div className="flex flex-wrap gap-1">
+              <Chip on={!t.holding} onClick={() => onChange({ holding: null })}>Nothing</Chip>
+              {props.map((p) => <Chip key={p.id} on={t.holding === p.id} onClick={() => onChange({ holding: p.id })}>{p.name}</Chip>)}
+            </div>
+          </div>
         ) : null}
       </Field>
-      <Field label={`Facing · ${t.facing}°`}>
+      <Field label={`Facing · ${Math.round(t.facing)}°`}>
         <input
           aria-label="Facing"
           type="range" min={-180} max={180} step={1} value={t.facing}
@@ -1957,6 +2592,39 @@ function TalentInspector({ t, units, onChange, onDelete }: {
           className="w-full accent-[var(--accent)]"
         />
         <p className="mt-1 text-xs text-text-muted">0° faces the camera side of the room.</p>
+      </Field>
+      <Field label="Action">
+        {t.mark ? (
+          <>
+            <p className="text-sm">
+              Walks {dist(walk, units)} to a mark
+              {speed !== null ? <>, {dist(speed, units)}/s: <span className="font-semibold">{pace}</span></> : null}.
+            </p>
+            <p className="mb-2 text-xs text-text-muted">
+              {moveSeconds ? "They set off as the shot plays and land on the mark at the end of the move." : "Give the shot a timeline to play it: a camera move, or Play the action under the frame."}
+              {" "}Drag the dashed circle on the map to move the mark.
+            </p>
+            <Field label={`Facing on the mark · ${Math.round(t.mark.facing)}°`}>
+              <input
+                aria-label="Facing on the mark"
+                type="range" min={-180} max={180} step={1} value={t.mark.facing}
+                onChange={(e) => onChange({ mark: { ...t.mark!, facing: Number(e.target.value) } })}
+                className="w-full accent-[var(--accent)]"
+              />
+            </Field>
+            <button type="button" onClick={() => onChange({ mark: null })} className="mt-2 text-xs font-semibold text-text-muted hover:text-text">
+              Stay put instead
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onChange({ mark: { x: t.x + 1.2, z: t.z, facing: t.facing } })}
+            className="rounded-[10px] border border-border px-3 py-1.5 text-xs font-semibold hover:border-border-strong"
+          >
+            + Walk to a mark
+          </button>
+        )}
       </Field>
       <Field label="Wardrobe">
         <div className="flex gap-3 text-xs text-text-muted">
@@ -1970,398 +2638,7 @@ function TalentInspector({ t, units, onChange, onDelete }: {
           </label>
         </div>
       </Field>
-      <p className="text-xs text-text-muted">Drag them on the map to block the scene. No faces, on purpose: these are stand-ins, not likenesses.</p>
-    </div>
-  );
-}
-
-function SetInspector({ set, talent, units, onChange }: {
-  set: SetSpec; talent: TalentSpec[]; units: Units; onChange: (s: SetSpec) => void;
-}) {
-  const b = set.backdrop;
-  const setB = (p: Partial<BackdropSpec>) => onChange({ ...set, backdrop: { ...b, ...p } });
-  // How far each person stands off the paper, measured from where it meets the floor.
-  const r = rad(b.rot);
-  const off = talent.map((t) => ({ name: t.name, d: (t.x - b.x) * Math.sin(r) + (t.z - b.z) * Math.cos(r) }));
-  const closest = off.length ? off.reduce((m, x) => (x.d < m.d ? x : m)) : null;
-  return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">Set</p>
-        <h2 className="font-display text-base font-bold">{set.kind === "studio" ? "Studio backdrop" : "Kitchen"}</h2>
-      </div>
-      <Seg
-        value={set.kind}
-        onChange={(v) => onChange({ ...set, kind: v as SetSpec["kind"] })}
-        options={[{ v: "studio", l: "Studio backdrop" }, { v: "kitchen", l: "Kitchen sample" }]}
-      />
-      {set.kind === "kitchen" ? (
-        <p className="text-sm text-text-muted">About 8 by 5 metres: window camera left, counter along the back wall, a dining table with two chairs.</p>
-      ) : (
-        <>
-          <Field label="Paper roll">
-            <div className="flex flex-wrap gap-1">
-              {ROLL_WIDTHS.map((w) => (
-                <Chip key={w.inches} on={b.widthIn === w.inches} onClick={() => setB({ widthIn: w.inches })}>{w.label}</Chip>
-              ))}
-            </div>
-          </Field>
-          <Field label={`Colour · ${PAPER_COLORS.find((c) => c.hex === b.color)?.name ?? "custom"}`}>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {PAPER_COLORS.map((c) => (
-                <button
-                  key={c.hex} type="button" title={c.name} aria-label={c.name}
-                  onClick={() => setB({ color: c.hex })}
-                  className={`h-6 w-6 rounded-full border ${b.color === c.hex ? "ring-2 ring-accent ring-offset-1 ring-offset-surface" : "border-border"}`}
-                  style={{ background: c.hex }}
-                />
-              ))}
-              <label className="ml-1 flex items-center gap-1 text-xs text-text-muted">
-                <input type="color" value={b.color} onChange={(e) => setB({ color: e.target.value })} className="h-6 w-8 cursor-pointer rounded border border-border bg-surface" />
-                Other
-              </label>
-            </div>
-          </Field>
-          <Field label={`Pulled out across the floor · ${dist(b.sweepM, units)}`}>
-            <input
-              aria-label="Sweep" type="range" min={1} max={5} step={0.05} value={b.sweepM}
-              onChange={(e) => setB({ sweepM: Number(e.target.value) })}
-              className="w-full accent-[var(--accent)]"
-            />
-          </Field>
-          <Field label={`Turned · ${b.rot}°`}>
-            <input
-              aria-label="Turn" type="range" min={-60} max={60} step={1} value={b.rot}
-              onChange={(e) => setB({ rot: Number(e.target.value) })}
-              className="w-full accent-[var(--accent)]"
-            />
-          </Field>
-          {closest ? (
-            <div className="rounded-[12px] border border-border bg-surface-2 p-3 text-xs text-text-muted">
-              <p>
-                <span className="font-semibold text-text">{closest.name}</span> is {dist(Math.max(0, closest.d), units)} off the paper.
-              </p>
-              <p className="mt-1">
-                {closest.d < 1.8
-                  ? "Close enough that a key will throw their shadow onto the background. 6 to 10 ft off keeps it on the floor."
-                  : "Far enough that their shadow falls on the floor, and the paper can be lit on its own."}
-              </p>
-            </div>
-          ) : null}
-          <p className="text-xs text-text-muted">Drag the paper on the map to move it.</p>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- top-down map
-
-type Pick =
-  | { kind: "camera" | "talent" | "light" | "grip"; id: string }
-  | { kind: "bottle" | "window" | "practical" | "backdrop" };
-
-function TopDownMap({
-  talent, bottle, shots, activeId, aspectRatio, onTalent, onBottle, onCamera, onAim, onPick,
-  lights, grips, winOn, practicalOn, selected, aimOfLight, effLight, onLight, onLightAim, onGrip, onGripAim,
-  rawShots, set, supportOf, onBackdrop,
-}: {
-  rawShots: Shot[];
-  set: SetSpec;
-  supportOf: (s: Shot, at: Vec3) => { yaw: number; opts: SupportOpts };
-  onBackdrop: (x: number, z: number) => void;
-  lights: LightSpec[];
-  grips: GripSpec[];
-  winOn: boolean;
-  practicalOn: boolean;
-  selected: Selection;
-  aimOfLight: (p: LightSpec | GripSpec) => { yaw: number; pitch: number };
-  effLight: (l: LightSpec) => LightSpec;
-  onLight: (id: string, x: number, z: number) => void;
-  onLightAim: (id: string, yaw: number) => void;
-  onGrip: (id: string, x: number, z: number) => void;
-  onGripAim: (id: string, yaw: number) => void;
-  talent: TalentSpec[];
-  bottle: PropSpec;
-  shots: Shot[];
-  activeId: string;
-  aspectRatio: number;
-  onTalent: (id: string, x: number, z: number) => void;
-  onBottle: (x: number, z: number) => void;
-  onCamera: (id: string, x: number, z: number) => void;
-  onAim: (id: string, yaw: number) => void;
-  onPick: (p: Pick) => void;
-}) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  // Drawn after mount only: the geometry is computed with trig whose last
-  // digit differs between the server and the browser.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const [size, setSize] = useState<"min" | "small" | "big">("small");
-  const drag = useRef<(Pick & { aim?: boolean }) | null>(null);
-  const grab = useRef({ dx: 0, dz: 0 });
-
-  const toWorld = (e: React.PointerEvent) => {
-    const svg = svgRef.current!;
-    const p = svg.createSVGPoint();
-    p.x = e.clientX;
-    p.y = e.clientY;
-    const w = p.matrixTransform(svg.getScreenCTM()!.inverse());
-    return { x: Math.max(-3.9, Math.min(4.3, w.x)), z: Math.max(-2.4, Math.min(5, w.y)) };
-  };
-  const start = (p: Pick & { aim?: boolean }) => (e: React.PointerEvent) => {
-    e.stopPropagation();
-    svgRef.current?.setPointerCapture(e.pointerId);
-    drag.current = p;
-    onPick(p);
-  };
-  const move = (e: React.PointerEvent) => {
-    const d = drag.current;
-    if (!d) return;
-    const w = toWorld(e);
-    const yawTo = (px: number, pz: number) => (Math.atan2(-(w.x - px), -(w.z - pz)) * 180) / Math.PI;
-    if (d.kind === "window" || d.kind === "practical") return;
-    if (d.kind === "backdrop") return onBackdrop(w.x + grab.current.dx, w.z + grab.current.dz);
-    if (d.kind === "bottle") onBottle(w.x, w.z);
-    else if (d.kind === "talent") onTalent(d.id, w.x, w.z);
-    else if (d.kind === "light") {
-      const l = lights.find((x) => x.id === d.id);
-      if (l && d.aim) onLightAim(d.id, yawTo(l.x, l.z));
-      else onLight(d.id, w.x, w.z);
-    } else if (d.kind === "grip") {
-      const g = grips.find((x) => x.id === d.id);
-      if (g && d.aim) onGripAim(d.id, yawTo(g.x, g.z));
-      else onGrip(d.id, w.x, w.z);
-    } else if (d.kind === "camera" && d.aim) {
-      const s = shots.find((x) => x.id === d.id);
-      if (s) onAim(d.id, yawTo(s.pos.x, s.pos.z));
-    } else if (d.kind === "camera") onCamera(d.id, w.x, w.z);
-  };
-
-  if (!mounted) return null;
-  return (
-    <div
-      className={`absolute bottom-3 right-3 overflow-hidden rounded-[12px] border border-white/10 bg-[#f4f1ea] shadow-lg ${
-        size === "big" ? "w-[460px]" : size === "small" ? "w-[210px]" : "w-[150px]"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2 bg-black/80 px-2.5 py-1 text-[11px] font-semibold text-white/90">
-        <span>Top-down map</span>
-        <span className="flex gap-2">
-          {size !== "min" ? (
-            <button type="button" onClick={() => setSize(size === "big" ? "small" : "big")} className="text-white/70 hover:text-white">
-              {size === "big" ? "Smaller" : "Bigger"}
-            </button>
-          ) : null}
-          <button type="button" onClick={() => setSize(size === "min" ? "small" : "min")} className="text-white/70 hover:text-white">
-            {size === "min" ? "Show" : "Hide"}
-          </button>
-        </span>
-      </div>
-      <svg
-        style={{ display: size === "min" ? "none" : undefined }}
-        ref={svgRef}
-        viewBox="-4.4 -2.9 8.8 8.2"
-        className="block w-full touch-none select-none"
-        onPointerMove={move}
-        onPointerUp={() => (drag.current = null)}
-        onPointerCancel={() => (drag.current = null)}
-      >
-        {/* floor grid, one metre */}
-        {Array.from({ length: 9 }, (_, i) => (
-          <line key={`gx${i}`} x1={-4 + i} y1={-2.5} x2={-4 + i} y2={5} stroke="#d9d3c6" strokeWidth={0.015} />
-        ))}
-        {Array.from({ length: 8 }, (_, i) => (
-          <line key={`gz${i}`} x1={-4} y1={-2.5 + i} x2={4.4} y2={-2.5 + i} stroke="#d9d3c6" strokeWidth={0.015} />
-        ))}
-        {set.kind === "kitchen" ? (
-          <>
-        {/* walls and window */}
-        <path d="M-4.06 5 L-4.06 -2.56 L4.4 -2.56" fill="none" stroke="#5a5148" strokeWidth={0.12} />
-        <line x1={-4.06} y1={-1.25} x2={-4.06} y2={0.45} stroke="#7fb3e6" strokeWidth={0.16} />
-        <rect x={-1.1} y={-2.5} width={3.4} height={0.62} fill="#b8c4b7" stroke="#6f7f6f" strokeWidth={0.02} />
-        {/* table + chairs */}
-        <rect x={-0.8} y={-1.05} width={1.6} height={0.9} fill="#a98a70" stroke="#6a4a34" strokeWidth={0.025} rx={0.02} />
-        {[0.35, -0.45].map((cx) => (
-          <rect key={cx} x={cx - 0.22} y={-1.51} width={0.44} height={0.42} fill="none" stroke="#6a4a34" strokeWidth={0.02} />
-        ))}
-        {/* the window and the pendant: click to select */}
-        <g className="cursor-pointer" onPointerDown={start({ kind: "window" })}>
-          <rect x={-4.3} y={-1.25} width={0.5} height={1.7} fill="transparent" />
-          <path d="M-3.95 -0.4 L-2.9 -0.4" stroke={winOn ? "#4f97d8" : "#9aa0a6"} strokeWidth={0.05} strokeDasharray="0.1 0.07" />
-          {selected.kind === "window" ? <rect x={-4.22} y={-1.3} width={0.32} height={1.8} fill="none" stroke="#1d1d1f" strokeWidth={0.03} /> : null}
-        </g>
-        <circle
-          cx={PENDANT.x} cy={PENDANT.z} r={0.1}
-          fill={practicalOn ? "#ffd28f" : "#cfcac0"} stroke={selected.kind === "practical" ? "#1d1d1f" : "#b9891d"} strokeWidth={selected.kind === "practical" ? 0.04 : 0.02}
-          className="cursor-pointer" onPointerDown={start({ kind: "practical" })}
-        />
-
-          </>
-        ) : (
-          <g
-            className="cursor-move"
-            onPointerDown={(e) => {
-              const w = toWorld(e);
-              grab.current = { dx: set.backdrop.x - w.x, dz: set.backdrop.z - w.z };
-              start({ kind: "backdrop" })(e);
-            }}
-          >
-            <polygon
-              points={backdropFootprint(set.backdrop).map((p) => `${p.x},${p.z}`).join(" ")}
-              fill={set.backdrop.color} fillOpacity={0.85}
-              stroke={selected.kind === "set" ? "#1d1d1f" : "#8a857c"} strokeWidth={selected.kind === "set" ? 0.04 : 0.025}
-            />
-            {(() => {
-              const f = backdropFootprint(set.backdrop);
-              return <line x1={f[0].x} y1={f[0].z} x2={f[1].x} y2={f[1].z} stroke="#5a5148" strokeWidth={0.08} />;
-            })()}
-            <text x={set.backdrop.x} y={set.backdrop.z + set.backdrop.sweepM / 2} textAnchor="middle" fontSize={0.17} fontWeight={700} fill="#5a5148" pointerEvents="none">
-              seamless
-            </text>
-          </g>
-        )}
-        {/* bounce boards and flags, edge on, with the side that works facing out */}
-        {grips.map((g) => {
-          const a = aimOfLight(g);
-          const y = rad(a.yaw);
-          const half = (g.sizeFt * FT * Math.cos(rad(a.pitch))) / 2 || 0.05;
-          const px = Math.cos(y) * Math.max(half, 0.12);
-          const pz = -Math.sin(y) * Math.max(half, 0.12);
-          const hx = g.x - Math.sin(y) * 0.6;
-          const hz = g.z - Math.cos(y) * 0.6;
-          const isSel = selected.kind === "grip" && selected.id === g.id;
-          const col = g.kind === "flag" ? "#1d1d1f" : g.kind === "silver" ? "#8b9097" : "#ffffff";
-          return (
-            <g key={g.id}>
-              <line x1={g.x} y1={g.z} x2={hx} y2={hz} stroke="#8b8478" strokeWidth={0.02} strokeDasharray="0.06 0.05" />
-              <circle cx={hx} cy={hz} r={0.08} fill="#fff" stroke="#6b645a" strokeWidth={0.03} className="cursor-crosshair" onPointerDown={start({ kind: "grip", id: g.id, aim: true })} />
-              <line
-                x1={g.x - px} y1={g.z - pz} x2={g.x + px} y2={g.z + pz}
-                stroke={isSel ? "#1d1d1f" : "#6b645a"} strokeWidth={0.14} strokeLinecap="round"
-                className="cursor-move" onPointerDown={start({ kind: "grip", id: g.id })}
-              />
-              <line x1={g.x - px} y1={g.z - pz} x2={g.x + px} y2={g.z + pz} stroke={col} strokeWidth={0.08} strokeLinecap="round" pointerEvents="none" />
-            </g>
-          );
-        })}
-
-        {/* lights: the beam they throw, a drag handle, and a white dot to aim */}
-        {lights.map((raw) => {
-          const l = effLight(raw);
-          const a = aimOfLight(l);
-          const y = rad(a.yaw);
-          const f = FIXTURES.find((x) => x.id === l.fixtureId) ?? FIXTURES[0];
-          const src = resolveSource(f, l.modifierId, l.dimmer, l.beamDeg, l.frame);
-          const half = rad(Math.min(src.omni ? 180 : src.beamDeg, 150) / 2);
-          const R = src.omni ? 0.7 : 1.5;
-          const ray = (k: number) => `${l.x - Math.sin(y + k) * R} ${l.z - Math.cos(y + k) * R}`;
-          const hx = l.x - Math.sin(y) * 0.7;
-          const hz = l.z - Math.cos(y) * 0.7;
-          const isSel = selected.kind === "light" && selected.id === l.id;
-          const fill = l.on ? "#f3c64a" : "#b7b1a6";
-          return (
-            <g key={l.id}>
-              {l.on ? (
-                src.omni
-                  ? <circle cx={l.x} cy={l.z} r={R} fill={fill} fillOpacity={0.12} />
-                  : <path d={`M${l.x} ${l.z} L${ray(half)} L${ray(-half)} Z`} fill={fill} fillOpacity={isSel ? 0.22 : 0.12} />
-              ) : null}
-              {!src.omni ? (
-                <>
-                  <line x1={l.x} y1={l.z} x2={hx} y2={hz} stroke="#b9891d" strokeWidth={0.025} />
-                  <circle cx={hx} cy={hz} r={0.08} fill="#fff" stroke="#b9891d" strokeWidth={0.03} className="cursor-crosshair" onPointerDown={start({ kind: "light", id: l.id, aim: true })} />
-                </>
-              ) : null}
-              {l.frame && !src.omni ? (
-                <line
-                  x1={l.x - Math.sin(y) * l.frame.distM + Math.cos(y) * (l.frame.sizeFt * FT) / 2}
-                  y1={l.z - Math.cos(y) * l.frame.distM - Math.sin(y) * (l.frame.sizeFt * FT) / 2}
-                  x2={l.x - Math.sin(y) * l.frame.distM - Math.cos(y) * (l.frame.sizeFt * FT) / 2}
-                  y2={l.z - Math.cos(y) * l.frame.distM + Math.sin(y) * (l.frame.sizeFt * FT) / 2}
-                  stroke="#f2efe8" strokeWidth={0.07} pointerEvents="none"
-                />
-              ) : null}
-              <g className="cursor-move" onPointerDown={start({ kind: "light", id: l.id })}>
-                <circle cx={l.x} cy={l.z} r={0.15} fill={fill} stroke={isSel ? "#1d1d1f" : "#b9891d"} strokeWidth={isSel ? 0.05 : 0.025} />
-                <text x={l.x} y={l.z + 0.06} textAnchor="middle" fontSize={0.15} fontWeight={800} fill="#4a3a10">{l.role[0]}</text>
-              </g>
-              <text x={l.x + 0.2} y={l.z - 0.16} fontSize={0.17} fontWeight={700} fill="#7a5b14" pointerEvents="none">{l.role}</text>
-            </g>
-          );
-        })}
-
-        {/* cameras, with their horizontal field of view */}
-        {shots.map((s, i) => {
-          const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
-          const half = rad(fovDeg(imagedArea(b, aspectRatio).w, s.focal) / 2);
-          const y = rad(s.yaw);
-          const L = 4.2;
-          const ray = (a: number) => `${s.pos.x - Math.sin(y + a) * L} ${s.pos.z - Math.cos(y + a) * L}`;
-          const col = SHOT_HUES[i % SHOT_HUES.length];
-          const isA = s.id === activeId;
-          const hx = s.pos.x - Math.sin(y) * 0.7;
-          const hz = s.pos.z - Math.cos(y) * 0.7;
-          // What it is on: a dolly's track or a robot's base, turned to the track.
-          const raw = rawShots.find((x) => x.id === s.id) ?? s;
-          const sp = supportOf(raw, s.pos);
-          const ty = rad(sp.yaw);
-          const fp = supportFootprint(s.support, s.pos.y, bodyDrop(s.bodyId), sp.opts);
-          const loc = (lx: number, lz: number) => ({ x: s.pos.x + lx * Math.cos(ty) + lz * Math.sin(ty), z: s.pos.z - lx * Math.sin(ty) + lz * Math.cos(ty) });
-          const rails = fp.track
-            ? [-fp.track.gauge / 2, fp.track.gauge / 2].map((o) => {
-                const t = fp.track!;
-                const a = t.axis === "x" ? loc(t.from, o) : loc(o, t.from);
-                const b = t.axis === "x" ? loc(t.to, o) : loc(o, t.to);
-                return { a, b };
-              })
-            : [];
-          const base = fp.base ? loc(fp.base.x, fp.base.z) : null;
-          return (
-            <g key={s.id} opacity={isA ? 1 : 0.55}>
-              {rails.map((r, k) => (
-                <line key={k} x1={r.a.x} y1={r.a.z} x2={r.b.x} y2={r.b.z} stroke="#6f747b" strokeWidth={0.035} strokeLinecap="round" pointerEvents="none" />
-              ))}
-              {base && fp.base ? <circle cx={base.x} cy={base.z} r={fp.base.r} fill="#2a2c30" fillOpacity={0.35} stroke="#2a2c30" strokeWidth={0.02} pointerEvents="none" /> : null}
-              {raw.move ? (
-                <g pointerEvents="none">
-                  <line x1={raw.pos.x} y1={raw.pos.z} x2={raw.move.end.pos.x} y2={raw.move.end.pos.z} stroke={col} strokeWidth={0.035} strokeDasharray="0.08 0.06" />
-                  <circle cx={raw.move.end.pos.x} cy={raw.move.end.pos.z} r={0.08} fill="none" stroke={col} strokeWidth={0.03} />
-                  <circle cx={raw.pos.x} cy={raw.pos.z} r={0.05} fill={col} />
-                </g>
-              ) : null}
-              <path d={`M${s.pos.x} ${s.pos.z} L${ray(half)} L${ray(-half)} Z`} fill={col} fillOpacity={isA ? 0.16 : 0.07} stroke={col} strokeWidth={0.02} />
-              <line x1={s.pos.x} y1={s.pos.z} x2={hx} y2={hz} stroke={col} strokeWidth={0.03} />
-              <circle cx={hx} cy={hz} r={0.09} fill="#fff" stroke={col} strokeWidth={0.03} className="cursor-crosshair" onPointerDown={start({ kind: "camera", id: s.id, aim: true })} />
-              <g transform={`translate(${s.pos.x} ${s.pos.z}) rotate(${-s.yaw})`} className="cursor-move" onPointerDown={start({ kind: "camera", id: s.id })}>
-                <rect x={-0.14} y={-0.05} width={0.28} height={0.32} rx={0.04} fill={col} stroke="#1d1d1f" strokeWidth={isA ? 0.04 : 0.02} />
-                <rect x={-0.07} y={-0.15} width={0.14} height={0.12} fill="#1d1d1f" />
-              </g>
-              <text x={s.pos.x + 0.22} y={s.pos.z + 0.3} fontSize={0.2} fontWeight={700} fill="#1d1d1f">{s.code}</text>
-            </g>
-          );
-        })}
-
-        {/* bottle */}
-        <circle cx={bottle.x} cy={bottle.z} r={0.07} fill="#2f6f62" stroke="#fff" strokeWidth={0.025} className="cursor-move" onPointerDown={start({ kind: "bottle" })} />
-
-        {/* talent: body, facing tick, name */}
-        {talent.map((t) => {
-          const f = rad(t.facing);
-          return (
-            <g key={t.id} className="cursor-move" onPointerDown={start({ kind: "talent", id: t.id })}>
-              <circle cx={t.x} cy={t.z} r={0.22} fill={t.top} stroke="#fff" strokeWidth={0.03} />
-              <line x1={t.x} y1={t.z} x2={t.x + Math.sin(f) * 0.36} y2={t.z + Math.cos(f) * 0.36} stroke="#1d1d1f" strokeWidth={0.05} strokeLinecap="round" />
-              <text x={t.x} y={t.z + 0.48} textAnchor="middle" fontSize={0.2} fontWeight={700} fill="#1d1d1f">{t.name}</text>
-            </g>
-          );
-        })}
-      </svg>
-      {size === "big" ? (
-        <p className="bg-black/80 px-2.5 py-1 text-[10px] text-white/75">
-          Drag people, the bottle, a camera, a light or a board. Drag a white dot to aim it.
-        </p>
-      ) : null}
+      <p className="text-xs text-text-muted">Drag them on the map to block the scene. On a riser or an apple box they stand on it. No faces, on purpose: these are stand-ins, not likenesses.</p>
     </div>
   );
 }
@@ -2376,17 +2653,19 @@ function HelpCard({ onClose }: { onClose: () => void }) {
     ["W A S D", "dolly and truck (Shift for bigger steps)"],
     ["Q / E", "boom down and up"],
     ["Arrow keys", "pan and tilt one degree"],
+    ["Click", "select what is under the cursor, in either view"],
     ["1, 2, 3", "switch shots"],
     ["Space", "play or stop the camera move"],
     ["V", "through the lens / free view"],
     ["C", "clay view"],
     ["B", "storyboard overlay"],
-    ["Map", "drag people, the bottle, cameras, lights and boards; drag a white dot to aim"],
+    ["Map", "drag anything; drag a white dot to aim it or turn it"],
     ["Z", "zebras: stripes where the picture clips"],
-    ["Delete", "delete the selected light, bounce or flag (a shot: its bin)"],
+    ["Delete", "delete the selected thing, light, bounce or flag"],
+    ["Cmd or Ctrl + D", "duplicate the selected thing"],
   ];
   return (
-    <div className="absolute left-3 top-14 w-[330px] rounded-[12px] border border-border bg-surface p-4 text-sm shadow-lg">
+    <div className="absolute left-3 top-14 w-[340px] rounded-[12px] border border-border bg-surface p-4 text-sm shadow-lg">
       <div className="mb-2 flex items-center justify-between">
         <p className="font-display font-bold">Driving the camera</p>
         <button type="button" onClick={onClose} className="text-xs text-text-muted hover:text-text">Close</button>

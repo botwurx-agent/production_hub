@@ -239,11 +239,13 @@ export function WindowInspector({ sky, nd, on, reading, targetName, fmt, onChang
   sky: WindowSky; nd: number; on: boolean; reading: Reading | null; targetName: string; fmt: Fmt;
   onChange: (p: { sky?: WindowSky; nd?: number; on?: boolean }) => void;
 }) {
-  const c = reading?.contributions.find((x) => x.id === "window");
+  // Every window in the room adds up to one daylight figure.
+  const ws = reading?.contributions.filter((x) => x.id.startsWith("window")) ?? [];
+  const c = ws.length ? { ...ws[0], label: "Windows", lux: ws.reduce((n, x) => n + x.lux, 0) } : undefined;
   const sun = reading?.contributions.find((x) => x.id === "sun");
   return (
     <div className="space-y-5">
-      <Header eyebrow="Daylight" title="Window" on={on} onToggle={() => onChange({ on: !on })} />
+      <Header eyebrow="Daylight" title="Through the windows" on={on} onToggle={() => onChange({ on: !on })} />
       <Field label="Outside">
         <div className="flex flex-wrap gap-1">
           {(Object.keys(WINDOW_SKIES) as WindowSky[]).map((k) => (
@@ -263,14 +265,23 @@ export function WindowInspector({ sky, nd, on, reading, targetName, fmt, onChang
   );
 }
 
-export function PracticalInspector({ dimmer, cct, on, reading, targetName, fmt, onChange }: {
-  dimmer: number; cct: number; on: boolean; reading: Reading | null; targetName: string; fmt: Fmt;
+/** A practical lamp's controls, inside an item's inspector. */
+export function PracticalInspector({ id, dimmer, cct, on, reading, targetName, fmt, onChange }: {
+  id: string; dimmer: number; cct: number; on: boolean; reading: Reading | null; targetName: string; fmt: Fmt;
   onChange: (p: { dimmer?: number; cct?: number; on?: boolean }) => void;
 }) {
-  const c = reading?.contributions.find((x) => x.id === "practical");
+  const c = reading?.contributions.find((x) => x.id === id);
   return (
     <div className="space-y-5">
-      <Header eyebrow="Practical" title="Pendant over the table" on={on} onToggle={() => onChange({ on: !on })} />
+      <Field label="Practical">
+        <button
+          type="button"
+          onClick={() => onChange({ on: !on })}
+          className={`rounded-[8px] border px-2 py-1 text-xs font-semibold ${on ? "border-accent bg-accent-soft text-accent" : "border-border text-text-muted"}`}
+        >
+          {on ? "On" : "Off"}
+        </button>
+      </Field>
       <Field label={`Dimmer · ${Math.round(dimmer * 100)}%`}>
         <Slider label="Dimmer" min={0.02} max={1} step={0.01} value={dimmer} onChange={(v) => onChange({ dimmer: v })} />
       </Field>

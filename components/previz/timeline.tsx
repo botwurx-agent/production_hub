@@ -10,8 +10,12 @@ import { EASES, type Ease, type Move, type MoveStats } from "@/lib/previz/camera
 
 export function Timeline({
   move, stats, playhead, playing, recording, tickRef, supportName, supportHint, warnings,
-  onPlay, onStop, onSeek, onAdd, onRemove, onChange, onRecord, fmtDist, fmtSpeed, canRecord,
+  onPlay, onStop, onSeek, onAdd, onRemove, onChange, onRecord, fmtDist, fmtSpeed, canRecord, onAddAction, walkers,
 }: {
+  /** Somebody has a mark to walk to: offers a timeline with the camera locked off. */
+  onAddAction?: () => void;
+  /** Who walks during the move, for the line under the scrubber. */
+  walkers?: string[];
   move: Move | null;
   stats: MoveStats | null;
   playhead: number;
@@ -68,6 +72,15 @@ export function Timeline({
         >
           + Add a camera move
         </button>
+        {onAddAction ? (
+          <button
+            type="button"
+            onClick={onAddAction}
+            className="rounded-[10px] border border-border px-3 py-1.5 text-xs font-semibold hover:border-border-strong"
+          >
+            + Play the action, camera locked off
+          </button>
+        ) : null}
         <span className="text-xs text-text-muted">{supportName}: {supportHint}</span>
       </div>
     );
@@ -160,7 +173,8 @@ export function Timeline({
             <span className="font-semibold text-text">{stats.name}</span>
             {stats.travelM > 0.02 ? <span>{fmtDist(stats.travelM)} of travel, {fmtSpeed(stats.speed)} average, {fmtSpeed(stats.peak)} at its fastest</span> : null}
             {stats.panDeg > 1 ? <span>pans {stats.panDeg.toFixed(0)}°</span> : null}
-            {stats.trackM ? <span>needs {fmtDist(stats.trackM)} of track</span> : null}
+            {stats.trackM && stats.travelM > 0.02 ? <span>needs {fmtDist(stats.trackM)} of track</span> : null}
+            {walkers?.length ? <span>{walkers.join(", ")} {walkers.length === 1 ? "walks" : "walk"} to {walkers.length === 1 ? "their mark" : "their marks"}</span> : null}
           </>
         ) : null}
         <span>
