@@ -7119,6 +7119,29 @@ reach for it during real prep.
   subject, and that is physics rather than a bug: the frame turns a 55-degree
   beam into a broad glowing card. Still not modelled: highlight size on shiny
   surfaces (lights are points), and blur stops growing past about 53 degrees.
+- HOUSE LIGHTS, GROUND GRID, FRAME ALL (2026-10-05, operator: zoomed out in
+  free view "everything is kind of pitch black"). The darkness was correct
+  behaviour, not a bug: free view exposes for the active shot's stop, so
+  anything outside the key's pool reads as black. lib/previz/house-view.ts.
+  THE RULE: these are for FINDING things and may never reach the shot. The
+  house fill is a shadowless HemisphereLight at HOUSE_LEVEL (0.6) x
+  luxForStop of the active shot, so it reads the same at any stop; it is set
+  to 0 inside renderShot, so lens view, thumbnails, recorded clips and Save
+  frame never carry it, and the meter never sees it (the meter reads
+  emitters, not three.js lights). H toggles it, on by default, remembered in
+  localStorage (previz.houseLights) as a per-person viewing preference. The
+  background lifts to a dim grey with it.
+  The GROUND GRID (lines, not a checkerboard, since a checker fights the light
+  falling on the floor) follows the ft/m setting (1 ft with a bolder 5 ft, or
+  0.5 m with a bolder 1 m), fades with distance, and is free view only.
+  MARKERS: a constant-size glowing dot on every light head (amber, dimmed when
+  off) and camera (blue, the active one bright), drawn through walls.
+  GRID AND MARKERS ARE A SECOND RENDER PASS (house.aids, autoClear off, depth
+  kept), because clay view's scene.overrideMaterial repaints EVERY mesh and
+  sprite in the scene and would have turned the grid into a grey slab.
+  F (or "Frame all") fits every set piece, person, light, room wall and camera
+  in free view from the current direction, never from below the floor; the
+  stage floor is left out of the box since it is effectively endless.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

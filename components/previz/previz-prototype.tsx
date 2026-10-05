@@ -23,7 +23,7 @@ import { buildFigure, buildRig, buildWorld, dofMaterial, eyeHeight, handWorld, t
 import { SAMPLE_BOARDS } from "@/lib/previz/boards";
 import { SUPPORTS, bodyDrop, buildSupport, robotBaseLocal, type SupportOpts } from "@/lib/previz/camera-model";
 import {
-  FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, exposureScale, resolveSource, type WindowSky,
+  FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, exposureScale, luxForStop, resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
 import {
   GRIP_NAMES, GRIP_REFLECTANCE, buildGripRig, buildLightRig, structureKey, updateGripRig, updateLightRig,
@@ -43,6 +43,7 @@ import {
   camAt, constrainEnd, ease, fromLocal, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
 } from "@/lib/previz/camera-move";
 import { POSES } from "@/lib/previz/poses";
+import { HOUSE_LEVEL, buildHouseView, frameBox, gridSpacing, syncMarkers, type Marker } from "@/lib/previz/house-view";
 import {
   CATEGORIES, bulbLocal, buildItem, catalogOf, containsPoint, itemShapeKey, itemToWorld, newItem, stackHeights, standHeight,
   type ItemSpec, type LabelArt,
@@ -360,6 +361,15 @@ export function PrevizPrototype() {
   const [aspectId, setAspectId] = useState(initial.aspectId);
   const [view, setView] = useState<"lens" | "free">("lens");
   const [clay, setClay] = useState(false);
+  // Free view's work lights. A per-person preference about how to look round
+  // the set, so it lives in this browser rather than in the setup file.
+  const [houseLights, setHouseLights] = useState(true);
+  useEffect(() => {
+    try { if (window.localStorage.getItem("previz.houseLights") === "off") setHouseLights(false); } catch { /* storage off */ }
+  }, []);
+  useEffect(() => {
+    try { window.localStorage.setItem("previz.houseLights", houseLights ? "on" : "off"); } catch { /* storage off */ }
+  }, [houseLights]);
   const [showBoard, setShowBoard] = useState(true);
   const [boardOpacity, setBoardOpacity] = useState(0.35);
   const [thirds, setThirds] = useState(false);
@@ -398,8 +408,8 @@ export function PrevizPrototype() {
 
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const live = useRef({ shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead });
-  live.current = { shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead };
+  const live = useRef({ shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead, houseLights, units });
+  live.current = { shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead, houseLights, units };
   // The scene as last posed by the render loop, which the light rigs aim from.
   const poseRef = useRef<Scene>(scene);
   // Playback runs in the render loop, not in React: `t0` is when the move
@@ -439,6 +449,7 @@ export function PrevizPrototype() {
     gripRigs: Map<string, GripRig>;
     syncRigs: (wb: number) => void;
     pose: (sc: Scene) => void;
+    house: ReturnType<typeof buildHouseView>;
   } | null>(null);
   const captureQueue = useRef<string[]>([]);
   const lastChange = useRef(0);
@@ -520,6 +531,12 @@ export function PrevizPrototype() {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     const world = buildWorld(renderer);
+    // Free view's aids (house lights, ground grid, markers). Hidden for every
+    // lens render, so none of it can reach a shot, a thumbnail or a clip.
+    const house = buildHouseView();
+    world.scene.add(house.fill);
+    const stageBg = (world.scene.background as THREE.Color).clone();
+    const houseBg = new THREE.Color("#22252b");
     const shotCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.05, 80);
     shotCam.rotation.order = "YXZ";
     const freeCam = new THREE.PerspectiveCamera(50, 16 / 9, 0.05, 200);
@@ -679,7 +696,7 @@ export function PrevizPrototype() {
       }
     };
 
-    engine.current = { renderer, world, shotCam, freeCam, controls, rt, quad, quadScene, quadCam, clayMat, lightRigs, gripRigs, syncRigs, pose };
+    engine.current = { renderer, world, shotCam, freeCam, controls, rt, quad, quadScene, quadCam, clayMat, lightRigs, gripRigs, syncRigs, pose, house };
     captureQueue.current = live.current.shots.map((s) => s.id);
 
     let raf = 0;
@@ -702,6 +719,8 @@ export function PrevizPrototype() {
       shotCam.position.set(s.pos.x, s.pos.y, s.pos.z);
       shotCam.rotation.set(rad(s.pitch), rad(s.yaw), 0);
       world.rigs.visible = false;
+      house.fill.intensity = 0;
+      (world.scene.background as THREE.Color).copy(stageBg);
       world.scene.overrideMaterial = L.clay ? clayMat : null;
       syncRigs(s.wb);
       const expo = exposureScale(s.stop, s.iso, s.nd);
@@ -761,10 +780,31 @@ export function PrevizPrototype() {
         renderer.toneMappingExposure = exposureScale(fs.stop, fs.iso, fs.nd);
         controls.update();
         world.rigs.visible = true;
+        // House lights: an even, shadowless fill about 2/3 of a stop under this
+        // shot's exposure, so the set reads at any stop. The meter never sees it.
+        house.fill.intensity = L.houseLights ? HOUSE_LEVEL * luxForStop(fs.stop, fs.iso, fs.nd) : 0;
+        (world.scene.background as THREE.Color).copy(L.houseLights ? houseBg : stageBg);
+        const sp = gridSpacing(L.units);
+        house.gridMat.uniforms.minor.value = sp.minor;
+        house.gridMat.uniforms.major.value = sp.major;
+        house.gridMat.uniforms.fadeM.value = Math.max(25, freeCam.position.distanceTo(controls.target) * 4);
+        const marks: Marker[] = [];
+        for (const l of L.lights) {
+          const rig = lightRigs.get(l.id);
+          if (rig) marks.push({ id: `l:${l.id}`, pos: rig.head.getWorldPosition(new THREE.Vector3()), color: "#ffc061", dim: !l.on });
+        }
+        for (const sh of L.shots) {
+          marks.push({ id: `c:${sh.id}`, pos: new THREE.Vector3(sh.pos.x, sh.pos.y, sh.pos.z), color: "#7fa8ff", dim: sh.id !== L.activeId });
+        }
+        syncMarkers(house, marks);
         world.scene.overrideMaterial = L.clay ? clayMat : null;
         freeCam.aspect = size.x / size.y;
         freeCam.updateProjectionMatrix();
         renderer.render(world.scene, freeCam);
+        // The grid and markers over it, against the scene's own depth.
+        renderer.autoClear = false;
+        renderer.render(house.aids, freeCam);
+        renderer.autoClear = true;
         return;
       }
       // Fill thumbnails for shots not yet seen, one per frame, never mid-move:
@@ -1353,6 +1393,24 @@ export function PrevizPrototype() {
     updateShot(active.id, (s) => ({ pos: { x: s.pos.x + f.x * step, y: Math.max(0.1, s.pos.y + f.y * step), z: s.pos.z + f.z * step } }));
   };
 
+  // Frame everything: free view backs off until every set piece, person,
+  // light and camera is in shot. The stage floor is left out, since it is
+  // effectively endless and would frame a void.
+  const frameAll = () => {
+    const e = engine.current;
+    if (!e) return;
+    const box = new THREE.Box3();
+    const roots: THREE.Object3D[] = [e.world.itemsRoot, e.world.lightsRoot, e.world.roomRoot, ...Array.from(figs.current.values()).map((f) => f.base)];
+    for (const r of roots) box.expandByObject(r);
+    for (const s of shots) box.expandByPoint(new THREE.Vector3(s.pos.x, s.pos.y, s.pos.z));
+    const to = frameBox(box, e.freeCam, e.controls.target);
+    if (!to) return;
+    e.freeCam.position.copy(to.pos);
+    e.controls.target.copy(to.target);
+    e.controls.update();
+    setView("free");
+  };
+
   // Keyboard: works anywhere on the page except while typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1366,6 +1424,8 @@ export function PrevizPrototype() {
       if (e.metaKey || e.ctrlKey) return;
       if (k === "v") return setView((v) => (v === "lens" ? "free" : "lens"));
       if (k === "c") return setClay((c) => !c);
+      if (k === "h") return setHouseLights((h) => !h);
+      if (k === "f") return frameAll();
       if (k === "b") return setShowBoard((b) => !b);
       if (k === "?") return setHelp((h) => !h);
       if (k === "z") return setZebra((z) => !z);
@@ -2067,6 +2127,14 @@ export function PrevizPrototype() {
           options={[{ v: "lens", l: "Through the lens" }, { v: "free", l: "Free view" }]}
         />
         <Toggle on={clay} onClick={() => setClay(!clay)} label="Clay" hint="C" />
+        {view === "free" ? (
+          <>
+            <Toggle on={houseLights} onClick={() => setHouseLights(!houseLights)} label="House lights" hint="H" />
+            <button type="button" onClick={frameAll} title="Fit everything in view (F)" className="rounded-[10px] border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:text-text">
+              Frame all
+            </button>
+          </>
+        ) : null}
         <Toggle on={showBoard} onClick={() => setShowBoard(!showBoard)} label="Board" hint="B" />
         {showBoard ? (
           <input
@@ -2269,7 +2337,7 @@ export function PrevizPrototype() {
               </div>
             ) : (
               <div className="pointer-events-none absolute left-3 top-3 rounded-[8px] bg-black/55 px-2.5 py-1.5 text-[11px] text-white/90">
-                Free view · drag a thing to move it, shift-drag to raise it · drag empty space to orbit, scroll to zoom · V for the lens
+                Free view · drag a thing to move it, shift-drag to raise it · drag empty space to orbit, scroll to zoom · H house lights · F frame all · V for the lens
               </div>
             )}
             {!lights.some((l) => l.on) && !items.some((i) => i.light?.on) && !(set.kind === "room" && windows.length && win.on) ? (
@@ -2807,6 +2875,8 @@ function HelpCard({ onClose }: { onClose: () => void }) {
     ["Space", "play or stop the camera move"],
     ["V", "through the lens / free view"],
     ["C", "clay view"],
+    ["H", "house lights in free view: see the whole stage; never in the shot or the meter"],
+    ["F", "frame all: fit every light, camera and set piece in free view"],
     ["B", "storyboard overlay"],
     ["Map", "drag anything; drag a white dot to aim it or turn it"],
     ["Z", "zebras: stripes where the picture clips"],
