@@ -6915,8 +6915,50 @@ reach for it during real prep.
   drags, free view, clay, thumbnails, no page errors, production build clean
   (three.js is 156 kB on that route only).
   KNOWN ROUGH EDGES, all deliberate for a prototype: a seated figure moved away
-  from its chair stays seated in mid-air; lights are three fixed sources;
-  9:16 is a sensor crop, not a rotated camera; nothing persists.
+  from its chair stays seated in mid-air; 9:16 is a sensor crop, not a
+  rotated camera; nothing persists.
+- LIGHTING ADDED TO THE PROTOTYPE (2026-10-05), because the operator asked to
+  test everything before building and rightly found no way to place, move,
+  dim or diffuse a light. Still a throwaway at /dev/scene-setup.
+  THE SCENE IS IN REAL UNITS and the camera exposes it: fixtures in lumens,
+  candela along the axis, lux at the subject, glowing faces in nits, and the
+  renderer's exposure is derived per shot from stop, ISO, a 180-degree
+  shutter and ND (`exposureScale` puts a correctly exposed grey card at 18
+  percent). That is what lets the meter say "reads f/5.6" and the picture
+  agree with it. White balance is a per-shot camera setting, so a daylight
+  source goes blue at 3200K and a tungsten one goes orange at 5600K.
+  lib/previz/lighting.ts is the pure maths (fixture catalogue, modifiers,
+  diffusion grades, frames, the stop and ND arithmetic, colour temperature),
+  tested in the scratchpad. lib/previz/light-build.ts draws fixtures, stands,
+  modifiers, frames, bounce boards and flags. lib/previz/meter.ts is an
+  incident meter with the dome to the lens: per-source contributions,
+  occlusion by raycast (so a flag or a person really cuts a light), what each
+  bounce board catches and throws back, and one averaged room bounce shown on
+  its own line. components/previz/light-panels.tsx holds the inspectors and
+  the Exposure panel (ISO, ND, white balance, the meter, "Set ND to match",
+  key to fill ratio).
+  WHAT CAN BE DONE: add any of eight fixtures from the rail, drag them on the
+  map, aim at a person or the bottle (stays on them) or by hand, dimmer,
+  colour temperature within the fixture's range, modifier (dome, softbox,
+  strip, reflector, lantern, fresnel spot to flood, grid), a diffusion frame
+  in front (4x4 to 20x20, six grades, distance from the light), on/off;
+  window with overcast, bright or direct sun and an ND gel; the pendant
+  practical; white or silver bounce and solid flags; zebras (Z).
+  TWO PHYSICS BUGS THE DRIVING FOUND, both worth keeping in mind: a big frame
+  close to a wide source was credited with catching more light than the
+  fixture emits (now capped by the frame's solid angle and the fixture's
+  flux), and a big card close to the subject was treated as a point, so
+  pushing the frame in read brighter without limit (now the near-field
+  E = I/(d² + A/π), and the renderer's point light is scaled to match the
+  meter AT THE SUBJECT, since three.js has no area lights with shadows). A
+  frame is also kept at least half a metre in front of what it is aimed at.
+  NEW LIGHTS AND BOARDS PLACE THEMSELVES out of the active camera's frame and
+  clear of people: a key three-quarter camera right, a fill or a bounce
+  opposite the key, a flag on the key side. The first version used fixed
+  spots and dropped a flag straight across the two-shot.
+  READ IT AS RELATIVE (a stop hotter, much softer), never as a meter on set:
+  lumen figures are per fixture class, room bounce is one averaged number,
+  diffusion is transmission plus spread rather than the fabric's real curve.
   HIGGSFIELD IS NOT NEEDED UNTIL SLICE 5 (previz frame to video), or earlier
   only if photo-to-3D appears in their public API. Slices 1 to 4 run entirely
   in the browser.

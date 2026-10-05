@@ -229,15 +229,36 @@ export type Built = {
   figures: Map<string, THREE.Group>;
   bottle: THREE.Group;
   rigs: THREE.Group;
+  /** Holds the movable fixtures, flags and bounce boards. */
+  lightsRoot: THREE.Group;
+  /** Daylight through the window: a soft sky source, plus direct sun. */
+  windowLight: THREE.SpotLight;
+  sun: THREE.DirectionalLight;
+  sky: THREE.MeshStandardMaterial;
+  pendant: THREE.PointLight;
+  bulb: THREE.MeshStandardMaterial;
+  /** Light bouncing round the set, as one averaged level. */
+  bounce: THREE.HemisphereLight;
 };
+
+/** The window opening, so the meter can find the sky. */
+export const WINDOW = { x: -4.06, z: -0.4, w: 1.7, sill: 0.9, top: 2.4 };
+export const WINDOW_AREA = WINDOW.w * (WINDOW.top - WINDOW.sill);
+/** The practical over the table: a 60W-equivalent bulb. */
+export const PENDANT = { x: 0, y: 1.94, z: -0.6, lumens: 800 };
+
+function glow(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ color: "#000000", emissive: "#ffffff", emissiveIntensity: 1, roughness: 1 });
+}
 
 /** The kitchen set. Returned groups are the things the UI moves. */
 export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color("#c9d4df");
+  // Beyond the set is a dark stage, which is what a real set has around it.
+  scene.background = new THREE.Color("#0a0b0d");
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.35;
+  scene.environmentIntensity = 0;
 
   const plaster = mat("#d8d0c3", 0.95);
   const floor = new THREE.Mesh(
@@ -251,8 +272,8 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
 
   // Back wall, and a left wall with a window cut into it
   scene.add(box(9, 3.2, 0.12, plaster, 0, 1.6, -2.56));
-  const wx = -4.06;
-  const win = { z: -0.4, w: 1.7, sill: 0.9, top: 2.4 };
+  const wx = WINDOW.x;
+  const win = WINDOW;
   scene.add(box(0.12, 3.2, win.z - win.w / 2 + 2.56, plaster, wx, 1.6, (-2.56 + win.z - win.w / 2) / 2));
   scene.add(box(0.12, 3.2, 4.94 - (win.z + win.w / 2), plaster, wx, 1.6, (win.z + win.w / 2 + 4.94) / 2));
   scene.add(box(0.12, win.sill, win.w, plaster, wx, win.sill / 2, win.z));
@@ -261,9 +282,13 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   scene.add(box(0.14, 0.05, win.w, frame, wx, win.sill, win.z));
   scene.add(box(0.14, 0.05, win.w, frame, wx, win.top, win.z));
   scene.add(box(0.14, win.top - win.sill, 0.04, frame, wx, (win.sill + win.top) / 2, win.z));
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshBasicMaterial({ color: "#e9f1ff" }));
+  // The sky seen through the window glows at real sky brightness, so it
+  // blows out unless the window is gelled, exactly as it does on a set.
+  const skyMat = glow();
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), skyMat);
   sky.position.set(wx - 1.5, 1.7, win.z);
   sky.rotation.y = Math.PI / 2;
+  sky.userData.noOcclude = true;
   scene.add(sky);
 
   // Counter run along the back wall, with a plant on it
@@ -309,44 +334,57 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   shade.position.set(0, 2.05, -0.6);
   scene.add(shade);
   scene.add(box(0.008, 1.05, 0.008, mat("#222"), 0, 2.67, -0.6));
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), new THREE.MeshBasicMaterial({ color: "#ffd9a6" }));
+  const bulbMat = glow();
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), bulbMat);
   bulb.position.set(0, 1.98, -0.6);
+  bulb.userData.noOcclude = true;
   scene.add(bulb);
-  const pendant = new THREE.PointLight("#ffb978", 2.2, 4, 2);
-  pendant.position.set(0, 1.94, -0.6);
+  const pendant = new THREE.PointLight("#ffffff", 0, 0, 2);
+  pendant.position.set(PENDANT.x, PENDANT.y, PENDANT.z);
   scene.add(pendant);
 
-  // Window light (daylight through the window), a key from camera right, fill
-  const sun = new THREE.DirectionalLight("#e4edff", 2.6);
+  // Daylight. The sky source sits OUTSIDE the wall, so the wall itself shapes
+  // the patch of light on the floor the way a real window does.
+  const windowLight = new THREE.SpotLight("#ffffff", 0, 0, 89 * (Math.PI / 180), 1, 2);
+  windowLight.position.set(wx - 0.35, (win.sill + win.top) / 2, win.z);
+  windowLight.target.position.set(wx + 3, (win.sill + win.top) / 2 - 0.4, win.z);
+  windowLight.castShadow = true;
+  windowLight.shadow.mapSize.set(1024, 1024);
+  windowLight.shadow.camera.near = 0.1;
+  windowLight.shadow.camera.far = 20;
+  windowLight.shadow.bias = -0.0006;
+  windowLight.shadow.radius = 18;
+  windowLight.shadow.blurSamples = 16;
+  scene.add(windowLight, windowLight.target);
+
+  const sun = new THREE.DirectionalLight("#ffffff", 0);
   sun.position.set(-9, 4.8, -0.2);
   sun.target.position.set(0, 0.7, -0.6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -4;
-  sun.shadow.camera.right = 4;
-  sun.shadow.camera.top = 4;
-  sun.shadow.camera.bottom = -4;
-  sun.shadow.camera.far = 20;
+  sun.shadow.camera.left = -5;
+  sun.shadow.camera.right = 5;
+  sun.shadow.camera.top = 5;
+  sun.shadow.camera.bottom = -5;
+  sun.shadow.camera.far = 25;
   sun.shadow.bias = -0.0004;
-  sun.shadow.radius = 6;
+  sun.shadow.radius = 1.5;
   scene.add(sun, sun.target);
 
-  const key = new THREE.SpotLight("#fff2e2", 26, 0, 0.62, 1, 2);
-  key.position.set(2.4, 2.5, 1.4);
-  key.target.position.set(-0.3, 1.0, -0.7);
-  key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  key.shadow.bias = -0.0004;
-  key.shadow.radius = 8;
-  scene.add(key, key.target);
+  const bounce = new THREE.HemisphereLight("#ffffff", "#c9b9a6", 0);
+  scene.add(bounce);
 
-  scene.add(new THREE.HemisphereLight("#dfe7f5", "#6d5a47", 0.55));
+  const lightsRoot = new THREE.Group();
+  lightsRoot.name = "lights";
+  scene.add(lightsRoot);
 
   const rigs = new THREE.Group();
   rigs.name = "rigs";
   scene.add(rigs);
 
-  return { scene, figures: new Map(), bottle, rigs };
+  return {
+    scene, figures: new Map(), bottle, rigs, lightsRoot, windowLight, sun, sky: skyMat, pendant, bulb: bulbMat, bounce,
+  };
 }
 
 /**
@@ -390,6 +428,7 @@ export function buildRig(
   plane.position.z = -d;
   g.add(plane);
   g.add(labelSprite(label, color));
+  g.traverse((o) => (o.userData.noOcclude = true));
   return g;
 }
 
@@ -438,6 +477,8 @@ export function dofMaterial(): THREE.ShaderMaterial {
       res: { value: new THREE.Vector2(1, 1) },
       maxR: { value: 22 },
       enabled: { value: 1 },
+      zebra: { value: 0 },
+      expo: { value: 1 },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -447,7 +488,7 @@ export function dofMaterial(): THREE.ShaderMaterial {
       #include <packing>
       uniform sampler2D tColor;
       uniform sampler2D tDepth;
-      uniform float cNear, cFar, focusM, focalMm, stop, imgWmm, maxR, enabled;
+      uniform float cNear, cFar, focusM, focalMm, stop, imgWmm, maxR, enabled, zebra, expo;
       uniform vec2 res;
       varying vec2 vUv;
 
@@ -489,6 +530,16 @@ export function dofMaterial(): THREE.ShaderMaterial {
             }
           }
           gl_FragColor = vec4(acc / wsum, 1.0);
+        }
+        // Zebras, as on a monitor: diagonal stripes wherever the exposed image
+        // is more than about two and a half stops over middle grey, i.e. where
+        // it is heading for clipping.
+        if (zebra > 0.5) {
+          vec3 e = gl_FragColor.rgb * expo;
+          if (max(e.r, max(e.g, e.b)) > 1.0) {
+            float band = step(0.5, fract((gl_FragCoord.x + gl_FragCoord.y) / 14.0));
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.0), band * 0.85);
+          }
         }
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
