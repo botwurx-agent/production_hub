@@ -174,3 +174,23 @@ export function trackExtent(kind: SupportKindLite, start: CamKey, move: Move | n
   }
   return null;
 }
+
+/** Two frames the camera cannot tell apart: within a millimetre and a tenth of a degree. */
+export function sameCam(a: CamKey, b: CamKey): boolean {
+  const near = (x: number, y: number, e: number) => Math.abs(x - y) <= e;
+  const turn = Math.abs(((((a.yaw - b.yaw) % 360) + 540) % 360) - 180);
+  return (
+    near(a.pos.x, b.pos.x, 0.001) && near(a.pos.y, b.pos.y, 0.001) && near(a.pos.z, b.pos.z, 0.001) &&
+    turn <= 0.1 && near(a.pitch, b.pitch, 0.1) && near(a.focal, b.focal, 0.05) &&
+    near(a.focusM, b.focusM, 0.001) && a.focusOn === b.focusOn
+  );
+}
+
+/**
+ * A timeline whose end frame is its start: the action plays and the camera
+ * does not move. Framing such a shot frames both ends at once, since there is
+ * no move to set up.
+ */
+export function isLockedOff(start: CamKey, move: Move | null): boolean {
+  return !!move && sameCam(start, move.end);
+}

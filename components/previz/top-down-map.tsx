@@ -395,6 +395,12 @@ export function TopDownMap({
                   <line x1={raw.pos.x} y1={raw.pos.z} x2={raw.move.end.pos.x} y2={raw.move.end.pos.z} stroke={col} strokeWidth={0.035 * k} strokeDasharray={`${0.08 * k} ${0.06 * k}`} />
                   <circle cx={raw.move.end.pos.x} cy={raw.move.end.pos.z} r={0.08 * k} fill="none" stroke={col} strokeWidth={0.03 * k} />
                   <circle cx={raw.pos.x} cy={raw.pos.z} r={0.05 * k} fill={col} />
+                  {isA && !sameSpot(raw.pos, raw.move.end.pos) ? (
+                    <>
+                      <MapLetter x={raw.pos.x} z={raw.pos.z} k={k} letter="A" color="var(--h-green)" />
+                      <MapLetter x={raw.move.end.pos.x} z={raw.move.end.pos.z} k={k} letter="B" color="var(--h-blue)" />
+                    </>
+                  ) : null}
                 </g>
               ) : null}
               <path d={`M${s.pos.x} ${s.pos.z} L${ray(half)} L${ray(-half)} Z`} fill={col} fillOpacity={isA ? 0.16 : 0.07} stroke={col} strokeWidth={0.02 * k} pointerEvents="none" />
@@ -443,5 +449,18 @@ export function TopDownMap({
         </p>
       ) : null}
     </div>
+  );
+}
+
+const sameSpot = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z) < 0.05;
+
+/** The A or B tag beside one end of a move, in the same colours as the timeline. */
+function MapLetter({ x, z, k, letter, color }: { x: number; z: number; k: number; letter: string; color: string }) {
+  const r = 0.13 * k;
+  return (
+    <g transform={`translate(${x - 0.3 * k} ${z - 0.3 * k})`}>
+      <circle r={r} style={{ fill: color }} />
+      <text textAnchor="middle" dy={0.055 * k} fontSize={0.15 * k} fontWeight={700} fill="#fff">{letter}</text>
+    </g>
   );
 }

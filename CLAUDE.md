@@ -7142,7 +7142,9 @@ reach for it during real prep.
   F (or "Frame all") fits every set piece, person, light, room wall and camera
   in free view from the current direction, never from below the floor; the
   stage floor is left out of the box since it is effectively endless.
-- PINCH AND THE STUCK MAP CAMERA (2026-10-05, operator on a Mac). A trackpad
+- PINCH AND THE STUCK MAP CAMERA (2026-10-05, operator on a Mac). (The
+  updateShot shift described here is superseded by framing-then-stamping
+  below; the same shift now happens when an end is stamped.) A trackpad
   pinch arrives as a `wheel` event with ctrlKey set, and the browser zooms the
   WHOLE PAGE unless it is cancelled. React's onWheel is PASSIVE and cannot
   cancel it, so the stage now carries a native `{ passive: false }` wheel
@@ -7156,6 +7158,34 @@ reach for it during real prep.
   frame. updateShot now moves the WHOLE SETUP by whatever the support cannot
   carry during the move, so sticks moves the camera, a Dana moves the rig off
   its rail axis and slides along it, and a Fisher moves sideways as a whole.
+- CAMERA MOVES ARE FRAMED, THEN STAMPED (2026-10-05, operator: "hard to
+  differentiate where start frame and end frame is and when I actually need to
+  move the camera"). The old rule was that a camera change landed on whichever
+  frame the PLAYHEAD sat on, snapping to the nearer one mid-scrub, so the
+  thing being edited was decided by an invisible position and said only in a
+  grey line under the bar. Now on a shot with a real move, driving the camera
+  (lens drag, keys, wheel, map, inspector, free view) moves an UNSAVED FRAMING
+  (`drafts`, per shot, not persisted) and the move does not change until
+  "Set as start" or "Set as end" is pressed (`stampFrame`), or Discard. While
+  framing is unsaved the scrubber, the A/B cards, Play and Record are disabled,
+  because previewing would either lose the framing or play a move that is not
+  the one on screen. Framing starts from whatever the camera shows, so
+  scrubbing to a moment and framing from there works.
+  A IS GREEN, B IS BLUE everywhere (`FRAME_A`/`FRAME_B` in timeline.tsx): the
+  frame cards either side of the scrubber (thumbnails rendered as `<id>#a` /
+  `<id>#b` in the capture queue, posed as the action stands at that end), the
+  border and label on the frame (amber for unsaved, nothing while playing),
+  the dashed OUTLINE of the other end projected into the view at its own focus
+  distance (`frameOutline`), and letters on the map's move path. Not red for
+  B: red is a problem colour here.
+  Stamping an end the support cannot reach (any travel on sticks, off the rail
+  on a Dana, sideways on a Fisher) moves the whole setup and SAYS SO in the
+  header note, rather than silently constraining it back.
+  A LOCKED-OFF timeline ("Play the action") has no frames to set: `isLockedOff`
+  (end equals start, `sameCam`) keeps camera edits direct with the end
+  following, and the timeline reads "Camera locked off" with "Make it a camera
+  move", which keeps the length. `requeue` exists because five places reset
+  the thumbnail queue wholesale and were dropping the A/B cards.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

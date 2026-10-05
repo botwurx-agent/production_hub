@@ -38,9 +38,9 @@ import {
   aim, asSetup, assetKeys, blankSetup, downloadSetup, kitchenSetup, loadSetup, saveSetup, studioSetup,
   type Setup, type Shot, type Units, type Vec3, type WinState,
 } from "./setup";
-import { Timeline } from "./timeline";
+import { FRAME_A, FRAME_B, Timeline } from "./timeline";
 import {
-  camAt, constrainEnd, ease, fromLocal, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
+  camAt, constrainEnd, ease, fromLocal, isLockedOff, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
 } from "@/lib/previz/camera-move";
 import { POSES } from "@/lib/previz/poses";
 import { HOUSE_LEVEL, buildHouseView, frameBox, gridSpacing, syncMarkers, type Marker } from "@/lib/previz/house-view";
@@ -163,6 +163,52 @@ function viewShot(s: Shot, t: number, sc: Scene): Shot {
   const fa = effectiveFocus({ ...base, focusOn: s.focusOn, focusM: s.focusM }, sc);
   const fb = effectiveFocus({ ...base, focusOn: e.focusOn, focusM: e.focusM }, sc);
   return { ...base, focusOn: null, focusM: fa + (fb - fa) * c.mix };
+}
+/** The camera keys of a frame, the only part of a shot a move changes. */
+const CAM_KEYS = ["pos", "yaw", "pitch", "focal", "focusM", "focusOn"] as const;
+/** A shot with a real move (not one locked off for the action), whose camera is framed then stamped. */
+function hasMove(s: Shot): boolean {
+  return !!s.move && !isLockedOff(camKey(s), s.move);
+}
+/**
+ * What the camera shows: unsaved framing when there is some and nothing is
+ * playing, otherwise the move at the playhead.
+ */
+function seenShot(s: Shot, t: number, sc: Scene, draft: CamKey | undefined, playing: boolean): Shot {
+  if (draft && !playing && hasMove(s)) return { ...s, ...draft };
+  return viewShot(s, t, sc);
+}
+/**
+ * The outline another frame of the move covers, drawn into this view: the
+ * rectangle that frame sees at its own focus distance, projected through the
+ * camera being looked through. Returned as fractions of the view, or null
+ * when any corner is behind this camera.
+ */
+function frameOutline(view: Shot, other: Shot, ratio: number, sc: Scene): [number, number][] | null {
+  const camFor = (s: Shot) => {
+    const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
+    const c = new THREE.PerspectiveCamera(fovDeg(imagedArea(b, ratio).h, s.focal), ratio, 0.05, 500);
+    c.rotation.order = "YXZ";
+    c.position.set(s.pos.x, s.pos.y, s.pos.z);
+    c.rotation.set(rad(s.pitch), rad(s.yaw), 0);
+    c.updateMatrixWorld(true);
+    c.updateProjectionMatrix();
+    return c;
+  };
+  const me = camFor(view);
+  const them = camFor(other);
+  const d = effectiveFocus(other, sc);
+  const hh = d * Math.tan(rad(them.fov / 2));
+  const hw = hh * ratio;
+  const out: [number, number][] = [];
+  for (const [x, y] of [[-hw, hh], [hw, hh], [hw, -hh], [-hw, -hh]]) {
+    const w = new THREE.Vector3(x, y, -d).applyMatrix4(them.matrixWorld);
+    const local = w.clone().applyMatrix4(me.matrixWorldInverse);
+    if (local.z > -0.05) return null;
+    const n = w.project(me);
+    out.push([(n.x + 1) / 2, (1 - n.y) / 2]);
+  }
+  return out;
 }
 /**
  * How a shot's support is drawn with the camera at `at`: turned to the
@@ -387,6 +433,10 @@ export function PrevizPrototype() {
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [recording, setRecording] = useState(false);
+  // Unsaved framing, per shot with a move: the camera as it is being driven,
+  // before it is stamped as the move's start or its end. Nothing about the
+  // move changes until one of those is pressed.
+  const [drafts, setDrafts] = useState<Record<string, CamKey>>({});
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -398,8 +448,10 @@ export function PrevizPrototype() {
   // Talent walk to their marks over the active shot's move, with its ease.
   const actionK = rawActive.move ? ease(rawActive.move.ease, playhead) : 0;
   const scene = useMemo(() => placeScene(talent, items, actionK), [talent, items, actionK]);
-  // What the camera sees right now: the start, the end, or a moment between.
-  const active = viewShot(rawActive, playhead, scene);
+  // What the camera sees right now: unsaved framing, or the start, the end or
+  // a moment between.
+  const draft = drafts[rawActive.id];
+  const active = seenShot(rawActive, playhead, scene, draft, playing);
   const aspect = ASPECTS.find((a) => a.id === aspectId) ?? ASPECTS[0];
   const body = BODIES.find((b) => b.id === active.bodyId) ?? BODIES[0];
   const area = imagedArea(body, aspect.ratio);
@@ -408,8 +460,8 @@ export function PrevizPrototype() {
 
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const live = useRef({ shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead, houseLights, units });
-  live.current = { shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead, houseLights, units };
+  const live = useRef({ shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead, houseLights, units, drafts });
+  live.current = { shots, activeId, talent, items, aspect, view, clay, lights, grips, win, zebra, set, playhead, houseLights, units, drafts };
   // The scene as last posed by the render loop, which the light rigs aim from.
   const poseRef = useRef<Scene>(scene);
   // Playback runs in the render loop, not in React: `t0` is when the move
@@ -452,6 +504,10 @@ export function PrevizPrototype() {
     house: ReturnType<typeof buildHouseView>;
   } | null>(null);
   const captureQueue = useRef<string[]>([]);
+  /** Queues these shots for new thumbnails, keeping any move-end cards already waiting. */
+  const requeue = (ids: string[]) => {
+    captureQueue.current = [...ids, ...captureQueue.current.filter((k) => k.includes("#") && !ids.includes(k))];
+  };
   const lastChange = useRef(0);
   const activeDirty = useRef(true);
   const saveFrame = useRef(false);
@@ -461,52 +517,57 @@ export function PrevizPrototype() {
   };
 
   /**
-   * Changes a shot. With a move, a camera change lands on whichever frame the
-   * playhead is on: the end frame when it sits at the end, the start (the
-   * shot's own values) otherwise. Between the two, it snaps to the nearer
-   * one. The end is always kept to what the support can physically do.
+   * Changes a shot. On a shot with a move, a camera change never lands on the
+   * move directly: it moves the UNSAVED FRAMING, starting from whatever the
+   * camera shows now, and nothing about the move changes until that framing
+   * is stamped as the start or the end. On a shot locked off for the action,
+   * both ends move together. Everything else lands on the shot as it is.
    */
   const updateShot = useCallback((id: string, patch: Partial<Shot> | ((s: Shot) => Partial<Shot>)) => {
-    const t = live.current.playhead;
-    const isActive = id === live.current.activeId;
-    const editEnd = isActive && t >= 0.5;
-    setShots((all) => all.map((s) => {
-      if (s.id !== id) return s;
-      if (s.move && editEnd) {
-        const cur: Shot = { ...s, ...s.move.end };
-        const p = typeof patch === "function" ? patch(cur) : patch;
-        const end: CamKey = { ...s.move.end };
-        const rest: Partial<Shot> = { ...p };
-        for (const k of ["pos", "yaw", "pitch", "focal", "focusM", "focusOn"] as const) {
-          if (k in p) {
-            (end as Record<string, unknown>)[k] = p[k];
-            delete rest[k];
-          }
+    const L = live.current;
+    const s0 = L.shots.find((x) => x.id === id);
+    if (!s0) return;
+    if (id === L.activeId && hasMove(s0)) {
+      const fromView = camKey(viewShot(s0, L.playhead, poseRef.current));
+      const probe = typeof patch === "function" ? patch({ ...s0, ...(L.drafts[id] ?? fromView) }) : patch;
+      const rest: Partial<Shot> = { ...probe };
+      let framing = false;
+      for (const k of CAM_KEYS) {
+        if (k in probe) {
+          framing = true;
+          delete rest[k];
         }
-        const next = { ...s, ...rest };
-        const move = (rest.move === undefined ? s.move : rest.move);
-        if (!move) return next;
-        let fixed = constrainEnd(next.support, camKey(next), end, move.trackYaw);
-        // Whatever the support cannot carry out during the move (any travel
-        // on sticks, sideways on a Fisher, off the rail on a Dana) moves the
-        // whole setup instead. Without this, dragging the camera at the end of
-        // a locked-off shot snapped it straight back and it looked stuck.
-        if ("pos" in p) {
-          const dx = end.pos.x - fixed.pos.x;
-          const dy = end.pos.y - fixed.pos.y;
-          const dz = end.pos.z - fixed.pos.z;
-          if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 1e-6) {
-            next.pos = { x: next.pos.x + dx, y: Math.max(0.1, next.pos.y + dy), z: next.pos.z + dz };
-            fixed = constrainEnd(next.support, camKey(next), end, move.trackYaw);
-          }
-        }
-        return { ...next, move: { ...move, end: fixed } };
       }
-      const next = { ...s, ...(typeof patch === "function" ? patch(s) : patch) };
-      if (next.move) next.move = { ...next.move, end: constrainEnd(next.support, camKey(next), next.move.end, next.move.trackYaw) };
-      return next;
-    }));
-    if (isActive && t > 0 && t < 1) setPlayhead(t >= 0.5 ? 1 : 0);
+      if (framing) {
+        // Evaluated against the freshest framing, so quick drags accumulate.
+        setDrafts((d) => {
+          const base = d[id] ?? fromView;
+          const p = typeof patch === "function" ? patch({ ...s0, ...base }) : patch;
+          const next: CamKey = { ...base };
+          for (const k of CAM_KEYS) if (k in p) (next as Record<string, unknown>)[k] = p[k];
+          return { ...d, [id]: next };
+        });
+      }
+      if (Object.keys(rest).length) {
+        setShots((all) => all.map((s) => {
+          if (s.id !== id) return s;
+          const next = { ...s, ...rest };
+          if (next.move) next.move = { ...next.move, end: constrainEnd(next.support, camKey(next), next.move.end, next.move.trackYaw) };
+          return next;
+        }));
+      }
+    } else {
+      setShots((all) => all.map((s) => {
+        if (s.id !== id) return s;
+        const p = typeof patch === "function" ? patch(s) : patch;
+        const next = { ...s, ...p };
+        if (!next.move) return next;
+        // Locked off for the action: the end IS the start, so it follows.
+        if (!("move" in p) && isLockedOff(camKey(s), s.move)) next.move = { ...next.move, end: camKey(next) };
+        else next.move = { ...next.move, end: constrainEnd(next.support, camKey(next), next.move.end, next.move.trackYaw) };
+        return next;
+      }));
+    }
     lastChange.current = performance.now();
     activeDirty.current = true;
   }, []);
@@ -712,7 +773,7 @@ export function PrevizPrototype() {
     };
 
     engine.current = { renderer, world, shotCam, freeCam, controls, rt, quad, quadScene, quadCam, clayMat, lightRigs, gripRigs, syncRigs, pose, house };
-    captureQueue.current = live.current.shots.map((s) => s.id);
+    requeue(live.current.shots.map((s) => s.id));
 
     let raf = 0;
     const thumbCanvas = document.createElement("canvas");
@@ -780,7 +841,7 @@ export function PrevizPrototype() {
       const sc = placeScene(L.talent, L.items, raw.move ? ease(raw.move.ease, t) : 0);
       poseRef.current = sc;
       pose(sc);
-      const view = viewShot(raw, t, sc);
+      const view = seenShot(raw, t, sc, L.drafts[raw.id], P.on);
 
       if (L.view === "free") {
         // A dolly travelling in free view: rebuild just the moving camera.
@@ -826,11 +887,24 @@ export function PrevizPrototype() {
       // a thumbnail render in a recorded frame would be a flash of another shot.
       const queued = P.on || P.rec ? undefined : captureQueue.current.shift();
       if (queued) {
-        const s = L.shots.find((x) => x.id === queued);
-        if (s) {
+        // "<id>#a" and "<id>#b" are the two ends of a move, for the frame cards.
+        const [qid, end] = queued.split("#");
+        const s = L.shots.find((x) => x.id === qid);
+        if (s && !end) {
           renderShot(s);
           const url = grab(360);
           setThumbs((th) => ({ ...th, [queued]: url }));
+        } else if (s && s.move) {
+          // Posed as the action stands at that end, then put back.
+          const at = end === "b" ? 1 : 0;
+          const sq = placeScene(L.talent, L.items, at);
+          poseRef.current = sq;
+          pose(sq);
+          renderShot(viewShot(s, at, sq));
+          const url = grab(200);
+          setThumbs((th) => ({ ...th, [queued]: url }));
+          poseRef.current = sc;
+          pose(sc);
         }
       }
       const s = view;
@@ -1065,7 +1139,7 @@ export function PrevizPrototype() {
       }
     }
     dirty();
-    captureQueue.current = live.current.shots.map((x) => x.id);
+    requeue(live.current.shots.map((x) => x.id));
   }, [set]);
 
   // A different shot starts at its own start frame.
@@ -1081,7 +1155,7 @@ export function PrevizPrototype() {
     const e = engine.current;
     if (!e) return;
     const t = window.setTimeout(() => {
-      const s = viewShot(shots.find((x) => x.id === activeId) ?? shots[0], playhead, scene);
+      const s = seenShot(shots.find((x) => x.id === activeId) ?? shots[0], playhead, scene, drafts[activeId], playing);
       poseRef.current = scene;
       e.pose(scene);
       e.syncRigs(s.wb);
@@ -1119,16 +1193,27 @@ export function PrevizPrototype() {
       setMeter(readMeter(p, new THREE.Vector3(s.pos.x, s.pos.y, s.pos.z), all, occ, sun, roomLux));
     }, 40);
     return () => window.clearTimeout(t);
-  }, [shots, activeId, lights, grips, win, scene, set, windows, playhead, assetTick]);
+  }, [shots, activeId, lights, grips, win, scene, set, windows, playhead, assetTick, drafts, playing]);
 
   // Light and the set change every shot, so every thumbnail is stale (once it settles).
   useEffect(() => {
     const t = window.setTimeout(() => {
-      captureQueue.current = live.current.shots.map((x) => x.id).filter((id) => id !== live.current.activeId);
+      requeue(live.current.shots.map((x) => x.id).filter((id) => id !== live.current.activeId));
       dirty();
     }, 400);
     return () => window.clearTimeout(t);
   }, [lights, grips, win, set, talent, items, assetTick]);
+
+  // The frame cards on the timeline: both ends of the active shot's move,
+  // retaken once things settle after anything that changes what they show.
+  useEffect(() => {
+    if (!rawActive.move) return;
+    const t = window.setTimeout(() => {
+      const q = captureQueue.current;
+      for (const k of [`${rawActive.id}#a`, `${rawActive.id}#b`]) if (!q.includes(k)) q.push(k);
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [rawActive, lights, grips, win, set, talent, items, aspectId, clay, assetTick]);
 
   // ----- Camera rigs, seen only in free view. Each is a "unit": the camera
   // pans and tilts on its head, and what it is on stays on the floor, turned
@@ -1169,7 +1254,7 @@ export function PrevizPrototype() {
     if (!e) return;
     clearGroup(e.world.rigs);
     for (const s of shots) {
-      const at = s.id === activeId ? viewShot(s, playhead, scene) : s;
+      const at = s.id === activeId ? seenShot(s, playhead, scene, drafts[s.id], playing) : s;
       e.world.rigs.add(unitRef.current(s, at));
       if (s.move) {
         const p0 = s.pos;
@@ -1182,7 +1267,7 @@ export function PrevizPrototype() {
         e.world.rigs.add(line);
       }
     }
-  }, [shots, activeId, aspect.ratio, scene, playhead]);
+  }, [shots, activeId, aspect.ratio, scene, playhead, drafts, playing]);
 
   useEffect(() => {
     const e = engine.current;
@@ -1191,7 +1276,7 @@ export function PrevizPrototype() {
 
   useEffect(() => {
     // Everything re-renders at the new aspect, so every thumbnail is stale.
-    captureQueue.current = shots.map((s) => s.id);
+    requeue(shots.map((s) => s.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aspectId, clay]);
 
@@ -1789,6 +1874,31 @@ export function PrevizPrototype() {
     setCanRecord(!!pickMime() && typeof HTMLCanvasElement !== "undefined" && "captureStream" in HTMLCanvasElement.prototype);
   }, []);
   const support = SUPPORTS.find((k) => k.id === rawActive.support) ?? SUPPORTS[0];
+  // Where the camera stands in the move, for the label on the frame.
+  const frameState: "start" | "end" | "unsaved" | "between" | "playing" | null = !hasMove(rawActive)
+    ? null
+    : playing
+      ? "playing"
+      : draft
+        ? "unsaved"
+        : playhead <= 0.001
+          ? "start"
+          : playhead >= 0.999
+            ? "end"
+            : "between";
+  // The other end (or both, for unsaved framing) outlined in this view.
+  const outlines: { letter: "A" | "B"; pts: [number, number][] }[] = [];
+  if (view === "lens" && rawActive.move && (frameState === "start" || frameState === "end" || frameState === "unsaved")) {
+    if (frameState !== "start") {
+      const pts = frameOutline(active, rawActive, aspect.ratio, placeScene(talent, items, 0));
+      if (pts) outlines.push({ letter: "A", pts });
+    }
+    if (frameState !== "end") {
+      const sEnd = placeScene(talent, items, 1);
+      const pts = frameOutline(active, viewShot(rawActive, 1, sEnd), aspect.ratio, sEnd);
+      if (pts) outlines.push({ letter: "B", pts });
+    }
+  }
   const stats = rawActive.move ? moveStats(rawActive.support, camKey(rawActive), rawActive.move) : null;
   const walkers = talent.filter((t) => t.mark && Math.hypot(t.mark.x - t.x, t.mark.z - t.z) > 0.05);
   const moveWarnings: string[] = [];
@@ -1888,7 +1998,63 @@ export function PrevizPrototype() {
     P.on = true;
     setPlaying(true);
   };
-  toggleRef.current = () => (playRef.current.on ? finish(nowT()) : play(false));
+  // Unsaved framing has to be set or discarded before the move plays: playing
+  // over it would either lose it or play a move that is not the one on screen.
+  toggleRef.current = () => (playRef.current.on ? finish(nowT()) : draft ? undefined : play(false));
+  const clearDraft = (id: string) =>
+    setDrafts((d) => {
+      if (!(id in d)) return d;
+      const r = { ...d };
+      delete r[id];
+      return r;
+    });
+  /**
+   * Stamps the unsaved framing as the move's start or its end. The end is
+   * kept to what the support can do; whatever it cannot travel during the
+   * move (any travel on sticks, off the rail on a Dana, sideways on a
+   * Fisher) moves the whole setup instead, and says so.
+   */
+  const stampFrame = (to: "start" | "end") => {
+    const s = rawActive;
+    const d = drafts[s.id];
+    if (!d || !s.move) return;
+    let next: Shot;
+    let note: string | null = null;
+    if (to === "start") {
+      next = { ...s, ...d };
+      next.move = { ...s.move, end: constrainEnd(next.support, camKey(next), s.move.end, s.move.trackYaw) };
+    } else {
+      next = { ...s };
+      const tried = constrainEnd(s.support, camKey(s), d, s.move.trackYaw);
+      const dx = d.pos.x - tried.pos.x;
+      const dy = d.pos.y - tried.pos.y;
+      const dz = d.pos.z - tried.pos.z;
+      if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 0.005) {
+        next.pos = { x: s.pos.x + dx, y: Math.max(0.1, s.pos.y + dy), z: s.pos.z + dz };
+        note = {
+          sticks: "Sticks do not travel during a move, so the whole camera moved there. The move keeps its pan, tilt and zoom.",
+          dana: "A Dana only slides along its rail, so the rail moved to reach that frame.",
+          fisher: "A Fisher only travels along its track and booms, so the track moved to reach that frame.",
+          robot: null,
+        }[s.support];
+      }
+      next.move = { ...s.move, end: constrainEnd(next.support, camKey(next), d, s.move.trackYaw) };
+    }
+    setShots((all) => all.map((x) => (x.id === s.id ? next : x)));
+    clearDraft(s.id);
+    setPlayhead(to === "start" ? 0 : 1);
+    if (note) setSaveNote(note);
+    dirty();
+  };
+  const discardFrame = () => {
+    clearDraft(rawActive.id);
+    dirty();
+  };
+  /** Shows one end of the move, or a moment between; never with unsaved framing. */
+  const seek = (t: number) => {
+    if (draft) return;
+    setPlayhead(t);
+  };
   const addMove = () => {
     const k = camKey(rawActive);
     // A small move the support can actually make, so play shows something
@@ -1897,7 +2063,10 @@ export function PrevizPrototype() {
     if (rawActive.support === "sticks") end = { ...k, yaw: k.yaw - 15 };
     else if (rawActive.support === "dana") end = { ...k, pos: fromLocal(k, 0.6, 0, 0) };
     else end = { ...k, pos: fromLocal(k, 0, 0, -0.6), focusM: Math.max(0.3, k.focusM - 0.6) };
-    updateShot(rawActive.id, { move: { end, durationS: 4, ease: "smooth", trackYaw: k.yaw } });
+    // A shot that was locked off for the action keeps its length.
+    const durationS = rawActive.move?.durationS ?? 4;
+    clearDraft(rawActive.id);
+    updateShot(rawActive.id, { move: { end, durationS, ease: rawActive.move?.ease ?? "smooth", trackYaw: k.yaw } });
     setPlayhead(1);
   };
   /** A timeline with the camera locked off, so the talent's action can play on its own. */
@@ -1908,6 +2077,7 @@ export function PrevizPrototype() {
     setPlayhead(0);
   };
   const removeMove = () => {
+    clearDraft(rawActive.id);
     updateShot(rawActive.id, { move: null });
     setPlayhead(0);
   };
@@ -1930,9 +2100,10 @@ export function PrevizPrototype() {
     setUnits(x.units);
     setAspectId(x.aspectId);
     setPlayhead(0);
+    setDrafts({});
     setSel({ kind: "camera" });
     setThumbs({});
-    captureQueue.current = x.shots.map((s) => s.id);
+    requeue(x.shots.map((s) => s.id));
   };
   useEffect(() => {
     const saved = loadSetup();
@@ -2382,6 +2553,66 @@ export function PrevizPrototype() {
                 ))}
               </div>
             ) : null}
+            {view === "lens" && frameState && frameState !== "playing" ? (
+              // Which frame of the move this is, said on the frame itself: a
+              // coloured border and a label for A or B, amber for unsaved
+              // framing, and the outline of the other end for reference.
+              <div className="pointer-events-none absolute inset-0">
+                <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
+                  {outlines.map((o) => (
+                    <polygon
+                      key={o.letter}
+                      points={o.pts.map((q) => q.join(",")).join(" ")}
+                      fill="none"
+                      stroke={o.letter === "A" ? FRAME_A : FRAME_B}
+                      strokeWidth={2}
+                      strokeDasharray="7 5"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </svg>
+                {outlines.map((o) => {
+                  // On the first corner that is inside the frame, if any is.
+                  const c = o.pts.find(([px, py]) => px >= 0.01 && px <= 0.95 && py >= 0.01 && py <= 0.95);
+                  if (!c) return null;
+                  const [x, y] = c;
+                  return (
+                    <span
+                      key={`l${o.letter}`}
+                      className="absolute flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                      style={{ left: `${x * 100}%`, top: `${y * 100}%`, background: o.letter === "A" ? FRAME_A : FRAME_B }}
+                    >
+                      {o.letter}
+                    </span>
+                  );
+                })}
+                {frameState !== "between" ? (
+                  <div
+                    className="absolute inset-0 border-[3px]"
+                    style={{ borderColor: frameState === "start" ? FRAME_A : frameState === "end" ? FRAME_B : "var(--h-amber)" }}
+                  />
+                ) : null}
+                <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-[8px] bg-black/65 px-2.5 py-1.5 text-[11px] font-semibold text-white">
+                  {frameState === "start" || frameState === "end" ? (
+                    <span
+                      className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
+                      style={{ background: frameState === "start" ? FRAME_A : FRAME_B }}
+                    >
+                      {frameState === "start" ? "A" : "B"}
+                    </span>
+                  ) : frameState === "unsaved" ? (
+                    <span className="h-2 w-2 rounded-full" style={{ background: "var(--h-amber)" }} />
+                  ) : null}
+                  {frameState === "start"
+                    ? "Start frame"
+                    : frameState === "end"
+                      ? "End frame"
+                      : frameState === "unsaved"
+                        ? "Unsaved framing: set it as the start or end below"
+                        : `Previewing ${(playhead * (rawActive.move?.durationS ?? 0)).toFixed(1)}s into the move`}
+                </div>
+              </div>
+            ) : null}
             {view === "lens" ? (
               <div className="pointer-events-none absolute left-3 top-3 rounded-[8px] bg-black/55 px-2.5 py-1.5 font-mono text-[11px] leading-tight text-white/90">
                 <div className="font-semibold">{active.code} · {body.name}</div>
@@ -2461,7 +2692,7 @@ export function PrevizPrototype() {
           warnings={moveWarnings}
           onPlay={() => play(false)}
           onStop={() => finish(nowT())}
-          onSeek={(t) => setPlayhead(t)}
+          onSeek={seek}
           onAdd={addMove}
           onRemove={removeMove}
           onChange={changeMove}
@@ -2471,6 +2702,14 @@ export function PrevizPrototype() {
           fmtDist={(m) => dist(m, units)}
           fmtSpeed={(v) => (units === "ft" ? `${(v / 0.3048).toFixed(1)} ft/s` : `${v.toFixed(2)} m/s`)}
           canRecord={canRecord}
+          lockedOff={!!rawActive.move && !hasMove(rawActive)}
+          unsaved={!!draft && hasMove(rawActive)}
+          thumbA={thumbs[`${rawActive.id}#a`] ?? null}
+          thumbB={thumbs[`${rawActive.id}#b`] ?? null}
+          lensA={`${Math.round(rawActive.focal)}mm`}
+          lensB={`${Math.round(rawActive.move?.end.focal ?? rawActive.focal)}mm`}
+          onStamp={stampFrame}
+          onDiscard={discardFrame}
         />
         </div>
 
