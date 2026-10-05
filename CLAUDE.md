@@ -7081,6 +7081,22 @@ reach for it during real prep.
   producer checks before anything is built, plus a camera matching the photo
   with the photo as its board overlay. NOT RUN against a live model: no key
   exists outside Vercel. Read the result as a rough start, not a survey.
+- MOVE THINGS IN FREE VIEW, NOT THROUGH THE LENS (2026-10-05, operator's call,
+  "just for testing purposes"). In free view a press on a light, person, grip
+  or set piece drags it across the floor and shift-drag raises it (lights,
+  grips, an item's raise); a press on empty space still orbits. Through the
+  lens is camera-only and a click there selects nothing, so framing a shot
+  can never pick up the talent. Native CAPTURE listener on the canvas so it is
+  heard before OrbitControls and can stop the orbit starting. Movement is a
+  steady rate at the THING'S OWN DISTANCE (camera right across, floor forward
+  up the screen, stretched for the camera's tilt and capped), NOT the cursor
+  projected onto a plane through the grab point: that was tried first and from
+  a high camera the plane is near edge-on, so grabbing the top of a tall
+  backdrop threw it three metres on a short drag. Found on the way: three.js
+  lets a LINE catch a ray up to one world unit away by default, so the camera
+  frustum lines running through the set swallowed every press on a person;
+  the raycaster's Line threshold is now 3 cm. Not built: rotate in 3D (the
+  map's handle and the inspector still do it).
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

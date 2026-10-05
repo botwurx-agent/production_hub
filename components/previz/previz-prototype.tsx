@@ -1171,13 +1171,24 @@ export function PrevizPrototype() {
     const p = press.current;
     press.current = null;
     if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) return;
-    pickAt(e.clientX, e.clientY);
+    // Through the lens is for framing only: a click there never picks
+    // anything up, so a stray press cannot select the talent mid-pan.
+    if (view === "free") pickAt(e.clientX, e.clientY);
   };
-  const ray = useMemo(() => new THREE.Raycaster(), []);
-  const pickAt = (cx: number, cy: number) => {
+  const ray = useMemo(() => {
+    const r = new THREE.Raycaster();
+    // three.js lets a LINE catch a ray up to one world unit away by default,
+    // so every camera's frustum lines (which run straight through the set)
+    // swallowed presses meant for the person standing inside them.
+    r.params.Line = { threshold: 0.03 };
+    r.params.Points = { threshold: 0.03 };
+    return r;
+  }, []);
+  /** What is under the cursor in the view being shown, and where it was hit. */
+  const hitAt = (cx: number, cy: number): { pick: { kind: string; id: string }; point: THREE.Vector3 } | null => {
     const e = engine.current;
     const canvas = canvasRef.current;
-    if (!e || !canvas) return;
+    if (!e || !canvas) return null;
     const r = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, view === "lens" ? e.shotCam : e.freeCam);
@@ -1187,7 +1198,14 @@ export function PrevizPrototype() {
       let o: THREE.Object3D | null = hit.object;
       while (o && !o.userData.pick) o = o.parent;
       if (!o || !o.visible) continue;
-      const pk = o.userData.pick as { kind: string; id: string };
+      return { pick: o.userData.pick as { kind: string; id: string }, point: hit.point.clone() };
+    }
+    return null;
+  };
+  const pickAt = (cx: number, cy: number) => {
+    const found = hitAt(cx, cy);
+    if (found) {
+      const pk = found.pick;
       if (pk.kind === "item") setSel({ kind: "item", id: pk.id });
       else if (pk.kind === "talent") setSel({ kind: "talent", id: pk.id });
       else if (pk.kind === "light") setSel({ kind: "light", id: pk.id });
@@ -1197,6 +1215,124 @@ export function PrevizPrototype() {
     }
     if (view === "lens") setSel({ kind: "camera" });
   };
+
+  // ----- Free view: press on a thing and drag to slide it across the floor,
+  // shift-drag to raise or lower it. Pressing empty space still orbits.
+  // This runs as a native CAPTURE listener on the canvas so it is heard
+  // before OrbitControls' own pointerdown, and can stop the orbit starting
+  // when the press lands on something movable.
+  const movable = (kind: string) => kind === "item" || kind === "talent" || kind === "light" || kind === "grip";
+  const live3d = useRef({ hitAt, scene, lights, grips, items });
+  live3d.current = { hitAt, scene, lights, grips, items };
+  const moveDrag = useRef<{
+    kind: string; id: string; start: THREE.Vector3; x: number; z: number;
+    lastX: number; lastY: number; lift: boolean;
+  } | null>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || view !== "free") return;
+    // Metres per screen pixel at the thing's own distance. Projecting the
+    // cursor onto a plane through the grab point was tried first and is
+    // wrong from a high camera: grab the top of a tall backdrop and the plane
+    // is nearly edge-on, so a short drag threw it three metres.
+    const metresPerPixel = (at: THREE.Vector3) => {
+      const e = engine.current;
+      if (!e) return 0;
+      const dist = e.freeCam.position.distanceTo(at);
+      return (2 * Math.tan(rad(e.freeCam.fov / 2)) * dist) / Math.max(1, canvas.clientHeight);
+    };
+    const baseOf = (kind: string, id: string): { x: number; z: number; y: number } | null => {
+      const L = live3d.current;
+      if (kind === "item") { const i = L.scene.items.find((o) => o.id === id); return i ? { x: i.x, z: i.z, y: i.raise ?? 0 } : null; }
+      if (kind === "talent") { const t = L.scene.talent.find((o) => o.id === id); return t ? { x: t.x, z: t.z, y: 0 } : null; }
+      if (kind === "light") { const l = L.lights.find((o) => o.id === id); return l ? { x: l.x, z: l.z, y: l.y } : null; }
+      if (kind === "grip") { const g = L.grips.find((o) => o.id === id); return g ? { x: g.x, z: g.z, y: g.y } : null; }
+      return null;
+    };
+    const down = (ev: PointerEvent) => {
+      if (ev.button !== 0) return;
+      const found = live3d.current.hitAt(ev.clientX, ev.clientY);
+      if (!found || !movable(found.pick.kind)) return;
+      const base = baseOf(found.pick.kind, found.pick.id);
+      if (!base) return;
+      // Ours, not the orbit's.
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+      canvas.setPointerCapture(ev.pointerId);
+      moveDrag.current = {
+        kind: found.pick.kind, id: found.pick.id, start: found.point, x: base.x, z: base.z,
+        lastX: ev.clientX, lastY: ev.clientY, lift: ev.shiftKey,
+      };
+      const pk = found.pick;
+      setSel(pk.kind === "item" ? { kind: "item", id: pk.id } : pk.kind === "talent" ? { kind: "talent", id: pk.id } : pk.kind === "light" ? { kind: "light", id: pk.id } : { kind: "grip", id: pk.id });
+      canvas.style.cursor = "grabbing";
+    };
+    const move = (ev: PointerEvent) => {
+      const d = moveDrag.current;
+      if (!d) {
+        // Hover: say what a press would do.
+        const found = live3d.current.hitAt(ev.clientX, ev.clientY);
+        canvas.style.cursor = found && movable(found.pick.kind) ? "grab" : "";
+        return;
+      }
+      ev.stopImmediatePropagation();
+      const e = engine.current;
+      if (!e) return;
+      const mpp = metresPerPixel(d.start);
+      const px = ev.clientX - d.lastX;
+      const py = ev.clientY - d.lastY;
+      d.lastX = ev.clientX;
+      d.lastY = ev.clientY;
+      if (d.lift || ev.shiftKey) {
+        const dh = -py * mpp;
+        if (d.kind === "item") setItems((all) => all.map((i) => (i.id === d.id ? { ...i, raise: Math.max(0, Math.min(12, (i.raise ?? catalogOf(i.kind).raise ?? 0) + dh)) } : i)));
+        else if (d.kind === "light") setLights((all) => all.map((l) => (l.id === d.id ? { ...l, y: Math.max(0.15, Math.min(8, l.y + dh)) } : l)));
+        else if (d.kind === "grip") setGrips((all) => all.map((g) => (g.id === d.id ? { ...g, y: Math.max(0.15, Math.min(8, g.y + dh)) } : g)));
+        return;
+      }
+      // Across the screen is the camera's right; up the screen is away from
+      // the camera along the floor, stretched for how steeply the camera
+      // looks down (capped, so a near-overhead view does not race).
+      const dir = e.freeCam.getWorldDirection(new THREE.Vector3());
+      const fwd = new THREE.Vector3(dir.x, 0, dir.z);
+      if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1);
+      fwd.normalize();
+      const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+      const stretch = 1 / Math.max(0.35, Math.abs(dir.y));
+      d.x += (right.x * px - fwd.x * py * stretch) * mpp;
+      d.z += (right.z * px - fwd.z * py * stretch) * mpp;
+      d.start.x += (right.x * px - fwd.x * py * stretch) * mpp;
+      d.start.z += (right.z * px - fwd.z * py * stretch) * mpp;
+      const { x, z } = d;
+      if (d.kind === "item") {
+        setItems((all) => all.map((i) => (i.id === d.id ? { ...i, x, z } : i)));
+        // Picking up something held takes it out of the hand, as on the map.
+        if (live3d.current.scene.items.find((i) => i.id === d.id)?.heldBy) setTalent((all) => all.map((t) => (t.holding === d.id ? { ...t, holding: null } : t)));
+      } else if (d.kind === "talent") setTalent((all) => all.map((t) => (t.id === d.id ? { ...t, x, z } : t)));
+      else if (d.kind === "light") setLights((all) => all.map((l) => (l.id === d.id ? { ...l, x, z } : l)));
+      else if (d.kind === "grip") setGrips((all) => all.map((g) => (g.id === d.id ? { ...g, x, z } : g)));
+    };
+    const up = (ev: PointerEvent) => {
+      if (!moveDrag.current) return;
+      ev.stopImmediatePropagation();
+      moveDrag.current = null;
+      if (canvas.hasPointerCapture(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
+      canvas.style.cursor = "grab";
+    };
+    canvas.addEventListener("pointerdown", down, { capture: true });
+    canvas.addEventListener("pointermove", move, { capture: true });
+    canvas.addEventListener("pointerup", up, { capture: true });
+    canvas.addEventListener("pointercancel", up, { capture: true });
+    return () => {
+      canvas.removeEventListener("pointerdown", down, { capture: true });
+      canvas.removeEventListener("pointermove", move, { capture: true });
+      canvas.removeEventListener("pointerup", up, { capture: true });
+      canvas.removeEventListener("pointercancel", up, { capture: true });
+      canvas.style.cursor = "";
+      moveDrag.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
   const onWheel = (e: React.WheelEvent) => {
     if (view !== "lens") return;
     const step = -Math.sign(e.deltaY) * Math.min(0.25, Math.abs(e.deltaY) * 0.002) * Math.max(1, focus * 0.5);
@@ -2120,7 +2256,7 @@ export function PrevizPrototype() {
               </div>
             ) : (
               <div className="pointer-events-none absolute left-3 top-3 rounded-[8px] bg-black/55 px-2.5 py-1.5 text-[11px] text-white/90">
-                Free view · drag to orbit, scroll to zoom · click a thing to select it · V for the lens
+                Free view · drag a thing to move it, shift-drag to raise it · drag empty space to orbit, scroll to zoom · V for the lens
               </div>
             )}
             {!lights.some((l) => l.on) && !items.some((i) => i.light?.on) && !(set.kind === "room" && windows.length && win.on) ? (
@@ -2653,7 +2789,7 @@ function HelpCard({ onClose }: { onClose: () => void }) {
     ["W A S D", "dolly and truck (Shift for bigger steps)"],
     ["Q / E", "boom down and up"],
     ["Arrow keys", "pan and tilt one degree"],
-    ["Click", "select what is under the cursor, in either view"],
+    ["Free view", "drag a light, person, grip or set piece to move it; shift-drag to raise it; click to select"],
     ["1, 2, 3", "switch shots"],
     ["Space", "play or stop the camera move"],
     ["V", "through the lens / free view"],
