@@ -106,9 +106,9 @@ export function kitchenSetup(): Setup {
  * what a move is.
  */
 export function studioSetup(): Setup {
-  const twoShot = shot("b", "1B", "Two shot", "fisher", 50, 4, 0, { x: 0, y: 1.45, z: 2.9 }, { x: 0, y: 1.3, z: -0.2 }, "ava", 3.1, null, 800);
+  const twoShot = shot("b", "1B", "Two shot", "fisher", 35, 4, 0, { x: 0, y: 1.45, z: 3.6 }, { x: 0, y: 1.25, z: -0.2 }, "ava", 3.8, null, 800);
   twoShot.move = {
-    end: { pos: { x: 0, y: 1.45, z: 2.0 }, yaw: twoShot.yaw, pitch: twoShot.pitch, focal: 50, focusM: 2.2, focusOn: "ava" },
+    end: { pos: { x: 0, y: 1.45, z: 2.6 }, yaw: twoShot.yaw, pitch: twoShot.pitch, focal: 35, focusM: 2.8, focusOn: "ava" },
     durationS: 4,
     ease: "smooth",
     trackYaw: twoShot.yaw,
@@ -120,7 +120,7 @@ export function studioSetup(): Setup {
     shots: [
       shot("a", "1A", "Wide", "sticks", 32, 4, 0, { x: 0, y: 1.5, z: 4.4 }, { x: 0, y: 1.0, z: -0.4 }, "ava", 4.6, null, 800),
       twoShot,
-      shot("c", "1C", "Product in hand", "robot", 85, 2.8, 0.3, { x: 0.1, y: 1.3, z: 1.25 }, { x: 0.24, y: 1.28, z: 0.02 }, "bottle", 1.2, null, 800),
+      shot("c", "1C", "Product in hand", "robot", 85, 2.8, 0.3, { x: 0.1, y: 1.3, z: 1.85 }, { x: 0.24, y: 1.27, z: 0.02 }, "bottle", 1.8, null, 800),
     ],
     activeId: "b",
     talent: [

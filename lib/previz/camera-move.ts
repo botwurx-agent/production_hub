@@ -49,7 +49,8 @@ export function ease(kind: Ease, t: number): number {
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 }
 
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+// Exact when both ends agree, so a 50mm that does not zoom reads 50, not 49.999.
+const lerp = (a: number, b: number, t: number) => (a === b ? a : a + (b - a) * t);
 /** The short way round between two headings. */
 function lerpAngle(a: number, b: number, t: number): number {
   const d = ((((b - a) % 360) + 540) % 360) - 180;
@@ -69,7 +70,7 @@ export function camAt(start: CamKey, move: Move | null, t: number): CamKey & { m
     pos: { x: lerp(start.pos.x, e.pos.x, k), y: lerp(start.pos.y, e.pos.y, k), z: lerp(start.pos.z, e.pos.z, k) },
     yaw: lerpAngle(start.yaw, e.yaw, k),
     pitch: lerp(start.pitch, e.pitch, k),
-    focal: Math.exp(lerp(Math.log(start.focal), Math.log(e.focal), k)),
+    focal: start.focal === e.focal ? start.focal : Math.exp(lerp(Math.log(start.focal), Math.log(e.focal), k)),
     focusM: lerp(start.focusM, e.focusM, k),
     focusOn: k < 0.5 ? start.focusOn : e.focusOn,
     mix: k,

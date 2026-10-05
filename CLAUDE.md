@@ -7000,6 +7000,39 @@ reach for it during real prep.
   HIGGSFIELD IS NOT NEEDED UNTIL SLICE 5 (previz frame to video), or earlier
   only if photo-to-3D appears in their public API. Slices 1 to 4 run entirely
   in the browser.
+- STUDIO SET, PEOPLE, CAMERA MOVES, CLIPS, SAVING (2026-10-05), built for the
+  operator's in-studio shoot the next day ("talent against a backdrop", "a
+  playable clip"). Still the /dev/scene-setup prototype, no database.
+  SET: lib/previz/studio-set.ts, seamless paper on two stands at the REAL roll
+  widths (53, 107, 140 in) in the standard shades, a sweep slider, turn, and
+  drag on the map. The inspector states the nearest person's distance off the
+  paper (under about 6 ft the shadow lands on the background). Studio hides the
+  kitchen, the window, the sun and the pendant, and cuts room bounce to 0.35.
+  PEOPLE: lib/previz/poses.ts, eight poses as DATA (joints as fractions of
+  height, arms relative to the shoulder line, so one table fits any height),
+  add/name/size/pose/dress/remove, and one person at a time can hold the bottle,
+  which follows their right hand.
+  MOVES: lib/previz/camera-move.ts (pure, 38 assertions). A shot's own values
+  ARE the start frame; a move adds an end frame, length and ease. Zoom
+  interpolates in log space, pan the short way round, focus racks between the
+  two targets' distances. The SUPPORT constrains the end frame (sticks no
+  travel, Dana sideways only, Fisher push plus boom, arm free), and the track
+  heading is fixed when the move is made so panning later turns the head, not
+  the track. Editing at the end of the scrubber edits the END frame. The
+  timeline names the move in production words and states travel, average and
+  peak speed, and track needed; it warns over 1.2 m/s on a dolly.
+  CLIPS: "Record clip" composites the WebGL frame plus a burn-in onto a 2D
+  canvas and records it with MediaRecorder. THE MOVE STARTS IN rec.onstart, not
+  on the press: the recorder starts late and a short move had finished before
+  the first frame (a 0-byte file). H.264 is asked for FIRST and a bare
+  "video/mp4" is never asked for, because Chromium without H.264 says yes to it
+  and writes VP9 into an mp4 box that QuickTime cannot open. Falls back to WebM.
+  SAVING: localStorage (previz.setup.v2, debounced), retrying without large
+  storyboard images if refused, plus download/open as .previz.json.
+  NOT BUILT: talent moving on the timeline, a real space from measurements or a
+  scout photo (honest answer: true dimensions need a LiDAR scan exported as GLB,
+  a photo gives a rough room), product from a photo, CAD import (STL/OBJ/GLB
+  load in a browser, STEP needs heavy wasm).
 
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the

@@ -106,7 +106,13 @@ const dist = (m: number, u: Units) => (u === "ft" ? feet(m) : metres(m));
 /** The best video format this browser can record: MP4 where it can, WebM otherwise. */
 function pickMime(): string | null {
   if (typeof MediaRecorder === "undefined") return null;
-  for (const m of ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]) {
+  // H.264 first, so the clip plays in QuickTime and on a phone. A bare
+  // "video/mp4" is left out on purpose: Chromium without H.264 answers yes to it
+  // and writes VP9 into an mp4 box, which QuickTime refuses to open.
+  for (const m of [
+    "video/mp4;codecs=avc1.640028", "video/mp4;codecs=avc1.4d002a", "video/mp4;codecs=avc1.42E01E", "video/mp4;codecs=avc1",
+    "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm",
+  ]) {
     if (MediaRecorder.isTypeSupported(m)) return m;
   }
   return null;
@@ -591,7 +597,7 @@ export function PrevizPrototype() {
       // Where the playhead is this frame: from the clock while playing.
       const P = playRef.current;
       const raw = L.shots.find((x) => x.id === L.activeId) ?? L.shots[0];
-      let t = L.playhead;
+      let t = P.rec && !P.on ? 0 : L.playhead;
       let finished = false;
       if (P.on && raw.move) {
         const el = (performance.now() - P.t0) / 1000 - P.hold;
@@ -622,7 +628,7 @@ export function PrevizPrototype() {
       }
       // Fill thumbnails for shots not yet seen, one per frame, never mid-move:
       // a thumbnail render in a recorded frame would be a flash of another shot.
-      const queued = P.on ? undefined : captureQueue.current.shift();
+      const queued = P.on || P.rec ? undefined : captureQueue.current.shift();
       if (queued) {
         const s = L.shots.find((x) => x.id === queued);
         if (s) {
@@ -633,7 +639,7 @@ export function PrevizPrototype() {
       }
       const s = view;
       renderShot(s);
-      if (P.on && P.rec && P.comp) {
+      if (P.rec && P.comp) {
         // The clip: this frame, with the shot's details burned in along the bottom.
         const c = P.comp;
         const g = c.getContext("2d")!;
@@ -1082,7 +1088,7 @@ export function PrevizPrototype() {
 
   const finish = (t: number) => {
     const P = playRef.current;
-    if (!P.on) return;
+    if (!P.on && !P.rec) return;
     P.on = false;
     if (P.rec && P.rec.state !== "inactive") P.rec.stop();
     P.rec = null;
@@ -1120,6 +1126,10 @@ export function PrevizPrototype() {
       const file = `${rawActive.code}_${rawActive.title.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "")}_previz.${ext}`;
       rec.onstop = () => {
         const blob = new Blob(chunks, { type: mime.split(";")[0] });
+        if (!blob.size) {
+          setSaveNote("This browser did not record anything: try Chrome, or record again");
+          return;
+        }
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = file;
@@ -1130,9 +1140,23 @@ export function PrevizPrototype() {
       P.comp = comp;
       P.rec = rec;
       P.file = `${rawActive.code} ${rawActive.title} · ${body.name} · ${support.name}: ${stats?.name ?? ""}`;
+      // The recorder starts asynchronously; the move starts when it does, or
+      // the first second of the clip is lost. Until then the loop keeps
+      // painting the start frame into the clip canvas.
+      rec.onstart = () => {
+        P.t0 = performance.now();
+        P.on = true;
+        setPlaying(true);
+      };
+      rec.onerror = () => {
+        finish(0);
+        setSaveNote("Recording stopped with an error: try again");
+      };
+      P.from = 0;
       rec.start(250);
       setRecording(true);
       setView("lens");
+      return;
     }
     P.t0 = performance.now();
     P.on = true;
@@ -1504,7 +1528,7 @@ export function PrevizPrototype() {
             {view === "lens" ? (
               <div className="pointer-events-none absolute left-3 top-3 rounded-[8px] bg-black/55 px-2.5 py-1.5 font-mono text-[11px] leading-tight text-white/90">
                 <div className="font-semibold">{active.code} · {body.name}</div>
-                <div>{active.focal}mm · f/{active.stop} · focus {dist(focus, units)}</div>
+                <div>{Math.round(active.focal)}mm · f/{active.stop} · focus {dist(focus, units)}</div>
               </div>
             ) : (
               <div className="pointer-events-none absolute left-3 top-3 rounded-[8px] bg-black/55 px-2.5 py-1.5 text-[11px] text-white/90">
