@@ -198,13 +198,26 @@ export const SUPPORTS: { id: SupportKind; name: string; note: string; lens: [num
   { id: "robot", name: "Motion control arm", note: "A Bolt-style robotic arm: repeatable moves to the frame, the high-speed food and liquid shot. Reaches a lens height of about 0.2 to 2.4 m.", lens: [0.2, 2.4] },
 ];
 
+/**
+ * Options for a support that is part way through a move: the track's extent
+ * along its axis, and the robot's base, both in the support's frame relative
+ * to where the camera is NOW. Left out, a support is drawn for a camera that
+ * is not moving.
+ */
+export type SupportOpts = { track?: { from: number; to: number }; base?: { x: number; z: number } };
+
 /** Where the support's footprint sits, in the camera's own frame (lens looks -Z). */
-export function supportFootprint(kind: SupportKind, lensHeight: number, drop: number):
-  { track?: { axis: "x" | "z"; from: number; to: number; gauge: number }; base?: { z: number; r: number } } {
-  if (kind === "dana") return { track: { axis: "x", from: -1.22, to: 1.22, gauge: 0.25 } };
-  if (kind === "fisher") return { track: { axis: "z", from: -1.4, to: 2.26, gauge: 0.62 } };
-  if (kind === "robot") return { base: { z: robotReach(lensHeight, drop).baseZ, r: 0.3 } };
+export function supportFootprint(kind: SupportKind, lensHeight: number, drop: number, opts: SupportOpts = {}):
+  { track?: { axis: "x" | "z"; from: number; to: number; gauge: number }; base?: { x: number; z: number; r: number } } {
+  if (kind === "dana") return { track: { axis: "x", from: opts.track?.from ?? -1.22, to: opts.track?.to ?? 1.22, gauge: 0.25 } };
+  if (kind === "fisher") return { track: { axis: "z", from: opts.track?.from ?? -1.4, to: opts.track?.to ?? 2.26, gauge: 0.62 } };
+  if (kind === "robot") return { base: { x: opts.base?.x ?? 0, z: opts.base?.z ?? robotReach(lensHeight, drop).baseZ, r: 0.3 } };
   return {};
+}
+
+/** Where the robot's base goes for a camera at this height, in the camera's frame. */
+export function robotBaseLocal(lensHeight: number, drop: number): { x: number; z: number } {
+  return { x: 0, z: robotReach(lensHeight, drop).baseZ };
 }
 
 const ROBOT = { shoulderY: 0.78, upper: 1.05, fore: 0.95, flangeZ: 0.2 };
@@ -239,26 +252,27 @@ function bowl(y: number) {
  * sticks (or a hi-hat), a Dana Dolly, a Fisher dolly on track, or a motion
  * control arm. The lens looks down -Z; the group is only ever yawed.
  */
-export function buildSupport(kind: SupportKind, lensHeight: number, drop: number): THREE.Group {
-  if (kind === "dana") return buildDana(lensHeight, drop);
-  if (kind === "fisher") return buildFisher(lensHeight, drop);
-  if (kind === "robot") return buildRobot(lensHeight, drop);
+export function buildSupport(kind: SupportKind, lensHeight: number, drop: number, opts: SupportOpts = {}): THREE.Group {
+  if (kind === "dana") return buildDana(lensHeight, drop, opts);
+  if (kind === "fisher") return buildFisher(lensHeight, drop, opts);
+  if (kind === "robot") return buildRobot(lensHeight, drop, opts);
   return buildSticks(lensHeight, drop);
 }
 
 /** Dana Dolly: two speed rails across the lens axis, a carriage on skate wheels. */
-function buildDana(lensHeight: number, drop: number): THREE.Group {
+function buildDana(lensHeight: number, drop: number, opts: SupportOpts): THREE.Group {
   const g = new THREE.Group();
   const alu = m("#b9bec5", 0.35, 0.85);
   const black = m("#1b1c1f", 0.6, 0.3);
   const wood = m("#b98a55", 0.8, 0);
   const bowlY = Math.max(0.2, lensHeight - drop - 0.08);
   const railY = Math.min(1.7, Math.max(0.12, bowlY - 0.2));
-  const half = 1.22;
+  const x0 = opts.track?.from ?? -1.22;
+  const x1 = opts.track?.to ?? 1.22;
   for (const z of [-0.125, 0.125]) {
-    g.add(segment(new THREE.Vector3(-half, railY, z), new THREE.Vector3(half, railY, z), 0.019, alu));
+    g.add(segment(new THREE.Vector3(x0, railY, z), new THREE.Vector3(x1, railY, z), 0.019, alu));
   }
-  for (const x of [-half + 0.08, half - 0.08]) {
+  for (const x of [x0 + 0.08, x1 - 0.08]) {
     // End brackets tying the two rails together.
     g.add(box(0.06, 0.04, 0.34, black, x, railY - 0.01, 0));
     if (railY > 0.32) {
@@ -297,7 +311,7 @@ function buildStandLite(h: number): THREE.Group {
 }
 
 /** Fisher 11: a heavy wheeled chassis on straight track, its hydraulic arm booming the head. */
-function buildFisher(lensHeight: number, drop: number): THREE.Group {
+function buildFisher(lensHeight: number, drop: number, opts: SupportOpts): THREE.Group {
   const g = new THREE.Group();
   const grey = m("#5d6168", 0.45, 0.6);
   const dark = m("#22252a", 0.55, 0.4);
@@ -305,7 +319,7 @@ function buildFisher(lensHeight: number, drop: number): THREE.Group {
   const rail = m("#a7adb4", 0.35, 0.85);
   const wood = m("#8a6a45", 0.85, 0);
   // Track: two round rails at the Fisher gauge on wooden sleepers.
-  const fp = supportFootprint("fisher", lensHeight, drop).track!;
+  const fp = supportFootprint("fisher", lensHeight, drop, opts).track!;
   for (let z = fp.from + 0.15; z < fp.to; z += 0.6) g.add(box(0.85, 0.035, 0.1, wood, 0, 0.018, z));
   for (const x of [-fp.gauge / 2, fp.gauge / 2]) {
     g.add(segment(new THREE.Vector3(x, 0.06, fp.from), new THREE.Vector3(x, 0.06, fp.to), 0.02, rail));
@@ -344,12 +358,19 @@ function buildFisher(lensHeight: number, drop: number): THREE.Group {
 }
 
 /** A Bolt-style motion control arm on a floor base, reaching in from behind. */
-function buildRobot(lensHeight: number, drop: number): THREE.Group {
+function buildRobot(lensHeight: number, drop: number, opts: SupportOpts): THREE.Group {
+  const outer = new THREE.Group();
   const g = new THREE.Group();
+  outer.add(g);
   const body = m("#1d1f23", 0.4, 0.5);
   const joint = m("#c9cdd3", 0.35, 0.7);
   const accent = m("#e0662a", 0.5, 0.2);
-  const { baseZ, ty } = robotReach(lensHeight, drop);
+  const reachAt = robotReach(lensHeight, drop);
+  const ty = reachAt.ty;
+  // A base left where it stood while the camera moves: build the arm along +Z
+  // to that distance, then turn the whole arm to face the base.
+  const baseZ = opts.base ? Math.max(0.3, Math.hypot(opts.base.x, opts.base.z)) : reachAt.baseZ;
+  if (opts.base) g.rotation.y = Math.atan2(opts.base.x, opts.base.z);
   // Base plate and turret.
   g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.36, 0.06, 28), body), 0, 0.03, baseZ));
   g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.4, 28), body), 0, 0.26, baseZ));
@@ -381,7 +402,7 @@ function buildRobot(lensHeight: number, drop: number): THREE.Group {
   const plateY = lensHeight - drop - 0.06;
   g.add(segment(reach, new THREE.Vector3(0, plateY, ROBOT.flangeZ - 0.05), 0.045, body));
   g.add(box(0.16, 0.03, 0.26, joint, 0, plateY, 0.1));
-  return g;
+  return outer;
 }
 
 /** Sticks and a fluid head, dropping to a hi-hat for a low lens. */

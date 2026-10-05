@@ -8,9 +8,11 @@
 // is +Z. A figure faces its local +Z, and `facing` (degrees) turns it about Y.
 import * as THREE from "three";
 import { buildCameraBody } from "./camera-model";
+import { hipY as poseHipY, poseDef, rightHand, shoulderY as poseShoulderY, eyeY, type PoseId } from "./poses";
+import { buildStageFloor } from "./studio-set";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
-export type Pose = "standing" | "seated";
+export type Pose = PoseId;
 export type TalentSpec = {
   id: string;
   name: string;
@@ -21,8 +23,18 @@ export type TalentSpec = {
   facing: number;
   top: string;
   bottom: string;
+  /** A prop held in the right hand ("bottle"), or nothing. */
+  holding?: string | null;
 };
-export type PropSpec = { id: string; name: string; x: number; z: number };
+export type PropSpec = {
+  id: string;
+  name: string;
+  x: number;
+  z: number;
+  /** Resolved at runtime: the base's height, and who is holding it. Not saved. */
+  y?: number;
+  heldBy?: string | null;
+};
 
 const mat = (color: string, roughness = 0.8, metalness = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
@@ -131,24 +143,23 @@ export function buildFigure(t: TalentSpec): THREE.Group {
   const bottom = mat(t.bottom, 0.9);
   const shoe = mat("#2a2623", 0.6);
 
-  const seated = t.pose === "seated";
-  const hipY = seated ? 0.47 : 0.52 * H;
-  const shoulderY = hipY + 0.29 * H;
+  const pose = poseDef(t.pose);
+  const hipY = poseHipY(pose, H);
+  const shoulderY = poseShoulderY(pose, H);
   const legR = 0.034 * H;
   const hipX = 0.055 * H;
+  const at = (p: [number, number, number], yBase = 0) => new THREE.Vector3(p[0] * H, yBase + p[1] * H, p[2] * H);
 
-  // Legs
-  for (const side of [-1, 1]) {
+  // Legs (side 0 is the figure's right, -X)
+  for (const i of [0, 1] as const) {
+    const side = i === 0 ? -1 : 1;
     const hip = new THREE.Vector3(side * hipX, hipY, 0);
-    const knee = seated
-      ? new THREE.Vector3(side * hipX, hipY, 0.25 * H)
-      : new THREE.Vector3(side * hipX, hipY * 0.52, 0.01);
-    const ankle = seated
-      ? new THREE.Vector3(side * hipX, 0.07, 0.25 * H + 0.02)
-      : new THREE.Vector3(side * hipX, 0.07, 0);
+    const knee = at(pose.knee[i]);
+    if (pose.seatM) knee.y = hipY; // thighs level on the seat
+    const ankle = at(pose.ankle[i]);
     g.add(limb(hip, knee, legR, bottom));
     g.add(limb(knee, ankle, legR * 0.85, bottom));
-    g.add(box(0.06 * H, 0.05, 0.15 * H, shoe, ankle.x, 0.03, ankle.z + 0.04 * H));
+    g.add(box(0.06 * H, 0.05, 0.15 * H, shoe, ankle.x, Math.max(0.025, ankle.y - 0.045), ankle.z + 0.04 * H));
   }
 
   // Torso: a capsule flattened front to back
@@ -165,17 +176,19 @@ export function buildFigure(t: TalentSpec): THREE.Group {
   head.castShadow = true;
   g.add(head);
 
-  // Arms: relaxed at the sides standing, forearms resting forward seated
-  for (const side of [-1, 1]) {
+  // Arms, from the pose: elbow and wrist are offsets from the shoulder line.
+  for (const i of [0, 1] as const) {
+    const side = i === 0 ? -1 : 1;
     const sh = new THREE.Vector3(side * 0.13 * H, shoulderY - 0.02 * H, 0);
-    const el = seated
-      ? new THREE.Vector3(side * 0.15 * H, shoulderY - 0.17 * H, 0.05 * H)
-      : new THREE.Vector3(side * 0.15 * H, shoulderY - 0.18 * H, 0);
-    const wr = seated
-      ? new THREE.Vector3(side * 0.1 * H, shoulderY - 0.18 * H, 0.2 * H)
-      : new THREE.Vector3(side * 0.155 * H, shoulderY - 0.34 * H, 0.02 * H);
+    const el = at(pose.elbow[i], shoulderY);
+    const wr = at(pose.wrist[i], shoulderY);
     g.add(limb(sh, el, 0.026 * H, top));
     g.add(limb(el, wr, 0.022 * H, skin));
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.027 * H, 12, 10), skin);
+    hand.scale.set(0.8, 1.15, 0.8);
+    hand.position.copy(wr);
+    hand.castShadow = true;
+    g.add(hand);
   }
 
   g.position.set(t.x, 0, t.z);
@@ -185,8 +198,14 @@ export function buildFigure(t: TalentSpec): THREE.Group {
 
 /** Eye-line height of a figure, where "focus on" pulls to. */
 export function eyeHeight(t: TalentSpec): number {
-  const hipY = t.pose === "seated" ? 0.47 : 0.52 * t.heightM;
-  return hipY + 0.29 * t.heightM + 0.11 * t.heightM;
+  return eyeY(poseDef(t.pose), t.heightM);
+}
+
+/** Where the right hand is in the world: a held prop sits in it. */
+export function handWorld(t: TalentSpec): { x: number; y: number; z: number } {
+  const [hx, hy, hz] = rightHand(poseDef(t.pose), t.heightM);
+  const r = (t.facing * Math.PI) / 180;
+  return { x: t.x + hx * Math.cos(r) + hz * Math.sin(r), y: hy, z: t.z - hx * Math.sin(r) + hz * Math.cos(r) };
 }
 
 export const BOTTLE_TOP_Y = 0.75; // the table top the bottle stands on
@@ -240,6 +259,9 @@ export type Built = {
   bulb: THREE.MeshStandardMaterial;
   /** Light bouncing round the set, as one averaged level. */
   bounce: THREE.HemisphereLight;
+  /** The two sets: only one is visible at a time. */
+  kitchen: THREE.Group;
+  studio: THREE.Group;
 };
 
 /** The window opening, so the meter can find the sky. */
@@ -261,6 +283,16 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0;
 
+  // The kitchen lives in its own group so the studio can take its place.
+  const kitchen = new THREE.Group();
+  kitchen.name = "kitchen";
+  scene.add(kitchen);
+  const studio = new THREE.Group();
+  studio.name = "studio";
+  studio.visible = false;
+  studio.add(buildStageFloor());
+  scene.add(studio);
+
   const plaster = mat("#d8d0c3", 0.95);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(9, 9),
@@ -269,20 +301,20 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0, 0.5);
   floor.receiveShadow = true;
-  scene.add(floor);
+  kitchen.add(floor);
 
   // Back wall, and a left wall with a window cut into it
-  scene.add(box(9, 3.2, 0.12, plaster, 0, 1.6, -2.56));
+  kitchen.add(box(9, 3.2, 0.12, plaster, 0, 1.6, -2.56));
   const wx = WINDOW.x;
   const win = WINDOW;
-  scene.add(box(0.12, 3.2, win.z - win.w / 2 + 2.56, plaster, wx, 1.6, (-2.56 + win.z - win.w / 2) / 2));
-  scene.add(box(0.12, 3.2, 4.94 - (win.z + win.w / 2), plaster, wx, 1.6, (win.z + win.w / 2 + 4.94) / 2));
-  scene.add(box(0.12, win.sill, win.w, plaster, wx, win.sill / 2, win.z));
-  scene.add(box(0.12, 3.2 - win.top, win.w, plaster, wx, (win.top + 3.2) / 2, win.z));
+  kitchen.add(box(0.12, 3.2, win.z - win.w / 2 + 2.56, plaster, wx, 1.6, (-2.56 + win.z - win.w / 2) / 2));
+  kitchen.add(box(0.12, 3.2, 4.94 - (win.z + win.w / 2), plaster, wx, 1.6, (win.z + win.w / 2 + 4.94) / 2));
+  kitchen.add(box(0.12, win.sill, win.w, plaster, wx, win.sill / 2, win.z));
+  kitchen.add(box(0.12, 3.2 - win.top, win.w, plaster, wx, (win.top + 3.2) / 2, win.z));
   const frame = mat("#f2efe8", 0.6);
-  scene.add(box(0.14, 0.05, win.w, frame, wx, win.sill, win.z));
-  scene.add(box(0.14, 0.05, win.w, frame, wx, win.top, win.z));
-  scene.add(box(0.14, win.top - win.sill, 0.04, frame, wx, (win.sill + win.top) / 2, win.z));
+  kitchen.add(box(0.14, 0.05, win.w, frame, wx, win.sill, win.z));
+  kitchen.add(box(0.14, 0.05, win.w, frame, wx, win.top, win.z));
+  kitchen.add(box(0.14, win.top - win.sill, 0.04, frame, wx, (win.sill + win.top) / 2, win.z));
   // The sky seen through the window glows at real sky brightness, so it
   // blows out unless the window is gelled, exactly as it does on a set.
   const skyMat = glow();
@@ -290,27 +322,27 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   sky.position.set(wx - 1.5, 1.7, win.z);
   sky.rotation.y = Math.PI / 2;
   sky.userData.noOcclude = true;
-  scene.add(sky);
+  kitchen.add(sky);
 
   // Counter run along the back wall, with a plant on it
   const cab = mat("#7f9182", 0.7);
-  scene.add(box(3.4, 0.86, 0.62, cab, 0.6, 0.43, -2.19));
-  scene.add(box(3.46, 0.04, 0.66, mat("#ece8e1", 0.35), 0.6, 0.88, -2.19));
-  scene.add(box(3.4, 0.7, 0.36, cab, 0.6, 2.05, -2.32));
+  kitchen.add(box(3.4, 0.86, 0.62, cab, 0.6, 0.43, -2.19));
+  kitchen.add(box(3.46, 0.04, 0.66, mat("#ece8e1", 0.35), 0.6, 0.88, -2.19));
+  kitchen.add(box(3.4, 0.7, 0.36, cab, 0.6, 2.05, -2.32));
   const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.2, 24), mat("#b5643f", 0.8));
   pot.position.set(1.85, 1.0, -2.15);
   pot.castShadow = true;
-  scene.add(pot);
+  kitchen.add(pot);
   const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 1), mat("#4e6e45", 0.9));
   leaves.position.set(1.85, 1.28, -2.15);
   leaves.castShadow = true;
-  scene.add(leaves);
+  kitchen.add(leaves);
 
   // Table and two chairs
   const walnut = mat("#6a4a34", 0.5);
-  scene.add(box(1.6, 0.05, 0.9, walnut, 0, 0.725, -0.6));
+  kitchen.add(box(1.6, 0.05, 0.9, walnut, 0, 0.725, -0.6));
   for (const [lx, lz] of [[-0.72, -0.98], [0.72, -0.98], [-0.72, -0.22], [0.72, -0.22]])
-    scene.add(box(0.05, 0.7, 0.05, walnut, lx, 0.35, lz));
+    kitchen.add(box(0.05, 0.7, 0.05, walnut, lx, 0.35, lz));
   const chair = (x: number, z: number, rot: number) => {
     const c = new THREE.Group();
     c.add(box(0.44, 0.04, 0.42, walnut, 0, 0.45, 0));
@@ -319,7 +351,7 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
       c.add(box(0.035, 0.45, 0.035, walnut, lx, 0.225, lz));
     c.position.set(x, 0, z);
     c.rotation.y = rot;
-    scene.add(c);
+    kitchen.add(c);
   };
   chair(0.35, -1.3, 0);
   chair(-0.45, -1.3, 0);
@@ -333,13 +365,13 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
     new THREE.MeshStandardMaterial({ color: "#2b2b2b", roughness: 0.5, side: THREE.DoubleSide }),
   );
   shade.position.set(0, 2.05, -0.6);
-  scene.add(shade);
-  scene.add(box(0.008, 1.05, 0.008, mat("#222"), 0, 2.67, -0.6));
+  kitchen.add(shade);
+  kitchen.add(box(0.008, 1.05, 0.008, mat("#222"), 0, 2.67, -0.6));
   const bulbMat = glow();
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), bulbMat);
   bulb.position.set(0, 1.98, -0.6);
   bulb.userData.noOcclude = true;
-  scene.add(bulb);
+  kitchen.add(bulb);
   const pendant = new THREE.PointLight("#ffffff", 0, 0, 2);
   pendant.position.set(PENDANT.x, PENDANT.y, PENDANT.z);
   scene.add(pendant);
@@ -384,7 +416,7 @@ export function buildWorld(renderer: THREE.WebGLRenderer): Built {
   scene.add(rigs);
 
   return {
-    scene, figures: new Map(), bottle, rigs, lightsRoot, windowLight, sun, sky: skyMat, pendant, bulb: bulbMat, bounce,
+    scene, figures: new Map(), bottle, rigs, lightsRoot, windowLight, sun, sky: skyMat, pendant, bulb: bulbMat, bounce, kitchen, studio,
   };
 }
 
