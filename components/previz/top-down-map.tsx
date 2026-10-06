@@ -89,6 +89,33 @@ export function TopDownMap({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [size, setSize] = useState<"min" | "small" | "big">("small");
+  // Where the panel sits, how see-through it is, and the room it has. The
+  // position is an offset from the stage's bottom-right corner, so it stays in
+  // its corner when the window resizes; both are a per-person preference.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState<MapView>(DEFAULT_VIEW);
+  const [stage, setStage] = useState({ w: 0, h: 0 });
+  const [self, setSelf] = useState({ w: 0, h: 0 });
+  const moveRef = useRef<{ x: number; y: number; r: number; b: number } | null>(null);
+  useEffect(() => setView(readView()), []);
+  useEffect(() => {
+    // The untouched default is never written: on mount it would overwrite the
+    // stored position before readView's result had landed.
+    if (view === DEFAULT_VIEW) return;
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch { /* private window */ }
+  }, [view]);
+  useEffect(() => {
+    const el = rootRef.current;
+    const parent = el?.parentElement;
+    if (!el || !parent) return;
+    const ro = new ResizeObserver(() => {
+      setStage({ w: parent.clientWidth, h: parent.clientHeight });
+      setSelf({ w: el.offsetWidth, h: el.offsetHeight });
+    });
+    ro.observe(parent);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mounted]);
   const drag = useRef<(MapPick & { aim?: boolean; rot?: boolean }) | null>(null);
   const grab = useRef({ dx: 0, dz: 0 });
   // The view is held still while something is dragged, so the map does not
@@ -153,6 +180,33 @@ export function TopDownMap({
     } else if (d.kind === "camera") onCamera(d.id, gx, gz);
   };
 
+  // Kept inside the stage whatever its size: an offset that would push the
+  // panel past an edge is pulled back, so it can never be dragged or grown out
+  // of reach.
+  const clampR = (r: number) => Math.max(MARGIN, Math.min(r, stage.w - self.w - MARGIN));
+  const clampB = (b: number) => Math.max(MARGIN, Math.min(b, stage.h - self.h - MARGIN));
+  const right = stage.w ? clampR(view.r) : view.r;
+  const bottom = stage.h ? clampB(view.b) : view.b;
+  const startMove = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button, input")) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    moveRef.current = { x: e.clientX, y: e.clientY, r: right, b: bottom };
+  };
+  const doMove = (e: React.PointerEvent) => {
+    const m = moveRef.current;
+    if (!m) return;
+    setView((v) => ({ ...v, r: clampR(m.r - (e.clientX - m.x)), b: clampB(m.b - (e.clientY - m.y)) }));
+  };
+  const endMove = () => { moveRef.current = null; };
+  // The width and the drawing's height both yield to the stage, so "Bigger"
+  // is as big as fits rather than a fixed size that runs off the top.
+  const wantW = size === "big" ? 460 : size === "small" ? 230 : 150;
+  const panelW = stage.w ? Math.max(150, Math.min(wantW, stage.w - 2 * MARGIN)) : wantW;
+  const chrome = 26 + (size === "big" ? 22 : 0);
+  const wantH = size === "big" ? 560 : 300;
+  const svgMaxH = stage.h ? Math.max(80, Math.min(wantH, stage.h - 2 * MARGIN - chrome)) : wantH;
+
   if (!mounted) return null;
   const W = B.x1 - B.x0;
   const H = B.z1 - B.z0;
@@ -165,14 +219,36 @@ export function TopDownMap({
 
   return (
     <div
+      ref={rootRef}
       data-previz-map
-      className={`absolute bottom-3 right-3 overflow-hidden rounded-[12px] border border-white/10 bg-[#f4f1ea] shadow-lg ${
-        size === "big" ? "w-[460px]" : size === "small" ? "w-[230px]" : "w-[150px]"
-      }`}
+      className="absolute z-30 overflow-hidden rounded-[12px] border border-white/10 shadow-lg"
+      style={{ right, bottom, width: panelW }}
     >
-      <div className="flex items-center justify-between gap-2 bg-black/80 px-2.5 py-1 text-[11px] font-semibold text-white/90">
-        <span>Top-down map</span>
-        <span className="flex gap-2">
+      <div
+        title="Drag to move the map. Double-click to put it back in the corner."
+        onPointerDown={startMove}
+        onPointerMove={doMove}
+        onPointerUp={endMove}
+        onPointerCancel={endMove}
+        onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest("button, input")) setView((v) => ({ ...v, r: MARGIN, b: MARGIN })); }}
+        className="flex cursor-move touch-none select-none items-center justify-between gap-2 bg-black/85 px-2.5 py-1 text-[11px] font-semibold text-white/90"
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <GripDots />
+          <span className="truncate">{size === "big" ? "Top-down map" : "Map"}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          {size !== "min" ? (
+            <label className="flex items-center gap-1 text-white/70" title={`Map opacity, ${Math.round(view.opacity * 100)}%`}>
+              <OpacityIcon />
+              <input
+                aria-label="Map opacity"
+                type="range" min={0.2} max={1} step={0.05} value={view.opacity}
+                onChange={(e) => setView((v) => ({ ...v, opacity: Number(e.target.value) }))}
+                className="h-1 w-14 cursor-pointer accent-white"
+              />
+            </label>
+          ) : null}
           {size !== "min" ? (
             <button type="button" onClick={() => setSize(size === "big" ? "small" : "big")} className="text-white/70 hover:text-white">
               {size === "big" ? "Smaller" : "Bigger"}
@@ -183,8 +259,9 @@ export function TopDownMap({
           </button>
         </span>
       </div>
+      <div style={{ opacity: view.opacity, background: "#f4f1ea" }}>
       <svg
-        style={{ display: size === "min" ? "none" : undefined, maxHeight: size === "big" ? 560 : 300 }}
+        style={{ display: size === "min" ? "none" : undefined, maxHeight: svgMaxH }}
         ref={svgRef}
         viewBox={`${B.x0} ${B.z0} ${W} ${H}`}
         className="mx-auto block w-full touch-none select-none"
@@ -448,7 +525,39 @@ export function TopDownMap({
           Drag anything to move it. Drag a white dot to aim a light or a camera, or to turn the selected piece.
         </p>
       ) : null}
+      </div>
     </div>
+  );
+}
+
+type MapView = { r: number; b: number; opacity: number };
+const VIEW_KEY = "previz.mapView";
+const MARGIN = 12;
+const DEFAULT_VIEW: MapView = { r: MARGIN, b: MARGIN, opacity: 1 };
+function readView(): MapView {
+  try {
+    const v = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "null");
+    if (v && Number.isFinite(v.r) && Number.isFinite(v.b) && Number.isFinite(v.opacity)) {
+      return { r: Math.max(0, v.r), b: Math.max(0, v.b), opacity: Math.max(0.2, Math.min(1, v.opacity)) };
+    }
+  } catch { /* nothing stored */ }
+  return DEFAULT_VIEW;
+}
+
+function GripDots() {
+  return (
+    <svg width="8" height="12" viewBox="0 0 8 12" aria-hidden className="shrink-0 text-white/50">
+      {[2, 6].flatMap((x) => [2, 6, 10].map((y) => <circle key={`${x}${y}`} cx={x} cy={y} r="1.1" fill="currentColor" />))}
+    </svg>
+  );
+}
+
+function OpacityIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
+      <circle cx="6" cy="6" r="4.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M6 1.2a4.8 4.8 0 0 1 0 9.6z" fill="currentColor" />
+    </svg>
   );
 }
 

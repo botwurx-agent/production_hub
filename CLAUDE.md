@@ -7202,6 +7202,17 @@ reach for it during real prep.
   per frame, so a seated figure is rebuilt off `seatKey` whenever its seat
   changes; without that the placed seat height never reached the mesh. The
   inspector names the seat ("Sitting on the bed, seat 1' 10" up").
+- THE TOP-DOWN MAP MOVES, FADES AND FITS (2026-10-06, operator: "Bigger" ran
+  off the top of the window). It was a fixed 460px wide with a 560px drawing,
+  inside a stage that is overflow-hidden, so on a shorter window the top was
+  simply cut off. Width and drawing height now yield to the stage (measured by
+  a ResizeObserver on the parent), so Bigger means as big as fits. The title
+  bar DRAGS the panel (position stored as an offset from the stage's
+  bottom-right so it keeps its corner on resize, clamped to the stage on every
+  move and resize, double-click returns it), and an opacity slider (20 to
+  100%) fades the map but never the title bar or its controls. Both persist in
+  localStorage ("previz.mapView"). GOTCHA: a save effect must skip the initial
+  default, or it overwrites the stored value before readView lands.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,
