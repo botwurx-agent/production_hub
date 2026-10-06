@@ -98,23 +98,33 @@ export function poseDef(id: string | undefined): PoseDef {
   return POSES.find((p) => p.id === id) ?? STANDING;
 }
 
-/** Hip height in metres. A seated person's hip is the seat, whatever their height. */
-export function hipY(pose: PoseDef, heightM: number): number {
-  return pose.seatM ?? pose.hip * heightM;
+/**
+ * Hip height in metres. A seated person's hip is the SEAT, whatever their
+ * height: the top of what they sit on when there is something (a bed, a sofa),
+ * else an implied chair at seatM.
+ */
+export function hipY(pose: PoseDef, heightM: number, seatY?: number | null): number {
+  // The hip joint is the middle of the thigh, so it sits a thigh's radius
+  // above what they sit on, or they sink into it.
+  if (pose.seatM !== undefined) return seatY != null ? seatY + 0.034 * heightM : pose.seatM;
+  return pose.hip * heightM;
 }
-export function shoulderY(pose: PoseDef, heightM: number): number {
-  return hipY(pose, heightM) + SH * heightM;
+export function shoulderY(pose: PoseDef, heightM: number, seatY?: number | null): number {
+  return hipY(pose, heightM, seatY) + SH * heightM;
 }
 /** Eye line, where "focus on" pulls to. */
-export function eyeY(pose: PoseDef, heightM: number): number {
-  return shoulderY(pose, heightM) + 0.11 * heightM;
+export function eyeY(pose: PoseDef, heightM: number, seatY?: number | null): number {
+  return shoulderY(pose, heightM, seatY) + 0.11 * heightM;
 }
+
+/** Knee to ankle, as a fraction of height. */
+export const SHIN = 0.235;
 
 /**
  * The right hand's position in the figure's own frame, metres. The held
  * product goes here.
  */
-export function rightHand(pose: PoseDef, heightM: number): [number, number, number] {
+export function rightHand(pose: PoseDef, heightM: number, seatY?: number | null): [number, number, number] {
   const w = pose.wrist[0];
-  return [w[0] * heightM, shoulderY(pose, heightM) + w[1] * heightM, w[2] * heightM];
+  return [w[0] * heightM, shoulderY(pose, heightM, seatY) + w[1] * heightM, w[2] * heightM];
 }

@@ -7,7 +7,7 @@
 // is +Z. A figure faces its local +Z, and `facing` (degrees) turns it about Y.
 import * as THREE from "three";
 import { buildCameraBody } from "./camera-model";
-import { hipY as poseHipY, poseDef, rightHand, shoulderY as poseShoulderY, eyeY, type PoseId } from "./poses";
+import { hipY as poseHipY, poseDef, rightHand, shoulderY as poseShoulderY, eyeY, SHIN, type PoseId } from "./poses";
 import { buildStageFloor } from "./studio-set";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
@@ -28,6 +28,10 @@ export type TalentSpec = {
   mark?: { x: number; z: number; facing: number } | null;
   /** Resolved at runtime, never saved: lifted by a riser or an apple box. */
   y?: number;
+  /** Runtime, seated only: the world height of the seat (a bed, a sofa). */
+  seatY?: number | null;
+  /** Runtime, seated only: where the feet land (the floor, or the bed). */
+  footY?: number;
 };
 
 const mat = (color: string, roughness = 0.8, metalness = 0) =>
@@ -74,8 +78,8 @@ export function buildFigure(t: TalentSpec): THREE.Group {
   const shoe = mat("#2a2623", 0.6);
 
   const pose = poseDef(t.pose);
-  const hipY = poseHipY(pose, H);
-  const shoulderY = poseShoulderY(pose, H);
+  const hipY = poseHipY(pose, H, t.seatY);
+  const shoulderY = poseShoulderY(pose, H, t.seatY);
   const legR = 0.034 * H;
   const hipX = 0.055 * H;
   const at = (p: [number, number, number], yBase = 0) => new THREE.Vector3(p[0] * H, yBase + p[1] * H, p[2] * H);
@@ -85,8 +89,20 @@ export function buildFigure(t: TalentSpec): THREE.Group {
     const side = i === 0 ? -1 : 1;
     const hip = new THREE.Vector3(side * hipX, hipY, 0);
     const knee = at(pose.knee[i]);
-    if (pose.seatM) knee.y = hipY; // thighs level on the seat
-    const ankle = at(pose.ankle[i]);
+    let ankle = at(pose.ankle[i]);
+    if (pose.seatM !== undefined) {
+      // Thighs level on the seat. The shins then find the ground: hanging
+      // straight when it is out of reach (a high stool), angled forward onto
+      // the floor, or laid along the seat when it carries on under the knees
+      // (sitting in the middle of a bed).
+      knee.y = hipY;
+      const L = SHIN * H;
+      const ground = (t.footY ?? 0) + 0.04 * H;
+      const drop = knee.y - ground;
+      if (drop < 0.08 * H) ankle = new THREE.Vector3(knee.x, knee.y, knee.z + L);
+      else if (drop >= L) ankle = new THREE.Vector3(knee.x, knee.y - L, knee.z + 0.02 * H);
+      else ankle = new THREE.Vector3(knee.x, ground, knee.z + Math.sqrt(L * L - drop * drop));
+    }
     g.add(limb(hip, knee, legR, bottom));
     g.add(limb(knee, ankle, legR * 0.85, bottom));
     g.add(box(0.06 * H, 0.05, 0.15 * H, shoe, ankle.x, Math.max(0.025, ankle.y - 0.045), ankle.z + 0.04 * H));
@@ -128,12 +144,12 @@ export function buildFigure(t: TalentSpec): THREE.Group {
 
 /** Eye-line height of a figure, where "focus on" pulls to. */
 export function eyeHeight(t: TalentSpec): number {
-  return (t.y ?? 0) + eyeY(poseDef(t.pose), t.heightM);
+  return (t.y ?? 0) + eyeY(poseDef(t.pose), t.heightM, t.seatY);
 }
 
 /** Where the right hand is in the world: a held prop sits in it. */
 export function handWorld(t: TalentSpec): { x: number; y: number; z: number } {
-  const [hx, hy, hz] = rightHand(poseDef(t.pose), t.heightM);
+  const [hx, hy, hz] = rightHand(poseDef(t.pose), t.heightM, t.seatY);
   const r = (t.facing * Math.PI) / 180;
   return { x: t.x + hx * Math.cos(r) + hz * Math.sin(r), y: (t.y ?? 0) + hy, z: t.z - hx * Math.sin(r) + hz * Math.cos(r) };
 }

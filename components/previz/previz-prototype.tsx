@@ -45,7 +45,7 @@ import {
 import { POSES } from "@/lib/previz/poses";
 import { HOUSE_LEVEL, buildHouseView, frameBox, gridSpacing, syncMarkers, type Marker } from "@/lib/previz/house-view";
 import {
-  CATEGORIES, bulbLocal, buildItem, catalogOf, containsPoint, itemShapeKey, itemToWorld, newItem, stackHeights, standHeight,
+  CATEGORIES, bulbLocal, buildItem, catalogOf, containsPoint, itemShapeKey, itemToWorld, newItem, stackHeights, standHeight, seatUnder, groundUnder,
   type ItemSpec, type LabelArt,
 } from "@/lib/previz/set-items";
 import { buildRoom, roomBounds, roomWindows, type SetSpec, type WindowInfo } from "@/lib/previz/room";
@@ -94,7 +94,13 @@ function placeScene(rawTalent: TalentSpec[], rawItems: ItemSpec[], k: number): S
     const w = walkerAt(raw, k);
     walk.set(raw.id, { walking: w.walking, walked: w.walked });
     const { walking: _a, walked: _b, ...t } = w;
-    return { ...t, y: t.pose === "seated" ? 0 : standHeight(rawItems, heights, t.x, t.z) };
+    if (t.pose !== "seated") return { ...t, y: standHeight(rawItems, heights, t.x, t.z), seatY: null };
+    // Seated: the hip lands on whatever is under it, and the feet on whatever
+    // is under the knees (the floor at a bed's edge, the bed in its middle).
+    const seat = seatUnder(rawItems, heights, t.x, t.z);
+    const r = (t.facing * Math.PI) / 180, reach = 0.27 * t.heightM;
+    const footY = groundUnder(rawItems, heights, t.x + Math.sin(r) * reach, t.z + Math.cos(r) * reach);
+    return { ...t, y: 0, seatY: seat?.y ?? null, footY };
   });
   const items = rawItems.map((i) => {
     const holder = talent.find((t) => t.holding === i.id && t.pose === "holding");
@@ -448,6 +454,8 @@ export function PrevizPrototype() {
   // Talent walk to their marks over the active shot's move, with its ease.
   const actionK = rawActive.move ? ease(rawActive.move.ease, playhead) : 0;
   const scene = useMemo(() => placeScene(talent, items, actionK), [talent, items, actionK]);
+  // What seated people sit on: a figure is rebuilt when its seat changes.
+  const seatKey = scene.talent.map((t) => (t.pose === "seated" ? `${t.id}:${(t.seatY ?? -1).toFixed(3)}:${(t.footY ?? 0).toFixed(3)}` : "")).join("|");
   // What the camera sees right now: unsaved framing, or the start, the end or
   // a moment between.
   const draft = drafts[rawActive.id];
@@ -968,7 +976,10 @@ export function PrevizPrototype() {
     }
     figs.current.clear();
     for (const t of talent) {
-      const base = buildFigure(t);
+      // Seated: built from where they are placed, since the seat (a bed, a
+      // sofa) and where the feet land decide the legs.
+      const placed = scene.talent.find((x) => x.id === t.id);
+      const base = buildFigure(t.pose === "seated" && placed ? { ...t, seatY: placed.seatY, footY: placed.footY } : t);
       base.userData.pick = { kind: "talent", id: t.id };
       e.world.scene.add(base);
       let walk: [THREE.Group, THREE.Group] | null = null;
@@ -988,7 +999,7 @@ export function PrevizPrototype() {
     e.pose(scene);
     dirty();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [talent]);
+  }, [talent, seatKey]);
 
   // ----- Assets: product photos and imported models, loaded once each.
   useEffect(() => {
@@ -2743,6 +2754,7 @@ export function PrevizPrototype() {
               units={units}
               props={items.filter((i) => catalogOf(i.kind).holdable)}
               moveSeconds={rawActive.move?.durationS ?? null}
+              seat={(() => { const p = talent.find((x) => x.id === sel.id); return p && p.pose === "seated" ? seatUnder(items, stackHeights(items), p.x, p.z) : null; })()}
               onChange={(p) => updatePerson(sel.id, p)}
               onDelete={() => removePerson(sel.id)}
             />
@@ -3041,8 +3053,9 @@ function CameraInspector({
   );
 }
 
-function TalentInspector({ t, units, props, moveSeconds, onChange, onDelete }: {
+function TalentInspector({ t, units, props, moveSeconds, seat, onChange, onDelete }: {
   t: TalentSpec; units: Units; props: ItemSpec[]; moveSeconds: number | null;
+  seat: { y: number; name: string } | null;
   onChange: (p: Partial<TalentSpec>) => void; onDelete: () => void;
 }) {
   const walk = t.mark ? Math.hypot(t.mark.x - t.x, t.mark.z - t.z) : 0;
@@ -3082,6 +3095,13 @@ function TalentInspector({ t, units, props, moveSeconds, onChange, onDelete }: {
             <Chip key={p.id} on={t.pose === p.id} onClick={() => onChange({ pose: p.id })}>{p.name}</Chip>
           ))}
         </div>
+        {t.pose === "seated" ? (
+          <p className="mt-2 text-xs text-text-muted">
+            {seat
+              ? `Sitting on the ${seat.name.toLowerCase()}, seat ${dist(seat.y, units)} up.`
+              : `Nothing under them, so they sit on an implied chair (${dist(0.47, units)}). Drag them onto a bed, sofa or chair to sit on it.`}
+          </p>
+        ) : null}
         {t.pose === "holding" && props.length ? (
           <div className="mt-2">
             <p className="mb-1 text-xs text-text-muted">In the right hand</p>
@@ -3146,7 +3166,7 @@ function TalentInspector({ t, units, props, moveSeconds, onChange, onDelete }: {
           </label>
         </div>
       </Field>
-      <p className="text-xs text-text-muted">Drag them on the map to block the scene. On a riser or an apple box they stand on it. No faces, on purpose: these are stand-ins, not likenesses.</p>
+      <p className="text-xs text-text-muted">Drag them on the map to block the scene. On a riser or an apple box they stand on it; seated, they sit on whatever is under them. No faces, on purpose: these are stand-ins, not likenesses.</p>
     </div>
   );
 }

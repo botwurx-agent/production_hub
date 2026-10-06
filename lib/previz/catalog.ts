@@ -215,6 +215,40 @@ export function stackHeights(items: ItemSpec[]): Map<string, number> {
   return out;
 }
 
+/** Lowest top that reads as a seat (a pancake or a plate is not one). */
+const MIN_SEAT = 0.2;
+
+/**
+ * What a seated person at (x, z) sits on: the highest surface under them (a
+ * bed, a sofa, a chair, an apple box), as a world height. Null when nothing
+ * is there, and the caller falls back to an implied chair.
+ */
+export function seatUnder(items: ItemSpec[], heights: Map<string, number>, x: number, z: number): { y: number; id: string; name: string } | null {
+  let best: { y: number; id: string; name: string } | null = null;
+  for (const s of items) {
+    const c = catalogOf(s.kind);
+    if (c.category === "backdrop" || c.hangs || s.kind === "rug") continue;
+    const top = surfaceTop(s);
+    if (top === null || top < MIN_SEAT || !containsPoint(s, x, z, 0.03)) continue;
+    const y = (heights.get(s.id) ?? 0) + top;
+    if (!best || y > best.y) best = { y, id: s.id, name: c.name };
+  }
+  return best;
+}
+
+/** Where a seated person's feet land at (x, z): the floor, or whatever is there. */
+export function groundUnder(items: ItemSpec[], heights: Map<string, number>, x: number, z: number): number {
+  let y = 0;
+  for (const s of items) {
+    const c = catalogOf(s.kind);
+    if (c.category === "backdrop" || c.hangs) continue;
+    const top = surfaceTop(s);
+    if (top === null || !containsPoint(s, x, z, 0.02)) continue;
+    y = Math.max(y, (heights.get(s.id) ?? 0) + top);
+  }
+  return y;
+}
+
 /** The height a person standing at (x, z) is lifted by: a riser or an apple box. */
 export function standHeight(items: ItemSpec[], heights: Map<string, number>, x: number, z: number): number {
   let y = 0;

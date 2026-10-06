@@ -7186,6 +7186,22 @@ reach for it during real prep.
   following, and the timeline reads "Camera locked off" with "Make it a camera
   move", which keeps the length. `requeue` exists because five places reset
   the thumbnail queue wholesale and were dropping the A/B cards.
+- SEATED PEOPLE SIT ON WHAT IS UNDER THEM (2026-10-06, operator: Rob on a bed
+  sank into it, and raising his height did nothing). The seated pose had a
+  FIXED 0.47 m hip, an implied dining chair, so a 1' 10" bed swallowed the
+  hips and the legs ran through the mattress, and height could not help since
+  a seat height is not a function of the person. Now `seatUnder`
+  (lib/previz/catalog.ts) finds the highest surface item under the hip (bed,
+  sofa, chair, apple box; tops under 0.2 m, backdrops, rugs and hanging items
+  do not count) and the hip sits a THIGH'S RADIUS above it, since the joint
+  is the middle of the thigh. `groundUnder` finds what is under the knees, so
+  the shins hang (high stool), angle onto the floor, or lie along the seat
+  (sitting in the middle of a bed). Nothing under them keeps the old implied
+  chair. Both are RUNTIME fields on the placed talent (seatY, footY), never
+  saved. GOTCHA: figures are built from the RAW talent and only repositioned
+  per frame, so a seated figure is rebuilt off `seatKey` whenever its seat
+  changes; without that the placed seat height never reached the mesh. The
+  inspector names the seat ("Sitting on the bed, seat 1' 10" up").
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,
