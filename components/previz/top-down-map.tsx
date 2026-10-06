@@ -75,7 +75,8 @@ export function TopDownMap({
   onMark: (id: string, x: number, z: number) => void;
   onItem: (id: string, x: number, z: number) => void;
   onItemRot: (id: string, rot: number) => void;
-  onCamera: (id: string, x: number, z: number) => void;
+  /** `together`: shift held, so a motion control arm's base moves with the camera. */
+  onCamera: (id: string, x: number, z: number, together?: boolean) => void;
   onAim: (id: string, yaw: number) => void;
   /** Turns a Dana or Fisher track without panning the head. */
   onRigYaw: (id: string, yaw: number) => void;
@@ -192,7 +193,7 @@ export function TopDownMap({
     else if (d.kind === "camera" && d.aim) {
       const s = shots.find((x) => x.id === d.id);
       if (s) onAim(d.id, yawTo(s.pos.x, s.pos.z));
-    } else if (d.kind === "camera") onCamera(d.id, gx, gz);
+    } else if (d.kind === "camera") onCamera(d.id, gx, gz, e.shiftKey);
   };
 
   // Kept inside the stage whatever its size: an offset that would push the

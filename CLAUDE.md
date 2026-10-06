@@ -7233,6 +7233,18 @@ reach for it during real prep.
   distance slider kept inside `robotBaseRange` (what the arm reaches at that
   lens height), and the base is draggable on the map. buildRobot already
   turned the arm to face any base offset, so the 3D needed nothing.
+- THE CAMERA MOVES, THE ARM'S BASE STANDS (2026-10-06, operator: dragging
+  the camera carried the base with it). `robotBase` is stored relative to the
+  camera's start, so any change of position or rig heading moved the base in
+  the world. `keepRobotBase` (inside updateShot and the start stamp) converts
+  the base to world before the change and back after, so the base stays on its
+  spot and only the arm reaches; once the camera goes past `robotBaseRange`
+  the base is pulled along at full reach (a leash), never left stranded.
+  It is skipped whenever the change sets `robotBase` itself (presets, the map's
+  base drag), and SHIFT-DRAG on the map passes the base explicitly, which is
+  how camera and base move together. Verified in Chromium: a drag within reach
+  leaves the base's map position unchanged to the millimetre, shift-drag moves
+  both, a drag past reach trails the base at the limit.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

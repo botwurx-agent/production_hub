@@ -243,6 +243,26 @@ function robotBaseOf(s: Shot): { x: number; z: number } {
  * unless the change sets a new one, so panning the head never turns the
  * track. A move's track heading follows it.
  */
+/**
+ * A motion control arm's base is stored relative to the camera, so moving the
+ * camera would carry the base with it. This keeps the base where it stands on
+ * the floor instead, and only lets it trail along once the camera goes past
+ * what the arm can reach (or folds in closer than it can bend).
+ */
+function keepRobotBase(prev: Shot, next: Shot): Shot {
+  if (next.support !== "robot" || prev.support !== "robot") return next;
+  const py = rigYawOf(prev);
+  const ny = rigYawOf(next);
+  if (prev.pos.x === next.pos.x && prev.pos.z === next.pos.z && py === ny) return next;
+  const b = robotBaseOf(prev);
+  const world = fromLocal({ ...camKey(prev), yaw: py }, b.x, 0, b.z);
+  const l = toLocal({ ...camKey(next), yaw: ny }, world);
+  const range = robotBaseRange(next.pos.y, bodyDrop(next.bodyId));
+  const d = Math.hypot(l.lx, l.lz) || 1;
+  const k = Math.max(range.min, Math.min(range.max, d)) / d;
+  return { ...next, robotBase: { x: l.lx * k, z: l.lz * k } };
+}
+
 function settleRig(prev: Shot, next: Shot): Shot {
   // A support just picked starts square to the lens; after that it stays put.
   const swapped = next.support !== prev.support && next.rigYaw === prev.rigYaw;
@@ -576,7 +596,8 @@ export function PrevizPrototype() {
       if (Object.keys(rest).length) {
         setShots((all) => all.map((s) => {
           if (s.id !== id) return s;
-          const next = settleRig(s, { ...s, ...rest });
+          let next = settleRig(s, { ...s, ...rest });
+          if (!("robotBase" in rest)) next = keepRobotBase(s, next);
           if (next.move) next.move = { ...next.move, end: constrainEnd(next.support, camKey(next), next.move.end, next.move.trackYaw) };
           return next;
         }));
@@ -585,7 +606,8 @@ export function PrevizPrototype() {
       setShots((all) => all.map((s) => {
         if (s.id !== id) return s;
         const p = typeof patch === "function" ? patch(s) : patch;
-        const next = settleRig(s, { ...s, ...p });
+        let next = settleRig(s, { ...s, ...p });
+        if (!("robotBase" in p)) next = keepRobotBase(s, next);
         if (!next.move) return next;
         // Locked off for the action: the end IS the start, so it follows.
         if (!("move" in p) && isLockedOff(camKey(s), s.move)) next.move = { ...next.move, end: camKey(next) };
@@ -2049,7 +2071,7 @@ export function PrevizPrototype() {
     let next: Shot;
     let note: string | null = null;
     if (to === "start") {
-      next = { ...s, ...d, rigYaw: rigYawOf(s) };
+      next = keepRobotBase(s, { ...s, ...d, rigYaw: rigYawOf(s) });
       next.move = { ...s.move, end: constrainEnd(next.support, camKey(next), s.move.end, s.move.trackYaw) };
     } else {
       next = { ...s };
@@ -2692,7 +2714,13 @@ export function PrevizPrototype() {
               if (scene.items.find((i) => i.id === id)?.heldBy) setTalent((all) => all.map((t) => (t.holding === id ? { ...t, holding: null } : t)));
             }}
             onItemRot={(id, rot) => updateItem(id, { rot })}
-            onCamera={(id, x, z) => updateShot(id, (s) => ({ pos: { ...s.pos, x, z } }))}
+            onCamera={(id, x, z, together) => updateShot(id, (s) => {
+              const pos = { ...s.pos, x, z };
+              // Shift-drag carries an arm's base along; a plain drag leaves it standing.
+              if (!together || s.support !== "robot") return { pos };
+              const raw = live.current.shots.find((r) => r.id === id) ?? s;
+              return { pos, robotBase: robotBaseOf(raw) };
+            })}
             onAim={(id, yaw) => updateShot(id, { yaw })}
             onRigYaw={(id, rigYaw) => updateShot(id, { rigYaw })}
             onRobotBase={(id, x, z) => updateShot(id, (s) => {
@@ -2978,7 +3006,7 @@ function RigControls({ shot, units, onChange }: { shot: Shot; units: Units; onCh
         />
       </label>
       <p className="text-xs leading-relaxed text-text-muted">
-        Placed against where the lens points; panning the head afterwards leaves the base where it stands. A base to one side with the arm reaching across gives the most sideways reach. Drag the base on the map to put it anywhere.
+        Placed against where the lens points. After that the base stands where it is: pan the head or drag the camera and only the arm moves, until the camera goes past its reach and the base follows. Drag the base on the map to put it anywhere, or shift-drag the camera to move both. A base to one side with the arm reaching across gives the most sideways reach.
       </p>
       {far ? (
         <p className="flex gap-1.5 rounded-[8px] border border-[var(--h-amber)] bg-[var(--h-amber-bg)] px-2 py-1.5 text-xs leading-relaxed text-text">
