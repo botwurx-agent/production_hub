@@ -21,7 +21,7 @@ import {
 } from "@/lib/previz/optics";
 import { buildFigure, buildRig, buildWorld, dofMaterial, eyeHeight, handWorld, type TalentSpec } from "@/lib/previz/scene-build";
 import { SAMPLE_BOARDS } from "@/lib/previz/boards";
-import { SUPPORTS, bodyDrop, buildSupport, robotBaseLocal, type SupportOpts } from "@/lib/previz/camera-model";
+import { SUPPORTS, bodyDrop, buildSupport, robotBaseLocal, robotBaseRange, type SupportOpts } from "@/lib/previz/camera-model";
 import {
   FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, exposureScale, luxForStop, resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
@@ -35,7 +35,7 @@ import {
 import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, WindowInspector } from "./light-panels";
 import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 import {
-  aim, asSetup, assetKeys, blankSetup, downloadSetup, kitchenSetup, loadSetup, saveSetup, studioSetup,
+  aim, asSetup, assetKeys, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
   type Setup, type Shot, type Units, type Vec3, type WinState,
 } from "./setup";
 import { FRAME_A, FRAME_B, Timeline } from "./timeline";
@@ -217,22 +217,39 @@ function frameOutline(view: Shot, other: Shot, ratio: number, sc: Scene): [numbe
   return out;
 }
 /**
- * How a shot's support is drawn with the camera at `at`: turned to the
- * track's heading, with the track covering the whole move and the robot's
- * base left where it stood at the start.
+ * How a shot's support is drawn with the camera at `at`: turned to its own
+ * heading (never the camera's pan), with the track covering the whole move
+ * and the robot's base left where it stood at the start.
  */
 function supportPose(s: Shot, at: Vec3): { yaw: number; opts: SupportOpts } {
-  if (!s.move) return { yaw: s.yaw, opts: {} };
-  const f = trackFrame(camKey(s), s.move);
+  const yaw = rigYawOf(s);
+  const f = { ...camKey(s), yaw };
   const cur = toLocal(f, at);
-  const ext = trackExtent(s.support, camKey(s), s.move);
-  if (s.support === "dana" && ext) return { yaw: f.yaw, opts: { track: { from: ext.from - cur.lx, to: ext.to - cur.lx } } };
-  if (s.support === "fisher" && ext) return { yaw: f.yaw, opts: { track: { from: ext.from - cur.lz, to: ext.to - cur.lz } } };
+  const ext = trackExtent(s.support, camKey(s), s.move ? { ...s.move, trackYaw: yaw } : null);
+  if (s.support === "dana" && ext) return { yaw, opts: { track: { from: ext.from - cur.lx, to: ext.to - cur.lx } } };
+  if (s.support === "fisher" && ext) return { yaw, opts: { track: { from: ext.from - cur.lz, to: ext.to - cur.lz } } };
   if (s.support === "robot") {
-    const b = robotBaseLocal(s.pos.y, bodyDrop(s.bodyId));
-    return { yaw: f.yaw, opts: { base: { x: b.x - cur.lx, z: b.z - cur.lz } } };
+    const b = robotBaseOf(s);
+    return { yaw, opts: { base: { x: b.x - cur.lx, z: b.z - cur.lz } } };
   }
-  return { yaw: f.yaw, opts: {} };
+  return { yaw, opts: {} };
+}
+/** Where the arm's base stands, rig frame, relative to the camera's start. */
+function robotBaseOf(s: Shot): { x: number; z: number } {
+  return s.robotBase ?? robotBaseLocal(s.pos.y, bodyDrop(s.bodyId));
+}
+/**
+ * After any change to a shot: what the camera is on keeps the heading it had
+ * unless the change sets a new one, so panning the head never turns the
+ * track. A move's track heading follows it.
+ */
+function settleRig(prev: Shot, next: Shot): Shot {
+  // A support just picked starts square to the lens; after that it stays put.
+  const swapped = next.support !== prev.support && next.rigYaw === prev.rigYaw;
+  const rigYaw = swapped ? next.yaw : next.rigYaw ?? rigYawOf(prev);
+  const out = { ...next, rigYaw };
+  if (out.move && out.move.trackYaw !== rigYaw) out.move = { ...out.move, trackYaw: rigYaw };
+  return out;
 }
 
 const WINDOW_CCT: Record<WindowSky, number> = { overcast: 6500, bright: 6000, sun: 5600 };
@@ -559,7 +576,7 @@ export function PrevizPrototype() {
       if (Object.keys(rest).length) {
         setShots((all) => all.map((s) => {
           if (s.id !== id) return s;
-          const next = { ...s, ...rest };
+          const next = settleRig(s, { ...s, ...rest });
           if (next.move) next.move = { ...next.move, end: constrainEnd(next.support, camKey(next), next.move.end, next.move.trackYaw) };
           return next;
         }));
@@ -568,7 +585,7 @@ export function PrevizPrototype() {
       setShots((all) => all.map((s) => {
         if (s.id !== id) return s;
         const p = typeof patch === "function" ? patch(s) : patch;
-        const next = { ...s, ...p };
+        const next = settleRig(s, { ...s, ...p });
         if (!next.move) return next;
         // Locked off for the action: the end IS the start, so it follows.
         if (!("move" in p) && isLockedOff(camKey(s), s.move)) next.move = { ...next.move, end: camKey(next) };
@@ -2032,7 +2049,7 @@ export function PrevizPrototype() {
     let next: Shot;
     let note: string | null = null;
     if (to === "start") {
-      next = { ...s, ...d };
+      next = { ...s, ...d, rigYaw: rigYawOf(s) };
       next.move = { ...s.move, end: constrainEnd(next.support, camKey(next), s.move.end, s.move.trackYaw) };
     } else {
       next = { ...s };
@@ -2070,21 +2087,24 @@ export function PrevizPrototype() {
     const k = camKey(rawActive);
     // A small move the support can actually make, so play shows something
     // straight away: a pan on sticks, a slide on the Dana, a push otherwise.
+    // Along the rig's own heading, which may not be where the head points.
+    const rigYaw = rigYawOf(rawActive);
+    const rf = { ...k, yaw: rigYaw };
     let end: CamKey = { ...k };
     if (rawActive.support === "sticks") end = { ...k, yaw: k.yaw - 15 };
-    else if (rawActive.support === "dana") end = { ...k, pos: fromLocal(k, 0.6, 0, 0) };
-    else end = { ...k, pos: fromLocal(k, 0, 0, -0.6), focusM: Math.max(0.3, k.focusM - 0.6) };
+    else if (rawActive.support === "dana") end = { ...k, pos: fromLocal(rf, 0.6, 0, 0) };
+    else end = { ...k, pos: fromLocal(rf, 0, 0, -0.6), focusM: Math.max(0.3, k.focusM - 0.6) };
     // A shot that was locked off for the action keeps its length.
     const durationS = rawActive.move?.durationS ?? 4;
     clearDraft(rawActive.id);
-    updateShot(rawActive.id, { move: { end, durationS, ease: rawActive.move?.ease ?? "smooth", trackYaw: k.yaw } });
+    updateShot(rawActive.id, { move: { end, durationS, ease: rawActive.move?.ease ?? "smooth", trackYaw: rigYaw }, rigYaw });
     setPlayhead(1);
   };
   /** A timeline with the camera locked off, so the talent's action can play on its own. */
   const addAction = () => {
     const k = camKey(rawActive);
     const longest = Math.max(0, ...walkers.map((w) => Math.hypot(w.mark!.x - w.x, w.mark!.z - w.z)));
-    updateShot(rawActive.id, { move: { end: { ...k }, durationS: Math.max(2, Math.round((longest / 1.2) * 2) / 2 + 1), ease: "smooth", trackYaw: k.yaw } });
+    updateShot(rawActive.id, { move: { end: { ...k }, durationS: Math.max(2, Math.round((longest / 1.2) * 2) / 2 + 1), ease: "smooth", trackYaw: rigYawOf(rawActive) }, rigYaw: rigYawOf(rawActive) });
     setPlayhead(0);
   };
   const removeMove = () => {
@@ -2674,6 +2694,17 @@ export function PrevizPrototype() {
             onItemRot={(id, rot) => updateItem(id, { rot })}
             onCamera={(id, x, z) => updateShot(id, (s) => ({ pos: { ...s.pos, x, z } }))}
             onAim={(id, yaw) => updateShot(id, { yaw })}
+            onRigYaw={(id, rigYaw) => updateShot(id, { rigYaw })}
+            onRobotBase={(id, x, z) => updateShot(id, (s) => {
+              // Into the rig's frame, measured from where the camera starts,
+              // and kept to what the arm can reach at this height.
+              const raw = live.current.shots.find((r) => r.id === id) ?? s;
+              const l = toLocal({ ...camKey(raw), yaw: rigYawOf(raw) }, { x, y: 0, z });
+              const range = robotBaseRange(raw.pos.y, bodyDrop(raw.bodyId));
+              const d = Math.hypot(l.lx, l.lz) || 1;
+              const k = Math.max(range.min, Math.min(range.max, d)) / d;
+              return { robotBase: { x: l.lx * k, z: l.lz * k }, rigYaw: rigYawOf(raw) };
+            })}
             onLight={(id, x, z) => setLights((all) => all.map((l) => (l.id === id ? { ...l, x, z } : l)))}
             onLightAim={(id, yaw) => setLights((all) => all.map((l) => (l.id === id ? { ...l, ...aimOf(l, scene), yaw, aimAt: null } : l)))}
             onGrip={(id, x, z) => setGrips((all) => all.map((g) => (g.id === id ? { ...g, x, z } : g)))}
@@ -2868,6 +2899,97 @@ export function PrevizPrototype() {
 
 // ---------------------------------------------------------------- inspector
 
+/** -180 to 180, the short way round. */
+const wrapDeg = (d: number) => ((((d % 360) + 540) % 360) - 180);
+
+/**
+ * What the camera is on, apart from where the head points: the heading of a
+ * Dana or Fisher track, and where a motion control arm's base stands.
+ */
+function RigControls({ shot, units, onChange }: { shot: Shot; units: Units; onChange: (p: Partial<Shot>) => void }) {
+  if (shot.support === "sticks") return null;
+  const rigYaw = rigYawOf(shot);
+  const off = Math.round(wrapDeg(shot.yaw - rigYaw));
+  if (shot.support === "dana" || shot.support === "fisher") {
+    const what = shot.support === "fisher" ? "Track" : "Rails";
+    return (
+      <div className="mt-3 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-text">{what} heading</p>
+          <button
+            type="button"
+            onClick={() => onChange({ rigYaw: shot.yaw })}
+            disabled={off === 0}
+            className="rounded-[8px] border border-border px-2 py-0.5 text-xs font-semibold text-text-muted hover:border-border-strong hover:text-text disabled:opacity-40"
+          >
+            Square to the lens
+          </button>
+        </div>
+        <input
+          aria-label={`${what} heading, relative to the lens`}
+          type="range" min={-180} max={180} step={1} value={-off}
+          onChange={(e) => onChange({ rigYaw: shot.yaw + Number(e.target.value) })}
+          className="w-full accent-[var(--accent)]"
+        />
+        <p className="text-xs leading-relaxed text-text-muted">
+          {off === 0
+            ? `The head points along the ${what.toLowerCase()}. Pan as much as you like: the ${what.toLowerCase()} stay where they are.`
+            : `The head is panned ${Math.abs(off)}° ${off > 0 ? "left" : "right"} of the ${what.toLowerCase()}. Drag the handle at the end of the ${what.toLowerCase()} on the map to turn them.`}
+        </p>
+      </div>
+    );
+  }
+  // Motion control arm: where the base stands, relative to the camera.
+  const range = robotBaseRange(shot.pos.y, bodyDrop(shot.bodyId));
+  const b = shot.robotBase ?? robotBaseLocal(shot.pos.y, bodyDrop(shot.bodyId));
+  const r = Math.hypot(b.x, b.z);
+  const ang = Math.round((Math.atan2(b.x, b.z) * 180) / Math.PI);
+  // A preset is placed against where the lens points now; the distance
+  // slider keeps the base on its bearing. Either way, panning afterwards
+  // leaves the base where it stands.
+  const place = (deg: number, d0: number, square: boolean) => {
+    const a = rad(deg);
+    const d = Math.max(range.min, Math.min(range.max, d0));
+    onChange({ robotBase: { x: Math.sin(a) * d, z: Math.cos(a) * d }, rigYaw: square ? shot.yaw : rigYaw });
+  };
+  const SPOTS: { deg: number; name: string }[] = [
+    { deg: -90, name: "Left" },
+    { deg: -45, name: "Behind left" },
+    { deg: 0, name: "Behind" },
+    { deg: 45, name: "Behind right" },
+    { deg: 90, name: "Right" },
+  ];
+  const far = r > range.max + 0.02;
+  return (
+    <div className="mt-3 space-y-1.5">
+      <p className="text-xs font-semibold text-text">Base</p>
+      <div className="flex flex-wrap gap-1">
+        {SPOTS.map((p) => (
+          <Chip key={p.deg} on={off === 0 && Math.abs(wrapDeg(ang - p.deg)) < 3} onClick={() => place(p.deg, r, true)}>{p.name}</Chip>
+        ))}
+      </div>
+      <label className="block text-xs text-text-muted">
+        {dist(r, units)} from the camera
+        <input
+          aria-label="Base distance from the camera"
+          type="range" min={range.min} max={range.max} step={0.01} value={Math.min(range.max, Math.max(range.min, r))}
+          onChange={(e) => place(ang, Number(e.target.value), false)}
+          className="mt-1 w-full accent-[var(--accent)]"
+        />
+      </label>
+      <p className="text-xs leading-relaxed text-text-muted">
+        Placed against where the lens points; panning the head afterwards leaves the base where it stands. A base to one side with the arm reaching across gives the most sideways reach. Drag the base on the map to put it anywhere.
+      </p>
+      {far ? (
+        <p className="flex gap-1.5 rounded-[8px] border border-[var(--h-amber)] bg-[var(--h-amber-bg)] px-2 py-1.5 text-xs leading-relaxed text-text">
+          <span aria-hidden className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--h-amber)]" />
+          The base is {dist(r, units)} away; at this height the arm reaches about {dist(range.max, units)}. Move it closer.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function CameraInspector({
   shot, units, focus, focusName, focusTargets, readouts, onChange, onDelete, onBoardFile, exposure,
 }: {
@@ -2946,6 +3068,7 @@ function CameraInspector({
             </p>
           );
         })()}
+        <RigControls shot={shot} units={units} onChange={onChange} />
       </Field>
 
       <Field label={`Lens · ${Math.round(shot.focal)}mm`}>

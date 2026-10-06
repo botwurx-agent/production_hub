@@ -7213,6 +7213,26 @@ reach for it during real prep.
   100%) fades the map but never the title bar or its controls. Both persist in
   localStorage ("previz.mapView"). GOTCHA: a save effect must skip the initial
   default, or it overwrites the stored value before readView lands.
+- THE HEAD PANS, THE RIG STAYS PUT (2026-10-06, operator: a Fisher tracking
+  beside the bed could not pan without the track turning with it, and the
+  arm's base was always straight behind the camera; they run the base on the
+  left with the arm reaching right for more sideways reach). A shot now
+  carries `rigYaw`, the heading of what the camera is on (a Dana's rails, a
+  Fisher's track, an arm's base frame), apart from the camera's own `yaw`.
+  `rigYawOf` falls back to `move.trackYaw` then `yaw`, so older setups read as
+  before. `settleRig` runs inside `updateShot` on every change and FREEZES the
+  heading the shot had, so a pan from the keys, the map, free view or the
+  inspector never turns the rig; picking a different support starts it square
+  to the lens. `move.trackYaw` is kept equal to `rigYaw`, so the move maths
+  (trackFrame, constrainEnd, trackExtent, moveStats) needed no change.
+  Inspector: a heading slider relative to the lens plus "Square to the lens".
+  Map: a turn handle off the front of the active track (snaps to the lens and
+  to the room's right angles within 4 degrees). ARM BASE: `robotBase` in the
+  rig frame relative to the camera's start, with presets Left / Behind left /
+  Behind / Behind right / Right (placed against where the lens points), a
+  distance slider kept inside `robotBaseRange` (what the arm reaches at that
+  lens height), and the base is draggable on the map. buildRobot already
+  turned the arm to face any base offset, so the 3D needed nothing.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

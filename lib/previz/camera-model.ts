@@ -220,6 +220,17 @@ export function robotBaseLocal(lensHeight: number, drop: number): { x: number; z
   return { x: 0, z: robotReach(lensHeight, drop).baseZ };
 }
 
+/**
+ * How far from the camera an arm's base can stand and still reach it at this
+ * height, metres across the floor. Closer than `min` the arm folds on itself.
+ */
+export function robotBaseRange(lensHeight: number, drop: number): { min: number; max: number } {
+  const ty = Math.max(0.12, lensHeight - drop - 0.04);
+  const dy = ty - ROBOT.shoulderY;
+  const maxR = ROBOT.upper + ROBOT.fore - 0.12;
+  return { min: ROBOT.flangeZ + 0.35, max: ROBOT.flangeZ + Math.sqrt(Math.max(0.12, maxR * maxR - dy * dy)) };
+}
+
 const ROBOT = { shoulderY: 0.78, upper: 1.05, fore: 0.95, flangeZ: 0.2 };
 
 /** Where a robot arm's base goes so it can reach the camera without straining. */

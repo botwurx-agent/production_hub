@@ -37,7 +37,25 @@ export type Shot = {
   wb: number;
   /** A camera move: this shot's own values are the start frame. */
   move: Move | null;
+  /**
+   * Which way what the camera is on faces, degrees, same convention as yaw:
+   * the Fisher's track, the Dana's rails, the arm's base. Kept apart from the
+   * camera's own pan so the head can pan freely while the track stays put.
+   * Absent on an older setup, where it followed the camera.
+   */
+  rigYaw?: number;
+  /**
+   * Where a motion control arm's base stands, in the rig's frame relative to
+   * the camera's start position (x toward rig right, z toward rig back).
+   * Absent means the default: straight behind the camera.
+   */
+  robotBase?: { x: number; z: number } | null;
 };
+
+/** The heading of what the camera is on, falling back the way older setups did. */
+export function rigYawOf(s: Pick<Shot, "rigYaw" | "move" | "yaw">): number {
+  return s.rigYaw ?? s.move?.trackYaw ?? s.yaw;
+}
 export type WinState = { sky: WindowSky; nd: number; on: boolean };
 export type Units = "ft" | "m";
 

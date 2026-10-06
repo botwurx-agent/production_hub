@@ -55,7 +55,7 @@ function wallEnds(r: RoomSpec, w: WallId) {
 export function TopDownMap({
   talent, items, shots, rawShots, activeId, aspectRatio, set, winOn, lights, grips, selected,
   supportOf, aimOfLight, effLight,
-  onTalent, onMark, onItem, onItemRot, onCamera, onAim, onLight, onLightAim, onGrip, onGripAim, onPick,
+  onTalent, onMark, onItem, onItemRot, onCamera, onAim, onRigYaw, onRobotBase, onLight, onLightAim, onGrip, onGripAim, onPick,
 }: {
   talent: TalentSpec[];
   items: ItemSpec[];
@@ -77,6 +77,10 @@ export function TopDownMap({
   onItemRot: (id: string, rot: number) => void;
   onCamera: (id: string, x: number, z: number) => void;
   onAim: (id: string, yaw: number) => void;
+  /** Turns a Dana or Fisher track without panning the head. */
+  onRigYaw: (id: string, yaw: number) => void;
+  /** Puts a motion control arm's base at a point on the floor. */
+  onRobotBase: (id: string, x: number, z: number) => void;
   onLight: (id: string, x: number, z: number) => void;
   onLightAim: (id: string, yaw: number) => void;
   onGrip: (id: string, x: number, z: number) => void;
@@ -116,7 +120,7 @@ export function TopDownMap({
     ro.observe(el);
     return () => ro.disconnect();
   }, [mounted]);
-  const drag = useRef<(MapPick & { aim?: boolean; rot?: boolean }) | null>(null);
+  const drag = useRef<(MapPick & { aim?: boolean; rot?: boolean; rig?: boolean; base?: boolean }) | null>(null);
   const grab = useRef({ dx: 0, dz: 0 });
   // The view is held still while something is dragged, so the map does not
   // rescale under the cursor as a thing is pulled toward its edge.
@@ -138,7 +142,7 @@ export function TopDownMap({
     const w = p.matrixTransform(svg.getScreenCTM()!.inverse());
     return { x: Math.max(B.x0 - 2, Math.min(B.x1 + 2, w.x)), z: Math.max(B.z0 - 2, Math.min(B.z1 + 2, w.y)) };
   };
-  const start = (p: MapPick & { aim?: boolean; rot?: boolean }, anchor?: { x: number; z: number }) => (e: React.PointerEvent) => {
+  const start = (p: MapPick & { aim?: boolean; rot?: boolean; rig?: boolean; base?: boolean }, anchor?: { x: number; z: number }) => (e: React.PointerEvent) => {
     e.stopPropagation();
     svgRef.current?.setPointerCapture(e.pointerId);
     frozen.current = live;
@@ -174,7 +178,18 @@ export function TopDownMap({
       const g = grips.find((x) => x.id === d.id);
       if (g && d.aim) onGripAim(d.id, yawTo(g.x, g.z));
       else onGrip(d.id, gx, gz);
-    } else if (d.kind === "camera" && d.aim) {
+    } else if (d.kind === "camera" && d.rig) {
+      const s = shots.find((x) => x.id === d.id);
+      if (s) {
+        // Settles onto the lens, or onto the room's square, when close.
+        let y = yawTo(s.pos.x, s.pos.z);
+        const near = (a: number) => Math.abs(((((y - a) % 360) + 540) % 360) - 180) < 4;
+        if (near(s.yaw)) y = s.yaw;
+        else for (const q of [-180, -90, 0, 90, 180]) if (near(q)) y = q;
+        onRigYaw(d.id, y);
+      }
+    } else if (d.kind === "camera" && d.base) onRobotBase(d.id, gx, gz);
+    else if (d.kind === "camera" && d.aim) {
       const s = shots.find((x) => x.id === d.id);
       if (s) onAim(d.id, yawTo(s.pos.x, s.pos.z));
     } else if (d.kind === "camera") onCamera(d.id, gx, gz);
@@ -461,12 +476,34 @@ export function TopDownMap({
               })
             : [];
           const base = fp.base ? loc(fp.base.x, fp.base.z) : null;
+          // The turn handle sits off the front of the track, so turning it
+          // never means grabbing the camera by mistake.
+          const turn = isA && fp.track
+            ? (fp.track.axis === "z" ? loc(0, fp.track.from - 0.3 * k) : loc(0, -0.6 * k))
+            : null;
           return (
             <g key={s.id} opacity={isA ? 1 : 0.55}>
               {rails.map((r, j) => (
                 <line key={j} x1={r.a.x} y1={r.a.z} x2={r.b.x} y2={r.b.z} stroke="#6f747b" strokeWidth={0.035 * k} strokeLinecap="round" pointerEvents="none" />
               ))}
-              {base && fp.base ? <circle cx={base.x} cy={base.z} r={fp.base.r} fill="#2a2c30" fillOpacity={0.35} stroke="#2a2c30" strokeWidth={0.02 * k} pointerEvents="none" /> : null}
+              {base && fp.base ? (
+                <g className="cursor-move" data-map-robot-base={s.id} onPointerDown={start({ kind: "camera", id: s.id, base: true }, base)}>
+                  <line x1={base.x} y1={base.z} x2={s.pos.x} y2={s.pos.z} stroke="#2a2c30" strokeOpacity={0.5} strokeWidth={0.05 * k} strokeLinecap="round" pointerEvents="none" />
+                  <circle cx={base.x} cy={base.z} r={Math.max(fp.base.r, 0.3 * k)} fill="#2a2c30" fillOpacity={0.35} stroke="#2a2c30" strokeWidth={0.02 * k} />
+                  <text x={base.x} y={base.z + 0.06 * k} textAnchor="middle" fontSize={0.15 * k} fontWeight={800} fill="#fff" pointerEvents="none">ARM</text>
+                </g>
+              ) : null}
+              {turn ? (
+                <g className="cursor-grab" data-map-rig-turn={s.id} onPointerDown={start({ kind: "camera", id: s.id, rig: true })}>
+                  <title>Turn the track. The head keeps its pan.</title>
+                  <line x1={s.pos.x} y1={s.pos.z} x2={turn.x} y2={turn.z} stroke="#6f747b" strokeWidth={0.02 * k} strokeDasharray={`${0.05 * k} ${0.05 * k}`} pointerEvents="none" />
+                  <circle cx={turn.x} cy={turn.z} r={0.13 * k} fill="#fff" stroke="#6f747b" strokeWidth={0.035 * k} />
+                  <path
+                    d={`M${turn.x - 0.06 * k} ${turn.z + 0.02 * k} A ${0.065 * k} ${0.065 * k} 0 1 1 ${turn.x + 0.06 * k} ${turn.z + 0.02 * k}`}
+                    fill="none" stroke="#6f747b" strokeWidth={0.025 * k} pointerEvents="none"
+                  />
+                </g>
+              ) : null}
               {raw.move ? (
                 <g pointerEvents="none">
                   <line x1={raw.pos.x} y1={raw.pos.z} x2={raw.move.end.pos.x} y2={raw.move.end.pos.z} stroke={col} strokeWidth={0.035 * k} strokeDasharray={`${0.08 * k} ${0.06 * k}`} />
