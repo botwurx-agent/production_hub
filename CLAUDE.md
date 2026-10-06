@@ -7245,6 +7245,23 @@ reach for it during real prep.
   how camera and base move together. Verified in Chromium: a drag within reach
   leaves the base's map position unchanged to the millimetre, shift-drag moves
   both, a drag past reach trails the base at the limit.
+- THE ARM IS UNDERSLUNG BY DEFAULT (2026-10-06, operator: the arm meeting
+  the baseplate from below is "overslung", which is not the usual rig).
+  Underslung means the arm's 6th axis comes down onto the TOP of the camera
+  through a small disc spacer, so the camera hangs under the wrist. Shot gained
+  `robotMount?: "under" | "over"` (absent = under) and a Mount chip pair in
+  RigControls. The spacer, tool flange and 6th axis housing are drawn ON THE
+  CAMERA (buildUnderslungMount, added to the rig group in free view), so they
+  pan and tilt with the head the way a real 6th axis does, and the top handle
+  and monitor (now grouped as "tophandle") are hidden, since the mount bolts
+  where they sit. The arm itself stays in the support's frame: supportPose
+  computes the top of the 6th axis (underslungTop, rotated by the head's own
+  pan and tilt, then into the rig frame) and passes it as `opts.wrist`;
+  buildRobot moves its IK plane to that point, turns it toward the base, and
+  ends in a 5th axis knuckle dropping onto the 6th. robotReach,
+  robotBaseRange and robotBaseLocal take the mount, because underslung the arm
+  reaches ABOVE the camera (about 0.37 m over the lens for a mini), which
+  lowers the highest lens it can carry.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

@@ -21,7 +21,7 @@ import {
 } from "@/lib/previz/optics";
 import { buildFigure, buildRig, buildWorld, dofMaterial, eyeHeight, handWorld, type TalentSpec } from "@/lib/previz/scene-build";
 import { SAMPLE_BOARDS } from "@/lib/previz/boards";
-import { SUPPORTS, bodyDrop, buildSupport, robotBaseLocal, robotBaseRange, type SupportOpts } from "@/lib/previz/camera-model";
+import { SUPPORTS, bodyDrop, buildSupport, buildUnderslungMount, underslungTop, robotBaseLocal, robotBaseRange, type RobotMount, type SupportOpts } from "@/lib/previz/camera-model";
 import {
   FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, exposureScale, luxForStop, resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
@@ -221,7 +221,7 @@ function frameOutline(view: Shot, other: Shot, ratio: number, sc: Scene): [numbe
  * heading (never the camera's pan), with the track covering the whole move
  * and the robot's base left where it stood at the start.
  */
-function supportPose(s: Shot, at: Vec3): { yaw: number; opts: SupportOpts } {
+function supportPose(s: Shot, at: Vec3, head?: { yaw: number; pitch: number }): { yaw: number; opts: SupportOpts } {
   const yaw = rigYawOf(s);
   const f = { ...camKey(s), yaw };
   const cur = toLocal(f, at);
@@ -230,13 +230,26 @@ function supportPose(s: Shot, at: Vec3): { yaw: number; opts: SupportOpts } {
   if (s.support === "fisher" && ext) return { yaw, opts: { track: { from: ext.from - cur.lz, to: ext.to - cur.lz } } };
   if (s.support === "robot") {
     const b = robotBaseOf(s);
-    return { yaw, opts: { base: { x: b.x - cur.lx, z: b.z - cur.lz } } };
+    const mount = mountOf(s);
+    const base = { x: b.x - cur.lx, z: b.z - cur.lz };
+    if (mount === "over") return { yaw, opts: { base, mount } };
+    // Underslung: the top of the 6th axis, which pans and tilts with the head,
+    // brought into the support's frame so the arm can reach down onto it.
+    const h = head ?? { yaw: s.yaw, pitch: s.pitch };
+    const top = underslungTop(s.bodyId);
+    top.applyEuler(new THREE.Euler(rad(h.pitch), rad(h.yaw), 0, "YXZ"));
+    top.applyAxisAngle(UP, -rad(yaw));
+    return { yaw, opts: { base, mount, wrist: { x: top.x, y: top.y + at.y, z: top.z } } };
   }
   return { yaw, opts: {} };
 }
 /** Where the arm's base stands, rig frame, relative to the camera's start. */
 function robotBaseOf(s: Shot): { x: number; z: number } {
-  return s.robotBase ?? robotBaseLocal(s.pos.y, bodyDrop(s.bodyId));
+  return s.robotBase ?? robotBaseLocal(s.pos.y, bodyDrop(s.bodyId), mountOf(s));
+}
+/** How the arm holds the camera: underslung unless the shot says otherwise. */
+function mountOf(s: Pick<Shot, "robotMount">): RobotMount {
+  return s.robotMount ?? "under";
 }
 /**
  * After any change to a shot: what the camera is on keeps the heading it had
@@ -257,7 +270,7 @@ function keepRobotBase(prev: Shot, next: Shot): Shot {
   const b = robotBaseOf(prev);
   const world = fromLocal({ ...camKey(prev), yaw: py }, b.x, 0, b.z);
   const l = toLocal({ ...camKey(next), yaw: ny }, world);
-  const range = robotBaseRange(next.pos.y, bodyDrop(next.bodyId));
+  const range = robotBaseRange(next.pos.y, bodyDrop(next.bodyId), mountOf(next));
   const d = Math.hypot(l.lx, l.lz) || 1;
   const k = Math.max(range.min, Math.min(range.max, d)) / d;
   return { ...next, robotBase: { x: l.lx * k, z: l.lz * k } };
@@ -1286,10 +1299,17 @@ export function PrevizPrototype() {
     unit.name = `unit:${s.id}`;
     unit.userData.pick = { kind: "camera", id: s.id };
     unit.position.set(at.pos.x, 0, at.pos.z);
-    const sp = supportPose(s, at.pos);
+    const sp = supportPose(s, at.pos, { yaw: at.yaw, pitch: at.pitch });
     const legs = buildSupport(s.support, at.pos.y, bodyDrop(s.bodyId), sp.opts);
     const bar = rig.getObjectByName("panbar");
     if (bar) bar.visible = s.support !== "robot";
+    if (s.support === "robot" && sp.opts.mount !== "over") {
+      // Underslung: the top handle comes off and the spacer and 6th axis sit
+      // on the camera's top plate, panning and tilting with it.
+      const handle = rig.getObjectByName("tophandle");
+      if (handle) handle.visible = false;
+      rig.add(buildUnderslungMount(s.bodyId).group);
+    }
     legs.rotation.y = rad(sp.yaw);
     legs.traverse((o) => (o.userData.noOcclude = true));
     unit.add(legs);
@@ -2728,7 +2748,7 @@ export function PrevizPrototype() {
               // and kept to what the arm can reach at this height.
               const raw = live.current.shots.find((r) => r.id === id) ?? s;
               const l = toLocal({ ...camKey(raw), yaw: rigYawOf(raw) }, { x, y: 0, z });
-              const range = robotBaseRange(raw.pos.y, bodyDrop(raw.bodyId));
+              const range = robotBaseRange(raw.pos.y, bodyDrop(raw.bodyId), mountOf(raw));
               const d = Math.hypot(l.lx, l.lz) || 1;
               const k = Math.max(range.min, Math.min(range.max, d)) / d;
               return { robotBase: { x: l.lx * k, z: l.lz * k }, rigYaw: rigYawOf(raw) };
@@ -2968,8 +2988,8 @@ function RigControls({ shot, units, onChange }: { shot: Shot; units: Units; onCh
     );
   }
   // Motion control arm: where the base stands, relative to the camera.
-  const range = robotBaseRange(shot.pos.y, bodyDrop(shot.bodyId));
-  const b = shot.robotBase ?? robotBaseLocal(shot.pos.y, bodyDrop(shot.bodyId));
+  const range = robotBaseRange(shot.pos.y, bodyDrop(shot.bodyId), mountOf(shot));
+  const b = robotBaseOf(shot);
   const r = Math.hypot(b.x, b.z);
   const ang = Math.round((Math.atan2(b.x, b.z) * 180) / Math.PI);
   // A preset is placed against where the lens points now; the distance
@@ -2990,7 +3010,17 @@ function RigControls({ shot, units, onChange }: { shot: Shot; units: Units; onCh
   const far = r > range.max + 0.02;
   return (
     <div className="mt-3 space-y-1.5">
-      <p className="text-xs font-semibold text-text">Base</p>
+      <p className="text-xs font-semibold text-text">Mount</p>
+      <div className="flex flex-wrap gap-1">
+        <Chip on={mountOf(shot) === "under"} onClick={() => onChange({ robotMount: "under" })}>Underslung</Chip>
+        <Chip on={mountOf(shot) === "over"} onClick={() => onChange({ robotMount: "over" })}>Overslung</Chip>
+      </div>
+      <p className="text-xs leading-relaxed text-text-muted">
+        {mountOf(shot) === "under"
+          ? "The arm's 6th axis comes down onto the top of the camera through a disc spacer, so the camera hangs under the wrist. The usual way."
+          : "The arm meets the camera's baseplate from below. Not the usual way; use it when the top of the camera has to stay clear."}
+      </p>
+      <p className="pt-1 text-xs font-semibold text-text">Base</p>
       <div className="flex flex-wrap gap-1">
         {SPOTS.map((p) => (
           <Chip key={p.deg} on={off === 0 && Math.abs(wrapDeg(ang - p.deg)) < 3} onClick={() => place(p.deg, r, true)}>{p.name}</Chip>

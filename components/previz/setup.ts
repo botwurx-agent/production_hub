@@ -50,6 +50,12 @@ export type Shot = {
    * Absent means the default: straight behind the camera.
    */
   robotBase?: { x: number; z: number } | null;
+  /**
+   * How a motion control arm holds the camera: "under" (underslung, the arm's
+   * 6th axis on the camera's top through a disc spacer, the normal way) or
+   * "over" (overslung, onto the baseplate). Absent means underslung.
+   */
+  robotMount?: "under" | "over";
 };
 
 /** The heading of what the camera is on, falling back the way older setups did. */

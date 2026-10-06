@@ -48,6 +48,44 @@ export function bodyDrop(bodyId: string): number {
 }
 
 /**
+ * How a motion control arm holds the camera. UNDERSLUNG is the normal way: the
+ * arm's 6th axis comes down onto the TOP of the camera through a small disc
+ * spacer, so the camera hangs under the wrist. OVERSLUNG has the arm meeting
+ * the baseplate from below, and is the exception.
+ */
+export type RobotMount = "under" | "over";
+
+/** Spacer disc and 6th axis flange heights, metres, stacked on the camera's top. */
+const MOUNT = { spacer: 0.022, flange: 0.05, housing: 0.12 };
+
+/**
+ * The spacer and the arm's 6th axis, drawn in the CAMERA's own frame (lens
+ * mount at the origin, lens down -Z), so they tilt and pan with the head the
+ * way a real 6th axis does. `top` is the point the arm's wrist reaches.
+ */
+export function underslungTop(bodyId: string): THREE.Vector3 {
+  const s = SPECS[bodyId] ?? SPECS.alexamini;
+  return new THREE.Vector3(0, s.h / 2 + MOUNT.spacer + MOUNT.flange + MOUNT.housing, s.d * 0.45);
+}
+export function buildUnderslungMount(bodyId: string): { group: THREE.Group; top: THREE.Vector3 } {
+  const s = SPECS[bodyId] ?? SPECS.alexamini;
+  const g = new THREE.Group();
+  g.name = "underslung";
+  const z = s.d * 0.45;
+  let y = s.h / 2;
+  // The disc spacer: thin, a little wider than the flange, bare aluminium.
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, MOUNT.spacer, 28), m("#b8bdc4", 0.3, 0.85)), 0, y + MOUNT.spacer / 2, z));
+  y += MOUNT.spacer;
+  // The tool flange with its orange ring, then the 6th axis housing.
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, MOUNT.flange, 24), m("#c9cdd3", 0.35, 0.7)), 0, y + MOUNT.flange / 2, z));
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.012, 24), m("#e0662a", 0.5, 0.2)), 0, y + MOUNT.flange - 0.006, z));
+  y += MOUNT.flange;
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.06, MOUNT.housing, 24), m("#1d1f23", 0.4, 0.5)), 0, y + MOUNT.housing / 2, z));
+  y += MOUNT.housing;
+  return { group: g, top: underslungTop(bodyId) };
+}
+
+/**
  * The camera, built out the way it would be on that job: cinema bodies get a
  * matte box, follow focus, top handle, monitor and a V-mount; compact bodies
  * a grip and a top handle; the Pocket is a hand-held body with a photo lens.
@@ -143,16 +181,20 @@ export function buildCameraBody(bodyId: string, focalMm: number): THREE.Group {
     g.add(ffKnob);
     // V-mount battery on the back.
     g.add(box(s.w * 0.85, s.h * 0.8, 0.05, m("#202124", 0.6, 0.2), 0, -0.005, s.d + 0.04));
-    // Top handle, and the 7" monitor out on an arm.
+    // Top handle, and the 7" monitor out on an arm. Grouped so an underslung
+    // arm can take them off: the arm bolts to the top plate where they sit.
+    const top = new THREE.Group();
+    top.name = "tophandle";
+    g.add(top);
     const handleY = s.h / 2 + 0.035;
-    g.add(box(0.025, 0.012, s.d * 1.1, black, 0, handleY, s.d * 0.4));
-    for (const z of [0.02, s.d * 0.85]) g.add(box(0.02, 0.035, 0.015, black, 0, s.h / 2 + 0.016, z));
+    top.add(box(0.025, 0.012, s.d * 1.1, black, 0, handleY, s.d * 0.4));
+    for (const z of [0.02, s.d * 0.85]) top.add(box(0.02, 0.035, 0.015, black, 0, s.h / 2 + 0.016, z));
     const mon = new THREE.Group();
     mon.add(box(0.17, 0.105, 0.025, black));
     mon.add(box(0.15, 0.088, 0.002, m("#101820", 0.1, 0.3), 0, 0, 0.014));
     mon.position.set(-s.w / 2 - 0.08, handleY + 0.06, s.d * 0.55);
     mon.rotation.y = -0.6;
-    g.add(mon);
+    top.add(mon);
     // The articulating arm from the handle to the monitor.
     const armA = new THREE.Vector3(-0.01, handleY + 0.005, s.d * 0.55);
     const armB = new THREE.Vector3(-s.w / 2 - 0.06, handleY + 0.03, s.d * 0.58);
@@ -160,7 +202,7 @@ export function buildCameraBody(bodyId: string, focalMm: number): THREE.Group {
     arm.position.copy(armA.clone().add(armB).multiplyScalar(0.5));
     arm.lookAt(armB);
     arm.rotateX(Math.PI / 2);
-    g.add(arm);
+    top.add(arm);
     // An eyepiece for the ARRIs.
     if (s.family === "arri") {
       const eye = cylZ(0.02, 0.06, rubber, s.d * 0.9);
@@ -170,7 +212,10 @@ export function buildCameraBody(bodyId: string, focalMm: number): THREE.Group {
     }
   } else if (s.family === "compact") {
     // Top handle with its mic holder, and the flip-out screen.
-    g.add(box(0.025, 0.02, s.d * 0.9, black, 0, s.h / 2 + 0.03, s.d * 0.45));
+    const top = new THREE.Group();
+    top.name = "tophandle";
+    top.add(box(0.025, 0.02, s.d * 0.9, black, 0, s.h / 2 + 0.03, s.d * 0.45));
+    g.add(top);
     g.add(box(0.008, 0.06, 0.09, black, -s.w / 2 - 0.006, 0.01, s.d * 0.35));
   } else {
     // Pocket: the big rear screen.
@@ -204,43 +249,62 @@ export const SUPPORTS: { id: SupportKind; name: string; note: string; lens: [num
  * to where the camera is NOW. Left out, a support is drawn for a camera that
  * is not moving.
  */
-export type SupportOpts = { track?: { from: number; to: number }; base?: { x: number; z: number } };
+export type SupportOpts = {
+  track?: { from: number; to: number };
+  base?: { x: number; z: number };
+  /** How the arm holds the camera; underslung when left out. */
+  mount?: RobotMount;
+  /** Underslung: the top of the 6th axis, in the support's frame (floor at y 0). */
+  wrist?: { x: number; y: number; z: number };
+};
 
 /** Where the support's footprint sits, in the camera's own frame (lens looks -Z). */
 export function supportFootprint(kind: SupportKind, lensHeight: number, drop: number, opts: SupportOpts = {}):
   { track?: { axis: "x" | "z"; from: number; to: number; gauge: number }; base?: { x: number; z: number; r: number } } {
   if (kind === "dana") return { track: { axis: "x", from: opts.track?.from ?? -1.22, to: opts.track?.to ?? 1.22, gauge: 0.25 } };
   if (kind === "fisher") return { track: { axis: "z", from: opts.track?.from ?? -1.4, to: opts.track?.to ?? 2.26, gauge: 0.62 } };
-  if (kind === "robot") return { base: { x: opts.base?.x ?? 0, z: opts.base?.z ?? robotReach(lensHeight, drop).baseZ, r: 0.3 } };
+  if (kind === "robot") return { base: { x: opts.base?.x ?? 0, z: opts.base?.z ?? robotReach(lensHeight, drop, opts.mount).baseZ, r: 0.3 } };
   return {};
 }
 
 /** Where the robot's base goes for a camera at this height, in the camera's frame. */
-export function robotBaseLocal(lensHeight: number, drop: number): { x: number; z: number } {
-  return { x: 0, z: robotReach(lensHeight, drop).baseZ };
+export function robotBaseLocal(lensHeight: number, drop: number, mount: RobotMount = "under"): { x: number; z: number } {
+  return { x: 0, z: robotReach(lensHeight, drop, mount).baseZ };
+}
+
+/**
+ * How high the arm has to reach for a camera at this lens height: above the
+ * camera's top (through the spacer and the 6th axis) when underslung, just
+ * under its baseplate when overslung.
+ */
+function robotTargetY(lensHeight: number, drop: number, mount: RobotMount = "under"): number {
+  if (mount === "over") return Math.max(0.12, lensHeight - drop - 0.04);
+  const top = drop - 0.03; // drop is half the body plus the baseplate
+  return lensHeight + top + MOUNT.spacer + MOUNT.flange + MOUNT.housing + 0.09;
 }
 
 /**
  * How far from the camera an arm's base can stand and still reach it at this
  * height, metres across the floor. Closer than `min` the arm folds on itself.
  */
-export function robotBaseRange(lensHeight: number, drop: number): { min: number; max: number } {
-  const ty = Math.max(0.12, lensHeight - drop - 0.04);
+export function robotBaseRange(lensHeight: number, drop: number, mount: RobotMount = "under"): { min: number; max: number } {
+  const ty = robotTargetY(lensHeight, drop, mount);
   const dy = ty - ROBOT.shoulderY;
   const maxR = ROBOT.upper + ROBOT.fore - 0.12;
-  return { min: ROBOT.flangeZ + 0.35, max: ROBOT.flangeZ + Math.sqrt(Math.max(0.12, maxR * maxR - dy * dy)) };
+  const off = mount === "over" ? ROBOT.flangeZ : 0;
+  return { min: off + 0.35, max: off + Math.sqrt(Math.max(0.12, maxR * maxR - dy * dy)) };
 }
 
 const ROBOT = { shoulderY: 0.78, upper: 1.05, fore: 0.95, flangeZ: 0.2 };
 
 /** Where a robot arm's base goes so it can reach the camera without straining. */
-function robotReach(lensHeight: number, drop: number) {
-  const ty = Math.max(0.12, lensHeight - drop - 0.04);
+function robotReach(lensHeight: number, drop: number, mount: RobotMount = "under") {
+  const ty = robotTargetY(lensHeight, drop, mount);
   const dy = ty - ROBOT.shoulderY;
   const maxR = ROBOT.upper + ROBOT.fore - 0.12;
   // About 1.1 m behind the camera, closer in when the lens is very high or low.
   const D = Math.max(0.35, Math.min(1.1, Math.sqrt(Math.max(0.12, maxR * maxR - dy * dy))));
-  return { baseZ: ROBOT.flangeZ + D, ty };
+  return { baseZ: (mount === "over" ? ROBOT.flangeZ : 0) + D, ty };
 }
 
 /** A beam or tube from a to b. */
@@ -368,7 +432,12 @@ function buildFisher(lensHeight: number, drop: number, opts: SupportOpts): THREE
   return g;
 }
 
-/** A Bolt-style motion control arm on a floor base, reaching in from behind. */
+/**
+ * A Bolt-style motion control arm on a floor base. Underslung (the default)
+ * the arm reaches over and comes down onto the top of the camera, whose 6th
+ * axis and spacer are drawn on the camera itself; overslung it meets the
+ * baseplate from below.
+ */
 function buildRobot(lensHeight: number, drop: number, opts: SupportOpts): THREE.Group {
   const outer = new THREE.Group();
   const g = new THREE.Group();
@@ -376,20 +445,25 @@ function buildRobot(lensHeight: number, drop: number, opts: SupportOpts): THREE.
   const body = m("#1d1f23", 0.4, 0.5);
   const joint = m("#c9cdd3", 0.35, 0.7);
   const accent = m("#e0662a", 0.5, 0.2);
-  const reachAt = robotReach(lensHeight, drop);
-  const ty = reachAt.ty;
+  const under = opts.mount !== "over";
+  const reachAt = robotReach(lensHeight, drop, opts.mount);
+  // Underslung, the arm works in the plane through the wrist above the
+  // camera, which moves with the head; overslung, through the camera itself.
+  const wrist = under ? opts.wrist ?? { x: 0, y: reachAt.ty - 0.09, z: 0 } : null;
+  if (wrist) g.position.set(wrist.x, 0, wrist.z);
+  const rel = opts.base && wrist ? { x: opts.base.x - wrist.x, z: opts.base.z - wrist.z } : opts.base;
   // A base left where it stood while the camera moves: build the arm along +Z
   // to that distance, then turn the whole arm to face the base.
-  const baseZ = opts.base ? Math.max(0.3, Math.hypot(opts.base.x, opts.base.z)) : reachAt.baseZ;
-  if (opts.base) g.rotation.y = Math.atan2(opts.base.x, opts.base.z);
+  const baseZ = rel ? Math.max(0.3, Math.hypot(rel.x, rel.z)) : reachAt.baseZ;
+  if (rel) g.rotation.y = Math.atan2(rel.x, rel.z);
   // Base plate and turret.
   g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.36, 0.06, 28), body), 0, 0.03, baseZ));
   g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.4, 28), body), 0, 0.26, baseZ));
   g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.225, 0.03, 28), accent), 0, 0.47, baseZ));
   g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.26, 24), body), 0, 0.62, baseZ));
-  // Two-link IK in the vertical plane through the camera: shoulder to flange.
+  // Two-link IK in the vertical plane: shoulder to the wrist joint.
   const S = new THREE.Vector3(0, ROBOT.shoulderY, baseZ);
-  const T = new THREE.Vector3(0, ty, ROBOT.flangeZ);
+  const T = wrist ? new THREE.Vector3(0, wrist.y + 0.09, 0) : new THREE.Vector3(0, reachAt.ty, ROBOT.flangeZ);
   const d = Math.min(S.distanceTo(T), ROBOT.upper + ROBOT.fore - 0.02);
   const dir = T.clone().sub(S).normalize();
   const reach = S.clone().add(dir.clone().multiplyScalar(d));
@@ -399,7 +473,7 @@ function buildRobot(lensHeight: number, drop: number, opts: SupportOpts): THREE.
   const e1 = new THREE.Vector3(0, S.y + Math.sin(a + b) * ROBOT.upper, S.z + Math.cos(a + b) * ROBOT.upper);
   const e2 = new THREE.Vector3(0, S.y + Math.sin(a - b) * ROBOT.upper, S.z + Math.cos(a - b) * ROBOT.upper);
   const E = e1.y > e2.y ? e1 : e2; // elbow up, out of the frame
-  // Shoulder and elbow joints, the two links, and the wrist at the flange.
+  // Shoulder and elbow joints, the two links, and the wrist.
   for (const [p, r] of [[S, 0.17], [E, 0.13]] as const) {
     const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.3, 24), joint);
     c.rotation.z = Math.PI / 2;
@@ -408,8 +482,17 @@ function buildRobot(lensHeight: number, drop: number, opts: SupportOpts): THREE.
   }
   g.add(segment(S, E, 0.12, body, false));
   g.add(segment(E, reach, 0.095, body, false));
+  if (wrist) {
+    // The 5th axis knuckle over the camera, and its short drop onto the 6th.
+    const w5 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.2, 22), joint);
+    w5.rotation.z = Math.PI / 2;
+    w5.position.copy(reach);
+    g.add(w5);
+    g.add(segment(reach, new THREE.Vector3(0, wrist.y + 0.005, 0), 0.06, body));
+    return outer;
+  }
   g.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.09, 18, 12), joint), reach.x, reach.y, reach.z));
-  // Wrist plate up to the camera's baseplate.
+  // Overslung: the wrist plate up to the camera's baseplate.
   const plateY = lensHeight - drop - 0.06;
   g.add(segment(reach, new THREE.Vector3(0, plateY, ROBOT.flangeZ - 0.05), 0.045, body));
   g.add(box(0.16, 0.03, 0.26, joint, 0, plateY, 0.1));
