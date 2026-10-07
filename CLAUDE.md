@@ -7360,8 +7360,8 @@ reach for it during real prep.
   empty room, seamless and a kitchen, and they wanted the two rooms most
   domestic commercials are shot in). `bathroomSetup()` is about 10 x 10 ft on
   tile (vanity and mirror on the back wall, a tub under a frosted window, a
-  shower and toilet on the right, one person holding a jar at the mirror, a
-  softbox key plus a top light); `bedroomSetup()` is 15 x 16 ft (queen bed
+  shower and toilet on the right, one person turned from the mirror holding a jar, a
+  softbox key plus a back light); `bedroomSetup()` is 15 x 16 ft (queen bed
   between two nightstands whose lamps are lit practicals, dresser and mirror on
   the right wall, armchair, a window key, one person sitting on the foot of the
   bed, which seatUnder resolves to the mattress on its own). Both are ordinary

@@ -221,16 +221,16 @@ export function bathroomSetup(): Setup {
     ],
     shots: [
       shot("a", "1A", "Wide", "sticks", 18, 4, 0, { x: 0.1, y: 1.5, z: 1.9 }, { x: 0, y: 1.1, z: -1.0 }, "nia", 2.4, null, 800),
-      shot("b", "1B", "At the mirror", "sticks", 35, 2.8, 0, { x: 1.0, y: 1.45, z: 0.6 }, { x: 0.15, y: 1.45, z: -0.7 }, "nia", 1.5, null, 800),
-      shot("c", "1C", "Product in hand", "sticks", 85, 2.8, 0, { x: -0.35, y: 1.2, z: 0.75 }, { x: 0.2, y: 1.15, z: -0.45 }, "jar", 1.35, null, 800),
+      shot("b", "1B", "Medium at the vanity", "sticks", 40, 2.8, 0, { x: 0.35, y: 1.5, z: 1.15 }, { x: 0.2, y: 1.4, z: -0.55 }, "nia", 1.7, null, 800),
+      shot("c", "1C", "Product in hand", "sticks", 85, 2.8, 0, { x: 0.25, y: 1.28, z: 1.0 }, { x: 0.12, y: 1.22, z: -0.24 }, "jar", 1.25, null, 800),
     ],
     activeId: "b",
     talent: [
-      { id: "nia", name: "Nia", heightM: 1.68, pose: "holding", x: 0.2, z: -0.55, facing: 170, top: "#e8e1d4", bottom: "#c8b9a6", holding: "jar" },
+      { id: "nia", name: "Nia", heightM: 1.68, pose: "holding", x: 0.2, z: -0.55, facing: 10, top: "#e8e1d4", bottom: "#c8b9a6", holding: "jar" },
     ],
     lights: [
-      { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "softbox", beamDeg: null, dimmer: 0.4, cct: 5600, x: 0.9, y: 2.2, z: 1.2, yaw: 0, pitch: 0, aimAt: "nia", frame: null, on: true },
-      { id: "top", role: "Top light", fixtureId: "s30", modifierId: "diffuser", beamDeg: null, dimmer: 0.5, cct: 4300, x: -0.1, y: 2.45, z: -0.6, yaw: 0, pitch: 0, aimAt: "nia", frame: null, on: true },
+      { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "softbox", beamDeg: null, dimmer: 0.3, cct: 5600, x: 1.2, y: 2.0, z: 0.55, yaw: 0, pitch: 0, aimAt: "nia", frame: null, on: true },
+      { id: "back", role: "Back light", fixtureId: "s30", modifierId: "diffuser", beamDeg: null, dimmer: 0.35, cct: 4300, x: -0.65, y: 2.3, z: -1.25, yaw: 0, pitch: 0, aimAt: "nia", frame: null, on: true },
     ],
     grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: -0.9, y: 1.2, z: 0.9, yaw: 0, pitch: 0, aimAt: "nia" }],
     win: { sky: "bright", nd: 0, on: true },

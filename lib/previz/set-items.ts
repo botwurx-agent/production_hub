@@ -426,7 +426,9 @@ export function buildItem(s: ItemSpec, art: LabelArt | null, model: THREE.Object
   } else if (k === "mirror") {
     // A thin frame round a reflective face, hung by its bottom edge.
     g.add(bx(w, h, d, mat("#2e2e2e", 0.5), 0, h / 2, 0));
-    g.add(bx(w - 0.04, h - 0.04, 0.004, mat(s.color, 0.04, 1), 0, h / 2, d / 2 + 0.002));
+    // Not metallic: with nothing to reflect, a true mirror material renders
+    // black. A pale, glossy face reads as glass from any angle.
+    g.add(bx(w - 0.04, h - 0.04, 0.004, mat(s.color, 0.12, 0.25), 0, h / 2, d / 2 + 0.002));
   } else if (k === "towel-rail") {
     const chrome = mat("#d6dade", 0.15, 1);
     const barY = h * 0.92;
