@@ -44,6 +44,7 @@ import {
   camAt, constrainEnd, ease, fromLocal, isLockedOff, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
 } from "@/lib/previz/camera-move";
 import { POSES } from "@/lib/previz/poses";
+import { ControlPads, type PadSpec } from "./move-pad";
 import { CLAMP_DROP, POLECAT_MAX, hangOn, isRig, rigHeight, wallToWall, type RigKind } from "@/lib/previz/rigging";
 import { HOUSE_LEVEL, buildHouseView, frameBox, gridSpacing, syncMarkers, type Marker } from "@/lib/previz/house-view";
 import {
@@ -1729,6 +1730,85 @@ export function PrevizPrototype() {
       if (patch.aimAt === null && g.aimAt) Object.assign(next, aimOf(g, scene));
       return next;
     }));
+  // ----- Controller pads (components/previz/move-pad.tsx). Each act is handed
+  // seconds at the chosen speed; these are the rates per second at Normal.
+  const PAD_M = 0.4; // metres a second
+  const PAD_DEG = 15; // degrees a second
+  const PAD_ZOOM = 0.6; // focal length grows by e^0.6 a second
+  const camPads = (id: string): PadSpec[] => {
+    const mv = (fn: (s: Shot) => Partial<Shot>) => updateShot(id, fn);
+    const slide = (t: number, side: number, fwd: number) => mv((s) => {
+      const y = rad(s.yaw);
+      const m = PAD_M * t;
+      return { pos: { x: s.pos.x + (Math.cos(y) * side - Math.sin(y) * fwd) * m, y: s.pos.y, z: s.pos.z + (-Math.sin(y) * side - Math.cos(y) * fwd) * m } };
+    });
+    const boom = (t: number) => mv((s) => ({ pos: { ...s.pos, y: Math.max(0.1, Math.min(6, s.pos.y + PAD_M * t)) } }));
+    return [
+      {
+        title: "Move",
+        up: { label: "Boom up", act: (t) => boom(t) },
+        down: { label: "Boom down", act: (t) => boom(-t) },
+        left: { label: "Truck left", act: (t) => slide(t, -1, 0) },
+        right: { label: "Truck right", act: (t) => slide(t, 1, 0) },
+        outerUp: { label: "Push in", act: (t) => slide(t, 0, 1) },
+        outerDown: { label: "Pull out", act: (t) => slide(t, 0, -1) },
+      },
+      {
+        title: "Aim",
+        up: { label: "Tilt up", act: (t) => mv((s) => ({ pitch: Math.min(80, s.pitch + PAD_DEG * t) })) },
+        down: { label: "Tilt down", act: (t) => mv((s) => ({ pitch: Math.max(-89, s.pitch - PAD_DEG * t) })) },
+        left: { label: "Pan left", act: (t) => mv((s) => ({ yaw: s.yaw + PAD_DEG * t })) },
+        right: { label: "Pan right", act: (t) => mv((s) => ({ yaw: s.yaw - PAD_DEG * t })) },
+        outerUp: { label: "Zoom in (longer lens)", act: (t) => mv((s) => ({ focal: Math.min(200, s.focal * Math.exp(PAD_ZOOM * t)) })) },
+        outerDown: { label: "Zoom out (wider lens)", act: (t) => mv((s) => ({ focal: Math.max(12, s.focal * Math.exp(-PAD_ZOOM * t)) })) },
+      },
+    ];
+  };
+  /**
+   * Pads for a light or a board, moved as if standing behind it: in is toward
+   * where it points, left and right are its own. Turning the head lets go of a
+   * target, starting from where it was pointing, the same rule as the
+   * inspector's "By hand".
+   */
+  const fixturePads = (kind: "light" | "grip", id: string): PadSpec[] => {
+    type P = LightSpec | GripSpec;
+    const apply = (fn: (p: P, a: { yaw: number; pitch: number }) => Partial<P>) => {
+      const sc = live3d.current.scene;
+      const step = <T extends P>(p: T): T => {
+        const a = aimOf(p, sc);
+        return { ...p, ...fn(p, a) } as T;
+      };
+      if (kind === "light") setLights((all) => all.map((l) => (l.id === id ? snapHung(step(l), live.current.items) : l)));
+      else setGrips((all) => all.map((g) => (g.id === id ? step(g) : g)));
+    };
+    const slide = (t: number, side: number, fwd: number) => apply((p, a) => {
+      const y = rad(a.yaw);
+      const m = PAD_M * t;
+      return { x: p.x + (Math.cos(y) * side - Math.sin(y) * fwd) * m, z: p.z + (-Math.sin(y) * side - Math.cos(y) * fwd) * m };
+    });
+    const raise = (t: number) => apply((p) => ({ y: Math.max(0.15, Math.min(8, p.y + PAD_M * t)) }));
+    const turn = (dYaw: number, dPitch: number) => apply((_p, a) => ({
+      aimAt: null, yaw: a.yaw + dYaw, pitch: Math.max(-89, Math.min(89, a.pitch + dPitch)),
+    }));
+    return [
+      {
+        title: "Move",
+        up: { label: kind === "light" ? "Raise the light" : "Raise the board", act: (t) => raise(t) },
+        down: { label: kind === "light" ? "Lower the light" : "Lower the board", act: (t) => raise(-t) },
+        left: { label: "Slide left", act: (t) => slide(t, -1, 0) },
+        right: { label: "Slide right", act: (t) => slide(t, 1, 0) },
+        outerUp: { label: "Bring it in", act: (t) => slide(t, 0, 1) },
+        outerDown: { label: "Back it off", act: (t) => slide(t, 0, -1) },
+      },
+      {
+        title: "Aim",
+        up: { label: "Tilt up", act: (t) => turn(0, PAD_DEG * t) },
+        down: { label: "Tilt down", act: (t) => turn(0, -PAD_DEG * t) },
+        left: { label: "Pan left", act: (t) => turn(PAD_DEG * t, 0) },
+        right: { label: "Pan right", act: (t) => turn(-PAD_DEG * t, 0) },
+      },
+    ];
+  };
   const subjectId = active.focusOn ?? talent[0]?.id ?? null;
   const subjectAt = meterPoint(active, scene);
   const occupied = [
@@ -2900,6 +2980,7 @@ export function PrevizPrototype() {
         <aside className="min-h-0 overflow-y-auto border-l border-border bg-surface p-4 text-sm">
           {sel.kind === "camera" ? (
             <CameraInspector
+              pads={<ControlPads pads={camPads(active.id)} caption={<>Keys work too through the lens: W A S D, Q E, and the arrows.</>} />}
               shot={active}
               units={units}
               focus={focus}
@@ -2967,11 +3048,13 @@ export function PrevizPrototype() {
                 return { pipeY: l.hungY, maxY: l.hungY - CLAMP_DROP - hangClearance(l.fixtureId, l.modifierId), rigName: rig.name };
               })()}
               onHangNew={(kind) => hangOnNew(sel.id, kind)}
+              pads={<ControlPads pads={fixturePads("light", sel.id)} caption="Moves as if you are standing behind the light." />}
               onChange={(p) => updateLight(sel.id, p)}
               onDelete={removeSelected}
             />
           ) : sel.kind === "grip" && grips.some((g) => g.id === sel.id) ? (
             <GripInspector
+              pads={<ControlPads pads={fixturePads("grip", sel.id)} caption="Moves as if you are standing behind the board." />}
               g={grips.find((g) => g.id === sel.id)!}
               targets={targets} reading={meter} targetName={meterTargetName} fmt={fmt}
               onChange={(p) => updateGrip(sel.id, p)}
@@ -3152,9 +3235,11 @@ function RigControls({ shot, units, onChange }: { shot: Shot; units: Units; onCh
 }
 
 function CameraInspector({
-  shot, units, focus, focusName, focusTargets, readouts, onChange, onDelete, onBoardFile, exposure,
+  shot, units, focus, focusName, focusTargets, readouts, onChange, onDelete, onBoardFile, exposure, pads,
 }: {
   shot: Shot;
+  /** The controller pads that move and aim this camera. */
+  pads: React.ReactNode;
   units: Units;
   focus: number;
   focusName: string | null;
@@ -3196,6 +3281,10 @@ function CameraInspector({
           </button>
         ) : null}
       </div>
+
+      <Field label={`Position · lens ${dist(shot.pos.y, units)} up, tilted ${shot.pitch >= 0 ? "up" : "down"} ${Math.abs(shot.pitch).toFixed(0)}°`}>
+        {pads}
+      </Field>
 
       <Field label="Body">
         <select
@@ -3271,23 +3360,6 @@ function CameraInspector({
         <p className="mt-1 text-xs text-text-muted">
           {focusName ? "Focus follows them as the camera or they move. Drag the slider to pull by hand." : "Pulled by hand."}
         </p>
-      </Field>
-
-      <Field label={`Height · ${dist(shot.pos.y, units)}`}>
-        <input
-          aria-label="Lens height"
-          type="range" min={0.15} max={3.5} step={0.01} value={shot.pos.y}
-          onChange={(e) => onChange({ pos: { ...shot.pos, y: Number(e.target.value) } })}
-          className="w-full accent-[var(--accent)]"
-        />
-      </Field>
-      <Field label={`Tilt · ${shot.pitch >= 0 ? "up" : "down"} ${Math.abs(shot.pitch).toFixed(0)}°`}>
-        <input
-          aria-label="Tilt"
-          type="range" min={-89} max={60} step={0.5} value={shot.pitch}
-          onChange={(e) => onChange({ pitch: Number(e.target.value) })}
-          className="w-full accent-[var(--accent)]"
-        />
       </Field>
 
       <div className="rounded-[12px] border border-border bg-surface-2 p-3">

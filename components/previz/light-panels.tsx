@@ -158,9 +158,11 @@ function ColorField({ color, cct, onChange }: {
 }
 
 export function LightInspector({
-  s, targets, reading, targetName, fmt, rigs, hung, onHangNew, onChange, onDelete,
+  s, targets, reading, targetName, fmt, rigs, hung, onHangNew, pads, onChange, onDelete,
 }: {
   s: LightSpec;
+  /** The controller pads that move and aim this light. */
+  pads?: React.ReactNode;
   targets: Target[];
   rigs: RigOption[];
   hung: Hung | null;
@@ -294,6 +296,8 @@ export function LightInspector({
         </Field>
       ) : null}
 
+      {pads ? <Field label="Move and aim">{pads}</Field> : null}
+
       <Field label="Mounted on">
         <div className="flex flex-wrap gap-1">
           <Chip on={!hung} onClick={() => onChange({ hangFrom: null })}>{fixture.kind === "lantern" ? "Boom stand" : "Stand"}</Chip>
@@ -400,14 +404,17 @@ export function PracticalInspector({ id, dimmer, cct, on, reading, targetName, f
   );
 }
 
-export function GripInspector({ g, targets, reading, targetName, fmt, onChange, onDelete }: {
+export function GripInspector({ g, targets, reading, targetName, fmt, pads, onChange, onDelete }: {
   g: GripSpec; targets: Target[]; reading: Reading | null; targetName: string; fmt: Fmt;
+  /** The controller pads that move and aim this board. */
+  pads?: React.ReactNode;
   onChange: (p: Partial<GripSpec>) => void; onDelete: () => void;
 }) {
   const c = reading?.contributions.find((x) => x.id === g.id);
   return (
     <div className="space-y-5">
       <Header eyebrow="Grip" title={GRIP_NAMES[g.kind]} onDelete={onDelete} />
+      {pads ? <Field label="Move and aim">{pads}</Field> : null}
       <Field label="Kind">
         <div className="flex flex-wrap gap-1">
           {(Object.keys(GRIP_NAMES) as GripKind[]).map((k) => (

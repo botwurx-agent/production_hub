@@ -7309,6 +7309,33 @@ reach for it during real prep.
   FOUND ON THE WAY: `stackHeights` returned a hanging item's height WITHOUT
   recording it, so every hanging thing, the kitchen's pendant lamp included,
   was drawn on the floor. Fixed; the kitchen's pendant now hangs at 1.95 m.
+- CONTROLLER PADS IN THE INSPECTOR (2026-10-07, operator: "more of like a
+  video game controller", from a two-pad reference). components/previz/
+  move-pad.tsx `ControlPads` draws two round pads side by side, MOVE and AIM,
+  each four wedge buttons round a hub with an optional outer ring pair. Tap
+  nudges (a tenth of a second's worth), HOLD keeps going via rAF after 220 ms,
+  release or lost pointer capture stops; Enter/Space nudges from the keyboard.
+  One speed (Fine 0.25x / Normal / Fast 3x) shared by both pads, remembered in
+  localStorage ("previz.padSpeed"), and a line under the pads names whatever
+  the pointer is over, so the buttons explain themselves. The pad knows nothing
+  about cameras: each button is a label plus an `act(seconds)`; the prototype
+  supplies the rates (0.4 m/s, 15 deg/s, zoom e^0.6/s at Normal).
+  CAMERA (top of the inspector, replacing the separate Height and Tilt sliders):
+  Move = boom up/down, truck left/right, outer ring push in / pull out (along
+  the floor, like a dolly); Aim = pan, tilt, outer ring zoom in/out. All through
+  `updateShot` with a functional patch, so framing drafts, the rig heading and
+  the arm's base behave exactly as for the keys.
+  LIGHTS AND BOARDS: the same pads, moved AS IF STANDING BEHIND IT (in = toward
+  where it points, left/right its own, up/down height); turning the head lets go
+  of a target from where it was pointing. Applied with functional setLights /
+  setGrips updaters reading live3d's scene (a per-frame stream of patches built
+  from a render's stale value would lose ticks), and lights go through snapHung,
+  so a hung light slides along its pipe. NOT built: roll (the reference's
+  curved arrows); a camera has no roll field.
+  TESTING GOTCHA: in headless swiftshader the 3D page blocks the main thread
+  for seconds, so pointer events arrive late and a held button reads as barely
+  moving. The hold logic was verified on a bare page mounting ControlPads alone
+  (1.0 units/s held, 0.1 per tap, stops on release), not on the prototype.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,
