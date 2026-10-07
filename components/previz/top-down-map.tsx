@@ -13,6 +13,7 @@ import { FIXTURES, FT, lightOutput, resolveSource } from "@/lib/previz/lighting"
 import type { GripSpec, LightSpec } from "@/lib/previz/light-build";
 import type { TalentSpec } from "@/lib/previz/scene-build";
 import { catalogOf, footprint, type ItemSpec } from "@/lib/previz/catalog";
+import { isRig, rigPipes } from "@/lib/previz/rigging";
 import { WALLS, clampOpening, wallLength, type RoomSpec, type SetSpec, type WallId } from "@/lib/previz/room";
 import type { Shot, Vec3 } from "./setup";
 
@@ -338,6 +339,33 @@ export function TopDownMap({
           const stroke = sel ? "#1d1d1f" : "#6f6a60";
           const sw = (sel ? 0.04 : 0.02) * k;
           const lamp = !!it.light;
+          if (isRig(it.kind)) {
+            // Overhead pipe: drawn as pipe, see-through, so the floor plan
+            // under a grid still reads. Only the pipes take a drag.
+            const pipes = rigPipes(it);
+            const col = it.kind === "spreader" ? "#a87c45" : "#7d848c";
+            return (
+              <g key={it.id}>
+                <g className="cursor-move" onPointerDown={start({ kind: "item", id: it.id }, { x: it.x, z: it.z })}>
+                  {pipes.map((p, i) => (
+                    <g key={i}>
+                      <line x1={p.ax} y1={p.az} x2={p.bx} y2={p.bz} stroke="transparent" strokeWidth={0.22 * k} />
+                      <line x1={p.ax} y1={p.az} x2={p.bx} y2={p.bz} stroke={sel ? "#1d1d1f" : col} strokeOpacity={sel ? 0.9 : 0.6} strokeWidth={(it.kind === "grid" ? 0.035 : 0.06) * k} strokeDasharray={it.kind === "grid" ? undefined : `${0.12 * k} ${0.05 * k}`} pointerEvents="none" />
+                    </g>
+                  ))}
+                </g>
+                {it.kind !== "grid" ? [pipes[0]].map((p) => (
+                  <g key="ends" pointerEvents="none">
+                    <rect x={p.ax - 0.06 * k} y={p.az - 0.06 * k} width={0.12 * k} height={0.12 * k} fill="#1c1c1e" />
+                    <rect x={p.bx - 0.06 * k} y={p.bz - 0.06 * k} width={0.12 * k} height={0.12 * k} fill="#1c1c1e" />
+                  </g>
+                )) : null}
+                <text x={it.kind === "grid" ? it.x : (pipes[0].ax + pipes[0].bx) / 2} y={(it.kind === "grid" ? it.z - it.d / 2 : (pipes[0].az + pipes[0].bz) / 2) - 0.12 * k} textAnchor="middle" fontSize={0.14 * k} fontWeight={700} fill="#5a5148" pointerEvents="none">
+                  {it.name}
+                </text>
+              </g>
+            );
+          }
           return (
             <g key={it.id}>
               <g
@@ -444,6 +472,10 @@ export function TopDownMap({
                 />
               ) : null}
               <g className="cursor-move" onPointerDown={start({ kind: "light", id: l.id }, l)}>
+                {l.hungY != null ? (
+                  // Hung overhead: a square clamp mark round it.
+                  <rect x={l.x - 0.21 * k} y={l.z - 0.21 * k} width={0.42 * k} height={0.42 * k} fill="none" stroke="#1c1c1e" strokeWidth={0.03 * k} strokeDasharray={`${0.07 * k} ${0.05 * k}`} />
+                ) : null}
                 <circle cx={l.x} cy={l.z} r={0.15 * k} fill={fill} stroke={sel ? "#1d1d1f" : "#b9891d"} strokeWidth={(sel ? 0.05 : 0.025) * k} />
                 <text x={l.x} y={l.z + 0.06 * k} textAnchor="middle" fontSize={0.15 * k} fontWeight={800} fill="#4a3a10">{l.role[0]}</text>
               </g>

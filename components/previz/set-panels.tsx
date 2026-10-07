@@ -11,6 +11,7 @@ import {
   FLOORS, WALLS, clampOpening, emptyRoom, wallLength, KITCHEN_ROOM, type Opening, type SetSpec, type WallId,
 } from "@/lib/previz/room";
 import { UNITS } from "@/lib/previz/model-import";
+import { DEFAULT_SPACING, GRID_SPACINGS, POLECAT_MAX, POLECAT_MIN, spanNote, wallToWall } from "@/lib/previz/rigging";
 import type { TalentSpec } from "@/lib/previz/scene-build";
 import type { RoomDraft } from "@/lib/previz/room-draft";
 import { Chip, Field, NumField, Seg, TrashIcon } from "./ui";
@@ -108,12 +109,71 @@ export function AddMenu({ onAdd, onProductPhoto, onModelFile, onClose }: {
 
 // ---------------------------------------------------------------- item inspector
 
+/**
+ * A grid, a spreader or a polecat: its size, the height of its pipe, and for
+ * a grid how far apart the pipes run. A spreader or a polecat can be fitted
+ * wall to wall in one press, which is how one is actually put up.
+ */
+function RigFields({ item, units, walls, hungCount, onChange }: {
+  item: ItemSpec;
+  units: Units;
+  walls: { minX: number; maxX: number; minZ: number; maxZ: number; has: Record<string, boolean> } | null;
+  hungCount: number;
+  onChange: (p: Partial<ItemSpec>) => void;
+}) {
+  const grid = item.kind === "grid";
+  const span = !grid && walls ? wallToWall(item, walls, walls.has) : null;
+  const fits = grid ? null : walls ? !!span && Math.abs(span.w - item.w) < 0.05 : false;
+  const note = spanNote(item, fits, span?.w ?? null, span && fits ? span.open : []);
+  const spacing = item.spacing ?? DEFAULT_SPACING;
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <NumField label={grid ? "Width" : "Length"} value={item.w} units={units} min={item.kind === "polecat" ? POLECAT_MIN : 0.5} max={60} onChange={(v) => onChange({ w: v })} />
+        {grid ? <NumField label="Depth" value={item.d} units={units} min={0.5} max={60} onChange={(v) => onChange({ d: v })} /> : null}
+        <NumField label="Pipe height" value={item.raise ?? 2.4} units={units} min={1.5} max={15} onChange={(v) => onChange({ raise: v })} />
+      </div>
+      {grid ? (
+        <Field label="Pipes every">
+          <div className="flex flex-wrap gap-1">
+            {GRID_SPACINGS.map((sp) => (
+              <Chip key={sp} on={Math.abs(sp - spacing) < 0.01} onClick={() => onChange({ spacing: sp })}>{feet(sp, units)}</Chip>
+            ))}
+          </div>
+        </Field>
+      ) : (
+        <div>
+          {span ? (
+            <button
+              type="button"
+              onClick={() => onChange({ x: span.x, z: span.z, w: item.kind === "polecat" ? Math.min(span.w, POLECAT_MAX) : span.w })}
+              className="rounded-[10px] border border-border px-3 py-1.5 text-xs font-semibold hover:border-border-strong"
+            >
+              Fit wall to wall ({feet(span.w, units)})
+            </button>
+          ) : null}
+          {note ? <p className="mt-1.5 border-l-2 border-[var(--h-amber)] pl-2 text-xs text-text">{note}</p> : null}
+          {!walls ? <p className="mt-1.5 text-xs text-text-muted">This is an open stage, so there are no walls to hold it. Build a room in Set, or use a studio grid.</p> : null}
+        </div>
+      )}
+      <p className="text-xs text-text-muted">
+        {hungCount ? `${hungCount} ${hungCount === 1 ? "light hangs" : "lights hang"} from it. ` : ""}
+        To hang a light, pick it and choose Hung from {item.name} under Mounted on.
+      </p>
+    </div>
+  );
+}
+
 export function ItemInspector({
-  item, units, talent, standsOn, labelAspect, modelRaw, lamp,
+  item, units, talent, standsOn, labelAspect, modelRaw, lamp, walls, hungCount = 0,
   onChange, onDelete, onDuplicate, onLabelFile, onClearLabel, onHold,
 }: {
   item: ItemSpec;
   units: Units;
+  /** The room's inside faces and which are walls, for fitting a spreader wall to wall. */
+  walls?: { minX: number; maxX: number; minZ: number; maxZ: number; has: Record<string, boolean> } | null;
+  /** How many lights hang from this item, for a rig. */
+  hungCount?: number;
   talent: TalentSpec[];
   /** What it is standing on, if anything, for a line of context. */
   standsOn: string | null;
@@ -173,6 +233,10 @@ export function ItemInspector({
         </Field>
       ) : null}
 
+      {c.category === "rigging" ? (
+        <RigFields item={item} units={units} walls={walls ?? null} hungCount={hungCount} onChange={onChange} />
+      ) : (
+      <>
       <div className="flex gap-2">
         <NumField label="Width" value={item.w} units={units} min={0.01} max={60} onChange={(v) => size("w", v)} />
         <NumField label={item.kind === "seamless" ? "Pulled out" : "Depth"} value={item.d} units={units} min={0.005} max={60} onChange={(v) => size("d", v)} />
@@ -189,8 +253,10 @@ export function ItemInspector({
           {[-90, 0, 90, 180].map((r) => <Chip key={r} on={item.rot === r} onClick={() => onChange({ rot: r })}>{r}°</Chip>)}
         </div>
       </Field>
+      </>
+      )}
 
-      {c.hangs ? (
+      {c.category === "rigging" ? null : c.hangs ? (
         <NumField label="Hangs at (bulb height)" value={item.raise ?? c.raise ?? 2} units={units} min={0.3} max={12} onChange={(v) => onChange({ raise: v })} />
       ) : (
         <div>

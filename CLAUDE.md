@@ -7280,6 +7280,35 @@ reach for it during real prep.
   saturation the colour is mixed with the fixture's white at its CCT
   (`lightRgb`). Approximate, like every lumen figure here. Changing to a
   non-rgb fixture clears the colour.
+- OVERHEAD RIGGING, LIGHTS OFF STANDS (2026-10-07, the operator's gaffer:
+  hang lights from a studio grid over a seamless or cyc, and in a home from
+  wall spreaders and polecats). Three set items in a new "Rigging" category
+  (lib/previz/rigging.ts, pure, 12 assertions): STUDIO GRID (schedule 40 pipe
+  both ways on 4, 5 or 6 ft centres, `ItemSpec.spacing`; fills a room under
+  its ceiling or hangs 16 ft over an open stage), WALL SPREADER (a 2x4 on edge
+  with a spreader end at each wall) and POLECAT (telescoping, warns past about
+  12 ft). Each `hangs`, so `raise` is the pipe's centre. A spreader or polecat
+  is placed across the frame and fitted WALL TO WALL, and says so when an end
+  lands on an OPEN side of the room (the kitchen is a two-wall corner), since
+  a spreader cannot push against air. LightSpec gained `hangFrom` (a rig item
+  id) and a runtime `hungY`. `settleHung` snaps the light to the NEAREST POINT
+  ON ANY PIPE and below the clamp (`CLAMP_DROP` + `hangClearance`, the yoke
+  measured off the model). It runs inside effLight, so the picture, the meter
+  and the map all see the same place; the stored copy (`snapHung`, which
+  strips hungY) is snapped on every write, so a light dragged on the map
+  slides along its pipe. A hung fixture is drawn UPSIDE DOWN on its yoke
+  (yoke rotated pi about Z, head pitch negated so it aims the same) with a
+  pipe clamp and a drop; a China ball hangs by its cord, its boom hidden.
+  Control boxes ride the drop or go to the floor. Moving a rig carries its
+  lights; deleting one puts them back on stands. The light inspector has
+  "Mounted on" (Stand / Hung from each rig, or "+ Studio grid / Wall spreader
+  / Polecat" which adds one over the light and hangs it in one press). The map
+  draws rigs as pipe, see-through, and a hung light with a dashed clamp box.
+  Backdrops are now AIM TARGETS (aimed at the middle of their face), since
+  lighting the paper from the grid is the point.
+  FOUND ON THE WAY: `stackHeights` returned a hanging item's height WITHOUT
+  recording it, so every hanging thing, the kitchen's pendant lamp included,
+  was drawn on the floor. Fixed; the kitchen's pendant now hangs at 1.95 m.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

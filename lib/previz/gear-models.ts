@@ -517,14 +517,19 @@ function chinaBall(f: Fixture, p: Pal, faces: THREE.MeshStandardMaterial[]): Par
   // Socket and cord up to the boom.
   yoke.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.06, 12), p.black), 0, r + 0.02, 0));
   const cordLen = 0.4;
-  yoke.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, cordLen, 6), p.rubber), 0, r + 0.05 + cordLen / 2, 0));
+  const cord = at(new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, cordLen, 6), p.rubber), 0, r + 0.05 + cordLen / 2, 0);
+  cord.name = "boomCord";
+  yoke.add(cord);
   const armY = r + 0.05 + cordLen;
   const armLen = 1.0;
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, armLen, 10), p.grey);
   arm.rotation.x = Math.PI / 2;
   arm.position.set(0, armY, armLen / 2);
+  arm.name = "boomArm";
   yoke.add(arm);
-  yoke.add(box(0.05, 0.05, 0.05, p.black, 0, armY, armLen));
+  const knuckle = box(0.05, 0.05, 0.05, p.black, 0, armY, armLen);
+  knuckle.name = "boomKnuckle";
+  yoke.add(knuckle);
   yoke.userData.boom = { y: armY, z: armLen };
   return { head, yoke, faceZ: 0, yokeDrop: 0, ownStand: true };
 }

@@ -27,7 +27,7 @@ import {
   resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
 import {
-  GRIP_NAMES, GRIP_REFLECTANCE, buildGripRig, buildLightRig, structureKey, updateGripRig, updateLightRig,
+  GRIP_NAMES, GRIP_REFLECTANCE, buildGripRig, buildLightRig, hangClearance, structureKey, updateGripRig, updateLightRig,
   type GripKind, type GripRig, type GripSpec, type LightRig, type LightSpec,
 } from "@/lib/previz/light-build";
 import {
@@ -44,6 +44,7 @@ import {
   camAt, constrainEnd, ease, fromLocal, isLockedOff, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
 } from "@/lib/previz/camera-move";
 import { POSES } from "@/lib/previz/poses";
+import { CLAMP_DROP, POLECAT_MAX, hangOn, isRig, rigHeight, wallToWall, type RigKind } from "@/lib/previz/rigging";
 import { HOUSE_LEVEL, buildHouseView, frameBox, gridSpacing, syncMarkers, type Marker } from "@/lib/previz/house-view";
 import {
   CATEGORIES, bulbLocal, buildItem, catalogOf, containsPoint, itemShapeKey, itemToWorld, newItem, stackHeights, standHeight, seatUnder, groundUnder,
@@ -119,8 +120,10 @@ function targetPoint(id: string, sc: Scene): THREE.Vector3 | null {
   const t = sc.talent.find((x) => x.id === id);
   if (t) return new THREE.Vector3(t.x, eyeHeight(t), t.z);
   const i = sc.items.find((x) => x.id === id);
-  if (i) return new THREE.Vector3(i.x, (i.y ?? 0) + i.h * (catalogOf(i.kind).surface === 1 ? 1 : 0.55), i.z);
-  return null;
+  if (!i) return null;
+  // A backdrop is lit on its face: the middle of the hanging part, at the back.
+  if (catalogOf(i.kind).category === "backdrop") return itemToWorld(i, new THREE.Vector3(0, i.h * 0.45, -i.d / 2 + 0.05));
+  return new THREE.Vector3(i.x, (i.y ?? 0) + i.h * (catalogOf(i.kind).surface === 1 ? 1 : 0.55), i.z);
 }
 function targetName(id: string | null, sc: Scene): string | null {
   if (!id) return null;
@@ -366,7 +369,24 @@ function findSpot(
  * A light with its diffusion frame kept in front of whatever it is aimed at:
  * a frame slid past the subject would be lighting the back of their head.
  */
-function effLight(s: LightSpec, sc: Scene): LightSpec {
+/**
+ * A light hung from a rig, put where it can actually be: on the nearest pipe
+ * and below the clamp. A light whose rig has gone is back on a stand.
+ */
+function settleHung(s: LightSpec, items: ItemSpec[]): LightSpec {
+  if (!s.hangFrom) return s.hungY == null ? s : { ...s, hungY: null };
+  const rig = items.find((i) => i.id === s.hangFrom && isRig(i.kind));
+  if (!rig) return { ...s, hungY: null };
+  const h = hangOn(rig, s.x, s.z, s.y, hangClearance(s.fixtureId, s.modifierId));
+  return { ...s, x: h.x, z: h.z, y: h.y, hungY: h.pipeY };
+}
+/** The same, for storing: the runtime pipe height is not part of the setup. */
+function snapHung(s: LightSpec, items: ItemSpec[]): LightSpec {
+  const { hungY: _h, ...rest } = settleHung(s, items);
+  return rest;
+}
+function effLight(raw: LightSpec, sc: Scene): LightSpec {
+  const s = settleHung(raw, sc.items);
   if (!s.frame || !s.aimAt) return s;
   const t = targetPoint(s.aimAt, sc);
   if (!t) return s;
@@ -1510,7 +1530,7 @@ export function PrevizPrototype() {
       if (d.lift || ev.shiftKey) {
         const dh = -py * mpp;
         if (d.kind === "item") setItems((all) => all.map((i) => (i.id === d.id ? { ...i, raise: Math.max(0, Math.min(12, (i.raise ?? catalogOf(i.kind).raise ?? 0) + dh)) } : i)));
-        else if (d.kind === "light") setLights((all) => all.map((l) => (l.id === d.id ? { ...l, y: Math.max(0.15, Math.min(8, l.y + dh)) } : l)));
+        else if (d.kind === "light") setLights((all) => all.map((l) => (l.id === d.id ? snapHung({ ...l, y: Math.max(0.15, Math.min(8, l.y + dh)) }, live.current.items) : l)));
         else if (d.kind === "grip") setGrips((all) => all.map((g) => (g.id === d.id ? { ...g, y: Math.max(0.15, Math.min(8, g.y + dh)) } : g)));
         return;
       }
@@ -1533,7 +1553,7 @@ export function PrevizPrototype() {
         // Picking up something held takes it out of the hand, as on the map.
         if (live3d.current.scene.items.find((i) => i.id === d.id)?.heldBy) setTalent((all) => all.map((t) => (t.holding === d.id ? { ...t, holding: null } : t)));
       } else if (d.kind === "talent") setTalent((all) => all.map((t) => (t.id === d.id ? { ...t, x, z } : t)));
-      else if (d.kind === "light") setLights((all) => all.map((l) => (l.id === d.id ? { ...l, x, z } : l)));
+      else if (d.kind === "light") setLights((all) => all.map((l) => (l.id === d.id ? snapHung({ ...l, x, z }, live.current.items) : l)));
       else if (d.kind === "grip") setGrips((all) => all.map((g) => (g.id === d.id ? { ...g, x, z } : g)));
     };
     const up = (ev: PointerEvent) => {
@@ -1690,6 +1710,9 @@ export function PrevizPrototype() {
       if (l.id !== id) return l;
       const next = { ...l, ...patch };
       if (patch.aimAt === null && l.aimAt) Object.assign(next, aimOf(l, scene));
+      // Going up onto a rig starts it a couple of feet under the pipe.
+      const rig = patch.hangFrom ? items.find((i) => i.id === patch.hangFrom) : null;
+      if (rig && !settleHung(l, items).hungY) next.y = rigHeight(rig) - 0.6;
       if (patch.fixtureId && patch.fixtureId !== l.fixtureId) {
         const f = FIXTURES.find((x) => x.id === patch.fixtureId) ?? FIXTURES[0];
         next.modifierId = f.defaultModifier;
@@ -1697,7 +1720,7 @@ export function PrevizPrototype() {
         next.beamDeg = null;
         if (!f.rgb) next.color = null;
       }
-      return next;
+      return snapHung(next, items);
     }));
   const updateGrip = (id: string, patch: Partial<GripSpec>) =>
     setGrips((all) => all.map((g) => {
@@ -1820,15 +1843,83 @@ export function PrevizPrototype() {
     }
     return { ...p, rot };
   };
+  /**
+   * A grid fills the room under its ceiling (or hangs 16 ft over an open
+   * stage, centred on `near`); a spreader or a polecat runs across the frame
+   * through `near`, wall to wall when there are walls, just under the ceiling.
+   */
+  const rigFor = (kind: RigKind, near: { x: number; z: number }): ItemSpec => {
+    const it = newItem(kind, near.x, near.z);
+    const room = set.kind === "room" ? set.room : null;
+    if (kind === "grid") {
+      if (room) {
+        const b = roomBounds(room);
+        return { ...it, x: (b.minX + b.maxX) / 2, z: (b.minZ + b.maxZ) / 2, w: room.width - 0.2, d: room.depth - 0.2, raise: room.height - 0.25 };
+      }
+      return it;
+    }
+    // Across the frame: the item's length runs along the camera's left-right.
+    const rot = Math.round(active.yaw / 90) * 90;
+    let next: ItemSpec = { ...it, rot };
+    if (room) {
+      next.raise = Math.max(1.5, room.height - 0.3);
+      // Run it between two real walls: across the frame if both ends land on
+      // walls, else the other way, else across the frame anyway (it warns).
+      const b = roomBounds(room);
+      const across = wallToWall(next, b, room.walls);
+      const turned = wallToWall({ ...next, rot: rot + 90 }, b, room.walls);
+      if (across?.open.length && turned && !turned.open.length) next.rot = rot + 90;
+      const span = wallToWall(next, b, room.walls);
+      if (span) next = { ...next, x: span.x, z: span.z, w: kind === "polecat" ? Math.min(span.w, POLECAT_MAX) : span.w };
+    }
+    return next;
+  };
   const addItem = (kind: string) => {
+    if (isRig(kind)) {
+      const it = rigFor(kind, subjectAt);
+      setItems((all) => [...all, it]);
+      setSel({ kind: "item", id: it.id });
+      setAdding(false);
+      return;
+    }
     const at = placeFor(kind);
     const it = { ...newItem(kind, at.x, at.z), rot: at.rot };
     setItems((all) => [...all, it]);
     setSel({ kind: "item", id: it.id });
     setAdding(false);
   };
+  /** Adds a rig over a light and hangs the light from it, in one go. */
+  const hangOnNew = (lightId: string, kind: RigKind) => {
+    const l = lights.find((x) => x.id === lightId);
+    if (!l) return;
+    const rig = rigFor(kind, { x: l.x, z: l.z });
+    const all = [...items, rig];
+    setItems(all);
+    setLights((ls) => ls.map((x) => (x.id === lightId ? snapHung({ ...x, hangFrom: rig.id, y: rigHeight(rig) - 0.6 }, all) : x)));
+  };
   const updateItem = (id: string, p: Partial<ItemSpec>) => setItems((all) => all.map((i) => (i.id === id ? { ...i, ...p } : i)));
+  // Lights hung from a rig go with it when it moves.
+  const rigAt = useRef(new Map<string, { x: number; z: number }>());
+  useEffect(() => {
+    const moved = new Map<string, { dx: number; dz: number }>();
+    const now = new Map<string, { x: number; z: number }>();
+    for (const i of items) {
+      if (!isRig(i.kind)) continue;
+      now.set(i.id, { x: i.x, z: i.z });
+      const was = rigAt.current.get(i.id);
+      if (was && (Math.abs(was.x - i.x) > 1e-6 || Math.abs(was.z - i.z) > 1e-6)) moved.set(i.id, { dx: i.x - was.x, dz: i.z - was.z });
+    }
+    rigAt.current = now;
+    if (moved.size) {
+      setLights((ls) => ls.map((l) => {
+        const m = l.hangFrom ? moved.get(l.hangFrom) : undefined;
+        return m ? snapHung({ ...l, x: l.x + m.dx, z: l.z + m.dz }, items) : l;
+      }));
+    }
+  }, [items]);
   const removeItem = (id: string) => {
+    // Taking a rig down puts what hung from it back on stands, where it was.
+    setLights((ls) => ls.map((l) => (l.hangFrom === id ? { ...l, hangFrom: null } : l)));
     setItems((all) => all.filter((i) => i.id !== id));
     setTalent((all) => all.map((t) => (t.holding === id ? { ...t, holding: null } : t)));
     if (sel.kind === "item" && sel.id === id) setSel({ kind: "camera" });
@@ -1924,7 +2015,7 @@ export function PrevizPrototype() {
   };
   const targets = [
     ...talent.map((t) => ({ id: t.id, name: t.name })),
-    ...items.filter((i) => ["prop", "furniture", "set"].includes(catalogOf(i.kind).category)).map((i) => ({ id: i.id, name: i.name })),
+    ...items.filter((i) => ["prop", "furniture", "set", "backdrop"].includes(catalogOf(i.kind).category)).map((i) => ({ id: i.id, name: i.name })),
   ];
   const meterTargetName = focusName ?? "the focus point";
   const fmt = (m: number) => dist(m, units);
@@ -2755,7 +2846,7 @@ export function PrevizPrototype() {
               const k = Math.max(range.min, Math.min(range.max, d)) / d;
               return { robotBase: { x: l.lx * k, z: l.lz * k }, rigYaw: rigYawOf(raw) };
             })}
-            onLight={(id, x, z) => setLights((all) => all.map((l) => (l.id === id ? { ...l, x, z } : l)))}
+            onLight={(id, x, z) => setLights((all) => all.map((l) => (l.id === id ? snapHung({ ...l, x, z }, items) : l)))}
             onLightAim={(id, yaw) => setLights((all) => all.map((l) => (l.id === id ? { ...l, ...aimOf(l, scene), yaw, aimAt: null } : l)))}
             onGrip={(id, x, z) => setGrips((all) => all.map((g) => (g.id === id ? { ...g, x, z } : g)))}
             onGripAim={(id, yaw) => setGrips((all) => all.map((g) => (g.id === id ? { ...g, ...aimOf(g, scene), yaw, aimAt: null } : g)))}
@@ -2857,6 +2948,8 @@ export function PrevizPrototype() {
               ) : null}
               onChange={(p) => updateItem(selItem.id, p)}
               onDelete={() => removeItem(selItem.id)}
+              walls={set.kind === "room" ? { ...roomBounds(set.room), has: set.room.walls } : null}
+              hungCount={lights.filter((l) => l.hangFrom === selItem.id).length}
               onDuplicate={() => duplicateItem(selItem.id)}
               onLabelFile={(f) => void setItemLabel(selItem.id, f)}
               onClearLabel={() => updateItem(selItem.id, { label: null })}
@@ -2866,6 +2959,14 @@ export function PrevizPrototype() {
             <LightInspector
               s={lights.find((l) => l.id === sel.id)!}
               targets={targets} reading={meter} targetName={meterTargetName} fmt={fmt}
+              rigs={items.filter((i) => isRig(i.kind)).map((i) => ({ id: i.id, name: i.name, kind: i.kind }))}
+              hung={(() => {
+                const l = settleHung(lights.find((x) => x.id === sel.id)!, items);
+                const rig = items.find((i) => i.id === l.hangFrom);
+                if (l.hungY == null || !rig) return null;
+                return { pipeY: l.hungY, maxY: l.hungY - CLAMP_DROP - hangClearance(l.fixtureId, l.modifierId), rigName: rig.name };
+              })()}
+              onHangNew={(kind) => hangOnNew(sel.id, kind)}
               onChange={(p) => updateLight(sel.id, p)}
               onDelete={removeSelected}
             />

@@ -9,7 +9,7 @@
 // degrees, the same convention as a person's facing. Sizes are real metres:
 // w across, d front to back, h tall.
 
-export type ItemCategory = "backdrop" | "set" | "furniture" | "practical" | "prop" | "model";
+export type ItemCategory = "backdrop" | "set" | "rigging" | "furniture" | "practical" | "prop" | "model";
 
 export type ItemLight = { on: boolean; dimmer: number; cct: number; lumens: number };
 export type ItemModel = { key: string; fileName: string; upZ: boolean; unit: string };
@@ -31,6 +31,8 @@ export type ItemSpec = {
   label?: string | null;
   model?: ItemModel | null;
   light?: ItemLight | null;
+  /** A studio grid's pipe centres, metres. */
+  spacing?: number;
   /** Resolved at runtime, never saved: its base height, and who holds it. */
   y?: number;
   heldBy?: string | null;
@@ -100,6 +102,10 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "apple", name: "Apple box", category: "set", hint: "Full, half, quarter or pancake", w: 20 * IN, d: 12 * IN, h: 8 * IN, color: "#b88d5a", surface: 1, standable: true, presets: [{ label: "Full", h: 8 * IN }, { label: "Half", h: 4 * IN }, { label: "Quarter", h: 2 * IN }, { label: "Pancake", h: 1 * IN }] },
   { kind: "plinth", name: "Plinth", category: "set", hint: "A product pedestal", w: 0.4, d: 0.4, h: 1.0, color: "#f2f1ec", surface: 1, standable: true },
   { kind: "rug", name: "Rug", category: "set", hint: "On the floor", w: 2.4, d: 1.7, h: 0.012, color: "#8a5a44", surface: 1 },
+  // Rigging: overhead pipe that lights hang from instead of standing on stands
+  { kind: "grid", name: "Studio grid", category: "rigging", hint: "Pipe grid overhead; hang lights from it", w: 24 * FT, d: 24 * FT, h: 0.05, color: "#8f959c", hangs: true, raise: 16 * FT, presets: [{ label: "16 x 16 ft", w: 16 * FT, d: 16 * FT }, { label: "24 x 24 ft", w: 24 * FT, d: 24 * FT }, { label: "32 x 40 ft", w: 40 * FT, d: 32 * FT }] },
+  { kind: "spreader", name: "Wall spreader", category: "rigging", hint: "A 2x4 held wall to wall by spreader ends", w: 12 * FT, d: 0.038, h: 0.089, color: "#c49a64", hangs: true, raise: 2.4 },
+  { kind: "polecat", name: "Polecat", category: "rigging", hint: "Spring-loaded pole, wall to wall, up to about 12 ft", w: 8 * FT, d: 0.045, h: 0.045, color: "#b9bec4", hangs: true, raise: 2.3 },
   // Furniture
   { kind: "dining-table", name: "Dining table", category: "furniture", hint: "Seats four to six", w: 1.6, d: 0.9, h: 0.75, color: "#6a4a34", surface: 1 },
   { kind: "round-table", name: "Round table", category: "furniture", hint: "A cafe or kitchen table", w: 1.0, d: 1.0, h: 0.75, color: "#6a4a34", surface: 1, round: true },
@@ -140,6 +146,7 @@ export const CATALOG: CatalogEntry[] = [
 export const CATEGORIES: { id: ItemCategory; name: string }[] = [
   { id: "backdrop", name: "Backdrops" },
   { id: "set", name: "Set pieces" },
+  { id: "rigging", name: "Rigging" },
   { id: "furniture", name: "Furniture" },
   { id: "practical", name: "Practicals" },
   { id: "prop", name: "Props and product" },
@@ -197,7 +204,14 @@ export function stackHeights(items: ItemSpec[]): Map<string, number> {
     const known = out.get(s.id);
     if (known !== undefined) return known;
     const c = catalogOf(s.kind);
-    if (c.hangs) return s.raise ?? c.raise ?? 2;
+    if (c.hangs) {
+      // Stored like everything else. It used to be returned without being
+      // recorded, so every hanging thing (the pendant included) was placed
+      // with no height at all and drawn on the floor.
+      const v = s.raise ?? c.raise ?? 2;
+      out.set(s.id, v);
+      return v;
+    }
     let y = 0;
     if (depth < 6) {
       for (const o of items) {

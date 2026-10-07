@@ -14,6 +14,16 @@ import { Chip, Field, Readout, Seg, TrashIcon } from "./ui";
 
 type Fmt = (m: number) => string;
 type Target = { id: string; name: string };
+/** A rig a light can hang from: a studio grid, a wall spreader, a polecat. */
+export type RigOption = { id: string; name: string; kind: string };
+/** Where a hung light is: its pipe's height and how high it may go under it. */
+export type Hung = { pipeY: number; maxY: number; rigName: string };
+
+const RIG_ADDS: { kind: "grid" | "spreader" | "polecat"; label: string }[] = [
+  { kind: "grid", label: "Studio grid" },
+  { kind: "spreader", label: "Wall spreader" },
+  { kind: "polecat", label: "Polecat" },
+];
 
 const ROLES = ["Key", "Fill", "Rim", "Back", "Hair", "Kicker", "Background"];
 const ndLabel = (nd: number) => (nd === 0 ? "None" : nd.toFixed(1));
@@ -148,10 +158,14 @@ function ColorField({ color, cct, onChange }: {
 }
 
 export function LightInspector({
-  s, targets, reading, targetName, fmt, onChange, onDelete,
+  s, targets, reading, targetName, fmt, rigs, hung, onHangNew, onChange, onDelete,
 }: {
   s: LightSpec;
   targets: Target[];
+  rigs: RigOption[];
+  hung: Hung | null;
+  /** Adds a rig over the light and hangs it there. */
+  onHangNew: (kind: "grid" | "spreader" | "polecat") => void;
   reading: Reading | null;
   targetName: string;
   fmt: Fmt;
@@ -280,8 +294,33 @@ export function LightInspector({
         </Field>
       ) : null}
 
-      <Field label={`Height · ${fmt(s.y)}`}>
-        <Slider label="Height" min={0.3} max={6} step={0.05} value={s.y} onChange={(v) => onChange({ y: v })} />
+      <Field label="Mounted on">
+        <div className="flex flex-wrap gap-1">
+          <Chip on={!hung} onClick={() => onChange({ hangFrom: null })}>{fixture.kind === "lantern" ? "Boom stand" : "Stand"}</Chip>
+          {rigs.map((r) => (
+            <Chip key={r.id} on={s.hangFrom === r.id && !!hung} onClick={() => onChange({ hangFrom: r.id })}>Hung from {r.name}</Chip>
+          ))}
+        </div>
+        {hung ? (
+          <p className="mt-1.5 text-xs text-text-muted">
+            On a clamp and a drop, {fmt(hung.pipeY - s.y)} under the {hung.rigName.toLowerCase()} at {fmt(hung.pipeY)}. Drag it on the map and it slides along the pipe.
+          </p>
+        ) : (
+          <div className="mt-1.5">
+            <p className="mb-1 text-xs text-text-muted">{rigs.length ? "Or hang it from something new:" : "Hang it overhead instead, off the floor and out of frame:"}</p>
+            <div className="flex flex-wrap gap-1">
+              {RIG_ADDS.map((r) => (
+                <button key={r.kind} type="button" onClick={() => onHangNew(r.kind)} className="rounded-[8px] border border-dashed border-border px-2 py-1 text-xs font-semibold text-text-muted hover:border-border-strong hover:text-text">
+                  + {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </Field>
+
+      <Field label={hung ? `Height · ${fmt(s.y)} (drop ${fmt(hung.pipeY - s.y)})` : `Height · ${fmt(s.y)}`}>
+        <Slider label="Height" min={0.3} max={hung ? Math.max(0.35, hung.maxY) : 6} step={0.05} value={Math.min(s.y, hung ? Math.max(0.35, hung.maxY) : 6)} onChange={(v) => onChange({ y: v })} />
       </Field>
 
       <Field label="Aim at">

@@ -35,6 +35,11 @@ export type LightSpec = {
   aimAt: string | null;
   frame: FrameSpec | null;
   on: boolean;
+  /** The rig (a set item: grid, spreader, polecat) it hangs from; absent or
+   * null is on a stand. */
+  hangFrom?: string | null;
+  /** Resolved at runtime, never saved: the hung-from pipe's centre height. */
+  hungY?: number | null;
 };
 
 export type GripKind = "bounce" | "silver" | "flag";
@@ -90,6 +95,45 @@ export type LightRig = {
   ownStand: boolean;
   structureKey: string;
 };
+
+const clearances = new Map<string, number>();
+/**
+ * How far a hung light's centre has to sit under its spigot: the yoke, or for
+ * a China ball its own radius and socket. Measured off the model once per
+ * fixture and modifier, since that is the only place the number lives.
+ */
+export function hangClearance(fixtureId: string, modifierId: string): number {
+  const key = `${fixtureId}|${modifierId}`;
+  const known = clearances.get(key);
+  if (known !== undefined) return known;
+  const fixture = FIXTURES.find((f) => f.id === fixtureId) ?? FIXTURES[0];
+  const v = fixture.kind === "lantern"
+    ? fixture.faceW / 2 + 0.06
+    : buildFixture(fixture, MODIFIERS[modifierId] ? modifierId : fixture.defaultModifier).yokeDrop;
+  clearances.set(key, v);
+  return v;
+}
+
+/** A pipe clamp on the rig and a drop down to the light's spigot (or its cord). */
+function buildHanger(top: number, bottom: number, lantern: boolean): THREE.Group {
+  const g = new THREE.Group();
+  const steel = mat("#9aa0a6", 0.4, 0.8);
+  const black = mat("#1c1c1e", 0.6, 0.3);
+  const len = Math.max(0.02, top - 0.04 - bottom);
+  const drop = new THREE.Mesh(new THREE.CylinderGeometry(lantern ? 0.004 : 0.013, lantern ? 0.004 : 0.013, len, lantern ? 6 : 12), lantern ? black : steel);
+  drop.position.y = bottom + len / 2;
+  g.add(drop);
+  const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.07, 0.07), black);
+  clamp.position.y = top;
+  g.add(clamp);
+  if (!lantern) {
+    // The pin's collar where it seats in the fixture's yoke.
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.04, 12), black);
+    collar.position.y = bottom + 0.02;
+    g.add(collar);
+  }
+  return g;
+}
 
 export function structureKey(s: LightSpec): string {
   const f = s.frame ? `${s.frame.sizeFt}|${s.frame.materialId}` : "none";
@@ -194,30 +238,51 @@ export function updateLightRig(
 ) {
   rig.group.position.set(s.x, 0, s.z);
   rig.yoke.position.set(0, s.y, 0);
-  rig.yoke.rotation.set(0, aim.yaw * R, 0);
-  rig.head.rotation.set(aim.pitch * R, 0, 0);
-  if (rig.standHolder.userData.h !== s.y) {
+  // Hung from a pipe, a fixture hangs upside down off its yoke: the yoke is
+  // turned over, so the head's tilt runs the other way to aim the same.
+  const hung = typeof s.hungY === "number";
+  const flip = hung && !rig.ownStand;
+  rig.yoke.rotation.set(0, aim.yaw * R, flip ? Math.PI : 0);
+  rig.head.rotation.set((flip ? -1 : 1) * aim.pitch * R, 0, 0);
+  const placeKey = `${s.y}|${hung ? s.hungY : ""}`;
+  if (rig.standHolder.userData.h !== placeKey) {
     rig.standHolder.clear();
-    if (rig.ownStand) {
+    rig.yoke.getObjectByName("boomstand")?.removeFromParent();
+    for (const n of ["boomArm", "boomKnuckle", "boomCord"]) {
+      const o = rig.yoke.getObjectByName(n);
+      if (o) o.visible = !hung;
+    }
+    if (hung) {
+      const spigot = rig.ownStand ? s.y + hangClearance(s.fixtureId, s.modifierId) - 0.01 : s.y + rig.yokeDrop;
+      rig.standHolder.add(tag(buildHanger(s.hungY as number, spigot, rig.ownStand)));
+      // A box light enough to hang rides on the drop; anything else is on the floor.
+      const room = (s.hungY as number) - spigot;
+      rig.base.traverse((o) => {
+        if (typeof o.userData.onStand !== "number") return;
+        if (o.userData.onStand >= 0.3 && room > 0.4) o.position.set(0, spigot + 0.18, 0.06);
+        else o.position.set(0.32, 0.12, 0.18);
+      });
+    } else if (rig.ownStand) {
       // A boom: the stand goes up behind the light to the arm's height.
       const boom = rig.yoke.userData.boom as { y: number; z: number } | undefined;
       const stand = buildStand(s.y + (boom?.y ?? 0.5), false);
       stand.name = "boomstand";
-      rig.yoke.getObjectByName("boomstand")?.removeFromParent();
       stand.position.set(0, -s.y, boom?.z ?? 1);
       rig.yoke.add(tag(stand));
     } else {
       rig.standHolder.add(tag(buildStand(s.y - rig.yokeDrop - 0.03, rig.heavy)));
     }
-    // A control box rides on the stand at a working height.
-    rig.base.traverse((o) => {
-      if (typeof o.userData.onStand === "number") {
-        // A box too heavy to hang sits on the floor beside the stand instead.
-        if (o.userData.onStand < 0.3) o.position.set(0.32, o.userData.onStand, 0.18);
-        else o.position.set(0, Math.min(o.userData.onStand, Math.max(0.3, s.y - 0.5)), 0.06);
-      }
-    });
-    rig.standHolder.userData.h = s.y;
+    if (!hung) {
+      // A control box rides on the stand at a working height.
+      rig.base.traverse((o) => {
+        if (typeof o.userData.onStand === "number") {
+          // A box too heavy to hang sits on the floor beside the stand instead.
+          if (o.userData.onStand < 0.3) o.position.set(0.32, o.userData.onStand, 0.18);
+          else o.position.set(0, Math.min(o.userData.onStand, Math.max(0.3, s.y - 0.5)), 0.06);
+        }
+      });
+    }
+    rig.standHolder.userData.h = placeKey;
   }
   const frame = rig.head.getObjectByName("frame");
   if (frame && s.frame) frame.position.z = -s.frame.distM;

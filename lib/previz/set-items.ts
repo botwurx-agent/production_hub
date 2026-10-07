@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import { buildCyc, buildSeamless } from "./studio-set";
 import { catalogOf, type ItemSpec } from "./catalog";
+import { DEFAULT_SPACING, gridLines } from "./rigging";
 
 export * from "./catalog";
 
@@ -191,6 +192,8 @@ export function buildItem(s: ItemSpec, art: LabelArt | null, model: THREE.Object
     const metal = mat("#8f959c", 0.4, 0.8);
     g.add(cy(0.018, 0.018, w + 0.4, metal, 0, h + 0.06, -0.05).rotateZ(Math.PI / 2));
     for (const sx of [-1, 1]) g.add(cy(0.02, 0.02, h + 0.1, metal, sx * (w / 2 + 0.2), (h + 0.1) / 2, -0.05));
+  } else if (k === "grid" || k === "spreader" || k === "polecat") {
+    g.add(buildRig(s));
   } else if (k === "flat" || k === "wall") {
     g.add(bx(w, h, d, m, 0, h / 2, 0));
   } else if (k === "vflat") {
@@ -460,7 +463,53 @@ export function buildItem(s: ItemSpec, art: LabelArt | null, model: THREE.Object
   return g;
 }
 
+/**
+ * Overhead rigging, drawn round its pipe centre (the item is placed at its
+ * `raise`). Pipe is thin and nobody judges it, so none of it casts a shadow
+ * or blocks the meter: a light under a grid is not cut by the grid.
+ */
+function buildRig(s: ItemSpec): THREE.Group {
+  const g = new THREE.Group();
+  const steel = mat("#9aa0a7", 0.4, 0.8);
+  const black = mat("#1c1c1e", 0.7, 0.2);
+  const pipe = (len: number, r: number, m: THREE.Material, x: number, z: number, alongX: boolean) => {
+    const p = cy(r, r, len, m, x, 0, z, 12);
+    p.rotation.set(alongX ? 0 : Math.PI / 2, 0, alongX ? Math.PI / 2 : 0);
+    return p;
+  };
+  if (s.kind === "grid") {
+    // Schedule 40 pipe, 1.9" outside, on even centres both ways, hung on
+    // short rods at the corners.
+    const sp = s.spacing ?? DEFAULT_SPACING;
+    for (const z of gridLines(s.d, sp)) g.add(pipe(s.w, 0.024, steel, 0, z, true));
+    for (const x of gridLines(s.w, sp)) g.add(pipe(s.d, 0.024, steel, x, 0, false));
+    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+      g.add(cy(0.008, 0.008, 0.3, black, (x * s.w) / 2, 0.15, (z * s.d) / 2, 6));
+    }
+  } else if (s.kind === "spreader") {
+    // A 2x4 on edge, and a spreader end at each wall with its rubber pad.
+    g.add(bx(s.w - 0.1, s.h, s.d, mat(s.color, 0.85), 0, 0, 0));
+    for (const sx of [-1, 1]) {
+      g.add(bx(0.09, s.h + 0.06, s.d + 0.05, black, sx * (s.w / 2 - 0.09), 0, 0));
+      g.add(bx(0.03, s.h + 0.1, s.d + 0.1, mat("#3a3a3c", 1), sx * (s.w / 2 - 0.015), 0, 0));
+    }
+  } else {
+    // A polecat: two telescoping tubes and a rubber cup at each end.
+    const tube = mat(s.color, 0.35, 0.8);
+    g.add(pipe(s.w * 0.55, s.d / 2, tube, -s.w * 0.225, 0, true));
+    g.add(pipe(s.w * 0.5, s.d * 0.38, tube, s.w * 0.25, 0, true));
+    g.add(pipe(0.05, s.d / 2 + 0.006, black, s.w * 0.05, 0, true));
+    for (const sx of [-1, 1]) g.add(pipe(0.05, 0.04, black, sx * (s.w / 2 - 0.025), 0, true));
+  }
+  g.traverse((o) => {
+    o.userData.noOcclude = true;
+    const m = o as THREE.Mesh;
+    if (m.isMesh) m.castShadow = false;
+  });
+  return g;
+}
+
 /** What changes an item's geometry: anything but where it is. */
 export function itemShapeKey(s: ItemSpec, artReady: boolean, modelReady: boolean): string {
-  return [s.kind, s.w, s.d, s.h, s.color, s.label ?? "", artReady ? 1 : 0, s.model?.key ?? "", modelReady ? 1 : 0].join("|");
+  return [s.kind, s.w, s.d, s.h, s.color, s.spacing ?? "", s.label ?? "", artReady ? 1 : 0, s.model?.key ?? "", modelReady ? 1 : 0].join("|");
 }
