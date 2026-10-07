@@ -326,6 +326,115 @@ export function buildItem(s: ItemSpec, art: LabelArt | null, model: THREE.Object
     g.add(bx(w - 0.04, h - frameH, d - 0.06, mat(s.color, 0.95), 0, frameH + (h - frameH) / 2, 0.02));
     g.add(bx(w, h + 0.5, 0.06, mat(shade(s.color, 0.6), 0.8), 0, (h + 0.5) / 2, -d / 2 + 0.03));
     for (const sx of [-1, 1]) g.add(bx(w * 0.4, 0.12, 0.4, mat("#f6f4ef", 0.95), sx * w * 0.23, h + 0.04, -d / 2 + 0.3));
+  } else if (k === "nightstand" || k === "dresser") {
+    // A carcass on short legs with drawer fronts and pulls.
+    const legH = Math.min(0.08, h * 0.12);
+    g.add(bx(w, h - legH, d, m, 0, legH + (h - legH) / 2, 0));
+    for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.add(bx(0.03, legH, 0.03, m, lx * (w / 2 - 0.03), legH / 2, lz * (d / 2 - 0.03)));
+    const rows = k === "dresser" ? Math.max(2, Math.round((h - legH) / 0.22)) : 1;
+    const pull = mat("#b8a27a", 0.35, 0.7);
+    const seam = mat(shade(s.color, 0.7));
+    const body = h - legH;
+    for (let i = 0; i < rows; i++) {
+      const y = legH + (body / rows) * (i + 0.5) + (k === "nightstand" ? body * 0.2 : 0);
+      if (i > 0) g.add(bx(w * 0.96, 0.006, 0.004, seam, 0, legH + (body / rows) * i, d / 2 + 0.002));
+      g.add(bx(Math.min(0.14, w * 0.25), 0.015, 0.02, pull, 0, y, d / 2 + 0.01));
+    }
+    if (k === "nightstand") g.add(bx(w * 0.96, 0.006, 0.004, seam, 0, legH + body * 0.55, d / 2 + 0.002));
+  } else if (k === "vanity") {
+    // A cabinet, a stone top, a basin set into it and a tap behind.
+    const topT = 0.03;
+    g.add(bx(w - 0.02, h - topT, d - 0.03, m, 0, (h - topT) / 2, -0.015));
+    g.add(bx(w, topT, d, mat("#ece8e1", 0.3), 0, h - topT / 2, 0));
+    const basins = w >= 1.3 ? [-w / 4, w / 4] : [0];
+    const porcelain = mat("#ffffff", 0.15);
+    const chrome = mat("#d6dade", 0.15, 1);
+    for (const bxp of basins) {
+      const bw = Math.min(0.5, w * 0.45);
+      const basin = new THREE.Mesh(new THREE.CylinderGeometry(bw / 2, bw * 0.38, 0.14, 40, 1, true), new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.15, side: THREE.DoubleSide }));
+      basin.scale.z = 0.75;
+      basin.position.set(bxp, h - 0.07 + 0.005, 0.02);
+      g.add(basin);
+      const floor = cy(bw * 0.38, bw * 0.38, 0.004, porcelain, bxp, h - 0.14, 0.02);
+      floor.scale.z = 0.75;
+      g.add(floor);
+      g.add(cy(0.014, 0.014, 0.16, chrome, bxp, h + 0.08, -d / 2 + 0.06));
+      const spout = cy(0.011, 0.011, 0.12, chrome, bxp, h + 0.155, -d / 2 + 0.11);
+      spout.rotation.x = Math.PI / 2;
+      g.add(spout);
+    }
+    const doors = Math.max(1, Math.round(w / 0.5));
+    const pull = mat("#b8bcc2", 0.3, 0.8);
+    for (let i = 0; i < doors; i++) {
+      const x = -w / 2 + (w / doors) * (i + 0.5);
+      if (i > 0) g.add(bx(0.006, (h - topT) * 0.9, 0.004, mat(shade(s.color, 0.7)), -w / 2 + (w / doors) * i, (h - topT) / 2, d / 2 - 0.013));
+      g.add(bx(0.015, 0.12, 0.02, pull, x + (i % 2 ? -1 : 1) * (w / doors / 2 - 0.06), h * 0.7, d / 2 - 0.005));
+    }
+  } else if (k === "bathtub") {
+    // An apron-front tub, open on top: a base under the hollow, four walls up
+    // to the rim, a white inside, and a spout at the tap end.
+    const rim = 0.07;
+    const depthIn = h * 0.75;
+    const inner = mat("#ffffff", 0.12);
+    g.add(bx(w, h - depthIn, d, m, 0, (h - depthIn) / 2, 0));
+    g.add(bx(w - 2 * rim, 0.004, d - 2 * rim, inner, 0, h - depthIn + 0.002, 0));
+    for (const sx of [-1, 1]) {
+      g.add(bx(rim, depthIn, d, m, sx * (w / 2 - rim / 2), h - depthIn / 2, 0));
+      g.add(bx(w - 2 * rim, depthIn, rim, m, 0, h - depthIn / 2, sx * (d / 2 - rim / 2)));
+    }
+    const chrome = mat("#d6dade", 0.15, 1);
+    g.add(cy(0.018, 0.018, 0.1, chrome, -w / 2 + rim / 2, h + 0.05, 0));
+    g.add(cy(0.014, 0.014, 0.14, chrome, -w / 2 + rim / 2 + 0.07, h + 0.1, 0).rotateZ(Math.PI / 2));
+  } else if (k === "toilet") {
+    // Pan at the front, cistern against the wall behind.
+    const seatY = h * 0.53;
+    const tankD = Math.min(0.2, d * 0.28);
+    const porcelain = mat(s.color, 0.15);
+    const pan = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.48, w * 0.36, seatY - 0.03, 32), porcelain);
+    pan.scale.z = (d - tankD) / w;
+    pan.position.set(0, (seatY - 0.03) / 2, tankD / 2);
+    pan.castShadow = pan.receiveShadow = true;
+    g.add(pan);
+    const seat = new THREE.Mesh(new THREE.TorusGeometry(w * 0.36, w * 0.09, 10, 32), porcelain);
+    seat.rotation.x = Math.PI / 2;
+    seat.scale.y = (d - tankD) / w;
+    seat.position.set(0, seatY - 0.015, tankD / 2);
+    g.add(seat);
+    g.add(bx(w * 1.0, h - seatY + 0.12, tankD, porcelain, 0, seatY - 0.12 + (h - seatY + 0.12) / 2, -d / 2 + tankD / 2));
+    g.add(bx(0.05, 0.012, 0.02, mat("#d6dade", 0.15, 1), w * 0.3, h - 0.05, -d / 2 + tankD + 0.005));
+  } else if (k === "shower") {
+    // A low tray, two glass sides on the open sides, a head and a valve on the back.
+    const trayH = 0.06;
+    g.add(bx(w, trayH, d, mat(s.color, 0.25), 0, trayH / 2, 0));
+    const glass = new THREE.MeshPhysicalMaterial({ color: "#e8f1f2", roughness: 0.05, transmission: 0.9, thickness: 0.008, ior: 1.5, transparent: true, opacity: 0.35 });
+    const front = new THREE.Mesh(new THREE.BoxGeometry(w, h - trayH, 0.008), glass);
+    front.position.set(0, trayH + (h - trayH) / 2, d / 2 - 0.004);
+    front.userData.noOcclude = true;
+    g.add(front);
+    const side = new THREE.Mesh(new THREE.BoxGeometry(0.008, h - trayH, d), glass);
+    side.position.set(w / 2 - 0.004, trayH + (h - trayH) / 2, 0);
+    side.userData.noOcclude = true;
+    g.add(side);
+    const chrome = mat("#d6dade", 0.15, 1);
+    g.add(bx(0.03, h - trayH, 0.03, chrome, w / 2 - 0.015, trayH + (h - trayH) / 2, d / 2 - 0.015));
+    g.add(cy(0.012, 0.012, 0.4, chrome, 0, h - 0.25, -d / 2 + 0.02));
+    const arm = cy(0.012, 0.012, 0.25, chrome, 0, h - 0.05, -d / 2 + 0.13);
+    arm.rotation.x = Math.PI / 2;
+    g.add(arm);
+    g.add(cy(0.1, 0.1, 0.02, chrome, 0, h - 0.07, -d / 2 + 0.25));
+    g.add(cy(0.04, 0.04, 0.03, chrome, 0, 1.05, -d / 2 + 0.015).rotateX(Math.PI / 2));
+  } else if (k === "mirror") {
+    // A thin frame round a reflective face, hung by its bottom edge.
+    g.add(bx(w, h, d, mat("#2e2e2e", 0.5), 0, h / 2, 0));
+    g.add(bx(w - 0.04, h - 0.04, 0.004, mat(s.color, 0.04, 1), 0, h / 2, d / 2 + 0.002));
+  } else if (k === "towel-rail") {
+    const chrome = mat("#d6dade", 0.15, 1);
+    const barY = h * 0.92;
+    g.add(cy(0.01, 0.01, w, chrome, 0, barY, 0).rotateZ(Math.PI / 2));
+    for (const sx of [-1, 1]) g.add(bx(0.02, 0.02, d, chrome, sx * (w / 2 - 0.02), barY, -d / 2 + 0.01));
+    // A towel folded over the bar, hanging both sides.
+    const towel = mat(s.color, 1);
+    for (const sz of [-1, 1]) g.add(bx(w * 0.8, barY, 0.012, towel, 0, barY / 2, sz * 0.02));
   } else if (k === "plant") {
     const potH = Math.min(0.35, h * 0.3);
     g.add(cy(w * 0.32, w * 0.24, potH, mat("#b5643f", 0.8), 0, potH / 2, 0));

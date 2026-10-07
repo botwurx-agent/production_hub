@@ -7356,6 +7356,26 @@ reach for it during real prep.
   button wrapped the toolbar to two lines at 1440 (a measured 1408px of
   children in 1408px); the setup name field went 230 to 190px and the gap
   2 to 1.5 to keep it one line. 1280 already wrapped and still does.
+- BATHROOM AND BEDROOM PRESETS (2026-10-07, operator: the Setup menu had an
+  empty room, seamless and a kitchen, and they wanted the two rooms most
+  domestic commercials are shot in). `bathroomSetup()` is about 10 x 10 ft on
+  tile (vanity and mirror on the back wall, a tub under a frosted window, a
+  shower and toilet on the right, one person holding a jar at the mirror, a
+  softbox key plus a top light); `bedroomSetup()` is 15 x 16 ft (queen bed
+  between two nightstands whose lamps are lit practicals, dresser and mirror on
+  the right wall, armchair, a window key, one person sitting on the foot of the
+  bed, which seatUnder resolves to the mattress on its own). Both are ordinary
+  rooms of ordinary items, so everything in them moves and deletes.
+  New catalog kinds for them, all usable anywhere: nightstand, dresser, vanity
+  (one basin, two from 1.3 m wide), bathtub (open on top: drawn as a base plus
+  four rim walls, since a solid box with an inside plane read as a block),
+  toilet (seat at the 16 in standard, surface 0.53), shower (tray plus two
+  glass sides marked noOcclude so the meter is not cut by glass), mirror and
+  towel rail. The last two `hang` like the pendant (raise = bottom edge, never
+  stacked), because a wall mirror placed over a vanity would otherwise be
+  carried up by the vanity's top; the inspector's hang label says "bottom
+  edge" for anything that is not a lamp. The mirror is a metallic face, not a
+  real reflection: three.js would need a second render per mirror.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

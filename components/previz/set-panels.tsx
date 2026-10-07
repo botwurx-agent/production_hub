@@ -257,7 +257,7 @@ export function ItemInspector({
       )}
 
       {c.category === "rigging" ? null : c.hangs ? (
-        <NumField label="Hangs at (bulb height)" value={item.raise ?? c.raise ?? 2} units={units} min={0.3} max={12} onChange={(v) => onChange({ raise: v })} />
+        <NumField label={c.light ? "Hangs at (bulb height)" : "Hangs at (bottom edge)"} value={item.raise ?? c.raise ?? 2} units={units} min={0.3} max={12} onChange={(v) => onChange({ raise: v })} />
       ) : (
         <div>
           <NumField label="Raised off what it stands on" value={item.raise ?? 0} units={units} min={0} max={12} onChange={(v) => onChange({ raise: v })} />

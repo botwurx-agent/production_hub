@@ -189,6 +189,109 @@ export function studioSetup(): Setup {
   };
 }
 
+/**
+ * A bathroom, the skincare and grooming spot: a vanity under a mirror on the
+ * back wall, a tub under a frosted window on the left, toilet and shower on
+ * the right, tile underfoot. Small on purpose (about 10 x 10 ft), because a
+ * real one is, and the camera works from the open fourth wall as it would on
+ * a built set.
+ */
+export function bathroomSetup(): Setup {
+  const room = {
+    x: -1.6, z: -1.5, width: 3.2, depth: 3.0, height: 2.6, wallColor: "#e6e2da", floor: "tile" as const,
+    walls: { back: true, left: true, right: true, front: false },
+    openings: [
+      { id: "bw1", wall: "left" as const, kind: "window" as const, at: 1.0, width: 0.9, sill: 1.2, top: 1.95 },
+      { id: "bd1", wall: "right" as const, kind: "door" as const, at: 2.4, width: 0.8, sill: 0, top: 2.05 },
+    ],
+  };
+  return {
+    v: 3,
+    name: "Bathroom, morning routine",
+    set: { kind: "room", room },
+    items: [
+      item("vanity", "b-vanity", 0.2, -1.225),
+      item("mirror", "b-mirror", 0.2, -1.48, { raise: 1.1 }),
+      item("bathtub", "b-tub", -1.22, -0.3, { rot: 90 }),
+      item("shower", "b-shower", 1.15, -1.05),
+      item("toilet", "b-toilet", 1.25, -0.15, { rot: -90 }),
+      item("towel-rail", "b-towel", -0.62, -1.46, { raise: 0.95 }),
+      item("plant", "b-plant", 0.55, -1.27, { w: 0.18, d: 0.18, h: 0.32 }),
+      item("jar", "jar", 0.18, -0.6, { name: "Hero jar" }),
+    ],
+    shots: [
+      shot("a", "1A", "Wide", "sticks", 18, 4, 0, { x: 0.1, y: 1.5, z: 1.9 }, { x: 0, y: 1.1, z: -1.0 }, "nia", 2.4, null, 800),
+      shot("b", "1B", "At the mirror", "sticks", 35, 2.8, 0, { x: 1.0, y: 1.45, z: 0.6 }, { x: 0.15, y: 1.45, z: -0.7 }, "nia", 1.5, null, 800),
+      shot("c", "1C", "Product in hand", "sticks", 85, 2.8, 0, { x: -0.35, y: 1.2, z: 0.75 }, { x: 0.2, y: 1.15, z: -0.45 }, "jar", 1.35, null, 800),
+    ],
+    activeId: "b",
+    talent: [
+      { id: "nia", name: "Nia", heightM: 1.68, pose: "holding", x: 0.2, z: -0.55, facing: 170, top: "#e8e1d4", bottom: "#c8b9a6", holding: "jar" },
+    ],
+    lights: [
+      { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "softbox", beamDeg: null, dimmer: 0.4, cct: 5600, x: 0.9, y: 2.2, z: 1.2, yaw: 0, pitch: 0, aimAt: "nia", frame: null, on: true },
+      { id: "top", role: "Top light", fixtureId: "s30", modifierId: "diffuser", beamDeg: null, dimmer: 0.5, cct: 4300, x: -0.1, y: 2.45, z: -0.6, yaw: 0, pitch: 0, aimAt: "nia", frame: null, on: true },
+    ],
+    grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: -0.9, y: 1.2, z: 0.9, yaw: 0, pitch: 0, aimAt: "nia" }],
+    win: { sky: "bright", nd: 0, on: true },
+    units: "ft",
+    aspectId: "16x9",
+  };
+}
+
+/**
+ * A bedroom: a queen bed against the back wall between two nightstands with
+ * lamps on, a dresser and mirror on the right wall, an armchair in the corner
+ * and a window on the left. One person sits on the foot of the bed (the seat
+ * is the bed, worked out on its own) and one stands by the window.
+ */
+export function bedroomSetup(): Setup {
+  const room = {
+    x: -2.25, z: -1.8, width: 4.5, depth: 4.8, height: 2.7, wallColor: "#d9d2c6", floor: "wood" as const,
+    walls: { back: true, left: true, right: true, front: false },
+    openings: [
+      { id: "rw1", wall: "left" as const, kind: "window" as const, at: 1.7, width: 1.4, sill: 0.8, top: 2.2 },
+      { id: "rd1", wall: "right" as const, kind: "door" as const, at: 3.9, width: 0.85, sill: 0, top: 2.05 },
+    ],
+  };
+  const lamp = (id: string, x: number) => item("table-lamp", id, x, -1.6, { light: { on: true, dimmer: 0.8, cct: 2700, lumens: 450 } });
+  return {
+    v: 3,
+    name: "Bedroom, evening",
+    set: { kind: "room", room },
+    items: [
+      item("rug", "r-rug", 0, 0.05, { w: 2.6, d: 1.8 }),
+      item("bed", "r-bed", 0, -0.75),
+      item("nightstand", "r-ns1", -1.15, -1.6),
+      item("nightstand", "r-ns2", 1.15, -1.6),
+      lamp("r-lamp1", -1.15),
+      lamp("r-lamp2", 1.15),
+      item("dresser", "r-dresser", 2.01, -0.25, { rot: -90 }),
+      item("mirror", "r-mirror", 2.235, -0.25, { rot: -90, w: 0.7, h: 0.9, raise: 1.25 }),
+      item("armchair", "r-chair", 1.55, 1.45, { rot: -135 }),
+      item("plant", "r-plant", -1.9, 1.7),
+    ],
+    shots: [
+      shot("a", "1A", "Wide", "sticks", 24, 2.8, 0, { x: 0.2, y: 1.5, z: 3.6 }, { x: 0, y: 0.9, z: -0.6 }, "rob", 3.4, null, 1280),
+      shot("b", "1B", "Medium on Rob", "fisher", 50, 2, 0, { x: 0.6, y: 1.15, z: 2.1 }, { x: 0.3, y: 1.0, z: 0.1 }, "rob", 2.0, null, 1280),
+      shot("c", "1C", "Bedside", "sticks", 85, 2, 0, { x: -0.3, y: 0.9, z: 0.2 }, { x: -1.15, y: 0.75, z: -1.6 }, null, 1.9, null, 1280),
+    ],
+    activeId: "a",
+    talent: [
+      { id: "rob", name: "Rob", heightM: 1.8, pose: "seated", x: 0.3, z: 0.1, facing: 0, top: "#4a5d6e", bottom: "#2e3138" },
+      { id: "jess", name: "Jess", heightM: 1.66, pose: "standing", x: -1.4, z: 0.7, facing: 40, top: "#b8794f", bottom: "#3a3f4a" },
+    ],
+    lights: [
+      { id: "key", role: "Key (window side)", fixtureId: "ls600d", modifierId: "dome", beamDeg: null, dimmer: 0.35, cct: 5600, x: -1.7, y: 2.1, z: 1.6, yaw: 0, pitch: 0, aimAt: "rob", frame: null, on: true },
+      { id: "kick", role: "Kicker", fixtureId: "titan", modifierId: "bare", beamDeg: null, dimmer: 0.6, cct: 3200, x: 1.7, y: 1.5, z: -1.2, yaw: 0, pitch: 0, aimAt: "rob", frame: null, on: true },
+    ],
+    grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: 1.6, y: 1.1, z: 1.0, yaw: 0, pitch: 0, aimAt: "rob" }],
+    win: { sky: "overcast", nd: 0.6, on: true },
+    units: "ft",
+    aspectId: "16x9",
+  };
+}
+
 /** A blank room built from measurements, with nobody in it yet. */
 export function blankSetup(width: number, depth: number, height: number): Setup {
   const s = studioSetup();

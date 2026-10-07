@@ -36,7 +36,7 @@ import {
 import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, WindowInspector } from "./light-panels";
 import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 import {
-  aim, asSetup, assetKeys, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
+  aim, asSetup, assetKeys, bathroomSetup, bedroomSetup, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
   type Setup, type Shot, type Units, type Vec3, type WinState,
 } from "./setup";
 import { FRAME_A, FRAME_B, Timeline } from "./timeline";
@@ -2401,9 +2401,15 @@ export function PrevizPrototype() {
     const t = window.setTimeout(() => setSaveNote(null), 6000);
     return () => window.clearTimeout(t);
   }, [saveNote]);
-  const newSetup = (which: "studio" | "kitchen" | "blank") => {
+  const newSetup = (which: "studio" | "kitchen" | "bathroom" | "bedroom" | "blank") => {
     if (!window.confirm("Start a new setup? This one is replaced in this browser. Download it first if you want to keep it.")) return;
-    applySetup(which === "studio" ? studioSetup() : which === "kitchen" ? kitchenSetup() : blankSetup(5, 6, 2.8));
+    applySetup(
+      which === "studio" ? studioSetup()
+        : which === "kitchen" ? kitchenSetup()
+        : which === "bathroom" ? bathroomSetup()
+        : which === "bedroom" ? bedroomSetup()
+        : blankSetup(5, 6, 2.8),
+    );
     if (which === "blank") setSel({ kind: "set" });
   };
   const download = async () => {
@@ -2602,6 +2608,8 @@ export function PrevizPrototype() {
                 { l: "New: empty room", d: "5 x 6 m, one window: build from here", f: () => newSetup("blank") },
                 { l: "New: talent on seamless", d: "Stage, paper backdrop, two people", f: () => newSetup("studio") },
                 { l: "New: kitchen sample", d: "A furnished kitchen with daylight", f: () => newSetup("kitchen") },
+      { l: "New: bathroom", d: "Vanity and mirror, tub, shower, tile", f: () => newSetup("bathroom") },
+      { l: "New: bedroom", d: "Queen bed, nightstands and lamps, dresser", f: () => newSetup("bedroom") },
                 { l: "Build a room from a scout photo", d: "The AI estimates it, you check it", f: () => setScout(true) },
                 { l: "Download this setup", d: "A file with its photos and models, for another computer", f: () => void download() },
                 { l: "Open a setup file", d: "One you downloaded before", f: () => setupFileRef.current?.click() },

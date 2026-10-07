@@ -121,6 +121,15 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "sofa", name: "Sofa", category: "furniture", hint: "Three seater", w: 2.1, d: 0.92, h: 0.84, color: "#8b8f97", surface: 0.52 },
   { kind: "armchair", name: "Armchair", category: "furniture", hint: "Upholstered", w: 0.86, d: 0.86, h: 0.84, color: "#b58c5e", surface: 0.52 },
   { kind: "bed", name: "Bed", category: "furniture", hint: "Queen", w: 1.6, d: 2.1, h: 0.55, color: "#e9e6df", surface: 1 },
+  { kind: "nightstand", name: "Nightstand", category: "furniture", hint: "Beside a bed, one drawer", w: 0.48, d: 0.4, h: 0.58, color: "#8a6748", surface: 1 },
+  { kind: "dresser", name: "Dresser", category: "furniture", hint: "Chest of drawers", w: 1.2, d: 0.48, h: 0.82, color: "#d9d2c6", surface: 1 },
+  // Bathroom
+  { kind: "vanity", name: "Vanity and sink", category: "furniture", hint: "Basin set in a counter", w: 1.0, d: 0.55, h: 0.86, color: "#e9e4da", surface: 1, presets: [{ label: "Single", w: 0.75 }, { label: "Wide", w: 1.0 }, { label: "Double", w: 1.5 }] },
+  { kind: "bathtub", name: "Bathtub", category: "furniture", hint: "Built in, 5 ft", w: 1.52, d: 0.76, h: 0.56, color: "#f4f3ef", surface: 1, presets: [{ label: "5 ft", w: 1.52 }, { label: "5.5 ft", w: 1.68 }] },
+  { kind: "toilet", name: "Toilet", category: "furniture", hint: "Seat at 16 in", w: 0.38, d: 0.7, h: 0.78, color: "#f4f3ef", surface: 0.53 },
+  { kind: "shower", name: "Shower", category: "furniture", hint: "Glass enclosure on a tray", w: 0.9, d: 0.9, h: 2.0, color: "#f4f3ef", presets: [{ label: "3 x 3 ft", w: 0.9, d: 0.9 }, { label: "3 x 5 ft", w: 1.5, d: 0.9 }] },
+  { kind: "mirror", name: "Wall mirror", category: "furniture", hint: "On the wall, over a sink or a dresser", w: 0.8, d: 0.03, h: 0.9, color: "#c9d3d8", hangs: true, raise: 1.1 },
+  { kind: "towel-rail", name: "Towel rail", category: "furniture", hint: "On the wall, with a towel", w: 0.6, d: 0.1, h: 0.5, color: "#f1ece2", hangs: true, raise: 0.9 },
   { kind: "plant", name: "Plant", category: "furniture", hint: "In a pot", w: 0.5, d: 0.5, h: 1.2, color: "#4e6e45", round: true },
   // Practicals: they light the scene
   { kind: "pendant", name: "Pendant lamp", category: "practical", hint: "Hangs over a table", w: 0.4, d: 0.4, h: 0.25, color: "#2b2b2b", round: true, hangs: true, raise: 1.95, light: { on: true, dimmer: 1, cct: 2700, lumens: 800 } },
