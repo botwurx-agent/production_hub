@@ -494,6 +494,18 @@ export function PrevizPrototype() {
   useEffect(() => {
     try { window.localStorage.setItem("previz.houseLights", houseLights ? "on" : "off"); } catch { /* storage off */ }
   }, [houseLights]);
+  // The shots strip folds down to one line of shot chips so the picture can
+  // take the room. Per person, like the house lights.
+  const [shotsOpen, setShotsOpenState] = useState(true);
+  useEffect(() => {
+    try { if (window.localStorage.getItem("previz.shotsOpen") === "closed") setShotsOpenState(false); } catch { /* storage off */ }
+  }, []);
+  // Saved on the press rather than in an effect, so nothing can write the
+  // default over a stored "closed" before it has been read.
+  const toggleShots = () => setShotsOpenState((o) => {
+    try { window.localStorage.setItem("previz.shotsOpen", o ? "closed" : "open"); } catch { /* storage off */ }
+    return !o;
+  });
   const [showBoard, setShowBoard] = useState(true);
   const [boardOpacity, setBoardOpacity] = useState(0.35);
   const [thirds, setThirds] = useState(false);
@@ -3072,7 +3084,46 @@ export function PrevizPrototype() {
       </div>
 
       {/* Shots strip */}
-      <footer className="flex gap-3 overflow-x-auto border-t border-border bg-surface px-4 py-3">
+      <div className="flex items-center gap-2 border-t border-border bg-surface px-4 py-1.5">
+        <button
+          type="button"
+          onClick={toggleShots}
+          aria-expanded={shotsOpen}
+          className="flex items-center gap-1.5 rounded-[7px] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted hover:text-text"
+        >
+          <svg viewBox="0 0 12 12" className={`h-3 w-3 transition-transform ${shotsOpen ? "" : "-rotate-90"}`} aria-hidden>
+            <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Shots · {shots.length}
+        </button>
+        {shotsOpen ? null : (
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+            {shots.map((s, i) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => { setActiveId(s.id); setSel({ kind: "camera" }); setView("lens"); }}
+                title={s.title}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                  s.id === activeId ? "border-accent bg-accent-soft text-text" : "border-border text-text-muted hover:border-border-strong hover:text-text"
+                }`}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ background: SHOT_HUES[i % SHOT_HUES.length] }} />
+                {s.code}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={addShot}
+              className="shrink-0 rounded-full border border-dashed border-border px-2.5 py-0.5 text-xs font-semibold text-text-muted hover:border-border-strong hover:text-text"
+            >
+              + Shot from here
+            </button>
+          </div>
+        )}
+      </div>
+      {shotsOpen ? (
+      <footer className="flex gap-3 overflow-x-auto bg-surface px-4 pb-3">
         {shots.map((s, i) => {
           const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
           const a = imagedArea(b, aspect.ratio);
@@ -3123,6 +3174,7 @@ export function PrevizPrototype() {
           Shot from here
         </button>
       </footer>
+      ) : null}
 
       {scout ? (
         <ScoutDialog units={units} read={readPhoto} onBuild={buildFromDraft} onClose={() => setScout(false)} />

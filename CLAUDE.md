@@ -7336,6 +7336,14 @@ reach for it during real prep.
   for seconds, so pointer events arrive late and a held button reads as barely
   moving. The hold logic was verified on a bare page mounting ControlPads alone
   (1.0 units/s held, 0.1 per tap, stops on release), not on the prototype.
+- THE SHOTS STRIP FOLDS (2026-10-07, operator: collapse it for a larger
+  previz window). A "Shots · N" toggle over the strip folds it to one row of
+  shot chips (still click to switch, plus "+ Shot from here"), so the stage
+  gains the strip's height. Remembered per browser ("previz.shotsOpen"), saved
+  on the press rather than in an effect. HONEST LIMIT: through the lens the
+  frame is fitted to the stage, so on a laptop at 16:9 the picture is bound by
+  WIDTH (the two side panels) and barely grows; at 1920 it went 1178x663 to
+  1352x760, and free view and 9:16 always use the full height.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,
