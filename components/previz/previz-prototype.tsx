@@ -497,12 +497,27 @@ export function PrevizPrototype() {
   // The shots strip folds down to one line of shot chips so the picture can
   // take the room. Per person, like the house lights.
   const [shotsOpen, setShotsOpenState] = useState(true);
+  // Focus hides both side panels and folds the shots strip, so the picture
+  // gets the whole window. Not remembered: reopening the page with every
+  // control hidden would read as the page being broken.
+  const [focusMode, setFocusMode] = useState(false);
+  const stripOpen = shotsOpen && !focusMode;
   useEffect(() => {
     try { if (window.localStorage.getItem("previz.shotsOpen") === "closed") setShotsOpenState(false); } catch { /* storage off */ }
   }, []);
   // Saved on the press rather than in an effect, so nothing can write the
   // default over a stored "closed" before it has been read.
-  const toggleShots = () => setShotsOpenState((o) => {
+  const toggleShots = () => {
+    // In focus the strip is folded by focus, not by preference: opening it
+    // means leaving focus, with the strip shown.
+    if (focusMode) {
+      setFocusMode(false);
+      if (!shotsOpen) flipShots();
+      return;
+    }
+    flipShots();
+  };
+  const flipShots = () => setShotsOpenState((o) => {
     try { window.localStorage.setItem("previz.shotsOpen", o ? "closed" : "open"); } catch { /* storage off */ }
     return !o;
   });
@@ -1671,6 +1686,8 @@ export function PrevizPrototype() {
       if (k === "b") return setShowBoard((b) => !b);
       if (k === "?") return setHelp((h) => !h);
       if (k === "z") return setZebra((z) => !z);
+      if (e.key === "\\") return setFocusMode((f) => !f);
+      if (e.key === "Escape" && focusMode) return setFocusMode(false);
       if (e.key === " ") {
         e.preventDefault();
         return toggleRef.current();
@@ -1705,7 +1722,7 @@ export function PrevizPrototype() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, active, shots, updateShot, sel, items]);
+  }, [view, active, shots, updateShot, sel, items, focusMode]);
 
   // ----- Readouts
   const hfov = fovDeg(area.w, active.focal);
@@ -2557,14 +2574,14 @@ export function PrevizPrototype() {
       </div>
 
       {/* Top bar */}
-      <header className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-4 py-2">
+      <header className="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface px-4 py-2">
         <div className="relative mr-3 min-w-0">
           <div className="flex items-center gap-2">
             <input
               aria-label="Setup name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-[230px] truncate rounded-[6px] border border-transparent bg-transparent px-1 font-display text-[15px] font-bold hover:border-border focus:border-border focus:outline-none"
+              className="w-[190px] truncate rounded-[6px] border border-transparent bg-transparent px-1 font-display text-[15px] font-bold hover:border-border focus:border-border focus:outline-none"
             />
             <button
               type="button"
@@ -2576,7 +2593,7 @@ export function PrevizPrototype() {
             </button>
             <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">Prototype</span>
           </div>
-          <p className="max-w-[420px] truncate px-1 text-xs text-text-muted">
+          <p className="max-w-[330px] truncate px-1 text-xs text-text-muted">
             {saveNote ?? `${shots.length} shot${shots.length === 1 ? "" : "s"} · ${items.length} thing${items.length === 1 ? "" : "s"} on the set · saved in this browser`}
           </p>
           {menu ? (
@@ -2608,6 +2625,7 @@ export function PrevizPrototype() {
           onChange={(v) => setView(v as "lens" | "free")}
           options={[{ v: "lens", l: "Through the lens" }, { v: "free", l: "Free view" }]}
         />
+        <Toggle on={focusMode} onClick={() => setFocusMode(!focusMode)} label="Focus" hint="\\" />
         <Toggle on={clay} onClick={() => setClay(!clay)} label="Clay" hint="C" />
         {view === "free" ? (
           <>
@@ -2666,9 +2684,9 @@ export function PrevizPrototype() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_300px]">
+      <div className={`grid min-h-0 flex-1 ${focusMode ? "grid-cols-[minmax(0,1fr)]" : "grid-cols-[220px_minmax(0,1fr)_300px]"}`}>
         {/* Left rail: what is in the scene */}
-        <aside className="min-h-0 overflow-y-auto border-r border-border bg-surface p-3 text-sm">
+        <aside className={`min-h-0 overflow-y-auto border-r border-border bg-surface p-3 text-sm ${focusMode ? "hidden" : ""}`}>
           <RailGroup title="Set">
             <RailItem
               active={sel.kind === "set"} onClick={() => setSel({ kind: "set" })} dot={set.kind === "room" ? set.room.wallColor : "#2b2c2e"}
@@ -2989,7 +3007,7 @@ export function PrevizPrototype() {
         </div>
 
         {/* Inspector */}
-        <aside className="min-h-0 overflow-y-auto border-l border-border bg-surface p-4 text-sm">
+        <aside className={`min-h-0 overflow-y-auto border-l border-border bg-surface p-4 text-sm ${focusMode ? "hidden" : ""}`}>
           {sel.kind === "camera" ? (
             <CameraInspector
               pads={<ControlPads pads={camPads(active.id)} caption={<>Keys work too through the lens: W A S D, Q E, and the arrows.</>} />}
@@ -3088,15 +3106,15 @@ export function PrevizPrototype() {
         <button
           type="button"
           onClick={toggleShots}
-          aria-expanded={shotsOpen}
+          aria-expanded={stripOpen}
           className="flex items-center gap-1.5 rounded-[7px] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted hover:text-text"
         >
-          <svg viewBox="0 0 12 12" className={`h-3 w-3 transition-transform ${shotsOpen ? "" : "-rotate-90"}`} aria-hidden>
+          <svg viewBox="0 0 12 12" className={`h-3 w-3 transition-transform ${stripOpen ? "" : "-rotate-90"}`} aria-hidden>
             <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Shots · {shots.length}
         </button>
-        {shotsOpen ? null : (
+        {stripOpen ? null : (
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
             {shots.map((s, i) => (
               <button
@@ -3122,7 +3140,7 @@ export function PrevizPrototype() {
           </div>
         )}
       </div>
-      {shotsOpen ? (
+      {stripOpen ? (
       <footer className="flex gap-3 overflow-x-auto bg-surface px-4 pb-3">
         {shots.map((s, i) => {
           const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
@@ -3599,6 +3617,7 @@ function HelpCard({ onClose }: { onClose: () => void }) {
     ["B", "storyboard overlay"],
     ["Map", "drag anything; drag a white dot to aim it or turn it"],
     ["Z", "zebras: stripes where the picture clips"],
+    ["\\", "focus: hide both side panels and the shot cards for a bigger picture (Esc to leave)"],
     ["Delete", "delete the selected thing, light, bounce or flag"],
     ["Cmd or Ctrl + D", "duplicate the selected thing"],
   ];

@@ -7344,6 +7344,18 @@ reach for it during real prep.
   frame is fitted to the stage, so on a laptop at 16:9 the picture is bound by
   WIDTH (the two side panels) and barely grows; at 1920 it went 1178x663 to
   1352x760, and free view and 9:16 always use the full height.
+- FOCUS (2026-10-07, operator, straight after the fold): a Focus toggle in
+  the toolbar (key \, Esc leaves) hides BOTH side panels and folds the shots
+  strip to its chip row, which is what actually enlarges the picture on a
+  laptop: at 1440 the 16:9 frame goes 872x490 to 1184x666, at 1920 1320x743
+  to 1571x884. NOT remembered across reloads on purpose (a page reopening
+  with every control hidden reads as broken). It does not overwrite the
+  strip's own open/closed preference: `stripOpen = shotsOpen && !focusMode`,
+  and pressing the strip toggle in focus leaves focus. The state is called
+  focusMode because `focus` is already the lens's focus distance. The extra
+  button wrapped the toolbar to two lines at 1440 (a measured 1408px of
+  children in 1408px); the setup name field went 230 to 190px and the gap
+  2 to 1.5 to keep it one line. 1280 already wrapped and still does.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,
