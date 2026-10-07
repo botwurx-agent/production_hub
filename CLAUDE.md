@@ -7262,6 +7262,24 @@ reach for it during real prep.
   robotBaseRange and robotBaseLocal take the mount, because underslung the arm
   reaches ABOVE the camera (about 0.37 m over the lens for a mini), which
   lowers the highest lens it can carry.
+- RGB FIXTURES AND HSI COLOUR (2026-10-07, operator: "We need to add some
+  RGB capable lights"). Three new fixtures: Aputure LS 600c Pro (the 600d
+  COB model, 28,000 lm, 2300-10000K), Nova P600c (22,000 lm) and Nova P300c
+  (11,000 lm), both drawn as panels in a gunmetal housing with an aluminium
+  bezel and end handles rather than the SkyPanel's black and ARRI blue.
+  Fixture gained `rgb`, and the SkyPanel S60-C/S30-C, MC Pro and Titan were
+  flagged too, since they are RGB units already in the catalogue. LightSpec
+  gained `color?: {hue, sat} | null` (null = white at the CCT, no migration).
+  The inspector shows White (CCT) | Colour (HSI) on an rgb fixture: ten named
+  colour swatches, hue and saturation sliders, and a line stating what the
+  colour costs. THE COST IS MODELLED, not ignored: a saturated colour runs only
+  some emitters, so `colorOutput` scales output by the pure hue's luminance
+  (green about 72%, red 21%, blue 7%, floored at 6%) blended back to 100% as
+  saturation drops, and `lightOutput` feeds that into resolveSource at all
+  three call sites, so the meter, the picture and the map agree. Below full
+  saturation the colour is mixed with the fixture's white at its CCT
+  (`lightRgb`). Approximate, like every lumen figure here. Changing to a
+  non-rgb fixture clears the colour.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
 import { bodyDrop, supportFootprint, type SupportOpts } from "@/lib/previz/camera-model";
-import { FIXTURES, FT, resolveSource } from "@/lib/previz/lighting";
+import { FIXTURES, FT, lightOutput, resolveSource } from "@/lib/previz/lighting";
 import type { GripSpec, LightSpec } from "@/lib/previz/light-build";
 import type { TalentSpec } from "@/lib/previz/scene-build";
 import { catalogOf, footprint, type ItemSpec } from "@/lib/previz/catalog";
@@ -413,7 +413,7 @@ export function TopDownMap({
           const a = aimOfLight(l);
           const y = rad(a.yaw);
           const f = FIXTURES.find((x) => x.id === l.fixtureId) ?? FIXTURES[0];
-          const src = resolveSource(f, l.modifierId, l.dimmer, l.beamDeg, l.frame);
+          const src = resolveSource(f, l.modifierId, lightOutput(l, f), l.beamDeg, l.frame);
           const half = rad(Math.min(src.omni ? 180 : src.shownBeamDeg, 150) / 2);
           const R = (src.omni ? 0.7 : 1.5) * k;
           const ray = (q: number) => `${l.x - Math.sin(y + q) * R} ${l.z - Math.cos(y + q) * R}`;

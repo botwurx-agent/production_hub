@@ -9,7 +9,7 @@
 // stands and softboxes and only stop at the set, the people and the flags.
 import * as THREE from "three";
 import {
-  FT, FIXTURES, MODIFIERS, shadowBlur, spotCone, type FrameSpec, type SourceResult,
+  FT, FIXTURES, MODIFIERS, shadowBlur, spotCone, type FrameSpec, type LightColor, type SourceResult,
 } from "./lighting";
 import { buildFixture, buildStand, faceMaterial } from "./gear-models";
 
@@ -24,6 +24,8 @@ export type LightSpec = {
   beamDeg: number | null;
   dimmer: number;
   cct: number;
+  /** An RGB fixture in its HSI mode; absent or null is white at the CCT. */
+  color?: LightColor | null;
   x: number;
   y: number;
   z: number;

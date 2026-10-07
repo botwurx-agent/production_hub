@@ -23,7 +23,8 @@ import { buildFigure, buildRig, buildWorld, dofMaterial, eyeHeight, handWorld, t
 import { SAMPLE_BOARDS } from "@/lib/previz/boards";
 import { SUPPORTS, bodyDrop, buildSupport, buildUnderslungMount, underslungTop, robotBaseLocal, robotBaseRange, type RobotMount, type SupportOpts } from "@/lib/previz/camera-model";
 import {
-  FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, exposureScale, luxForStop, resolveSource, type WindowSky,
+  FIXTURES, FT, WINDOW_SKIES, apparentSizeDeg, cameraColor, cameraColorRgb, exposureScale, lightOutput, lightRgb, luxForStop,
+  resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
 import {
   GRIP_NAMES, GRIP_REFLECTANCE, buildGripRig, buildLightRig, structureKey, updateGripRig, updateLightRig,
@@ -406,7 +407,7 @@ function buildEmitters(lights: LightSpec[], win: WinState, sc: Scene, windows: W
   for (const raw of lights) {
     if (!raw.on) continue;
     const s = effLight(raw, sc);
-    const src = resolveSource(fixtureOf(s), s.modifierId, s.dimmer, s.beamDeg, s.frame);
+    const src = resolveSource(fixtureOf(s), s.modifierId, lightOutput(s, fixtureOf(s)), s.beamDeg, s.frame);
     const a = aimOf(s, sc);
     out.push(...emittersFromSource(s.id, lightLabel(s), new THREE.Vector3(s.x, s.y, s.z), forward(a.yaw, a.pitch), src));
   }
@@ -715,7 +716,7 @@ export function PrevizPrototype() {
           world.lightsRoot.add(rig.group);
           lightRigs.set(s.id, rig);
         }
-        const src = resolveSource(fixtureOf(s), s.modifierId, s.dimmer, s.beamDeg, s.frame);
+        const src = resolveSource(fixtureOf(s), s.modifierId, lightOutput(s, fixtureOf(s)), s.beamDeg, s.frame);
         const a = aimOf(s, sc);
         const t = s.aimAt ? targetPoint(s.aimAt, sc) : null;
         const dFix = t ? Math.max(0.3, t.distanceTo(new THREE.Vector3(s.x, s.y, s.z))) : 2;
@@ -737,7 +738,7 @@ export function PrevizPrototype() {
             cast: castT,
           };
         }
-        updateLightRig(rig, s, a, lit, soft, cameraColor(s.cct, wb), cast, through);
+        updateLightRig(rig, s, a, lit, soft, cameraColorRgb(lightRgb(s.cct, fixtureOf(s).rgb ? s.color : null), wb), cast, through);
       }
       for (const [id, rig] of lightRigs) {
         if (seen.has(id)) continue;
@@ -1694,6 +1695,7 @@ export function PrevizPrototype() {
         next.modifierId = f.defaultModifier;
         next.cct = f.cctDefault;
         next.beamDeg = null;
+        if (!f.rgb) next.color = null;
       }
       return next;
     }));

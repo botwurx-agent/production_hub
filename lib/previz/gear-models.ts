@@ -229,7 +229,7 @@ function bowensModifier(head: THREE.Group, p: Pal, faces: THREE.MeshStandardMate
 // ------------------------------------------------------------ heads
 
 /**
- * Aputure LS 1200d / 600d / 300x: a finned COB head with a modifier mount and a
+ * Aputure LS 1200d / 600d / 600c / 300x: a finned COB head with a modifier mount and a
  * fan grille. The 1200d is the same family a size up, on the larger Pro mount,
  * with a bigger control box and a second fan.
  */
@@ -238,7 +238,7 @@ function cobHead(f: Fixture, modifierId: string, p: Pal, faces: THREE.MeshStanda
   const yoke = new THREE.Group();
   const base = new THREE.Group();
   const huge = f.id === "ls1200d";
-  const big = huge || f.id === "ls600d";
+  const big = huge || f.id === "ls600d" || f.id === "ls600c";
   const r = huge ? 0.15 : big ? 0.115 : 0.095;
   const len = huge ? 0.37 : big ? 0.29 : 0.23;
   const zc = 0.03 + len / 2;
@@ -320,16 +320,32 @@ function miniHead(f: Fixture, p: Pal, faces: THREE.MeshStandardMaterial[]): Part
   return { head, yoke, faceZ: -0.001, yokeDrop: drop };
 }
 
-/** ARRI SkyPanel: a slim rectangular soft panel in a wide yoke. */
+/**
+ * ARRI SkyPanel: a slim rectangular soft panel in a wide yoke. The Aputure
+ * Nova is the same shape of job in a deeper, gunmetal housing with a bright
+ * aluminium bezel round the face, a side handle at each end and no ARRI blue.
+ */
 function panelHead(f: Fixture, modifierId: string, p: Pal, faces: THREE.MeshStandardMaterial[]): Partial<FixtureModel> & { faceZ: number } {
   const head = new THREE.Group();
   const yoke = new THREE.Group();
-  const w = f.faceW + 0.07;
-  const h = f.faceH + 0.07;
-  const d = 0.075;
-  head.add(box(w, h, d, p.black, 0, 0, d / 2));
+  const nova = f.id.startsWith("nova");
+  const w = f.faceW + (nova ? 0.09 : 0.07);
+  const h = f.faceH + (nova ? 0.09 : 0.07);
+  const d = nova ? 0.1 : 0.075;
+  const shell = nova ? m("#2c2f34", 0.45, 0.45) : p.black;
+  head.add(box(w, h, d, shell, 0, 0, d / 2));
+  if (nova) {
+    // The bezel: four bright rails framing the face.
+    const t = 0.018;
+    for (const s of [-1, 1]) {
+      head.add(box(w, t, 0.012, p.alu, 0, (s * (h - t)) / 2, -0.004));
+      head.add(box(t, h, 0.012, p.alu, (s * (w - t)) / 2, 0, -0.004));
+    }
+    // A carry handle on each short end.
+    for (const s of [-1, 1]) head.add(box(0.02, h * 0.55, 0.04, p.rubber, s * (w / 2 + 0.012), 0, d / 2));
+  }
   // Rounded-looking ends: half cylinders on the short sides.
-  for (const s of [-1, 1]) {
+  for (const s of nova ? [] : [-1, 1]) {
     const end = new THREE.Mesh(new THREE.CylinderGeometry(d / 2, d / 2, h, 16, 1, false, s > 0 ? 0 : Math.PI, Math.PI), p.black);
     end.position.set((s * w) / 2, 0, d / 2);
     head.add(end);
@@ -340,7 +356,7 @@ function panelHead(f: Fixture, modifierId: string, p: Pal, faces: THREE.MeshStan
   head.add(box(0.07, 0.035, 0.002, m("#1f3b4f", 0.2, 0.2), w / 2 - 0.16, h / 2 - 0.08, d + 0.031));
   // Two handles on top, and ARRI's blue badge.
   for (const s of [-1, 1]) head.add(at(topHandle(p, h / 2 + 0.005, d / 2, 0.06), s * w * 0.3, h / 2 + 0.005, d / 2));
-  head.add(box(0.06, 0.012, 0.003, p.arriBlue, -w / 2 + 0.08, -h / 2 + 0.03, -0.002));
+  if (!nova) head.add(box(0.06, 0.012, 0.003, p.arriBlue, -w / 2 + 0.08, -h / 2 + 0.03, -0.002));
   const face = new THREE.Mesh(new THREE.PlaneGeometry(f.faceW, f.faceH), faceMaterial());
   face.position.z = -0.002;
   faces.push(face.material as THREE.MeshStandardMaterial);

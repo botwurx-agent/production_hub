@@ -5,12 +5,12 @@
 // light meter. Every number shown comes from lib/previz/lighting.ts and the
 // meter, the same figures the picture is drawn from.
 import {
-  DIFFUSIONS, FIXTURES, FRAME_SIZES, ISOS, MODIFIERS, ND_STEPS, WHITE_BALANCES, WINDOW_SKIES,
-  apparentSizeDeg, bestNd, readsAt, softness, stopLabel, stopsLabel, stopsOver, type WindowSky,
+  COLOR_PRESETS, DIFFUSIONS, FIXTURES, FRAME_SIZES, ISOS, MODIFIERS, ND_STEPS, WHITE_BALANCES, WINDOW_SKIES,
+  apparentSizeDeg, bestNd, colorOutput, readsAt, softness, stopLabel, stopsLabel, stopsOver, type WindowSky,
 } from "@/lib/previz/lighting";
 import { GRIP_NAMES, type GripKind, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
 import type { Contribution, Reading } from "@/lib/previz/meter";
-import { Chip, Field, Readout, TrashIcon } from "./ui";
+import { Chip, Field, Readout, Seg, TrashIcon } from "./ui";
 
 type Fmt = (m: number) => string;
 type Target = { id: string; name: string };
@@ -96,6 +96,57 @@ function AtSubject({ c, total, targetName, fmt }: { c: Contribution | undefined;
   );
 }
 
+/** The swatch for a hue. A literal colour on purpose: it is the light's colour, not a theme token. */
+const swatch = (hue: number, sat: number) => `hsl(${Math.round(hue)} ${Math.round(sat * 100)}% 50%)`;
+
+/**
+ * HSI mode on an RGB fixture: a named colour, then hue and saturation. States
+ * what the colour costs, since a deep blue is a fraction of the white output
+ * and that is the surprise on set.
+ */
+function ColorField({ color, cct, onChange }: {
+  color: { hue: number; sat: number };
+  cct: number;
+  onChange: (c: { hue: number; sat: number }) => void;
+}) {
+  const near = COLOR_PRESETS.find((p) => Math.abs(((p.hue - color.hue + 540) % 360) - 180) < 4);
+  const out = Math.round(colorOutput(color) * 100);
+  return (
+    <Field label={`Colour · ${near && color.sat > 0.95 ? near.name : `${Math.round(color.hue)}°`}, ${Math.round(color.sat * 100)}% saturation`}>
+      <div className="mb-2 flex flex-wrap gap-1">
+        {COLOR_PRESETS.map((p) => (
+          <button
+            key={p.name}
+            type="button"
+            title={p.name}
+            aria-label={p.name}
+            aria-pressed={near?.name === p.name && color.sat > 0.95}
+            onClick={() => onChange({ hue: p.hue, sat: 1 })}
+            className={`h-6 w-6 rounded-full border border-border ${near?.name === p.name && color.sat > 0.95 ? "ring-2 ring-accent ring-offset-1 ring-offset-surface" : ""}`}
+            style={{ background: swatch(p.hue, 1) }}
+          />
+        ))}
+      </div>
+      <div
+        aria-hidden
+        className="mb-1 h-2 rounded-full"
+        style={{ background: "linear-gradient(to right, hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%), hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%))" }}
+      />
+      <Slider label="Hue" min={0} max={359} step={1} value={Math.round(color.hue)} onChange={(v) => onChange({ ...color, hue: v })} />
+      <div className="mt-2 flex items-center gap-2">
+        <span aria-hidden className="h-4 w-4 shrink-0 rounded-full border border-border" style={{ background: swatch(color.hue, color.sat) }} />
+        <div className="min-w-0 flex-1">
+          <Slider label="Saturation" min={0} max={1} step={0.01} value={color.sat} onChange={(v) => onChange({ ...color, sat: v })} />
+        </div>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-text-muted">
+        About {out}% of the light&apos;s white output at this colour, since a saturated colour runs only some of the
+        emitters. Below full saturation the colour is mixed with the fixture&apos;s white at {cct}K. Approximate.
+      </p>
+    </Field>
+  );
+}
+
 export function LightInspector({
   s, targets, reading, targetName, fmt, onChange, onDelete,
 }: {
@@ -131,6 +182,7 @@ export function LightInspector({
               modifierId: f.defaultModifier,
               beamDeg: null,
               cct: Math.max(f.cctMin, Math.min(f.cctMax, s.cct)),
+              color: f.rgb ? s.color ?? null : null,
               frame: MODIFIERS[f.defaultModifier]?.omni ? null : s.frame,
             });
           }}
@@ -144,6 +196,19 @@ export function LightInspector({
         <Slider label="Intensity" min={0.01} max={1} step={0.01} value={s.dimmer} onChange={(v) => onChange({ dimmer: v })} />
       </Field>
 
+      {fixture.rgb ? (
+        <div className="-mb-2">
+          <Seg
+            value={s.color ? "hsi" : "cct"}
+            onChange={(v) => onChange({ color: v === "hsi" ? (s.color ?? { hue: 230, sat: 1 }) : null })}
+            options={[{ v: "cct", l: "White (CCT)" }, { v: "hsi", l: "Colour (HSI)" }]}
+          />
+        </div>
+      ) : null}
+
+      {fixture.rgb && s.color ? (
+        <ColorField color={s.color} cct={s.cct} onChange={(color) => onChange({ color })} />
+      ) : (
       <Field label={fixedCct ? `Colour · ${fixture.cctMin}K, fixed` : `Colour · ${s.cct}K`}>
         {fixedCct ? (
           <p className="text-xs text-text-muted">
@@ -160,6 +225,7 @@ export function LightInspector({
           </>
         )}
       </Field>
+      )}
 
       {fixture.modifiers.length > 1 ? (
         <Field label="Modifier">

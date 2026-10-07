@@ -31,18 +31,30 @@ export type Fixture = {
   faceH: number;
   modifiers: string[];
   defaultModifier: string;
+  /** An RGBWW engine: it can make a saturated colour as well as white. */
+  rgb?: boolean;
 };
+
+/**
+ * A colour an RGB fixture is making, in its HSI mode: hue in degrees, and how
+ * saturated (0 is the fixture's white at its CCT, 1 is the pure colour).
+ * Absent means CCT mode, white at the CCT.
+ */
+export type LightColor = { hue: number; sat: number };
 
 export const FIXTURES: Fixture[] = [
   { id: "ls1200d", name: "Aputure LS 1200d Pro", kind: "cob", lumens: 80000, cctMin: 5600, cctMax: 5600, cctDefault: 5600, faceW: 0.22, faceH: 0.22, modifiers: ["reflector", "dome", "softbox", "strip", "lantern"], defaultModifier: "dome" },
   { id: "ls600d", name: "Aputure LS 600d Pro", kind: "cob", lumens: 40000, cctMin: 5600, cctMax: 5600, cctDefault: 5600, faceW: 0.18, faceH: 0.18, modifiers: ["reflector", "dome", "softbox", "strip", "lantern"], defaultModifier: "dome" },
   { id: "ls300x", name: "Aputure LS 300x", kind: "cob", lumens: 18000, cctMin: 2700, cctMax: 6500, cctDefault: 5600, faceW: 0.15, faceH: 0.15, modifiers: ["reflector", "dome", "softbox", "strip", "lantern"], defaultModifier: "reflector" },
-  { id: "s60", name: "ARRI SkyPanel S60-C", kind: "panel", lumens: 12000, cctMin: 2800, cctMax: 10000, cctDefault: 5600, faceW: 0.65, faceH: 0.3, modifiers: ["diffuser", "grid"], defaultModifier: "diffuser" },
-  { id: "s30", name: "ARRI SkyPanel S30-C", kind: "panel", lumens: 6000, cctMin: 2800, cctMax: 10000, cctDefault: 5600, faceW: 0.33, faceH: 0.3, modifiers: ["diffuser", "grid"], defaultModifier: "diffuser" },
+  { id: "ls600c", name: "Aputure LS 600c Pro", kind: "cob", lumens: 28000, cctMin: 2300, cctMax: 10000, cctDefault: 5600, faceW: 0.18, faceH: 0.18, modifiers: ["reflector", "dome", "softbox", "strip", "lantern"], defaultModifier: "dome", rgb: true },
+  { id: "novap600c", name: "Aputure Nova P600c", kind: "panel", lumens: 22000, cctMin: 2300, cctMax: 10000, cctDefault: 5600, faceW: 0.64, faceH: 0.3, modifiers: ["diffuser", "grid"], defaultModifier: "diffuser", rgb: true },
+  { id: "novap300c", name: "Aputure Nova P300c", kind: "panel", lumens: 11000, cctMin: 2300, cctMax: 10000, cctDefault: 5600, faceW: 0.44, faceH: 0.24, modifiers: ["diffuser", "grid"], defaultModifier: "diffuser", rgb: true },
+  { id: "s60", name: "ARRI SkyPanel S60-C", kind: "panel", lumens: 12000, cctMin: 2800, cctMax: 10000, cctDefault: 5600, faceW: 0.65, faceH: 0.3, modifiers: ["diffuser", "grid"], defaultModifier: "diffuser", rgb: true },
+  { id: "s30", name: "ARRI SkyPanel S30-C", kind: "panel", lumens: 6000, cctMin: 2800, cctMax: 10000, cctDefault: 5600, faceW: 0.33, faceH: 0.3, modifiers: ["diffuser", "grid"], defaultModifier: "diffuser", rgb: true },
   { id: "m18", name: "ARRI M18 HMI", kind: "hmi", lumens: 150000, cctMin: 5600, cctMax: 5600, cctDefault: 5600, faceW: 0.42, faceH: 0.42, modifiers: ["reflector", "fresnel"], defaultModifier: "reflector" },
   { id: "arri650", name: "ARRI 650 Plus (tungsten)", kind: "fresnel", lumens: 14000, cctMin: 3200, cctMax: 3200, cctDefault: 3200, faceW: 0.16, faceH: 0.16, modifiers: ["fresnel"], defaultModifier: "fresnel" },
-  { id: "mcpro", name: "Aputure MC Pro", kind: "mini", lumens: 450, cctMin: 2000, cctMax: 10000, cctDefault: 5600, faceW: 0.12, faceH: 0.065, modifiers: ["bare", "diffuser"], defaultModifier: "bare" },
-  { id: "titan", name: "Astera Titan Tube", kind: "tube", lumens: 2000, cctMin: 1750, cctMax: 20000, cctDefault: 5600, faceW: 0.05, faceH: 1.0, modifiers: ["bare"], defaultModifier: "bare" },
+  { id: "mcpro", name: "Aputure MC Pro", kind: "mini", lumens: 450, cctMin: 2000, cctMax: 10000, cctDefault: 5600, faceW: 0.12, faceH: 0.065, modifiers: ["bare", "diffuser"], defaultModifier: "bare", rgb: true },
+  { id: "titan", name: "Astera Titan Tube", kind: "tube", lumens: 2000, cctMin: 1750, cctMax: 20000, cctDefault: 5600, faceW: 0.05, faceH: 1.0, modifiers: ["bare"], defaultModifier: "bare", rgb: true },
   { id: "chinaball", name: "China ball (26\")", kind: "lantern", lumens: 4000, cctMin: 3200, cctMax: 3200, cctDefault: 3200, faceW: 0.66, faceH: 0.66, modifiers: ["bare"], defaultModifier: "bare" },
 ];
 
@@ -339,6 +351,85 @@ export function kelvinRgb(k: number): [number, number, number] {
   const out: [number, number, number] = [lin(r), lin(g), lin(b)];
   const y = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2];
   return [out[0] / y, out[1] / y, out[2] / y];
+}
+
+const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+const luma = (c: [number, number, number]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
+/** A fully saturated hue, linear RGB with its brightest channel at 1. */
+export function hueRgb(hueDeg: number): [number, number, number] {
+  const h = (((hueDeg % 360) + 360) % 360) / 60;
+  const x = 1 - Math.abs((h % 2) - 1);
+  const [r, g, b] =
+    h < 1 ? [1, x, 0] : h < 2 ? [x, 1, 0] : h < 3 ? [0, 1, x] : h < 4 ? [0, x, 1] : h < 5 ? [x, 0, 1] : [1, 0, x];
+  return [toLinear(r), toLinear(g), toLinear(b)];
+}
+
+function clampColor(c: LightColor): LightColor {
+  const hue = Number.isFinite(c.hue) ? (((c.hue % 360) + 360) % 360) : 0;
+  const sat = Number.isFinite(c.sat) ? Math.max(0, Math.min(1, c.sat)) : 0;
+  return { hue, sat };
+}
+
+/**
+ * The light a fixture actually emits: white at its CCT, or in HSI mode its
+ * white mixed toward a saturated hue. Luminance 1, so colour and output are
+ * kept apart (output is `colorOutput`).
+ */
+export function lightRgb(cct: number, color: LightColor | null | undefined): [number, number, number] {
+  const w = kelvinRgb(cct);
+  if (!color) return w;
+  const { hue, sat } = clampColor(color);
+  const wm = Math.max(...w);
+  const p = hueRgb(hue);
+  const mix: [number, number, number] = [
+    (1 - sat) * (w[0] / wm) + sat * p[0],
+    (1 - sat) * (w[1] / wm) + sat * p[1],
+    (1 - sat) * (w[2] / wm) + sat * p[2],
+  ];
+  const y = luma(mix) || 1;
+  return [mix[0] / y, mix[1] / y, mix[2] / y];
+}
+
+/**
+ * The share of a fixture's white output it can still make at this colour.
+ * A saturated colour runs only some of the emitters, so a deep blue is a
+ * small fraction of the white figure and a green a large one. Weighted by
+ * luminance, which is what a meter reads; the floor stops a deep blue from
+ * reading as off. Approximate, like every lumen figure here.
+ */
+export function colorOutput(color: LightColor | null | undefined): number {
+  if (!color) return 1;
+  const { hue, sat } = clampColor(color);
+  const pure = Math.max(0.06, luma(hueRgb(hue)));
+  return (1 - sat) + sat * pure;
+}
+
+/** The dimmer a fixture effectively runs at once its colour has cost output. */
+export function lightOutput(s: { dimmer: number; color?: LightColor | null }, f: Fixture): number {
+  return s.dimmer * (f.rgb ? colorOutput(s.color) : 1);
+}
+
+/** Named colours a gaffer asks for, as hues. */
+export const COLOR_PRESETS: { name: string; hue: number }[] = [
+  { name: "Red", hue: 0 },
+  { name: "Orange", hue: 25 },
+  { name: "Amber", hue: 40 },
+  { name: "Yellow", hue: 55 },
+  { name: "Green", hue: 120 },
+  { name: "Cyan", hue: 185 },
+  { name: "Blue", hue: 230 },
+  { name: "Purple", hue: 270 },
+  { name: "Magenta", hue: 300 },
+  { name: "Pink", hue: 330 },
+];
+
+/** A light's colour (linear RGB, luminance 1) as the camera records it at a white balance. */
+export function cameraColorRgb(light: [number, number, number], wbK: number): [number, number, number] {
+  const w = kelvinRgb(wbK);
+  const o: [number, number, number] = [light[0] / w[0], light[1] / w[1], light[2] / w[2]];
+  const y = luma(o) || 1;
+  return [o[0] / y, o[1] / y, o[2] / y];
 }
 
 /**
