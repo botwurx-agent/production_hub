@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0115. Recent: 0115 =
+files in supabase/migrations. THROUGH 0116. Recent: 0116 =
+location_stills (phone viewfinder frames with body/lens/aspect/tilt/roll,
+project-scoped read/edit RLS split, scene_setup_id on delete set null); 0115 =
 scene_setups (Scene builder: one row per 3D setup, the whole scene as jsonb,
 project-scoped read/edit RLS split); 0114 =
 cost_bill_payment (project_costs.bill_vendor_id / bill_bill_id /
@@ -6880,6 +6882,88 @@ and see how it goes." The 3D previz below is now a project page.
   so live was probably unaffected, but any remount (a hot reload, a future
   Suspense boundary) would have hit it. Talent and the room rebuild fully on
   every run and never had the problem.
+
+### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
+Operator, 2026-10-08: on set a DP or director pulls out a phone app, picks a
+focal length and sees the frame. They wanted that here, plus taking a still
+on location to build a scene from. They pushed back on a first proposal that
+had the capture work on desktop, and were right: a viewfinder is a phone tool.
+- PHONE: /projects/[id]/viewfinder (components/viewfinder/viewfinder.tsx).
+  Pick a body, a lens and the delivery aspect; the rear camera is cropped to
+  that exact frame, the surround dimmed like a cine monitor, with tilt and a
+  level line off the motion sensor. Always dark, whatever the theme (the
+  triage overlay precedent). Held sideways the controls move to a side column
+  so the frame gets the full height. On a computer the same route shows a QR
+  code (components/viewfinder/viewfinder-gate.tsx, `qrcode` package) rather
+  than pretending a webcam is a lens.
+- STILLS: the shutter crops the stream to the lens's frame at the stream's
+  own resolution (capped at 4096) and uploads DIRECT to Storage on a new
+  upload-ticket scope `location_still` (can_edit_project, same as an asset;
+  a collaborator DP may be the one holding the phone). The row
+  (`location_stills`) is written only after finalizeUpload. Uploads queue one
+  at a time so a burst on weak signal does not race. A lens WIDER than the
+  phone sees is padded black rather than passed off as a smaller frame.
+- LOCATION STILLS is its own page and table, NOT the asset library (operator's
+  call: forty scout frames next to the pack shot would bury both). Hub card in
+  the Visualize band after Scene builder. Each tile: lens, body, aspect, tilt,
+  roll, which phone camera, an editable note, Delete, and BUILD A SCENE.
+- BUILD A SCENE (components/previz/setup.ts setupFromStill): a new scene setup
+  whose camera 1A is the still's body, lens, aspect and tilt, with the still as
+  the board overlay. When AI is configured (and not for collaborators, since
+  readScoutPhoto refuses them) the room is read from the still, and the lens
+  is handed to the model AS A FACT (extractRoomFromPhoto gained a `lens`
+  hint), which removes the biggest source of error in sizing a room from one
+  photo. Without AI a plain room stands in and the camera is still exact.
+  The still remembers its scene (`scene_setup_id`) and the tile says "Open its
+  scene".
+- CALIBRATION IS MEASURED, PER PHONE CAMERA (operator chose it over a phone
+  model list for legitimacy). A browser cannot read a phone's real field of
+  view, and "26mm" is a rounded marketing figure for a stream the browser may
+  then crop. lib/viewfinder.ts is pure and tested (45 assertions): two marks of
+  known width W on a wall at distance D span p stream pixels, and for a pinhole
+  p = f*W/D exactly wherever they sit in frame. f is stored NORMALISED BY THE
+  STREAM'S LONG SIDE, because phones crop a 16:9 stream off the short side and
+  portrait swaps the axes. Accuracy steps, all deliberate: the picture is
+  FROZEN before measuring, a 4x LOUPE follows the dragged line, NUDGE buttons
+  move a line one stream pixel, several readings are averaged as field of view
+  with their SPREAD shown and the odd one out flagged, tilt is read at freeze
+  and called out over 4 degrees, readings that land outside 8 to 140 degrees
+  are refused as a units mistake, and the result is stated as a full-frame
+  equivalent ("like a 24.8mm") as a sanity check against the phone's spec.
+  Stored in localStorage keyed by camera LABEL (Safari rotates device ids), so
+  it is per phone, not per account. Uncalibrated, the frame lines use a
+  typical 26mm-equivalent and an amber banner says they are approximate.
+- VIRTUAL CAMERAS ("Back Dual Wide", "Triple") hop lenses by themselves, so a
+  calibration on one is meaningless: they are ranked last and labelled. With
+  two or more calibrated cameras, AUTO picks the NARROWEST one that still shows
+  the whole frame (a 100mm through the telephoto is sharper than through the
+  main camera's middle). The widest lens the current camera can show is stated
+  in mm when a pick is wider.
+- TILT AND ROLL: tilt is the z-component of the device's -Z axis under the
+  DeviceOrientation Z-X'-Y'' order, -cos(beta)cos(gamma), so it is continuous
+  through landscape where beta and gamma jump. Roll uses
+  screen.orientation.angle. iOS motion permission is requested from the Start
+  tap. SIGNS ARE REASONED AND UNIT-TESTED, NOT YET CONFIRMED ON A REAL PHONE:
+  if the level line leans the wrong way on an iPhone, flip the roll sign.
+- CAMERA CATALOGUE EXPANDED (lib/previz/optics.ts) and grouped cinema vs
+  compact: Alexa LF and 265, Burano, FX9, FX3, FX30, V-Raptor S35, Komodo-X,
+  C500 II, C400, C80, URSA Cine 12K, Pyxis 6K, Cinema Camera 6K, Nikon ZR,
+  Lumix S1H and GH7, GFX Eterna, Ronin 4D. Recording areas are published
+  figures where published; treat a third of a mm as noise. Each has a drawn
+  model spec in camera-model.ts. PRIMES now carries the union of common cine
+  sets (12 to 200, 24 entries, including 24, 28, 35, 65, 100), and the scene
+  builder's body picker uses the same groups.
+- FIXED ON THE WAY: components/upload/direct-upload.ts did `"error" in ticket`
+  on a Server Action result, which throws on the undefined an expired session
+  returns. Same class as lib/action-result.ts.
+- Verified in headless Chromium with a fake camera (Playwright's
+  --use-fake-device-for-media-stream): start, frame lines at 35/85/14mm, the
+  too-wide note, the shutter firing a save, calibration freeze/drag/loupe/add/
+  use, portrait and landscape layouts, no overflow, the stills grid, the QR
+  gate, and a scene built from a still opening on its camera. NOT verified on a
+  real phone, and the save path cannot reach Supabase from a session: the first
+  real scout is the test. Things to watch then: iOS stream size and
+  orientation, which cameras Safari lists, and the roll sign.
 
 ### Scene Setup: 3D previz (DECIDED DIRECTION, 2026-10-05) — PROTOTYPE, now the Scene builder above
 Operator's idea, discussed at length and confirmed as a fit: a real 3D scene

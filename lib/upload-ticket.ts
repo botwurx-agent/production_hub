@@ -34,7 +34,8 @@ export type UploadScope =
   | { kind: "agreement" }
   | { kind: "billing_doc"; docId: string }
   | { kind: "cost"; projectId: string }
-  | { kind: "board"; boardId: string };
+  | { kind: "board"; boardId: string }
+  | { kind: "location_still"; projectId: string };
 
 type Granted = {
   studioId: string;
@@ -132,6 +133,29 @@ async function authorize(scope: UploadScope): Promise<Granted | { error: string 
         studioId: project.studio_id,
         folder: `costs/${project.id}`,
         maxBytes: MAX_DOCUMENT_BYTES,
+      };
+    }
+
+    case "location_still": {
+      // Project-scoped like an asset (0116): a collaborator on the job may be
+      // the one holding the phone, so this is the project_asset check, read
+      // then can_edit_project, not the studio context.
+      const { data: project } = await supabase
+        .from("projects")
+        .select("id, studio_id")
+        .eq("id", scope.projectId)
+        .maybeSingle();
+      if (!project) return { error: "You do not have access to this project." };
+      const { data: canEdit } = await supabase.rpc("can_edit_project", {
+        p_project_id: scope.projectId,
+      });
+      if (!canEdit) {
+        return { error: "You have review access to this project, so you cannot add stills." };
+      }
+      return {
+        studioId: project.studio_id,
+        folder: `stills/${project.id}`,
+        maxBytes: MAX_IMAGE_BYTES,
       };
     }
 

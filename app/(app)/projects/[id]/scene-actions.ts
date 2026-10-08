@@ -113,7 +113,13 @@ export async function deleteSceneSetup(id: string): Promise<{ ok: true } | { err
   return { ok: true };
 }
 
-export async function readScoutPhoto(input: { base64: string; mediaType: string; fileName: string }): Promise<{ draft: RoomDraft } | { error: string }> {
+export async function readScoutPhoto(input: {
+  base64: string;
+  mediaType: string;
+  fileName: string;
+  /** Known when the photo came through the phone viewfinder. */
+  lens?: { ffFocal: number; hfovDeg: number; tiltDeg: number | null };
+}): Promise<{ draft: RoomDraft } | { error: string }> {
   const ctx = await requireStudioContext();
   if (ctx.isCollaborator) return { error: "Only studio members can use this." };
   if (!aiConfigured()) return { error: "No AI provider is set up on this deployment, so the photo cannot be read." };
@@ -123,6 +129,13 @@ export async function readScoutPhoto(input: { base64: string; mediaType: string;
     const raw = await extractRoomFromPhoto(
       { base64: input.base64, mediaType: input.mediaType, fileName: input.fileName.slice(0, 120) },
       ROOM_KINDS,
+      input.lens && Number.isFinite(input.lens.ffFocal) && Number.isFinite(input.lens.hfovDeg)
+        ? {
+            ffFocal: Math.max(5, Math.min(800, input.lens.ffFocal)),
+            hfovDeg: Math.max(1, Math.min(170, input.lens.hfovDeg)),
+            tiltDeg: input.lens.tiltDeg !== null && Number.isFinite(input.lens.tiltDeg) ? Math.max(-90, Math.min(90, input.lens.tiltDeg)) : null,
+          }
+        : undefined,
     );
     const draft = parseRoomDraft(raw);
     if (!draft) return { error: "The photo could not be read as a room. Try one taken from a corner, showing the floor." };

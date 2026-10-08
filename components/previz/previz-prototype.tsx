@@ -3425,7 +3425,12 @@ function CameraInspector({
           onChange={(e) => onChange({ bodyId: e.target.value })}
           className="w-full rounded-[10px] border border-border bg-surface px-2.5 py-1.5 text-sm"
         >
-          {BODIES.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.format})</option>)}
+          <optgroup label="Cinema cameras">
+            {BODIES.filter((b) => b.group === "cinema").map((b) => <option key={b.id} value={b.id}>{b.name} ({b.format})</option>)}
+          </optgroup>
+          <optgroup label="Compact and mirrorless">
+            {BODIES.filter((b) => b.group === "compact").map((b) => <option key={b.id} value={b.id}>{b.name} ({b.format})</option>)}
+          </optgroup>
         </select>
       </Field>
 

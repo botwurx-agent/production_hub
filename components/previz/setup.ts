@@ -15,6 +15,7 @@ import { newItem, type ItemSpec } from "@/lib/previz/catalog";
 import { KITCHEN_ROOM, emptyRoom, type SetSpec } from "@/lib/previz/room";
 import type { WindowSky } from "@/lib/previz/lighting";
 import type { EmbeddedAsset } from "@/lib/previz/asset-store";
+import type { RoomDraft } from "@/lib/previz/room-draft";
 
 export type Vec3 = { x: number; y: number; z: number };
 export type Shot = {
@@ -392,5 +393,71 @@ export function setupForStore(s: Setup): { setup: Setup; dropped: boolean } {
   return {
     setup: { ...setup, shots: setup.shots.map((x) => ({ ...x, board: x.board && x.board.length < 60000 ? x.board : null })) },
     dropped: true,
+  };
+}
+
+/**
+ * A scene started from a location still taken through the phone viewfinder:
+ * camera 1A on the still's own body, lens and tilt, with the still as its
+ * storyboard overlay, so the job of the scene builder becomes matching the
+ * frame that was actually seen. With a room read from the photo, the room and
+ * its furniture are built from it and the camera stands where the photo was
+ * taken; without one, a plain room stands in, to be measured and corrected.
+ */
+export function setupFromStill(o: {
+  name: string;
+  bodyId: string;
+  focal: number;
+  aspectId: string;
+  tiltDeg: number | null;
+  board: string | null;
+  draft: RoomDraft | null;
+}): Setup {
+  const d = o.draft;
+  const width = d?.width ?? 5;
+  const depth = d?.depth ?? 6;
+  const height = d?.height ?? 2.8;
+  const base = blankSetup(width, depth, height);
+  const x0 = -width / 2;
+  const z0 = -depth * 0.55;
+  const room = d
+    ? {
+        x: x0, z: z0, width, depth, height, wallColor: d.wallColor, floor: d.floor,
+        walls: { back: d.walls.back, left: d.walls.left, right: d.walls.right, front: false },
+        openings: d.openings.map((op, i) => ({ ...op, id: `s${Date.now()}${i}` })),
+      }
+    : { ...emptyRoom(width, depth, height), x: x0, z: z0 };
+  const items: ItemSpec[] = (d?.items ?? []).map((it) => ({
+    ...newItem(it.kind, x0 + it.x, z0 + it.z),
+    name: it.name,
+    rot: Math.round(it.rot),
+    ...(it.w ? { w: it.w } : {}),
+    ...(it.d ? { d: it.d } : {}),
+    ...(it.h ? { h: it.h } : {}),
+    ...(it.color ? { color: it.color } : {}),
+  }));
+  const pos: Vec3 = d?.camera
+    ? { x: x0 + d.camera.x, y: d.camera.height, z: z0 + Math.min(d.camera.z, depth - 0.3) }
+    : { x: 0, y: 1.5, z: z0 + depth - 0.6 };
+  const yaw = d?.camera?.yaw ?? 0;
+  const pitch = o.tiltDeg ?? -2;
+  const centre: Vec3 = { x: 0, y: 1.1, z: z0 + depth * 0.45 };
+  const keyPos: Vec3 = { x: pos.x + 1.6, y: 2.3, z: pos.z - 1.2 };
+  return {
+    ...base,
+    name: o.name,
+    set: { kind: "room", room },
+    items,
+    aspectId: o.aspectId,
+    shots: [{
+      id: "a", code: "1A", title: "Location still", bodyId: o.bodyId, support: "sticks",
+      focal: o.focal, stop: 4, pos, yaw, pitch,
+      focusM: Math.max(1, depth * 0.45), focusOn: null, board: o.board, iso: 800, nd: 0, wb: 5600, move: null,
+    }],
+    activeId: "a",
+    lights: [{
+      id: "key", role: "Key", fixtureId: "ls600d", modifierId: "dome", beamDeg: null, dimmer: 0.6, cct: 5600,
+      ...keyPos, ...aim(keyPos, centre), aimAt: null, frame: null, on: true,
+    }],
   };
 }

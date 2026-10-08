@@ -208,7 +208,7 @@ export default async function ProjectDetailPage({
       .eq("project_id", params.id),
   ]);
 
-  const [attention, { assets, reviewLinkByAsset }, documents] =
+  const [attention, { assets, reviewLinkByAsset }, documents, stillsRes] =
     await Promise.all([
       getProjectOutstanding(params.id),
       loadProjectAssets(supabase, params.id),
@@ -219,8 +219,13 @@ export default async function ProjectDetailPage({
         .select("id", { count: "exact", head: true })
         .eq("project_id", params.id)
         .eq("type", "document"),
+      supabase
+        .from("location_stills")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", params.id),
     ]);
   const documentCount = documents.count ?? 0;
+  const stillCount = stillsRes.count ?? 0;
 
   // Project collaborators + pending invites (for the staff-only People control).
   const [{ data: pmembers }, { data: pinvites }] = await Promise.all([
@@ -694,6 +699,24 @@ export default async function ProjectDetailPage({
             >
               <p className="text-[13px] text-text-muted">
                 Build the setup in 3D, then frame each shot through a real lens.
+              </p>
+            </HubCard>
+
+            <HubCard
+              href={`/projects/${project.id}/stills`}
+              hue="orange"
+              title="Location stills"
+              sub="Phone viewfinder frames, with the lens"
+              footer={stillCount ? `${stillCount} ${stillCount === 1 ? "still" : "stills"}` : "Open the viewfinder"}
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7h3l2-3h8l2 3h3v13H3z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                Frame a cine lens through your phone on location. Each still can become a scene.
               </p>
             </HubCard>
 

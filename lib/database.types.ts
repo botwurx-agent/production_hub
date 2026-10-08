@@ -4299,6 +4299,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      location_stills: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          storage_path: string;
+          width: number | null;
+          height: number | null;
+          body_id: string;
+          focal_mm: number;
+          aspect_id: string;
+          tilt_deg: number | null;
+          roll_deg: number | null;
+          phone_camera: string | null;
+          note: string | null;
+          scene_setup_id: string | null;
+          taken_by: string | null;
+          taken_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          storage_path: string;
+          width?: number | null;
+          height?: number | null;
+          body_id: string;
+          focal_mm: number;
+          aspect_id: string;
+          tilt_deg?: number | null;
+          roll_deg?: number | null;
+          phone_camera?: string | null;
+          note?: string | null;
+          scene_setup_id?: string | null;
+          taken_by?: string | null;
+          taken_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          storage_path?: string;
+          width?: number | null;
+          height?: number | null;
+          body_id?: string;
+          focal_mm?: number;
+          aspect_id?: string;
+          tilt_deg?: number | null;
+          roll_deg?: number | null;
+          phone_camera?: string | null;
+          note?: string | null;
+          scene_setup_id?: string | null;
+          taken_by?: string | null;
+          taken_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       project_events: {
         Row: {
           id: string;

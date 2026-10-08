@@ -826,10 +826,20 @@ Rules:
  * Estimates a room from a single location scout photo, as a DRAFT the
  * producer reviews before anything is built. Nothing here writes anything.
  */
-export async function extractRoomFromPhoto(doc: AiDocument, kinds: string[]): Promise<string> {
+export async function extractRoomFromPhoto(
+  doc: AiDocument,
+  kinds: string[],
+  lens?: { ffFocal: number; hfovDeg: number; tiltDeg: number | null },
+): Promise<string> {
   const provider = aiProvider();
   const system = ROOM_SYSTEM.replace("KINDS", kinds.join(", "));
-  const user = "Estimate this room and return the JSON described in the instructions.";
+  // A still from the phone viewfinder carries its real lens and tilt, which is
+  // the single biggest source of error when sizing a room from one photo, so
+  // they are handed over as facts rather than left to be guessed.
+  const facts = lens
+    ? ` Measured, not estimated: this photo's horizontal field of view is ${lens.hfovDeg.toFixed(1)} degrees, the same as a ${Math.round(lens.ffFocal)}mm lens on full frame, so set camera.focal to ${Math.round(lens.ffFocal)} and size the room from that field of view.${lens.tiltDeg !== null ? ` The camera was tilted ${Math.abs(lens.tiltDeg).toFixed(0)} degrees ${lens.tiltDeg < 0 ? "down" : "up"}.` : ""}`
+    : "";
+  const user = `Estimate this room and return the JSON described in the instructions.${facts}`;
   if (provider === "openai") return openaiReadDocument(system, user, doc, 6000);
   if (provider === "anthropic") return anthropicReadDocument(system, user, doc, 6000);
   throw new Error("No AI provider configured.");

@@ -39,6 +39,8 @@ export async function uploadDirect(
   file: File
 ): Promise<DirectUpload> {
   const ticket = await createUploadTicket(scope, file.name, file.size);
+  // An expired session resolves a Server Action to undefined, not to an error.
+  if (!ticket) throw new Error("That did not reach the server. Your session may have expired, so reload the page and try again.");
   if ("error" in ticket) throw new Error(ticket.error);
 
   const supabase = createClient();
