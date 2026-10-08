@@ -33,7 +33,7 @@ import {
 import {
   bounceCandela, collectOccluders, emittersFromSource, nearFieldScale, readMeter, roomLuxFrom, type Board, type Emitter, type Reading,
 } from "@/lib/previz/meter";
-import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, WindowInspector } from "./light-panels";
+import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, ShotExposure, WindowInspector } from "./light-panels";
 import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 import {
   aim, asSetup, assetKeys, bathroomSetup, bedroomSetup, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
@@ -3016,6 +3016,7 @@ export function PrevizPrototype() {
 
         {/* Inspector */}
         <aside className={`min-h-0 overflow-y-auto border-l border-border bg-surface p-4 text-sm ${focusMode ? "hidden" : ""}`}>
+          <ShotExposure.Provider value={{ stop: active.stop, iso: active.iso, nd: active.nd }}>
           {sel.kind === "camera" ? (
             <CameraInspector
               pads={<ControlPads pads={camPads(active.id)} caption={<>Keys work too through the lens: W A S D, Q E, and the arrows.</>} />}
@@ -3106,6 +3107,7 @@ export function PrevizPrototype() {
           ) : (
             <RoomInspector set={set} units={units} onChange={setSet} onScout={() => setScout(true)} />
           )}
+          </ShotExposure.Provider>
         </aside>
       </div>
 

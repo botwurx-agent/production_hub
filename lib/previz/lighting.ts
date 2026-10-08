@@ -462,3 +462,45 @@ export const WINDOW_SKIES = {
   sun: { name: "Direct sun", skyNits: 7000, sunLux: 60000 },
 } as const;
 export type WindowSky = keyof typeof WINDOW_SKIES;
+
+/**
+ * One source read on its own, the way a gaffer meters a light with the others
+ * off: what it reads, where it sits against the shot's own stop, and where it
+ * sits against the key. Uses the SAME camera settings as the shot's meter, so
+ * the light panel and the Exposure panel can never disagree about a number.
+ */
+export type SoloReading = {
+  /** The stop this source alone calls for (no ND, like any meter). */
+  reads: number;
+  /** Stops over (+) or under (-) the shot's stop, ND included. */
+  vsShot: number;
+  /** The brightest source at the subject. */
+  isKey: boolean;
+  /** For anything but the key: stops against the key (negative = under). */
+  vsKey: number | null;
+  /** Key to this source (4 means 4:1). For the key, key to everything else. */
+  ratio: number | null;
+};
+
+export function soloReading(
+  lux: number, keyLux: number, totalLux: number, stop: number, iso: number, ndOptical = 0,
+): SoloReading | null {
+  if (!(lux > 0.5)) return null;
+  const isKey = !(keyLux > lux + 1e-6);
+  const rest = totalLux - lux;
+  return {
+    reads: readsAt(lux, iso),
+    vsShot: stopsOver(lux, stop, iso, ndOptical),
+    isKey,
+    vsKey: isKey ? null : Math.log2(lux / keyLux),
+    ratio: isKey ? (rest > 0.5 ? lux / rest : null) : keyLux / lux,
+  };
+}
+
+/** "1 stop under", "0.7 stops over", "on" for a stop difference. */
+export function stopsWord(s: number): string {
+  if (!Number.isFinite(s)) return "no light";
+  if (Math.abs(s) < 0.17) return "on";
+  const r = Math.round(Math.abs(s) * 10) / 10;
+  return `${r} ${r === 1 ? "stop" : "stops"} ${s > 0 ? "over" : "under"}`;
+}

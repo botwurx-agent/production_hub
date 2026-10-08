@@ -7376,6 +7376,21 @@ reach for it during real prep.
   carried up by the vanity's top; the inspector's hang label says "bottom
   edge" for anything that is not a lamp. The mirror is a metallic face, not a
   real reflection: three.js would need a second render per mirror.
+- EACH LIGHT METERS ITSELF (2026-10-08, operator: the meter lived only on
+  the camera, "but light readings come from light"). The "At <subject>" box
+  on every light, window, practical and bounce now reads that source ALONE,
+  the way a gaffer meters one light with the others off: its lux, the stop
+  it calls for by itself, how far it sits under or over the SHOT'S stop, and
+  where it sits against the key ("3.4 stops under the key (11:1)"), or that it
+  IS the key. `soloReading` + `stopsWord` in lib/previz/lighting.ts (19
+  assertions). THE OVER/UNDER VERDICT STAYS ON THE CAMERA, deliberately: one
+  light is not the exposure, and saying it is would be wrong. And it is the
+  CAMERA'S meter read per source, never a second meter: the stop, ISO and ND
+  come from the active shot through a `ShotExposure` context set once around
+  the inspector column (one camera's settings apply, so a context rather than
+  a prop on four inspectors), so the two panels cannot disagree. The key's
+  ratio "against everything else" is shown only above 1:1, because room
+  bounce plus a window can outweigh a key and "0.8:1" reads as nonsense.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,

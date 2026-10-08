@@ -6,11 +6,21 @@
 // meter, the same figures the picture is drawn from.
 import {
   COLOR_PRESETS, DIFFUSIONS, FIXTURES, FRAME_SIZES, ISOS, MODIFIERS, ND_STEPS, WHITE_BALANCES, WINDOW_SKIES,
-  apparentSizeDeg, bestNd, colorOutput, readsAt, softness, stopLabel, stopsLabel, stopsOver, type WindowSky,
+  apparentSizeDeg, bestNd, colorOutput, readsAt, soloReading, softness, stopLabel, stopsLabel, stopsOver, stopsWord,
+  type WindowSky,
 } from "@/lib/previz/lighting";
 import { GRIP_NAMES, type GripKind, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
 import type { Contribution, Reading } from "@/lib/previz/meter";
 import { Chip, Field, Readout, Seg, TrashIcon } from "./ui";
+import { createContext, useContext } from "react";
+
+/**
+ * The active shot's stop, ISO and ND, so a light's own panel can say what that
+ * light reads in the camera's terms. A context rather than a prop on every
+ * inspector: the reading is the camera's, and there is exactly one camera
+ * whose settings apply, so it is set once around the inspector column.
+ */
+export const ShotExposure = createContext<{ stop: number; iso: number; nd: number } | null>(null);
 
 type Fmt = (m: number) => string;
 type Target = { id: string; name: string };
@@ -86,15 +96,40 @@ function AimChips({ aimAt, targets, onChange }: { aimAt: string | null; targets:
   );
 }
 
-/** What one source contributes at the metered subject. */
-function AtSubject({ c, total, targetName, fmt }: { c: Contribution | undefined; total: number; targetName: string; fmt: Fmt }) {
+/**
+ * What one source contributes at the metered subject, read on its own the way
+ * a gaffer meters one light with the others off. The overall over/under stays
+ * on the camera: one light is not the whole exposure.
+ */
+function AtSubject({ c, reading, targetName, fmt }: { c: Contribution | undefined; reading: Reading | null; targetName: string; fmt: Fmt }) {
+  const exp = useContext(ShotExposure);
   if (!c) return null;
+  const total = reading?.lux ?? 0;
   const share = total > 0 ? Math.round((c.lux / total) * 100) : 0;
   const deg = c.deg ?? (c.sizeM > 0 && Number.isFinite(c.distM) ? apparentSizeDeg(c.sizeM, c.distM) : 0);
+  const keyLux = reading?.contributions[0]?.lux ?? 0;
+  const solo = exp ? soloReading(c.lux, keyLux, total, exp.stop, exp.iso, exp.nd) : null;
   return (
     <div className="rounded-[12px] border border-border bg-surface-2 p-3">
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">At {targetName}</p>
-      <Readout k="Light from this" v={c.lux > 0 ? `${Math.round(c.lux)} lux` : "none (blocked or aimed away)"} />
+      {solo && exp ? (
+        <div className="mb-2 border-b border-border pb-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="font-display text-lg font-bold">{Math.round(c.lux)} lux</span>
+            <span className="text-sm font-semibold">reads {stopLabel(solo.reads)} alone</span>
+          </div>
+          <p className="mt-1 text-xs text-text-muted">
+            {`${capital(stopsWord(solo.vsShot))} your f/${exp.stop}${exp.nd ? ` (ND ${exp.nd.toFixed(1)})` : ""}.`}
+          </p>
+          <p className="mt-0.5 text-xs text-text-muted">
+            {solo.isKey
+              ? `The key: the brightest single source here${solo.ratio && solo.ratio >= 1.05 ? `, ${fmtRatio(solo.ratio)} against everything else` : ""}.`
+              : `${capital(stopsWord(solo.vsKey ?? 0))} the key${solo.ratio ? ` (${fmtRatio(solo.ratio)})` : ""}.`}
+          </p>
+        </div>
+      ) : (
+        <Readout k="Light from this" v={c.lux > 0 ? `${Math.round(c.lux)} lux` : "none (blocked or aimed away)"} />
+      )}
       <Readout k="Share of the exposure" v={`${share}%`} />
       {deg > 0 ? (
         <>
@@ -105,6 +140,10 @@ function AtSubject({ c, total, targetName, fmt }: { c: Contribution | undefined;
     </div>
   );
 }
+
+const capital = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+/** A key-to-fill ratio the way it is said on set: 4:1, 2.5:1, not 4.0:1. */
+const fmtRatio = (r: number) => `${r >= 10 ? Math.round(r) : Math.round(r * 10) / 10}:1`;
 
 /** The swatch for a hue. A literal colour on purpose: it is the light's colour, not a theme token. */
 const swatch = (hue: number, sat: number) => `hsl(${Math.round(hue)} ${Math.round(sat * 100)}% 50%)`;
@@ -339,7 +378,7 @@ export function LightInspector({
         )}
       </Field>
 
-      <AtSubject c={c} total={reading?.lux ?? 0} targetName={targetName} fmt={fmt} />
+      <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} />
     </div>
   );
 }
@@ -368,7 +407,7 @@ export function WindowInspector({ sky, nd, on, reading, targetName, fmt, onChang
         </div>
         <p className="mt-1 text-xs text-text-muted">Each 0.3 takes a stop off the window and the view through it, so the outside stops blowing out.</p>
       </Field>
-      <AtSubject c={c} total={reading?.lux ?? 0} targetName={targetName} fmt={fmt} />
+      <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} />
       {sun && sun.lux > 0 ? <Readout k="Direct sun" v={`${Math.round(sun.lux)} lux`} /> : null}
     </div>
   );
@@ -399,7 +438,7 @@ export function PracticalInspector({ id, dimmer, cct, on, reading, targetName, f
           {[2200, 2700, 3200, 4000].map((k) => <Chip key={k} on={cct === k} onClick={() => onChange({ cct: k })}>{k}K</Chip>)}
         </div>
       </Field>
-      <AtSubject c={c} total={reading?.lux ?? 0} targetName={targetName} fmt={fmt} />
+      <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} />
     </div>
   );
 }
@@ -441,7 +480,7 @@ export function GripInspector({ g, targets, reading, targetName, fmt, pads, onCh
           </div>
         ) : null}
       </Field>
-      {g.kind !== "flag" ? <AtSubject c={c} total={reading?.lux ?? 0} targetName={targetName} fmt={fmt} /> : null}
+      {g.kind !== "flag" ? <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} /> : null}
     </div>
   );
 }
