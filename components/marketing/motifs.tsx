@@ -688,6 +688,49 @@ function ScheduleMotif() {
   );
 }
 
+function PrevizMotif() {
+  // A lighting plan as the scene builder draws it from above: the camera's
+  // field of view for its lens, the key through a diffusion frame, a fill
+  // opposite, and the numbers the camera reads them in.
+  return (
+    <Stage hue="orange" label="A top-down lighting plan: the camera's field of view for a 35mm lens, a key through a diffusion frame, and a fill, with the stop and ratio stated.">
+      <div className="mb-4 flex items-center justify-between">
+        <span className="font-display text-sm font-extrabold text-text">Kitchen · 1A from above</span>
+        <StatusChip tone="green"><Tick /> Key on the stop</StatusChip>
+      </div>
+      <svg viewBox="0 0 320 210" className="block w-full" aria-hidden="true">
+        <rect x="6" y="6" width="308" height="198" rx="10" fill="var(--surface)" stroke="var(--border)" />
+        <rect x="70" y="16" width="180" height="26" rx="4" fill="var(--surface-2)" />
+        <text x="160" y="33" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--text-faint)">Counter</text>
+        <polygon points="160,190 103,52 217,52" fill="var(--h-indigo)" opacity="0.12" />
+        <line x1="160" y1="190" x2="103" y2="52" stroke="var(--h-indigo)" strokeWidth="1" opacity="0.5" />
+        <line x1="160" y1="190" x2="217" y2="52" stroke="var(--h-indigo)" strokeWidth="1" opacity="0.5" />
+        <circle cx="160" cy="76" r="9" fill="var(--m)" />
+        <rect x="150" y="180" width="20" height="14" rx="3" fill="var(--h-indigo)" />
+        <path d="M268 132 L172 82" stroke="var(--h-amber)" strokeWidth="2" strokeDasharray="5 4" />
+        <rect x="205" y="98" width="34" height="6" rx="2" fill="var(--text-faint)" transform="rotate(-28 222 101)" />
+        <circle cx="268" cy="132" r="10" fill="var(--h-amber)" />
+        <path d="M46 120 L148 82" stroke="var(--h-blue)" strokeWidth="2" strokeDasharray="5 4" />
+        <circle cx="46" cy="120" r="9" fill="var(--h-blue)" />
+        <text x="268" y="157" textAnchor="middle" fontSize="10" fontWeight="800" fill="var(--text)">Key</text>
+        <text x="46" y="144" textAnchor="middle" fontSize="10" fontWeight="800" fill="var(--text)">Fill</text>
+      </svg>
+      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+        {[
+          ["35mm", "Alexa Mini"],
+          ["f/4", "ISO 800 · ND .3"],
+          ["4:1", "Key to fill"],
+        ].map(([a, b]) => (
+          <div key={a} className="rounded-[10px] border border-border bg-bg px-2 py-2">
+            <p className="font-display text-[17px] font-extrabold text-text">{a}</p>
+            <p className="text-[11px] font-semibold text-text-faint">{b}</p>
+          </div>
+        ))}
+      </div>
+    </Stage>
+  );
+}
+
 /** One motif per feature page, keyed by slug. */
 const MOTIFS: Record<string, () => ReactNode> = {
   "production-hub": HubMotif,
@@ -695,6 +738,7 @@ const MOTIFS: Record<string, () => ReactNode> = {
   "storyboard-software": StoryboardMotif,
   "shot-list-software": ShotListMotif,
   "moodboard-maker": MoodboardMotif,
+  "previz-software": PrevizMotif,
   "video-review-software": ReviewMotif,
   "production-communication": CommunicationMotif,
   "shooting-schedule-software": ScheduleMotif,

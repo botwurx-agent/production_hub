@@ -531,6 +531,46 @@ export const FEATURES: FeatureDef[] = [
     related: ["storyboard-software", "ai-video-production"],
   },
 
+  {
+    slug: "previz-software",
+    nav: "Scene builder",
+    hint: "Block the shot in 3D first",
+    hue: "orange",
+    keyword: "3D previz software",
+    metaTitle: "Scene Builder: 3D Previz Software with Real Lenses and Lights",
+    h1: "Light the shot before you're on set.",
+    lede: "Build the set in 3D, put talent on their marks, and look through the real camera and lens: the frame, the depth of field, the light and the move, worked out at the desk. Then frame it again on location with your phone.",
+    problem: "Prep happens in words: a diagram on a napkin, a lens guessed from a reference frame, a lighting plan that lives in the gaffer's head. Then the shoot day is spent finding out that the 35 is too wide for the room and the key has nowhere to go.",
+    shots: [],
+    // The chapters in lib/marketing/chapters.ts carry this page's body, so
+    // there are no claim panels to say the same thing twice.
+    blocks: [],
+    moreTitle: "More the scene builder does",
+    ticks: [
+      { t: "Several setups per job", d: "One tab each: the kitchen, the hero table, the bedroom, each with its own cameras." },
+      { t: "Cameras that remember their shot", d: "Every camera keeps its body, lens, stop and position, and shows its own view on its card." },
+      { t: "Save frame", d: "Download exactly what the lens sees as an image for the deck or the board." },
+      { t: "Overhead rigging", d: "A studio grid, wall spreaders and polecats, with lights hung from them." },
+      { t: "RGB fixtures", d: "Colour by hue and saturation, with the output a saturated colour really costs." },
+      { t: "Clay view", d: "One key strips the colour so you can read the light alone." },
+      { t: "Zebras", d: "See what clips at the stop and ISO you have set." },
+      { t: "Your own models", d: "Import GLB, OBJ or STL, including a LiDAR scan of a real room at true size." },
+      { t: "View-only for reviewers", d: "Anyone with review access to the job can look through every camera and change nothing." },
+    ],
+    diff: {
+      eyebrow: "The difference",
+      title: "Real optics, not a mood picture.",
+      body: "A storyboard says what the shot should feel like. The scene builder tells you whether it will work: the frame comes from the sensor width and the focal length, the background falls off from the stop, and the light reads in stops at the subject. When the phone frames a location for the same body and lens, the still lands back on the job with those numbers on it.",
+      points: [
+        "Field of view from real recording areas, for nearly thirty cinema and compact bodies",
+        "Depth of field drawn from the lens's own circle of confusion",
+        "Each light metered on its own, and the key to fill ratio stated",
+      ],
+    },
+    band: "visualize",
+    related: ["storyboard-software", "shot-list-software"],
+  },
+
   /* -------------------------------------------------------------- Review */
   {
     slug: "video-review-software",
@@ -1479,6 +1519,33 @@ export const MODULES: ModuleDef[] = [
       "Images, notes, shapes, arrows, columns, links and video",
       "Import from Drive and Figma, or paste from anywhere",
       "Share a view-only link, or send it for pinned review",
+    ],
+  },
+  {
+    key: "scene-builder",
+    name: "Scene builder",
+    band: "visualize",
+    page: "previz-software",
+    own: true,
+    hue: "orange",
+    blurb: "The set in 3D, seen through the real camera and lens.",
+    points: [
+      "Rooms, furniture, talent and props, from a preset or to measurement",
+      "Real bodies and primes, depth of field, and named lights metered in stops",
+      "Camera supports and moves, recorded as a clip",
+    ],
+  },
+  {
+    key: "location-stills",
+    name: "Location stills",
+    band: "visualize",
+    page: "previz-software",
+    hue: "orange",
+    blurb: "Frame a location on your phone for the camera and lens you will shoot.",
+    points: [
+      "Pick the body, the lens and the aspect, and the phone shows that exact frame",
+      "Calibrated once per phone, with tilt and a level line",
+      "Every still lands on the job with its lens, and builds a 3D scene in one press",
     ],
   },
   {

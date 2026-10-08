@@ -82,6 +82,7 @@ import {
   MoodboardOrganizeScene,
   MoodboardReviewScene,
 } from "./scenes-moodboard";
+import { PV_CAM_MS, PV_FINDER_MS, PV_HERO_MS, PV_LIGHT_MS, PV_MOVE_MS, PV_SET_MS, PrevizCameraScene, PrevizFinderScene, PrevizHeroScene, PrevizLightScene, PrevizMoveScene, PrevizSetScene } from "./scenes-previz";
 import { MOOD_MS, MoodboardScene, PIPELINE_MS, PipelineScene } from "./scenes-more";
 import { BOARD_MS, COMMS_MS, CommsScene, SCHEDULE_MS, ScheduleScene, StoryboardScene } from "./scenes-panels";
 
@@ -166,6 +167,12 @@ const SCENES = {
   "hb-docs": { ms: HB_DOCS_MS, C: HubDocsScene, label: "Documents", hue: "indigo" },
   "hb-summary": { ms: HB_SUMMARY_MS, C: HubSummaryScene, label: "Summary", hue: "indigo" },
   "hb-binder": { ms: HB_BINDER_MS, C: HubBinderScene, label: "Binder", hue: "indigo" },
+  previz: { ms: PV_HERO_MS, C: PrevizHeroScene, label: "Scene builder", hue: "orange" },
+  "pv-camera": { ms: PV_CAM_MS, C: PrevizCameraScene, label: "Camera", hue: "orange" },
+  "pv-light": { ms: PV_LIGHT_MS, C: PrevizLightScene, label: "Light", hue: "orange" },
+  "pv-set": { ms: PV_SET_MS, C: PrevizSetScene, label: "Set", hue: "orange" },
+  "pv-move": { ms: PV_MOVE_MS, C: PrevizMoveScene, label: "Moves", hue: "orange" },
+  "pv-finder": { ms: PV_FINDER_MS, C: PrevizFinderScene, label: "Viewfinder", hue: "orange" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;

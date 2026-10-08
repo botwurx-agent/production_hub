@@ -7,11 +7,11 @@
  * width, stays sharp, reflows on a phone, and can move.
  *
  * The honesty rule that keeps this from being marketing invention: these are
- * the twenty-one module cards a project hub actually carries, with the phase
+ * the twenty-three module cards a project hub actually carries, with the phase
  * each one belongs to printed on it. The six screenshots elsewhere on the page
  * carry the burden of proof; this one carries the scope.
  *
- * THE SET IS DELIBERATELY THE FULL TWENTY-ONE, not the nineteen a live-action
+ * THE SET IS DELIBERATELY THE FULL TWENTY-THREE, not the twenty-one a live-action
  * job shows. AI Pipeline and Elements are hidden on a non-generated project and
  * Call sheet, Gear and Props are hidden on a generated one, so no single job
  * displays all of these at once. The claim being made here is what the PRODUCT
@@ -42,6 +42,10 @@ const ROW_A: Module[] = [
     icon: "M4 6h2.2v2.2H4z M8.5 7h7.5 M4 11.8h2.2V14H4z M8.5 12.8h7.5" },
   { band: "Visualize", name: "Moodboard", note: "References on a canvas", from: "pink", to: "orange",
     icon: "M3.5 6.5h7v7h-7z M8 4h8.5v7.5" },
+  { band: "Visualize", name: "Scene builder", note: "The shot in 3D, real lenses", from: "orange", to: "amber",
+    icon: "M10 2.8 16.5 6.5v7L10 17.2 3.5 13.5v-7z M3.5 6.5 10 10.2l6.5-3.7 M10 10.2v7" },
+  { band: "Visualize", name: "Location stills", note: "Framed on the phone", from: "amber", to: "orange",
+    icon: "M6.5 2.8h7a1.5 1.5 0 011.5 1.5v11.4a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 015 15.7V4.3a1.5 1.5 0 011.5-1.5z M7.5 7h5v4h-5z M9.2 14.6h1.6" },
   { band: "Review", name: "Approvals", note: "Pinned notes, a clear yes", from: "green", to: "cyan",
     icon: "M10 3a7 7 0 100 14 7 7 0 000-14z M7 10l2 2 4-4" },
   { band: "Review", name: "Communication", note: "Threads tied to the job", from: "cyan", to: "blue",
@@ -118,7 +122,7 @@ function Row({ mods, className }: { mods: Module[]; className: string }) {
       ))}
       {/* A second pass, so the band always overruns the viewport in both
           directions and drifting never walks an edge into view. Hidden from
-          assistive tech: it is the same twenty-one modules said twice. */}
+          assistive tech: it is the same twenty-three modules said twice. */}
       {mods.map((m) => (
         <ModuleCard key={`${m.name}-repeat`} mod={m} />
       ))}

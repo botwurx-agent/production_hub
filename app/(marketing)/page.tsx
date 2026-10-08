@@ -62,7 +62,7 @@ export default function MarketingHome() {
       <SectionHeader
         eyebrow="Inside a project"
         title="Laid out the way a production moves."
-        sub="A project is not a folder of files. It is twenty-one tools, from the brief to the budget, each waiting in the phase where you'll need it: plan, visualize, review, produce."
+        sub="A project is not a folder of files. It is twenty-three tools, from the brief to the budget, each waiting in the phase where you'll need it: plan, visualize, review, produce."
       />
       <div className="mt-16">
         <ModuleMap />
@@ -88,6 +88,18 @@ export default function MarketingHome() {
           body: "Frames go from sketch to final on the board, and every frame becomes a shot with its size and move, ready for the day.",
           hue: "purple",
           children: <LiveScene name="storyboard" className="h-full" box />,
+        },
+        {
+          eyebrow: "Scene builder",
+          title: "Light the shot before you're on set.",
+          body: "Build the set in 3D and look through the real camera and lens. Swap the 24 for an 85 and the frame tightens, add a key and it reads in stops, and lay the storyboard over the lens to line it up.",
+          hue: "orange",
+          cta: (
+            <Link href="/previz-software" className="text-[15px] font-semibold text-accent">
+              More about the scene builder
+            </Link>
+          ),
+          children: <LiveScene name="previz" className="h-full" box />,
         },
         {
           eyebrow: "Shooting schedule",

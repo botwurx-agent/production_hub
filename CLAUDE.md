@@ -4944,6 +4944,28 @@ Claude Code session cannot reach, so no clip had ever been recorded.
 - Worth knowing: `pkill -f "next dev"` inside a Bash call kills that call's own
   shell (the pattern matches its command line). Kill by pid.
 
+### Scene builder on the marketing site (2026-10-08) — BUILT
+Operator: feature the scene builder in the home page's sliding panels, give it
+its own page, animate it like the rest, and show the phone viewfinder there.
+- PAGE /previz-software (keyword "3D previz software", nav "Scene builder",
+  band Visualize, hue orange), in the CHAPTER form: hero scene plus five
+  chapters (Camera and lens, Light, Set and talent, Moves, Phone viewfinder),
+  each with its own scene. Slug added to FEATURE_SLUGS, so the middleware,
+  sitemap, OG card, nav and mesh all picked it up with no further wiring.
+- components/marketing/scenes-previz.tsx: the six scenes. THE PICTURE IS
+  PROJECTED, not drawn per frame: a tiny pinhole camera projects a set built
+  in metres through a focal length and a sensor width, so 24mm to 85mm really
+  reframes and a full-frame body on the same 85 really sees wider (the camera
+  chapter shows exactly that, and its shot-size label changes with it). Keep
+  it that way if a scene is edited: a hand-faked zoom under a "real lens
+  maths" claim would be the one dishonest thing on the page.
+- Home: a fifth sliding panel (after storyboards) using the hero scene, with a
+  link to the page. ModuleMap gained Scene builder and Location stills, and
+  the home copy now says twenty-three tools (the hub really carries them).
+- Every chapter detail was checked against the code (29 bodies, 54 catalogue
+  kinds, the real pose list, Save frame downloading a PNG). NOT added to the
+  pricing table: which tier carries the scene builder is the operator's call.
+
 ### Animated home hero: PROTOTYPE, not placed (2026-09-28)
 Operator's reference is monday.com's home hero (a 5s screen recording, frames
 studied): words left, and on the right a SIMPLIFIED hand-built board animated
