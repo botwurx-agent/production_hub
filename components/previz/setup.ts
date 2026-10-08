@@ -1,7 +1,7 @@
-// The Scene Setup prototype's document: everything a setup holds, the setups
-// it can start from, and keeping it in this browser so closing the tab does
-// not lose an afternoon's work. Nothing here reaches a server: the real build
-// stores setups in the database, and this is the stand-in until then.
+// The scene builder's document: everything a setup holds and the setups it can
+// start from. On a project a setup is saved to scene_setups (migration 0115)
+// through app/(app)/projects/[id]/scene-actions.ts; the /dev prototype keeps it
+// in this browser instead, which is what loadSetup / saveSetup are for.
 //
 // Version 3 made the set free-form: a room built from measurements (or an
 // open stage) plus any number of placed items. A version 2 setup (a fixed
@@ -401,4 +401,20 @@ export function assetKeys(items: ItemSpec[]): string[] {
     if (i.model?.key) out.push(i.model.key);
   }
   return out;
+}
+
+/**
+ * A setup ready to send to the project. Storyboard frames uploaded into a shot
+ * are data URLs and the only part of a setup that gets big; a save crosses a
+ * Server Action (about 4.5MB), so past a safe size the large frames are left
+ * off and the caller says so, rather than the save failing outright.
+ */
+export function setupForStore(s: Setup): { setup: Setup; dropped: boolean } {
+  const { assets: _a, ...plain } = s;
+  const setup = plain as Setup;
+  if (JSON.stringify(setup).length <= 3_000_000) return { setup, dropped: false };
+  return {
+    setup: { ...setup, shots: setup.shots.map((x) => ({ ...x, board: x.board && x.board.length < 60000 ? x.board : null })) },
+    dropped: true,
+  };
 }

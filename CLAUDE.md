@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0114. Recent: 0114 =
+files in supabase/migrations. THROUGH 0115. Recent: 0115 =
+scene_setups (Scene builder: one row per 3D setup, the whole scene as jsonb,
+project-scoped read/edit RLS split); 0114 =
 cost_bill_payment (project_costs.bill_vendor_id / bill_bill_id /
 bill_payment_id / bill_status / bill_synced_at: what BILL did with a cost.
 Mirrors what the deleted 0111 did for FreshBooks); 0113 =
@@ -6810,7 +6812,59 @@ indistinguishable from nothing happening.
   clipboard (items=0). So routing the in-app card paste through the paste event
   rather than the keydown is sound, and Cmd+V needs no clipboard write.
 
-### Scene Setup: 3D previz (DECIDED DIRECTION, 2026-10-05) — NOTHING BUILT
+### Scene builder ON A PROJECT (migration 0115) — BUILT, first slice
+Operator, 2026-10-08, after testing the prototype end to end: "add this feature
+to the site and call it scene builder... place it in the project level first
+and see how it goes." The 3D previz below is now a project page.
+- /projects/[id]/scene-builder, a hub card in the VISUALIZE band (after Shot
+  list, for every project type: live action is the main case, not AI only).
+  The page is FULL BLEED inside the app shell (undoes main's padding) with a
+  49px bar (back to the project, setup tabs, Delete setup) over the builder at
+  `h-[calc(100dvh-106px)]`, so the page itself never scrolls. Measured: the
+  document is exactly the viewport at 1440x900.
+- A PROJECT HOLDS SEVERAL SETUPS, one tab each (the kitchen, the hero table,
+  the bedroom), and a setup holds its several camera positions, which matches
+  how a day is lit. `?setup=<id>` picks the tab; none named opens the first.
+  No setups yet is an empty state offering the five presets.
+- `scene_setups` (0115): studio/project/name/data jsonb/position/created_by/
+  updated_by. THE WHOLE SCENE IS ONE jsonb, for the call_sheets.layout reason:
+  only ever read and written whole, and its shape (Setup, versioned by its own
+  `v`) is still moving. RLS is the 0093 split: anyone on the job READS (a DP is
+  who wants the lighting plan), studio members and project editors WRITE.
+- PrevizPrototype takes an optional `store` (SceneStore: initial, save, create,
+  canEdit) and `heightClass`. Without a store it is the old localStorage
+  prototype, so /dev/scene-setup still works unchanged. With one: "New: ..." and
+  "Open a setup file" CREATE ANOTHER SETUP rather than replacing this one (no
+  confirm needed), edits save after an 800ms pause, the first snapshot after
+  opening is a BASELINE so merely opening a setup writes nothing, an unchanged
+  scene is never re-sent, and a change still pending when the tab is switched is
+  flushed on unmount rather than dropped. View-only access saves nothing, hides
+  the New/Open/scout entries, and says "view only, changes are not saved".
+- SAVES DO NOT REVALIDATE the page (scene-actions.ts saveSceneSetup), on
+  purpose: the builder holds the scene client-side and a revalidate per save
+  would refetch the route under somebody dragging a light, the moodboard #482
+  lesson. Create and delete do revalidate. The tab name follows edits live.
+- A save crosses a Server Action, so `setupForStore` (setup.ts) drops uploaded
+  storyboard frames over 60KB once the scene passes 3MB and says so; the action
+  refuses past 3.5M characters. Nothing else in a setup gets near it.
+- readScoutPhoto moved from app/dev/scene-setup/actions.ts (deleted) into
+  app/(app)/projects/[id]/scene-actions.ts.
+- KNOWN LIMIT, THE ONE TO FIX NEXT IF IT BITES: product photos and imported 3D
+  models still live in the IndexedDB of the browser that added them; the saved
+  scene holds only their keys. A colleague opening the setup sees the item at
+  its size with no label or model. Moving those bytes to the assets bucket
+  through lib/upload-ticket.ts (a new scope) is the fix; "Download this setup"
+  still embeds them for carrying by hand meanwhile.
+- Verified in Chromium against a throwaway fixture mounting the real workspace
+  (deleted): no page errors, no page scroll, opening sends nothing, an edit
+  sends one save carrying the setup id. NOT verified end to end against the
+  database: a session here cannot reach Supabase, so the first real save is on
+  the operator's machine.
+- NOT YET: the outputs in the slice list below (lens and movement onto a shot
+  list row, a render into the storyboard, fixtures into Gear & crew, the
+  diagram onto the call sheet, client review). Each is additive.
+
+### Scene Setup: 3D previz (DECIDED DIRECTION, 2026-10-05) — PROTOTYPE, now the Scene builder above
 Operator's idea, discussed at length and confirmed as a fit: a real 3D scene
 layout where a setup is built (set, talent, props, camera, lighting) and the
 camera, lens, lights and diffusion are controlled for real. They had seen

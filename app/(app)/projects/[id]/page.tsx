@@ -680,6 +680,24 @@ export default async function ProjectDetailPage({
             </HubCard>
 
             <HubCard
+              href={`/projects/${project.id}/scene-builder`}
+              hue="orange"
+              title="Scene builder"
+              sub="3D previz: set, talent, lights, camera"
+              footer="Open scene builder"
+              icon={
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2 3 7v10l9 5 9-5V7z" />
+                  <path d="m3 7 9 5 9-5M12 12v10" />
+                </svg>
+              }
+            >
+              <p className="text-[13px] text-text-muted">
+                Build the setup in 3D, then frame each shot through a real lens.
+              </p>
+            </HubCard>
+
+            <HubCard
               href={`/projects/${project.id}/moodboard`}
               hue="cyan"
               title="Moodboard"

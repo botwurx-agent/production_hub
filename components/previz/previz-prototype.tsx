@@ -36,7 +36,7 @@ import {
 import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, ShotExposure, WindowInspector } from "./light-panels";
 import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 import {
-  aim, asSetup, assetKeys, bathroomSetup, bedroomSetup, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
+  aim, asSetup, assetKeys, bathroomSetup, setupForStore, bedroomSetup, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
   type Setup, type Shot, type Units, type Vec3, type WinState,
 } from "./setup";
 import { FRAME_A, FRAME_B, Timeline } from "./timeline";
@@ -57,7 +57,7 @@ import { MAX_MODEL_BYTES, UNITS, guessUnit, loadModel, modelFormat, rawSize } fr
 import { strideSide, walkSpeed, walkerAt } from "@/lib/previz/talent-walk";
 import { AddMenu, ItemInspector, RoomInspector, ScoutDialog, type ScoutChoices } from "./set-panels";
 import { SHOT_HUES, TopDownMap, type MapPick } from "./top-down-map";
-import { readScoutPhoto } from "@/app/dev/scene-setup/actions";
+import { readScoutPhoto } from "@/app/(app)/projects/[id]/scene-actions";
 import type { RoomDraft } from "@/lib/previz/room-draft";
 
 type Selection =
@@ -474,8 +474,23 @@ async function shrinkPhoto(file: File, maxSide: number, quality: number): Promis
 type ModelEntry = { obj: THREE.Object3D; raw: { x: number; y: number; z: number } } | "loading" | "missing";
 type ArtEntry = (LabelArt & { aspect: number }) | "loading" | "missing";
 
-export function PrevizPrototype() {
-  const [initial] = useState(kitchenSetup);
+/**
+ * Where a setup is kept. Without one (the /dev prototype) it lives in this
+ * browser's localStorage; with one (Scene builder on a project) it is saved to
+ * the project's scene_setups row, and "New" makes another row instead of
+ * replacing this one.
+ */
+export type SceneStore = {
+  initial: Setup;
+  /** Resolves to an error sentence, or null when saved. */
+  save: (s: Setup) => Promise<string | null>;
+  /** Makes a new setup on the project and switches to it. */
+  create: (s: Setup) => Promise<void>;
+  canEdit: boolean;
+};
+
+export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: SceneStore; heightClass?: string } = {}) {
+  const [initial] = useState(() => store?.initial ?? kitchenSetup());
   const [name, setName] = useState(initial.name);
   const [set, setSet] = useState<SetSpec>(initial.set);
   const [items, setItems] = useState<ItemSpec[]>(initial.items);
@@ -2381,13 +2396,44 @@ export function PrevizPrototype() {
     requeue(x.shots.map((s) => s.id));
   };
   useEffect(() => {
-    const saved = loadSetup();
+    const saved = store ? store.initial : loadSetup();
     if (saved) applySetup(saved);
     setLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Project saving. The first snapshot after loading is the baseline, so
+  // opening a setup writes nothing; after that only a real change is sent, and
+  // a change still waiting when the builder closes (switching setups) is sent
+  // on the way out rather than dropped.
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  const lastSaved = useRef<string | null>(null);
+  const pending = useRef<Setup | null>(null);
+  const flushStore = () => {
+    const st = storeRef.current;
+    const next = pending.current;
+    if (!st || !next) return;
+    pending.current = null;
+    const { setup, dropped } = setupForStore(next);
+    const json = JSON.stringify(setup);
+    if (json === lastSaved.current) return;
+    lastSaved.current = json;
+    void st.save(setup).then((err) => {
+      if (err) { lastSaved.current = null; setSaveNote(err); }
+      else if (dropped) setSaveNote("Saved, without the largest storyboard pictures: they are too big to keep");
+    });
+  };
+  useEffect(() => () => flushStore(), []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!loaded) return;
+    if (store) {
+      if (!store.canEdit) return;
+      const snap = snapshot();
+      if (lastSaved.current === null) { lastSaved.current = JSON.stringify(setupForStore(snap).setup); return; }
+      pending.current = snap;
+      const t = window.setTimeout(flushStore, 800);
+      return () => window.clearTimeout(t);
+    }
     const t = window.setTimeout(() => {
       const r = saveSetup(snapshot());
       if (r === "without-boards") setSaveNote("Saved, but storyboard pictures are too big to keep in this browser");
@@ -2402,14 +2448,15 @@ export function PrevizPrototype() {
     return () => window.clearTimeout(t);
   }, [saveNote]);
   const newSetup = (which: "studio" | "kitchen" | "bathroom" | "bedroom" | "blank") => {
+    const fresh = which === "studio" ? studioSetup()
+      : which === "kitchen" ? kitchenSetup()
+      : which === "bathroom" ? bathroomSetup()
+      : which === "bedroom" ? bedroomSetup()
+      : blankSetup(5, 6, 2.8);
+    // On a project, New is another setup beside this one, never a replacement.
+    if (store) { flushStore(); void store.create(fresh); return; }
     if (!window.confirm("Start a new setup? This one is replaced in this browser. Download it first if you want to keep it.")) return;
-    applySetup(
-      which === "studio" ? studioSetup()
-        : which === "kitchen" ? kitchenSetup()
-        : which === "bathroom" ? bathroomSetup()
-        : which === "bedroom" ? bedroomSetup()
-        : blankSetup(5, 6, 2.8),
-    );
+    applySetup(fresh);
     if (which === "blank") setSel({ kind: "set" });
   };
   const download = async () => {
@@ -2427,6 +2474,7 @@ export function PrevizPrototype() {
       const parsed = asSetup(raw);
       if (!parsed) { window.alert("That file is not a scene setup this page can open."); return; }
       const n = await restoreAssets((raw as Setup).assets);
+      if (store) { flushStore(); await store.create(parsed); return; }
       applySetup(parsed);
       setSaveNote(`Opened ${parsed.name}${n ? ` with ${n} photo${n === 1 ? "" : "s"} and model${n === 1 ? "" : "s"}` : ""}`);
     });
@@ -2574,9 +2622,9 @@ export function PrevizPrototype() {
     CATEGORIES.findIndex((c) => c.id === catalogOf(a.kind).category) - CATEGORIES.findIndex((c) => c.id === catalogOf(b.kind).category));
 
   return (
-    <div className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-bg text-text">
+    <div className={`flex ${heightClass} min-h-[640px] flex-col overflow-hidden bg-bg text-text`}>
       <div className="border-b border-border bg-surface px-4 py-1.5 text-xs font-semibold text-text-muted lg:hidden">
-        Scene Setup is a desktop workspace. Open this on a laptop or larger screen.
+        The scene builder is a desktop workspace. Open this on a laptop or larger screen.
       </div>
 
       {/* Top bar */}
@@ -2597,23 +2645,23 @@ export function PrevizPrototype() {
             >
               Setup ▾
             </button>
-            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">Prototype</span>
+            {store ? null : <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">Prototype</span>}
           </div>
           <p className="max-w-[330px] truncate px-1 text-xs text-text-muted">
-            {saveNote ?? `${shots.length} shot${shots.length === 1 ? "" : "s"} · ${items.length} thing${items.length === 1 ? "" : "s"} on the set · saved in this browser`}
+            {saveNote ?? `${shots.length} shot${shots.length === 1 ? "" : "s"} · ${items.length} thing${items.length === 1 ? "" : "s"} on the set · ${!store ? "saved in this browser" : store.canEdit ? "saved to this project" : "view only, changes are not saved"}`}
           </p>
           {menu ? (
             <div className="absolute left-0 top-full z-30 mt-1 w-[280px] rounded-[12px] border border-border bg-surface p-1.5 shadow-lg" onMouseLeave={() => setMenu(false)}>
               {[
-                { l: "New: empty room", d: "5 x 6 m, one window: build from here", f: () => newSetup("blank") },
-                { l: "New: talent on seamless", d: "Stage, paper backdrop, two people", f: () => newSetup("studio") },
-                { l: "New: kitchen sample", d: "A furnished kitchen with daylight", f: () => newSetup("kitchen") },
-      { l: "New: bathroom", d: "Vanity and mirror, tub, shower, tile", f: () => newSetup("bathroom") },
-      { l: "New: bedroom", d: "Queen bed, nightstands and lamps, dresser", f: () => newSetup("bedroom") },
-                { l: "Build a room from a scout photo", d: "The AI estimates it, you check it", f: () => setScout(true) },
-                { l: "Download this setup", d: "A file with its photos and models, for another computer", f: () => void download() },
-                { l: "Open a setup file", d: "One you downloaded before", f: () => setupFileRef.current?.click() },
-              ].map((o) => (
+                { l: "New: empty room", d: "5 x 6 m, one window: build from here", f: () => newSetup("blank"), edit: true },
+                { l: "New: talent on seamless", d: "Stage, paper backdrop, two people", f: () => newSetup("studio"), edit: true },
+                { l: "New: kitchen sample", d: "A furnished kitchen with daylight", f: () => newSetup("kitchen"), edit: true },
+                { l: "New: bathroom", d: "Vanity and mirror, tub, shower, tile", f: () => newSetup("bathroom"), edit: true },
+                { l: "New: bedroom", d: "Queen bed, nightstands and lamps, dresser", f: () => newSetup("bedroom"), edit: true },
+                { l: "Build a room from a scout photo", d: "The AI estimates it, you check it", f: () => setScout(true), edit: true },
+                { l: "Download this setup", d: "A file with its photos and models, for another computer", f: () => void download(), edit: false },
+                { l: "Open a setup file", d: store ? "Adds it to this project as a new setup" : "One you downloaded before", f: () => setupFileRef.current?.click(), edit: true },
+              ].filter((o) => !o.edit || !store || store.canEdit).map((o) => (
                 <button
                   key={o.l}
                   type="button"

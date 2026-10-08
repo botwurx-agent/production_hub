@@ -4260,6 +4260,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      scene_setups: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          name: string;
+          data: Json;
+          position: number;
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          name?: string;
+          data: Json;
+          position?: number;
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          name?: string;
+          data?: Json;
+          position?: number;
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       project_events: {
         Row: {
           id: string;
