@@ -13,7 +13,6 @@ import type { TalentSpec } from "@/lib/previz/scene-build";
 import type { BackdropSpec, LegacySetSpec } from "@/lib/previz/studio-set";
 import { newItem, type ItemSpec } from "@/lib/previz/catalog";
 import { KITCHEN_ROOM, emptyRoom, type SetSpec } from "@/lib/previz/room";
-import { SAMPLE_BOARDS } from "@/lib/previz/boards";
 import type { WindowSky } from "@/lib/previz/lighting";
 import type { EmbeddedAsset } from "@/lib/previz/asset-store";
 
@@ -117,28 +116,29 @@ function kitchenItems(pendant?: { on: boolean; dimmer: number; cct: number }): I
   ];
 }
 
-/** The kitchen the prototype has always opened on. */
+/**
+ * A kitchen, kept plain: the counters, a table and chairs, one person and one
+ * camera. Presets are a starting room, not a finished plan (operator,
+ * 2026-10-08: three cameras and a hero product on every preset was noise);
+ * the cameras, people, lights and props are added as the job needs them.
+ */
 export function kitchenSetup(): Setup {
   return {
     v: 3,
-    name: "Kitchen, morning",
+    name: "Kitchen",
     set: { kind: "room", room: KITCHEN_ROOM },
-    items: [...kitchenItems(), item("bottle", "bottle", 0.18, -0.52, { name: "Hero bottle" })],
+    items: kitchenItems(),
     shots: [
-      shot("a", "1A", "Wide", "sticks", 25, 4, 0.3, { x: 0.4, y: 1.55, z: 3.6 }, { x: -0.1, y: 0.95, z: -0.8 }, "leo", 4, SAMPLE_BOARDS["1A"] ?? null),
-      shot("b", "1B", "Two shot", "fisher", 40, 2.8, 0.6, { x: 0.1, y: 1.35, z: 1.9 }, { x: -0.3, y: 1.15, z: -0.8 }, "leo", 3, SAMPLE_BOARDS["1B"] ?? null),
-      shot("c", "1C", "Product close-up", "robot", 85, 2, 0.9, { x: 0.45, y: 0.92, z: 0.55 }, { x: 0.18, y: 0.84, z: -0.52 }, "bottle", 1, SAMPLE_BOARDS["1C"] ?? null),
+      shot("a", "1A", "Wide", "sticks", 25, 4, 0.3, { x: 0.4, y: 1.55, z: 3.6 }, { x: 0, y: 1.1, z: -0.3 }, "maya", 3.5, null),
     ],
-    activeId: "b",
+    activeId: "a",
     talent: [
-      { id: "maya", name: "Maya", heightM: 1.68, pose: "standing", x: -1.15, z: -0.35, facing: 70, top: "#9b5a3d", bottom: "#33373f" },
-      { id: "leo", name: "Leo", heightM: 1.83, pose: "seated", x: 0.35, z: -1.3, facing: 0, top: "#3f5c7c", bottom: "#857a62" },
+      { id: "maya", name: "Maya", heightM: 1.68, pose: "standing", x: 0, z: 0.1, facing: 0, top: "#9b5a3d", bottom: "#33373f" },
     ],
     lights: [
-      { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "dome", beamDeg: null, dimmer: 0.6, cct: 5600, x: 2.6, y: 2.3, z: 0.3, yaw: 0, pitch: 0, aimAt: "leo", frame: null, on: true },
-      { id: "rim", role: "Rim", fixtureId: "titan", modifierId: "bare", beamDeg: null, dimmer: 1, cct: 5600, x: 3.2, y: 1.7, z: -1.6, yaw: 0, pitch: 0, aimAt: "leo", frame: null, on: true },
+      { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "dome", beamDeg: null, dimmer: 0.6, cct: 5600, x: 2.2, y: 2.3, z: 1.6, yaw: 0, pitch: 0, aimAt: "maya", frame: null, on: true },
     ],
-    grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: -2.2, y: 1.2, z: 0.8, yaw: 0, pitch: 0, aimAt: "leo" }],
+    grips: [],
     win: { sky: "overcast", nd: 0, on: true },
     units: "ft",
     aspectId: "16x9",
@@ -146,43 +146,27 @@ export function kitchenSetup(): Setup {
 }
 
 /**
- * Talent against a backdrop, the commonest commercial setup: 9 ft white
- * seamless, two people a good distance off the paper so their shadows fall
- * on the floor rather than the background, a soft key, a back light and a
- * bounce. The two shot already carries a slow push in, so pressing play shows
- * what a move is.
+ * Talent on seamless, and nothing more: 9 ft white paper, one person a good
+ * distance off it so their shadow falls on the floor rather than the
+ * background, one soft key and one camera on sticks.
  */
 export function studioSetup(): Setup {
-  const twoShot = shot("b", "1B", "Two shot", "fisher", 35, 4, 0, { x: 0, y: 1.45, z: 3.6 }, { x: 0, y: 1.25, z: -0.2 }, "ava", 3.8, null, 800);
-  twoShot.move = {
-    end: { pos: { x: 0, y: 1.45, z: 2.6 }, yaw: twoShot.yaw, pitch: twoShot.pitch, focal: 35, focusM: 2.8, focusOn: "ava" },
-    durationS: 4,
-    ease: "smooth",
-    trackYaw: twoShot.yaw,
-  };
   return {
     v: 3,
-    name: "Studio, talent on seamless",
+    name: "Talent on seamless",
     set: { kind: "stage", room: emptyRoom() },
-    items: [
-      item("seamless", "paper", 0, -0.9),
-      item("bottle", "bottle", 0.5, 0.1, { name: "Hero bottle" }),
-    ],
+    items: [item("seamless", "paper", 0, -0.9)],
     shots: [
-      shot("a", "1A", "Wide", "sticks", 32, 4, 0, { x: 0, y: 1.5, z: 4.4 }, { x: 0, y: 1.0, z: -0.4 }, "ava", 4.6, null, 800),
-      twoShot,
-      shot("c", "1C", "Product in hand", "robot", 85, 2.8, 0.3, { x: 0.1, y: 1.3, z: 1.85 }, { x: 0.24, y: 1.27, z: 0.02 }, "bottle", 1.8, null, 800),
+      shot("a", "1A", "Wide", "sticks", 32, 4, 0, { x: 0, y: 1.5, z: 4.4 }, { x: 0, y: 1.0, z: -0.2 }, "ava", 4.6, null, 800),
     ],
-    activeId: "b",
+    activeId: "a",
     talent: [
-      { id: "ava", name: "Ava", heightM: 1.7, pose: "standing", x: -0.45, z: -0.2, facing: 8, top: "#c4553d", bottom: "#2f3542" },
-      { id: "sam", name: "Sam", heightM: 1.83, pose: "holding", x: 0.45, z: -0.25, facing: -12, top: "#3d6c8c", bottom: "#d6d0c4", holding: "bottle" },
+      { id: "ava", name: "Ava", heightM: 1.7, pose: "standing", x: 0, z: -0.2, facing: 0, top: "#c4553d", bottom: "#2f3542" },
     ],
     lights: [
       { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "dome", beamDeg: null, dimmer: 0.55, cct: 5600, x: 1.9, y: 2.2, z: 1.5, yaw: 0, pitch: 0, aimAt: "ava", frame: null, on: true },
-      { id: "back", role: "Back", fixtureId: "ls300x", modifierId: "reflector", beamDeg: null, dimmer: 0.35, cct: 5600, x: -1.7, y: 2.4, z: -1.3, yaw: 0, pitch: 0, aimAt: "sam", frame: null, on: true },
     ],
-    grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: -1.9, y: 1.2, z: 1.1, yaw: 0, pitch: 0, aimAt: "ava" }],
+    grips: [],
     win: { sky: "overcast", nd: 0, on: false },
     units: "ft",
     aspectId: "16x9",
@@ -194,7 +178,7 @@ export function studioSetup(): Setup {
  * back wall, a tub under a frosted window on the left, toilet and shower on
  * the right, tile underfoot. Small on purpose (about 10 x 10 ft), because a
  * real one is, and the camera works from the open fourth wall as it would on
- * a built set.
+ * a built set. One person, one camera, one key: the rest is added per job.
  */
 export function bathroomSetup(): Setup {
   const room = {
@@ -207,7 +191,7 @@ export function bathroomSetup(): Setup {
   };
   return {
     v: 3,
-    name: "Bathroom, morning routine",
+    name: "Bathroom",
     set: { kind: "room", room },
     items: [
       item("vanity", "b-vanity", 0.2, -1.225),
@@ -217,22 +201,18 @@ export function bathroomSetup(): Setup {
       item("toilet", "b-toilet", 1.25, -0.15, { rot: -90 }),
       item("towel-rail", "b-towel", -0.62, -1.46, { raise: 0.95 }),
       item("plant", "b-plant", 0.55, -1.27, { w: 0.18, d: 0.18, h: 0.32 }),
-      item("jar", "jar", 0.18, -0.6, { name: "Hero jar" }),
     ],
     shots: [
       shot("a", "1A", "Wide", "sticks", 18, 4, 0, { x: 0.1, y: 1.5, z: 1.9 }, { x: 0, y: 1.1, z: -1.0 }, "nia", 2.4, null, 800),
-      shot("b", "1B", "Medium at the vanity", "sticks", 40, 2.8, 0, { x: 0.35, y: 1.5, z: 1.15 }, { x: 0.2, y: 1.4, z: -0.55 }, "nia", 1.7, null, 800),
-      shot("c", "1C", "Product in hand", "sticks", 85, 2.8, 0, { x: 0.25, y: 1.28, z: 1.0 }, { x: 0.12, y: 1.22, z: -0.24 }, "jar", 1.25, null, 800),
     ],
-    activeId: "b",
+    activeId: "a",
     talent: [
-      { id: "nia", name: "Nia", heightM: 1.68, pose: "holding", x: 0.2, z: -0.55, facing: 10, top: "#e8e1d4", bottom: "#c8b9a6", holding: "jar" },
+      { id: "nia", name: "Nia", heightM: 1.68, pose: "standing", x: 0.2, z: -0.55, facing: 10, top: "#e8e1d4", bottom: "#c8b9a6" },
     ],
     lights: [
       { id: "key", role: "Key", fixtureId: "ls600d", modifierId: "softbox", beamDeg: null, dimmer: 0.3, cct: 5600, x: 1.2, y: 2.0, z: 0.55, yaw: 0, pitch: 0, aimAt: "nia", frame: null, on: true },
-      { id: "back", role: "Back light", fixtureId: "s30", modifierId: "diffuser", beamDeg: null, dimmer: 0.35, cct: 4300, x: -0.65, y: 2.3, z: -1.25, yaw: 0, pitch: 0, aimAt: "nia", frame: null, on: true },
     ],
-    grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: -0.9, y: 1.2, z: 0.9, yaw: 0, pitch: 0, aimAt: "nia" }],
+    grips: [],
     win: { sky: "bright", nd: 0, on: true },
     units: "ft",
     aspectId: "16x9",
@@ -243,7 +223,7 @@ export function bathroomSetup(): Setup {
  * A bedroom: a queen bed against the back wall between two nightstands with
  * lamps on, a dresser and mirror on the right wall, an armchair in the corner
  * and a window on the left. One person sits on the foot of the bed (the seat
- * is the bed, worked out on its own) and one stands by the window.
+ * is the bed, worked out on its own), with one camera and one key.
  */
 export function bedroomSetup(): Setup {
   const room = {
@@ -257,7 +237,7 @@ export function bedroomSetup(): Setup {
   const lamp = (id: string, x: number) => item("table-lamp", id, x, -1.6, { light: { on: true, dimmer: 0.8, cct: 2700, lumens: 450 } });
   return {
     v: 3,
-    name: "Bedroom, evening",
+    name: "Bedroom",
     set: { kind: "room", room },
     items: [
       item("rug", "r-rug", 0, 0.05, { w: 2.6, d: 1.8 }),
@@ -273,19 +253,15 @@ export function bedroomSetup(): Setup {
     ],
     shots: [
       shot("a", "1A", "Wide", "sticks", 24, 2.8, 0, { x: 0.2, y: 1.5, z: 3.6 }, { x: 0, y: 0.9, z: -0.6 }, "rob", 3.4, null, 1280),
-      shot("b", "1B", "Medium on Rob", "fisher", 50, 2, 0, { x: 0.6, y: 1.15, z: 2.1 }, { x: 0.3, y: 1.0, z: 0.1 }, "rob", 2.0, null, 1280),
-      shot("c", "1C", "Bedside", "sticks", 85, 2, 0, { x: -0.3, y: 0.9, z: 0.2 }, { x: -1.15, y: 0.75, z: -1.6 }, null, 1.9, null, 1280),
     ],
     activeId: "a",
     talent: [
       { id: "rob", name: "Rob", heightM: 1.8, pose: "seated", x: 0.3, z: 0.1, facing: 0, top: "#4a5d6e", bottom: "#2e3138" },
-      { id: "jess", name: "Jess", heightM: 1.66, pose: "standing", x: -1.4, z: 0.7, facing: 40, top: "#b8794f", bottom: "#3a3f4a" },
     ],
     lights: [
       { id: "key", role: "Key (window side)", fixtureId: "ls600d", modifierId: "dome", beamDeg: null, dimmer: 0.35, cct: 5600, x: -1.7, y: 2.1, z: 1.6, yaw: 0, pitch: 0, aimAt: "rob", frame: null, on: true },
-      { id: "kick", role: "Kicker", fixtureId: "titan", modifierId: "bare", beamDeg: null, dimmer: 0.6, cct: 3200, x: 1.7, y: 1.5, z: -1.2, yaw: 0, pitch: 0, aimAt: "rob", frame: null, on: true },
     ],
-    grips: [{ id: "g1", kind: "bounce", sizeFt: 4, x: 1.6, y: 1.1, z: 1.0, yaw: 0, pitch: 0, aimAt: "rob" }],
+    grips: [],
     win: { sky: "overcast", nd: 0.6, on: true },
     units: "ft",
     aspectId: "16x9",

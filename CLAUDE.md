@@ -6863,6 +6863,23 @@ and see how it goes." The 3D previz below is now a project page.
 - NOT YET: the outputs in the slice list below (lens and movement onto a shot
   list row, a render into the storyboard, fixtures into Gear & crew, the
   diagram onto the call sheet, client review). Each is additive.
+- PRESETS ARE A STARTING ROOM, NOT A PLAN (operator, first real test,
+  2026-10-08: "talent in front of seamless created three variations with three
+  cameras... let's keep it simple"). Every preset is now the room, ONE person,
+  ONE camera (1A Wide, sticks, no move, no board) and ONE key light. No hero
+  product, no 1B/1C, no second person, no bounce, no back light. Building on
+  top is the user's job; a preset that arrives with three shots and a product
+  in hand reads as something to delete before starting. The key stays because
+  a stage with nothing lit renders black. The menu and empty-state blurbs say
+  "one person, one camera" so the promise matches.
+- FURNITURE MISSING ON A FRESH LOAD, fixed at the same time: the item cache
+  (itemObjs) outlived the 3D engine across React's development double mount,
+  so the second, empty engine skipped every piece as already built and a
+  freshly opened setup showed people but no set until something forced a
+  rebuild. The engine's cleanup now clears that cache. Production mounts once,
+  so live was probably unaffected, but any remount (a hot reload, a future
+  Suspense boundary) would have hit it. Talent and the room rebuild fully on
+  every run and never had the problem.
 
 ### Scene Setup: 3D previz (DECIDED DIRECTION, 2026-10-05) — PROTOTYPE, now the Scene builder above
 Operator's idea, discussed at length and confirmed as a fit: a real 3D scene

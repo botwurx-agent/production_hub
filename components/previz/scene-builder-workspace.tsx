@@ -21,10 +21,10 @@ import {
 
 const PRESETS: { l: string; d: string; make: () => Setup }[] = [
   { l: "Empty room", d: "5 x 6 m with one window. Build it to your location.", make: () => blankSetup(5, 6, 2.8) },
-  { l: "Talent on seamless", d: "A stage, paper backdrop and two people.", make: studioSetup },
-  { l: "Kitchen", d: "A furnished kitchen in daylight.", make: kitchenSetup },
-  { l: "Bathroom", d: "Vanity and mirror, tub, shower, tile.", make: bathroomSetup },
-  { l: "Bedroom", d: "Queen bed, nightstands and lamps, dresser.", make: bedroomSetup },
+  { l: "Talent on seamless", d: "Paper backdrop, one person, one camera.", make: studioSetup },
+  { l: "Kitchen", d: "A simple kitchen, one person, one camera.", make: kitchenSetup },
+  { l: "Bathroom", d: "A simple bathroom, one person, one camera.", make: bathroomSetup },
+  { l: "Bedroom", d: "A simple bedroom, one person, one camera.", make: bedroomSetup },
 ];
 
 export function SceneBuilderWorkspace({

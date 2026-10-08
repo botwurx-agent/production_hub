@@ -1071,6 +1071,11 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       rt.dispose();
       renderer.dispose();
       engine.current = null;
+      // The set pieces were added to THIS engine's scene. A remount (React's
+      // development double mount, a hot reload) makes a fresh, empty engine,
+      // and a cache still holding the old groups would skip every piece as
+      // already built, leaving the room bare.
+      itemObjs.current.clear();
     };
   }, []);
 
@@ -2654,10 +2659,10 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
             <div className="absolute left-0 top-full z-30 mt-1 w-[280px] rounded-[12px] border border-border bg-surface p-1.5 shadow-lg" onMouseLeave={() => setMenu(false)}>
               {[
                 { l: "New: empty room", d: "5 x 6 m, one window: build from here", f: () => newSetup("blank"), edit: true },
-                { l: "New: talent on seamless", d: "Stage, paper backdrop, two people", f: () => newSetup("studio"), edit: true },
-                { l: "New: kitchen sample", d: "A furnished kitchen with daylight", f: () => newSetup("kitchen"), edit: true },
-                { l: "New: bathroom", d: "Vanity and mirror, tub, shower, tile", f: () => newSetup("bathroom"), edit: true },
-                { l: "New: bedroom", d: "Queen bed, nightstands and lamps, dresser", f: () => newSetup("bedroom"), edit: true },
+                { l: "New: talent on seamless", d: "Paper backdrop, one person, one camera", f: () => newSetup("studio"), edit: true },
+                { l: "New: kitchen", d: "A simple kitchen, one person, one camera", f: () => newSetup("kitchen"), edit: true },
+                { l: "New: bathroom", d: "A simple bathroom, one person, one camera", f: () => newSetup("bathroom"), edit: true },
+                { l: "New: bedroom", d: "A simple bedroom, one person, one camera", f: () => newSetup("bedroom"), edit: true },
                 { l: "Build a room from a scout photo", d: "The AI estimates it, you check it", f: () => setScout(true), edit: true },
                 { l: "Download this setup", d: "A file with its photos and models, for another computer", f: () => void download(), edit: false },
                 { l: "Open a setup file", d: store ? "Adds it to this project as a new setup" : "One you downloaded before", f: () => setupFileRef.current?.click(), edit: true },
