@@ -10,8 +10,11 @@ import { createClient } from "@/lib/supabase/client";
 // default "My Studio".
 export function GoogleAuthButton({
   label = "Continue with Google",
+  next,
 }: {
   label?: string;
+  /** Where to land after signing in; validated again by /auth/callback. */
+  next?: string;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +29,11 @@ export function GoogleAuthButton({
   async function signInWithGoogle() {
     setLoading(true);
     setError(null);
+    // The destination rides in a short-lived cookie rather than on redirectTo:
+    // Supabase only honours a redirectTo that matches its allow-list, and one
+    // carrying a query string may not, which would drop the person on the
+    // Site URL instead. /auth/callback reads it, validates it and clears it.
+    if (next) document.cookie = `sf_next=${encodeURIComponent(next)}; path=/; max-age=600; samesite=lax`;
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",

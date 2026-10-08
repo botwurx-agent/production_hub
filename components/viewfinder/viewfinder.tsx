@@ -74,12 +74,24 @@ function rankCams(list: Cam[]): Cam[] {
     .sort((a, b) => Number(isVirtual(a.label)) - Number(isVirtual(b.label)));
 }
 
-/** Smooths the motion sensor so the readout does not shimmer. */
+/**
+ * Smooths the motion sensor so the readout does not shimmer, and works out
+ * which way the phone is physically HELD, separately from which way the page
+ * is drawn. The two differ whenever rotation lock is on, which is most
+ * iPhones: the phone turns sideways and the page does not, so the frame has to
+ * turn itself the way the built-in camera app does.
+ *
+ * `held` uses the screen.orientation convention: 0 upright, 90 turned
+ * counterclockwise (top to the left), 270 clockwise. Read off gravity in the
+ * device's own axes, with hysteresis so a phone held near 45 degrees does not
+ * flicker between the two, and lying flat keeps whatever it was.
+ */
 function useOrientation(enabled: boolean) {
-  const [o, setO] = useState<{ beta: number; gamma: number; angle: number } | null>(null);
+  const [o, setO] = useState<{ beta: number; gamma: number; angle: number; held: number } | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let last: { beta: number; gamma: number } | null = null;
+    let held = 0;
     const onO = (e: DeviceOrientationEvent) => {
       if (e.beta === null || e.gamma === null) return;
       const k = 0.25;
@@ -87,7 +99,15 @@ function useOrientation(enabled: boolean) {
       const angle =
         (typeof screen !== "undefined" && screen.orientation?.angle) ??
         ((window as unknown as { orientation?: number }).orientation ?? 0);
-      setO({ ...last, angle: ((Number(angle) % 360) + 360) % 360 });
+      // Gravity in device axes (x right, y up the screen in portrait).
+      const b = (last.beta * Math.PI) / 180;
+      const g = (last.gamma * Math.PI) / 180;
+      const gx = Math.cos(b) * Math.sin(g);
+      const gy = -Math.sin(b);
+      const margin = 0.3;
+      if (Math.abs(gx) > 0.5 && Math.abs(gx) > Math.abs(gy) + margin) held = gx < 0 ? 90 : 270;
+      else if (Math.abs(gy) > 0.5 && Math.abs(gy) > Math.abs(gx) + margin) held = gy < 0 ? 0 : 180;
+      setO({ ...last, angle: ((Number(angle) % 360) + 360) % 360, held });
     };
     window.addEventListener("deviceorientation", onO);
     return () => window.removeEventListener("deviceorientation", onO);
@@ -128,6 +148,20 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
   const body = bodyById(bodyId);
   const aspect = ASPECTS.find((a) => a.id === aspectId) ?? ASPECTS[0];
   const tans = targetTans(body, focal, aspect.ratio);
+
+  // How far the phone is turned against the page. 90 or 270 means it is held
+  // sideways while the page stayed upright (rotation lock): the shot's width
+  // then runs DOWN the screen, so the frame is drawn tall, the crop swaps its
+  // axes, and the readout and the saved still are turned to match the hand.
+  const turn = orient ? (((orient.held - orient.angle) % 360) + 360) % 360 : 0;
+  const sideways = turn === 90 || turn === 270;
+  const textTurn = turn === 90 ? 90 : turn === 270 ? -90 : 0;
+  const onScreenTans = sideways ? { tanX: tans.tanY, tanY: tans.tanX } : tans;
+  // The stream as the frame sees it: held sideways, the shot is as wide as
+  // the stream is tall.
+  const viewStream = (m: { w: number; h: number }) => (sideways ? { w: m.h, h: m.w } : m);
+  const ratio = sideways ? 1 / aspect.ratio : aspect.ratio;
+
 
   useEffect(() => setCal(allCalibrations()), []);
 
@@ -197,7 +231,14 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
     v.addEventListener("loadedmetadata", onMeta);
     v.addEventListener("resize", onMeta);
     v.play().catch(() => {});
+    // Some mobile browsers swap the stream's width and height on rotation
+    // without firing "resize", which would leave the frame cropped against
+    // the old shape. A cheap poll catches it.
+    const poll = window.setInterval(() => {
+      setMedia((m) => (m.w === v.videoWidth && m.h === v.videoHeight ? m : { w: v.videoWidth, h: v.videoHeight }));
+    }, 500);
     return () => {
+      window.clearInterval(poll);
       v.removeEventListener("loadedmetadata", onMeta);
       v.removeEventListener("resize", onMeta);
     };
@@ -227,7 +268,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
       .filter((x): x is { c: Cam; k: CameraCalibration } => !!x.k)
       .map((x) => ({ id: x.c.deviceId, label: x.c.label, fNorm: x.k.fNorm }));
     if (calibrated.length < 2) return;
-    const pick = bestCamera(calibrated, media, tans);
+    const pick = bestCamera(calibrated, viewStream(media), tans);
     if (pick && pick.id !== cam?.deviceId) {
       const next = cams.find((c) => c.deviceId === pick.id) ?? null;
       if (next) {
@@ -236,25 +277,27 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoCam, started, calibrating, focal, bodyId, aspectId, media.w, media.h, cal, cams.length]);
+  }, [autoCam, started, calibrating, focal, bodyId, aspectId, media.w, media.h, cal, cams.length, sideways]);
 
-  const crop: Crop | null = media.w ? cropFor(fNorm, media, tans) : null;
+  const crop: Crop | null = media.w ? cropFor(fNorm, media, onScreenTans) : null;
 
   // The frame fitted into the stage, then the stream scaled so the crop lands
   // exactly on it.
   const M = 10;
-  const fw = Math.max(0, Math.min(stage.w - 2 * M, (stage.h - 2 * M) * aspect.ratio));
-  const fh = fw / aspect.ratio;
+  const fw = Math.max(0, Math.min(stage.w - 2 * M, (stage.h - 2 * M) * ratio));
+  const fh = fw / ratio;
   const fx = (stage.w - fw) / 2;
   const fy = (stage.h - fh) / 2;
   const sc = crop ? fw / crop.w : 1;
 
   const tilt = orient ? cameraTilt(orient.beta, orient.gamma) : null;
-  const roll = orient ? cameraRoll(orient.beta, orient.gamma, orient.angle) : null;
+  // Level is read against the way the phone is HELD, so sideways under
+  // rotation lock it still means the horizon of the shot.
+  const roll = orient ? cameraRoll(orient.beta, orient.gamma, sideways ? orient.held : orient.angle) : null;
   const level = roll !== null && Math.abs(roll) < 0.5;
 
   const hfov = fovDeg(imagedArea(body, aspect.ratio).w, focal);
-  const widest = media.w ? widestFocal(fNorm, media, body, aspect.ratio) : null;
+  const widest = media.w ? widestFocal(fNorm, viewStream(media), body, aspect.ratio) : null;
 
   // ----- Capture
   const capture = () => {
@@ -267,8 +310,12 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
     // this phone camera the frame is padded black, so the still is the LENS's
     // frame and says so, rather than a smaller one passed off as it.
     const scale = Math.min(1, 4096 / Math.max(crop.w, crop.h));
-    const W = Math.max(1, Math.round(crop.w * scale));
-    const H = Math.max(1, Math.round(crop.h * scale));
+    const cw = Math.max(1, Math.round(crop.w * scale));
+    const ch = Math.max(1, Math.round(crop.h * scale));
+    // Held sideways under rotation lock, the picture on screen is on its side,
+    // so the still is turned upright before it is saved.
+    const W = sideways ? ch : cw;
+    const H = sideways ? cw : ch;
     const c = document.createElement("canvas");
     c.width = W;
     c.height = H;
@@ -276,6 +323,13 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
     if (!g) return;
     g.fillStyle = "#000";
     g.fillRect(0, 0, W, H);
+    if (turn === 90) {
+      g.translate(0, H);
+      g.rotate(-Math.PI / 2);
+    } else if (turn === 270) {
+      g.translate(W, 0);
+      g.rotate(Math.PI / 2);
+    }
     const sx = Math.max(0, crop.x);
     const sy = Math.max(0, crop.y);
     const sw = Math.min(v.videoWidth, crop.x + crop.w) - sx;
@@ -401,14 +455,19 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
           {roll !== null && (
             <div
               className={`absolute left-1/2 top-1/2 h-[2px] w-1/3 -translate-x-1/2 -translate-y-1/2 ${level ? "bg-[#3ddc84]" : "bg-white/60"}`}
-              style={{ transform: `translate(-50%, -50%) rotate(${-roll}deg)` }}
+              style={{ transform: `translate(-50%, -50%) rotate(${textTurn - roll}deg)` }}
             />
           )}
         </div>
         {flash && <div className="pointer-events-none absolute inset-0 bg-white/70" />}
 
         {/* Readout */}
-        <div className="pointer-events-none absolute left-0 right-0 flex justify-center" style={{ top: Math.max(4, fy + 6) }}>
+        <div
+          className="pointer-events-none absolute whitespace-nowrap"
+          style={sideways
+            ? { left: turn === 90 ? fx + fw - 16 : fx + 16, top: fy + fh / 2, transform: `translate(-50%, -50%) rotate(${textTurn}deg)` }
+            : { left: stage.w / 2, top: Math.max(4, fy + 6), transform: "translateX(-50%)" }}
+        >
           <div className="rounded-md bg-black/55 px-2 py-0.5 text-xs tabular-nums">
             {Math.round(focal)}mm · {hfov.toFixed(1)}° across
             {tilt !== null && ` · tilt ${Math.abs(tilt).toFixed(0)}° ${tilt < -0.5 ? "down" : tilt > 0.5 ? "up" : ""}`}
@@ -426,7 +485,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
               Wider than this phone camera sees{widest ? `: ${widest}mm is the widest it can show` : ""}. The black edges are outside it.
             </div>
           )}
-          {stage.h > stage.w && aspect.ratio > 1 && (
+          {stage.h > stage.w && aspect.ratio > 1 && !sideways && (
             <div className="rounded-md bg-black/70 px-2.5 py-1 text-xs">Turn the phone sideways for a bigger frame.</div>
           )}
           {toast && <div className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-black">{toast}</div>}

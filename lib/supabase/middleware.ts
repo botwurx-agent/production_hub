@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { safeNext } from "@/lib/safe-next";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/database.types";
 import { FEATURE_SLUGS } from "@/lib/marketing/feature-slugs";
@@ -175,13 +176,23 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
+    // Remember where they were going, so signing in lands them THERE. A QR
+    // code scanned off a desktop opens one project's viewfinder; dropping the
+    // phone on the projects list after sign-in made it a hunt (operator,
+    // 2026-10-08). safeNext validates it again on the way out.
+    const wanted = `${pathname}${request.nextUrl.search}`;
     url.pathname = "/login";
+    url.search = "";
+    if (pathname !== "/") url.searchParams.set("next", wanted);
     return NextResponse.redirect(url);
   }
 
   if (user && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/projects";
+    const target = safeNext(request.nextUrl.searchParams.get("next"), "/projects");
+    const [path, query = ""] = target.split("?");
+    url.pathname = path;
+    url.search = query ? `?${query}` : "";
     return NextResponse.redirect(url);
   }
 

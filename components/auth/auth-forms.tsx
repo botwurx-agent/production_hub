@@ -49,7 +49,7 @@ const LOGIN_ERRORS: Record<string, string> = {
   auth_failed: "That sign-in link did not work. Try signing in again.",
 };
 
-export function LoginForm({ errorCode }: { errorCode?: string } = {}) {
+export function LoginForm({ errorCode, next }: { errorCode?: string; next?: string } = {}) {
   const [state, action] = useFormState(signIn, null);
   const notice = errorCode ? LOGIN_ERRORS[errorCode] : undefined;
   const showResend = errorCode === "confirmation_failed";
@@ -65,9 +65,10 @@ export function LoginForm({ errorCode }: { errorCode?: string } = {}) {
         </p>
       )}
       <div className="mt-6">
-        <GoogleAuthButton />
+        <GoogleAuthButton next={next} />
       </div>
       <form action={action} className="space-y-4">
+        {next && <input type="hidden" name="next" value={next} />}
         <Field label="Email" htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" required />
         </Field>

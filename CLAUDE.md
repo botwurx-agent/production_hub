@@ -6953,6 +6953,31 @@ had the capture work on desktop, and were right: a viewfinder is a phone tool.
   model spec in camera-model.ts. PRIMES now carries the union of common cine
   sets (12 to 200, 24 entries, including 24, 28, 35, 65, 100), and the scene
   builder's body picker uses the same groups.
+- FIRST PHONE TEST (2026-10-08) found two things, both fixed:
+  (1) TURNING THE PHONE DID NOTHING, because rotation lock (on by default on
+  most iPhones) keeps the PAGE portrait, so the landscape layout never fires.
+  The viewfinder now reads which way the phone is physically HELD from
+  gravity in device axes (`held` in useOrientation, with hysteresis so 45
+  degrees does not flicker and lying flat keeps the last answer) and compares
+  it with the page's own angle. Held sideways under a portrait page, it does
+  what the built-in camera app does: the frame is drawn TALL (1/ratio), the
+  crop swaps its axes (`onScreenTans`, `viewStream`), the readout and level
+  line turn with the hand, roll is read against the held orientation, and
+  the still is rotated upright before saving. Measured on a 390x844 phone:
+  the 16:9 frame goes 370x208 to 260x462, and a sideways still saves
+  landscape. With rotation lock off the page itself turns and the landscape
+  layout applies as before. A 500ms poll of videoWidth/Height catches a
+  browser that swaps the stream's shape on rotation without firing resize.
+  (2) THE QR CODE LANDED ON THE PROJECTS LIST after sign-in. The middleware
+  now sends a signed-out visitor to /login?next=<the page they asked for>,
+  the login form carries it, and signIn redirects there. lib/safe-next.ts is
+  the one validator (same-site path only: rejects //host, backslashes,
+  control characters and a loop back to /login), used by signIn, the
+  middleware, /auth/callback (whose unvalidated `next` was itself an open
+  redirect behind a valid code, now fixed) and the login page. Google
+  sign-in carries it in a ten-minute `sf_next` cookie rather than on
+  redirectTo, because Supabase only honours a redirectTo that matches its
+  allow-list and one with a query string may not.
 - FIXED ON THE WAY: components/upload/direct-upload.ts did `"error" in ticket`
   on a Server Action result, which throws on the undefined an expired session
   returns. Same class as lib/action-result.ts.
