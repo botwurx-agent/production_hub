@@ -4963,8 +4963,11 @@ its own page, animate it like the rest, and show the phone viewfinder there.
   link to the page. ModuleMap gained Scene builder and Location stills, and
   the home copy now says twenty-three tools (the hub really carries them).
 - Every chapter detail was checked against the code (29 bodies, 54 catalogue
-  kinds, the real pose list, Save frame downloading a PNG). NOT added to the
-  pricing table: which tier carries the scene builder is the operator's call.
+  kinds, the real pose list, Save frame downloading a PNG).
+- PRICING (operator, 2026-10-08): the scene builder is STUDIO AND UP. Two
+  compare rows in the Visualize band (scene builder; phone viewfinder and
+  location stills) on the TEAM cells, and a point on the Studio card. Like
+  every other tier line, NOTHING ENFORCES IT in the product yet.
 
 ### Animated home hero: PROTOTYPE, not placed (2026-09-28)
 Operator's reference is monday.com's home hero (a 5s screen recording, frames
