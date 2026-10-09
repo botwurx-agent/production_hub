@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import {
   createReviewLink,
   revokeReviewLink,
+  setReviewLinkDownloadLock,
 } from "@/app/(app)/projects/[id]/share-actions";
+import { actionError } from "@/lib/action-result";
 
 // Share an asset for client review: create/copy/revoke a public review link.
 export function ShareReviewButton({
@@ -26,6 +28,10 @@ export function ShareReviewButton({
   const [token, setToken] = useState<string | null>(initialToken);
   const [id, setId] = useState<string | null>(linkId);
   const [copied, setCopied] = useState(false);
+  // Read fresh every time the window opens (the link may have been locked from
+  // another card or another person), so null means "not known yet".
+  const [locked, setLocked] = useState<boolean | null>(null);
+  const [lockBusy, setLockBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
 
@@ -40,9 +46,12 @@ export function ShareReviewButton({
     setError(null);
     start(async () => {
       const res = await createReviewLink(projectId, assetId);
-      if ("error" in res) setError(res.error);
+      const err = actionError(res);
+      if (err || !res || "error" in res) setError(err ?? "Could not load the link.");
       else {
         setToken(res.token);
+        setId(res.id);
+        setLocked(res.lockDownloads);
         router.refresh();
       }
     });
@@ -50,7 +59,21 @@ export function ShareReviewButton({
 
   function openModal() {
     setOpen(true);
-    if (!token) ensureLink();
+    // Also run for an existing link: it returns that link's id and lock state
+    // rather than making a new one.
+    ensureLink();
+  }
+
+  async function toggleLock(next: boolean) {
+    if (!id) return;
+    setLocked(next);
+    setLockBusy(true);
+    const res = await setReviewLinkDownloadLock(projectId, id, next);
+    setLockBusy(false);
+    if (res?.error) {
+      setLocked(!next);
+      setError(res.error);
+    }
   }
 
   function copy() {
@@ -73,6 +96,7 @@ export function ShareReviewButton({
       else {
         setToken(null);
         setId(null);
+        setLocked(null);
         router.refresh();
       }
     });
@@ -135,6 +159,29 @@ export function ShareReviewButton({
                 </svg>
                 Open what the client sees
               </a>
+
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-[12px] border px-3 py-2.5 transition ${
+                  locked ? "border-amber bg-amber-bg" : "border-border"
+                } ${locked === null ? "opacity-60" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={Boolean(locked)}
+                  disabled={locked === null || lockBusy}
+                  onChange={(e) => toggleLock(e.target.checked)}
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-text">
+                    Lock downloads until approved
+                  </span>
+                  <span className="mt-0.5 block text-[12.5px] text-text-muted">
+                    The client can still watch, comment and approve. Downloading
+                    opens by itself once the latest version is approved.
+                  </span>
+                </span>
+              </label>
 
               <div className="flex items-center justify-between border-t border-border pt-3">
                 <span className="text-xs text-text-faint">

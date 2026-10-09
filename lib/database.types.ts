@@ -4574,6 +4574,7 @@ export type Database = {
           revoked: boolean;
           studio_id: string;
           token: string;
+          lock_downloads: boolean;
         };
         Insert: {
           asset_id?: string | null;
@@ -4591,6 +4592,7 @@ export type Database = {
           revoked?: boolean;
           studio_id: string;
           token: string;
+          lock_downloads?: boolean;
         };
         Update: {
           asset_id?: string | null;
@@ -4608,6 +4610,7 @@ export type Database = {
           revoked?: boolean;
           studio_id?: string;
           token?: string;
+          lock_downloads?: boolean;
         };
         Relationships: [];
       };

@@ -89,7 +89,46 @@ export type PortalData = {
   // The client's own current decision on the current version, via this link.
   myDecision: ApprovalStatus | null;
   dueDate: string | null;
+  /**
+   * True while the studio has locked downloads and the work is not yet
+   * approved. The page hides every way to save the file; the file route
+   * enforces the same rule on a download request.
+   */
+  downloadsLocked: boolean;
 };
+
+/**
+ * Whether a link's downloads are still locked.
+ *
+ * ONE RULE, used by the portal page and the file route, so the button and the
+ * route cannot disagree. It opens on its own once the work is approved, by the
+ * studio's sign-off (the asset reads approved) or by the client approving the
+ * LATEST version through this link: nobody has to come back and unlock it.
+ */
+export async function downloadsLocked(
+  service: SupabaseClient<Database>,
+  link: ReviewLink
+): Promise<boolean> {
+  if (!link.lock_downloads || !link.asset_id) return false;
+  const { data: asset } = await service
+    .from("assets")
+    .select("status, current_version_id")
+    .eq("id", link.asset_id)
+    .maybeSingle();
+  if (!asset) return true;
+  if (asset.status === "approved") return false;
+  if (!asset.current_version_id) return true;
+  const { data: approval } = await service
+    .from("approvals")
+    .select("id")
+    .eq("target_type", "version")
+    .eq("target_id", asset.current_version_id)
+    .eq("review_link_id", link.id)
+    .eq("status", "approved")
+    .limit(1)
+    .maybeSingle();
+  return !approval;
+}
 
 // Assembles everything the client portal shows, strictly scoped to the link's
 // asset. Runs with the service client (RLS bypassed), so it must only ever read
@@ -105,7 +144,7 @@ export async function gatherReview(
     await Promise.all([
       service
         .from("assets")
-        .select("id, name, current_version_id")
+        .select("id, name, current_version_id, status")
         .eq("id", link.asset_id)
         .maybeSingle(),
       service
@@ -210,6 +249,11 @@ export async function gatherReview(
     comments,
     myDecision,
     dueDate: link.due_date ?? null,
+    // Same rule as downloadsLocked(), read from what is already loaded here.
+    downloadsLocked:
+      Boolean(link.lock_downloads) &&
+      asset.status !== "approved" &&
+      myDecision !== "approved",
   };
 }
 

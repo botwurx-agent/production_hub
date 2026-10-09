@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0117. Recent: 0117 =
+files in supabase/migrations. THROUGH 0118. Recent: 0118 =
+review_link_lock_downloads (review_links.lock_downloads: the client can
+watch and comment but not download until the work is approved); 0117 =
 review_comment_team_only (review_comments.team_only: a note the client
 review portal never sees; see "Team-only review comments"); 0116 =
 location_stills (phone viewfinder frames with body/lens/aspect/tilt/roll,
@@ -1892,6 +1894,41 @@ stays in the editor's own app.
   imported. The first real import is the test, and the thing to watch is
   Premiere, whose import opens a new sequence carrying the markers rather than
   adding them to the editor's existing one.
+
+### Lock downloads until approved (migration 0118) — BUILT
+Third item off the Timeliner list. A studio sends a cut for comments and the
+client downloads it, posts it, or hands it to another vendor before anyone has
+signed off, so the review link doubles as a delivery.
+- `review_links.lock_downloads` (0118, default false). A checkbox in the Share
+  for review window, read fresh each time the window opens (createReviewLink
+  returns the existing link's id and lock state) and toggled optimistically
+  via setReviewLinkDownloadLock.
+- ONE RULE, `downloadsLocked()` in lib/review-links.ts, shared by the portal
+  page (gatherReview computes the same thing inline from data it already has)
+  and the file route, so the button and the route cannot disagree.
+- IT UNLOCKS BY ITSELF on approval: the asset reading `approved` (the studio's
+  sign-off) or the client approving the LATEST version through this link.
+  Nobody has to come back and switch it off, which is the step that would be
+  forgotten.
+- THE ROUTE ENFORCES IT, not just the page: `/r/<token>/file?download=1`
+  answers 403 with a sentence while locked. Plain viewing still streams, since
+  the file has to reach the browser to be watched.
+- A DETERRENT, NOT DRM, and the copy never claims otherwise: anything a browser
+  can play can be screen-recorded or pulled from the network tab. What it
+  removes is every one-click way to save: the Download link, the player's
+  "Download this frame", the native video menu (`controlsList="nodownload"`),
+  and right-click save on images, PDFs and video. The meta row says "Download
+  opens once approved" with a lock, so the client knows why rather than hunting.
+- `download=1` now signs with a filename (`Hero v2.mp4`), so Download actually
+  downloads instead of opening the file in a tab. That was a pre-existing gap.
+- KNOWN LIMIT: an Office document rendered through Microsoft's hosted viewer
+  can still offer its own download inside the embed. Not ours to control.
+- ASSET LINKS ONLY. Doc review links (shot list, storyboard, etc.) have nothing
+  to download, so the toggle does not exist there.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  ClientReview: locked video shows the lock line, no download link,
+  controlslist nodownload and no frame download in the settings menu; unlocked
+  shows all three back; same for an image; no page errors, no overflow.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

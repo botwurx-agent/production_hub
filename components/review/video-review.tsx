@@ -49,6 +49,7 @@ export function VideoReview({
   videoUrl,
   comments,
   exportName,
+  noSave = false,
   canResolve = true,
   disabled = false,
   disabledHint,
@@ -68,6 +69,8 @@ export function VideoReview({
    * only renders in the app (team context), never on the client link.
    */
   exportName?: string;
+  /** Locked downloads on the client link: the player offers no way to save. */
+  noSave?: boolean;
   canResolve?: boolean;
   disabled?: boolean;
   disabledHint?: string;
@@ -350,6 +353,7 @@ export function VideoReview({
         <ScrubVideo
           ref={playerRef}
           src={videoUrl}
+          noSave={noSave}
           markers={markers}
           onMarkerClick={(id) => {
             const c = comments.find((x) => x.id === id);

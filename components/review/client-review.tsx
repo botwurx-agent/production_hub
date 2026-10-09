@@ -92,6 +92,13 @@ export function ClientReview({
     return `${origin}/r/${token}/file?v=${versionId}`;
   }
 
+  // The studio can lock downloads until the work is approved. Watching,
+  // commenting and approving all still work; only the ways to SAVE the file go.
+  // The file route refuses a download request on the same rule, so this is
+  // presentation over a real gate, not the gate itself.
+  const locked = data.downloadsLocked;
+  const noSave = locked ? (e: React.MouseEvent) => e.preventDefault() : undefined;
+
   // Pin-review post handler: returns whether it succeeded (so the pin clears).
   async function postPinned(
     text: string,
@@ -294,13 +301,22 @@ export function ClientReview({
         {viewing.size_bytes ? ` · ${fileSize(viewing.size_bytes)}` : ""}
         {viewing.created_at ? ` · ${shortDate(viewing.created_at)}` : ""}
       </span>
-      <a
-        href={fileUrl(viewing.id)}
-        download={data.asset.name}
-        className="font-semibold text-accent hover:underline"
-      >
-        Download
-      </a>
+      {locked ? (
+        <span className="inline-flex items-center gap-1.5 font-semibold text-text-muted">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <rect x="5" y="11" width="14" height="10" rx="2" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+          </svg>
+          Download opens once approved
+        </span>
+      ) : (
+        <a
+          href={`${fileUrl(viewing.id)}&download=1`}
+          className="font-semibold text-accent hover:underline"
+        >
+          Download
+        </a>
+      )}
     </div>
   );
 
@@ -392,12 +408,14 @@ export function ClientReview({
         </p>
       ) : isImage && compareMode ? (
         <>
+          <div onContextMenu={noSave}>
           <VersionCompare
             versions={data.versions}
             currentId={viewing.id}
             urlFor={fileUrl}
             alt={data.asset.name}
           />
+          </div>
           {metaRow}
         </>
       ) : isImage ? (
@@ -405,6 +423,7 @@ export function ClientReview({
           <div className="mb-4 max-w-md">{nameField}</div>
           {versionSwitcher}
           {olderBanner}
+          <div onContextMenu={noSave}>
           <PinReview
             imageUrl={fileUrl(viewing.id)}
             alt={data.asset.name}
@@ -419,6 +438,7 @@ export function ClientReview({
             onPost={postPinned}
             onResolve={resolve}
           />
+          </div>
           {metaRow}
           {!isOlder && decision}
           {error && (
@@ -432,6 +452,7 @@ export function ClientReview({
           <div className="mb-4 max-w-md">{nameField}</div>
           {versionSwitcher}
           {olderBanner}
+          <div onContextMenu={noSave}>
           <PdfReview
             fileUrl={fileUrl(viewing.id)}
             comments={comments}
@@ -445,6 +466,7 @@ export function ClientReview({
             onPost={postPinned}
             onResolve={resolve}
           />
+          </div>
           {metaRow}
           {!isOlder && decision}
           {error && (
@@ -460,6 +482,7 @@ export function ClientReview({
           {olderBanner}
           <VideoReview
             videoUrl={fileUrl(viewing.id)}
+            noSave={locked}
             comments={comments}
             disabled={isOlder || !name.trim()}
             disabledHint={
@@ -486,12 +509,15 @@ export function ClientReview({
         </>
       ) : (
         <>
-          <ReviewPreview
-            name={data.asset.name}
-            versionNumber={viewing.version_number}
-            url={fileUrl(viewing.id)}
-            mime={viewing.mime_type}
-          />
+          <div onContextMenu={noSave}>
+            <ReviewPreview
+              name={data.asset.name}
+              versionNumber={viewing.version_number}
+              url={fileUrl(viewing.id)}
+              mime={viewing.mime_type}
+              locked={locked}
+            />
+          </div>
           {metaRow}
 
           <div className="mt-8 max-w-md">{nameField}</div>
@@ -563,11 +589,13 @@ function ReviewPreview({
   versionNumber,
   url,
   mime,
+  locked = false,
 }: {
   name: string;
   versionNumber: number;
   url: string;
   mime: string | null;
+  locked?: boolean;
 }) {
   const kind = viewerKind(mime, name);
 
@@ -585,14 +613,14 @@ function ReviewPreview({
   if (kind === "video") {
     return (
       <div className={`${frame} flex items-center justify-center`}>
-        <video src={url} controls className="max-h-[70vh] w-full" />
+        <video src={url} controls controlsList={locked ? "nodownload" : undefined} className="max-h-[70vh] w-full" />
       </div>
     );
   }
   if (kind === "audio") {
     return (
       <div className={`${frame} p-6`}>
-        <audio src={url} controls className="w-full" />
+        <audio src={url} controls controlsList={locked ? "nodownload" : undefined} className="w-full" />
       </div>
     );
   }
@@ -627,7 +655,9 @@ function ReviewPreview({
     <div className={`${frame} flex flex-col items-center gap-3 py-16 text-center`}>
       <p className="text-sm text-text-muted">
         Preview isn&apos;t available for this file type.
+        {locked && " It can be downloaded once it is approved."}
       </p>
+      {!locked && (
       <a
         href={url}
         target="_blank"
@@ -636,6 +666,7 @@ function ReviewPreview({
       >
         Open v{versionNumber}
       </a>
+      )}
     </div>
   );
 }
