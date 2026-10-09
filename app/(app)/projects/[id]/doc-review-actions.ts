@@ -152,7 +152,11 @@ export async function addDocReviewCommentAt(
   timecodeEnd?: number | null,
   // Roster contact ids the author picked, validated server-side against this
   // project's own roster.
-  mentions?: string[]
+  mentions?: string[],
+  // A note the client never sees. A reply under a team-only comment is
+  // always team-only, whatever the composer said, so a thread cannot leak
+  // half of itself onto the portal.
+  opts?: { teamOnly?: boolean }
 ): Promise<DocReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -162,16 +166,18 @@ export async function addDocReviewCommentAt(
 
   // A reply hangs off its parent (same doc target) and never nests further.
   let parent: string | null = null;
+  let parentTeamOnly = false;
   if (parentId) {
     const { data: p } = await supabase
       .from("review_comments")
-      .select("id, target_type, target_id, parent_id")
+      .select("id, target_type, target_id, parent_id, team_only")
       .eq("id", parentId)
       .maybeSingle();
     if (!p || p.target_type !== kind || p.target_id !== targetId) {
       return { error: "That comment is not part of this review." };
     }
     parent = p.parent_id ?? p.id;
+    parentTeamOnly = p.team_only;
   }
 
   const hasPin = !parent && pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
@@ -220,6 +226,7 @@ export async function addDocReviewCommentAt(
     timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
+    team_only: parentTeamOnly || opts?.teamOnly === true,
   })
     .select("id")
     .single();

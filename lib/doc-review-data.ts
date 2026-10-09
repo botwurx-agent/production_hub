@@ -158,7 +158,7 @@ export async function loadDocReviewDetail(
     supabase
       .from("review_comments")
       .select(
-        "id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+        "id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at, team_only"
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
@@ -190,6 +190,7 @@ export async function loadDocReviewDetail(
       timecodeEnd: c.timecode_end ?? null,
       parentId: c.parent_id ?? null,
       editedAt: c.edited_at ?? null,
+      teamOnly: c.team_only,
       authorKey: c.author_key ?? null,
       reactions: [],
       drawing: normalizeDrawing(c.drawing),

@@ -9,6 +9,7 @@ import { Topbar } from "@/components/app-shell/topbar";
 import { Toaster } from "@/components/ui/toast";
 import { ConfirmHost } from "@/components/ui/confirm";
 import { AiAvailabilityProvider } from "@/components/ai/ai-availability";
+import { TeamReviewProvider } from "@/components/review/team-review";
 import { AgentMount } from "@/components/agent/agent-mount";
 import { TourGuide } from "@/components/tour/tour-guide";
 import { canUseRunner } from "@/lib/agent/access";
@@ -82,6 +83,7 @@ export default async function AppLayout({
 
   return (
     <AiAvailabilityProvider enabled={aiConfigured()}>
+      <TeamReviewProvider>
       <div className="flex min-h-[100dvh] bg-bg">
         <Sidebar
           studioName={ctx.studio.name}
@@ -123,6 +125,7 @@ export default async function AppLayout({
         <Toaster />
         <ConfirmHost />
       </div>
+      </TeamReviewProvider>
     </AiAvailabilityProvider>
   );
 }

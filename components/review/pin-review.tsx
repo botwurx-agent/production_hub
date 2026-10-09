@@ -27,7 +27,7 @@ export function PinReview({
   onPost: (
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null }
+    extra?: { drawing?: Drawing | null; mentions?: string[]; teamOnly?: boolean }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {

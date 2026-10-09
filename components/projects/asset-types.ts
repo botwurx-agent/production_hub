@@ -19,6 +19,7 @@ export type VersionComment = {
   timecode_end: number | null;
   author_key: string | null;
   edited_at: string | null;
+  team_only: boolean;
   reactions?: CommentReaction[];
 };
 

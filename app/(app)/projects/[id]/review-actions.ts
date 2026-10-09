@@ -57,7 +57,11 @@ export async function addReviewCommentAt(
   // Roster contact ids the author picked. Validated server-side against the
   // project's own roster, so an id from the browser can only ever name someone
   // already on this job.
-  mentions?: string[]
+  mentions?: string[],
+  // A note the client never sees. A reply under a team-only comment is
+  // always team-only, whatever the composer said, so a thread cannot leak
+  // half of itself onto the portal.
+  opts?: { teamOnly?: boolean }
 ): Promise<ReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
@@ -66,16 +70,18 @@ export async function addReviewCommentAt(
   const supabase = createClient();
 
   let parent: string | null = null;
+  let parentTeamOnly = false;
   if (parentId) {
     const { data: p } = await supabase
       .from("review_comments")
-      .select("id, version_id, parent_id")
+      .select("id, version_id, parent_id, team_only")
       .eq("id", parentId)
       .maybeSingle();
     if (!p || p.version_id !== versionId) {
       return { error: "That comment is not part of this review." };
     }
     parent = p.parent_id ?? p.id;
+    parentTeamOnly = p.team_only;
   }
 
   const hasPin = !parent && pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
@@ -126,6 +132,7 @@ export async function addReviewCommentAt(
     timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
+    team_only: parentTeamOnly || opts?.teamOnly === true,
   })
     .select("id")
     .single();

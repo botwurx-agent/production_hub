@@ -11,6 +11,7 @@ import { mentionText, type MentionCandidate } from "@/lib/mentions";
 import { DRAW_COLORS, type Drawing, type DrawTool } from "@/lib/review-drawing";
 import type { PortalComment } from "@/lib/review-links";
 import { useModalRoomy } from "@/components/ui/modal";
+import { TeamOnlyTag, TeamOnlyToggle } from "@/components/review/team-review";
 
 // Frame.io-style pinned review over an arbitrary surface: click the surface to
 // drop the next numbered pin and open a matching comment; the sidebar stays in
@@ -45,7 +46,7 @@ export function PinCanvas({
     pin: { x: number; y: number } | null,
     // `extra` is the extension point: a caller that does not care about
     // drawings or mentions simply ignores it.
-    extra?: { drawing?: Drawing | null; mentions?: string[] }
+    extra?: { drawing?: Drawing | null; mentions?: string[]; teamOnly?: boolean }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
@@ -66,6 +67,9 @@ export function PinCanvas({
   // id so the chips can name people without a second lookup.
   const roster = useMentionRoster();
   const [picked, setPicked] = useState<MentionCandidate[]>([]);
+  // Kept between posts on purpose: a producer doing an internal pass leaves
+  // several notes in a row, and the switch stays visibly amber while on.
+  const [teamOnly, setTeamOnly] = useState(false);
 
   const pins = comments.filter(
     (c) => !c.resolved && c.x != null && c.y != null && c.pinNumber != null
@@ -94,6 +98,7 @@ export function PinCanvas({
     const ok = await onPost(t, pending, {
       drawing: draft,
       mentions: picked.map((p) => p.id),
+      teamOnly,
     });
     setSending(false);
     if (ok) {
@@ -327,6 +332,7 @@ export function PinCanvas({
                     >
                       {c.isClient ? "Client" : "Studio"}
                     </span>
+                    {c.teamOnly && <TeamOnlyTag />}
                     <span className="ml-auto text-[11px] font-semibold text-text-faint">
                       {timeAgo(c.created_at)}
                     </span>
@@ -373,7 +379,13 @@ export function PinCanvas({
             value={text}
             disabled={disabled}
             onChange={(e) => setText(e.target.value)}
-            placeholder={pending ? "Comment on this spot…" : "Add a comment, or click to pin one…"}
+            placeholder={
+              teamOnly
+                ? "Note for your team only…"
+                : pending
+                  ? "Comment on this spot…"
+                  : "Add a comment, or click to pin one…"
+            }
             className="min-h-[64px] w-full rounded-[11px] border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
           />
           {/* Always rendered, inert when gated, so the tools stay discoverable. */}
@@ -400,6 +412,7 @@ export function PinCanvas({
             </button>
             <EmojiPicker onPick={insertEmoji} />
             <MentionPicker roster={roster} onPick={addMention} disabled={disabled} />
+            <TeamOnlyToggle on={teamOnly} onChange={setTeamOnly} disabled={disabled} />
             {pending && (
               <button
                 onClick={() => setPending(null)}

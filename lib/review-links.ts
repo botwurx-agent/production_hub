@@ -63,6 +63,12 @@ export type PortalComment = {
   reactions: CommentReaction[];
   // Freehand annotation drawn over the frame this comment is pinned to.
   drawing: Drawing | null;
+  /**
+   * A note the studio kept to itself. Never true on the public portal, since
+   * its loaders filter these out before anything is serialised; in the app it
+   * draws a "Team only" tag so the author can see who will read it.
+   */
+  teamOnly?: boolean;
 };
 
 export type PortalVersion = {
@@ -138,6 +144,9 @@ export async function gatherReview(
           "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
         )
         .in("version_id", versionIds)
+        // A team-only note never leaves the studio. Filtered here, in the
+        // query, so it is never serialised to the browser at all.
+        .eq("team_only", false)
         .order("created_at", { ascending: true }),
       // The client's decision on the current version, made through this link.
       asset.current_version_id
@@ -752,6 +761,7 @@ export async function gatherDocReview(
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
+      .eq("team_only", false)
       .order("created_at", { ascending: true }),
     service
       .from("approvals")

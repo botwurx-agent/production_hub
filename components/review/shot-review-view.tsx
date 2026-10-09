@@ -55,7 +55,8 @@ export function ShotReviewView({
       anchor.parentId ?? null,
       anchor.drawing ?? null,
       anchor.timecodeEnd ?? null,
-      anchor.mentions
+      anchor.mentions,
+      { teamOnly: anchor.teamOnly }
     );
     if (res?.error) return false;
     await reload();

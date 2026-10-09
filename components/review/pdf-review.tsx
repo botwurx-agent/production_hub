@@ -70,7 +70,7 @@ export function PdfReview({
   onPost: (
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; page?: number },
+    extra?: { drawing?: Drawing | null; page?: number; mentions?: string[]; teamOnly?: boolean },
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {

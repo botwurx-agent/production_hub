@@ -65,7 +65,7 @@ export function DocReviewView({
   async function post(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; mentions?: string[] }
+    extra?: { drawing?: Drawing | null; mentions?: string[]; teamOnly?: boolean }
   ): Promise<boolean> {
     const res = await addDocReviewCommentAt(
       projectId,
@@ -77,7 +77,8 @@ export function DocReviewView({
       null,
       extra?.drawing ?? null,
       null,
-      extra?.mentions
+      extra?.mentions,
+      { teamOnly: extra?.teamOnly }
     );
     if (res?.error) return false;
     await reload();

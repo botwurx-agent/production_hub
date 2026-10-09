@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0116. Recent: 0116 =
+files in supabase/migrations. THROUGH 0117. Recent: 0117 =
+review_comment_team_only (review_comments.team_only: a note the client
+review portal never sees; see "Team-only review comments"); 0116 =
 location_stills (phone viewfinder frames with body/lens/aspect/tilt/roll,
 project-scoped read/edit RLS split, scene_setup_id on delete set null); 0115 =
 scene_setups (Scene builder: one row per 3D setup, the whole scene as jsonb,
@@ -1808,6 +1810,49 @@ shot review, and the master-cut review all gained it at once.
   file download, so it read as the only action. Renamed to "Download".
 - NOT built: comment attachments (a paid-tier question, per the operator), CC
   captions, per-comment @mentions.
+
+### Team-only review comments (migration 0117) — BUILT
+First item off the Timeliner list (docs/competitor-research/timeliner.md),
+and it closed a real exposure rather than adding a nicety: team and client
+comments share ONE stream per version (and per doc target), so every note a
+team member left in the in-app review canvas was also served to the client on
+/r/<token>. "The editor missed this again" landed in front of the brand.
+- `review_comments.team_only` (0117, default false, so nothing existing moved).
+- THE PORTAL NEVER RECEIVES ONE. Both public loaders (gatherReview,
+  gatherDocReview) filter `.eq("team_only", false)` IN THE QUERY, so a hidden
+  note is never serialised to the browser, not just hidden by CSS. The five
+  portal write actions that look a comment up by id (reply parent, resolve x2,
+  react) carry the same filter, so a team-only id reads as "not part of this
+  review" from outside. Edit/delete already required the portal's own
+  author_key, which a studio comment never has.
+- A REPLY UNDER A TEAM-ONLY COMMENT IS ALWAYS TEAM-ONLY, enforced server-side
+  in addReviewCommentAt / addDocReviewCommentAt (`parentTeamOnly ||
+  opts.teamOnly`), so a thread can never leak half of itself. A team-only
+  reply under a CLIENT comment is allowed: discussing a client note
+  internally is the common case.
+- THE SWITCH IS A CONTEXT, not a prop (components/review/team-review.tsx),
+  for the mention-roster reason: eight surfaces mount the same composers.
+  TeamReviewProvider is mounted ONCE in app/(app)/layout.tsx; the public
+  portal lives outside that layout, so it gets the false default and the
+  control does not exist there at all. TeamOnlyToggle renders null without
+  the provider. The switch stays on between posts (an internal pass is
+  several notes in a row) and the placeholder reads "Note for your team
+  only..." while it is on.
+- Every in-app caller forwards `extra.teamOnly` as a trailing
+  `{ teamOnly }` argument: review-modal, cut-review-view, doc-review-modal,
+  doc-review-view, shot-review-view (via ShotAnchor). A NEW REVIEW SURFACE
+  MUST FORWARD IT TOO or the switch silently does nothing there.
+- Mentions are safe by construction: the roster is project contacts only, so
+  a team-only note can never email the client.
+- KNOWN, CHOSEN: pin numbers are one shared sequence, so the client sees a
+  GAP where a team-only pin sits (1, 3). Renumbering on the portal would make
+  the client's "#2" the studio's "#3", which is worse in conversation than a
+  missing number.
+- NOT DONE: a reviewer-role project member (0093) still sees team-only notes
+  in the app, since they read through RLS like any project member. If
+  reviewers turn out to be client-side people, that needs an RLS change.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  PinCanvas and VideoReview inside and outside the provider, light and dark.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

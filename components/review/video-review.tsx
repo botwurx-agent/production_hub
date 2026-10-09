@@ -14,6 +14,7 @@ import {
 } from "@/lib/review-drawing";
 import { EmojiPicker } from "@/components/review/emoji-picker";
 import { MentionPicker, MentionChips } from "@/components/review/mention-picker";
+import { TeamOnlyTag, TeamOnlyToggle } from "@/components/review/team-review";
 import { useMentionRoster } from "@/components/review/mention-roster";
 import { mentionText, type MentionCandidate } from "@/lib/mentions";
 import { DrawToolbar } from "@/components/review/draw-toolbar";
@@ -74,6 +75,7 @@ export function VideoReview({
       drawing?: Drawing | null;
       timecodeEnd?: number | null;
       mentions?: string[];
+      teamOnly?: boolean;
     }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
@@ -113,6 +115,12 @@ export function VideoReview({
   // roster provider, so a client is never shown the crew list.
   const roster = useMentionRoster();
   const [picked, setPicked] = useState<MentionCandidate[]>([]);
+  // Kept between posts: an internal pass is usually several notes in a row,
+  // and the switch stays visibly amber while it is on.
+  const [teamOnly, setTeamOnly] = useState(false);
+  // A reply's own switch. Under a team-only comment it is forced on (the
+  // server enforces the same), so a thread never splits across audiences.
+  const [replyTeamOnly, setReplyTeamOnly] = useState(false);
   const [color, setColor] = useState(DRAW_COLORS[0]);
   const [tool, setTool] = useState<DrawTool>("pen");
   // Strokes popped by Undo, so Redo can put them back.
@@ -243,6 +251,7 @@ export function VideoReview({
       drawing: draft,
       timecodeEnd: pendingEnd != null && pendingEnd > at ? pendingEnd : null,
       mentions: picked.map((p) => p.id),
+      teamOnly,
     });
     setSending(false);
     if (ok) {
@@ -290,7 +299,10 @@ export function VideoReview({
     const t = replyText.trim();
     if (!t || sending || disabled || !replyTo) return;
     setSending(true);
-    const ok = await onPost(t, replyTo.timecode ?? 0, { parentId: replyTo.id });
+    const ok = await onPost(t, replyTo.timecode ?? 0, {
+      parentId: replyTo.id,
+      teamOnly: replyTo.teamOnly || replyTeamOnly,
+    });
     setSending(false);
     if (ok) {
       setReplyText("");
@@ -542,6 +554,7 @@ export function VideoReview({
                         >
                           {c.isClient ? "Client" : "Studio"}
                         </span>
+                        {c.teamOnly && <TeamOnlyTag />}
                         {c.drawing && (
                           <span
                             title="Has a drawing on the frame"
@@ -606,6 +619,7 @@ export function VideoReview({
                           onClick={(e) => {
                             e.stopPropagation();
                             setReplyTo(replyTo?.id === c.id ? null : c);
+                            setReplyTeamOnly(false);
                             setReplyText("");
                           }}
                           className="-my-1 py-1 text-[11px] font-bold text-text-faint transition hover:text-accent"
@@ -703,6 +717,7 @@ export function VideoReview({
                             >
                               {r.isClient ? "Client" : "Studio"}
                             </span>
+                            {r.teamOnly && !c.teamOnly && <TeamOnlyTag />}
                             <span className="ml-auto text-[10px] font-semibold text-text-faint">
                               {timeAgo(r.created_at)}
                             </span>
@@ -815,6 +830,11 @@ export function VideoReview({
                       />
                       <div className="mt-1.5 flex items-center gap-2">
                         <EmojiPicker onPick={insertReplyEmoji} />
+                        <TeamOnlyToggle
+                          on={Boolean(c.teamOnly) || replyTeamOnly}
+                          onChange={setReplyTeamOnly}
+                          disabled={disabled || Boolean(c.teamOnly)}
+                        />
                         <span className="flex-1" />
                         <button
                           onClick={() => setReplyTo(null)}
@@ -860,7 +880,7 @@ export function VideoReview({
               if (pending == null) captureHere();
             }}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Comment at this moment…"
+            placeholder={teamOnly ? "Note for your team only…" : "Comment at this moment…"}
             className="min-h-[64px] w-full rounded-[11px] border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
           />
 
@@ -938,6 +958,7 @@ export function VideoReview({
 
             <EmojiPicker onPick={insertEmoji} />
             <MentionPicker roster={roster} onPick={addMention} disabled={disabled} />
+            <TeamOnlyToggle on={teamOnly} onChange={setTeamOnly} disabled={disabled} />
 
             <span className="flex-1" />
 

@@ -81,6 +81,7 @@ export function CutReviewView({
       timecodeEnd: c.timecode_end ?? null,
       parentId: c.parent_id ?? null,
       editedAt: c.edited_at ?? null,
+      teamOnly: c.team_only,
       // Internally, ownership is the author id: meKey below is the user id, so
       // a team member can edit or delete the comments they wrote.
       authorKey: c.author_id ?? null,
@@ -93,7 +94,7 @@ export function CutReviewView({
   async function postPinned(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null }
+    extra?: { drawing?: Drawing | null; teamOnly?: boolean }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
       projectId,
@@ -102,7 +103,11 @@ export function CutReviewView({
       pin,
       null,
       null,
-      extra?.drawing ?? null
+      extra?.drawing ?? null,
+      null,
+      null,
+      undefined,
+      { teamOnly: extra?.teamOnly }
     );
     if (res?.error) return false;
     router.refresh();
@@ -115,6 +120,7 @@ export function CutReviewView({
       parentId?: string | null;
       drawing?: Drawing | null;
       timecodeEnd?: number | null;
+      teamOnly?: boolean;
     }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
@@ -125,7 +131,10 @@ export function CutReviewView({
       timecode,
       extra?.parentId ?? null,
       extra?.drawing ?? null,
-      extra?.timecodeEnd ?? null
+      extra?.timecodeEnd ?? null,
+      null,
+      undefined,
+      { teamOnly: extra?.teamOnly }
     );
     if (res?.error) return false;
     router.refresh();

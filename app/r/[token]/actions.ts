@@ -113,6 +113,9 @@ export async function submitClientComment(
       .from("review_comments")
       .select("id, version_id, parent_id")
       .eq("id", parentId)
+      // A team-only note is invisible here, so it cannot be replied to,
+      // resolved or reacted to from the portal either.
+      .eq("team_only", false)
       .maybeSingle();
     if (!p || p.version_id !== versionId) {
       return { error: "That comment is not part of this review." };
@@ -212,6 +215,8 @@ export async function resolveClientComment(
     .from("review_comments")
     .select("id, version_id")
     .eq("id", commentId)
+    // Never a team-only note (see above).
+    .eq("team_only", false)
     .maybeSingle();
   if (
     !comment ||
@@ -343,6 +348,8 @@ export async function submitDocComment(
       .from("review_comments")
       .select("id, target_type, target_id, parent_id")
       .eq("id", parentId)
+      // Never a team-only note (see above).
+      .eq("team_only", false)
       .maybeSingle();
     if (
       !p ||
@@ -440,6 +447,8 @@ export async function resolveDocComment(
     .from("review_comments")
     .select("id, target_type, target_id")
     .eq("id", commentId)
+    // Never a team-only note (see above).
+    .eq("team_only", false)
     .maybeSingle();
   if (
     !comment ||
@@ -626,6 +635,8 @@ export async function toggleClientReaction(
     .from("review_comments")
     .select("id, version_id, target_type, target_id")
     .eq("id", commentId)
+    // Never a team-only note (see above).
+    .eq("team_only", false)
     .maybeSingle();
   if (!comment) return { error: "That comment is no longer available." };
   const inThisReview = link.target_type

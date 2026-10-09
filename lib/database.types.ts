@@ -4490,6 +4490,7 @@ export type Database = {
           timecode_end: number | null;
           author_key: string | null;
           edited_at: string | null;
+          team_only: boolean;
         };
         Insert: {
           author_id?: string | null;
@@ -4513,6 +4514,7 @@ export type Database = {
           timecode_end?: number | null;
           author_key?: string | null;
           edited_at?: string | null;
+          team_only?: boolean;
         };
         Update: {
           author_id?: string | null;
@@ -4536,6 +4538,7 @@ export type Database = {
           timecode_end?: number | null;
           author_key?: string | null;
           edited_at?: string | null;
+          team_only?: boolean;
         };
         Relationships: [
           {

@@ -16,6 +16,8 @@ export type ShotAnchor = {
   timecodeEnd?: number | null;
   /** Roster contacts the author chose to notify. */
   mentions?: string[];
+  /** Keep the note inside the studio (hidden from the client link). */
+  teamOnly?: boolean;
 };
 
 // Review canvas for an AI pipeline shot. If the shot has a playable take video,
@@ -59,6 +61,7 @@ export function AiShotReviewCanvas({
               drawing: extra?.drawing ?? null,
               timecodeEnd: extra?.timecodeEnd ?? null,
               mentions: extra?.mentions,
+              teamOnly: extra?.teamOnly,
             })
           }
           onResolve={onResolve}
@@ -83,6 +86,7 @@ export function AiShotReviewCanvas({
             pin,
             drawing: extra?.drawing ?? null,
             mentions: extra?.mentions,
+            teamOnly: extra?.teamOnly,
           })
         }
       onResolve={onResolve}

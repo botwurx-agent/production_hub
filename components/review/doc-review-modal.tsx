@@ -74,7 +74,8 @@ export function DocReviewModal({
       anchor.parentId ?? null,
       anchor.drawing ?? null,
       anchor.timecodeEnd ?? null,
-      anchor.mentions
+      anchor.mentions,
+      { teamOnly: anchor.teamOnly }
     );
     if (res?.error) return false;
     await reload();
@@ -122,7 +123,12 @@ export function DocReviewModal({
               comments={detail.comments}
               emptyHint="Click anywhere on the document to drop a pin and start."
               onPost={(text, pin, extra) =>
-            post(text, { pin, drawing: extra?.drawing ?? null })
+            post(text, {
+              pin,
+              drawing: extra?.drawing ?? null,
+              mentions: extra?.mentions,
+              teamOnly: extra?.teamOnly,
+            })
           }
               onResolve={resolve}
             />
