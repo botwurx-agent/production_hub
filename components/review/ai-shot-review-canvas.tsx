@@ -5,6 +5,7 @@ import { VideoReview } from "@/components/review/video-review";
 import { DocSurfaceView } from "@/components/review/doc-surface";
 import type { DocSurface, DocShotMedia, PortalComment } from "@/lib/review-links";
 import type { Drawing } from "@/lib/review-drawing";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 // A comment anchor: an image pin (percent coords) OR a video timecode (seconds).
 export type ShotAnchor = {
@@ -18,6 +19,7 @@ export type ShotAnchor = {
   mentions?: string[];
   /** Keep the note inside the studio (hidden from the client link). */
   teamOnly?: boolean;
+  audio?: VoiceAttachment | null;
 };
 
 // Review canvas for an AI pipeline shot. If the shot has a playable take video,
@@ -66,6 +68,7 @@ export function AiShotReviewCanvas({
               timecodeEnd: extra?.timecodeEnd ?? null,
               mentions: extra?.mentions,
               teamOnly: extra?.teamOnly,
+              audio: extra?.audio,
             })
           }
           onResolve={onResolve}
@@ -91,6 +94,7 @@ export function AiShotReviewCanvas({
             drawing: extra?.drawing ?? null,
             mentions: extra?.mentions,
             teamOnly: extra?.teamOnly,
+            audio: extra?.audio,
           })
         }
       onResolve={onResolve}

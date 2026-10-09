@@ -4494,6 +4494,8 @@ export type Database = {
           author_key: string | null;
           edited_at: string | null;
           team_only: boolean;
+          audio_path: string | null;
+          audio_seconds: number | null;
         };
         Insert: {
           author_id?: string | null;
@@ -4518,6 +4520,8 @@ export type Database = {
           author_key?: string | null;
           edited_at?: string | null;
           team_only?: boolean;
+          audio_path?: string | null;
+          audio_seconds?: number | null;
         };
         Update: {
           author_id?: string | null;
@@ -4542,6 +4546,8 @@ export type Database = {
           author_key?: string | null;
           edited_at?: string | null;
           team_only?: boolean;
+          audio_path?: string | null;
+          audio_seconds?: number | null;
         };
         Relationships: [
           {

@@ -12,6 +12,12 @@ import { DRAW_COLORS, type Drawing, type DrawTool } from "@/lib/review-drawing";
 import type { PortalComment } from "@/lib/review-links";
 import { useModalRoomy } from "@/components/ui/modal";
 import { TeamOnlyTag, TeamOnlyToggle } from "@/components/review/team-review";
+import {
+  VoicePlayer,
+  VoiceRecorder,
+  useVoiceDraft,
+  type VoiceAttachment,
+} from "@/components/review/voice-note";
 
 // Frame.io-style pinned review over an arbitrary surface: click the surface to
 // drop the next numbered pin and open a matching comment; the sidebar stays in
@@ -46,7 +52,12 @@ export function PinCanvas({
     pin: { x: number; y: number } | null,
     // `extra` is the extension point: a caller that does not care about
     // drawings or mentions simply ignores it.
-    extra?: { drawing?: Drawing | null; mentions?: string[]; teamOnly?: boolean }
+    extra?: {
+      drawing?: Drawing | null;
+      mentions?: string[];
+      teamOnly?: boolean;
+      audio?: VoiceAttachment | null;
+    }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {
@@ -70,6 +81,7 @@ export function PinCanvas({
   // Kept between posts on purpose: a producer doing an internal pass leaves
   // several notes in a row, and the switch stays visibly amber while on.
   const [teamOnly, setTeamOnly] = useState(false);
+  const voice = useVoiceDraft();
 
   const pins = comments.filter(
     (c) => !c.resolved && c.x != null && c.y != null && c.pinNumber != null
@@ -93,15 +105,24 @@ export function PinCanvas({
 
   async function post() {
     const t = text.trim();
-    if (!t || sending || disabled) return;
+    if ((!t && !voice.draft) || sending || disabled) return;
     setSending(true);
+    // The recording goes up first; a failed upload stops the post rather than
+    // sending a comment that silently lost its voice note.
+    const audio = await voice.upload();
+    if (audio === false) {
+      setSending(false);
+      return;
+    }
     const ok = await onPost(t, pending, {
       drawing: draft,
       mentions: picked.map((p) => p.id),
       teamOnly,
+      audio,
     });
     setSending(false);
     if (ok) {
+      voice.clear();
       setText("");
       setPending(null);
       setDraft(null);
@@ -337,9 +358,12 @@ export function PinCanvas({
                       {timeAgo(c.created_at)}
                     </span>
                   </div>
-                  <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
-                    {c.body}
-                  </p>
+                  {c.body && (
+                    <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
+                      {c.body}
+                    </p>
+                  )}
+                  {c.audio && <VoicePlayer commentId={c.id} seconds={c.audio.seconds} />}
                   {canResolve && onResolve && (
                     <button
                       onClick={(e) => {
@@ -411,6 +435,7 @@ export function PinCanvas({
               {draft ? "Drawing" : "Draw"}
             </button>
             <EmojiPicker onPick={insertEmoji} />
+            <VoiceRecorder voice={voice} disabled={disabled} />
             <MentionPicker roster={roster} onPick={addMention} disabled={disabled} />
             <TeamOnlyToggle on={teamOnly} onChange={setTeamOnly} disabled={disabled} />
             {pending && (
@@ -424,7 +449,7 @@ export function PinCanvas({
             <span className="flex-1" />
             <button
               onClick={post}
-              disabled={disabled || sending || !text.trim()}
+              disabled={disabled || sending || (!text.trim() && !voice.draft)}
               className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
             >
               {sending ? "Posting…" : "Post"}

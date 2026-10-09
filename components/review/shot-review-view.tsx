@@ -56,7 +56,7 @@ export function ShotReviewView({
       anchor.drawing ?? null,
       anchor.timecodeEnd ?? null,
       anchor.mentions,
-      { teamOnly: anchor.teamOnly }
+      { teamOnly: anchor.teamOnly, audio: anchor.audio }
     );
     if (res?.error) return false;
     await reload();

@@ -21,6 +21,7 @@ import {
   resolveClientComment,
 } from "@/app/r/[token]/actions";
 import type { PortalData } from "@/lib/review-links";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 const NAME_KEY = "review.name.v1";
 
@@ -103,7 +104,7 @@ export function ClientReview({
   async function postPinned(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; page?: number }
+    extra?: { drawing?: Drawing | null; page?: number; audio?: VoiceAttachment | null }
   ): Promise<boolean> {
     if (!viewing) return false;
     if (!name.trim()) {
@@ -123,7 +124,8 @@ export function ClientReview({
       null,
       myKey,
       // Only a PDF sends one; everything else leaves the column null.
-      extra?.page ?? null
+      extra?.page ?? null,
+      extra?.audio ?? null
     );
     if (res?.error) {
       setError(res.error);
@@ -167,6 +169,7 @@ export function ClientReview({
       parentId?: string | null;
       drawing?: Drawing | null;
       timecodeEnd?: number | null;
+      audio?: VoiceAttachment | null;
     }
   ): Promise<boolean> {
     if (!viewing) return false;
@@ -185,7 +188,9 @@ export function ClientReview({
       extra?.parentId ?? null,
       extra?.drawing ?? null,
       extra?.timecodeEnd ?? null,
-      myKey
+      myKey,
+      null,
+      extra?.audio ?? null
     );
     if (res?.error) {
       setError(res.error);

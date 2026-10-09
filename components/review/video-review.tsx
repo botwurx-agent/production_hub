@@ -21,6 +21,12 @@ import { mentionText, type MentionCandidate } from "@/lib/mentions";
 import { DrawToolbar } from "@/components/review/draw-toolbar";
 import { CommentReactions } from "@/components/review/comment-reactions";
 import type { PortalComment } from "@/lib/review-links";
+import {
+  VoicePlayer,
+  VoiceRecorder,
+  useVoiceDraft,
+  type VoiceAttachment,
+} from "@/components/review/voice-note";
 import { useModalRoomy } from "@/components/ui/modal";
 
 // Frame.io-grade video review: the shared ScrubVideo player (accurate scrubbing,
@@ -86,6 +92,7 @@ export function VideoReview({
       timecodeEnd?: number | null;
       mentions?: string[];
       teamOnly?: boolean;
+      audio?: VoiceAttachment | null;
     }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
@@ -128,6 +135,7 @@ export function VideoReview({
   // Kept between posts: an internal pass is usually several notes in a row,
   // and the switch stays visibly amber while it is on.
   const [teamOnly, setTeamOnly] = useState(false);
+  const voice = useVoiceDraft();
   // A reply's own switch. Under a team-only comment it is forced on (the
   // server enforces the same), so a thread never splits across audiences.
   const [replyTeamOnly, setReplyTeamOnly] = useState(false);
@@ -254,17 +262,25 @@ export function VideoReview({
 
   async function post() {
     const t = text.trim();
-    if (!t || sending || disabled) return;
+    if ((!t && !voice.draft) || sending || disabled) return;
     const at = pending ?? round2(currentTime);
     setSending(true);
+    // Upload first: a failed upload stops the post instead of losing the note.
+    const audio = await voice.upload();
+    if (audio === false) {
+      setSending(false);
+      return;
+    }
     const ok = await onPost(t, at, {
       drawing: draft,
       timecodeEnd: pendingEnd != null && pendingEnd > at ? pendingEnd : null,
       mentions: picked.map((p) => p.id),
       teamOnly,
+      audio,
     });
     setSending(false);
     if (ok) {
+      voice.clear();
       setText("");
       setPending(null);
       setPendingEnd(null);
@@ -612,14 +628,21 @@ export function VideoReview({
                           </div>
                         </div>
                       ) : (
-                        <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
-                          {c.body}
-                          {c.editedAt && (
-                            <span className="ml-1 text-[10px] font-semibold text-text-faint">
-                              (edited)
-                            </span>
+                        <>
+                          {(c.body || c.editedAt) && (
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
+                              {c.body}
+                              {c.editedAt && (
+                                <span className="ml-1 text-[10px] font-semibold text-text-faint">
+                                  (edited)
+                                </span>
+                              )}
+                            </p>
                           )}
-                        </p>
+                          {c.audio && (
+                            <VoicePlayer commentId={c.id} seconds={c.audio.seconds} />
+                          )}
+                        </>
                       )}
 
                       {onReact && (
@@ -764,14 +787,21 @@ export function VideoReview({
                               </div>
                             </div>
                           ) : (
-                            <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-text-muted">
-                              {r.body}
-                              {r.editedAt && (
-                                <span className="ml-1 text-[10px] font-semibold text-text-faint">
-                                  (edited)
-                                </span>
+                            <>
+                              {(r.body || r.editedAt) && (
+                                <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-text-muted">
+                                  {r.body}
+                                  {r.editedAt && (
+                                    <span className="ml-1 text-[10px] font-semibold text-text-faint">
+                                      (edited)
+                                    </span>
+                                  )}
+                                </p>
                               )}
-                            </p>
+                              {r.audio && (
+                                <VoicePlayer commentId={r.id} seconds={r.audio.seconds} />
+                              )}
+                            </>
                           )}
 
                           {onReact && (
@@ -973,6 +1003,7 @@ export function VideoReview({
             </button>
 
             <EmojiPicker onPick={insertEmoji} />
+            <VoiceRecorder voice={voice} disabled={disabled} />
             <MentionPicker roster={roster} onPick={addMention} disabled={disabled} />
             <TeamOnlyToggle on={teamOnly} onChange={setTeamOnly} disabled={disabled} />
 
@@ -980,7 +1011,7 @@ export function VideoReview({
 
             <button
               onClick={post}
-              disabled={disabled || sending || !text.trim()}
+              disabled={disabled || sending || (!text.trim() && !voice.draft)}
               className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
             >
               {sending ? "Posting…" : "Post"}

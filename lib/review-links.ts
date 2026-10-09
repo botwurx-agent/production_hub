@@ -69,6 +69,12 @@ export type PortalComment = {
    * draws a "Team only" tag so the author can see who will read it.
    */
   teamOnly?: boolean;
+  /**
+   * Set when the comment carries a voice note. The file is never signed into
+   * the page: it plays through an access-checked route, so only its length
+   * travels here.
+   */
+  audio?: { seconds: number | null } | null;
 };
 
 export type PortalVersion = {
@@ -180,7 +186,7 @@ export async function gatherReview(
       service
         .from("review_comments")
         .select(
-          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at, audio_path, audio_seconds"
         )
         .in("version_id", versionIds)
         // A team-only note never leaves the studio. Filtered here, in the
@@ -217,6 +223,7 @@ export async function gatherReview(
         resolved: Boolean(c.resolved_at),
         parentId: c.parent_id ?? null,
         editedAt: c.edited_at ?? null,
+        audio: c.audio_path ? { seconds: c.audio_seconds } : null,
         authorKey: c.author_key ?? null,
         reactions: [],
         drawing: normalizeDrawing(c.drawing),
@@ -801,7 +808,7 @@ export async function gatherDocReview(
     service
       .from("review_comments")
       .select(
-        "id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+        "id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at, audio_path, audio_seconds"
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
@@ -834,6 +841,7 @@ export async function gatherDocReview(
       resolved: Boolean(c.resolved_at),
       parentId: c.parent_id ?? null,
       editedAt: c.edited_at ?? null,
+      audio: c.audio_path ? { seconds: c.audio_seconds } : null,
       authorKey: c.author_key ?? null,
       reactions: [],
       drawing: normalizeDrawing(c.drawing),

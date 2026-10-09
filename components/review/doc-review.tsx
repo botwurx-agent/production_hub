@@ -69,7 +69,10 @@ export function DocReview({
       anchor.timecode ?? null,
       anchor.parentId ?? null,
       anchor.drawing ?? null,
-      anchor.timecodeEnd ?? null
+      anchor.timecodeEnd ?? null,
+      // No per-browser key on doc reviews yet, so edit/delete stays off here.
+      null,
+      anchor.audio ?? null
     );
     if (res?.error) {
       setError(res.error);

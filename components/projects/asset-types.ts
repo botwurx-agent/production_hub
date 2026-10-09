@@ -20,6 +20,8 @@ export type VersionComment = {
   author_key: string | null;
   edited_at: string | null;
   team_only: boolean;
+  audio_path?: string | null;
+  audio_seconds?: number | null;
   reactions?: CommentReaction[];
 };
 

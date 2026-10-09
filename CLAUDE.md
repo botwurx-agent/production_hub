@@ -1452,7 +1452,10 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0120. Recent: 0120 =
+files in supabase/migrations. THROUGH 0121. Recent: 0121 =
+review_comment_voice_note (review_comments.audio_path + audio_seconds: a
+recorded voice note on a comment, played only through access-checked
+routes); 0120 =
 client_portals (one no-login link per project listing every live review
 link; is_studio_member RLS, read publicly through the service role); 0119 =
 project_revision_rounds (projects.revision_rounds: client revision rounds
@@ -2026,6 +2029,60 @@ spread across ten emails.
   every card carrying the portal token, the button in both states, light and
   dark, no overflow at 390. NOT verified end to end against the database: a
   session here cannot reach Supabase.
+
+### Voice notes on review comments (migration 0121) — BUILT
+Sixth item off the Timeliner list. A director's note is often faster said than
+typed ("this push-in wants to land a beat later, and the light is too warm"),
+and a client on a phone will talk where they will not type.
+- `review_comments.audio_path` + `audio_seconds` (0121). A comment can be a
+  voice note with NO text: every comment action now refuses only when there is
+  neither text nor a voice note.
+- RECORDING IS THE BROWSER'S OWN MediaRecorder (components/review/
+  voice-note.tsx), a "Voice" button in BOTH composers (pin canvas for images,
+  PDFs and docs; the video timeline), capped at two minutes with a running
+  clock and Stop, then a playable preview with remove. Nothing uploads until
+  Post, so an abandoned take costs nothing. AAC in MP4 is asked for first
+  because it plays everywhere, Safari included; WebM/Opus is what Chrome and
+  Firefox actually record. Never a bare video/mp4 (the demo-clip lesson).
+- A FRESH RECORDING CARRIES NO LENGTH until played once, so Chrome's preview
+  reads 0:00. The length we measured is printed beside it, and that is what is
+  stored.
+- UPLOAD FIRST, THEN POST, and a failed upload STOPS the post (it keeps the
+  recording and says so) rather than sending a comment that silently lost its
+  voice note. The file crosses a Server Action, so MAX_VOICE_BYTES is 3MB,
+  far above two minutes of speech.
+- THE PATH COMES BACK FROM THE BROWSER, so it is the trust boundary
+  (lib/voice-note.ts, pure, 27 assertions). The server names the file
+  (lib/voice-store.ts) inside a folder per owner: `<studio>/voice/u-<user>/`
+  in the app, `<studio>/voice/l-<link>/` on the portal. The comment actions
+  accept a path only as ONE file directly in the caller's own folder, matched
+  on whole segments, so another studio's file, another link's file, a deeper
+  path and a traversal are all refused. Bug the tests caught: an empty
+  duration was read as 0 seconds (Number("") is 0, the "n/a" trap again).
+- PLAYBACK NEVER SIGNS A URL INTO THE PAGE. The player's src is a route that
+  checks access and redirects to a ten-minute signed file: /api/voice/<id> in
+  the app (the comment is read through RLS, which is the whole check) and
+  /r/<token>/voice/<id> on the portal (live link, the comment belongs to what
+  this link reviews, and never a team-only note). Loaders carry only
+  `audio: { seconds }` on PortalComment, so no storage path reaches a browser.
+- A CONTEXT, NOT A PROP, the Team only switch's pattern and for the same
+  reason: eight surfaces mount the same two composers. AppVoiceProvider is
+  mounted once in app/(app)/layout.tsx; PortalVoiceProvider wraps ClientReview
+  and DocReview on /r bound to the token. A composer with no provider shows no
+  microphone at all. EVERY CALLER FORWARDS extra.audio beside extra.teamOnly
+  (review-modal, cut-review-view, doc-review-modal, doc-review-view,
+  shot-review-view via ShotAnchor, client-review, doc-review); A NEW REVIEW
+  SURFACE MUST FORWARD IT TOO or the button records into nothing.
+- Client comment notifications read "Left a voice note" when there is no text.
+- NOT BUILT: recording on REPLIES (a reply plays one if it has one, but the
+  reply composer has no microphone yet), the batch review page (/rb), and
+  transcripts (item #7, which will fill a voice note's text).
+- Verified in Chromium with a fake microphone against a throwaway fixture
+  (deleted) mounting the real PinCanvas and VideoReview: record, stop,
+  preview, Post enabled with no text, a refused upload keeping the take and
+  saying so, the posted note's player pointing at the guarded route, and no
+  microphone without a provider. NOT verified end to end: a session here
+  cannot reach Supabase Storage, so the first real note is the test.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PinCanvas } from "@/components/review/pin-canvas";
 import type { PortalComment } from "@/lib/review-links";
 import type { Drawing } from "@/lib/review-drawing";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 /** Only what this file uses, so pdf.js stays a dynamic import. */
 type PdfDoc = {
@@ -70,7 +71,7 @@ export function PdfReview({
   onPost: (
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; page?: number; mentions?: string[]; teamOnly?: boolean },
+    extra?: { drawing?: Drawing | null; page?: number; mentions?: string[]; teamOnly?: boolean; audio?: VoiceAttachment | null },
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {

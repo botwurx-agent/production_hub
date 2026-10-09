@@ -30,6 +30,7 @@ import {
 } from "@/components/projects/asset-types";
 import type { PortalComment } from "@/lib/review-links";
 import { timeAgo } from "@/lib/format";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 function CommentSubmit() {
   const { pending } = useFormStatus();
@@ -108,6 +109,7 @@ export function ReviewModal({
       parentId: c.parent_id ?? null,
       editedAt: c.edited_at ?? null,
       teamOnly: c.team_only,
+      audio: c.audio_path ? { seconds: c.audio_seconds ?? null } : null,
       // Internally, ownership is the author id: meKey below is the user id, so
       // a team member can edit or delete the comments they wrote.
       authorKey: c.author_id ?? null,
@@ -120,7 +122,7 @@ export function ReviewModal({
   async function postPinned(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; page?: number; mentions?: string[]; teamOnly?: boolean }
+    extra?: { drawing?: Drawing | null; page?: number; mentions?: string[]; teamOnly?: boolean; audio?: VoiceAttachment | null }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
       projectId,
@@ -133,7 +135,7 @@ export function ReviewModal({
       null,
       extra?.page ?? null,
       extra?.mentions,
-      { teamOnly: extra?.teamOnly }
+      { teamOnly: extra?.teamOnly, audio: extra?.audio }
     );
     if (res?.error) return false;
     router.refresh();
@@ -148,6 +150,7 @@ export function ReviewModal({
       timecodeEnd?: number | null;
       mentions?: string[];
       teamOnly?: boolean;
+      audio?: VoiceAttachment | null;
     }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
@@ -161,7 +164,7 @@ export function ReviewModal({
       extra?.timecodeEnd ?? null,
       null,
       extra?.mentions,
-      { teamOnly: extra?.teamOnly }
+      { teamOnly: extra?.teamOnly, audio: extra?.audio }
     );
     if (res?.error) return false;
     router.refresh();

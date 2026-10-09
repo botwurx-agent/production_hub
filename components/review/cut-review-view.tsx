@@ -26,6 +26,7 @@ import {
 } from "@/components/projects/asset-types";
 import type { PortalComment } from "@/lib/review-links";
 import type { ApprovalStatus } from "@/lib/database.types";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 // Full-page internal review of one master-cut version: big video with the
 // timecode scrubber (or pins for a still), the comment rail beside it with room
@@ -82,6 +83,7 @@ export function CutReviewView({
       parentId: c.parent_id ?? null,
       editedAt: c.edited_at ?? null,
       teamOnly: c.team_only,
+      audio: c.audio_path ? { seconds: c.audio_seconds ?? null } : null,
       // Internally, ownership is the author id: meKey below is the user id, so
       // a team member can edit or delete the comments they wrote.
       authorKey: c.author_id ?? null,
@@ -94,7 +96,7 @@ export function CutReviewView({
   async function postPinned(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; teamOnly?: boolean }
+    extra?: { drawing?: Drawing | null; teamOnly?: boolean; audio?: VoiceAttachment | null }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
       projectId,
@@ -107,7 +109,7 @@ export function CutReviewView({
       null,
       null,
       undefined,
-      { teamOnly: extra?.teamOnly }
+      { teamOnly: extra?.teamOnly, audio: extra?.audio }
     );
     if (res?.error) return false;
     router.refresh();
@@ -121,6 +123,7 @@ export function CutReviewView({
       drawing?: Drawing | null;
       timecodeEnd?: number | null;
       teamOnly?: boolean;
+      audio?: VoiceAttachment | null;
     }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
@@ -134,7 +137,7 @@ export function CutReviewView({
       extra?.timecodeEnd ?? null,
       null,
       undefined,
-      { teamOnly: extra?.teamOnly }
+      { teamOnly: extra?.teamOnly, audio: extra?.audio }
     );
     if (res?.error) return false;
     router.refresh();

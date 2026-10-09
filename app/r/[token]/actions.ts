@@ -1,6 +1,8 @@
 "use server";
 
 import { clientRoundsUsed, roundNote } from "@/lib/revision-rounds";
+import { voiceFolder, voicePathAllowed, voiceSeconds } from "@/lib/voice-note";
+import { storeVoice } from "@/lib/voice-store";
 
 import { revalidatePath } from "next/cache";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
@@ -92,7 +94,9 @@ export async function submitClientComment(
   authorKey?: string | null,
   // For a PDF, which page the pin was dropped on. A single-surface review
   // sends nothing and the column stays null.
-  pinPage?: number | null
+  pinPage?: number | null,
+  // A voice note uploaded first through uploadClientVoiceNote.
+  audio?: { path: string; seconds: number | null } | null
 ): Promise<PortalState> {
   if (!allowPublic("r-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -100,13 +104,15 @@ export async function submitClientComment(
   const reviewer = name.trim();
   const text = body.trim();
   if (!reviewer) return { error: "Add your name first." };
-  if (!text) return { error: "Write a comment first." };
+  if (!text && !audio) return { error: "Write a comment first." };
 
   const service = createServiceClient();
   const link = await getValidLink(service, token);
   if (!link) return { error: "This review link is no longer active." };
   if (!(await versionInLink(service, link, versionId)))
     return { error: "That version is not part of this review." };
+  const voice = linkVoice(link, audio);
+  if (audio && !voice) return { error: "That voice note could not be attached." };
 
   // A reply must belong to this same version, and never nests further.
   let parent: string | null = null;
@@ -179,6 +185,8 @@ export async function submitClientComment(
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
     author_key: authorKey?.trim() || null,
+    audio_path: voice?.path ?? null,
+    audio_seconds: voice?.seconds ?? null,
   });
   if (error) return { error: error.message };
 
@@ -192,7 +200,7 @@ export async function submitClientComment(
     project_id: link.project_id,
     type: "client_comment",
     title: `${reviewer} ${parent ? "replied in" : "commented in"} client review`,
-    body: text.slice(0, 140),
+    body: text ? text.slice(0, 140) : voice ? "Left a voice note" : "",
     href: `/projects/${link.project_id}`,
   });
   revalidatePath(`/r/${token}`);
@@ -335,7 +343,8 @@ export async function submitDocComment(
   drawing?: unknown,
   // Out-point for a range comment; timecode is the in-point.
   timecodeEnd?: number | null,
-  authorKey?: string | null
+  authorKey?: string | null,
+  audio?: { path: string; seconds: number | null } | null
 ): Promise<PortalState> {
   if (!allowPublic("r-doc-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -343,13 +352,15 @@ export async function submitDocComment(
   const reviewer = name.trim();
   const text = body.trim();
   if (!reviewer) return { error: "Add your name first." };
-  if (!text) return { error: "Write a comment first." };
+  if (!text && !audio) return { error: "Write a comment first." };
 
   const service = createServiceClient();
   const link = await getValidLink(service, token);
   if (!link) return { error: "This review link is no longer active." };
   if (!isDocKind(link.target_type) || !link.target_id)
     return { error: "This is not a document review." };
+  const voice = linkVoice(link, audio);
+  if (audio && !voice) return { error: "That voice note could not be attached." };
 
   // A reply hangs off its parent (same doc target) and never nests further.
   let parent: string | null = null;
@@ -420,6 +431,8 @@ export async function submitDocComment(
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
     author_key: authorKey?.trim() || null,
+    audio_path: voice?.path ?? null,
+    audio_seconds: voice?.seconds ?? null,
   });
   if (error) return { error: error.message };
 
@@ -431,7 +444,7 @@ export async function submitDocComment(
     project_id: link.project_id,
     type: "client_comment",
     title: `${reviewer} commented on the ${noun}`,
-    body: text.slice(0, 140),
+    body: text ? text.slice(0, 140) : voice ? "Left a voice note" : "",
     href: `/projects/${link.project_id}`,
   });
   revalidatePath(`/r/${token}`);
@@ -727,4 +740,36 @@ async function revisionRoundNote(
     approvals: (approvals ?? []).filter((a) => a.target_id === id),
   }));
   return roundNote(clientRoundsUsed(byVersion), project.revision_rounds);
+}
+
+/**
+ * A voice note path handed back by the browser, accepted only from the folder
+ * this review link uploads into. Null when absent or not ours.
+ */
+function linkVoice(
+  link: { id: string; studio_id: string },
+  audio: { path: string; seconds: number | null } | null | undefined
+): { path: string; seconds: number | null } | null {
+  if (!audio) return null;
+  const folder = voiceFolder(link.studio_id, { linkId: link.id });
+  if (!voicePathAllowed(audio.path, folder)) return null;
+  return { path: audio.path, seconds: voiceSeconds(audio.seconds) };
+}
+
+/**
+ * Upload a client's voice note before the comment that carries it. The file
+ * goes into a folder named for this review link, which is the only place the
+ * comment actions will accept a path from.
+ */
+export async function uploadClientVoiceNote(
+  token: string,
+  form: FormData
+): Promise<{ path: string } | { error: string }> {
+  if (!allowPublic("r-voice"))
+    return { error: "Too many requests. Please wait a moment and try again." };
+  if (!serviceConfigured()) return { error: "Review portal is not configured." };
+  const service = createServiceClient();
+  const link = await getValidLink(service, token);
+  if (!link) return { error: "This review link is no longer active." };
+  return storeVoice(form, voiceFolder(link.studio_id, { linkId: link.id }));
 }

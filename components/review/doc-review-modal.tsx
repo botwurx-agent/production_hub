@@ -75,7 +75,7 @@ export function DocReviewModal({
       anchor.drawing ?? null,
       anchor.timecodeEnd ?? null,
       anchor.mentions,
-      { teamOnly: anchor.teamOnly }
+      { teamOnly: anchor.teamOnly, audio: anchor.audio }
     );
     if (res?.error) return false;
     await reload();
@@ -129,6 +129,7 @@ export function DocReviewModal({
               drawing: extra?.drawing ?? null,
               mentions: extra?.mentions,
               teamOnly: extra?.teamOnly,
+              audio: extra?.audio,
             })
           }
               onResolve={resolve}

@@ -1,5 +1,7 @@
 "use server";
 
+import { voiceFolder, voicePathAllowed, voiceSeconds } from "@/lib/voice-note";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeDrawing } from "@/lib/review-drawing";
@@ -61,11 +63,23 @@ export async function addReviewCommentAt(
   // A note the client never sees. A reply under a team-only comment is
   // always team-only, whatever the composer said, so a thread cannot leak
   // half of itself onto the portal.
-  opts?: { teamOnly?: boolean }
+  opts?: {
+    teamOnly?: boolean;
+    /** A voice note uploaded first through uploadVoiceNote. */
+    audio?: { path: string; seconds: number | null } | null;
+  }
 ): Promise<ReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
-  if (!text) return { error: "Write a comment first." };
+  // A voice note is only accepted from the folder this user was given, since
+  // the path comes back from the browser (lib/voice-note).
+  const audio =
+    opts?.audio &&
+    voicePathAllowed(opts.audio.path, voiceFolder(ctx.studio.id, { userId: ctx.userId }))
+      ? { path: opts.audio.path, seconds: voiceSeconds(opts.audio.seconds) }
+      : null;
+  if (opts?.audio && !audio) return { error: "That voice note could not be attached." };
+  if (!text && !audio) return { error: "Write a comment first." };
 
   const supabase = createClient();
 
@@ -133,6 +147,8 @@ export async function addReviewCommentAt(
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
     team_only: parentTeamOnly || opts?.teamOnly === true,
+    audio_path: audio?.path ?? null,
+    audio_seconds: audio?.seconds ?? null,
   })
     .select("id")
     .single();
