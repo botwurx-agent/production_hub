@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
 import { Card, EmptyState } from "@/components/ui/card";
 import { AssetCard } from "@/components/projects/asset-card";
+import { RevisionRoundsControl } from "@/components/review/revision-rounds";
 import { DocReviewCard } from "@/components/review/doc-review-card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { StatusTag } from "@/components/status-tag";
@@ -36,7 +37,7 @@ export default async function ReviewPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title")
+    .select("id, title, revision_rounds")
     .eq("id", params.id)
     .maybeSingle();
   if (!project) notFound();
@@ -62,6 +63,13 @@ export default async function ReviewPage({
         section="Review & approvals"
         hue="pink"
         subtitle="Assets and documents in the review cycle. Comment, sign off, or share with the client."
+        action={
+          <RevisionRoundsControl
+            projectId={project.id}
+            rounds={project.revision_rounds}
+            canEdit={!ctx.isCollaborator}
+          />
+        }
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 11l3 3 8-8" />
@@ -128,7 +136,8 @@ export default async function ReviewPage({
                       studioId={ctx.studio.id}
                       currentUserId={ctx.userId}
                       reviewLink={reviewLinkByAsset.get(a.id) ?? null}
-                emailEnabled={emailConfigured()}
+                      emailEnabled={emailConfigured()}
+                      revisionRounds={project.revision_rounds}
                     />
                   ))}
                   {docs.map((d) => (

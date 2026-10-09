@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0118. Recent: 0118 =
+files in supabase/migrations. THROUGH 0119. Recent: 0119 =
+project_revision_rounds (projects.revision_rounds: client revision rounds
+the SOW includes per deliverable, null = not tracked); 0118 =
 review_link_lock_downloads (review_links.lock_downloads: the client can
 watch and comment but not download until the work is approved); 0117 =
 review_comment_team_only (review_comments.team_only: a note the client
@@ -1929,6 +1931,46 @@ signed off, so the review link doubles as a delivery.
   ClientReview: locked video shows the lock line, no download link,
   controlslist nodownload and no frame download in the settings menu; unlocked
   shows all three back; same for an image; no page errors, no overflow.
+
+### Revision rounds against the SOW (migration 0119) — BUILT
+Fourth item off the Timeliner list. Commercial SOWs routinely include two
+rounds of revisions, and nothing in the app could say when a client had used
+them, so the third round got done for free because nobody noticed it was the
+third.
+- `projects.revision_rounds` (0119, nullable smallint 0 to 20, null = not
+  tracked). Set once per job from a "Client revision rounds" select in the
+  Review page header (RevisionRoundsControl, staff only; a collaborator sees
+  the number as text if set). Per DELIVERABLE, not per project, because that is
+  how an SOW counts them.
+- A ROUND IS SPENT WHEN THE CLIENT REQUESTS CHANGES on a version through a
+  review link (an approvals row with review_link_id set and status
+  changes_requested), one per version. Deliberately NOT counted: versions the
+  client never saw, the studio's own internal "request changes", and a version
+  the client sent back and then approved (the row updates in place). DERIVED
+  from approvals every time, never stored, so it cannot drift.
+- lib/revision-rounds.ts is pure (30 assertions): clientRoundsUsed, roundState
+  (ok / last / over and the sentence), roundNote, parseRounds (the trust
+  boundary; "n/a" and fractions are refused, not read as 0).
+- ON EACH DELIVERABLE on the Review page, one line under the review signal:
+  "1 of 2 revision rounds used", "2 of 2 used, next is extra", "3 of 2 used,
+  1 over". Words in the text colour, hue on a dot (blue / amber / red), the
+  read-banner contrast lesson again. The Assets library passes nothing and
+  shows nothing.
+- THE NOTIFICATION SAYS IT at the moment it matters: a client change request
+  that uses the last included round or goes past it reads "Sam requested
+  changes (round 3, 2 included)" in the bell and the activity log. Counted
+  after the request is written, through the same rule; best effort, so a
+  failed count only loses the note.
+- THE CLIENT IS NOT TOLD and is not blocked. Timeliner "auto-limits"; refusing
+  a client's request in the portal is a commercial conversation the studio
+  should have, not a wall the software puts up. The studio sees it and decides
+  whether it is a change order.
+- ASSETS ONLY. Doc reviews (shot list, storyboard) have no versions to count.
+- NOT BUILT: the SOW reader filling the number in (extractSow could read "two
+  rounds of revisions"), and a warning on "+ Version" itself.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  AssetCard and control: all three states, nothing on a card without rounds,
+  light and dark, no overflow at 390.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

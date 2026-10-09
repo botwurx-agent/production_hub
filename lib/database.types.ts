@@ -4155,6 +4155,7 @@ export type Database = {
           shoot_date: string | null;
           status: Database["public"]["Enums"]["project_status"];
           archived_at: string | null;
+          revision_rounds: number | null;
           project_type: string;
           color: string | null;
           studio_id: string;
@@ -4172,6 +4173,7 @@ export type Database = {
           shoot_date?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
           archived_at?: string | null;
+          revision_rounds?: number | null;
           project_type?: string;
           color?: string | null;
           studio_id: string;
@@ -4189,6 +4191,7 @@ export type Database = {
           shoot_date?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
           archived_at?: string | null;
+          revision_rounds?: number | null;
           project_type?: string;
           color?: string | null;
           studio_id?: string;

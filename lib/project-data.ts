@@ -127,7 +127,7 @@ export async function loadProjectAssets(
       supabase
         .from("approvals")
         .select(
-          "id, status, reviewer_user_id, reviewer_name, created_at, target_id"
+          "id, status, reviewer_user_id, reviewer_name, created_at, target_id, review_link_id"
         )
         .eq("target_type", "version")
         .in("target_id", versionIds),

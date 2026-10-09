@@ -1,5 +1,7 @@
 "use server";
 
+import { clientRoundsUsed, roundNote } from "@/lib/revision-rounds";
+
 import { revalidatePath } from "next/cache";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import { allowPublic } from "@/lib/rate-limit";
@@ -286,12 +288,20 @@ export async function submitClientDecision(
 
   const label =
     status === "approved" ? "approved this asset" : "requested changes";
-  await logActivity(service, link, `${reviewer} ${label} in client review`);
+  // Say so when this request reaches or passes the rounds the SOW includes,
+  // which is the moment a change order is worth raising. Best effort: a
+  // failed count only loses the note, never the decision.
+  const note =
+    status === "changes_requested"
+      ? await revisionRoundNote(service, link, versionId).catch(() => null)
+      : null;
+  const said = note ? `${label} (${note})` : label;
+  await logActivity(service, link, `${reviewer} ${said} in client review`);
   await createNotification(service, {
     studio_id: link.studio_id,
     project_id: link.project_id,
     type: status === "approved" ? "client_approved" : "client_changes",
-    title: `${reviewer} ${label}`,
+    title: `${reviewer} ${said}`,
     href: `/projects/${link.project_id}`,
   });
   revalidatePath(`/r/${token}`);
@@ -677,4 +687,44 @@ export async function toggleClientReaction(
   revalidatePath(`/r/${token}`);
   revalidatePath(`/projects/${link.project_id}`);
   return null;
+}
+
+/**
+ * "round 3, 2 included" for a client change request, or null when the project
+ * does not track rounds or nothing is worth saying. Counts through the same
+ * rule the Review page shows (lib/revision-rounds), after this request has
+ * been written, so the request just made is included.
+ */
+async function revisionRoundNote(
+  service: ReturnType<typeof createServiceClient>,
+  link: { project_id: string },
+  versionId: string
+): Promise<string | null> {
+  const { data: project } = await service
+    .from("projects")
+    .select("revision_rounds")
+    .eq("id", link.project_id)
+    .maybeSingle();
+  if (project?.revision_rounds == null) return null;
+  const { data: version } = await service
+    .from("versions")
+    .select("asset_id")
+    .eq("id", versionId)
+    .maybeSingle();
+  if (!version?.asset_id) return null;
+  const { data: versions } = await service
+    .from("versions")
+    .select("id")
+    .eq("asset_id", version.asset_id);
+  const ids = (versions ?? []).map((v) => v.id);
+  if (ids.length === 0) return null;
+  const { data: approvals } = await service
+    .from("approvals")
+    .select("target_id, status, review_link_id")
+    .eq("target_type", "version")
+    .in("target_id", ids);
+  const byVersion = ids.map((id) => ({
+    approvals: (approvals ?? []).filter((a) => a.target_id === id),
+  }));
+  return roundNote(clientRoundsUsed(byVersion), project.revision_rounds);
 }

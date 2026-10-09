@@ -29,6 +29,8 @@ export type VersionApproval = {
   reviewer_user_id: string | null;
   reviewer_name: string | null;
   created_at: string;
+  /** Set when the decision came from the client through a review link. */
+  review_link_id?: string | null;
 };
 
 export type VersionRow = {
