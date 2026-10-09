@@ -131,6 +131,7 @@ export function ShotReviewView({
         <AiShotReviewCanvas
           surface={surface}
           comments={detail.comments}
+          exportName={detail.docTitle}
           wide
           onPost={post}
           onResolve={resolve}

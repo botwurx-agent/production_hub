@@ -31,10 +31,13 @@ export function AiShotReviewCanvas({
   disabled = false,
   disabledHint,
   wide = false,
+  exportName,
   onPost,
   onResolve,
 }: {
   surface: Extract<DocSurface, { kind: "ai_shot" }>;
+  /** Names the marker export (the shot's title). */
+  exportName?: string;
   comments: PortalComment[];
   canResolve?: boolean;
   disabled?: boolean;
@@ -49,6 +52,7 @@ export function AiShotReviewCanvas({
         {surface.frames.length > 0 && <FrameStrip frames={surface.frames} />}
         <VideoReview
           videoUrl={surface.takeVideoUrl}
+          exportName={exportName}
           comments={comments}
           canResolve={canResolve}
           disabled={disabled}

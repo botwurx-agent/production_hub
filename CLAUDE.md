@@ -1854,6 +1854,45 @@ team member left in the in-app review canvas was also served to the client on
 - Verified in Chromium against a throwaway fixture (deleted) mounting the real
   PinCanvas and VideoReview inside and outside the provider, light and dark.
 
+### Review notes out as timeline markers (no migration) — BUILT
+Second item off the Timeliner list. Every video review canvas in the app (the
+review window, the master cut page, an AI shot's take) has a "Markers" button
+in its comment list header that downloads the notes as markers for the edit,
+so an editor sees each note on its frame instead of reading a list beside the
+timeline. It is "orchestrate, do not replace" in its plainest form: the edit
+stays in the editor's own app.
+- lib/marker-export.ts is pure and NOT `server-only` (43 assertions in the
+  scratchpad, plus both XML outputs parsed as well-formed). Four formats, each
+  the one its app actually imports markers from: Premiere (FCP7 xmeml sequence
+  with sequence markers), Resolve (an EDL in Resolve's marker form, Timeline >
+  Import > Timeline Markers from EDL), Final Cut Pro (FCPXML 1.9 project whose
+  gap clip carries the markers) and CSV.
+- FRAME RATE IS ASKED, NEVER GUESSED. A browser video does not expose a file's
+  rate (the player itself assumes 24), and markers built at the wrong rate
+  drift further off the frame the further into the cut they go. The window
+  asks for the rate of the EDITOR'S SEQUENCE, which is the one that matters.
+- NON-DROP-FRAME TIMECODE throughout: for 29.97 and 59.94 the frame NUMBER is
+  exact (seconds x the true rate) and the label counts on the nominal base.
+  Drop-frame labelling is deliberately not offered.
+- START TIMECODE is a choice (00:00:00:00 or 01:00:00:00) and defaults to 01
+  for Resolve, 00 for the others, because that is where each app's new
+  timelines start and a Resolve EDL places markers by RECORD timecode.
+- A range comment becomes a marker spanning its range; a point comment is one
+  frame. Replies ride on their parent's marker text. Resolved notes are left
+  out unless ticked. Client notes are yellow in Resolve, team notes blue.
+- TEAM ONLY, through the same TeamReviewProvider as the Team only switch: the
+  export INCLUDES team-only notes (the editor is the team), so it must never
+  render on the client link, which sits outside that provider. Verified: the
+  button is absent on the portal-side mount.
+- Built entirely in the browser from comments the canvas already holds; no
+  server action, nothing fetched. Choices persist in localStorage
+  ("review.markerExport").
+- NOT VERIFIED INSIDE PREMIERE, RESOLVE OR FINAL CUT: none of them run in a
+  session. The files were checked for structure and well-formedness, not
+  imported. The first real import is the test, and the thing to watch is
+  Premiere, whose import opens a new sequence carrying the markers rather than
+  adding them to the editor's existing one.
+
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
 could say you were $4,200 over but not why, who, or against what document. Actual

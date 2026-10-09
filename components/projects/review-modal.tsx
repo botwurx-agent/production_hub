@@ -263,6 +263,7 @@ export function ReviewModal({
         ) : isVideo ? (
           <VideoReview
             videoUrl={version.signedUrl as string}
+            exportName={`${assetName} v${version.version_number}`}
             comments={portalComments}
             meKey={currentUserId}
             onPost={postTimed}

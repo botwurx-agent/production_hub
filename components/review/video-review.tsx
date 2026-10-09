@@ -15,6 +15,7 @@ import {
 import { EmojiPicker } from "@/components/review/emoji-picker";
 import { MentionPicker, MentionChips } from "@/components/review/mention-picker";
 import { TeamOnlyTag, TeamOnlyToggle } from "@/components/review/team-review";
+import { MarkerExportButton } from "@/components/review/marker-export";
 import { useMentionRoster } from "@/components/review/mention-roster";
 import { mentionText, type MentionCandidate } from "@/lib/mentions";
 import { DrawToolbar } from "@/components/review/draw-toolbar";
@@ -47,6 +48,7 @@ const SORTS: { key: Sort; label: string }[] = [
 export function VideoReview({
   videoUrl,
   comments,
+  exportName,
   canResolve = true,
   disabled = false,
   disabledHint,
@@ -61,6 +63,11 @@ export function VideoReview({
 }: {
   videoUrl: string;
   comments: PortalComment[];
+  /**
+   * Names the marker export file and its sequence. The export button itself
+   * only renders in the app (team context), never on the client link.
+   */
+  exportName?: string;
   canResolve?: boolean;
   disabled?: boolean;
   disabledHint?: string;
@@ -409,6 +416,11 @@ export function VideoReview({
               {roots.length}
             </span>
             <span className="flex-1" />
+            <MarkerExportButton
+              comments={comments}
+              title={exportName ?? "Review notes"}
+              className="inline-flex h-7 items-center gap-1 rounded-[7px] px-1.5 text-text-faint transition hover:bg-surface-2 hover:text-text"
+            />
             <button
               onClick={() => setSearchOpen((v) => !v)}
               className={railBtn}

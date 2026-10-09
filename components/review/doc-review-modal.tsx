@@ -111,6 +111,7 @@ export function DocReviewModal({
           {detail.surface.kind === "ai_shot" ? (
             <AiShotReviewCanvas
               surface={detail.surface}
+              exportName={title}
               comments={detail.comments}
               onPost={post}
               onResolve={resolve}
