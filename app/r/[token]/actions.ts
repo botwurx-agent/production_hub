@@ -773,3 +773,33 @@ export async function uploadClientVoiceNote(
   if (!link) return { error: "This review link is no longer active." };
   return storeVoice(form, voiceFolder(link.studio_id, { linkId: link.id }));
 }
+
+/**
+ * The transcript of a version this link reviews, read-only on the portal.
+ * Searching what was said and clicking to the moment is as useful to the
+ * client as to the studio; generating and editing stay in the app.
+ */
+export async function getClientTranscript(
+  token: string,
+  versionId: string
+): Promise<import("@/lib/transcript").TranscriptData | null> {
+  if (!serviceConfigured() || !allowPublic("transcript", 60)) return null;
+  const service = createServiceClient();
+  const link = await getValidLink(service, token);
+  if (!link || !(await versionInLink(service, link, versionId))) return null;
+  const { data } = await service
+    .from("version_transcripts")
+    .select("segments, language, duration, updated_at")
+    .eq("version_id", versionId)
+    .maybeSingle();
+  if (!data) return null;
+  const { parseSegments } = await import("@/lib/transcript");
+  const segments = parseSegments(data.segments);
+  if (!segments.length) return null;
+  return {
+    segments,
+    language: data.language,
+    duration: data.duration == null ? null : Number(data.duration),
+    updatedAt: data.updated_at,
+  };
+}

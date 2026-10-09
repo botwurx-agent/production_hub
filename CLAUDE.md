@@ -1448,11 +1448,13 @@ optimizing the flow + IA of this whole section.
   PRODUCTION; set it to `sandbox` to opt in.
   (The FreshBooks pair is gone with the connector.)
 - AI (optional): `OPENAI_API_KEY` (+ `OPENAI_MODEL`, default gpt-5-mini) or
-  `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one.
+  `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one. Transcripts need the OpenAI key specifically (`OPENAI_TRANSCRIBE_MODEL`, default whisper-1).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0121. Recent: 0121 =
+files in supabase/migrations. THROUGH 0122. Recent: 0122 =
+version_transcripts (timed transcript lines per version, read by anyone on
+the job and by the portal through the service role); 0121 =
 review_comment_voice_note (review_comments.audio_path + audio_seconds: a
 recorded voice note on a comment, played only through access-checked
 routes); 0120 =
@@ -2083,6 +2085,68 @@ and a client on a phone will talk where they will not type.
   saying so, the posted note's player pointing at the guarded route, and no
   microphone without a provider. NOT verified end to end: a session here
   cannot reach Supabase Storage, so the first real note is the test.
+
+### Automatic transcripts (migration 0122) — BUILT
+Seventh item off the Timeliner list. Interviews, testimonials and VO reads are
+reviewed by what was SAID, and until now the only way to find "the line about
+the peach" was scrubbing for it.
+- `version_transcripts` (0122): one row per VERSION (unique), the timed lines
+  as jsonb `segments` [{start, end, text}], plus language, duration, model.
+  jsonb for the call_sheets.layout reason: only ever read and written whole.
+  RLS is the 0093 split: anyone on the job reads, editors write. The client
+  portal reads it through the service role (getClientTranscript, link live and
+  the version belongs to the link's asset).
+- THE BROWSER DOES THE AUDIO, and that is the whole design. A cut can be a
+  gigabyte, Whisper takes 25MB, a Server Action about 4MB, and the platform has
+  no ffmpeg. The browser downloads the version, decodes its soundtrack with an
+  OfflineAudioContext at 16kHz (decodeAudioData RESAMPLES to the context's
+  rate, which is what makes this cheap), downmixes to mono, cuts it into pieces
+  of at most 115 seconds (3.68MB as 16-bit WAV, under the action cap) on the
+  QUIETEST tenth of a second near 90s so no word is split, skips pieces that
+  are room tone, and sends them one at a time to `transcribePiece`. Each piece
+  carries the tail of what was heard so far as Whisper's `prompt`, so a brand
+  name spelled one way in minute one is spelled the same in minute two. The
+  bytes of the cut never move again. Ceilings: 45 minutes, 1.5GB.
+- OPENAI ONLY, and gated on the OpenAI key, not aiConfigured(): Anthropic has
+  no transcription endpoint. `whisper-1` by default (OPENAI_TRANSCRIBE_MODEL
+  overrides) because it is the model that returns TIMESTAMPED segments
+  (verbose_json); the gpt-4o transcribe models return text only. About $0.006 a
+  minute. parseWhisper drops a segment Whisper itself rates likely-not-speech
+  AND low-confidence, which is the signature of the invented "Thank you for
+  watching" over silence.
+- lib/transcript.ts is pure (42 assertions): parseSegments (the trust boundary
+  on the way back to be saved and out of jsonb; "" is not 0), parseWhisper,
+  planChunks, chunkIsSilent, encodeWav, promptTail, segmentAt, searchSegments,
+  toSrt / toVtt / toText. lib/transcribe.ts is the server half;
+  app/(app)/transcript-actions.ts holds getTranscript / transcribePiece /
+  saveTranscript, each checking can_edit_project through the RPC for writes.
+- THE PANEL (components/review/transcript-panel.tsx) sits UNDER THE PLAYER in
+  VideoReview whenever a `versionId` is passed: the in-app review window, the
+  master cut page and the client portal. A CONTEXT again, for the voice-note
+  reason: AppTranscriptProvider (read, transcribe, edit) in the app layout,
+  PortalTranscriptProvider (read only) on /r. With nothing to show and no right
+  to generate, it draws nothing. The AI shot review passes no version and gets
+  no panel.
+- WHAT IT DOES: Transcribe (with phase progress), search what was said, the
+  line being spoken highlighted and kept in view (scrolling the panel, never
+  the page), click a line or its time to jump there, COMMENT ON A LINE (the
+  comment becomes a RANGE comment over that line with the words quoted in the
+  composer), EDIT a line (Whisper misspells brand names; saved whole), Redo,
+  and Export as SRT (Premiere, Resolve, YouTube), VTT, or text with timecodes.
+  A caption is never shorter than half a second.
+- Clients see the transcript read-only and can comment on a line; they cannot
+  generate or edit.
+- NOT BUILT: transcribing a VOICE NOTE into its comment text, audio-only
+  assets (VideoReview is video only), speaker labels, and transcripts on the
+  batch review page.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  VideoReview with a stubbed provider and a 200 second test file: the real
+  download, decode, split (cut at 87.25s, a silent gap), WAV encode (2.8MB and
+  3.6MB pieces), prompt carry-over, save, search, jump, comment-on-a-line,
+  edit and SRT export, light and dark, no overflow at 390. NOT verified
+  against the live OpenAI endpoint or Supabase from a session, and the test
+  file was WebM because Playwright's Chromium has no AAC; real Chrome and
+  Safari decode AAC in MP4/MOV, which is what to watch on the first real cut.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

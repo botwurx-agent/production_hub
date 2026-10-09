@@ -10,6 +10,7 @@ import {
 import { ClientReview } from "@/components/review/client-review";
 import { DocReview } from "@/components/review/doc-review";
 import { PortalVoiceProvider } from "@/components/review/voice-note";
+import { PortalTranscriptProvider } from "@/components/review/transcript-panel";
 import { verifyPortalToken } from "@/lib/client-portal-data";
 import Link from "next/link";
 
@@ -150,7 +151,9 @@ export default async function ReviewPortalPage({
     <>
       <PortalBar token={portalToken} />
       <PortalVoiceProvider token={params.token}>
-        <ClientReview token={params.token} origin={origin} data={data} />
+        <PortalTranscriptProvider token={params.token}>
+          <ClientReview token={params.token} origin={origin} data={data} />
+        </PortalTranscriptProvider>
       </PortalVoiceProvider>
     </>
   );

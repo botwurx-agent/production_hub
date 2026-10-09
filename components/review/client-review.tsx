@@ -487,6 +487,8 @@ export function ClientReview({
           {olderBanner}
           <VideoReview
             videoUrl={fileUrl(viewing.id)}
+            versionId={viewing.id}
+            exportName={`${data.asset.name} v${viewing.version_number}`}
             noSave={locked}
             comments={comments}
             disabled={isOlder || !name.trim()}

@@ -28,6 +28,8 @@ import {
   type VoiceAttachment,
 } from "@/components/review/voice-note";
 import { useModalRoomy } from "@/components/ui/modal";
+import { TranscriptPanel } from "@/components/review/transcript-panel";
+import type { Segment } from "@/lib/transcript";
 
 // Frame.io-grade video review: the shared ScrubVideo player (accurate scrubbing,
 // frame stepping, speed, loop, shuttle keys) + a comment rail with threaded
@@ -53,6 +55,7 @@ const SORTS: { key: Sort; label: string }[] = [
 
 export function VideoReview({
   videoUrl,
+  versionId,
   comments,
   exportName,
   noSave = false,
@@ -69,6 +72,8 @@ export function VideoReview({
   onReact,
 }: {
   videoUrl: string;
+  /** The version being played; with it, the transcript panel shows under the player. */
+  versionId?: string;
   comments: PortalComment[];
   /**
    * Names the marker export file and its sequence. The export button itself
@@ -213,6 +218,23 @@ export function VideoReview({
     setActiveId(id);
     setDrawMode(false);
   }
+  // Comment on a line of the transcript: the comment spans the line, and the
+  // words are quoted so the note says exactly what it is about.
+  function commentOnLine(s: Segment) {
+    playerRef.current?.seek(s.start);
+    playerRef.current?.pause();
+    setPending(round2(s.start));
+    setPendingEnd(s.end > s.start ? round2(s.end) : null);
+    setText((prev) => (prev.trim() ? prev : `“${s.text}” `));
+    setDrawMode(false);
+    requestAnimationFrame(() => {
+      const el = textRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }
+
   function captureHere() {
     const t = playerRef.current?.getTime() ?? currentTime;
     playerRef.current?.pause();
@@ -408,6 +430,20 @@ export function VideoReview({
               setRedo([]);
             }}
             hint="Mark up the frame, then write your comment."
+          />
+        )}
+
+        {versionId && (
+          <TranscriptPanel
+            versionId={versionId}
+            mediaUrl={videoUrl}
+            currentTime={currentTime}
+            exportName={exportName}
+            roomy={roomy}
+            onSeek={(t) => {
+              playerRef.current?.seek(t);
+            }}
+            onComment={disabled ? undefined : commentOnLine}
           />
         )}
       </div>

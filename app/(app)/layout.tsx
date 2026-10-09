@@ -11,6 +11,7 @@ import { ConfirmHost } from "@/components/ui/confirm";
 import { AiAvailabilityProvider } from "@/components/ai/ai-availability";
 import { TeamReviewProvider } from "@/components/review/team-review";
 import { AppVoiceProvider } from "@/components/review/voice-note";
+import { AppTranscriptProvider } from "@/components/review/transcript-panel";
 import { AgentMount } from "@/components/agent/agent-mount";
 import { TourGuide } from "@/components/tour/tour-guide";
 import { canUseRunner } from "@/lib/agent/access";
@@ -86,6 +87,7 @@ export default async function AppLayout({
     <AiAvailabilityProvider enabled={aiConfigured()}>
       <TeamReviewProvider>
       <AppVoiceProvider>
+      <AppTranscriptProvider>
       <div className="flex min-h-[100dvh] bg-bg">
         <Sidebar
           studioName={ctx.studio.name}
@@ -127,6 +129,7 @@ export default async function AppLayout({
         <Toaster />
         <ConfirmHost />
       </div>
+      </AppTranscriptProvider>
       </AppVoiceProvider>
       </TeamReviewProvider>
     </AiAvailabilityProvider>

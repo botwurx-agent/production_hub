@@ -243,6 +243,7 @@ export function CutReviewView({
       ) : isVideo ? (
         <VideoReview
           videoUrl={version.signedUrl as string}
+          versionId={version.id}
           exportName={`${cut.name} v${version.version_number}`}
           comments={portalComments}
           wide

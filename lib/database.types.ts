@@ -4725,6 +4725,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      version_transcripts: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          duration: number | null;
+          id: string;
+          language: string | null;
+          model: string | null;
+          project_id: string;
+          segments: Json;
+          studio_id: string;
+          updated_at: string;
+          version_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          duration?: number | null;
+          id?: string;
+          language?: string | null;
+          model?: string | null;
+          project_id: string;
+          segments?: Json;
+          studio_id: string;
+          updated_at?: string;
+          version_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          duration?: number | null;
+          id?: string;
+          language?: string | null;
+          model?: string | null;
+          project_id?: string;
+          segments?: Json;
+          studio_id?: string;
+          updated_at?: string;
+          version_id?: string;
+        };
+        Relationships: [];
+      };
       versions: {
         Row: {
           asset_id: string;
