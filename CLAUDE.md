@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0119. Recent: 0119 =
+files in supabase/migrations. THROUGH 0120. Recent: 0120 =
+client_portals (one no-login link per project listing every live review
+link; is_studio_member RLS, read publicly through the service role); 0119 =
 project_revision_rounds (projects.revision_rounds: client revision rounds
 the SOW includes per deliverable, null = not tracked); 0118 =
 review_link_lock_downloads (review_links.lock_downloads: the client can
@@ -1971,6 +1973,59 @@ third.
 - Verified in Chromium against a throwaway fixture (deleted) mounting the real
   AssetCard and control: all three states, nothing on a card without rounds,
   light and dark, no overflow at 390.
+
+### One client link for everything: the client portal (migration 0120) — BUILT
+Fifth item off the Timeliner list, and the one their page makes the most of.
+A client with ten things in review held ten links, one per asset or document,
+spread across ten emails.
+- `client_portals` (0120): one row per project (unique), a token, revoked_at,
+  last_viewed_at. RLS is_studio_member; the public page reads it through the
+  service role, gated by token, like /r and /bd.
+- THE PORTAL HOLDS NOTHING OF ITS OWN. Its items ARE the project's live
+  review_links (not revoked, not expired), one per thing shared (the newest
+  link wins if something was shared twice). So nothing appears that the studio
+  did not already share one at a time: the binder's "default off" rule, for
+  free. A link whose asset, board or AI shot was deleted is dropped rather than
+  shown as a dead card.
+- STATUS IS THE CLIENT'S OWN DECISION through their link (lib/client-portal.ts,
+  pure, 15 assertions): no decision is "Waiting on you", changes requested is
+  "Changes requested" (the studio is on it), approved is "Approved". For an
+  asset it is the decision on the CURRENT version, so a new cut after a change
+  request reads as waiting on them again, which is exactly what happened.
+  Groups in that order; inside one, earliest due date first, undated last.
+  A passed due date on a waiting item says "Was due Oct 7" with a red dot.
+- /portal/<token> (app/portal/[token]/page.tsx, public in middleware, noindex,
+  force-dynamic) renders components/review/client-portal-view.tsx, which is
+  presentational and hook-free so a fixture mounts the real thing. Studio name
+  and logo, the project title, "For <client>", a "3 things are waiting on you"
+  pill, then cards (thumbnail, version, due line) opening each /r/<token>
+  exactly as before. Words in the text colour, hue on dots. Due dates are read
+  as CALENDAR DAYS in UTC: lib/format shortDate does `new Date("2026-10-07")`,
+  which is UTC midnight and shows the day before anywhere west of Greenwich.
+- THE WAY BACK IS PROOF-GATED, and this was nearly a leak. An /r page shows a
+  thin "Everything shared on this job" bar only when the visitor hands in the
+  portal token (`?portal=<token>`, which the portal's cards carry) and
+  verifyPortalToken confirms it is a LIVE portal for the SAME project. The
+  first version showed the bar to anyone on any review link once a portal
+  existed, so a talent agent sent one photo could have walked into every
+  deliverable on the job; the second used `?from=portal`, which anybody could
+  type. Rule: a page may only hand a visitor a token they already brought.
+- STUDIO SIDE: a "Client portal" button on the Review page header (staff only,
+  green dot when live). Creating the link is a deliberate press, never a side
+  effect of opening the window. It states how many items are shared, then
+  Copy / Open what the client sees / Email it to the client (SendDocEmailModal
+  + emailClientPortal, gated on emailConfigured) / Turn off link (confirmed).
+  Turning it back on issues a NEW token, so a leaked old address stays dead.
+  Single review links are unaffected either way.
+- NOT BUILT, deliberately for this slice: a per-CLIENT portal spanning several
+  projects (a client with three jobs still holds three links), the
+  request-new-work form (that is item #11), and reminders driven by the portal
+  (each review link already carries its own due date and reminder).
+- Verified in Chromium against a throwaway fixture (deleted): all three groups
+  in order with due-first sorting, overdue and upcoming lines, empty state,
+  every card carrying the portal token, the button in both states, light and
+  dark, no overflow at 390. NOT verified end to end against the database: a
+  session here cannot reach Supabase.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

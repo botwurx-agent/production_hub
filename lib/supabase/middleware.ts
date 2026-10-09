@@ -62,6 +62,9 @@ const PUBLIC_PATHS = [
   "/b",
   // The client project binder. Its own prefix because /b is the shared board.
   "/bd",
+  // The client portal: one link per project listing every review link the
+  // studio has shared. Its own prefix because /p is the billing document.
+  "/portal",
   "/c",
   "/p",
   "/h",

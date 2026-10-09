@@ -4560,6 +4560,39 @@ export type Database = {
           },
         ];
       };
+      client_portals: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          revoked_at: string | null;
+          last_viewed_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          token?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       review_links: {
         Row: {
           asset_id: string | null;

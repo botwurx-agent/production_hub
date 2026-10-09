@@ -7,6 +7,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { Card, EmptyState } from "@/components/ui/card";
 import { AssetCard } from "@/components/projects/asset-card";
 import { RevisionRoundsControl } from "@/components/review/revision-rounds";
+import { ClientPortalButton } from "@/components/review/client-portal-button";
 import { DocReviewCard } from "@/components/review/doc-review-card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { StatusTag } from "@/components/status-tag";
@@ -54,6 +55,28 @@ export default async function ReviewPage({
   );
 
   const roster = await loadMentionRoster(project.id);
+
+  // The client portal lists every live review link, so the button can say how
+  // many items the client would see. Staff only: collaborators do not share.
+  const [{ data: portal }, { data: shared }] = ctx.isCollaborator
+    ? [{ data: null }, { data: [] }]
+    : await Promise.all([
+        supabase
+          .from("client_portals")
+          .select("token, revoked_at")
+          .eq("project_id", project.id)
+          .maybeSingle(),
+        supabase
+          .from("review_links")
+          .select("asset_id, target_type, target_id, expires_at")
+          .eq("project_id", project.id)
+          .eq("revoked", false),
+      ]);
+  const sharedCount = new Set(
+    (shared ?? [])
+      .filter((l) => !l.expires_at || new Date(l.expires_at).getTime() >= Date.now())
+      .map((l) => (l.asset_id ? `a:${l.asset_id}` : `d:${l.target_type}:${l.target_id}`))
+  ).size;
   return (
     <MentionRosterProvider roster={roster}>
     <div>
@@ -64,11 +87,22 @@ export default async function ReviewPage({
         hue="pink"
         subtitle="Assets and documents in the review cycle. Comment, sign off, or share with the client."
         action={
-          <RevisionRoundsControl
-            projectId={project.id}
-            rounds={project.revision_rounds}
-            canEdit={!ctx.isCollaborator}
-          />
+          <div className="flex flex-col gap-3 sm:items-end">
+            {!ctx.isCollaborator && (
+              <ClientPortalButton
+                projectId={project.id}
+                projectTitle={project.title}
+                initialToken={portal && !portal.revoked_at ? portal.token : null}
+                sharedCount={sharedCount}
+                emailEnabled={emailConfigured()}
+              />
+            )}
+            <RevisionRoundsControl
+              projectId={project.id}
+              rounds={project.revision_rounds}
+              canEdit={!ctx.isCollaborator}
+            />
+          </div>
         }
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
