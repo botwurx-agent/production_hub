@@ -2397,6 +2397,23 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   that the host's generic allow prompt is the only check. UNVERIFIED: whether
   ChatGPT can pass an image it generated itself to a connector tool, and
   whether Higgsfield's result links stay downloadable.
+- THE BOARD TOOLS ARE BUILT (lib/connector-write.ts, lib/connector-board.ts):
+  `create_board` (moodboard or storyboard on a project, optional frame
+  aspect, never seeds the three empty frames createStoryboard does),
+  `add_to_moodboard` (images by link, notes, headings, laid out BELOW
+  everything already on the board in rows of four, a heading starting a new
+  group) and `add_storyboard_frames` (appended in order, picture optional).
+  They do NOT call the board server actions: those go through
+  requireStudioContext, which needs a cookie session the connector does not
+  have. They insert directly through the borrowed RLS client with the
+  owner's ids, which is the same boundary. Images go through fetchMediaFromUrl
+  (SSRF-guarded) and are stored with the service role under
+  `<studio>/boards/<board>/`, the Drive and Figma imports' move, only after
+  the board was read through RLS and pinned to the link's studio. Twelve
+  entries per call, four downloads at a time, since the route has a minute.
+  A frame whose picture fails still lands as TEXT ONLY and is named in
+  `skipped`, because a dropped frame would renumber the board. Note text is
+  HTML-escaped. 17 assertions on the pure half. NOT RUN against a real host.
   CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
   can call the image models (billed separately, and newer image models may
   need the organization verified).

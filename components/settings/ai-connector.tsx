@@ -81,9 +81,10 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
     <div className="space-y-5" data-ai-connector>
       <p className="max-w-2xl text-sm text-text-muted">
         Ask Claude or ChatGPT about your jobs in plain words: what is still owed, where a
-        project stands, which client is slow to sign off. It reads what you can read in
-        Studio Flows and <span className="font-semibold text-text">cannot change anything</span>.
-        Your own AI subscription does the work.
+        project stands, which client is slow to sign off. It can also build moodboards and
+        storyboards from images it generates or finds. It reads what you can read in Studio
+        Flows, only ever <span className="font-semibold text-text">adds</span>, and never
+        changes or deletes your work. Your own AI subscription does the work.
       </p>
 
       <ol className="grid gap-3 text-sm sm:grid-cols-2">
@@ -132,7 +133,7 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
               className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
               style={{ background: "var(--h-amber)" }}
             />
-            Copy this now. It is shown once, and anyone holding it can read the studio as you.
+            Copy this now. It is shown once, and anyone holding it can read and add to the studio as you.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <code className="min-w-0 flex-1 break-all rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text">

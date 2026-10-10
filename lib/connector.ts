@@ -14,14 +14,15 @@ import {
   query,
 } from "@/lib/agent/read-tools";
 import type { McpTool } from "@/lib/mcp";
+import { CONNECTOR_WRITE_TOOLS, WRITERS } from "@/lib/connector-write";
 
 /**
  * The AI connector's server half: who a link belongs to, a session as that
- * person, and the tools. READ ONLY, deliberately and by construction: only
- * Runner's read tools are offered and none of them has a code path that
- * writes. Over MCP the tool call IS the action (the host shows a generic
- * "allow this tool?" over JSON rather than our readable card), so writes wait
- * until there is a confirmation a producer can actually check.
+ * person, and the tools. Runner's read tools, plus a small set of ADD-ONLY
+ * write tools (lib/connector-write.ts). Over MCP the tool call IS the action:
+ * the host's own "allow this tool?" is the only check, which the operator
+ * accepted (2026-10-10) on the condition that nothing here can delete or
+ * overwrite existing work.
  */
 
 export type ConnectorOwner = {
@@ -138,7 +139,7 @@ const CATALOG_NOTE =
  * own description: Runner gets it from a system prompt, and a host that drops
  * the server instructions (some do) would otherwise be querying blind.
  */
-export const CONNECTOR_TOOLS: McpTool[] = READ_TOOLS.map((t) => ({
+const READ_ONLY_TOOLS: McpTool[] = READ_TOOLS.map((t) => ({
   name: t.name,
   description:
     t.name === "query"
@@ -147,6 +148,8 @@ export const CONNECTOR_TOOLS: McpTool[] = READ_TOOLS.map((t) => ({
   inputSchema: t.parameters,
   annotations: { readOnlyHint: true, openWorldHint: false },
 }));
+
+export const CONNECTOR_TOOLS: McpTool[] = [...READ_ONLY_TOOLS, ...CONNECTOR_WRITE_TOOLS];
 
 type ReadFn = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -169,6 +172,8 @@ export async function runConnectorTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<unknown> {
+  const write = WRITERS[name];
+  if (write) return write(owner, args);
   const fn = READERS[name];
   if (!fn) return { error: `Unknown tool "${name}".` };
   if (name === "query") {
@@ -186,7 +191,7 @@ export function connectorInstructions(owner: ConnectorOwner): string {
   const today = new Date().toISOString().slice(0, 10);
   return [
     `You are connected to Studio Flows, the production hub for ${owner.studioName}, a commercial production studio. Today is ${today}.`,
-    "This connection is READ ONLY. You can look things up; you cannot create, change or send anything. If the producer asks for a change, tell them what to do in Studio Flows instead of claiming it is done.",
+    "You can look anything up. You can also ADD moodboards and storyboards (create_board, then add_to_moodboard or add_storyboard_frames), with pictures passed as public image links, for example images you or another connected tool just generated. You cannot change, delete or send anything, and nothing else can be created yet: if the producer asks for something outside that, say so and tell them where to do it in Studio Flows. Never say something was created unless a tool result says it was, and report what each tool skipped.",
     "Start with `search` when they name a project, client, deal or person, so you have its id. `get_project` takes only the sections you need. `get_money` is what is owed, billed and the margin. `get_crm` is the sales side. `get_attention` is what is at risk right now. `query` reads any listed table when nothing else fits.",
     "Money amounts are US dollars. Dates are YYYY-MM-DD. Speak in production terms (projects, shoots, deliverables, call sheets, approvals), not table names.",
   ].join("\n\n");
