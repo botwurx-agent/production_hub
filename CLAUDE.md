@@ -2379,6 +2379,27 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
 - NOT BUILT: writes, OAuth, per-link scopes or expiry, studio-pinning the fat
   tools, and anything about removing Runner (the decision stays the
   operator's, after a real job).
+- DECIDED (operator, 2026-10-10): NO IMAGE GENERATION INSIDE STUDIO FLOWS.
+  Storyboard and moodboard pictures come through the CONNECTOR: the
+  customer's own Claude or ChatGPT, plus their own Higgsfield connector in
+  that same chat, generates the image and hands Studio Flows a link. The
+  in-app "Draw this frame" button (OpenAI or Higgsfield API on our account)
+  was weighed and refused because every image would be a hard cost against a
+  flat monthly fee; credits with a cap and bring-your-own-key were discussed
+  and set aside with it. Do not reopen it unprompted.
+  WHAT THAT MEANS FOR THE BUILD: the next slice is WRITE tools on the
+  connector, starting with ONE BOARD TOOL covering moodboards AND storyboards
+  (create a board; add images BY LINK, fetched through lib/media-import's
+  SSRF-guarded fetch, plus notes, headings and links; storyboard frames may be
+  text-only). Then shot list rows, build-the-schedule (through planSchedule,
+  so it matches the app's own button), and tasks. ADD-ONLY: no tool deletes
+  or overwrites, and each says exactly what it created. The operator accepted
+  that the host's generic allow prompt is the only check. UNVERIFIED: whether
+  ChatGPT can pass an image it generated itself to a connector tool, and
+  whether Higgsfield's result links stay downloadable.
+  CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
+  can call the image models (billed separately, and newer image models may
+  need the organization verified).
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
