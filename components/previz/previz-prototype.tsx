@@ -27,12 +27,13 @@ import {
   resolveSource, type WindowSky,
 } from "@/lib/previz/lighting";
 import {
-  GRIP_NAMES, GRIP_REFLECTANCE, buildGripRig, buildLightRig, hangClearance, structureKey, updateGripRig, updateLightRig,
+  GRIP_DOT, GRIP_NAMES, GRIP_REFLECTANCE, buildGripRig, gripKey, softenForPattern, buildLightRig, hangClearance, structureKey, updateGripRig, updateLightRig,
   type GripKind, type GripRig, type GripSpec, type LightRig, type LightSpec,
 } from "@/lib/previz/light-build";
 import {
-  bounceCandela, collectOccluders, emittersFromSource, nearFieldScale, readMeter, roomLuxFrom, type Board, type Emitter, type Reading,
+  bounceCandela, collectOccluders, emittersFromSource, nearFieldScale, readMeter, readPatterns, roomLuxFrom, type Board, type Emitter, type PatternRead, type Reading, type Screen,
 } from "@/lib/previz/meter";
+import { PATTERNS, featureM, isPattern, patternTransmission, type PatternKind } from "@/lib/previz/patterns";
 import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, ShotExposure, WindowInspector, type WindowLightStyle } from "./light-panels";
 import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 import {
@@ -549,6 +550,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const [win, setWin] = useState<WinState>(initial.win);
   const [zebra, setZebra] = useState(false);
   const [meter, setMeter] = useState<Reading | null>(null);
+  const [patternReads, setPatternReads] = useState<Map<string, PatternRead>>(new Map());
   // The move timeline: where the playhead sits (0 start, 1 end), and playback.
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -598,7 +600,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const unitRef = useRef<(s: Shot, at: Shot) => THREE.Group>(() => new THREE.Group());
   // What the meter worked out and the renderer needs: light thrown back by
   // each bounce board, and the averaged room bounce.
-  const levels = useRef<{ bounce: Map<string, number>; roomLux: number }>({ bounce: new Map(), roomLux: 0 });
+  const levels = useRef<{ bounce: Map<string, number>; roomLux: number; patterns: Map<string, PatternRead> }>({ bounce: new Map(), roomLux: 0, patterns: new Map() });
   // The 3D objects the React state turns into, kept by id.
   const figs = useRef(new Map<string, { base: THREE.Group; walk: [THREE.Group, THREE.Group] | null }>());
   const itemObjs = useRef(new Map<string, { group: THREE.Group; key: string }>());
@@ -813,7 +815,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       for (const g of L.grips) {
         seen.add(g.id);
         let rig = gripRigs.get(g.id);
-        const key = `${g.kind}|${g.sizeFt}`;
+        const key = gripKey(g);
         if (!rig || rig.group.userData.key !== key) {
           if (rig) { world.lightsRoot.remove(rig.group); disposeTree(rig.group); }
           rig = buildGripRig(g);
@@ -826,6 +828,9 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         const gd = gt ? Math.max(0.3, gt.distanceTo(new THREE.Vector3(g.x, g.y, g.z))) : 2;
         const cd = (levels.current.bounce.get(g.id) ?? 0) * nearFieldScale(g.sizeFt * FT, gd);
         updateGripRig(rig, g, aimOf(g, sc), cd, cameraColor(5600, wb));
+        const pr = levels.current.patterns.get(g.id);
+        const lr = pr ? lightRigs.get(pr.lightId) : undefined;
+        if (lr && pr) softenForPattern(lr, pr.blurM, pr.sourceToPatternM + pr.patternToSubjectM);
       }
       for (const [id, rig] of gripRigs) {
         if (seen.has(id)) continue;
@@ -1300,7 +1305,17 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       const sunLux = WINDOW_SKIES[win.sky].sunLux * tau;
       const dir = roomOn ? sunDirection(ws) : null;
       const sun = sunLux > 0 && dir ? { dir, lux: sunLux, label: "Sun through the window" } : null;
-      const boards: Board[] = grips.map((g) => {
+      const screens: Screen[] = grips.filter((g) => isPattern(g.kind)).map((g) => {
+        const a = aimOf(g, scene);
+        const eu = new THREE.Euler(rad(a.pitch), rad(a.yaw), 0, "YXZ");
+        const k = g.kind as PatternKind;
+        return {
+          id: g.id, label: GRIP_NAMES[g.kind], pos: new THREE.Vector3(g.x, g.y, g.z), normal: forward(a.yaw, a.pitch),
+          right: new THREE.Vector3(1, 0, 0).applyEuler(eu), up: new THREE.Vector3(0, 1, 0).applyEuler(eu),
+          half: (g.sizeFt * FT) / 2, transmission: patternTransmission(k, g.open), featureM: featureM(k, g.sizeFt * FT),
+        };
+      });
+      const boards: Board[] = grips.filter((g) => GRIP_REFLECTANCE[g.kind] > 0).map((g) => {
         const a = aimOf(g, scene);
         const side = g.sizeFt * FT;
         return {
@@ -1308,7 +1323,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           areaM2: side * side, sizeM: side, reflectance: GRIP_REFLECTANCE[g.kind],
         };
       });
-      const bounce = bounceCandela(boards, emitters, occ, sun);
+      const bounce = bounceCandela(boards, emitters, occ, sun, screens);
       const all = [...emitters];
       for (const b of boards) {
         const cd = bounce.get(b.id) ?? 0;
@@ -1320,9 +1335,13 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       // A stage has black walls a long way off: far less comes back than in a
       // plaster room, and most of what does is off the paper.
       const roomLux = roomLuxFrom(flux) * (roomOn ? 1 : 0.35);
-      levels.current = { bounce, roomLux };
+      const patterns = readPatterns(meterPoint(s, scene), emitters, screens, occ);
+      levels.current = { bounce, roomLux, patterns };
+      // The renderer reads these levels; draw again now they are known.
+      dirty();
       const p = meterPoint(s, scene);
-      setMeter(readMeter(p, new THREE.Vector3(s.pos.x, s.pos.y, s.pos.z), all, occ, sun, roomLux));
+      setMeter(readMeter(p, new THREE.Vector3(s.pos.x, s.pos.y, s.pos.z), all, occ, sun, roomLux, screens));
+      setPatternReads(patterns);
     }, 40);
     return () => window.clearTimeout(t);
   }, [shots, activeId, lights, grips, win, scene, set, windows, playhead, assetTick, drafts, playing]);
@@ -1910,7 +1929,45 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     // A bounce goes to the side opposite the key; a flag to the side, ready to cut.
     const key = lights.find((l) => l.role === "Key" && l.on);
     const keySide = key ? keySideOf(key) : 1;
-    const sizeFt = kind === "flag" ? 2 : 4;
+    const sizeFt = kind === "flag" ? 2 : kind === "cookie" || kind === "windowpane" ? 3 : 4;
+    if (isPattern(kind)) {
+      // A pattern goes in the key's path, about a third of the way from the
+      // subject toward the light (close enough to read, out of frame), and
+      // faces down that line. With no light on yet it waits beside the subject.
+      const src = key ?? lights.find((l) => l.on);
+      let at: { x: number; y: number; z: number } | null = null;
+      if (src) {
+        const ly = src.hungY ?? src.y;
+        // Never closer than about 0.4 m to the head: that is where it lands
+        // when the light is near and everything nearer the subject is in shot.
+        const span = Math.hypot(src.x - subjectAt.x, src.z - subjectAt.z);
+        const fMax = Math.max(0.3, 1 - 0.4 / Math.max(0.5, span));
+        for (let f = 0.3; f <= fMax + 1e-6; f += 0.05) {
+          const x = subjectAt.x + (src.x - subjectAt.x) * f;
+          const z = subjectAt.z + (src.z - subjectAt.z) * f;
+          if (!outOfFrame(active, hfov, x, z, (sizeFt * FT) / 2)) continue;
+          at = { x, z, y: subjectAt.y + (ly - subjectAt.y) * f };
+          break;
+        }
+        // Everything on that line is in shot (the light is too): it goes just
+        // in front of the head, where a cookie lives on a lamp in the frame.
+        if (!at) {
+          at = {
+            x: subjectAt.x + (src.x - subjectAt.x) * fMax,
+            z: subjectAt.z + (src.z - subjectAt.z) * fMax,
+            y: subjectAt.y + (ly - subjectAt.y) * fMax,
+          };
+        }
+      }
+      if (!at) at = { ...findSpot(active, hfov, subjectAt, keySide, 60, 1.2, (sizeFt * FT) / 2, occupied), y: Math.max(0.9, subjectAt.y) };
+      const spec: GripSpec = {
+        id, kind, sizeFt, x: at.x, y: Math.max((sizeFt * FT) / 2 + 0.2, at.y), z: at.z, yaw: 0, pitch: 0, aimAt: subjectId,
+        ...(kind === "blinds" ? { open: 0.6 } : {}),
+      };
+      setGrips((all) => [...all, spec]);
+      setSel({ kind: "grip", id });
+      return;
+    }
     const at = kind === "flag"
       ? findSpot(active, hfov, subjectAt, keySide, 80, 1.1, (sizeFt * FT) / 2, occupied)
       : findSpot(active, hfov, subjectAt, -keySide, 70, 1.5, (sizeFt * FT) / 2, occupied);
@@ -2852,7 +2909,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
                 key={g.id}
                 active={sel.kind === "grip" && sel.id === g.id}
                 onClick={() => setSel({ kind: "grip", id: g.id })}
-                dot={g.kind === "flag" ? "#1d1d1f" : g.kind === "silver" ? "#c8ccd2" : "#f2f2ee"}
+                dot={GRIP_DOT[g.kind]}
                 label={GRIP_NAMES[g.kind]}
                 onDelete={() => removeGrip(g.id)}
                 sub={`${g.sizeFt}x${g.sizeFt}${g.aimAt ? `, on ${targets.find((t) => t.id === g.aimAt)?.name ?? ""}` : ""}`}
@@ -2862,6 +2919,15 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
               <button type="button" onClick={() => addGrip("bounce")} className="flex-1 rounded-[8px] border border-dashed border-border px-2 py-1 text-xs font-semibold text-text-muted hover:text-text">+ Bounce</button>
               <button type="button" onClick={() => addGrip("flag")} className="flex-1 rounded-[8px] border border-dashed border-border px-2 py-1 text-xs font-semibold text-text-muted hover:text-text">+ Flag</button>
             </div>
+            <select
+              aria-label="Add a pattern"
+              value=""
+              onChange={(e) => { if (e.target.value) addGrip(e.target.value as GripKind); }}
+              className="mt-1 w-full rounded-[8px] border border-dashed border-border bg-surface px-2 py-1 text-xs font-semibold text-text-muted hover:text-text"
+            >
+              <option value="">+ Pattern (cookie, branch, blinds)</option>
+              {(Object.keys(PATTERNS) as PatternKind[]).map((k) => <option key={k} value={k}>{PATTERNS[k].name}</option>)}
+            </select>
           </RailGroup>
           <RailGroup title="Cameras">
             {shots.map((s, i) => (
@@ -3184,6 +3250,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
               pads={<ControlPads pads={fixturePads("grip", sel.id)} caption="Moves as if you are standing behind the board." />}
               g={grips.find((g) => g.id === sel.id)!}
               targets={targets} reading={meter} targetName={meterTargetName} fmt={fmt}
+              pattern={patternReads.get(sel.id) ?? null}
               onChange={(p) => updateGrip(sel.id, p)}
               onDelete={removeSelected}
             />

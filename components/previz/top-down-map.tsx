@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
 import { bodyDrop, supportFootprint, type SupportOpts } from "@/lib/previz/camera-model";
 import { FIXTURES, FT, lightOutput, resolveSource } from "@/lib/previz/lighting";
-import type { GripSpec, LightSpec } from "@/lib/previz/light-build";
+import { GRIP_DOT, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
 import type { TalentSpec } from "@/lib/previz/scene-build";
 import { catalogOf, footprint, type ItemSpec } from "@/lib/previz/catalog";
 import { isRig, rigPipes } from "@/lib/previz/rigging";
@@ -420,7 +420,7 @@ export function TopDownMap({
           const hx = g.x - Math.sin(y) * 0.6 * k;
           const hz = g.z - Math.cos(y) * 0.6 * k;
           const sel = isSel("grip", g.id);
-          const col = g.kind === "flag" ? "#1d1d1f" : g.kind === "silver" ? "#8b9097" : "#ffffff";
+          const col = g.kind === "silver" ? "#8b9097" : g.kind === "bounce" ? "#ffffff" : GRIP_DOT[g.kind];
           return (
             <g key={g.id}>
               <line x1={g.x} y1={g.z} x2={hx} y2={hz} stroke="#8b8478" strokeWidth={0.02 * k} strokeDasharray={`${0.06 * k} ${0.05 * k}`} />

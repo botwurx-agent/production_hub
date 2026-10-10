@@ -9,8 +9,11 @@ import {
   apparentSizeDeg, bestNd, colorOutput, readsAt, soloReading, softness, stopLabel, stopsLabel, stopsOver, stopsWord,
   type WindowSky,
 } from "@/lib/previz/lighting";
-import { GRIP_NAMES, type GripKind, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
-import type { Contribution, Reading } from "@/lib/previz/meter";
+import { GRIP_NAMES, GRIP_REFLECTANCE, type GripKind, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
+import type { Contribution, PatternRead, Reading } from "@/lib/previz/meter";
+import {
+  LOOK_WORDS, PATTERNS, clampOpen, isPattern, patternLook, patternTransmission, sharpenAdvice, type PatternKind,
+} from "@/lib/previz/patterns";
 import { Chip, Field, Readout, Seg, TrashIcon } from "./ui";
 import { createContext, useContext, useState } from "react";
 
@@ -500,30 +503,45 @@ export function PracticalInspector({ id, dimmer, cct, on, reading, targetName, f
   );
 }
 
-export function GripInspector({ g, targets, reading, targetName, fmt, pads, onChange, onDelete }: {
+export function GripInspector({ g, targets, reading, targetName, fmt, pads, pattern, onChange, onDelete }: {
   g: GripSpec; targets: Target[]; reading: Reading | null; targetName: string; fmt: Fmt;
   /** The controller pads that move and aim this board. */
   pads?: React.ReactNode;
+  /** A pattern grip: the light it is breaking up and how sharp that lands. */
+  pattern?: PatternRead | null;
   onChange: (p: Partial<GripSpec>) => void; onDelete: () => void;
 }) {
   const c = reading?.contributions.find((x) => x.id === g.id);
+  const kinds = Object.keys(GRIP_NAMES) as GripKind[];
+  const boards = kinds.filter((k) => !isPattern(k));
+  const patterns = kinds.filter((k) => isPattern(k));
+  const isPat = isPattern(g.kind);
   return (
     <div className="space-y-5">
-      <Header eyebrow="Grip" title={GRIP_NAMES[g.kind]} onDelete={onDelete} />
+      <Header eyebrow={isPat ? "Pattern" : "Grip"} title={GRIP_NAMES[g.kind]} onDelete={onDelete} />
       {pads ? <Field label="Move and aim">{pads}</Field> : null}
       <Field label="Kind">
         <div className="flex flex-wrap gap-1">
-          {(Object.keys(GRIP_NAMES) as GripKind[]).map((k) => (
+          {boards.map((k) => (
+            <Chip key={k} on={g.kind === k} onClick={() => onChange({ kind: k })}>{GRIP_NAMES[k]}</Chip>
+          ))}
+        </div>
+        <p className="mb-1 mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">Patterns</p>
+        <div className="flex flex-wrap gap-1">
+          {patterns.map((k) => (
             <Chip key={k} on={g.kind === k} onClick={() => onChange({ kind: k })}>{GRIP_NAMES[k]}</Chip>
           ))}
         </div>
         <p className="mt-1 text-xs text-text-muted">
-          {g.kind === "flag" ? "Blocks light: use it to cut a source off a wall or out of the lens." : "Catches light and throws a soft fill back. It only works facing a source."}
+          {isPattern(g.kind)
+            ? PATTERNS[g.kind].hint
+            : g.kind === "flag" ? "Blocks light: use it to cut a source off a wall or out of the lens." : "Catches light and throws a soft fill back. It only works facing a source."}
         </p>
       </Field>
+      {isPattern(g.kind) ? <PatternControls g={g} kind={g.kind} pattern={pattern ?? null} fmt={fmt} onChange={onChange} /> : null}
       <Field label="Size">
         <div className="flex flex-wrap gap-1">
-          {[2, 4, 6, 8, 12].map((ft) => <Chip key={ft} on={g.sizeFt === ft} onClick={() => onChange({ sizeFt: ft })}>{ft}x{ft}</Chip>)}
+          {[2, 3, 4, 6, 8, 12].map((ft) => <Chip key={ft} on={g.sizeFt === ft} onClick={() => onChange({ sizeFt: ft })}>{ft}x{ft}</Chip>)}
         </div>
       </Field>
       <Field label={`Height · ${fmt(g.y)}`}>
@@ -537,8 +555,53 @@ export function GripInspector({ g, targets, reading, targetName, fmt, pads, onCh
           </div>
         ) : null}
       </Field>
-      {g.kind !== "flag" ? <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} /> : null}
+      {GRIP_REFLECTANCE[g.kind] > 0 ? <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} /> : null}
     </div>
+  );
+}
+
+/** What a pattern is doing to the light through it, and the knobs it has. */
+function PatternControls({ g, kind, pattern, fmt, onChange }: {
+  g: GripSpec; kind: PatternKind; pattern: PatternRead | null; fmt: Fmt; onChange: (p: Partial<GripSpec>) => void;
+}) {
+  const t = patternTransmission(kind, g.open);
+  const stops = Math.log2(1 / t);
+  const look = pattern ? patternLook(pattern.blurM, pattern.featureM) : null;
+  const advice = look ? sharpenAdvice(look) : null;
+  return (
+    <>
+      {kind === "blinds" ? (
+        <Field label={`Slats open · ${Math.round(clampOpen(g.open) * 100)}%`}>
+          <Slider label="Slats open" min={0.1} max={1} step={0.05} value={clampOpen(g.open)} onChange={(v) => onChange({ open: v })} />
+        </Field>
+      ) : (
+        <Field label="Pattern">
+          <button
+            type="button"
+            onClick={() => onChange({ seed: Math.floor(Math.random() * 4294967295) })}
+            className="rounded-[8px] border border-border px-2.5 py-1 text-xs font-semibold text-text hover:bg-surface-2"
+          >
+            {kind === "branch" ? "Another branch" : kind === "cookie" ? "Recut the holes" : "Another window"}
+          </button>
+        </Field>
+      )}
+      <div className="space-y-1.5 rounded-[10px] border border-border p-3 text-xs">
+        <p className="text-text">
+          Lets through about {Math.round(t * 100)}% of the light, {stops.toFixed(1)} {stops >= 0.95 && stops < 1.05 ? "stop" : "stops"} down where it falls.
+        </p>
+        {pattern && look ? (
+          <>
+            <p className="font-semibold text-text">{LOOK_WORDS[look]}</p>
+            <p className="text-text-muted">
+              Breaking up the {pattern.lightLabel}: {fmt(pattern.sourceToPatternM)} from the light, {fmt(pattern.patternToSubjectM)} in front of the subject.
+            </p>
+            {advice ? <p className="text-text-muted">{advice}</p> : null}
+          </>
+        ) : (
+          <p className="text-text-muted">No light reaches the subject through it yet. Put it in a light&apos;s path, or aim a light through it.</p>
+        )}
+      </div>
+    </>
   );
 }
 

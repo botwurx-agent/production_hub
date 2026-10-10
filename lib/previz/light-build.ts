@@ -12,6 +12,7 @@ import {
   FT, FIXTURES, MODIFIERS, shadowBlur, spotCone, type FrameSpec, type LightColor, type SourceResult,
 } from "./lighting";
 import { buildFixture, buildStand, faceMaterial } from "./gear-models";
+import { PATTERNS, clampOpen, isPattern, leafSizeM, rng, seedOf, type PatternKind } from "./patterns";
 
 export { faceMaterial };
 
@@ -42,7 +43,7 @@ export type LightSpec = {
   hungY?: number | null;
 };
 
-export type GripKind = "bounce" | "silver" | "flag";
+export type GripKind = "bounce" | "silver" | "flag" | PatternKind;
 export type GripSpec = {
   id: string;
   kind: GripKind;
@@ -53,10 +54,27 @@ export type GripSpec = {
   yaw: number;
   pitch: number;
   aimAt: string | null;
+  /** Patterns: which holes, leaves or panes it draws. Absent is from the id. */
+  seed?: number;
+  /** Blinds: how far open, 0.1 to 1. */
+  open?: number;
 };
 
-export const GRIP_REFLECTANCE: Record<GripKind, number> = { bounce: 0.8, silver: 1.4, flag: 0 };
-export const GRIP_NAMES: Record<GripKind, string> = { bounce: "Bounce (white)", silver: "Bounce (silver)", flag: "Flag (solid)" };
+export const GRIP_REFLECTANCE: Record<GripKind, number> = {
+  bounce: 0.8, silver: 1.4, flag: 0, cookie: 0, branch: 0, blinds: 0, windowpane: 0,
+};
+export const GRIP_NAMES: Record<GripKind, string> = {
+  bounce: "Bounce (white)", silver: "Bounce (silver)", flag: "Flag (solid)",
+  cookie: PATTERNS.cookie.name, branch: PATTERNS.branch.name, blinds: PATTERNS.blinds.name, windowpane: PATTERNS.windowpane.name,
+};
+/** The colour a grip is drawn in on the rail and the map. */
+export const GRIP_DOT: Record<GripKind, string> = {
+  bounce: "#f2f2ee", silver: "#c8ccd2", flag: "#1d1d1f", cookie: "#b08a5a", branch: "#5b7a3a", blinds: "#d9d4ca", windowpane: "#3a3a3c",
+};
+/** What makes a grip's drawing change, so a rig is rebuilt only then. */
+export function gripKey(g: GripSpec): string {
+  return `${g.kind}|${g.sizeFt}|${g.seed ?? ""}|${g.kind === "blinds" ? clampOpen(g.open).toFixed(2) : ""}`;
+}
 
 const R = Math.PI / 180;
 
@@ -334,30 +352,36 @@ export function buildGripRig(g: GripSpec): GripRig {
   board.rotation.order = "YXZ";
   group.add(board);
   const side = g.sizeFt * FT;
-  const surface = new THREE.Mesh(
-    new THREE.PlaneGeometry(side, side),
-    new THREE.MeshStandardMaterial({
-      color: g.kind === "flag" ? "#0b0b0c" : g.kind === "silver" ? "#c8ccd2" : "#f2f2ee",
-      roughness: g.kind === "silver" ? 0.3 : 0.95,
-      metalness: g.kind === "silver" ? 0.6 : 0,
-      side: THREE.DoubleSide,
-    }),
-  );
-  surface.castShadow = true;
-  surface.receiveShadow = true;
-  surface.userData.grip = true;
-  board.add(surface);
-  const pipe = mat("#5d6166", 0.4, 0.8);
-  for (const [w, h, x, y] of [
-    [side, 0.025, 0, side / 2], [side, 0.025, 0, -side / 2], [0.025, side, side / 2, 0], [0.025, side, -side / 2, 0],
-  ] as const) {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.025), pipe);
-    p.position.set(x, y, 0);
-    p.userData.noOcclude = true;
-    board.add(p);
+  if (isPattern(g.kind)) {
+    board.add(buildPattern(g.kind, side, g.seed ?? seedOf(g.id), clampOpen(g.open)));
+  } else {
+    const surface = new THREE.Mesh(
+      new THREE.PlaneGeometry(side, side),
+      new THREE.MeshStandardMaterial({
+        color: g.kind === "flag" ? "#0b0b0c" : g.kind === "silver" ? "#c8ccd2" : "#f2f2ee",
+        roughness: g.kind === "silver" ? 0.3 : 0.95,
+        metalness: g.kind === "silver" ? 0.6 : 0,
+        side: THREE.DoubleSide,
+      }),
+    );
+    surface.castShadow = true;
+    surface.receiveShadow = true;
+    surface.userData.grip = true;
+    board.add(surface);
+  }
+  if (g.kind !== "branch") {
+    const pipe = mat("#5d6166", 0.4, 0.8);
+    for (const [w, h, x, y] of [
+      [side, 0.025, 0, side / 2], [side, 0.025, 0, -side / 2], [0.025, side, side / 2, 0], [0.025, side, -side / 2, 0],
+    ] as const) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.025), pipe);
+      p.position.set(x, y, 0);
+      p.userData.noOcclude = true;
+      board.add(p);
+    }
   }
   let light: THREE.SpotLight | null = null;
-  if (g.kind !== "flag") {
+  if (GRIP_REFLECTANCE[g.kind] > 0) {
     light = new THREE.SpotLight("#ffffff", 0, 0, 89 * R, 1, 2);
     light.castShadow = false;
     const target = new THREE.Object3D();
@@ -371,6 +395,209 @@ export function buildGripRig(g: GripSpec): GripRig {
   standHolder.name = "stand";
   group.add(standHolder);
   return { group, board, light };
+}
+
+/**
+ * Soften a light's shadows to the blur a pattern in front of it really gets:
+ * source size x pattern-to-subject / source-to-pattern (lib/previz/patterns.ts
+ * works it out, the meter's readPatterns hands it over). Shadows here are
+ * blurred per LIGHT in shadow-map texels, so the blur is turned into texels at
+ * the subject's distance. Only ever raises the blur the light already has, so
+ * a cookie in front of a big source washes out the way a real one does rather
+ * than throwing a crisp pattern it never could.
+ */
+export function softenForPattern(rig: LightRig, blurM: number, distM: number) {
+  if (!(blurM > 0) || !(distM > 0)) return;
+  for (const l of [rig.light, rig.through]) {
+    if (!l) continue;
+    const fov = (l as THREE.SpotLight).isSpotLight ? (l as THREE.SpotLight).angle * 2 : Math.PI / 2;
+    const texel = (2 * distM * Math.tan(Math.min(fov, 3) / 2)) / l.shadow.mapSize.x;
+    const r = Math.min(40, blurM / texel);
+    if (l.shadow.radius < r) l.shadow.radius = r;
+  }
+}
+
+// --- Patterns ---------------------------------------------------------------
+// Each is a cutout: an alpha map with alphaTest, which three.js carries into
+// the shadow pass by itself, so the light throws the real holes, slats or
+// leaves (softened per light by softenForPattern). They are tagged noOcclude: the meter takes their AVERAGE
+// transmission (lib/previz/patterns.ts) rather than tracing every hole.
+
+function cutoutCanvas(px: number, draw: (c: CanvasRenderingContext2D, n: number) => void): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = px;
+  canvas.height = px;
+  const c = canvas.getContext("2d")!;
+  // White is solid, black is a hole.
+  c.fillStyle = "#fff";
+  c.fillRect(0, 0, px, px);
+  c.fillStyle = "#000";
+  draw(c, px);
+  return canvas;
+}
+
+function texOf(canvas: HTMLCanvasElement): THREE.CanvasTexture {
+  const t = new THREE.CanvasTexture(canvas);
+  t.anisotropy = 4;
+  return t;
+}
+
+/** A smooth closed blob round (cx, cy), drawn as a hole. */
+function blob(c: CanvasRenderingContext2D, cx: number, cy: number, r: number, rand: () => number) {
+  const k = 7 + Math.floor(rand() * 4);
+  const pts: [number, number][] = [];
+  const stretch = 0.55 + rand() * 0.9;
+  const turn = rand() * Math.PI;
+  for (let i = 0; i < k; i++) {
+    const a = (i / k) * Math.PI * 2;
+    const rr = r * (0.6 + rand() * 0.6);
+    const x = Math.cos(a) * rr * stretch;
+    const y = Math.sin(a) * rr;
+    pts.push([cx + x * Math.cos(turn) - y * Math.sin(turn), cy + x * Math.sin(turn) + y * Math.cos(turn)]);
+  }
+  c.beginPath();
+  const mid = (i: number) => {
+    const a = pts[i % k];
+    const b = pts[(i + 1) % k];
+    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as const;
+  };
+  const m0 = mid(0);
+  c.moveTo(m0[0], m0[1]);
+  for (let i = 1; i <= k; i++) {
+    const p = pts[i % k];
+    const m = mid(i);
+    c.quadraticCurveTo(p[0], p[1], m[0], m[1]);
+  }
+  c.closePath();
+  c.fill();
+}
+
+function cutoutBoard(side: number, tex: THREE.Texture, color: string, roughness = 0.85): THREE.Mesh {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(side, side),
+    new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, alphaMap: tex, alphaTest: 0.5, side: THREE.DoubleSide }),
+  );
+  m.castShadow = true;
+  m.receiveShadow = true;
+  m.userData.noOcclude = true;
+  m.userData.grip = true;
+  return m;
+}
+
+function boardPattern(side: number, canvas: HTMLCanvasElement, color: string, roughness?: number): THREE.Mesh {
+  return cutoutBoard(side, texOf(canvas), color, roughness);
+}
+
+function buildPattern(kind: PatternKind, side: number, seed: number, open: number): THREE.Object3D {
+  const rand = rng(seed);
+  if (kind === "cookie") {
+    const canvas = cutoutCanvas(512, (c, n) => {
+      // Holes sized off the board so a 2x2 and a 4x4 read alike in scale of
+      // their own surface; a margin keeps the board in one piece.
+      const holes = 26 + Math.floor(rand() * 10);
+      const margin = n * 0.08;
+      for (let i = 0; i < holes; i++) {
+        const r = n * (0.035 + rand() * 0.05);
+        blob(c, margin + rand() * (n - 2 * margin), margin + rand() * (n - 2 * margin), r, rand);
+      }
+    });
+    return boardPattern(side, canvas, "#b08a5a");
+  }
+  if (kind === "blinds") {
+    // A slat about 2 in deep whatever the board's size; opening them narrows
+    // the slat's shadow (it turns edge on) and widens the gap.
+    const slats = Math.max(6, Math.round(side / 0.05));
+    const canvas = cutoutCanvas(512, (c, n) => {
+      const pitch = n / slats;
+      const gap = pitch * Math.min(0.92, 0.12 + open * 0.8);
+      for (let i = 0; i < slats; i++) c.fillRect(0, i * pitch, n, gap);
+      // The ladder tapes that hold the slats.
+      c.fillStyle = "#fff";
+      for (const f of [0.22, 0.78]) c.fillRect(n * f - 2, 0, 4, n);
+    });
+    return boardPattern(side, canvas, "#e2ddd3", 0.6);
+  }
+  if (kind === "windowpane") {
+    const cols = 2 + (rand() < 0.5 ? 0 : 1);
+    const rows = 2 + (rand() < 0.5 ? 0 : 1);
+    const canvas = cutoutCanvas(512, (c, n) => {
+      const frame = n * 0.07;
+      const mull = n * 0.035;
+      const w = (n - 2 * frame - (cols - 1) * mull) / cols;
+      const h = (n - 2 * frame - (rows - 1) * mull) / rows;
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) c.fillRect(frame + i * (w + mull), frame + j * (h + mull), w, h);
+      }
+    });
+    return boardPattern(side, canvas, "#2b2b2d");
+  }
+  return buildBranch(side, rand);
+}
+
+/** A leafy branch held up on the stand's arm, filling about the board's square. */
+function buildBranch(side: number, rand: () => number): THREE.Group {
+  const g = new THREE.Group();
+  const bark = mat("#5b4632", 0.9, 0);
+  // One leaf, solid (white) on open (black).
+  const leafCanvas = cutoutCanvas(128, (c, n) => {
+    c.fillRect(0, 0, n, n);
+    c.fillStyle = "#fff";
+    c.beginPath();
+    c.moveTo(n * 0.5, n * 0.04);
+    c.quadraticCurveTo(n * 0.95, n * 0.45, n * 0.5, n * 0.96);
+    c.quadraticCurveTo(n * 0.05, n * 0.45, n * 0.5, n * 0.04);
+    c.fill();
+  });
+  const tex = texOf(leafCanvas);
+  const leafMat = new THREE.MeshStandardMaterial({ color: "#4f6f33", roughness: 0.8, alphaMap: tex, alphaTest: 0.5, side: THREE.DoubleSide });
+  const leafSize = leafSizeM(side);
+  const leaves: THREE.Matrix4[] = [];
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const half = side / 2;
+  // A main stem rising from the bottom, and limbs off it to either side.
+  const stem = (a: THREE.Vector3, b: THREE.Vector3, r: number) => {
+    const d = b.clone().sub(a);
+    const len = d.length();
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r, len, 6), bark);
+    m.position.copy(a).addScaledVector(d, 0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+    m.castShadow = true;
+    m.userData.noOcclude = true;
+    g.add(m);
+  };
+  const base = new THREE.Vector3(0, -half, 0);
+  const top = new THREE.Vector3((rand() - 0.5) * side * 0.2, half * 0.9, (rand() - 0.5) * 0.1);
+  stem(base, top, 0.018);
+  const limbs = 6 + Math.floor(rand() * 3);
+  for (let i = 0; i < limbs; i++) {
+    const t = 0.25 + (i / limbs) * 0.7;
+    const from = base.clone().lerp(top, t);
+    const dir = (i % 2 === 0 ? 1 : -1) * (0.6 + rand() * 0.4);
+    const to = from.clone().add(new THREE.Vector3(dir * half * (0.55 + rand() * 0.35), half * (0.1 + rand() * 0.35), (rand() - 0.5) * 0.25));
+    stem(from, to, 0.009);
+    // Leaves along the limb, thickest toward its end, each turned its own way.
+    const n = 14 + Math.floor(rand() * 10);
+    for (let k = 0; k < n; k++) {
+      const u = 0.25 + rand() * 0.8;
+      const p = from.clone().lerp(to, Math.min(1, u)).add(new THREE.Vector3(
+        (rand() - 0.5) * leafSize * 2.4, (rand() - 0.5) * leafSize * 2.4, (rand() - 0.5) * leafSize * 1.5,
+      ));
+      e.set((rand() - 0.5) * 1.4, (rand() - 0.5) * 1.4, rand() * Math.PI * 2);
+      q.setFromEuler(e);
+      const sc = leafSize * (0.7 + rand() * 0.6);
+      leaves.push(new THREE.Matrix4().compose(p, q, new THREE.Vector3(sc * 0.6, sc, 1)));
+    }
+  }
+  const inst = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), leafMat, leaves.length);
+  leaves.forEach((m, i) => inst.setMatrixAt(i, m));
+  inst.instanceMatrix.needsUpdate = true;
+  inst.castShadow = true;
+  inst.receiveShadow = true;
+  inst.userData.noOcclude = true;
+  inst.userData.grip = true;
+  g.add(inst);
+  return g;
 }
 
 export function updateGripRig(
