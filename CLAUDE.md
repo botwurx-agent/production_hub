@@ -2477,6 +2477,26 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   one, and an unmatched name is reported. The instructions tell the host to
   read existing tasks (query on project_tasks) first, since add-only means a
   duplicate cannot be cleaned up from the chat. NOT RUN against a real host.
+- CONTACTS (2026-10-10, operator's ask: pull people out of Gmail, or off an
+  earlier project, onto a project's roster). `add_contacts`
+  (lib/connector-contact-tool.ts, pure half lib/connector-contacts.ts, 29
+  assertions). Reading Gmail is NOT ours: Claude does that with its own Gmail
+  connector in the same chat (and drafts replies there too), then hands this
+  tool names, positions, emails and phones. Two lists in one call: `contacts`
+  (new people) and `copy` (existing contact ids, found with query on
+  contacts). A COPY, never a link (contacts_one_parent), carrying details,
+  the DAY RATE (operator: carry it over, and Claude may type a rate in when
+  told; an explicit rate overrides the carried one) and the talent profile
+  (catering, wardrobe, representation). NOT the headshot: both profiles would
+  point at one stored file, and replacing either headshot deletes the old
+  file, which would blank the other person's picture. Files are not copied.
+  Rates go to contact_rates (0074 side table), never onto contacts. A copy off
+  a client's list defaults to category client. Dedupe against the project's
+  roster and within the call by email, else by name. Ids are minted before the
+  insert so rates and profiles attach to the right rows without trusting
+  return order. A rate is read from "$1,200/day", "1.2k" or a number; "n/a"
+  is reported, never $0, and over $100,000 is a misread. Adds only, emails
+  nobody. NOT RUN against a real host.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
