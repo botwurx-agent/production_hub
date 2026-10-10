@@ -15,6 +15,7 @@ import {
 } from "@/lib/agent/read-tools";
 import type { McpTool } from "@/lib/mcp";
 import { CONNECTOR_WRITE_TOOLS, WRITERS } from "@/lib/connector-write";
+import { SCHEDULE_TOOL, buildScheduleTool } from "@/lib/connector-schedule";
 
 /**
  * The AI connector's server half: who a link belongs to, a session as that
@@ -149,7 +150,7 @@ const READ_ONLY_TOOLS: McpTool[] = READ_TOOLS.map((t) => ({
   annotations: { readOnlyHint: true, openWorldHint: false },
 }));
 
-export const CONNECTOR_TOOLS: McpTool[] = [...READ_ONLY_TOOLS, ...CONNECTOR_WRITE_TOOLS];
+export const CONNECTOR_TOOLS: McpTool[] = [...READ_ONLY_TOOLS, ...CONNECTOR_WRITE_TOOLS, SCHEDULE_TOOL];
 
 type ReadFn = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -172,6 +173,7 @@ export async function runConnectorTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<unknown> {
+  if (name === SCHEDULE_TOOL.name) return buildScheduleTool(owner, args);
   const write = WRITERS[name];
   if (write) return write(owner, args);
   const fn = READERS[name];
@@ -191,7 +193,7 @@ export function connectorInstructions(owner: ConnectorOwner): string {
   const today = new Date().toISOString().slice(0, 10);
   return [
     `You are connected to Studio Flows, the production hub for ${owner.studioName}, a commercial production studio. Today is ${today}.`,
-    "You can look anything up. You can also ADD moodboards and storyboards (create_board, then add_to_moodboard or add_storyboard_frames) and shot lists (create_shot_list, then add_shots), with pictures passed as public image links, for example images you or another connected tool just generated. Make one board or list per request and put everything in it; nothing you make can be deleted from here, so a spare one is left for the producer to clean up. You cannot change, delete or send anything, and nothing else can be created yet: if the producer asks for something outside that, say so and tell them where to do it in Studio Flows. Never say something was created unless a tool result says it was, and report what each tool skipped.",
+    "You can look anything up. You can also ADD moodboards and storyboards (create_board, then add_to_moodboard or add_storyboard_frames) and shot lists (create_shot_list, then add_shots), and build the shooting schedule from the shot lists (build_schedule, which only adds), with pictures passed as public image links, for example images you or another connected tool just generated. Make one board or list per request and put everything in it; nothing you make can be deleted from here, so a spare one is left for the producer to clean up. You cannot change, delete or send anything, and nothing else can be created yet: if the producer asks for something outside that, say so and tell them where to do it in Studio Flows. Never say something was created unless a tool result says it was, and report what each tool skipped.",
     "Start with `search` when they name a project, client, deal or person, so you have its id. `get_project` takes only the sections you need. `get_money` is what is owed, billed and the margin. `get_crm` is the sales side. `get_attention` is what is at risk right now. `query` reads any listed table when nothing else fits.",
     "Money amounts are US dollars. Dates are YYYY-MM-DD. Speak in production terms (projects, shoots, deliverables, call sheets, approvals), not table names.",
   ].join("\n\n");

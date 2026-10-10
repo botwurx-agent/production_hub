@@ -2442,6 +2442,21 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   (15 assertions). The server instructions now say ONE board or list per
   request, the stray-boards lesson from the first live run. VERIFIED LIVE
   from Claude by the operator the same day.
+- BUILD THE SCHEDULE (2026-10-10): `build_schedule` (lib/connector-schedule.ts)
+  is the schedule page's "Build from the shot list" over the connector, and it
+  is LITERALLY THE SAME CODE: the write half moved out of schedule-actions.ts
+  into lib/schedule-build-write.ts (`writeScheduleBuild`, plus the
+  shot_cards.day sync helpers), taking the client it is handed and the user
+  id, so the button passes its cookie client and the connector passes the
+  owner's borrowed RLS client. The move was diffed line by line against the
+  old file: only exports, the signature and the two revalidates (kept in the
+  action wrapper) changed. Every option is optional and defaults to the
+  button's (7:00 call, 6:00 pm wrap, 60 min shots, 15 min setups, 60 min
+  opener, lunch 1:00 pm, "none" turns it off), every shot list by default.
+  THE BUTTON PREVIEWS BEFORE WRITING AND A TOOL CANNOT, so the answer comes
+  after, READ BACK from what was written rather than the plan: each day's
+  name, row count, wrap time and minutes over its target. Adds only, so a
+  re-run places new shots and nothing else. NOT RUN against a real host.
   CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
   can call the image models (billed separately, and newer image models may
   need the organization verified).
