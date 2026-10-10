@@ -848,9 +848,13 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         light.color.setRGB(...dayCol);
         light.intensity = sky.skyNits * info.area * tau;
       }
+      // With daylight off there is no sky: the card is hidden rather than left
+      // as a dim grey sheet, so the window looks through to whatever is
+      // really outside it (a lamp lighting through, or the dark stage).
       for (const m of skies.current.values()) {
+        m.visible = L.win.on;
         m.emissive.setRGB(...dayCol);
-        m.emissiveIntensity = sky.skyNits * tau + (L.win.on ? 0 : 30);
+        m.emissiveIntensity = sky.skyNits * tau;
       }
       world.sun.color.setRGB(...cameraColor(5600, wb));
       world.sun.intensity = sunDir.current ? sky.sunLux * tau : 0;

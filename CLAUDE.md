@@ -8364,6 +8364,11 @@ reach for it during real prep.
   emitters. NOT built: a gobo in an ellipsoidal (the lamp-mounted version,
   needs a projector light), branch sway in a clip, and a softness that differs
   between the subject and a wall further back (VSM has one blur per light).
+  THE SKY CARD (a glowing sheet 0.35 m outside each window, so the window
+  reads bright from inside) is HIDDEN when daylight is off rather than left at
+  a dim grey: from free view it was an unexplained grey slab beside a lamp
+  lighting through, and with no daylight a real window shows what is really
+  outside it.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,
