@@ -2313,7 +2313,7 @@ into an inbound deal with the brief and files attached.
   running total), which needs a service catalogue the studio does not keep
   today, and an email to the studio on top of the bell.
 
-### Claude / ChatGPT connector, read only (migration 0124) — BUILT, not yet run live
+### Claude / ChatGPT connector, read only (migration 0124) — BUILT, VERIFIED LIVE
 Twelfth item off the Timeliner list, and the "DECISION (operator, 2026-09-17)"
 below finally started, in the order it set: READ ONLY, prove it on a real job,
 and only then decide whether Runner goes. Nothing about Runner was removed.
@@ -2414,6 +2414,18 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   A frame whose picture fails still lands as TEXT ONLY and is named in
   `skipped`, because a dropped frame would renumber the board. Note text is
   HTML-escaped. 17 assertions on the pure half. NOT RUN against a real host.
+- VERIFIED END TO END (operator, 2026-10-10) from Claude: a real host
+  connected through the link, the generateLink + verifyOtp session exchange
+  worked, reads answered, and a storyboard ("Labs in Bed", Payment Test
+  Shoot) landed with two frames whose pictures were Higgsfield images passed
+  by link and fetched into Storage. So both earlier unknowns closed: the
+  exchange runs, and Higgsfield result links were still downloadable.
+  FIRST FRICTION, worth watching rather than acting on: Claude made two
+  single-frame boards first, then a combined one, and had to tell the
+  producer to delete the two strays by hand, because the tools are add-only.
+  Also "Wide shot." landed in the motion field. If that repeats, the fix is
+  in the tool descriptions (one board per ask, which field is which), not in
+  granting delete.
   CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
   can call the image models (billed separately, and newer image models may
   need the organization verified).
