@@ -7,6 +7,8 @@ import { StatusTag } from "@/components/status-tag";
 import { ContactList } from "@/components/contacts/contact-list";
 import { AddContactForm } from "@/components/contacts/add-contact-form";
 import { NewProjectButton } from "@/components/projects/new-project-button";
+import { RequestLinkButton } from "@/components/requests/request-link-button";
+import { emailConfigured } from "@/lib/email";
 import { ChevronLeftIcon } from "@/components/app-shell/nav-icons";
 import { addClientContact } from "@/app/(app)/clients/actions";
 import {
@@ -52,6 +54,7 @@ export default async function ClientDetailPage({
     { data: slackAccount },
     { data: chatSpaces },
     { data: agreements },
+    { data: requestLink },
   ] = await Promise.all([
     supabase
       .from("contacts")
@@ -108,6 +111,11 @@ export default async function ClientDetailPage({
       .eq("client_id", params.id)
       .order("effective_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false }),
+    supabase
+      .from("request_links")
+      .select("token, revoked_at")
+      .eq("client_id", params.id)
+      .maybeSingle(),
   ]);
 
   const revalidate = `/clients/${params.id}`;
@@ -150,11 +158,20 @@ export default async function ClientDetailPage({
           )}
         </div>
         <div className="flex flex-col items-end gap-2">
-          <NewProjectButton
-            clients={[{ id: client.id, name: client.name }]}
-            defaultClientId={client.id}
-            label="Start a project"
-          />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <RequestLinkButton
+              clientId={client.id}
+              clientName={client.name}
+              initialToken={requestLink && !requestLink.revoked_at ? requestLink.token : null}
+              defaultTo={primaryEmail}
+              emailEnabled={emailConfigured()}
+            />
+            <NewProjectButton
+              clients={[{ id: client.id, name: client.name }]}
+              defaultClientId={client.id}
+              label="Start a project"
+            />
+          </div>
           <DeleteClientButton
             clientId={client.id}
             clientName={client.name}

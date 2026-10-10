@@ -28,6 +28,8 @@ export type PortalView = {
   logoUrl: string | null;
   projectTitle: string;
   clientName: string | null;
+  /** The project's client, so the page can offer that client's request link. */
+  clientId: string | null;
   items: PortalItem[];
 };
 
@@ -95,7 +97,7 @@ export async function buildPortalView(
   const [{ data: project }, { data: studio }, { data: links }] = await Promise.all([
     service
       .from("projects")
-      .select("title, client:clients(name)")
+      .select("title, client_id, client:clients(name)")
       .eq("id", projectId)
       .maybeSingle(),
     service.from("studios").select("name, logo_path").eq("id", studioId).maybeSingle(),
@@ -238,6 +240,7 @@ export async function buildPortalView(
     logoUrl,
     projectTitle: project.title,
     clientName: client?.name ?? null,
+    clientId: (project as { client_id?: string | null }).client_id ?? null,
     items,
   };
 }

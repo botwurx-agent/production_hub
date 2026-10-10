@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { serviceConfigured } from "@/lib/supabase/service";
 import { loadPortalByToken, recordPortalView } from "@/lib/client-portal-data";
 import { ClientPortalView } from "@/components/review/client-portal-view";
+import { liveRequestTokenForClient } from "@/lib/request-links";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +37,15 @@ export default async function ClientPortalPage({
   }
   // Best effort: a failed stamp must never fail the page a client is reading.
   void recordPortalView(params.token).catch(() => {});
+  // The client's own request link, offered here because whoever holds this
+  // portal is already that client. Absent when the studio has not made one.
+  const requestToken = await liveRequestTokenForClient(view.clientId);
   return (
     <ClientPortalView
       view={view}
       todayIso={new Date().toISOString().slice(0, 10)}
       portalToken={params.token}
+      requestHref={requestToken ? `/request/${requestToken}` : null}
     />
   );
 }

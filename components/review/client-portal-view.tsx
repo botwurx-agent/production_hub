@@ -32,11 +32,14 @@ export function ClientPortalView({
   view,
   todayIso,
   portalToken,
+  requestHref = null,
 }: {
   view: PortalView;
   todayIso: string;
   /** Carried onto each item's link so its review can offer the way back. */
   portalToken: string;
+  /** The client's request link, when the studio has made one. */
+  requestHref?: string | null;
 }) {
   const groups = groupPortalItems(view.items);
   const summary = waitingSummary(view.items);
@@ -75,6 +78,20 @@ export function ClientPortalView({
               />
               {summary}
             </p>
+          )}
+          {requestHref && (
+            <div className="mt-4">
+              <Link
+                href={requestHref}
+                data-portal-request
+                className="inline-flex items-center gap-2 rounded-[11px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
+              >
+                Request new work
+              </Link>
+              <p className="mt-1.5 text-xs text-text-faint">
+                Need something else from {view.studioName}? Send the brief here.
+              </p>
+            </div>
           )}
         </header>
 

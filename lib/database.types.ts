@@ -4566,6 +4566,84 @@ export type Database = {
           },
         ];
       };
+      request_links: {
+        Row: {
+          id: string;
+          studio_id: string;
+          client_id: string;
+          token: string;
+          revoked_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          client_id: string;
+          token: string;
+          revoked_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          client_id?: string;
+          token?: string;
+          revoked_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      job_requests: {
+        Row: {
+          id: string;
+          studio_id: string;
+          client_id: string;
+          deal_id: string | null;
+          request_link_id: string | null;
+          title: string;
+          details: string | null;
+          needed_by: string | null;
+          budget: number | null;
+          contact_name: string;
+          contact_email: string;
+          files: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          client_id: string;
+          deal_id?: string | null;
+          request_link_id?: string | null;
+          title: string;
+          details?: string | null;
+          needed_by?: string | null;
+          budget?: number | null;
+          contact_name: string;
+          contact_email: string;
+          files?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          client_id?: string;
+          deal_id?: string | null;
+          request_link_id?: string | null;
+          title?: string;
+          details?: string | null;
+          needed_by?: string | null;
+          budget?: number | null;
+          contact_name?: string;
+          contact_email?: string;
+          files?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       client_portals: {
         Row: {
           id: string;

@@ -5,6 +5,8 @@ import { requireStudioContext } from "@/lib/studio";
 import { PageHeader } from "@/components/page-header";
 import { LeadsIcon } from "@/components/app-shell/nav-icons";
 import { DealDetail } from "@/components/deals/deal-detail";
+import { RequestCard } from "@/components/requests/request-card";
+import { parseRequestFiles } from "@/lib/job-request";
 
 export default async function DealDetailPage({
   params,
@@ -28,7 +30,7 @@ export default async function DealDetailPage({
     .maybeSingle();
   if (!account) notFound();
 
-  const [{ data: contacts }, { data: activities }, { data: tasks }] =
+  const [{ data: contacts }, { data: activities }, { data: tasks }, { data: request }] =
     await Promise.all([
       supabase
         .from("contacts")
@@ -45,6 +47,13 @@ export default async function DealDetailPage({
         .select("id, title, due_date, done")
         .eq("deal_id", deal.id)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("job_requests")
+        .select("id, title, details, needed_by, budget, contact_name, contact_email, files, created_at")
+        .eq("deal_id", deal.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
   return (
@@ -63,6 +72,22 @@ export default async function DealDetailPage({
           </Link>
         }
       />
+      {request && (
+        <RequestCard
+          request={{
+            id: request.id,
+            title: request.title,
+            details: request.details,
+            neededBy: request.needed_by,
+            // numeric comes back from PostgREST as a string.
+            budget: request.budget == null ? null : Number(request.budget),
+            contactName: request.contact_name,
+            contactEmail: request.contact_email,
+            files: parseRequestFiles(request.files),
+            createdAt: request.created_at,
+          }}
+        />
+      )}
       <DealDetail
         deal={deal}
         account={account}

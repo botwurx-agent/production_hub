@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0122. Recent: 0122 =
+files in supabase/migrations. THROUGH 0123. Recent: 0123 =
+job_requests (request_links, one no-login link per client, and job_requests,
+what a client sent through it; each becomes an inbound deal); 0122 =
 version_transcripts (timed transcript lines per version, read by anyone on
 the job and by the portal through the service role); 0121 =
 review_comment_voice_note (review_comments.audio_path + audio_seconds: a
@@ -2248,6 +2250,66 @@ STILLS in the client portal.
   12s WebM: play, pause, scrub, frame step, offset, end handling, wipe drag,
   image pair, locked downloads, light at 1280 and dark at 390, no page errors,
   no overflow. Production build clean.
+
+### A client asks for new work through a link (migration 0123) — BUILT
+Eleventh item off the Timeliner list. A repeat client's next job arrived as an
+email, a call or a text, and somebody retyped it into the pipeline. Now each
+client can hold ONE no-login link, /request/<token>, that turns their request
+into an inbound deal with the brief and files attached.
+- `request_links` (one per CLIENT, unique, token, revoked_at) and
+  `job_requests` (title, details, needed_by, budget, contact name and email,
+  files jsonb, deal_id). Both is_studio_member only; the public page reads and
+  writes through the service role, gated by token, like /portal and /r.
+  Turning a link off and on again issues a NEW token, the portal's contract.
+- PER CLIENT, NOT PER PROJECT, deliberately: the request is for the NEXT job,
+  which has no project yet. A deal is what a new job is before it is a project.
+- THE STUDIO SIDE is a "Request link" button on the client's page (create,
+  copy, open what the client sees, email it, turn off), and the deal page
+  shows a "Requested by the client" card with exactly what was sent: title,
+  who, when, needed by, budget, the details, and the files (signed on CLICK,
+  and only for a path the request row itself lists). The deal's own fields are
+  the studio's to edit; the card is the record of what was asked.
+- THE CLIENT PORTAL OFFERS IT: a "Request new work" button when the project's
+  client has a live link. Safe for the portal rule (a page only hands a
+  visitor what belongs to the client they came as), since whoever holds the
+  portal IS that client.
+- THE ROW IS WRITTEN BEFORE ANY FILE MOVES, the contact form's order: the
+  request is what must not be lost, files are a layer on top. The deal, the
+  request row, a `created` CRM activity, a pink `job_request` notification in
+  the bell, and the requester added to the account's contacts when no contact
+  there has that address (never overwriting one). Everything after the two
+  inserts is best effort.
+- FILES GO DIRECT TO STORAGE, up to five, 200MB each. The tickets are minted
+  by `mintRequestUpload` in lib/upload-ticket.ts, beside every other mint, so
+  the "one file decides who may write bytes" rule holds for the first PUBLIC
+  scope too. The path is built server-side under
+  `<studio>/requests/<requestId>/`, each ticket carries the INDEX of the file it
+  is for (names can repeat), and `finishJobRequest` checks every path's shape
+  and real size before listing it. It only ever ADDS, only to a request under
+  the same link, and only within three hours, so a token cannot rewrite a
+  request later. A file that fails is named on the success screen ("send it by
+  email") rather than failing the request.
+- SPAM: the contact form's three filters (honeypot and timing answer success
+  silently; a rate limit of 6 per 10 minutes per IP says so).
+- lib/job-request.ts is pure (40 assertions): the field rules, real calendar
+  days, no date in the past, `parseBudget` reading "$12,500", "12.5k",
+  "1.2m" and refusing "n/a" (never $0), the file list, the jsonb read-back,
+  and the deal notes. Files are deliberately NOT counted in the notes: they
+  upload after the deal exists, so a count written first could be wrong.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  page and form with stubbed actions: a field error beside its input, a file
+  attached, the request sent, a failed upload named on the success screen,
+  the deal card, light at 1280 and dark at 390 with no overflow. Against the
+  live database: the inserts the action makes, and an anon read refused.
+  NOT run end to end from a session: the first real request is the test.
+- LITTER, because the Supabase MCP refused DELETE (timed out, the failure
+  mode recorded under 0113): a "ZZ test request" deal on the DEMO studio's
+  Bright Water account, marked Lost with "safe to delete", one job_requests
+  row under it, and a revoked request link. Delete the deal from its page;
+  the request row's deal_id is set null by the FK.
+- NOT BUILT: Timeliner's PRICED menu (pick "short-form reel $160" and see a
+  running total), which needs a service catalogue the studio does not keep
+  today, and an email to the studio on top of the bell.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

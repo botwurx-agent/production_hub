@@ -16,6 +16,7 @@ const TYPE_HUE: Record<string, string> = {
   client_comment: "blue",
   client_approved: "green",
   client_changes: "red",
+  job_request: "pink",
 };
 
 export function NotificationBell({ needsYouCount = 0 }: { needsYouCount?: number }) {
