@@ -14,6 +14,7 @@ import {
   parseFrames,
   MEDIA_W,
 } from "@/lib/connector-board";
+import { parseShots, shotListTitle, MAX_SHOTS } from "@/lib/connector-shots";
 import type { ConnectorOwner } from "@/lib/connector";
 import type { McpTool } from "@/lib/mcp";
 
@@ -121,6 +122,52 @@ export const CONNECTOR_WRITE_TOOLS: McpTool[] = [
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   },
+  {
+    name: "create_shot_list",
+    description:
+      "Create a new, empty shot list on a project (a project can hold several, e.g. one per cut or per shoot day). Returns its id, which add_shots then fills. Use search to get the project id first. Never use this to replace a list; it always makes a new one, so make ONE list per request and add every row to it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project_id: s("The project's id, from search."),
+        title: s("What to call it, e.g. 'Hero :30' or 'Day 2, product'."),
+      },
+      required: ["project_id", "title"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  },
+  {
+    name: "add_shots",
+    description:
+      `Add shots to the end of a shot list, in order, one row each. Every field is optional but a row needs at least one. Adds only: never changes or removes a row already there. At most ${MAX_SHOTS} rows per call (pictures at most 12 per call); send more in further calls. Pictures must be public http(s) links. Tell the producer exactly what was added and what was skipped.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        shot_list_id: s("The shot list's id, from create_shot_list or the query tool (table shot_groups)."),
+        shots: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              code: s("The shot's number, e.g. '1A'."),
+              description: s("What we see."),
+              shot_size: s("e.g. Extreme Close-up, Close-up, Medium Shot, Full Shot, Wide Shot, Extreme Wide Shot."),
+              shot_type: s("Angle or framing, e.g. Eye Level, Low Angle, High Angle, Overhead, Over-the-Shoulder, Point of View, Two Shot."),
+              movement: s("e.g. Static, Pan, Tilt, Tracking, Push In, Pull Out, Dolly, Crane, Handheld, Steadicam, Gimbal."),
+              day: s("Which shoot day it is on: '1', '2', or a day name such as 'Prelight'. The schedule builder splits the days by this, so leave it out when the producer has not said."),
+              vo: s("Dialogue, voiceover or on-screen text for the shot."),
+              image_url: s("Optional public link to a reference picture or storyboard frame for the row."),
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["shot_list_id", "shots"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  },
 ];
 
 type Json = Record<string, unknown>;
@@ -138,13 +185,17 @@ type Stored =
   | { ok: true; path: string; mime: string; name: string; width: number | null; height: number | null }
   | { ok: false; reason: string };
 
-/** Fetch an image by link (SSRF-guarded) and store it in the board's folder. */
-async function storeImage(studioId: string, boardId: string, url: string): Promise<Stored> {
+/**
+ * Fetch an image by link (SSRF-guarded) and store it under the studio's own
+ * folder. `folder` is built by the caller from a row it has already read
+ * through RLS, never from anything the assistant sent.
+ */
+async function storeImage(studioId: string, folder: string, url: string): Promise<Stored> {
   const got = await fetchMediaFromUrl(url);
   if ("error" in got) return { ok: false, reason: got.error };
   if (got.kind !== "image") return { ok: false, reason: "that link is a video, not an image" };
   const name = (got.filename || "image").replace(/[^\w.\-]+/g, "_").slice(-100) || "image";
-  const path = `${studioId}/boards/${boardId}/${randomUUID()}-${name}`;
+  const path = `${studioId}/${folder}/${randomUUID()}-${name}`;
   const { error } = await assetStorage().upload(path, got.bytes, {
     contentType: got.contentType || undefined,
   });
@@ -231,7 +282,7 @@ export async function addToMoodboardTool(owner: ConnectorOwner, args: Json) {
 
   // Download first, so a failed image is reported and simply not placed.
   const stored = await inBatches(entries, 4, (e) =>
-    e.type === "image" ? storeImage(owner.studioId, board.id, e.url) : Promise.resolve(null)
+    e.type === "image" ? storeImage(owner.studioId, `boards/${board.id}`, e.url) : Promise.resolve(null)
   );
   const placing: { entry: (typeof entries)[number]; store: Stored | null }[] = [];
   entries.forEach((entry, i) => {
@@ -308,7 +359,7 @@ export async function addStoryboardFramesTool(owner: ConnectorOwner, args: Json)
     .maybeSingle();
 
   const stored = await inBatches(frames, 4, (f) =>
-    f.imageUrl ? storeImage(owner.studioId, board.id, f.imageUrl) : Promise.resolve(null)
+    f.imageUrl ? storeImage(owner.studioId, `boards/${board.id}`, f.imageUrl) : Promise.resolve(null)
   );
   let position = (last?.position ?? -1) + 1;
   let pictured = 0;
@@ -343,8 +394,134 @@ export async function addStoryboardFramesTool(owner: ConnectorOwner, args: Json)
   };
 }
 
+
+async function readProject(owner: ConnectorOwner, projectId: string) {
+  if (!projectId) return null;
+  const { data } = await createClient()
+    .from("projects")
+    .select("id, title, studio_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  return data && data.studio_id === owner.studioId ? data : null;
+}
+
+function shotListLink(projectId: string): string {
+  return `${siteOrigin()}/projects/${projectId}/shot-list`;
+}
+
+export async function createShotListTool(owner: ConnectorOwner, args: Json) {
+  const project = await readProject(owner, String(args.project_id ?? "").trim());
+  if (!project) return { error: "No project with that id is visible here. Use search first." };
+  const supabase = createClient();
+
+  // The cover row the shot list page reads. The app makes it on first use,
+  // so a list made here has to as well or the page has nothing to hang on.
+  const { data: board } = await supabase
+    .from("shot_boards")
+    .select("id")
+    .eq("project_id", project.id)
+    .maybeSingle();
+  if (!board) {
+    const { error } = await supabase
+      .from("shot_boards")
+      .insert({ studio_id: owner.studioId, project_id: project.id, created_by: owner.userId });
+    if (error) return { error: "The shot list could not be created." };
+  }
+
+  const { data: last } = await supabase
+    .from("shot_groups")
+    .select("position")
+    .eq("project_id", project.id)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  // No seeded empty rows, unlike the app's button: those are for a person to
+  // type into, and an assistant fills the list itself straight after.
+  const { data: group, error } = await supabase
+    .from("shot_groups")
+    .insert({
+      studio_id: owner.studioId,
+      project_id: project.id,
+      position: (last?.position ?? -1) + 1,
+      title: shotListTitle(args.title),
+      created_by: owner.userId,
+    })
+    .select("id, title")
+    .single();
+  if (error || !group) return { error: "The shot list could not be created." };
+  return {
+    created: "shot list",
+    shot_list_id: group.id,
+    title: group.title,
+    project: project.title,
+    open: shotListLink(project.id),
+    next: "Fill it with add_shots.",
+  };
+}
+
+export async function addShotsTool(owner: ConnectorOwner, args: Json) {
+  const id = String(args.shot_list_id ?? "").trim();
+  const supabase = createClient();
+  const { data: group } = id
+    ? await supabase.from("shot_groups").select("id, studio_id, project_id, title").eq("id", id).maybeSingle()
+    : { data: null };
+  if (!group || group.studio_id !== owner.studioId) {
+    return { error: "No shot list with that id is visible here." };
+  }
+  const { shots, skipped } = parseShots(args.shots);
+  if (!shots.length) return { error: "No usable shots to add.", skipped };
+
+  const { data: last } = await supabase
+    .from("shot_cards")
+    .select("position")
+    .eq("group_id", group.id)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const stored = await inBatches(shots, 4, (sh) =>
+    sh.imageUrl ? storeImage(owner.studioId, `shotlists/${group.id}`, sh.imageUrl) : Promise.resolve(null)
+  );
+  let position = (last?.position ?? -1) + 1;
+  let pictured = 0;
+  const rows = shots.map((sh, i) => {
+    const st = stored[i];
+    // A row whose picture failed still lands, and is named: a missing row
+    // would renumber the list, which is worse than a row with no picture.
+    if (sh.imageUrl && st && !st.ok) skipped.push(`Shot ${sh.code ?? i + 1}: picture not added (${st.reason}); added without it.`);
+    const ok = st && st.ok ? st : null;
+    if (ok) pictured++;
+    return {
+      studio_id: owner.studioId,
+      group_id: group.id,
+      position: position++,
+      code: sh.code,
+      description: sh.description,
+      shot_size: sh.shotSize,
+      shot_type: sh.shotType,
+      movement: sh.movement,
+      day: sh.day,
+      vo: sh.vo,
+      storage_path: ok?.path ?? null,
+      mime_type: ok?.mime ?? null,
+      image_name: ok?.name ?? null,
+      tags: [],
+      created_by: owner.userId,
+    };
+  });
+  const { error } = await supabase.from("shot_cards").insert(rows);
+  if (error) return { error: "The shots could not be saved.", skipped };
+  return {
+    added: { shots: rows.length, with_pictures: pictured },
+    shot_list: group.title || "Untitled shot list",
+    skipped,
+    open: shotListLink(group.project_id),
+  };
+}
+
 export const WRITERS: Record<string, (owner: ConnectorOwner, args: Json) => Promise<unknown>> = {
   create_board: createBoardTool,
   add_to_moodboard: addToMoodboardTool,
   add_storyboard_frames: addStoryboardFramesTool,
+  create_shot_list: createShotListTool,
+  add_shots: addShotsTool,
 };

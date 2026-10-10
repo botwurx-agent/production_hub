@@ -2428,6 +2428,20 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   production notes"; the description now names the field as the producer
   sees it. If stray boards repeat, the fix is the tool descriptions, not
   granting delete.
+- SHOT LIST TOOLS (2026-10-10, the next slice): `create_shot_list` (a new
+  shot_groups row, making the project's shot_boards cover row first if it is
+  missing, and WITHOUT the three empty rows the app's button seeds, since an
+  assistant fills the list straight after) and `add_shots` (rows appended in
+  order: code, description, shot size, type, movement, day, VO, an optional
+  picture by link stored under `<studio>/shotlists/<list>/`). Up to 40 rows a
+  call but 12 pictures; a row over the picture cap or with a bad link still
+  lands, without the picture, and is named in `skipped`, since a missing row
+  renumbers the list. `day` is described as what the schedule builder splits
+  on and to be left out unless the producer said, so a list made here feeds
+  "Build from the shot list" directly. lib/connector-shots.ts is the pure half
+  (15 assertions). The server instructions now say ONE board or list per
+  request, the stray-boards lesson from the first live run. NOT RUN against a
+  real host yet.
   CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
   can call the image models (billed separately, and newer image models may
   need the organization verified).
