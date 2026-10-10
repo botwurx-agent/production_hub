@@ -59,6 +59,13 @@ const PUBLIC_PATHS = [
   "/auth",
   "/r",
   "/rb",
+  // The AI connector (Claude / ChatGPT, over MCP). The link in the path is the
+  // credential and the route resolves it before reading anything.
+  "/api/mcp",
+  // OAuth discovery, which an MCP host probes before connecting. Nothing is
+  // served there, and it must answer 404 rather than redirect to /login, or
+  // the host reads the login page as a broken authorization server.
+  "/.well-known",
   "/b",
   // The client project binder. Its own prefix because /b is the shared board.
   "/bd",

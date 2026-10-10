@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0123. Recent: 0123 =
+files in supabase/migrations. THROUGH 0124. Recent: 0124 =
+connector_tokens (private links for the read-only AI connector, hash only,
+owned by their maker: RLS user_id = auth.uid()); 0123 =
 job_requests (request_links, one no-login link per client, and job_requests,
 what a client sent through it; each becomes an inbound deal); 0122 =
 version_transcripts (timed transcript lines per version, read by anyone on
@@ -2310,6 +2312,73 @@ into an inbound deal with the brief and files attached.
 - NOT BUILT: Timeliner's PRICED menu (pick "short-form reel $160" and see a
   running total), which needs a service catalogue the studio does not keep
   today, and an email to the studio on top of the bell.
+
+### Claude / ChatGPT connector, read only (migration 0124) — BUILT, not yet run live
+Twelfth item off the Timeliner list, and the "DECISION (operator, 2026-09-17)"
+below finally started, in the order it set: READ ONLY, prove it on a real job,
+and only then decide whether Runner goes. Nothing about Runner was removed.
+- WHAT IT IS: an MCP server at `/api/mcp/<token>`. Settings, AI connector,
+  "Make a link" gives a private URL that is pasted into Claude (Settings,
+  Connectors, Add custom connector) or ChatGPT (developer mode connector, no
+  authentication). The customer's own subscription pays for the thinking,
+  which is the whole commercial point: Runner was the one feature here with a
+  per-use cost to us.
+- A LINK, NOT OAUTH, deliberately for this slice. A URL with a secret in it is
+  the one thing both hosts accept without an authorization server, and OAuth
+  with dynamic client registration is a project of its own. The link IS the
+  credential, so: 192 random bits (`sfc_` + 32 base64url), only the SHA-256 is
+  stored (`connector_tokens`), the plain URL is shown ONCE (and copied), each
+  row has a name, last-4, last-used and a one-press Turn off. Ten live links per
+  person. RLS is `user_id = auth.uid()` (and is_studio_member): a link reads as
+  its maker, so it is theirs alone, the notification_reads shape.
+- IT RUNS AS THE PERSON, UNDER RLS, and this is the decision that matters. The
+  request has no cookie session, and a service-role client would have to
+  re-derive tenancy by hand in every reader, which is the one mistake that
+  crosses studios. Instead lib/connector.ts signs in AS the link's owner server
+  side (admin generateLink magic link, exchanged at once with verifyOtp, no
+  email sent), caches that session per user on the warm instance until five
+  minutes before expiry, and runs the ordinary readers inside `runAsUser`
+  (lib/supabase/run-as.ts, AsyncLocalStorage). `createClient()` in
+  lib/supabase/server.ts returns that borrowed client when one is in scope, so
+  Runner's six read tools and getOutstanding needed NO changes and cannot
+  disagree with the app about anything. AsyncLocalStorage rather than a module
+  variable because two requests on one warm instance must never share a client.
+- THE OWNER MUST STILL BE A STUDIO MEMBER on every request (a membership row,
+  so never a collaborator): removing somebody from the studio kills their links
+  with nothing to remember. The gate is `canUseConnector(ctx)` in
+  lib/agent/access.ts, beside canUseRunner, for the one-function tier rule. No
+  AI key is needed on our side.
+- READ ONLY BY CONSTRUCTION: only READ_TOOLS are offered (the propose_* tools
+  are not listed and an unknown tool is refused before anything runs), all
+  carry `readOnlyHint`. Over MCP the call IS the action and the host's generic
+  allow prompt is not a confirmation anyone can check, so writes wait.
+- `query` is PINNED TO THE LINK'S STUDIO (a studio_id filter appended), since
+  RLS scopes to the PERSON and a person in two studios would get a blend. The
+  fat tools are NOT pinned: for a user in two studios, get_money and friends
+  can still mix them. Rare (the switcher case) and not a leak, since the person
+  can read both, but worth fixing if it bites.
+- `query` carries the schema catalog in its own DESCRIPTION as well as in the
+  server instructions, because some hosts drop instructions.
+- lib/mcp.ts is the protocol, hand-written (initialize, ping, tools/list,
+  tools/call, empty resources/prompts lists, batches, notifications get 202),
+  answering each POST with plain JSON, which Streamable HTTP allows. No SDK:
+  its server transport assumes a long-lived process. A tool failure is a
+  RESULT with isError, not a protocol error, so the model can retry. Results
+  are cut at 24k characters with a note. 32 assertions with the token module.
+- NEVER 401. A 401 makes the host start an OAuth sign-in we do not offer, so a
+  dead link answers 404 with a sentence naming Settings. `/api/mcp` and
+  `/.well-known` are in PUBLIC_PATHS: the host probes OAuth discovery first,
+  and a redirect to /login there reads as a broken authorization server.
+  Verified on a dev server: bad link 404 JSON, discovery 404, GET 405.
+- NOT VERIFIED END TO END, and the thing to watch: the session exchange
+  (generateLink then verifyOtp type magiclink) has never run, since a session
+  here cannot reach Supabase Auth, and no real host has connected. If the
+  first tool call fails with "Could not open a session for this link", that
+  exchange is the suspect. Each sign-in also leaves a row in auth.sessions;
+  harmless, and the cache keeps it to about one an hour per warm instance.
+- NOT BUILT: writes, OAuth, per-link scopes or expiry, studio-pinning the fat
+  tools, and anything about removing Runner (the decision stays the
+  operator's, after a real job).
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

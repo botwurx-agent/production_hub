@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/database.types";
+import { borrowedClient } from "@/lib/supabase/run-as";
 
 /**
  * Server-side Supabase client for Server Components, Route Handlers, and
@@ -9,6 +10,12 @@ import type { Database } from "@/lib/database.types";
  * safe to ignore because the middleware refreshes the session.
  */
 export function createClient() {
+  // Inside runAsUser (the AI connector, which has no cookie session), every
+  // reader gets that request's own user-scoped client instead, so the same
+  // RLS that bounds the app bounds the connector, with no second code path.
+  const borrowed = borrowedClient();
+  if (borrowed) return borrowed;
+
   const cookieStore = cookies();
 
   return createServerClient<Database>(

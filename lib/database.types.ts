@@ -2027,6 +2027,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      connector_tokens: {
+        Row: {
+          id: string;
+          studio_id: string;
+          user_id: string;
+          name: string;
+          token_hash: string;
+          token_last4: string;
+          created_at: string;
+          last_used_at: string | null;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          user_id: string;
+          name: string;
+          token_hash: string;
+          token_last4: string;
+          created_at?: string;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          user_id?: string;
+          name?: string;
+          token_hash?: string;
+          token_last4?: string;
+          created_at?: string;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Relationships: [];
+      };
       notification_reads: {
         Row: {
           id: string;
