@@ -115,6 +115,7 @@ export function clampOpening(r: RoomSpec, o: Opening): Opening {
 
 export type WindowInfo = {
   id: string;
+  wall: WallId;
   /** Centre of the opening on the inside face of its wall. */
   centre: THREE.Vector3;
   inward: THREE.Vector3;
@@ -132,6 +133,7 @@ export function roomWindows(r: RoomSpec): WindowInfo[] {
       const o = clampOpening(r, raw);
       return {
         id: o.id,
+        wall: o.wall,
         centre: wallPoint(r, o.wall, o.at, (o.sill + o.top) / 2),
         inward: wallInward(o.wall),
         width: o.width,
@@ -144,6 +146,70 @@ export function roomWindows(r: RoomSpec): WindowInfo[] {
 
 export function roomBounds(r: RoomSpec) {
   return { minX: r.x, maxX: r.x + r.width, minZ: r.z, maxZ: r.z + r.depth };
+}
+
+/** True when (x, z) is outside the room's footprint. */
+export function outsideRoom(r: RoomSpec, x: number, z: number): boolean {
+  return x < r.x || x > r.x + r.width || z < r.z || z > r.z + r.depth;
+}
+
+/** "Window 1, left wall", or plain "Left wall window" when it is the only one. */
+export function windowName(windows: WindowInfo[], id: string): string {
+  const i = windows.findIndex((w) => w.id === id);
+  const w = windows[i];
+  if (!w) return "Window";
+  const wall = WALLS.find((x) => x.id === w.wall)?.name.toLowerCase() ?? "wall";
+  return windows.length > 1 ? `Window ${i + 1}, ${wall}` : `Window, ${wall}`;
+}
+
+/**
+ * Where a lamp goes to light a subject THROUGH a window from outside, the way
+ * day interiors are lit: `outM` metres out from the wall, on the line from the
+ * subject through the opening, and as high as it can go while the beam still
+ * clears the head of the window, so it rakes down like the sun rather than
+ * coming in flat. `frameDistM` is how far along the beam a diffusion frame
+ * sits when it is `frameOutM` outside the glass, which hides its edges behind
+ * the wall from inside. A subject off to one side gets the steepest angle the
+ * opening allows; one not in front of the window at all gets the light
+ * straight out from it.
+ */
+export function throughWindow(
+  w: WindowInfo,
+  subject: { x: number; y: number; z: number },
+  outM: number,
+  frameOutM = 0.25,
+): { x: number; y: number; z: number; frameDistM: number } {
+  const out = { x: -w.inward.x, z: -w.inward.z };
+  // Through the middle of a PANE, not of the window: a window has a mullion
+  // down its centre, and a beam aimed through it would be cut by that bar.
+  // The pane on the subject's side, so the angle in is the gentler one.
+  const along = { x: -w.inward.z, z: w.inward.x };
+  const side = Math.sign((subject.x - w.centre.x) * along.x + (subject.z - w.centre.z) * along.z) || 1;
+  const pass = { x: w.centre.x + along.x * side * (w.width / 4), z: w.centre.z + along.z * side * (w.width / 4) };
+  let hx = pass.x - subject.x;
+  let hz = pass.z - subject.z;
+  // The subject's distance in from the wall, perpendicular to it.
+  let inM = hx * out.x + hz * out.z;
+  const hl = Math.hypot(hx, hz) || 1;
+  hx /= hl;
+  hz /= hl;
+  // Too oblique (or behind the wall): the light goes straight out instead.
+  let cos = hx * out.x + hz * out.z;
+  if (!(inM > 0.2) || cos < 0.35) {
+    hx = out.x;
+    hz = out.z;
+    cos = 1;
+    inM = Math.max(0.5, inM);
+  }
+  const run = outM / cos;
+  const x = pass.x + hx * run;
+  const z = pass.z + hz * run;
+  // The beam crosses the wall near the top of the opening, so it comes down.
+  const yWall = w.top - 0.15 * (w.top - w.sill);
+  const y = Math.max(1.2, Math.min(6, subject.y + ((yWall - subject.y) * (inM + outM)) / inM));
+  const len = Math.hypot(x - subject.x, y - subject.y, z - subject.z);
+  const frameDistM = Math.max(0.3, (len * Math.max(0, outM - frameOutM)) / (inM + outM));
+  return { x, y, z, frameDistM };
 }
 
 // ---------------------------------------------------------------- drawing

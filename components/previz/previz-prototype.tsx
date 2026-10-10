@@ -33,7 +33,7 @@ import {
 import {
   bounceCandela, collectOccluders, emittersFromSource, nearFieldScale, readMeter, roomLuxFrom, type Board, type Emitter, type Reading,
 } from "@/lib/previz/meter";
-import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, ShotExposure, WindowInspector } from "./light-panels";
+import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, ShotExposure, WindowInspector, type WindowLightStyle } from "./light-panels";
 import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 import {
   aim, asSetup, assetKeys, bathroomSetup, setupForStore, bedroomSetup, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
@@ -51,7 +51,7 @@ import {
   CATEGORIES, bulbLocal, buildItem, catalogOf, containsPoint, itemShapeKey, itemToWorld, newItem, stackHeights, standHeight, seatUnder, groundUnder,
   type ItemSpec, type LabelArt,
 } from "@/lib/previz/set-items";
-import { buildRoom, roomBounds, roomWindows, type SetSpec, type WindowInfo } from "@/lib/previz/room";
+import { buildRoom, outsideRoom, roomBounds, roomWindows, throughWindow, windowName, type SetSpec, type WindowInfo } from "@/lib/previz/room";
 import { embedAssets, getAsset, prepareLabel, putAsset, restoreAssets } from "@/lib/previz/asset-store";
 import { MAX_MODEL_BYTES, UNITS, guessUnit, loadModel, modelFormat, rawSize } from "@/lib/previz/model-import";
 import { strideSide, walkSpeed, walkerAt } from "@/lib/previz/talent-walk";
@@ -1884,6 +1884,27 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     setLights((all) => [...all, spec]);
     setSel({ kind: "light", id });
   };
+  /**
+   * A lamp OUTSIDE a window, lighting the subject through it: how most day
+   * interiors are really lit, rather than leaving it to the weather. An M18
+   * a few metres out, aimed in and kept on the subject; the soft versions
+   * put a frame of diffusion just outside the glass.
+   */
+  const addWindowLight = (windowId: string, style: WindowLightStyle) => {
+    const w = windows.find((x) => x.id === windowId);
+    if (!w) return;
+    const id = `l${Date.now()}`;
+    const f = FIXTURES.find((x) => x.id === "m18") ?? FIXTURES[0];
+    const at = throughWindow(w, subjectAt, style === "hard" ? 4 : 3);
+    const frame = style === "hard" ? null
+      : { sizeFt: style === "soft20" ? 20 : 12, materialId: style === "soft20" ? "full-grid" : "half-grid", distM: at.frameDistM };
+    const spec: LightSpec = {
+      id, role: "Window", fixtureId: f.id, modifierId: "reflector", beamDeg: null, dimmer: style === "hard" ? 0.5 : 1,
+      cct: f.cctDefault, x: at.x, y: at.y, z: at.z, yaw: 0, pitch: 0, aimAt: subjectId, frame, on: true,
+    };
+    setLights((all) => [...all, spec]);
+    setSel({ kind: "light", id });
+  };
   const addGrip = (kind: GripKind) => {
     const id = `g${Date.now()}`;
     // A bounce goes to the side opposite the key; a flag to the side, ready to cut.
@@ -2813,11 +2834,16 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
             <select
               aria-label="Add a light"
               value=""
-              onChange={(e) => { if (e.target.value) addLight(e.target.value); }}
+              onChange={(e) => { const v = e.target.value; if (v.startsWith("window:")) addWindowLight(v.slice(7), "hard"); else if (v) addLight(v); }}
               className="mt-1 w-full rounded-[8px] border border-dashed border-border bg-surface px-2 py-1 text-xs font-semibold text-text-muted"
             >
               <option value="">+ Add a light</option>
               {FIXTURES.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              {set.kind === "room" && windows.length ? (
+                <optgroup label="Outside, through a window">
+                  {windows.map((w) => <option key={w.id} value={`window:${w.id}`}>{windowName(windows, w.id)}</option>)}
+                </optgroup>
+              ) : null}
             </select>
           </RailGroup>
           <RailGroup title="Grip">
@@ -3140,6 +3166,15 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
                 return { pipeY: l.hungY, maxY: l.hungY - CLAMP_DROP - hangClearance(l.fixtureId, l.modifierId), rigName: rig.name };
               })()}
               onHangNew={(kind) => hangOnNew(sel.id, kind)}
+              note={(() => {
+                const l = lights.find((x) => x.id === sel.id)!;
+                if (set.kind !== "room" || !outsideRoom(set.room, l.x, l.z)) return null;
+                const lux = meter?.contributions.find((c) => c.id === l.id)?.lux ?? 0;
+                if (!l.on || !meter) return "Outside the room.";
+                return lux > 0.5
+                  ? "Outside the room, lighting through the window."
+                  : "Outside the room, and the wall is in the way: none of it reaches the subject. Move or aim it so the beam goes through a window.";
+              })()}
               pads={<ControlPads pads={fixturePads("light", sel.id)} caption="Moves as if you are standing behind the light." />}
               onChange={(p) => updateLight(sel.id, p)}
               onDelete={removeSelected}
@@ -3156,6 +3191,10 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
             <WindowInspector
               sky={win.sky} nd={win.nd} on={win.on} reading={meter} targetName={meterTargetName} fmt={fmt}
               onChange={(p) => setWin((w) => ({ ...w, ...p }))}
+              windows={windows.map((w) => ({ id: w.id, name: windowName(windows, w.id) }))}
+              outside={lights.filter((l) => set.kind === "room" && outsideRoom(set.room, l.x, l.z)).map((l) => ({ id: l.id, name: `${l.role} · ${fixtureOf(l).name.replace(/^(Aputure|ARRI|Astera) /, "")}` }))}
+              onLightThrough={addWindowLight}
+              onSelectLight={(id) => setSel({ kind: "light", id })}
             />
           ) : (
             <RoomInspector set={set} units={units} onChange={setSet} onScout={() => setScout(true)} />

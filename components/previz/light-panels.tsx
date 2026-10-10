@@ -12,7 +12,7 @@ import {
 import { GRIP_NAMES, type GripKind, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
 import type { Contribution, Reading } from "@/lib/previz/meter";
 import { Chip, Field, Readout, Seg, TrashIcon } from "./ui";
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 
 /**
  * The active shot's stop, ISO and ND, so a light's own panel can say what that
@@ -35,7 +35,7 @@ const RIG_ADDS: { kind: "grid" | "spreader" | "polecat"; label: string }[] = [
   { kind: "polecat", label: "Polecat" },
 ];
 
-const ROLES = ["Key", "Fill", "Rim", "Back", "Hair", "Kicker", "Background"];
+const ROLES = ["Key", "Fill", "Rim", "Back", "Hair", "Kicker", "Window", "Background"];
 const ndLabel = (nd: number) => (nd === 0 ? "None" : nd.toFixed(1));
 
 function Header({ eyebrow, title, onDelete, on, onToggle }: {
@@ -197,9 +197,11 @@ function ColorField({ color, cct, onChange }: {
 }
 
 export function LightInspector({
-  s, targets, reading, targetName, fmt, rigs, hung, onHangNew, pads, onChange, onDelete,
+  s, targets, reading, targetName, fmt, rigs, hung, onHangNew, pads, note, onChange, onDelete,
 }: {
   s: LightSpec;
+  /** Where the light stands, when that is worth saying (outside the room). */
+  note?: string | null;
   /** The controller pads that move and aim this light. */
   pads?: React.ReactNode;
   targets: Target[];
@@ -220,6 +222,7 @@ export function LightInspector({
   return (
     <div className="space-y-5">
       <Header eyebrow="Light" title={`${s.role} · ${fixture.name}`} on={s.on} onToggle={() => onChange({ on: !s.on })} onDelete={onDelete} />
+      {note ? <p className="rounded-[8px] border border-border bg-surface-2 px-2 py-1.5 text-xs text-text">{note}</p> : null}
 
       <Field label="Role">
         <div className="flex flex-wrap gap-1">
@@ -383,10 +386,25 @@ export function LightInspector({
   );
 }
 
-export function WindowInspector({ sky, nd, on, reading, targetName, fmt, onChange }: {
+export type WindowLightStyle = "hard" | "soft12" | "soft20";
+const WINDOW_LIGHT_STYLES: { id: WindowLightStyle; label: string; hint: string }[] = [
+  { id: "hard", label: "Hard, like sun", hint: "An M18 straight through the glass: a crisp patch on the floor and hard shadows." },
+  { id: "soft12", label: "12x12 half grid", hint: "An M18 through a 12x12 of half grid just outside the glass: soft, still directional." },
+  { id: "soft20", label: "20x20 full grid", hint: "An M18 through a 20x20 of full grid: the whole window becomes a soft source." },
+];
+
+export function WindowInspector({
+  sky, nd, on, reading, targetName, fmt, onChange, windows, outside, onLightThrough, onSelectLight,
+}: {
   sky: WindowSky; nd: number; on: boolean; reading: Reading | null; targetName: string; fmt: Fmt;
   onChange: (p: { sky?: WindowSky; nd?: number; on?: boolean }) => void;
+  windows: { id: string; name: string }[];
+  /** Lights already standing outside the room. */
+  outside: { id: string; name: string }[];
+  onLightThrough: (windowId: string, style: WindowLightStyle) => void;
+  onSelectLight: (id: string) => void;
 }) {
+  const [style, setStyle] = useState<WindowLightStyle>("soft12");
   // Every window in the room adds up to one daylight figure.
   const ws = reading?.contributions.filter((x) => x.id.startsWith("window")) ?? [];
   const c = ws.length ? { ...ws[0], label: "Windows", lux: ws.reduce((n, x) => n + x.lux, 0) } : undefined;
@@ -409,6 +427,45 @@ export function WindowInspector({ sky, nd, on, reading, targetName, fmt, onChang
       </Field>
       <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} />
       {sun && sun.lux > 0 ? <Readout k="Direct sun" v={`${Math.round(sun.lux)} lux`} /> : null}
+
+      <div className="space-y-3 border-t border-border pt-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-text-faint">Light a window from outside</p>
+          <p className="mt-1 text-xs text-text-muted">
+            Most day interiors are lit this way rather than left to the weather. The lamp stands outside, aimed in at the subject and kept on them, and you can move it on the map like any other light.
+          </p>
+        </div>
+        <Field label="Diffusion">
+          <div className="flex flex-wrap gap-1">
+            {WINDOW_LIGHT_STYLES.map((x) => <Chip key={x.id} on={style === x.id} onClick={() => setStyle(x.id)}>{x.label}</Chip>)}
+          </div>
+          <p className="mt-1 text-xs text-text-muted">{WINDOW_LIGHT_STYLES.find((x) => x.id === style)?.hint}</p>
+        </Field>
+        <div className="flex flex-col gap-1">
+          {windows.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => onLightThrough(w.id, style)}
+              className="rounded-[8px] border border-dashed border-border px-2 py-1.5 text-left text-xs font-semibold text-text hover:border-accent hover:text-accent"
+            >
+              + Light through {w.name.charAt(0).toLowerCase() + w.name.slice(1)}
+            </button>
+          ))}
+        </div>
+        {outside.length ? (
+          <Field label="Outside now">
+            <div className="flex flex-wrap gap-1">
+              {outside.map((l) => <Chip key={l.id} on={false} onClick={() => onSelectLight(l.id)}>{l.name}</Chip>)}
+            </div>
+          </Field>
+        ) : null}
+        {on ? (
+          <p className="text-xs text-text-muted">
+            The daylight above still comes through as well. Turn it off to light the window with your lamp alone (a night exterior, or full control), or ND it down.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
