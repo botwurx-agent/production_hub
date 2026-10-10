@@ -2460,6 +2460,23 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
   can call the image models (billed separately, and newer image models may
   need the organization verified).
+- TASKS (2026-10-10), the last tool on the planned list: `add_tasks`
+  (lib/connector-task-tool.ts, pure half lib/connector-tasks.ts, 25
+  assertions). Up to 30 cards per call onto the project's task board, the
+  same row addProjectTask writes (title, notes, due date, phase, status, a
+  checklist stored as one named group "Steps", assignees), never `done`
+  (generated). Producer words are read ("Pre-production", "in progress",
+  "blocked" -> waiting); anything unreadable lands in the default column
+  (Anytime / To do) and is NAMED in `skipped` rather than refusing the task.
+  The first task given sits on top, the rest beneath in order (sort =
+  -now/1e6 + i/1000), and inserted rows are matched back on that sort key,
+  not on return order. ASSIGNEES MATCH EXACTLY or not at all: "me" is the
+  link's owner, otherwise a team member's email as loadProjectPeople labels
+  it (fed a minimal context with the owner's email from auth.getUser). No
+  fuzzy names, since a task on the wrong person is worse than an unassigned
+  one, and an unmatched name is reported. The instructions tell the host to
+  read existing tasks (query on project_tasks) first, since add-only means a
+  duplicate cannot be cleaned up from the chat. NOT RUN against a real host.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
