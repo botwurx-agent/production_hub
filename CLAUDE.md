@@ -2148,6 +2148,60 @@ the peach" was scrubbing for it.
   file was WebM because Playwright's Chromium has no AAC; real Chrome and
   Safari decode AAC in MP4/MOV, which is what to watch on the first real cut.
 
+### Studio reports (no migration) — BUILT
+Ninth item off the Timeliner list (their #10). The app held every number a
+studio owner asks at the end of a quarter and showed none of it studio-wide:
+each job's margin lived on its own budget page, review turnaround nowhere.
+- /reports, a nav row between Pipeline and Settings, staff only (a
+  collaborator is redirected, and every table read is is_studio_member).
+  Period chips This year / Last 12 months / All time, This year by default.
+- NOTHING IS STORED. Every figure is derived from rows that exist for other
+  reasons, so a report cannot drift from the pages it summarises:
+  - MONEY uses the budget page's own rules through the SAME functions
+    (lineActual, marginOf, computeTotals): invoices made here when a job has
+    any, else the delivery page's billed figure, margin on revenue. A job
+    reads the same here as on its budget page, which is the whole test.
+    Each job opens (a native <details>, no script) to WHERE THE COST WENT,
+    grouped by budget category with "Not on a budget line" for unassigned
+    costs, plus a plain line saying which billed figure was used.
+  - ON TIME compares the day a job was moved to Delivered with its due date.
+    There is no delivered column: the date is the LATEST "Moved to Delivered"
+    status_change row in `activity` (updateProjectStatus writes it). Checked
+    live: 6 of 7 delivered jobs carry it. One that does not reads "Delivered,
+    date not recorded" and is LEFT OUT of the rate rather than guessed, and
+    the footnote counts them. An open job past its due date reads Overdue.
+  - CLIENT RESPONSE is the median days from when work reached the client (the
+    review link, or a LATER version on it, since a v2 was in front of them from
+    its upload) to their first approve or change request through that link
+    (approvals with review_link_id, created_at). Change requests per job count
+    the same rows the revision-rounds rule counts, per job that went to review.
+- A JOB BELONGS TO THE PERIOD IT LANDS IN: its due date, else the day it was
+  started. "This year" runs to Dec 31, so a job due next month is already this
+  year's work; "Last 12 months" stops at today. Archived jobs stay in, since
+  finished work is most of what a report is about.
+- lib/studio-reports.ts is pure (45 assertions, run on copies with the
+  `@/lib/costs` import rewritten, since node cannot resolve the alias):
+  periodRange/inPeriod, projectMoney (strings summed, "" is not a number, an
+  invoice totalling 0 still beats the manual figure exactly as the budget page
+  does), deliveredDates, deliveryState (same day is on time, due today is not
+  overdue), onTimeSummary, turnaroundDays, median, clientRows (clients ordered
+  by what they paid; jobs with no client grouped as "No client").
+  lib/studio-reports-data.ts is the loader; `.in()` lists go in batches of
+  150 because the ids travel in the URL.
+- components/reports/report-view.tsx is presentational and hook-free, shared by
+  the page and the PDF (/reports/print, forced light, studio logo and name,
+  every job printed open, rows kept off page breaks, ?auto=1 is the one-click
+  Download PDF). Words in the text colour, hue on dots: red for a loss or a late
+  delivery, amber for overdue, an on-time rate under 75%, or a client averaging
+  two or more change requests a job.
+- NOT BUILT: the client-facing branded report Timeliner sells (a client should
+  never see the studio's margin, so that would be a different document), CSV
+  export, a per-person or per-crew view, and turnaround on the studio's OWN
+  internal review. Verified in Chromium against a throwaway fixture (deleted)
+  mounting the real ReportView: light, dark, 390 and print, no page errors, no
+  overflow. NOT verified against the database: a session here cannot reach
+  Supabase, so the first real open of /reports is the test.
+
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
 could say you were $4,200 over but not why, who, or against what document. Actual
