@@ -3,11 +3,12 @@
 import { normalizeDrawing, type Drawing } from "@/lib/review-drawing";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StatusTag } from "@/components/status-tag";
 import { PinReview } from "@/components/review/pin-review";
 import { VideoReview } from "@/components/review/video-review";
+import { VersionCompare, CompareToggle } from "@/components/review/version-compare";
 import { ShareReviewButton } from "@/components/projects/share-review-button";
 import { viewerKind } from "@/lib/file-kind";
 import { timeAgo } from "@/lib/format";
@@ -59,6 +60,10 @@ export function CutReviewView({
   const kind = viewerKind(version.mime_type, cut.name);
   const isImage = kind === "image" && Boolean(version.signedUrl);
   const isVideo = kind === "video" && Boolean(version.signedUrl);
+  // Compare needs a playable copy of each side, so only signed versions count.
+  const comparable = cut.versions.filter((v) => v.signedUrl);
+  const canCompare = (isImage || isVideo) && comparable.length >= 2;
+  const [compareMode, setCompareMode] = useState(false);
 
   function toPortal(c: VersionComment): PortalComment {
     const isClient = Boolean(c.reviewer_name) && !c.author_id;
@@ -227,12 +232,23 @@ export function CutReviewView({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {canCompare && (
+              <CompareToggle on={compareMode} onToggle={() => setCompareMode((v) => !v)} />
+            )}
             <ShareReviewButton projectId={projectId} assetId={cut.id} initialToken={reviewToken} linkId={reviewLinkId} />
           </div>
         </div>
       </div>
 
-      {isImage ? (
+      {canCompare && compareMode ? (
+        <VersionCompare
+          versions={comparable}
+          currentId={version.id}
+          urlFor={(id) => comparable.find((v) => v.id === id)?.signedUrl ?? ""}
+          alt={cut.name}
+          kind={isVideo ? "video" : "image"}
+        />
+      ) : isImage ? (
         <PinReview
           imageUrl={version.signedUrl as string}
           alt={cut.name}

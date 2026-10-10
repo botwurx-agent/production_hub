@@ -2,7 +2,7 @@
 
 import { normalizeDrawing, type Drawing } from "@/lib/review-drawing";
 
-import { useEffect, useRef, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFormState, useFormStatus } from "react-dom";
 import { Modal } from "@/components/ui/modal";
@@ -12,6 +12,7 @@ import { StatusTag } from "@/components/status-tag";
 import { PinReview } from "@/components/review/pin-review";
 import { PdfReview } from "@/components/review/pdf-review";
 import { VideoReview } from "@/components/review/video-review";
+import { VersionCompare, CompareToggle } from "@/components/review/version-compare";
 import { viewerKind } from "@/lib/file-kind";
 import {
   addReviewComment,
@@ -47,6 +48,7 @@ export function ReviewModal({
   projectId,
   assetName,
   version,
+  versions = [],
   currentUserId,
 }: {
   open: boolean;
@@ -54,6 +56,8 @@ export function ReviewModal({
   projectId: string;
   assetName: string;
   version: VersionRow;
+  /** Every version of the asset, so this one can be compared with another. */
+  versions?: VersionRow[];
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -84,6 +88,9 @@ export function ReviewModal({
   // A PDF pins like an image now, so the studio's own review matches what the
   // client sees rather than being the poorer of the two.
   const isPdf = kind === "pdf" && Boolean(version.signedUrl);
+  const comparable = versions.filter((v) => v.signedUrl);
+  const canCompare = (isImage || isVideo) && comparable.length >= 2;
+  const [compareMode, setCompareMode] = useState(false);
 
   // Map internal comments to the shared review-comment shape.
   function toPortal(c: VersionComment): PortalComment {
@@ -248,7 +255,21 @@ export function ReviewModal({
       <div className="space-y-5">
         {signOff}
 
-        {isImage ? (
+        {canCompare && (
+          <div className="flex justify-end">
+            <CompareToggle on={compareMode} onToggle={() => setCompareMode((v) => !v)} />
+          </div>
+        )}
+
+        {canCompare && compareMode ? (
+          <VersionCompare
+            versions={comparable}
+            currentId={version.id}
+            urlFor={(id) => comparable.find((v) => v.id === id)?.signedUrl ?? ""}
+            alt={assetName}
+            kind={isVideo ? "video" : "image"}
+          />
+        ) : isImage ? (
           <PinReview
             imageUrl={version.signedUrl as string}
             alt={assetName}

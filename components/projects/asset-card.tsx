@@ -515,6 +515,7 @@ export function AssetCard({
           projectId={projectId}
           assetName={asset.name}
           version={reviewVersion}
+          versions={asset.versions}
           currentUserId={currentUserId}
         />
       )}

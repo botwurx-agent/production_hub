@@ -2202,6 +2202,53 @@ each job's margin lived on its own budget page, review turnaround nowhere.
   overflow. NOT verified against the database: a session here cannot reach
   Supabase, so the first real open of /reports is the test.
 
+### Compare two versions of a video (no migration) — BUILT
+Tenth item off the Timeliner list. "What changed in v3" was answered by
+opening two tabs and scrubbing each by hand, and compare existed only for
+STILLS in the client portal.
+- components/review/version-compare.tsx is now one compare for both: an
+  IMAGE pair and a VIDEO pair, each SIDE BY SIDE or under a WIPE (B drawn over
+  A, clipped right of a draggable divider; arrow keys move it too), with A/B
+  pickers and a swap. It opens on the version being looked at against the one
+  IMMEDIATELY BEFORE it (defaultPair), which is the revision question, not
+  the oldest.
+- VIDEO HAS ONE TRANSPORT FOR BOTH: Play both, scrub, frame step, speed, loop,
+  which side is HEARD (default the newer), and Space / arrows / , . on the
+  window (the review canvas is not mounted while comparing). The lane with the
+  most left to play drives the clock and the other is corrected when it drifts
+  past 0.12s playing or 0.02s paused. A shorter version HOLDS ITS LAST FRAME
+  and says "v1 has ended" rather than looping or going black.
+- LINE UP: a head offset in whole frames (-1f/+1f/-1s/+1s, capped at a
+  minute) for a revision that gained a slate or lost a beat at the top. It is
+  stored as "which side skips how much", never negative, so the timeline
+  always starts at zero for both. Measured in Chromium: drift 0.03s while
+  playing, under 0.01s paused, exactly 1.000s apart with a one-second offset.
+- lib/compare-sync.ts is the pure half (42 assertions): laneOffsets,
+  timelineLength, masterIndex, laneTarget, timelineFrom, shouldResync,
+  defaultPair, offsetLabel, clampWipe, clampOffset.
+- WHERE IT IS: the client portal (now video as well as images, honouring
+  locked downloads: nodownload and no right-click save), the MASTER CUT page,
+  and the in-app REVIEW WINDOW, which closes the old gap where it only knew
+  one version's URL. loadProjectAssets already signed every version, so the
+  window just needed `versions`, which AssetCard now passes. One
+  CompareToggle button on all three.
+- COMPARE IS FOR LOOKING. No commenting in it, and it says so: a note belongs
+  to one version, on the review canvas.
+- A BUG WORTH KNOWING, found by the fixture: a server-rendered <video> can
+  load its metadata BEFORE React attaches onLoadedMetadata, so the event is
+  missed and the timeline reads 0:00 with a dead scrub bar. The pair reads
+  readyState/duration on mount and also listens to durationchange. Any new
+  component that needs a video's duration should do the same.
+- Also: `bg-surface/90` on the version tags rendered NOTHING (the opacity
+  modifier on a var() colour compiles away, as recorded under the slate), so
+  they are solid surface with a border.
+- NOT BUILT: an onion-skin (opacity) mode, frame-accurate sync (the 24fps
+  assumption the player already makes), and compare on PDFs or doc reviews.
+- Verified in Chromium against a throwaway fixture (deleted) with a 10s and a
+  12s WebM: play, pause, scrub, frame step, offset, end handling, wipe drag,
+  image pair, locked downloads, light at 1280 and dark at 390, no page errors,
+  no overflow. Production build clean.
+
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
 could say you were $4,200 over but not why, who, or against what document. Actual
@@ -8198,10 +8245,9 @@ The parked items, so they are findable WHEN friction hits (not before):
   with good natural light" is a toy. Timestamped transcription would let each
   finding carry the frame from the moment it was spoken, which is the part that
   would have been genuinely novel.
-- Review-round edges, all half-built already: due/overdue never surfaces on the
-  INTERNAL review page (the client portal shows it, the studio cannot see which
-  reviews are late); version compare is image-only; the in-app ReviewModal is
-  handed one version's signed URL so compare does not work there at all.
+- Review-round edges: due/overdue never surfaces on the INTERNAL review page
+  (the client portal shows it, the studio cannot see which reviews are late).
+  Version compare (images and video, portal and in-app) is BUILT, see above.
 - Weekly studio digest (lib/outstanding.ts + Resend already exist). Low value
   for a solo operator who is in the app daily; revisit when a second person
   joins or during a long shoot.
@@ -8397,8 +8443,8 @@ Shot cockpit / Triage) was shown to the operator.
     AI-shot review treatment: big VideoReview timecode scrubber (or PinReview for a
     still) + comment rail + version switcher chips + internal sign-off + client
     ShareReviewButton; reuses the asset review-actions (addReviewCommentAt/
-    resolveReviewComment/setVersionApproval). NOT built: video version-compare
-    (image-only today), whole-sequence auto-assemble (deliberate -- we don't edit),
+    resolveReviewComment/setVersionApproval). Version compare is BUILT (see
+    "Compare two versions of a video"). NOT built: whole-sequence auto-assemble (deliberate -- we don't edit),
     asset-level status menu in the band.
   - SHAREABLE BATCH REVIEW ("send options for a pick", migration 0066): curate a
     SUBSET of a shot's candidates and share a no-login /rb/<token> link so a
