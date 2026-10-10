@@ -121,13 +121,13 @@ export async function loadProjectAssets(
       supabase
         .from("review_comments")
         .select(
-          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+          "id, body, created_at, author_id, reviewer_name, version_id, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at, team_only, audio_path, audio_seconds"
         )
         .in("version_id", versionIds),
       supabase
         .from("approvals")
         .select(
-          "id, status, reviewer_user_id, reviewer_name, created_at, target_id"
+          "id, status, reviewer_user_id, reviewer_name, created_at, target_id, review_link_id"
         )
         .eq("target_type", "version")
         .in("target_id", versionIds),

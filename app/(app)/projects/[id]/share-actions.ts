@@ -29,7 +29,7 @@ export async function createReviewLink(
   projectId: string,
   assetId: string,
   recipient?: string
-): Promise<{ token: string } | { error: string }> {
+): Promise<{ token: string; id: string; lockDownloads: boolean } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
 
@@ -44,27 +44,55 @@ export async function createReviewLink(
 
   const { data: existing } = await supabase
     .from("review_links")
-    .select("token")
+    .select("id, token, lock_downloads")
     .eq("asset_id", assetId)
     .eq("revoked", false)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (existing) return { token: existing.token };
+  if (existing) {
+    return { token: existing.token, id: existing.id, lockDownloads: existing.lock_downloads };
+  }
 
   const token = generateReviewToken();
-  const { error } = await supabase.from("review_links").insert({
-    studio_id: ctx.studio.id,
-    project_id: projectId,
-    asset_id: assetId,
-    token,
-    recipient: recipient?.trim() || null,
-    created_by: ctx.userId,
-  });
-  if (error) return { error: error.message };
+  const { data: created, error } = await supabase
+    .from("review_links")
+    .insert({
+      studio_id: ctx.studio.id,
+      project_id: projectId,
+      asset_id: assetId,
+      token,
+      recipient: recipient?.trim() || null,
+      created_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error || !created) return { error: error?.message ?? "Could not create the link." };
 
   revalidatePath(`/projects/${projectId}`);
-  return { token };
+  return { token, id: created.id, lockDownloads: false };
+}
+
+// Lock (or unlock) a review link's downloads until the work is approved. The
+// portal and its file route both read lock_downloads, and it lifts on its own
+// once the asset is approved, so this is set once and rarely touched again.
+export async function setReviewLinkDownloadLock(
+  projectId: string,
+  linkId: string,
+  locked: boolean
+): Promise<ShareState> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("review_links")
+    .update({ lock_downloads: locked })
+    .eq("id", linkId)
+    .eq("project_id", projectId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That review link is no longer available." };
+  revalidatePath(`/projects/${projectId}`);
+  return null;
 }
 
 // Creates (or returns the existing active) client review link for a doc

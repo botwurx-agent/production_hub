@@ -1,5 +1,7 @@
 "use server";
 
+import { voiceFolder, voicePathAllowed, voiceSeconds } from "@/lib/voice-note";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeDrawing } from "@/lib/review-drawing";
@@ -57,25 +59,43 @@ export async function addReviewCommentAt(
   // Roster contact ids the author picked. Validated server-side against the
   // project's own roster, so an id from the browser can only ever name someone
   // already on this job.
-  mentions?: string[]
+  mentions?: string[],
+  // A note the client never sees. A reply under a team-only comment is
+  // always team-only, whatever the composer said, so a thread cannot leak
+  // half of itself onto the portal.
+  opts?: {
+    teamOnly?: boolean;
+    /** A voice note uploaded first through uploadVoiceNote. */
+    audio?: { path: string; seconds: number | null } | null;
+  }
 ): Promise<ReviewState> {
   const ctx = await requireStudioContext();
   const text = body.trim();
-  if (!text) return { error: "Write a comment first." };
+  // A voice note is only accepted from the folder this user was given, since
+  // the path comes back from the browser (lib/voice-note).
+  const audio =
+    opts?.audio &&
+    voicePathAllowed(opts.audio.path, voiceFolder(ctx.studio.id, { userId: ctx.userId }))
+      ? { path: opts.audio.path, seconds: voiceSeconds(opts.audio.seconds) }
+      : null;
+  if (opts?.audio && !audio) return { error: "That voice note could not be attached." };
+  if (!text && !audio) return { error: "Write a comment first." };
 
   const supabase = createClient();
 
   let parent: string | null = null;
+  let parentTeamOnly = false;
   if (parentId) {
     const { data: p } = await supabase
       .from("review_comments")
-      .select("id, version_id, parent_id")
+      .select("id, version_id, parent_id, team_only")
       .eq("id", parentId)
       .maybeSingle();
     if (!p || p.version_id !== versionId) {
       return { error: "That comment is not part of this review." };
     }
     parent = p.parent_id ?? p.id;
+    parentTeamOnly = p.team_only;
   }
 
   const hasPin = !parent && pin && Number.isFinite(pin.x) && Number.isFinite(pin.y);
@@ -126,6 +146,9 @@ export async function addReviewCommentAt(
     timecode_end: endTime,
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
+    team_only: parentTeamOnly || opts?.teamOnly === true,
+    audio_path: audio?.path ?? null,
+    audio_seconds: audio?.seconds ?? null,
   })
     .select("id")
     .single();

@@ -122,6 +122,18 @@ export default function MarketingHome() {
           hue: "pink",
           children: <LiveScene name="pipeline" className="h-full" box />,
         },
+        {
+          eyebrow: "CRM and pipeline",
+          title: "Win the next job before this one wraps.",
+          body: "Deals move from inbound to awarded on one board, every call, meeting and linked email lands on the client's timeline, and a repeat client can ask for their next job through a link of their own.",
+          hue: "cyan",
+          cta: (
+            <Link href="/production-crm" className="text-[15px] font-semibold text-accent">
+              More about the CRM
+            </Link>
+          ),
+          children: <LiveScene name="deal" className="h-full" box />,
+        },
       ]}
     />
 
@@ -149,6 +161,8 @@ export default function MarketingHome() {
         "Crew confirm the call sheet from one link.",
         "See the margin before the job wraps.",
         "Every AI take, one pick.",
+        "Clients ask for the next job from their own link.",
+        "Bring your own Claude or ChatGPT.",
       ]}
     />
     </>

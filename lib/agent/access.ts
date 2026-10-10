@@ -25,3 +25,18 @@ import type { StudioContext } from "@/lib/studio";
 export function canUseRunner(ctx: StudioContext): boolean {
   return aiConfigured() && !ctx.isCollaborator;
 }
+
+/**
+ * The single question "may this person make an AI connector link?". The same
+ * one-function rule as canUseRunner, for the same reason: a tier check will
+ * land here and nowhere else.
+ *
+ * Studio members only. The connector reads money, deals and contacts, all of
+ * which are is_studio_member, so a project collaborator's link could answer
+ * almost nothing, and the endpoint independently refuses any link whose owner
+ * has no membership row. No AI key is needed on our side: the customer's own
+ * Claude or ChatGPT does the thinking, which is the point of it.
+ */
+export function canUseConnector(ctx: StudioContext): boolean {
+  return !ctx.isCollaborator;
+}

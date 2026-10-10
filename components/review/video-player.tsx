@@ -88,6 +88,8 @@ export const ScrubVideo = forwardRef<
     drawColor?: string;
     drawSize?: number;
     onDrawChange?: (d: Drawing | null) => void;
+    /** Locked downloads: no frame grab, no save-video menu. */
+    noSave?: boolean;
   }
 >(function ScrubVideo(
   {
@@ -104,6 +106,7 @@ export const ScrubVideo = forwardRef<
     drawColor,
     drawSize,
     onDrawChange,
+    noSave = false,
   },
   ref
 ) {
@@ -368,6 +371,8 @@ export const ScrubVideo = forwardRef<
           ref={videoRef}
           src={src}
           playsInline
+          controlsList={noSave ? "nodownload" : undefined}
+          onContextMenu={noSave ? (e) => e.preventDefault() : undefined}
           autoPlay={autoPlay}
           loop={loop}
           onLoadedMetadata={(e) => {
@@ -695,6 +700,8 @@ export const ScrubVideo = forwardRef<
                   </p>
                 )}
 
+                {!noSave && (
+                <>
                 <div className="my-1.5 border-t border-white/10" />
                 <button
                   onClick={downloadStill}
@@ -709,6 +716,8 @@ export const ScrubVideo = forwardRef<
                 </button>
                 {stillError && (
                   <p className="px-1.5 pt-1 text-[10px] text-red">{stillError}</p>
+                )}
+                </>
                 )}
 
                 <div className="my-1.5 border-t border-white/10" />

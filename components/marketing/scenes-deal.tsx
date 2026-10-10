@@ -156,7 +156,7 @@ export function DealScene({ t }: { t: number }) {
         ) : null}
       </Window>
       <ActionLabel t={t} at={DRAG_AT} x={COL_X(2) + 40} y={CARD_Y(0) + 20} text="Drag it to Awarded" tone="green" after={700} />
-      <ActionLabel t={t} at={PROJECT_AT} x={420} y={360} text="Start the job from the deal" after={900} />
+      <ActionLabel t={t} at={PROJECT_AT} x={420} y={360} text="Start the job from the client" after={900} />
       <Cursor
         t={t}
         travel={850}

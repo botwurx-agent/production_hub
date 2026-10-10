@@ -2027,6 +2027,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      connector_tokens: {
+        Row: {
+          id: string;
+          studio_id: string;
+          user_id: string;
+          name: string;
+          token_hash: string;
+          token_last4: string;
+          created_at: string;
+          last_used_at: string | null;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          user_id: string;
+          name: string;
+          token_hash: string;
+          token_last4: string;
+          created_at?: string;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          user_id?: string;
+          name?: string;
+          token_hash?: string;
+          token_last4?: string;
+          created_at?: string;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Relationships: [];
+      };
       notification_reads: {
         Row: {
           id: string;
@@ -4155,6 +4191,7 @@ export type Database = {
           shoot_date: string | null;
           status: Database["public"]["Enums"]["project_status"];
           archived_at: string | null;
+          revision_rounds: number | null;
           project_type: string;
           color: string | null;
           studio_id: string;
@@ -4172,6 +4209,7 @@ export type Database = {
           shoot_date?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
           archived_at?: string | null;
+          revision_rounds?: number | null;
           project_type?: string;
           color?: string | null;
           studio_id: string;
@@ -4189,6 +4227,7 @@ export type Database = {
           shoot_date?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
           archived_at?: string | null;
+          revision_rounds?: number | null;
           project_type?: string;
           color?: string | null;
           studio_id?: string;
@@ -4490,6 +4529,9 @@ export type Database = {
           timecode_end: number | null;
           author_key: string | null;
           edited_at: string | null;
+          team_only: boolean;
+          audio_path: string | null;
+          audio_seconds: number | null;
         };
         Insert: {
           author_id?: string | null;
@@ -4513,6 +4555,9 @@ export type Database = {
           timecode_end?: number | null;
           author_key?: string | null;
           edited_at?: string | null;
+          team_only?: boolean;
+          audio_path?: string | null;
+          audio_seconds?: number | null;
         };
         Update: {
           author_id?: string | null;
@@ -4536,6 +4581,9 @@ export type Database = {
           timecode_end?: number | null;
           author_key?: string | null;
           edited_at?: string | null;
+          team_only?: boolean;
+          audio_path?: string | null;
+          audio_seconds?: number | null;
         };
         Relationships: [
           {
@@ -4554,6 +4602,117 @@ export type Database = {
           },
         ];
       };
+      request_links: {
+        Row: {
+          id: string;
+          studio_id: string;
+          client_id: string;
+          token: string;
+          revoked_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          client_id: string;
+          token: string;
+          revoked_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          client_id?: string;
+          token?: string;
+          revoked_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      job_requests: {
+        Row: {
+          id: string;
+          studio_id: string;
+          client_id: string;
+          deal_id: string | null;
+          request_link_id: string | null;
+          title: string;
+          details: string | null;
+          needed_by: string | null;
+          budget: number | null;
+          contact_name: string;
+          contact_email: string;
+          files: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          client_id: string;
+          deal_id?: string | null;
+          request_link_id?: string | null;
+          title: string;
+          details?: string | null;
+          needed_by?: string | null;
+          budget?: number | null;
+          contact_name: string;
+          contact_email: string;
+          files?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          client_id?: string;
+          deal_id?: string | null;
+          request_link_id?: string | null;
+          title?: string;
+          details?: string | null;
+          needed_by?: string | null;
+          budget?: number | null;
+          contact_name?: string;
+          contact_email?: string;
+          files?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      client_portals: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          revoked_at: string | null;
+          last_viewed_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          token?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       review_links: {
         Row: {
           asset_id: string | null;
@@ -4571,6 +4730,7 @@ export type Database = {
           revoked: boolean;
           studio_id: string;
           token: string;
+          lock_downloads: boolean;
         };
         Insert: {
           asset_id?: string | null;
@@ -4588,6 +4748,7 @@ export type Database = {
           revoked?: boolean;
           studio_id: string;
           token: string;
+          lock_downloads?: boolean;
         };
         Update: {
           asset_id?: string | null;
@@ -4605,6 +4766,7 @@ export type Database = {
           revoked?: boolean;
           studio_id?: string;
           token?: string;
+          lock_downloads?: boolean;
         };
         Relationships: [];
       };
@@ -4674,6 +4836,48 @@ export type Database = {
           name?: string;
           logo_path?: string | null;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      version_transcripts: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          duration: number | null;
+          id: string;
+          language: string | null;
+          model: string | null;
+          project_id: string;
+          segments: Json;
+          studio_id: string;
+          updated_at: string;
+          version_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          duration?: number | null;
+          id?: string;
+          language?: string | null;
+          model?: string | null;
+          project_id: string;
+          segments?: Json;
+          studio_id: string;
+          updated_at?: string;
+          version_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          duration?: number | null;
+          id?: string;
+          language?: string | null;
+          model?: string | null;
+          project_id?: string;
+          segments?: Json;
+          studio_id?: string;
+          updated_at?: string;
+          version_id?: string;
         };
         Relationships: [];
       };

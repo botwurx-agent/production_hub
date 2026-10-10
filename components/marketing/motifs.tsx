@@ -373,6 +373,41 @@ function InvoicingMotif() {
   );
 }
 
+function CrmMotif() {
+  return (
+    <Stage hue="cyan" label="One account with three jobs over two years: two won and a new request on the way.">
+      <div className="rounded-[10px] border border-border bg-bg p-3">
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-[8px] text-[11px] font-black text-white" style={{ background: "var(--m)" }}>BW</span>
+          <div className="flex-1">
+            <p className="text-[12px] font-bold leading-tight text-text">Bright Water</p>
+            <p className="text-[10px] text-text-faint">Last contact today</p>
+          </div>
+          <StatusChip tone="green">Client</StatusChip>
+        </div>
+        <div className="mt-3 space-y-1.5">
+          {[
+            { what: "Summer launch", when: "2025", tone: "faint" as const, tag: "Awarded" },
+            { what: "30s hero spot", when: "2026", tone: "green" as const, tag: "Awarded" },
+            { what: "Holiday cutdowns", when: "via request link", tone: "amber" as const, tag: "Inbound" },
+          ].map((d) => (
+            <div key={d.what} className="flex items-center justify-between rounded-[8px] bg-surface-2 px-2 py-1.5">
+              <span>
+                <span className="block text-[11px] font-bold text-text">{d.what}</span>
+                <span className="block text-[10px] text-text-faint">{d.when}</span>
+              </span>
+              <StatusChip tone={d.tone}>{d.tag}</StatusChip>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="mt-4 text-center text-[12px] font-medium text-text-faint">
+        One company, every job you have done for it, and the next one already asked for.
+      </p>
+    </Stage>
+  );
+}
+
 function TasksMotif() {
   return (
     <Stage hue="purple" label="A task board with a Waiting column, one card mid-drag toward Done.">
@@ -735,6 +770,7 @@ function PrevizMotif() {
 const MOTIFS: Record<string, () => ReactNode> = {
   "production-hub": HubMotif,
   "production-task-management": TasksMotif,
+  "production-crm": CrmMotif,
   "storyboard-software": StoryboardMotif,
   "shot-list-software": ShotListMotif,
   "moodboard-maker": MoodboardMotif,

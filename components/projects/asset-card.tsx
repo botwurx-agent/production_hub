@@ -20,6 +20,7 @@ import { ShareReviewButton } from "@/components/projects/share-review-button";
 import { PdfThumb } from "@/components/projects/pdf-thumb";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag } from "@/components/status-tag";
+import { RoundsLine } from "@/components/review/revision-rounds";
 import { PlusIcon } from "@/components/app-shell/nav-icons";
 import { ASSET_TYPE_HUE, ASSET_TYPE_LABEL, REVIEW_CYCLE } from "@/lib/status";
 import { fileSize, shortDate } from "@/lib/format";
@@ -157,6 +158,7 @@ export function AssetCard({
   currentUserId,
   reviewLink,
   emailEnabled = false,
+  revisionRounds,
 }: {
   asset: AssetWithVersions;
   projectId: string;
@@ -164,6 +166,11 @@ export function AssetCard({
   currentUserId: string;
   reviewLink?: { id: string; token: string; recipient?: string | null } | null;
   emailEnabled?: boolean;
+  /**
+   * Client revision rounds the project includes. Passed only on the Review
+   * page; undefined or null draws nothing, so the Assets library stays quiet.
+   */
+  revisionRounds?: number | null;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -217,6 +224,8 @@ export function AssetCard({
           </span>
         </button>
       )}
+
+      <RoundsLine versions={asset.versions} included={revisionRounds} />
 
       <div className="mt-3 flex items-center gap-2">
         <button
@@ -506,6 +515,7 @@ export function AssetCard({
           projectId={projectId}
           assetName={asset.name}
           version={reviewVersion}
+          versions={asset.versions}
           currentUserId={currentUserId}
         />
       )}

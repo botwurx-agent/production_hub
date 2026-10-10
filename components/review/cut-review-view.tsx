@@ -3,11 +3,12 @@
 import { normalizeDrawing, type Drawing } from "@/lib/review-drawing";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StatusTag } from "@/components/status-tag";
 import { PinReview } from "@/components/review/pin-review";
 import { VideoReview } from "@/components/review/video-review";
+import { VersionCompare, CompareToggle } from "@/components/review/version-compare";
 import { ShareReviewButton } from "@/components/projects/share-review-button";
 import { viewerKind } from "@/lib/file-kind";
 import { timeAgo } from "@/lib/format";
@@ -26,6 +27,7 @@ import {
 } from "@/components/projects/asset-types";
 import type { PortalComment } from "@/lib/review-links";
 import type { ApprovalStatus } from "@/lib/database.types";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 // Full-page internal review of one master-cut version: big video with the
 // timecode scrubber (or pins for a still), the comment rail beside it with room
@@ -58,6 +60,10 @@ export function CutReviewView({
   const kind = viewerKind(version.mime_type, cut.name);
   const isImage = kind === "image" && Boolean(version.signedUrl);
   const isVideo = kind === "video" && Boolean(version.signedUrl);
+  // Compare needs a playable copy of each side, so only signed versions count.
+  const comparable = cut.versions.filter((v) => v.signedUrl);
+  const canCompare = (isImage || isVideo) && comparable.length >= 2;
+  const [compareMode, setCompareMode] = useState(false);
 
   function toPortal(c: VersionComment): PortalComment {
     const isClient = Boolean(c.reviewer_name) && !c.author_id;
@@ -81,6 +87,8 @@ export function CutReviewView({
       timecodeEnd: c.timecode_end ?? null,
       parentId: c.parent_id ?? null,
       editedAt: c.edited_at ?? null,
+      teamOnly: c.team_only,
+      audio: c.audio_path ? { seconds: c.audio_seconds ?? null } : null,
       // Internally, ownership is the author id: meKey below is the user id, so
       // a team member can edit or delete the comments they wrote.
       authorKey: c.author_id ?? null,
@@ -93,7 +101,7 @@ export function CutReviewView({
   async function postPinned(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null }
+    extra?: { drawing?: Drawing | null; teamOnly?: boolean; audio?: VoiceAttachment | null }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
       projectId,
@@ -102,7 +110,11 @@ export function CutReviewView({
       pin,
       null,
       null,
-      extra?.drawing ?? null
+      extra?.drawing ?? null,
+      null,
+      null,
+      undefined,
+      { teamOnly: extra?.teamOnly, audio: extra?.audio }
     );
     if (res?.error) return false;
     router.refresh();
@@ -115,6 +127,8 @@ export function CutReviewView({
       parentId?: string | null;
       drawing?: Drawing | null;
       timecodeEnd?: number | null;
+      teamOnly?: boolean;
+      audio?: VoiceAttachment | null;
     }
   ): Promise<boolean> {
     const res = await addReviewCommentAt(
@@ -125,7 +139,10 @@ export function CutReviewView({
       timecode,
       extra?.parentId ?? null,
       extra?.drawing ?? null,
-      extra?.timecodeEnd ?? null
+      extra?.timecodeEnd ?? null,
+      null,
+      undefined,
+      { teamOnly: extra?.teamOnly, audio: extra?.audio }
     );
     if (res?.error) return false;
     router.refresh();
@@ -215,12 +232,23 @@ export function CutReviewView({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {canCompare && (
+              <CompareToggle on={compareMode} onToggle={() => setCompareMode((v) => !v)} />
+            )}
             <ShareReviewButton projectId={projectId} assetId={cut.id} initialToken={reviewToken} linkId={reviewLinkId} />
           </div>
         </div>
       </div>
 
-      {isImage ? (
+      {canCompare && compareMode ? (
+        <VersionCompare
+          versions={comparable}
+          currentId={version.id}
+          urlFor={(id) => comparable.find((v) => v.id === id)?.signedUrl ?? ""}
+          alt={cut.name}
+          kind={isVideo ? "video" : "image"}
+        />
+      ) : isImage ? (
         <PinReview
           imageUrl={version.signedUrl as string}
           alt={cut.name}
@@ -231,6 +259,8 @@ export function CutReviewView({
       ) : isVideo ? (
         <VideoReview
           videoUrl={version.signedUrl as string}
+          versionId={version.id}
+          exportName={`${cut.name} v${version.version_number}`}
           comments={portalComments}
           wide
           meKey={currentUserId}

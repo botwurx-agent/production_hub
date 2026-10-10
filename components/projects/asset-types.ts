@@ -19,6 +19,9 @@ export type VersionComment = {
   timecode_end: number | null;
   author_key: string | null;
   edited_at: string | null;
+  team_only: boolean;
+  audio_path?: string | null;
+  audio_seconds?: number | null;
   reactions?: CommentReaction[];
 };
 
@@ -28,6 +31,8 @@ export type VersionApproval = {
   reviewer_user_id: string | null;
   reviewer_name: string | null;
   created_at: string;
+  /** Set when the decision came from the client through a review link. */
+  review_link_id?: string | null;
 };
 
 export type VersionRow = {

@@ -1,5 +1,9 @@
 "use server";
 
+import { clientRoundsUsed, roundNote } from "@/lib/revision-rounds";
+import { voiceFolder, voicePathAllowed, voiceSeconds } from "@/lib/voice-note";
+import { storeVoice } from "@/lib/voice-store";
+
 import { revalidatePath } from "next/cache";
 import { createServiceClient, serviceConfigured } from "@/lib/supabase/service";
 import { allowPublic } from "@/lib/rate-limit";
@@ -90,7 +94,9 @@ export async function submitClientComment(
   authorKey?: string | null,
   // For a PDF, which page the pin was dropped on. A single-surface review
   // sends nothing and the column stays null.
-  pinPage?: number | null
+  pinPage?: number | null,
+  // A voice note uploaded first through uploadClientVoiceNote.
+  audio?: { path: string; seconds: number | null } | null
 ): Promise<PortalState> {
   if (!allowPublic("r-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -98,13 +104,15 @@ export async function submitClientComment(
   const reviewer = name.trim();
   const text = body.trim();
   if (!reviewer) return { error: "Add your name first." };
-  if (!text) return { error: "Write a comment first." };
+  if (!text && !audio) return { error: "Write a comment first." };
 
   const service = createServiceClient();
   const link = await getValidLink(service, token);
   if (!link) return { error: "This review link is no longer active." };
   if (!(await versionInLink(service, link, versionId)))
     return { error: "That version is not part of this review." };
+  const voice = linkVoice(link, audio);
+  if (audio && !voice) return { error: "That voice note could not be attached." };
 
   // A reply must belong to this same version, and never nests further.
   let parent: string | null = null;
@@ -113,6 +121,9 @@ export async function submitClientComment(
       .from("review_comments")
       .select("id, version_id, parent_id")
       .eq("id", parentId)
+      // A team-only note is invisible here, so it cannot be replied to,
+      // resolved or reacted to from the portal either.
+      .eq("team_only", false)
       .maybeSingle();
     if (!p || p.version_id !== versionId) {
       return { error: "That comment is not part of this review." };
@@ -174,6 +185,8 @@ export async function submitClientComment(
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
     author_key: authorKey?.trim() || null,
+    audio_path: voice?.path ?? null,
+    audio_seconds: voice?.seconds ?? null,
   });
   if (error) return { error: error.message };
 
@@ -187,7 +200,7 @@ export async function submitClientComment(
     project_id: link.project_id,
     type: "client_comment",
     title: `${reviewer} ${parent ? "replied in" : "commented in"} client review`,
-    body: text.slice(0, 140),
+    body: text ? text.slice(0, 140) : voice ? "Left a voice note" : "",
     href: `/projects/${link.project_id}`,
   });
   revalidatePath(`/r/${token}`);
@@ -212,6 +225,8 @@ export async function resolveClientComment(
     .from("review_comments")
     .select("id, version_id")
     .eq("id", commentId)
+    // Never a team-only note (see above).
+    .eq("team_only", false)
     .maybeSingle();
   if (
     !comment ||
@@ -281,12 +296,20 @@ export async function submitClientDecision(
 
   const label =
     status === "approved" ? "approved this asset" : "requested changes";
-  await logActivity(service, link, `${reviewer} ${label} in client review`);
+  // Say so when this request reaches or passes the rounds the SOW includes,
+  // which is the moment a change order is worth raising. Best effort: a
+  // failed count only loses the note, never the decision.
+  const note =
+    status === "changes_requested"
+      ? await revisionRoundNote(service, link, versionId).catch(() => null)
+      : null;
+  const said = note ? `${label} (${note})` : label;
+  await logActivity(service, link, `${reviewer} ${said} in client review`);
   await createNotification(service, {
     studio_id: link.studio_id,
     project_id: link.project_id,
     type: status === "approved" ? "client_approved" : "client_changes",
-    title: `${reviewer} ${label}`,
+    title: `${reviewer} ${said}`,
     href: `/projects/${link.project_id}`,
   });
   revalidatePath(`/r/${token}`);
@@ -320,7 +343,8 @@ export async function submitDocComment(
   drawing?: unknown,
   // Out-point for a range comment; timecode is the in-point.
   timecodeEnd?: number | null,
-  authorKey?: string | null
+  authorKey?: string | null,
+  audio?: { path: string; seconds: number | null } | null
 ): Promise<PortalState> {
   if (!allowPublic("r-doc-comment"))
     return { error: "Too many requests. Please wait a moment and try again." };
@@ -328,13 +352,15 @@ export async function submitDocComment(
   const reviewer = name.trim();
   const text = body.trim();
   if (!reviewer) return { error: "Add your name first." };
-  if (!text) return { error: "Write a comment first." };
+  if (!text && !audio) return { error: "Write a comment first." };
 
   const service = createServiceClient();
   const link = await getValidLink(service, token);
   if (!link) return { error: "This review link is no longer active." };
   if (!isDocKind(link.target_type) || !link.target_id)
     return { error: "This is not a document review." };
+  const voice = linkVoice(link, audio);
+  if (audio && !voice) return { error: "That voice note could not be attached." };
 
   // A reply hangs off its parent (same doc target) and never nests further.
   let parent: string | null = null;
@@ -343,6 +369,8 @@ export async function submitDocComment(
       .from("review_comments")
       .select("id, target_type, target_id, parent_id")
       .eq("id", parentId)
+      // Never a team-only note (see above).
+      .eq("team_only", false)
       .maybeSingle();
     if (
       !p ||
@@ -403,6 +431,8 @@ export async function submitDocComment(
     parent_id: parent,
     drawing: parent ? null : normalizeDrawing(drawing),
     author_key: authorKey?.trim() || null,
+    audio_path: voice?.path ?? null,
+    audio_seconds: voice?.seconds ?? null,
   });
   if (error) return { error: error.message };
 
@@ -414,7 +444,7 @@ export async function submitDocComment(
     project_id: link.project_id,
     type: "client_comment",
     title: `${reviewer} commented on the ${noun}`,
-    body: text.slice(0, 140),
+    body: text ? text.slice(0, 140) : voice ? "Left a voice note" : "",
     href: `/projects/${link.project_id}`,
   });
   revalidatePath(`/r/${token}`);
@@ -440,6 +470,8 @@ export async function resolveDocComment(
     .from("review_comments")
     .select("id, target_type, target_id")
     .eq("id", commentId)
+    // Never a team-only note (see above).
+    .eq("team_only", false)
     .maybeSingle();
   if (
     !comment ||
@@ -626,6 +658,8 @@ export async function toggleClientReaction(
     .from("review_comments")
     .select("id, version_id, target_type, target_id")
     .eq("id", commentId)
+    // Never a team-only note (see above).
+    .eq("team_only", false)
     .maybeSingle();
   if (!comment) return { error: "That comment is no longer available." };
   const inThisReview = link.target_type
@@ -666,4 +700,106 @@ export async function toggleClientReaction(
   revalidatePath(`/r/${token}`);
   revalidatePath(`/projects/${link.project_id}`);
   return null;
+}
+
+/**
+ * "round 3, 2 included" for a client change request, or null when the project
+ * does not track rounds or nothing is worth saying. Counts through the same
+ * rule the Review page shows (lib/revision-rounds), after this request has
+ * been written, so the request just made is included.
+ */
+async function revisionRoundNote(
+  service: ReturnType<typeof createServiceClient>,
+  link: { project_id: string },
+  versionId: string
+): Promise<string | null> {
+  const { data: project } = await service
+    .from("projects")
+    .select("revision_rounds")
+    .eq("id", link.project_id)
+    .maybeSingle();
+  if (project?.revision_rounds == null) return null;
+  const { data: version } = await service
+    .from("versions")
+    .select("asset_id")
+    .eq("id", versionId)
+    .maybeSingle();
+  if (!version?.asset_id) return null;
+  const { data: versions } = await service
+    .from("versions")
+    .select("id")
+    .eq("asset_id", version.asset_id);
+  const ids = (versions ?? []).map((v) => v.id);
+  if (ids.length === 0) return null;
+  const { data: approvals } = await service
+    .from("approvals")
+    .select("target_id, status, review_link_id")
+    .eq("target_type", "version")
+    .in("target_id", ids);
+  const byVersion = ids.map((id) => ({
+    approvals: (approvals ?? []).filter((a) => a.target_id === id),
+  }));
+  return roundNote(clientRoundsUsed(byVersion), project.revision_rounds);
+}
+
+/**
+ * A voice note path handed back by the browser, accepted only from the folder
+ * this review link uploads into. Null when absent or not ours.
+ */
+function linkVoice(
+  link: { id: string; studio_id: string },
+  audio: { path: string; seconds: number | null } | null | undefined
+): { path: string; seconds: number | null } | null {
+  if (!audio) return null;
+  const folder = voiceFolder(link.studio_id, { linkId: link.id });
+  if (!voicePathAllowed(audio.path, folder)) return null;
+  return { path: audio.path, seconds: voiceSeconds(audio.seconds) };
+}
+
+/**
+ * Upload a client's voice note before the comment that carries it. The file
+ * goes into a folder named for this review link, which is the only place the
+ * comment actions will accept a path from.
+ */
+export async function uploadClientVoiceNote(
+  token: string,
+  form: FormData
+): Promise<{ path: string } | { error: string }> {
+  if (!allowPublic("r-voice"))
+    return { error: "Too many requests. Please wait a moment and try again." };
+  if (!serviceConfigured()) return { error: "Review portal is not configured." };
+  const service = createServiceClient();
+  const link = await getValidLink(service, token);
+  if (!link) return { error: "This review link is no longer active." };
+  return storeVoice(form, voiceFolder(link.studio_id, { linkId: link.id }));
+}
+
+/**
+ * The transcript of a version this link reviews, read-only on the portal.
+ * Searching what was said and clicking to the moment is as useful to the
+ * client as to the studio; generating and editing stay in the app.
+ */
+export async function getClientTranscript(
+  token: string,
+  versionId: string
+): Promise<import("@/lib/transcript").TranscriptData | null> {
+  if (!serviceConfigured() || !allowPublic("transcript", 60)) return null;
+  const service = createServiceClient();
+  const link = await getValidLink(service, token);
+  if (!link || !(await versionInLink(service, link, versionId))) return null;
+  const { data } = await service
+    .from("version_transcripts")
+    .select("segments, language, duration, updated_at")
+    .eq("version_id", versionId)
+    .maybeSingle();
+  if (!data) return null;
+  const { parseSegments } = await import("@/lib/transcript");
+  const segments = parseSegments(data.segments);
+  if (!segments.length) return null;
+  return {
+    segments,
+    language: data.language,
+    duration: data.duration == null ? null : Number(data.duration),
+    updatedAt: data.updated_at,
+  };
 }

@@ -14,12 +14,22 @@ import {
 } from "@/lib/review-drawing";
 import { EmojiPicker } from "@/components/review/emoji-picker";
 import { MentionPicker, MentionChips } from "@/components/review/mention-picker";
+import { TeamOnlyTag, TeamOnlyToggle } from "@/components/review/team-review";
+import { MarkerExportButton } from "@/components/review/marker-export";
 import { useMentionRoster } from "@/components/review/mention-roster";
 import { mentionText, type MentionCandidate } from "@/lib/mentions";
 import { DrawToolbar } from "@/components/review/draw-toolbar";
 import { CommentReactions } from "@/components/review/comment-reactions";
 import type { PortalComment } from "@/lib/review-links";
+import {
+  VoicePlayer,
+  VoiceRecorder,
+  useVoiceDraft,
+  type VoiceAttachment,
+} from "@/components/review/voice-note";
 import { useModalRoomy } from "@/components/ui/modal";
+import { TranscriptPanel } from "@/components/review/transcript-panel";
+import type { Segment } from "@/lib/transcript";
 
 // Frame.io-grade video review: the shared ScrubVideo player (accurate scrubbing,
 // frame stepping, speed, loop, shuttle keys) + a comment rail with threaded
@@ -45,7 +55,10 @@ const SORTS: { key: Sort; label: string }[] = [
 
 export function VideoReview({
   videoUrl,
+  versionId,
   comments,
+  exportName,
+  noSave = false,
   canResolve = true,
   disabled = false,
   disabledHint,
@@ -59,7 +72,16 @@ export function VideoReview({
   onReact,
 }: {
   videoUrl: string;
+  /** The version being played; with it, the transcript panel shows under the player. */
+  versionId?: string;
   comments: PortalComment[];
+  /**
+   * Names the marker export file and its sequence. The export button itself
+   * only renders in the app (team context), never on the client link.
+   */
+  exportName?: string;
+  /** Locked downloads on the client link: the player offers no way to save. */
+  noSave?: boolean;
   canResolve?: boolean;
   disabled?: boolean;
   disabledHint?: string;
@@ -74,6 +96,8 @@ export function VideoReview({
       drawing?: Drawing | null;
       timecodeEnd?: number | null;
       mentions?: string[];
+      teamOnly?: boolean;
+      audio?: VoiceAttachment | null;
     }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
@@ -113,6 +137,13 @@ export function VideoReview({
   // roster provider, so a client is never shown the crew list.
   const roster = useMentionRoster();
   const [picked, setPicked] = useState<MentionCandidate[]>([]);
+  // Kept between posts: an internal pass is usually several notes in a row,
+  // and the switch stays visibly amber while it is on.
+  const [teamOnly, setTeamOnly] = useState(false);
+  const voice = useVoiceDraft();
+  // A reply's own switch. Under a team-only comment it is forced on (the
+  // server enforces the same), so a thread never splits across audiences.
+  const [replyTeamOnly, setReplyTeamOnly] = useState(false);
   const [color, setColor] = useState(DRAW_COLORS[0]);
   const [tool, setTool] = useState<DrawTool>("pen");
   // Strokes popped by Undo, so Redo can put them back.
@@ -187,6 +218,23 @@ export function VideoReview({
     setActiveId(id);
     setDrawMode(false);
   }
+  // Comment on a line of the transcript: the comment spans the line, and the
+  // words are quoted so the note says exactly what it is about.
+  function commentOnLine(s: Segment) {
+    playerRef.current?.seek(s.start);
+    playerRef.current?.pause();
+    setPending(round2(s.start));
+    setPendingEnd(s.end > s.start ? round2(s.end) : null);
+    setText((prev) => (prev.trim() ? prev : `“${s.text}” `));
+    setDrawMode(false);
+    requestAnimationFrame(() => {
+      const el = textRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }
+
   function captureHere() {
     const t = playerRef.current?.getTime() ?? currentTime;
     playerRef.current?.pause();
@@ -236,16 +284,25 @@ export function VideoReview({
 
   async function post() {
     const t = text.trim();
-    if (!t || sending || disabled) return;
+    if ((!t && !voice.draft) || sending || disabled) return;
     const at = pending ?? round2(currentTime);
     setSending(true);
+    // Upload first: a failed upload stops the post instead of losing the note.
+    const audio = await voice.upload();
+    if (audio === false) {
+      setSending(false);
+      return;
+    }
     const ok = await onPost(t, at, {
       drawing: draft,
       timecodeEnd: pendingEnd != null && pendingEnd > at ? pendingEnd : null,
       mentions: picked.map((p) => p.id),
+      teamOnly,
+      audio,
     });
     setSending(false);
     if (ok) {
+      voice.clear();
       setText("");
       setPending(null);
       setPendingEnd(null);
@@ -290,7 +347,10 @@ export function VideoReview({
     const t = replyText.trim();
     if (!t || sending || disabled || !replyTo) return;
     setSending(true);
-    const ok = await onPost(t, replyTo.timecode ?? 0, { parentId: replyTo.id });
+    const ok = await onPost(t, replyTo.timecode ?? 0, {
+      parentId: replyTo.id,
+      teamOnly: replyTo.teamOnly || replyTeamOnly,
+    });
     setSending(false);
     if (ok) {
       setReplyText("");
@@ -331,6 +391,7 @@ export function VideoReview({
         <ScrubVideo
           ref={playerRef}
           src={videoUrl}
+          noSave={noSave}
           markers={markers}
           onMarkerClick={(id) => {
             const c = comments.find((x) => x.id === id);
@@ -371,6 +432,20 @@ export function VideoReview({
             hint="Mark up the frame, then write your comment."
           />
         )}
+
+        {versionId && (
+          <TranscriptPanel
+            versionId={versionId}
+            mediaUrl={videoUrl}
+            currentTime={currentTime}
+            exportName={exportName}
+            roomy={roomy}
+            onSeek={(t) => {
+              playerRef.current?.seek(t);
+            }}
+            onComment={disabled ? undefined : commentOnLine}
+          />
+        )}
       </div>
 
       {/* Comments */}
@@ -397,6 +472,11 @@ export function VideoReview({
               {roots.length}
             </span>
             <span className="flex-1" />
+            <MarkerExportButton
+              comments={comments}
+              title={exportName ?? "Review notes"}
+              className="inline-flex h-7 items-center gap-1 rounded-[7px] px-1.5 text-text-faint transition hover:bg-surface-2 hover:text-text"
+            />
             <button
               onClick={() => setSearchOpen((v) => !v)}
               className={railBtn}
@@ -542,6 +622,7 @@ export function VideoReview({
                         >
                           {c.isClient ? "Client" : "Studio"}
                         </span>
+                        {c.teamOnly && <TeamOnlyTag />}
                         {c.drawing && (
                           <span
                             title="Has a drawing on the frame"
@@ -583,14 +664,21 @@ export function VideoReview({
                           </div>
                         </div>
                       ) : (
-                        <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
-                          {c.body}
-                          {c.editedAt && (
-                            <span className="ml-1 text-[10px] font-semibold text-text-faint">
-                              (edited)
-                            </span>
+                        <>
+                          {(c.body || c.editedAt) && (
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] text-text-muted">
+                              {c.body}
+                              {c.editedAt && (
+                                <span className="ml-1 text-[10px] font-semibold text-text-faint">
+                                  (edited)
+                                </span>
+                              )}
+                            </p>
                           )}
-                        </p>
+                          {c.audio && (
+                            <VoicePlayer commentId={c.id} seconds={c.audio.seconds} />
+                          )}
+                        </>
                       )}
 
                       {onReact && (
@@ -606,6 +694,7 @@ export function VideoReview({
                           onClick={(e) => {
                             e.stopPropagation();
                             setReplyTo(replyTo?.id === c.id ? null : c);
+                            setReplyTeamOnly(false);
                             setReplyText("");
                           }}
                           className="-my-1 py-1 text-[11px] font-bold text-text-faint transition hover:text-accent"
@@ -703,6 +792,7 @@ export function VideoReview({
                             >
                               {r.isClient ? "Client" : "Studio"}
                             </span>
+                            {r.teamOnly && !c.teamOnly && <TeamOnlyTag />}
                             <span className="ml-auto text-[10px] font-semibold text-text-faint">
                               {timeAgo(r.created_at)}
                             </span>
@@ -733,14 +823,21 @@ export function VideoReview({
                               </div>
                             </div>
                           ) : (
-                            <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-text-muted">
-                              {r.body}
-                              {r.editedAt && (
-                                <span className="ml-1 text-[10px] font-semibold text-text-faint">
-                                  (edited)
-                                </span>
+                            <>
+                              {(r.body || r.editedAt) && (
+                                <p className="mt-0.5 whitespace-pre-wrap break-words text-[12px] text-text-muted">
+                                  {r.body}
+                                  {r.editedAt && (
+                                    <span className="ml-1 text-[10px] font-semibold text-text-faint">
+                                      (edited)
+                                    </span>
+                                  )}
+                                </p>
                               )}
-                            </p>
+                              {r.audio && (
+                                <VoicePlayer commentId={r.id} seconds={r.audio.seconds} />
+                              )}
+                            </>
                           )}
 
                           {onReact && (
@@ -815,6 +912,11 @@ export function VideoReview({
                       />
                       <div className="mt-1.5 flex items-center gap-2">
                         <EmojiPicker onPick={insertReplyEmoji} />
+                        <TeamOnlyToggle
+                          on={Boolean(c.teamOnly) || replyTeamOnly}
+                          onChange={setReplyTeamOnly}
+                          disabled={disabled || Boolean(c.teamOnly)}
+                        />
                         <span className="flex-1" />
                         <button
                           onClick={() => setReplyTo(null)}
@@ -860,7 +962,7 @@ export function VideoReview({
               if (pending == null) captureHere();
             }}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Comment at this moment…"
+            placeholder={teamOnly ? "Note for your team only…" : "Comment at this moment…"}
             className="min-h-[64px] w-full rounded-[11px] border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:opacity-60"
           />
 
@@ -937,13 +1039,15 @@ export function VideoReview({
             </button>
 
             <EmojiPicker onPick={insertEmoji} />
+            <VoiceRecorder voice={voice} disabled={disabled} />
             <MentionPicker roster={roster} onPick={addMention} disabled={disabled} />
+            <TeamOnlyToggle on={teamOnly} onChange={setTeamOnly} disabled={disabled} />
 
             <span className="flex-1" />
 
             <button
               onClick={post}
-              disabled={disabled || sending || !text.trim()}
+              disabled={disabled || sending || (!text.trim() && !voice.draft)}
               className="rounded-[10px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong disabled:opacity-50"
             >
               {sending ? "Posting…" : "Post"}

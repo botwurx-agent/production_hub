@@ -15,6 +15,7 @@ import {
 } from "@/app/(app)/projects/[id]/doc-review-actions";
 import type { DocReviewDetail } from "@/lib/doc-review-data";
 import type { ApprovalStatus } from "@/lib/database.types";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 type DocKind = "shot_list" | "storyboard" | "moodboard" | "props" | "schedule";
 
@@ -65,7 +66,7 @@ export function DocReviewView({
   async function post(
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null; mentions?: string[] }
+    extra?: { drawing?: Drawing | null; mentions?: string[]; teamOnly?: boolean; audio?: VoiceAttachment | null }
   ): Promise<boolean> {
     const res = await addDocReviewCommentAt(
       projectId,
@@ -77,7 +78,8 @@ export function DocReviewView({
       null,
       extra?.drawing ?? null,
       null,
-      extra?.mentions
+      extra?.mentions,
+      { teamOnly: extra?.teamOnly, audio: extra?.audio }
     );
     if (res?.error) return false;
     await reload();

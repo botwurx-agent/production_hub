@@ -84,6 +84,8 @@ import {
 } from "./scenes-moodboard";
 import { PV_CAM_MS, PV_FINDER_MS, PV_HERO_MS, PV_LIGHT_MS, PV_MOVE_MS, PV_SET_MS, PrevizCameraScene, PrevizFinderScene, PrevizHeroScene, PrevizLightScene, PrevizMoveScene, PrevizSetScene } from "./scenes-previz";
 import { MOOD_MS, MoodboardScene, PIPELINE_MS, PipelineScene } from "./scenes-more";
+import { DEAL_MS, DealScene } from "./scenes-deal";
+import { CRM_ACCOUNTS_MS, CRM_REQUEST_MS, CRM_TIMELINE_MS, CrmAccountsScene, CrmRequestScene, CrmTimelineScene } from "./scenes-crm";
 import { BOARD_MS, COMMS_MS, CommsScene, SCHEDULE_MS, ScheduleScene, StoryboardScene } from "./scenes-panels";
 
 /**
@@ -167,6 +169,10 @@ const SCENES = {
   "hb-docs": { ms: HB_DOCS_MS, C: HubDocsScene, label: "Documents", hue: "indigo" },
   "hb-summary": { ms: HB_SUMMARY_MS, C: HubSummaryScene, label: "Summary", hue: "indigo" },
   "hb-binder": { ms: HB_BINDER_MS, C: HubBinderScene, label: "Binder", hue: "indigo" },
+  deal: { ms: DEAL_MS, C: DealScene, label: "Pipeline", hue: "cyan" },
+  "crm-accounts": { ms: CRM_ACCOUNTS_MS, C: CrmAccountsScene, label: "Accounts", hue: "cyan" },
+  "crm-timeline": { ms: CRM_TIMELINE_MS, C: CrmTimelineScene, label: "Timeline", hue: "cyan" },
+  "crm-request": { ms: CRM_REQUEST_MS, C: CrmRequestScene, label: "Request link", hue: "cyan" },
   previz: { ms: PV_HERO_MS, C: PrevizHeroScene, label: "Scene builder", hue: "orange" },
   "pv-camera": { ms: PV_CAM_MS, C: PrevizCameraScene, label: "Camera", hue: "orange" },
   "pv-light": { ms: PV_LIGHT_MS, C: PrevizLightScene, label: "Light", hue: "orange" },

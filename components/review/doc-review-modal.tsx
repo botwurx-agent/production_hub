@@ -74,7 +74,8 @@ export function DocReviewModal({
       anchor.parentId ?? null,
       anchor.drawing ?? null,
       anchor.timecodeEnd ?? null,
-      anchor.mentions
+      anchor.mentions,
+      { teamOnly: anchor.teamOnly, audio: anchor.audio }
     );
     if (res?.error) return false;
     await reload();
@@ -110,6 +111,7 @@ export function DocReviewModal({
           {detail.surface.kind === "ai_shot" ? (
             <AiShotReviewCanvas
               surface={detail.surface}
+              exportName={title}
               comments={detail.comments}
               onPost={post}
               onResolve={resolve}
@@ -122,7 +124,13 @@ export function DocReviewModal({
               comments={detail.comments}
               emptyHint="Click anywhere on the document to drop a pin and start."
               onPost={(text, pin, extra) =>
-            post(text, { pin, drawing: extra?.drawing ?? null })
+            post(text, {
+              pin,
+              drawing: extra?.drawing ?? null,
+              mentions: extra?.mentions,
+              teamOnly: extra?.teamOnly,
+              audio: extra?.audio,
+            })
           }
               onResolve={resolve}
             />

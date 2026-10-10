@@ -18,6 +18,8 @@ import { LogoUpload } from "@/components/settings/logo-upload";
 import { StudioName } from "@/components/settings/studio-name";
 import { BillingProfileForm } from "@/components/settings/billing-profile";
 import { TeamPanel } from "@/components/settings/team-panel";
+import { AiConnector, type ConnectorLinkRow } from "@/components/settings/ai-connector";
+import { canUseConnector } from "@/lib/agent/access";
 import type { BillingProfile } from "@/lib/database.types";
 import { signedLogoUrl } from "@/lib/branding";
 import type { Hue } from "@/components/status-tag";
@@ -83,6 +85,25 @@ export default async function SettingsPage({
     .select(BILL_PUBLIC_COLUMNS)
     .eq("studio_id", ctx.studio.id)
     .maybeSingle();
+  // Only this person's own links: a link reads as its maker, so it is theirs
+  // to see and turn off (RLS is user_id = auth.uid() as well).
+  const { data: connectorRows } = canUseConnector(ctx)
+    ? await supabase
+        .from("connector_tokens")
+        .select("id, name, token_last4, created_at, last_used_at")
+        .eq("studio_id", ctx.studio.id)
+        .eq("user_id", ctx.userId)
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false })
+    : { data: [] };
+  const connectorLinks: ConnectorLinkRow[] = (connectorRows ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    last4: r.token_last4,
+    createdAt: r.created_at,
+    lastUsedAt: r.last_used_at,
+  }));
+
   const billConnection: BillConnectionView | null = billRow
     ? {
         username: billRow.username,
@@ -208,6 +229,11 @@ export default async function SettingsPage({
               canEdit={ctx.role === "owner" || ctx.role === "admin"}
             />
           </div>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="mb-3 font-display text-base font-bold">AI connector</h2>
+          <AiConnector links={connectorLinks} canUse={canUseConnector(ctx)} />
         </Card>
 
         <Card className="p-5">

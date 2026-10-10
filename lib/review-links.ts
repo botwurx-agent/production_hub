@@ -63,6 +63,18 @@ export type PortalComment = {
   reactions: CommentReaction[];
   // Freehand annotation drawn over the frame this comment is pinned to.
   drawing: Drawing | null;
+  /**
+   * A note the studio kept to itself. Never true on the public portal, since
+   * its loaders filter these out before anything is serialised; in the app it
+   * draws a "Team only" tag so the author can see who will read it.
+   */
+  teamOnly?: boolean;
+  /**
+   * Set when the comment carries a voice note. The file is never signed into
+   * the page: it plays through an access-checked route, so only its length
+   * travels here.
+   */
+  audio?: { seconds: number | null } | null;
 };
 
 export type PortalVersion = {
@@ -83,7 +95,46 @@ export type PortalData = {
   // The client's own current decision on the current version, via this link.
   myDecision: ApprovalStatus | null;
   dueDate: string | null;
+  /**
+   * True while the studio has locked downloads and the work is not yet
+   * approved. The page hides every way to save the file; the file route
+   * enforces the same rule on a download request.
+   */
+  downloadsLocked: boolean;
 };
+
+/**
+ * Whether a link's downloads are still locked.
+ *
+ * ONE RULE, used by the portal page and the file route, so the button and the
+ * route cannot disagree. It opens on its own once the work is approved, by the
+ * studio's sign-off (the asset reads approved) or by the client approving the
+ * LATEST version through this link: nobody has to come back and unlock it.
+ */
+export async function downloadsLocked(
+  service: SupabaseClient<Database>,
+  link: ReviewLink
+): Promise<boolean> {
+  if (!link.lock_downloads || !link.asset_id) return false;
+  const { data: asset } = await service
+    .from("assets")
+    .select("status, current_version_id")
+    .eq("id", link.asset_id)
+    .maybeSingle();
+  if (!asset) return true;
+  if (asset.status === "approved") return false;
+  if (!asset.current_version_id) return true;
+  const { data: approval } = await service
+    .from("approvals")
+    .select("id")
+    .eq("target_type", "version")
+    .eq("target_id", asset.current_version_id)
+    .eq("review_link_id", link.id)
+    .eq("status", "approved")
+    .limit(1)
+    .maybeSingle();
+  return !approval;
+}
 
 // Assembles everything the client portal shows, strictly scoped to the link's
 // asset. Runs with the service client (RLS bypassed), so it must only ever read
@@ -99,7 +150,7 @@ export async function gatherReview(
     await Promise.all([
       service
         .from("assets")
-        .select("id, name, current_version_id")
+        .select("id, name, current_version_id, status")
         .eq("id", link.asset_id)
         .maybeSingle(),
       service
@@ -135,9 +186,12 @@ export async function gatherReview(
       service
         .from("review_comments")
         .select(
-          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+          "id, version_id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at, audio_path, audio_seconds"
         )
         .in("version_id", versionIds)
+        // A team-only note never leaves the studio. Filtered here, in the
+        // query, so it is never serialised to the browser at all.
+        .eq("team_only", false)
         .order("created_at", { ascending: true }),
       // The client's decision on the current version, made through this link.
       asset.current_version_id
@@ -169,6 +223,7 @@ export async function gatherReview(
         resolved: Boolean(c.resolved_at),
         parentId: c.parent_id ?? null,
         editedAt: c.edited_at ?? null,
+        audio: c.audio_path ? { seconds: c.audio_seconds } : null,
         authorKey: c.author_key ?? null,
         reactions: [],
         drawing: normalizeDrawing(c.drawing),
@@ -201,6 +256,11 @@ export async function gatherReview(
     comments,
     myDecision,
     dueDate: link.due_date ?? null,
+    // Same rule as downloadsLocked(), read from what is already loaded here.
+    downloadsLocked:
+      Boolean(link.lock_downloads) &&
+      asset.status !== "approved" &&
+      myDecision !== "approved",
   };
 }
 
@@ -748,10 +808,11 @@ export async function gatherDocReview(
     service
       .from("review_comments")
       .select(
-        "id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at"
+        "id, body, created_at, author_id, reviewer_name, pin_number, pin_page, pos_x, pos_y, timecode, resolved_at, parent_id, drawing, timecode_end, author_key, edited_at, audio_path, audio_seconds"
       )
       .eq("target_type", kind)
       .eq("target_id", targetId)
+      .eq("team_only", false)
       .order("created_at", { ascending: true }),
     service
       .from("approvals")
@@ -780,6 +841,7 @@ export async function gatherDocReview(
       resolved: Boolean(c.resolved_at),
       parentId: c.parent_id ?? null,
       editedAt: c.edited_at ?? null,
+      audio: c.audio_path ? { seconds: c.audio_seconds } : null,
       authorKey: c.author_key ?? null,
       reactions: [],
       drawing: normalizeDrawing(c.drawing),

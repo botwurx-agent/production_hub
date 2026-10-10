@@ -9,6 +9,10 @@ import {
 } from "@/lib/review-links";
 import { ClientReview } from "@/components/review/client-review";
 import { DocReview } from "@/components/review/doc-review";
+import { PortalVoiceProvider } from "@/components/review/voice-note";
+import { PortalTranscriptProvider } from "@/components/review/transcript-panel";
+import { verifyPortalToken } from "@/lib/client-portal-data";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +21,29 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
   title: "Review",
 };
+
+/**
+ * A thin bar back to the client portal, shown only to a visitor who arrived
+ * from it and only while it is live. The review page itself is untouched underneath it.
+ */
+function PortalBar({ token }: { token: string | null }) {
+  if (!token) return null;
+  return (
+    <div className="border-b border-border bg-surface">
+      <div className="mx-auto max-w-6xl px-4 py-2 sm:px-6">
+        <Link
+          href={`/portal/${token}`}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted transition hover:text-text"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+          Everything shared on this job
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
@@ -28,8 +55,10 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 export default async function ReviewPortalPage({
   params,
+  searchParams,
 }: {
   params: { token: string };
+  searchParams?: { portal?: string };
 }) {
   if (!serviceConfigured()) {
     return (
@@ -63,6 +92,15 @@ export default async function ReviewPortalPage({
     );
   }
 
+  // Only for somebody who came FROM the portal, proven by the portal token
+  // they bring. A single review link can be sent to someone who should see
+  // only that item, so the way to everything else is never offered to them.
+  const portalToken = await verifyPortalToken(
+    service,
+    link.project_id,
+    searchParams?.portal
+  ).catch(() => null);
+
   // Doc surfaces (shot list / storyboard / moodboard) render live with pins.
   if (isDocKind(link.target_type)) {
     const doc = await gatherDocReview(service, link, viewerKey);
@@ -78,7 +116,14 @@ export default async function ReviewPortalPage({
         </Centered>
       );
     }
-    return <DocReview token={params.token} data={doc} />;
+    return (
+      <>
+        <PortalBar token={portalToken} />
+        <PortalVoiceProvider token={params.token}>
+          <DocReview token={params.token} data={doc} />
+        </PortalVoiceProvider>
+      </>
+    );
   }
 
   const data = await gatherReview(service, link, viewerKey);
@@ -102,5 +147,14 @@ export default async function ReviewPortalPage({
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
     (host ? `${proto}://${host}` : "");
 
-  return <ClientReview token={params.token} origin={origin} data={data} />;
+  return (
+    <>
+      <PortalBar token={portalToken} />
+      <PortalVoiceProvider token={params.token}>
+        <PortalTranscriptProvider token={params.token}>
+          <ClientReview token={params.token} origin={origin} data={data} />
+        </PortalTranscriptProvider>
+      </PortalVoiceProvider>
+    </>
+  );
 }

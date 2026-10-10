@@ -4,6 +4,7 @@ import {
   BoardsIcon,
   ClientsIcon,
   LeadsIcon,
+  ReportsIcon,
   SettingsIcon,
   CommunicationIcon,
 } from "@/components/app-shell/nav-icons";
@@ -24,6 +25,7 @@ export const NAV_ITEMS = [
   { href: "/communication", label: "Communication", Icon: CommunicationIcon },
   { href: "/clients", label: "Clients", Icon: ClientsIcon },
   { href: "/pipeline", label: "Pipeline", Icon: LeadsIcon },
+  { href: "/reports", label: "Reports", Icon: ReportsIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ] as const;
 

@@ -1448,11 +1448,28 @@ optimizing the flow + IA of this whole section.
   PRODUCTION; set it to `sandbox` to opt in.
   (The FreshBooks pair is gone with the connector.)
 - AI (optional): `OPENAI_API_KEY` (+ `OPENAI_MODEL`, default gpt-5-mini) or
-  `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one.
+  `ANTHROPIC_API_KEY`; `AI_PROVIDER` to force one. Transcripts need the OpenAI key specifically (`OPENAI_TRANSCRIBE_MODEL`, default whisper-1).
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0116. Recent: 0116 =
+files in supabase/migrations. THROUGH 0124. Recent: 0124 =
+connector_tokens (private links for the read-only AI connector, hash only,
+owned by their maker: RLS user_id = auth.uid()); 0123 =
+job_requests (request_links, one no-login link per client, and job_requests,
+what a client sent through it; each becomes an inbound deal); 0122 =
+version_transcripts (timed transcript lines per version, read by anyone on
+the job and by the portal through the service role); 0121 =
+review_comment_voice_note (review_comments.audio_path + audio_seconds: a
+recorded voice note on a comment, played only through access-checked
+routes); 0120 =
+client_portals (one no-login link per project listing every live review
+link; is_studio_member RLS, read publicly through the service role); 0119 =
+project_revision_rounds (projects.revision_rounds: client revision rounds
+the SOW includes per deliverable, null = not tracked); 0118 =
+review_link_lock_downloads (review_links.lock_downloads: the client can
+watch and comment but not download until the work is approved); 0117 =
+review_comment_team_only (review_comments.team_only: a note the client
+review portal never sees; see "Team-only review comments"); 0116 =
 location_stills (phone viewfinder frames with body/lens/aspect/tilt/roll,
 project-scoped read/edit RLS split, scene_setup_id on delete set null); 0115 =
 scene_setups (Scene builder: one row per 3D setup, the whole scene as jsonb,
@@ -1808,6 +1825,678 @@ shot review, and the master-cut review all gained it at once.
   file download, so it read as the only action. Renamed to "Download".
 - NOT built: comment attachments (a paid-tier question, per the operator), CC
   captions, per-comment @mentions.
+
+### Team-only review comments (migration 0117) — BUILT
+First item off the Timeliner list (docs/competitor-research/timeliner.md),
+and it closed a real exposure rather than adding a nicety: team and client
+comments share ONE stream per version (and per doc target), so every note a
+team member left in the in-app review canvas was also served to the client on
+/r/<token>. "The editor missed this again" landed in front of the brand.
+- `review_comments.team_only` (0117, default false, so nothing existing moved).
+- THE PORTAL NEVER RECEIVES ONE. Both public loaders (gatherReview,
+  gatherDocReview) filter `.eq("team_only", false)` IN THE QUERY, so a hidden
+  note is never serialised to the browser, not just hidden by CSS. The five
+  portal write actions that look a comment up by id (reply parent, resolve x2,
+  react) carry the same filter, so a team-only id reads as "not part of this
+  review" from outside. Edit/delete already required the portal's own
+  author_key, which a studio comment never has.
+- A REPLY UNDER A TEAM-ONLY COMMENT IS ALWAYS TEAM-ONLY, enforced server-side
+  in addReviewCommentAt / addDocReviewCommentAt (`parentTeamOnly ||
+  opts.teamOnly`), so a thread can never leak half of itself. A team-only
+  reply under a CLIENT comment is allowed: discussing a client note
+  internally is the common case.
+- THE SWITCH IS A CONTEXT, not a prop (components/review/team-review.tsx),
+  for the mention-roster reason: eight surfaces mount the same composers.
+  TeamReviewProvider is mounted ONCE in app/(app)/layout.tsx; the public
+  portal lives outside that layout, so it gets the false default and the
+  control does not exist there at all. TeamOnlyToggle renders null without
+  the provider. The switch stays on between posts (an internal pass is
+  several notes in a row) and the placeholder reads "Note for your team
+  only..." while it is on.
+- Every in-app caller forwards `extra.teamOnly` as a trailing
+  `{ teamOnly }` argument: review-modal, cut-review-view, doc-review-modal,
+  doc-review-view, shot-review-view (via ShotAnchor). A NEW REVIEW SURFACE
+  MUST FORWARD IT TOO or the switch silently does nothing there.
+- Mentions are safe by construction: the roster is project contacts only, so
+  a team-only note can never email the client.
+- KNOWN, CHOSEN: pin numbers are one shared sequence, so the client sees a
+  GAP where a team-only pin sits (1, 3). Renumbering on the portal would make
+  the client's "#2" the studio's "#3", which is worse in conversation than a
+  missing number.
+- NOT DONE: a reviewer-role project member (0093) still sees team-only notes
+  in the app, since they read through RLS like any project member. If
+  reviewers turn out to be client-side people, that needs an RLS change.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  PinCanvas and VideoReview inside and outside the provider, light and dark.
+
+### Review notes out as timeline markers (no migration) — BUILT
+Second item off the Timeliner list. Every video review canvas in the app (the
+review window, the master cut page, an AI shot's take) has a "Markers" button
+in its comment list header that downloads the notes as markers for the edit,
+so an editor sees each note on its frame instead of reading a list beside the
+timeline. It is "orchestrate, do not replace" in its plainest form: the edit
+stays in the editor's own app.
+- lib/marker-export.ts is pure and NOT `server-only` (43 assertions in the
+  scratchpad, plus both XML outputs parsed as well-formed). Four formats, each
+  the one its app actually imports markers from: Premiere (FCP7 xmeml sequence
+  with sequence markers), Resolve (an EDL in Resolve's marker form, Timeline >
+  Import > Timeline Markers from EDL), Final Cut Pro (FCPXML 1.9 project whose
+  gap clip carries the markers) and CSV.
+- FRAME RATE IS ASKED, NEVER GUESSED. A browser video does not expose a file's
+  rate (the player itself assumes 24), and markers built at the wrong rate
+  drift further off the frame the further into the cut they go. The window
+  asks for the rate of the EDITOR'S SEQUENCE, which is the one that matters.
+- NON-DROP-FRAME TIMECODE throughout: for 29.97 and 59.94 the frame NUMBER is
+  exact (seconds x the true rate) and the label counts on the nominal base.
+  Drop-frame labelling is deliberately not offered.
+- START TIMECODE is a choice (00:00:00:00 or 01:00:00:00) and defaults to 01
+  for Resolve, 00 for the others, because that is where each app's new
+  timelines start and a Resolve EDL places markers by RECORD timecode.
+- A range comment becomes a marker spanning its range; a point comment is one
+  frame. Replies ride on their parent's marker text. Resolved notes are left
+  out unless ticked. Client notes are yellow in Resolve, team notes blue.
+- TEAM ONLY, through the same TeamReviewProvider as the Team only switch: the
+  export INCLUDES team-only notes (the editor is the team), so it must never
+  render on the client link, which sits outside that provider. Verified: the
+  button is absent on the portal-side mount.
+- Built entirely in the browser from comments the canvas already holds; no
+  server action, nothing fetched. Choices persist in localStorage
+  ("review.markerExport").
+- NOT VERIFIED INSIDE PREMIERE, RESOLVE OR FINAL CUT: none of them run in a
+  session. The files were checked for structure and well-formedness, not
+  imported. The first real import is the test, and the thing to watch is
+  Premiere, whose import opens a new sequence carrying the markers rather than
+  adding them to the editor's existing one.
+
+### Lock downloads until approved (migration 0118) — BUILT
+Third item off the Timeliner list. A studio sends a cut for comments and the
+client downloads it, posts it, or hands it to another vendor before anyone has
+signed off, so the review link doubles as a delivery.
+- `review_links.lock_downloads` (0118, default false). A checkbox in the Share
+  for review window, read fresh each time the window opens (createReviewLink
+  returns the existing link's id and lock state) and toggled optimistically
+  via setReviewLinkDownloadLock.
+- ONE RULE, `downloadsLocked()` in lib/review-links.ts, shared by the portal
+  page (gatherReview computes the same thing inline from data it already has)
+  and the file route, so the button and the route cannot disagree.
+- IT UNLOCKS BY ITSELF on approval: the asset reading `approved` (the studio's
+  sign-off) or the client approving the LATEST version through this link.
+  Nobody has to come back and switch it off, which is the step that would be
+  forgotten.
+- THE ROUTE ENFORCES IT, not just the page: `/r/<token>/file?download=1`
+  answers 403 with a sentence while locked. Plain viewing still streams, since
+  the file has to reach the browser to be watched.
+- A DETERRENT, NOT DRM, and the copy never claims otherwise: anything a browser
+  can play can be screen-recorded or pulled from the network tab. What it
+  removes is every one-click way to save: the Download link, the player's
+  "Download this frame", the native video menu (`controlsList="nodownload"`),
+  and right-click save on images, PDFs and video. The meta row says "Download
+  opens once approved" with a lock, so the client knows why rather than hunting.
+- `download=1` now signs with a filename (`Hero v2.mp4`), so Download actually
+  downloads instead of opening the file in a tab. That was a pre-existing gap.
+- KNOWN LIMIT: an Office document rendered through Microsoft's hosted viewer
+  can still offer its own download inside the embed. Not ours to control.
+- ASSET LINKS ONLY. Doc review links (shot list, storyboard, etc.) have nothing
+  to download, so the toggle does not exist there.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  ClientReview: locked video shows the lock line, no download link,
+  controlslist nodownload and no frame download in the settings menu; unlocked
+  shows all three back; same for an image; no page errors, no overflow.
+
+### Revision rounds against the SOW (migration 0119) — BUILT
+Fourth item off the Timeliner list. Commercial SOWs routinely include two
+rounds of revisions, and nothing in the app could say when a client had used
+them, so the third round got done for free because nobody noticed it was the
+third.
+- `projects.revision_rounds` (0119, nullable smallint 0 to 20, null = not
+  tracked). Set once per job from a "Client revision rounds" select in the
+  Review page header (RevisionRoundsControl, staff only; a collaborator sees
+  the number as text if set). Per DELIVERABLE, not per project, because that is
+  how an SOW counts them.
+- A ROUND IS SPENT WHEN THE CLIENT REQUESTS CHANGES on a version through a
+  review link (an approvals row with review_link_id set and status
+  changes_requested), one per version. Deliberately NOT counted: versions the
+  client never saw, the studio's own internal "request changes", and a version
+  the client sent back and then approved (the row updates in place). DERIVED
+  from approvals every time, never stored, so it cannot drift.
+- lib/revision-rounds.ts is pure (30 assertions): clientRoundsUsed, roundState
+  (ok / last / over and the sentence), roundNote, parseRounds (the trust
+  boundary; "n/a" and fractions are refused, not read as 0).
+- ON EACH DELIVERABLE on the Review page, one line under the review signal:
+  "1 of 2 revision rounds used", "2 of 2 used, next is extra", "3 of 2 used,
+  1 over". Words in the text colour, hue on a dot (blue / amber / red), the
+  read-banner contrast lesson again. The Assets library passes nothing and
+  shows nothing.
+- THE NOTIFICATION SAYS IT at the moment it matters: a client change request
+  that uses the last included round or goes past it reads "Sam requested
+  changes (round 3, 2 included)" in the bell and the activity log. Counted
+  after the request is written, through the same rule; best effort, so a
+  failed count only loses the note.
+- THE CLIENT IS NOT TOLD and is not blocked. Timeliner "auto-limits"; refusing
+  a client's request in the portal is a commercial conversation the studio
+  should have, not a wall the software puts up. The studio sees it and decides
+  whether it is a change order.
+- ASSETS ONLY. Doc reviews (shot list, storyboard) have no versions to count.
+- NOT BUILT: the SOW reader filling the number in (extractSow could read "two
+  rounds of revisions"), and a warning on "+ Version" itself.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  AssetCard and control: all three states, nothing on a card without rounds,
+  light and dark, no overflow at 390.
+
+### One client link for everything: the client portal (migration 0120) — BUILT
+Fifth item off the Timeliner list, and the one their page makes the most of.
+A client with ten things in review held ten links, one per asset or document,
+spread across ten emails.
+- `client_portals` (0120): one row per project (unique), a token, revoked_at,
+  last_viewed_at. RLS is_studio_member; the public page reads it through the
+  service role, gated by token, like /r and /bd.
+- THE PORTAL HOLDS NOTHING OF ITS OWN. Its items ARE the project's live
+  review_links (not revoked, not expired), one per thing shared (the newest
+  link wins if something was shared twice). So nothing appears that the studio
+  did not already share one at a time: the binder's "default off" rule, for
+  free. A link whose asset, board or AI shot was deleted is dropped rather than
+  shown as a dead card.
+- STATUS IS THE CLIENT'S OWN DECISION through their link (lib/client-portal.ts,
+  pure, 15 assertions): no decision is "Waiting on you", changes requested is
+  "Changes requested" (the studio is on it), approved is "Approved". For an
+  asset it is the decision on the CURRENT version, so a new cut after a change
+  request reads as waiting on them again, which is exactly what happened.
+  Groups in that order; inside one, earliest due date first, undated last.
+  A passed due date on a waiting item says "Was due Oct 7" with a red dot.
+- /portal/<token> (app/portal/[token]/page.tsx, public in middleware, noindex,
+  force-dynamic) renders components/review/client-portal-view.tsx, which is
+  presentational and hook-free so a fixture mounts the real thing. Studio name
+  and logo, the project title, "For <client>", a "3 things are waiting on you"
+  pill, then cards (thumbnail, version, due line) opening each /r/<token>
+  exactly as before. Words in the text colour, hue on dots. Due dates are read
+  as CALENDAR DAYS in UTC: lib/format shortDate does `new Date("2026-10-07")`,
+  which is UTC midnight and shows the day before anywhere west of Greenwich.
+- THE WAY BACK IS PROOF-GATED, and this was nearly a leak. An /r page shows a
+  thin "Everything shared on this job" bar only when the visitor hands in the
+  portal token (`?portal=<token>`, which the portal's cards carry) and
+  verifyPortalToken confirms it is a LIVE portal for the SAME project. The
+  first version showed the bar to anyone on any review link once a portal
+  existed, so a talent agent sent one photo could have walked into every
+  deliverable on the job; the second used `?from=portal`, which anybody could
+  type. Rule: a page may only hand a visitor a token they already brought.
+- STUDIO SIDE: a "Client portal" button on the Review page header (staff only,
+  green dot when live). Creating the link is a deliberate press, never a side
+  effect of opening the window. It states how many items are shared, then
+  Copy / Open what the client sees / Email it to the client (SendDocEmailModal
+  + emailClientPortal, gated on emailConfigured) / Turn off link (confirmed).
+  Turning it back on issues a NEW token, so a leaked old address stays dead.
+  Single review links are unaffected either way.
+- NOT BUILT, deliberately for this slice: a per-CLIENT portal spanning several
+  projects (a client with three jobs still holds three links), the
+  request-new-work form (that is item #11), and reminders driven by the portal
+  (each review link already carries its own due date and reminder).
+- Verified in Chromium against a throwaway fixture (deleted): all three groups
+  in order with due-first sorting, overdue and upcoming lines, empty state,
+  every card carrying the portal token, the button in both states, light and
+  dark, no overflow at 390. NOT verified end to end against the database: a
+  session here cannot reach Supabase.
+
+### Voice notes on review comments (migration 0121) — BUILT
+Sixth item off the Timeliner list. A director's note is often faster said than
+typed ("this push-in wants to land a beat later, and the light is too warm"),
+and a client on a phone will talk where they will not type.
+- `review_comments.audio_path` + `audio_seconds` (0121). A comment can be a
+  voice note with NO text: every comment action now refuses only when there is
+  neither text nor a voice note.
+- RECORDING IS THE BROWSER'S OWN MediaRecorder (components/review/
+  voice-note.tsx), a "Voice" button in BOTH composers (pin canvas for images,
+  PDFs and docs; the video timeline), capped at two minutes with a running
+  clock and Stop, then a playable preview with remove. Nothing uploads until
+  Post, so an abandoned take costs nothing. AAC in MP4 is asked for first
+  because it plays everywhere, Safari included; WebM/Opus is what Chrome and
+  Firefox actually record. Never a bare video/mp4 (the demo-clip lesson).
+- A FRESH RECORDING CARRIES NO LENGTH until played once, so Chrome's preview
+  reads 0:00. The length we measured is printed beside it, and that is what is
+  stored.
+- UPLOAD FIRST, THEN POST, and a failed upload STOPS the post (it keeps the
+  recording and says so) rather than sending a comment that silently lost its
+  voice note. The file crosses a Server Action, so MAX_VOICE_BYTES is 3MB,
+  far above two minutes of speech.
+- THE PATH COMES BACK FROM THE BROWSER, so it is the trust boundary
+  (lib/voice-note.ts, pure, 27 assertions). The server names the file
+  (lib/voice-store.ts) inside a folder per owner: `<studio>/voice/u-<user>/`
+  in the app, `<studio>/voice/l-<link>/` on the portal. The comment actions
+  accept a path only as ONE file directly in the caller's own folder, matched
+  on whole segments, so another studio's file, another link's file, a deeper
+  path and a traversal are all refused. Bug the tests caught: an empty
+  duration was read as 0 seconds (Number("") is 0, the "n/a" trap again).
+- PLAYBACK NEVER SIGNS A URL INTO THE PAGE. The player's src is a route that
+  checks access and redirects to a ten-minute signed file: /api/voice/<id> in
+  the app (the comment is read through RLS, which is the whole check) and
+  /r/<token>/voice/<id> on the portal (live link, the comment belongs to what
+  this link reviews, and never a team-only note). Loaders carry only
+  `audio: { seconds }` on PortalComment, so no storage path reaches a browser.
+- A CONTEXT, NOT A PROP, the Team only switch's pattern and for the same
+  reason: eight surfaces mount the same two composers. AppVoiceProvider is
+  mounted once in app/(app)/layout.tsx; PortalVoiceProvider wraps ClientReview
+  and DocReview on /r bound to the token. A composer with no provider shows no
+  microphone at all. EVERY CALLER FORWARDS extra.audio beside extra.teamOnly
+  (review-modal, cut-review-view, doc-review-modal, doc-review-view,
+  shot-review-view via ShotAnchor, client-review, doc-review); A NEW REVIEW
+  SURFACE MUST FORWARD IT TOO or the button records into nothing.
+- Client comment notifications read "Left a voice note" when there is no text.
+- NOT BUILT: recording on REPLIES (a reply plays one if it has one, but the
+  reply composer has no microphone yet), the batch review page (/rb), and
+  transcripts (item #7, which will fill a voice note's text).
+- Verified in Chromium with a fake microphone against a throwaway fixture
+  (deleted) mounting the real PinCanvas and VideoReview: record, stop,
+  preview, Post enabled with no text, a refused upload keeping the take and
+  saying so, the posted note's player pointing at the guarded route, and no
+  microphone without a provider. NOT verified end to end: a session here
+  cannot reach Supabase Storage, so the first real note is the test.
+
+### Automatic transcripts (migration 0122) — BUILT
+Seventh item off the Timeliner list. Interviews, testimonials and VO reads are
+reviewed by what was SAID, and until now the only way to find "the line about
+the peach" was scrubbing for it.
+- `version_transcripts` (0122): one row per VERSION (unique), the timed lines
+  as jsonb `segments` [{start, end, text}], plus language, duration, model.
+  jsonb for the call_sheets.layout reason: only ever read and written whole.
+  RLS is the 0093 split: anyone on the job reads, editors write. The client
+  portal reads it through the service role (getClientTranscript, link live and
+  the version belongs to the link's asset).
+- THE BROWSER DOES THE AUDIO, and that is the whole design. A cut can be a
+  gigabyte, Whisper takes 25MB, a Server Action about 4MB, and the platform has
+  no ffmpeg. The browser downloads the version, decodes its soundtrack with an
+  OfflineAudioContext at 16kHz (decodeAudioData RESAMPLES to the context's
+  rate, which is what makes this cheap), downmixes to mono, cuts it into pieces
+  of at most 115 seconds (3.68MB as 16-bit WAV, under the action cap) on the
+  QUIETEST tenth of a second near 90s so no word is split, skips pieces that
+  are room tone, and sends them one at a time to `transcribePiece`. Each piece
+  carries the tail of what was heard so far as Whisper's `prompt`, so a brand
+  name spelled one way in minute one is spelled the same in minute two. The
+  bytes of the cut never move again. Ceilings: 45 minutes, 1.5GB.
+- OPENAI ONLY, and gated on the OpenAI key, not aiConfigured(): Anthropic has
+  no transcription endpoint. `whisper-1` by default (OPENAI_TRANSCRIBE_MODEL
+  overrides) because it is the model that returns TIMESTAMPED segments
+  (verbose_json); the gpt-4o transcribe models return text only. About $0.006 a
+  minute. parseWhisper drops a segment Whisper itself rates likely-not-speech
+  AND low-confidence, which is the signature of the invented "Thank you for
+  watching" over silence.
+- lib/transcript.ts is pure (42 assertions): parseSegments (the trust boundary
+  on the way back to be saved and out of jsonb; "" is not 0), parseWhisper,
+  planChunks, chunkIsSilent, encodeWav, promptTail, segmentAt, searchSegments,
+  toSrt / toVtt / toText. lib/transcribe.ts is the server half;
+  app/(app)/transcript-actions.ts holds getTranscript / transcribePiece /
+  saveTranscript, each checking can_edit_project through the RPC for writes.
+- THE PANEL (components/review/transcript-panel.tsx) sits UNDER THE PLAYER in
+  VideoReview whenever a `versionId` is passed: the in-app review window, the
+  master cut page and the client portal. A CONTEXT again, for the voice-note
+  reason: AppTranscriptProvider (read, transcribe, edit) in the app layout,
+  PortalTranscriptProvider (read only) on /r. With nothing to show and no right
+  to generate, it draws nothing. The AI shot review passes no version and gets
+  no panel.
+- WHAT IT DOES: Transcribe (with phase progress), search what was said, the
+  line being spoken highlighted and kept in view (scrolling the panel, never
+  the page), click a line or its time to jump there, COMMENT ON A LINE (the
+  comment becomes a RANGE comment over that line with the words quoted in the
+  composer), EDIT a line (Whisper misspells brand names; saved whole), Redo,
+  and Export as SRT (Premiere, Resolve, YouTube), VTT, or text with timecodes.
+  A caption is never shorter than half a second.
+- Clients see the transcript read-only and can comment on a line; they cannot
+  generate or edit.
+- NOT BUILT: transcribing a VOICE NOTE into its comment text, audio-only
+  assets (VideoReview is video only), speaker labels, and transcripts on the
+  batch review page.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  VideoReview with a stubbed provider and a 200 second test file: the real
+  download, decode, split (cut at 87.25s, a silent gap), WAV encode (2.8MB and
+  3.6MB pieces), prompt carry-over, save, search, jump, comment-on-a-line,
+  edit and SRT export, light and dark, no overflow at 390. NOT verified
+  against the live OpenAI endpoint or Supabase from a session, and the test
+  file was WebM because Playwright's Chromium has no AAC; real Chrome and
+  Safari decode AAC in MP4/MOV, which is what to watch on the first real cut.
+
+### Studio reports (no migration) — BUILT
+Ninth item off the Timeliner list (their #10). The app held every number a
+studio owner asks at the end of a quarter and showed none of it studio-wide:
+each job's margin lived on its own budget page, review turnaround nowhere.
+- /reports, a nav row between Pipeline and Settings, staff only (a
+  collaborator is redirected, and every table read is is_studio_member).
+  Period chips This year / Last 12 months / All time, This year by default.
+- NOTHING IS STORED. Every figure is derived from rows that exist for other
+  reasons, so a report cannot drift from the pages it summarises:
+  - MONEY uses the budget page's own rules through the SAME functions
+    (lineActual, marginOf, computeTotals): invoices made here when a job has
+    any, else the delivery page's billed figure, margin on revenue. A job
+    reads the same here as on its budget page, which is the whole test.
+    Each job opens (a native <details>, no script) to WHERE THE COST WENT,
+    grouped by budget category with "Not on a budget line" for unassigned
+    costs, plus a plain line saying which billed figure was used.
+  - ON TIME compares the day a job was moved to Delivered with its due date.
+    There is no delivered column: the date is the LATEST "Moved to Delivered"
+    status_change row in `activity` (updateProjectStatus writes it). Checked
+    live: 6 of 7 delivered jobs carry it. One that does not reads "Delivered,
+    date not recorded" and is LEFT OUT of the rate rather than guessed, and
+    the footnote counts them. An open job past its due date reads Overdue.
+  - CLIENT RESPONSE is the median days from when work reached the client (the
+    review link, or a LATER version on it, since a v2 was in front of them from
+    its upload) to their first approve or change request through that link
+    (approvals with review_link_id, created_at). Change requests per job count
+    the same rows the revision-rounds rule counts, per job that went to review.
+- A JOB BELONGS TO THE PERIOD IT LANDS IN: its due date, else the day it was
+  started. "This year" runs to Dec 31, so a job due next month is already this
+  year's work; "Last 12 months" stops at today. Archived jobs stay in, since
+  finished work is most of what a report is about.
+- lib/studio-reports.ts is pure (45 assertions, run on copies with the
+  `@/lib/costs` import rewritten, since node cannot resolve the alias):
+  periodRange/inPeriod, projectMoney (strings summed, "" is not a number, an
+  invoice totalling 0 still beats the manual figure exactly as the budget page
+  does), deliveredDates, deliveryState (same day is on time, due today is not
+  overdue), onTimeSummary, turnaroundDays, median, clientRows (clients ordered
+  by what they paid; jobs with no client grouped as "No client").
+  lib/studio-reports-data.ts is the loader; `.in()` lists go in batches of
+  150 because the ids travel in the URL.
+- components/reports/report-view.tsx is presentational and hook-free, shared by
+  the page and the PDF (/reports/print, forced light, studio logo and name,
+  every job printed open, rows kept off page breaks, ?auto=1 is the one-click
+  Download PDF). Words in the text colour, hue on dots: red for a loss or a late
+  delivery, amber for overdue, an on-time rate under 75%, or a client averaging
+  two or more change requests a job.
+- NOT BUILT: the client-facing branded report Timeliner sells (a client should
+  never see the studio's margin, so that would be a different document), CSV
+  export, a per-person or per-crew view, and turnaround on the studio's OWN
+  internal review. Verified in Chromium against a throwaway fixture (deleted)
+  mounting the real ReportView: light, dark, 390 and print, no page errors, no
+  overflow. NOT verified against the database: a session here cannot reach
+  Supabase, so the first real open of /reports is the test.
+
+### Compare two versions of a video (no migration) — BUILT
+Tenth item off the Timeliner list. "What changed in v3" was answered by
+opening two tabs and scrubbing each by hand, and compare existed only for
+STILLS in the client portal.
+- components/review/version-compare.tsx is now one compare for both: an
+  IMAGE pair and a VIDEO pair, each SIDE BY SIDE or under a WIPE (B drawn over
+  A, clipped right of a draggable divider; arrow keys move it too), with A/B
+  pickers and a swap. It opens on the version being looked at against the one
+  IMMEDIATELY BEFORE it (defaultPair), which is the revision question, not
+  the oldest.
+- VIDEO HAS ONE TRANSPORT FOR BOTH: Play both, scrub, frame step, speed, loop,
+  which side is HEARD (default the newer), and Space / arrows / , . on the
+  window (the review canvas is not mounted while comparing). The lane with the
+  most left to play drives the clock and the other is corrected when it drifts
+  past 0.12s playing or 0.02s paused. A shorter version HOLDS ITS LAST FRAME
+  and says "v1 has ended" rather than looping or going black.
+- LINE UP: a head offset in whole frames (-1f/+1f/-1s/+1s, capped at a
+  minute) for a revision that gained a slate or lost a beat at the top. It is
+  stored as "which side skips how much", never negative, so the timeline
+  always starts at zero for both. Measured in Chromium: drift 0.03s while
+  playing, under 0.01s paused, exactly 1.000s apart with a one-second offset.
+- lib/compare-sync.ts is the pure half (42 assertions): laneOffsets,
+  timelineLength, masterIndex, laneTarget, timelineFrom, shouldResync,
+  defaultPair, offsetLabel, clampWipe, clampOffset.
+- WHERE IT IS: the client portal (now video as well as images, honouring
+  locked downloads: nodownload and no right-click save), the MASTER CUT page,
+  and the in-app REVIEW WINDOW, which closes the old gap where it only knew
+  one version's URL. loadProjectAssets already signed every version, so the
+  window just needed `versions`, which AssetCard now passes. One
+  CompareToggle button on all three.
+- COMPARE IS FOR LOOKING. No commenting in it, and it says so: a note belongs
+  to one version, on the review canvas.
+- A BUG WORTH KNOWING, found by the fixture: a server-rendered <video> can
+  load its metadata BEFORE React attaches onLoadedMetadata, so the event is
+  missed and the timeline reads 0:00 with a dead scrub bar. The pair reads
+  readyState/duration on mount and also listens to durationchange. Any new
+  component that needs a video's duration should do the same.
+- Also: `bg-surface/90` on the version tags rendered NOTHING (the opacity
+  modifier on a var() colour compiles away, as recorded under the slate), so
+  they are solid surface with a border.
+- NOT BUILT: an onion-skin (opacity) mode, frame-accurate sync (the 24fps
+  assumption the player already makes), and compare on PDFs or doc reviews.
+- Verified in Chromium against a throwaway fixture (deleted) with a 10s and a
+  12s WebM: play, pause, scrub, frame step, offset, end handling, wipe drag,
+  image pair, locked downloads, light at 1280 and dark at 390, no page errors,
+  no overflow. Production build clean.
+
+### A client asks for new work through a link (migration 0123) — BUILT
+Eleventh item off the Timeliner list. A repeat client's next job arrived as an
+email, a call or a text, and somebody retyped it into the pipeline. Now each
+client can hold ONE no-login link, /request/<token>, that turns their request
+into an inbound deal with the brief and files attached.
+- `request_links` (one per CLIENT, unique, token, revoked_at) and
+  `job_requests` (title, details, needed_by, budget, contact name and email,
+  files jsonb, deal_id). Both is_studio_member only; the public page reads and
+  writes through the service role, gated by token, like /portal and /r.
+  Turning a link off and on again issues a NEW token, the portal's contract.
+- PER CLIENT, NOT PER PROJECT, deliberately: the request is for the NEXT job,
+  which has no project yet. A deal is what a new job is before it is a project.
+- THE STUDIO SIDE is a "Request link" button on the client's page (create,
+  copy, open what the client sees, email it, turn off), and the deal page
+  shows a "Requested by the client" card with exactly what was sent: title,
+  who, when, needed by, budget, the details, and the files (signed on CLICK,
+  and only for a path the request row itself lists). The deal's own fields are
+  the studio's to edit; the card is the record of what was asked.
+- THE CLIENT PORTAL OFFERS IT: a "Request new work" button when the project's
+  client has a live link. Safe for the portal rule (a page only hands a
+  visitor what belongs to the client they came as), since whoever holds the
+  portal IS that client.
+- THE ROW IS WRITTEN BEFORE ANY FILE MOVES, the contact form's order: the
+  request is what must not be lost, files are a layer on top. The deal, the
+  request row, a `created` CRM activity, a pink `job_request` notification in
+  the bell, and the requester added to the account's contacts when no contact
+  there has that address (never overwriting one). Everything after the two
+  inserts is best effort.
+- FILES GO DIRECT TO STORAGE, up to five, 200MB each. The tickets are minted
+  by `mintRequestUpload` in lib/upload-ticket.ts, beside every other mint, so
+  the "one file decides who may write bytes" rule holds for the first PUBLIC
+  scope too. The path is built server-side under
+  `<studio>/requests/<requestId>/`, each ticket carries the INDEX of the file it
+  is for (names can repeat), and `finishJobRequest` checks every path's shape
+  and real size before listing it. It only ever ADDS, only to a request under
+  the same link, and only within three hours, so a token cannot rewrite a
+  request later. A file that fails is named on the success screen ("send it by
+  email") rather than failing the request.
+- SPAM: the contact form's three filters (honeypot and timing answer success
+  silently; a rate limit of 6 per 10 minutes per IP says so).
+- lib/job-request.ts is pure (40 assertions): the field rules, real calendar
+  days, no date in the past, `parseBudget` reading "$12,500", "12.5k",
+  "1.2m" and refusing "n/a" (never $0), the file list, the jsonb read-back,
+  and the deal notes. Files are deliberately NOT counted in the notes: they
+  upload after the deal exists, so a count written first could be wrong.
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  page and form with stubbed actions: a field error beside its input, a file
+  attached, the request sent, a failed upload named on the success screen,
+  the deal card, light at 1280 and dark at 390 with no overflow. Against the
+  live database: the inserts the action makes, and an anon read refused.
+  NOT run end to end from a session: the first real request is the test.
+- LITTER, because the Supabase MCP refused DELETE (timed out, the failure
+  mode recorded under 0113): a "ZZ test request" deal on the DEMO studio's
+  Bright Water account, marked Lost with "safe to delete", one job_requests
+  row under it, and a revoked request link. Delete the deal from its page;
+  the request row's deal_id is set null by the FK.
+- NOT BUILT: Timeliner's PRICED menu (pick "short-form reel $160" and see a
+  running total), which needs a service catalogue the studio does not keep
+  today, and an email to the studio on top of the bell.
+
+### Claude / ChatGPT connector, read only (migration 0124) — BUILT, VERIFIED LIVE
+Twelfth item off the Timeliner list, and the "DECISION (operator, 2026-09-17)"
+below finally started, in the order it set: READ ONLY, prove it on a real job,
+and only then decide whether Runner goes. Nothing about Runner was removed.
+- WHAT IT IS: an MCP server at `/api/mcp/<token>`. Settings, AI connector,
+  "Make a link" gives a private URL that is pasted into Claude (Settings,
+  Connectors, Add custom connector) or ChatGPT (developer mode connector, no
+  authentication). The customer's own subscription pays for the thinking,
+  which is the whole commercial point: Runner was the one feature here with a
+  per-use cost to us.
+- A LINK, NOT OAUTH, deliberately for this slice. A URL with a secret in it is
+  the one thing both hosts accept without an authorization server, and OAuth
+  with dynamic client registration is a project of its own. The link IS the
+  credential, so: 192 random bits (`sfc_` + 32 base64url), only the SHA-256 is
+  stored (`connector_tokens`), the plain URL is shown ONCE (and copied), each
+  row has a name, last-4, last-used and a one-press Turn off. Ten live links per
+  person. RLS is `user_id = auth.uid()` (and is_studio_member): a link reads as
+  its maker, so it is theirs alone, the notification_reads shape.
+- IT RUNS AS THE PERSON, UNDER RLS, and this is the decision that matters. The
+  request has no cookie session, and a service-role client would have to
+  re-derive tenancy by hand in every reader, which is the one mistake that
+  crosses studios. Instead lib/connector.ts signs in AS the link's owner server
+  side (admin generateLink magic link, exchanged at once with verifyOtp, no
+  email sent), caches that session per user on the warm instance until five
+  minutes before expiry, and runs the ordinary readers inside `runAsUser`
+  (lib/supabase/run-as.ts, AsyncLocalStorage). `createClient()` in
+  lib/supabase/server.ts returns that borrowed client when one is in scope, so
+  Runner's six read tools and getOutstanding needed NO changes and cannot
+  disagree with the app about anything. AsyncLocalStorage rather than a module
+  variable because two requests on one warm instance must never share a client.
+- THE OWNER MUST STILL BE A STUDIO MEMBER on every request (a membership row,
+  so never a collaborator): removing somebody from the studio kills their links
+  with nothing to remember. The gate is `canUseConnector(ctx)` in
+  lib/agent/access.ts, beside canUseRunner, for the one-function tier rule. No
+  AI key is needed on our side.
+- READ ONLY BY CONSTRUCTION: only READ_TOOLS are offered (the propose_* tools
+  are not listed and an unknown tool is refused before anything runs), all
+  carry `readOnlyHint`. Over MCP the call IS the action and the host's generic
+  allow prompt is not a confirmation anyone can check, so writes wait.
+- `query` is PINNED TO THE LINK'S STUDIO (a studio_id filter appended), since
+  RLS scopes to the PERSON and a person in two studios would get a blend. The
+  fat tools are NOT pinned: for a user in two studios, get_money and friends
+  can still mix them. Rare (the switcher case) and not a leak, since the person
+  can read both, but worth fixing if it bites.
+- `query` carries the schema catalog in its own DESCRIPTION as well as in the
+  server instructions, because some hosts drop instructions.
+- lib/mcp.ts is the protocol, hand-written (initialize, ping, tools/list,
+  tools/call, empty resources/prompts lists, batches, notifications get 202),
+  answering each POST with plain JSON, which Streamable HTTP allows. No SDK:
+  its server transport assumes a long-lived process. A tool failure is a
+  RESULT with isError, not a protocol error, so the model can retry. Results
+  are cut at 24k characters with a note. 32 assertions with the token module.
+- NEVER 401. A 401 makes the host start an OAuth sign-in we do not offer, so a
+  dead link answers 404 with a sentence naming Settings. `/api/mcp` and
+  `/.well-known` are in PUBLIC_PATHS: the host probes OAuth discovery first,
+  and a redirect to /login there reads as a broken authorization server.
+  Verified on a dev server: bad link 404 JSON, discovery 404, GET 405.
+- NOT VERIFIED END TO END, and the thing to watch: the session exchange
+  (generateLink then verifyOtp type magiclink) has never run, since a session
+  here cannot reach Supabase Auth, and no real host has connected. If the
+  first tool call fails with "Could not open a session for this link", that
+  exchange is the suspect. Each sign-in also leaves a row in auth.sessions;
+  harmless, and the cache keeps it to about one an hour per warm instance.
+- NOT BUILT: writes, OAuth, per-link scopes or expiry, studio-pinning the fat
+  tools, and anything about removing Runner (the decision stays the
+  operator's, after a real job).
+- DECIDED (operator, 2026-10-10): NO IMAGE GENERATION INSIDE STUDIO FLOWS.
+  Storyboard and moodboard pictures come through the CONNECTOR: the
+  customer's own Claude or ChatGPT, plus their own Higgsfield connector in
+  that same chat, generates the image and hands Studio Flows a link. The
+  in-app "Draw this frame" button (OpenAI or Higgsfield API on our account)
+  was weighed and refused because every image would be a hard cost against a
+  flat monthly fee; credits with a cap and bring-your-own-key were discussed
+  and set aside with it. Do not reopen it unprompted.
+  WHAT THAT MEANS FOR THE BUILD: the next slice is WRITE tools on the
+  connector, starting with ONE BOARD TOOL covering moodboards AND storyboards
+  (create a board; add images BY LINK, fetched through lib/media-import's
+  SSRF-guarded fetch, plus notes, headings and links; storyboard frames may be
+  text-only). Then shot list rows, build-the-schedule (through planSchedule,
+  so it matches the app's own button), and tasks. ADD-ONLY: no tool deletes
+  or overwrites, and each says exactly what it created. The operator accepted
+  that the host's generic allow prompt is the only check. UNVERIFIED: whether
+  ChatGPT can pass an image it generated itself to a connector tool, and
+  whether Higgsfield's result links stay downloadable.
+- THE BOARD TOOLS ARE BUILT (lib/connector-write.ts, lib/connector-board.ts):
+  `create_board` (moodboard or storyboard on a project, optional frame
+  aspect, never seeds the three empty frames createStoryboard does),
+  `add_to_moodboard` (images by link, notes, headings, laid out BELOW
+  everything already on the board in rows of four, a heading starting a new
+  group) and `add_storyboard_frames` (appended in order, picture optional).
+  They do NOT call the board server actions: those go through
+  requireStudioContext, which needs a cookie session the connector does not
+  have. They insert directly through the borrowed RLS client with the
+  owner's ids, which is the same boundary. Images go through fetchMediaFromUrl
+  (SSRF-guarded) and are stored with the service role under
+  `<studio>/boards/<board>/`, the Drive and Figma imports' move, only after
+  the board was read through RLS and pinned to the link's studio. Twelve
+  entries per call, four downloads at a time, since the route has a minute.
+  A frame whose picture fails still lands as TEXT ONLY and is named in
+  `skipped`, because a dropped frame would renumber the board. Note text is
+  HTML-escaped. 17 assertions on the pure half. NOT RUN against a real host.
+- VERIFIED END TO END (operator, 2026-10-10) from Claude: a real host
+  connected through the link, the generateLink + verifyOtp session exchange
+  worked, reads answered, and a storyboard ("Labs in Bed", Payment Test
+  Shoot) landed with two frames whose pictures were Higgsfield images passed
+  by link and fetched into Storage. So both earlier unknowns closed: the
+  exchange runs, and Higgsfield result links were still downloadable.
+  FIRST FRICTION, worth watching rather than acting on: Claude made two
+  single-frame boards first, then a combined one, and had to tell the
+  producer to delete the two strays by hand, because the tools are add-only.
+  "Wide shot." landed in the frame's Video / motion field, which is correct
+  (that field IS `notes`) but the tool had described notes as "camera or
+  production notes"; the description now names the field as the producer
+  sees it. If stray boards repeat, the fix is the tool descriptions, not
+  granting delete.
+- SHOT LIST TOOLS (2026-10-10, the next slice): `create_shot_list` (a new
+  shot_groups row, making the project's shot_boards cover row first if it is
+  missing, and WITHOUT the three empty rows the app's button seeds, since an
+  assistant fills the list straight after) and `add_shots` (rows appended in
+  order: code, description, shot size, type, movement, day, VO, an optional
+  picture by link stored under `<studio>/shotlists/<list>/`). Up to 40 rows a
+  call but 12 pictures; a row over the picture cap or with a bad link still
+  lands, without the picture, and is named in `skipped`, since a missing row
+  renumbers the list. `day` is described as what the schedule builder splits
+  on and to be left out unless the producer said, so a list made here feeds
+  "Build from the shot list" directly. lib/connector-shots.ts is the pure half
+  (15 assertions). The server instructions now say ONE board or list per
+  request, the stray-boards lesson from the first live run. VERIFIED LIVE
+  from Claude by the operator the same day.
+- BUILD THE SCHEDULE (2026-10-10): `build_schedule` (lib/connector-schedule.ts)
+  is the schedule page's "Build from the shot list" over the connector, and it
+  is LITERALLY THE SAME CODE: the write half moved out of schedule-actions.ts
+  into lib/schedule-build-write.ts (`writeScheduleBuild`, plus the
+  shot_cards.day sync helpers), taking the client it is handed and the user
+  id, so the button passes its cookie client and the connector passes the
+  owner's borrowed RLS client. The move was diffed line by line against the
+  old file: only exports, the signature and the two revalidates (kept in the
+  action wrapper) changed. Every option is optional and defaults to the
+  button's (7:00 call, 6:00 pm wrap, 60 min shots, 15 min setups, 60 min
+  opener, lunch 1:00 pm, "none" turns it off), every shot list by default.
+  THE BUTTON PREVIEWS BEFORE WRITING AND A TOOL CANNOT, so the answer comes
+  after, READ BACK from what was written rather than the plan: each day's
+  name, row count, wrap time and minutes over its target. Adds only, so a
+  re-run places new shots and nothing else. NOT RUN against a real host.
+  CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
+  can call the image models (billed separately, and newer image models may
+  need the organization verified).
+- TASKS (2026-10-10), the last tool on the planned list: `add_tasks`
+  (lib/connector-task-tool.ts, pure half lib/connector-tasks.ts, 25
+  assertions). Up to 30 cards per call onto the project's task board, the
+  same row addProjectTask writes (title, notes, due date, phase, status, a
+  checklist stored as one named group "Steps", assignees), never `done`
+  (generated). Producer words are read ("Pre-production", "in progress",
+  "blocked" -> waiting); anything unreadable lands in the default column
+  (Anytime / To do) and is NAMED in `skipped` rather than refusing the task.
+  The first task given sits on top, the rest beneath in order (sort =
+  -now/1e6 + i/1000), and inserted rows are matched back on that sort key,
+  not on return order. ASSIGNEES MATCH EXACTLY or not at all: "me" is the
+  link's owner, otherwise a team member's email as loadProjectPeople labels
+  it (fed a minimal context with the owner's email from auth.getUser). No
+  fuzzy names, since a task on the wrong person is worse than an unassigned
+  one, and an unmatched name is reported. The instructions tell the host to
+  read existing tasks (query on project_tasks) first, since add-only means a
+  duplicate cannot be cleaned up from the chat. NOT RUN against a real host.
+- CONTACTS (2026-10-10, operator's ask: pull people out of Gmail, or off an
+  earlier project, onto a project's roster). `add_contacts`
+  (lib/connector-contact-tool.ts, pure half lib/connector-contacts.ts, 29
+  assertions). Reading Gmail is NOT ours: Claude does that with its own Gmail
+  connector in the same chat (and drafts replies there too), then hands this
+  tool names, positions, emails and phones. Two lists in one call: `contacts`
+  (new people) and `copy` (existing contact ids, found with query on
+  contacts). A COPY, never a link (contacts_one_parent), carrying details,
+  the DAY RATE (operator: carry it over, and Claude may type a rate in when
+  told; an explicit rate overrides the carried one) and the talent profile
+  (catering, wardrobe, representation). NOT the headshot: both profiles would
+  point at one stored file, and replacing either headshot deletes the old
+  file, which would blank the other person's picture. Files are not copied.
+  Rates go to contact_rates (0074 side table), never onto contacts. A copy off
+  a client's list defaults to category client. Dedupe against the project's
+  roster and within the call by email, else by name. Ids are minted before the
+  insert so rates and profiles attach to the right rows without trusting
+  return order. A rate is read from "$1,200/day", "1.2k" or a number; "n/a"
+  is reported, never $0, and over $100,000 is a misread. Adds only, emails
+  nobody. NOT RUN against a real host.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
@@ -4944,6 +5633,29 @@ Claude Code session cannot reach, so no clip had ever been recorded.
 - Worth knowing: `pkill -f "next dev"` inside a Bash call kills that call's own
   shell (the pattern matches its command line). Kill by pid.
 
+### CRM page + the Timeliner features on the site (2026-10-10) — BUILT
+Operator: highlight the day's new features on the site, and "the website makes
+no mention of the CRM system we have". It did not, anywhere.
+- /production-crm (keyword "CRM for production companies", nav "CRM &
+  pipeline", band Plan, hue cyan), a CHAPTER page: The pipeline (scene
+  `deal`), Accounts (`crm-accounts`), Timeline and follow-ups
+  (`crm-timeline`), Request link (`crm-request`). The three new scenes are in
+  components/marketing/scenes-crm.tsx; CrmMotif carries the diff band.
+- ONE CLAIM WAS CORRECTED BEFORE SHIPPING: winning a deal does NOT start a
+  project in one press. The deal page links to Projects; a project starts from
+  the CLIENT'S page with the client filled in (NewProjectButton
+  defaultClientId). The copy and the deal scene's label both say that now.
+- video-review-software chapters gained: one client link for the whole job,
+  locked downloads, transcripts, markers for the edit, voice notes, team-only
+  notes, wipe compare for video, revision rounds. The budget page gained
+  "Receipts land as paid" and "Studio reports". Runner gained a fourth block,
+  "Or bring your own Claude or ChatGPT", which states only what the connector
+  does today (read, and add-only boards and storyboard frames).
+- Home: a sixth stack panel (CRM, last, after the AI pipeline so two cyan
+  panels are not adjacent) and two ticker lines.
+- NOT DONE: the pricing table has no rows for any of this. Tier placement is
+  the operator's call, and per the pricing rule a row ships only once decided.
+
 ### Scene builder on the marketing site (2026-10-08) — BUILT
 Operator: feature the scene builder in the home page's sliding panels, give it
 its own page, animate it like the rest, and show the phone viewfinder there.
@@ -7825,10 +8537,9 @@ The parked items, so they are findable WHEN friction hits (not before):
   with good natural light" is a toy. Timestamped transcription would let each
   finding carry the frame from the moment it was spoken, which is the part that
   would have been genuinely novel.
-- Review-round edges, all half-built already: due/overdue never surfaces on the
-  INTERNAL review page (the client portal shows it, the studio cannot see which
-  reviews are late); version compare is image-only; the in-app ReviewModal is
-  handed one version's signed URL so compare does not work there at all.
+- Review-round edges: due/overdue never surfaces on the INTERNAL review page
+  (the client portal shows it, the studio cannot see which reviews are late).
+  Version compare (images and video, portal and in-app) is BUILT, see above.
 - Weekly studio digest (lib/outstanding.ts + Resend already exist). Low value
   for a solo operator who is in the app daily; revisit when a second person
   joins or during a long shoot.
@@ -8024,8 +8735,8 @@ Shot cockpit / Triage) was shown to the operator.
     AI-shot review treatment: big VideoReview timecode scrubber (or PinReview for a
     still) + comment rail + version switcher chips + internal sign-off + client
     ShareReviewButton; reuses the asset review-actions (addReviewCommentAt/
-    resolveReviewComment/setVersionApproval). NOT built: video version-compare
-    (image-only today), whole-sequence auto-assemble (deliberate -- we don't edit),
+    resolveReviewComment/setVersionApproval). Version compare is BUILT (see
+    "Compare two versions of a video"). NOT built: whole-sequence auto-assemble (deliberate -- we don't edit),
     asset-level status menu in the band.
   - SHAREABLE BATCH REVIEW ("send options for a pick", migration 0066): curate a
     SUBSET of a shot's candidates and share a no-login /rb/<token> link so a

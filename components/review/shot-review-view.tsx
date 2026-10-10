@@ -55,7 +55,8 @@ export function ShotReviewView({
       anchor.parentId ?? null,
       anchor.drawing ?? null,
       anchor.timecodeEnd ?? null,
-      anchor.mentions
+      anchor.mentions,
+      { teamOnly: anchor.teamOnly, audio: anchor.audio }
     );
     if (res?.error) return false;
     await reload();
@@ -130,6 +131,7 @@ export function ShotReviewView({
         <AiShotReviewCanvas
           surface={surface}
           comments={detail.comments}
+          exportName={detail.docTitle}
           wide
           onPost={post}
           onResolve={resolve}

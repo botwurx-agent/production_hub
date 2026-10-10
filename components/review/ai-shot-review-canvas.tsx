@@ -5,6 +5,7 @@ import { VideoReview } from "@/components/review/video-review";
 import { DocSurfaceView } from "@/components/review/doc-surface";
 import type { DocSurface, DocShotMedia, PortalComment } from "@/lib/review-links";
 import type { Drawing } from "@/lib/review-drawing";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 // A comment anchor: an image pin (percent coords) OR a video timecode (seconds).
 export type ShotAnchor = {
@@ -16,6 +17,9 @@ export type ShotAnchor = {
   timecodeEnd?: number | null;
   /** Roster contacts the author chose to notify. */
   mentions?: string[];
+  /** Keep the note inside the studio (hidden from the client link). */
+  teamOnly?: boolean;
+  audio?: VoiceAttachment | null;
 };
 
 // Review canvas for an AI pipeline shot. If the shot has a playable take video,
@@ -29,10 +33,13 @@ export function AiShotReviewCanvas({
   disabled = false,
   disabledHint,
   wide = false,
+  exportName,
   onPost,
   onResolve,
 }: {
   surface: Extract<DocSurface, { kind: "ai_shot" }>;
+  /** Names the marker export (the shot's title). */
+  exportName?: string;
   comments: PortalComment[];
   canResolve?: boolean;
   disabled?: boolean;
@@ -47,6 +54,7 @@ export function AiShotReviewCanvas({
         {surface.frames.length > 0 && <FrameStrip frames={surface.frames} />}
         <VideoReview
           videoUrl={surface.takeVideoUrl}
+          exportName={exportName}
           comments={comments}
           canResolve={canResolve}
           disabled={disabled}
@@ -59,6 +67,8 @@ export function AiShotReviewCanvas({
               drawing: extra?.drawing ?? null,
               timecodeEnd: extra?.timecodeEnd ?? null,
               mentions: extra?.mentions,
+              teamOnly: extra?.teamOnly,
+              audio: extra?.audio,
             })
           }
           onResolve={onResolve}
@@ -83,6 +93,8 @@ export function AiShotReviewCanvas({
             pin,
             drawing: extra?.drawing ?? null,
             mentions: extra?.mentions,
+            teamOnly: extra?.teamOnly,
+            audio: extra?.audio,
           })
         }
       onResolve={onResolve}

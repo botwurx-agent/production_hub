@@ -3,6 +3,7 @@
 import { PinCanvas } from "@/components/review/pin-canvas";
 import type { PortalComment } from "@/lib/review-links";
 import type { Drawing } from "@/lib/review-drawing";
+import type { VoiceAttachment } from "@/components/review/voice-note";
 
 // Frame.io-style pinned review for an image asset: thin wrapper that hands the
 // image to the generic PinCanvas as the pinnable surface.
@@ -27,7 +28,7 @@ export function PinReview({
   onPost: (
     text: string,
     pin: { x: number; y: number } | null,
-    extra?: { drawing?: Drawing | null }
+    extra?: { drawing?: Drawing | null; mentions?: string[]; teamOnly?: boolean; audio?: VoiceAttachment | null }
   ) => Promise<boolean>;
   onResolve?: (id: string, resolved: boolean) => void;
 }) {

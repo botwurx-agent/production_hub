@@ -295,3 +295,67 @@ function mb(bytes: number): string {
   if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)}GB`;
   return `${Math.round(bytes / 1_000_000)}MB`;
 }
+
+/*
+ * THE ONE PUBLIC SCOPE: files a client attaches to a job request.
+ *
+ * Every scope above authorizes from a SESSION. A request comes from somebody
+ * with no account, so it cannot go through authorize(): the caller has already
+ * proved itself by presenting a live request-link token and having the request
+ * row created under it (app/request/[token]/actions.ts). These two functions
+ * take that row's studio and id, never anything the browser chose, and keep
+ * the same shape rules as the session scopes: the server builds the path, the
+ * path sits directly in one request's folder, and the real size is read back.
+ *
+ * They live HERE, beside the others, so the rule this file states stays true:
+ * every mint in the app is in one place where they can be reviewed together.
+ */
+export async function mintRequestUpload(
+  studioId: string,
+  requestId: string,
+  fileName: string,
+  declaredBytes: number,
+  maxBytes: number
+): Promise<UploadTicket> {
+  if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+    return { error: overLimit(declaredBytes, maxBytes) };
+  }
+  const safe = fileName.replace(/[^\w.\-]+/g, "_").slice(-120) || "file";
+  const path = `${studioId}/requests/${requestId}/${crypto.randomUUID()}-${safe}`;
+  const { data, error } = await assetStorage().createSignedUploadUrl(path);
+  if (error || !data) {
+    reportError("mintRequestUpload", error);
+    return { error: error?.message ?? "Could not start the upload." };
+  }
+  return { path, token: data.token, maxBytes };
+}
+
+/** The request scope's finalizeUpload: shape first, then the real size. */
+export async function finalizeRequestUpload(
+  studioId: string,
+  requestId: string,
+  path: string,
+  maxBytes: number
+): Promise<FinalizedUpload> {
+  if (!pathWithinScope(path, studioId, `requests/${requestId}`)) {
+    reportError("finalizeRequestUpload.path", new Error(`path outside scope: ${path}`));
+    return { error: "That upload could not be verified." };
+  }
+  const slash = path.lastIndexOf("/");
+  const folder = path.slice(0, slash);
+  const name = path.slice(slash + 1);
+  const { data, error } = await assetStorage().list(folder, { limit: 1, search: name });
+  if (error) {
+    reportError("finalizeRequestUpload.list", error);
+    return { error: "Could not confirm the upload." };
+  }
+  const object = data?.find((o) => o.name === name);
+  if (!object) return { error: "The upload did not complete." };
+  const size = Number(object.metadata?.size ?? 0);
+  const mimeType = (object.metadata?.mimetype as string | undefined) ?? null;
+  if (size > maxBytes) {
+    await discardUpload(path);
+    return { error: overLimit(size, maxBytes) };
+  }
+  return { size, mimeType };
+}
