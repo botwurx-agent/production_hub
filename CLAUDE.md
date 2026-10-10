@@ -2440,8 +2440,8 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   on and to be left out unless the producer said, so a list made here feeds
   "Build from the shot list" directly. lib/connector-shots.ts is the pure half
   (15 assertions). The server instructions now say ONE board or list per
-  request, the stray-boards lesson from the first live run. NOT RUN against a
-  real host yet.
+  request, the stray-boards lesson from the first live run. VERIFIED LIVE
+  from Claude by the operator the same day.
   CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
   can call the image models (billed separately, and newer image models may
   need the organization verified).
