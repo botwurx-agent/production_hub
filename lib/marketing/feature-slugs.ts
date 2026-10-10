@@ -17,6 +17,7 @@
 export const FEATURE_SLUGS = [
   "production-hub",
   "production-task-management",
+  "production-crm",
   "storyboard-software",
   "shot-list-software",
   "moodboard-maker",

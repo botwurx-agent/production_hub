@@ -40,6 +40,63 @@ export type ChapterPage = {
 };
 
 export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
+  "production-crm": {
+    hero: "deal",
+    chapters: [
+      {
+        nav: "The pipeline",
+        title: "Every deal, by stage, worth what it is worth.",
+        body: "A deal is a job you are trying to win. It moves from Inbound to Qualifying to Bidding and then to Awarded or Lost, with its value, its odds and when you expect to hear. Drag it along the board, and when it is awarded, the company becomes a client, ready for its first project.",
+        details: [
+          { t: "Five stages, the industry's own", d: "Inbound, Qualifying, Bidding, Awarded and Lost, each column summing what is in it." },
+          { t: "Value, odds and a close date", d: "Every deal carries what it is worth, how likely it is, and when you expect an answer." },
+          { t: "Open pipeline at a glance", d: "The total of every open deal, on the pipeline page and on your dashboard." },
+          { t: "Win it, start the job", d: "An awarded deal turns its company into a client, and the project starts from the client's page with the client already filled in." },
+          { t: "Lost, with the reason", d: "Mark a deal lost and record why, so you can see what keeps costing you jobs." },
+        ],
+        scene: "deal",
+      },
+      {
+        nav: "Accounts",
+        title: "Every company, from first email to past work.",
+        body: "A client is a company you have done business with, or want to. It can start as a prospect before any job exists, become a client when you win one, and be marked past when the relationship ends, all without losing a single job, deal or conversation along the way.",
+        details: [
+          { t: "Prospect, client, past", d: "One status per company, changed from a chip on its page, and a filter to see just one kind." },
+          { t: "All its deals and jobs", d: "Every deal and every project you have done for a company, on one page, over the years." },
+          { t: "The people behind it", d: "Brand managers, agency producers and anyone else at the company, with their details." },
+          { t: "Last contact", d: "When you last actually spoke to them, worked out from real calls, meetings and email." },
+          { t: "Mistakes come out cleanly", d: "A duplicate or a typo can be deleted; a company with real jobs is kept and marked past." },
+        ],
+        scene: "crm-accounts",
+      },
+      {
+        nav: "Timeline and follow-ups",
+        title: "The whole relationship on one timeline.",
+        body: "Log a call, a meeting or a note in a sentence. Email threads you have linked to the company appear on the same timeline by themselves, so the history is complete without anyone keeping it up. Follow-ups are tasks with due dates, so a bid never goes quiet because nobody remembered to chase it.",
+        details: [
+          { t: "Calls, meetings, notes, email", d: "Each logged in a line, with when it happened, on the company or on one deal." },
+          { t: "Email logs itself", d: "Gmail threads linked to the company show up on its timeline, marked auto." },
+          { t: "Stage changes recorded", d: "Created, moved, won and lost are written to the timeline as they happen." },
+          { t: "Follow-ups with due dates", d: "Tasks on a deal or a company, overdue ones in red." },
+          { t: "On your dashboard", d: "Every open follow-up across the studio in one widget, ticked off in one click." },
+        ],
+        scene: "crm-timeline",
+      },
+      {
+        nav: "Request link",
+        title: "Your clients ask for the next job themselves.",
+        body: "Give each client one private link. When they need something, they open it, describe the job, set a date and a budget, attach the brief, and send. It lands in your pipeline as an inbound deal with everything they wrote, and the person who sent it is added to their contacts.",
+        details: [
+          { t: "One link per client", d: "No login for them. It never changes, and you can turn it off and issue a new one." },
+          { t: "Everything in one request", d: "What they need, when, the budget, the details and up to five files, briefs and references included." },
+          { t: "An inbound deal, ready to work", d: "Their request becomes a deal at the first stage, with what they sent kept beside it." },
+          { t: "You hear about it", d: "A notification in the studio's bell the moment a request arrives." },
+          { t: "Offered where they already are", d: "The client portal they use for approvals carries a Request new work button." },
+        ],
+        scene: "crm-request",
+      },
+    ],
+  },
   "moodboard-maker": {
     hero: "moodboard",
     chapters: [
@@ -147,6 +204,7 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
         body: "Attach a supplier's invoice or estimate and the app reads it for you: who it is from, the amount, the dates, the invoice number and which line it belongs to. It fills the form and tells you exactly what it filled. You check it and save, so no money figure is ever written without a person looking at it.",
         details: [
           { t: "PDFs and photos", d: "A PDF straight from the vendor, or a photo of a paper invoice taken on your phone." },
+          { t: "Receipts land as paid", d: "Photograph a receipt from the shoot and it is filed as money already spent, with the shop, the total and the date, not as a bill still owed." },
           { t: "It finds the right vendor", d: "The name on the invoice is matched against the people on the job, including when the work was billed through an agency." },
           { t: "Reads estimates too", d: "A vendor's estimate becomes the cost you are committing to, weeks before the final invoice arrives." },
           { t: "You always confirm", d: "A banner names every field it filled, with Undo, and nothing saves until you press Save." },
@@ -178,6 +236,7 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
           { t: "A bar that turns red on a loss", d: "Cost shown as a share of what you billed, so a job going under is obvious at a glance." },
           { t: "Crew cannot see the money", d: "Budgets, costs, invoices and day rates are hidden from collaborators by the database itself, not just by hiding a button." },
           { t: "One source of truth", d: "The budget page, the project hub and the dashboard all work from the same ledger, so they never disagree." },
+          { t: "Studio reports", d: "Across every job for the year: what each made, where the cost went, how many shipped on time, and how fast each client signs off. Download it as a PDF." },
         ],
         scene: "bg-margin",
       },
@@ -270,6 +329,8 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
           { t: "Respond-by dates", d: "The client sees the date in amber, and in red once it has passed." },
           { t: "Reminders that stop", d: "An overdue review gets a nudge by email, at most three, two days apart, and none once they respond." },
           { t: "Every version on the link", d: "The client can open earlier versions and the notes left on them, while only the latest can be approved." },
+          { t: "One link for the whole job", d: "A client portal lists every cut, frame and document you have shared on the project, with what is waiting on them first." },
+          { t: "Downloads locked until approved", d: "The client can watch and comment but not download until the work is signed off, and it unlocks by itself on approval." },
         ],
         scene: "rv-share",
       },
@@ -295,6 +356,8 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
           { t: "An editor's player", d: "J, K and L shuttle, frame stepping, playback speed from 0.25x to 2x, loop and volume." },
           { t: "Safe areas and crop masks", d: "Title and action safe, rule of thirds, and 1:1, 4:5 and 9:16 masks for social cuts." },
           { t: "Zoom and grab a frame", d: "Zoom to 2x or 4x and pan, or download the current frame as a still." },
+          { t: "Transcripts", d: "Turn the dialogue and voiceover into timed text: search what was said, jump to it, comment on a line, and export it as captions." },
+          { t: "Markers for the edit", d: "Download every note as timeline markers for Premiere, Resolve or Final Cut, at your sequence's frame rate." },
         ],
         scene: "rv-video",
       },
@@ -309,6 +372,8 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
           { t: "Reactions", d: "A quick thumbs up when the note is just agreement." },
           { t: "Resolve, filter and search", d: "Mark notes resolved, filter by open, resolved or yours, and search every comment." },
           { t: "Edit or delete your own", d: "People can fix their own notes, and only their own." },
+          { t: "Voice notes", d: "Say the note instead of typing it, up to two minutes, on a frame or a moment. Clients can leave them too." },
+          { t: "Team-only notes", d: "Flip a switch and a note stays inside the studio. The client's link never receives it." },
         ],
         scene: "rv-draw",
       },
@@ -318,8 +383,9 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
         body: "Upload the next version on top of the last. Nothing is lost: each version keeps its own notes, before and after can sit side by side, and the client approves or requests changes on the latest. Your team can greenlight it internally before the client ever sees it.",
         details: [
           { t: "Versions, never overwritten", d: "v1, v2 and v3 all stay openable, each with the notes that were left on it." },
-          { t: "Compare side by side", d: "Put two versions of an image next to each other to see what changed." },
+          { t: "Compare side by side or with a wipe", d: "Two versions of a still or a cut next to each other, or under a divider you drag. Video plays both in sync." },
           { t: "Approve or request changes", d: "One clear decision from the client, recorded against the version they saw." },
+          { t: "Revision rounds against the SOW", d: "Set how many rounds the job includes and every deliverable shows how many the client has used, so an extra round is a conversation, not a freebie." },
           { t: "Internal review first", d: "Your team reviews and greenlights on the project's Review page before anything goes to the client." },
           { t: "In your notifications", d: "Every client comment and decision lands in the studio's bell, with their name on it." },
           { t: "Send options for a pick", d: "For generated shots, share a set of takes and get back stars, notes and one pick per reviewer." },

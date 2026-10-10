@@ -299,6 +299,43 @@ export const FEATURES: FeatureDef[] = [
 
   /* ----------------------------------------------------------- Visualize */
   {
+    slug: "production-crm",
+    nav: "CRM & pipeline",
+    hint: "Clients, deals and the next job",
+    hue: "cyan",
+    keyword: "CRM for production companies",
+    metaTitle: "CRM for Production Companies: Clients, Deals and Repeat Work",
+    h1: "Win the next job before you wrap this one.",
+    lede: "Every client and prospect, every deal from first email to award, and every call, meeting and thread on one timeline. Built for the way production actually sells: the same brands, again and again.",
+    problem: "Most of a studio's work comes from people it has worked with before, and the record of those relationships lives in an inbox and someone's memory. Bids go out and nobody follows up, a brand goes quiet for six months, and the next job arrives as a text message somebody has to retype.",
+    shots: [],
+    blocks: [],
+    moreTitle: "More the CRM carries",
+    ticks: [
+      { t: "Pipeline on the dashboard", d: "Open deals and the pipeline's total value, on the page you open every morning." },
+      { t: "Tasks widget", d: "Every open follow-up across deals and accounts, overdue in red, ticked off from the dashboard." },
+      { t: "Lost, with a reason", d: "Mark a deal lost and say why, so the pattern is there when you look back." },
+      { t: "Mine or everyone", d: "Filter the pipeline to your own deals or the whole studio's." },
+      { t: "Board or list", d: "Drag deals between stages, or read them as a sortable list." },
+      { t: "Contacts on the account", d: "The brand manager, the agency producer and the rest of the people behind each company." },
+      { t: "Client reports", d: "Which clients paid the most this year, and which take longest to sign off." },
+      { t: "Ask Runner", d: "Log a call, create a deal or move it a stage from a sentence, with a card to confirm." },
+      { t: "Delete a mistake, keep the history", d: "A typo or a duplicate can be deleted; a client with real jobs is marked Past instead." },
+    ],
+    diff: {
+      eyebrow: "The difference",
+      title: "Built for repeat business.",
+      body: "Generic CRMs are built to close a stranger once. A studio's best clients come back every quarter, so here a company holds every deal you have ever done with it, winning one makes it a client ready for the job, and when the brand wants the next job they ask through their own link instead of a text.",
+      points: [
+        "One account, many deals over the years, never a duplicate record per job",
+        "Winning a deal makes the company a client, ready for its project",
+        "The pipeline lives in the same app as the work, so nothing is retyped",
+      ],
+    },
+    band: "plan",
+    related: ["production-hub", "production-invoicing"],
+  },
+  {
     slug: "storyboard-software",
     nav: "Storyboards",
     hint: "Frames that keep their shape",
@@ -580,7 +617,7 @@ export const FEATURES: FeatureDef[] = [
     keyword: "Video review & approval",
     metaTitle: "Video Review and Approval Software for Client Work",
     h1: "Notes that land on the frame.",
-    lede: "Send a link. No login, no account, no explaining. The client pins a comment to a spot on the still, a moment in the cut, or a page of the PDF, draws on the frame when words are slow, and approves on the record.",
+    lede: "Send a link. No login, no account, no explaining. The client pins a comment to a spot on the still, a moment in the cut, or a page of the PDF, draws or talks when words are slow, and approves on the record.",
     problem: "Feedback arrives as 'the logo feels off' in an email, three texts and a phone call, about a file called final_v3_new. Nobody knows which frame they meant, which version they saw, or whether it was ever actually approved.",
     shots: [
       {
@@ -615,7 +652,7 @@ export const FEATURES: FeatureDef[] = [
         body: "Every round keeps its notes, and the open round is always explicit.",
         points: [
           "Switch versions inside the portal; older rounds are clearly read-only",
-          "Side-by-side compare for stills: before and after a revision",
+          "Side-by-side or wipe compare, for stills and for video",
           "Approve or request changes in one click, timestamped, on the record",
           "Internal team sign-off runs separately, before the client ever sees it",
         ],
@@ -1297,6 +1334,16 @@ export const FEATURES: FeatureDef[] = [
           "A received SOW read into deliverables, proposed as a checklist",
           "Project summaries and drafted client updates, always yours to edit",
           "The Polish button in every composer, with undo to your exact words",
+        ],
+      },
+      {
+        title: "Or bring your own Claude or ChatGPT",
+        body: "Connect the assistant you already pay for, and talk to your studio from the chat where the brief and the client's email already are.",
+        points: [
+          "A private link from Settings adds Studio Flows as a connector in Claude or ChatGPT",
+          "Ask where a job stands, what is still owed, or which client is slow to sign off",
+          "It can build moodboards and storyboards, with images it generated or found",
+          "It only ever adds, never changes or deletes, and the link turns off in one press",
         ],
       },
     ],

@@ -5553,6 +5553,29 @@ Claude Code session cannot reach, so no clip had ever been recorded.
 - Worth knowing: `pkill -f "next dev"` inside a Bash call kills that call's own
   shell (the pattern matches its command line). Kill by pid.
 
+### CRM page + the Timeliner features on the site (2026-10-10) — BUILT
+Operator: highlight the day's new features on the site, and "the website makes
+no mention of the CRM system we have". It did not, anywhere.
+- /production-crm (keyword "CRM for production companies", nav "CRM &
+  pipeline", band Plan, hue cyan), a CHAPTER page: The pipeline (scene
+  `deal`), Accounts (`crm-accounts`), Timeline and follow-ups
+  (`crm-timeline`), Request link (`crm-request`). The three new scenes are in
+  components/marketing/scenes-crm.tsx; CrmMotif carries the diff band.
+- ONE CLAIM WAS CORRECTED BEFORE SHIPPING: winning a deal does NOT start a
+  project in one press. The deal page links to Projects; a project starts from
+  the CLIENT'S page with the client filled in (NewProjectButton
+  defaultClientId). The copy and the deal scene's label both say that now.
+- video-review-software chapters gained: one client link for the whole job,
+  locked downloads, transcripts, markers for the edit, voice notes, team-only
+  notes, wipe compare for video, revision rounds. The budget page gained
+  "Receipts land as paid" and "Studio reports". Runner gained a fourth block,
+  "Or bring your own Claude or ChatGPT", which states only what the connector
+  does today (read, and add-only boards and storyboard frames).
+- Home: a sixth stack panel (CRM, last, after the AI pipeline so two cyan
+  panels are not adjacent) and two ticker lines.
+- NOT DONE: the pricing table has no rows for any of this. Tier placement is
+  the operator's call, and per the pricing rule a row ships only once decided.
+
 ### Scene builder on the marketing site (2026-10-08) — BUILT
 Operator: feature the scene builder in the home page's sliding panels, give it
 its own page, animate it like the rest, and show the phone viewfinder there.
