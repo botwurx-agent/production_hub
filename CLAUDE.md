@@ -2423,8 +2423,10 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   FIRST FRICTION, worth watching rather than acting on: Claude made two
   single-frame boards first, then a combined one, and had to tell the
   producer to delete the two strays by hand, because the tools are add-only.
-  Also "Wide shot." landed in the motion field. If that repeats, the fix is
-  in the tool descriptions (one board per ask, which field is which), not in
+  "Wide shot." landed in the frame's Video / motion field, which is correct
+  (that field IS `notes`) but the tool had described notes as "camera or
+  production notes"; the description now names the field as the producer
+  sees it. If stray boards repeat, the fix is the tool descriptions, not
   granting delete.
   CORRECTION worth keeping: an OpenAI API key is not text-only; the same key
   can call the image models (billed separately, and newer image models may

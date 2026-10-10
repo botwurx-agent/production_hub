@@ -110,7 +110,7 @@ export const CONNECTOR_WRITE_TOOLS: McpTool[] = [
               scene: s("The shot's number and title, e.g. '1A · The reveal'."),
               description: s("What we see."),
               sound: s("Dialogue, voiceover, music or effects."),
-              notes: s("Camera or production notes."),
+              notes: s("Camera move, shot size or motion, e.g. 'Wide, slow push in'. Shown as Video / motion on the frame."),
             },
             additionalProperties: false,
           },
