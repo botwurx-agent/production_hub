@@ -5787,6 +5787,26 @@ shell (nav, footer, light theme) so it is judged as a page.
   in it (even inside a heredoc), and kills the shell. Kill by pid, in a call
   of its own.
 
+### Home hero: the Client review tab sells the whole review kit (2026-10-11)
+Operator: the hero's review animation only showed click-and-comment, and the
+point is to sell the client side. components/marketing/scenes-review-hero.tsx
+(ReviewHeroScene, 23s) is a VIDEO review instead of a still, and runs the
+shipped ways a client leaves a note in order: a comment at the exact frame
+(timecode), drawing on the frame (arrow + circle), a range comment over a
+stretch, a voice note, then Approve on a no-login link. SCENES["review"] now
+points at it; the old still-image pin scene is SCENES["review-pins"] and is
+still what the two Instagram videos import directly, so their tuned windows
+are untouched. Not shown and true if wanted later: transcripts, version
+compare (wipe), marker export to the editor, emoji reactions, replies.
+Second pass, same day (operator): the shot was a bottle tilted away from the
+glass with the pour coming from nowhere, so it is now a HAND holding the
+bottle and pouring into the glass (bottle drawn upright in its own coordinates
+and placed by POUR, with LABEL the point the drawing aims at, so the arrow and
+circle always land on the label). And it was too fast: 13.4s to 23s, typing at
+55ms a character, the pointer at 750ms a move, the arrow drawn over 1.1s, and
+each label held 2.2s. If a beat is retimed, move the constants together; the
+cursor path reads them.
+
 ### Demo clips (scripts/capture-demos.mjs, `npm run demos`): BUILT
 A screenshot cannot show an interaction, and on the canvas pages every claim IS
 an interaction: creation is drag-only, selecting a card turns the tool rail into
