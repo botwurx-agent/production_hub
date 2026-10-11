@@ -6,6 +6,7 @@
 // number and the picture cannot disagree about a light.
 import * as THREE from "three";
 import { coneFalloff, roomBounceLux, spotCone, type SourceResult } from "./lighting";
+import { shadowBlurM } from "./patterns";
 
 export type Emitter = {
   id: string;
@@ -35,6 +36,75 @@ export type Board = {
   sizeM: number;
   reflectance: number;
 };
+
+/**
+ * A pattern grip (cookie, branch, blinds, window cutout) as the meter sees
+ * it: a square that passes `transmission` of whatever light crosses it.
+ */
+export type Screen = {
+  id: string;
+  label: string;
+  pos: THREE.Vector3;
+  normal: THREE.Vector3;
+  right: THREE.Vector3;
+  up: THREE.Vector3;
+  half: number;
+  transmission: number;
+  featureM: number;
+};
+
+/** Where a segment crosses a screen's square, or null. */
+export function screenHit(from: THREE.Vector3, to: THREE.Vector3, s: Screen): THREE.Vector3 | null {
+  const d = to.clone().sub(from);
+  const den = d.dot(s.normal);
+  if (Math.abs(den) < 1e-9) return null;
+  const t = s.pos.clone().sub(from).dot(s.normal) / den;
+  if (t <= 0.001 || t >= 0.999) return null;
+  const hit = from.clone().addScaledVector(d, t);
+  const rel = hit.clone().sub(s.pos);
+  if (Math.abs(rel.dot(s.right)) > s.half || Math.abs(rel.dot(s.up)) > s.half) return null;
+  return hit;
+}
+
+/** Share of light that gets from `from` to `to` through every screen in the way. */
+export function throughScreens(from: THREE.Vector3, to: THREE.Vector3, screens: Screen[]): number {
+  let f = 1;
+  for (const s of screens) if (screenHit(from, to, s)) f *= s.transmission;
+  return f;
+}
+
+export type PatternRead = {
+  /** The light the pattern is breaking up: the brightest one through it. */
+  lightId: string;
+  lightLabel: string;
+  blurM: number;
+  featureM: number;
+  sourceToPatternM: number;
+  patternToSubjectM: number;
+};
+
+/**
+ * For each screen, the brightest light whose path to the subject crosses it
+ * and how soft that light makes the pattern's edges. A screen nothing shines
+ * through is absent: it is not doing anything yet.
+ */
+export function readPatterns(p: THREE.Vector3, emitters: Emitter[], screens: Screen[], occluders: THREE.Object3D[]): Map<string, PatternRead> {
+  const out = new Map<string, PatternRead>();
+  const best = new Map<string, number>();
+  for (const em of emitters) {
+    const { lux } = luxFrom(em, p);
+    if (lux <= 0 || !clear(p, em.pos, occluders)) continue;
+    for (const s of screens) {
+      const hit = screenHit(em.pos, p, s);
+      if (!hit || lux <= (best.get(s.id) ?? 0)) continue;
+      const a = em.pos.distanceTo(hit);
+      const b = hit.distanceTo(p);
+      best.set(s.id, lux);
+      out.set(s.id, { lightId: em.group ?? em.id, lightLabel: em.label, blurM: shadowBlurM(em.sizeM, a, b), featureM: s.featureM, sourceToPatternM: a, patternToSubjectM: b });
+    }
+  }
+  return out;
+}
 
 export type Contribution = {
   id: string; label: string; lux: number; sizeM: number; distM: number;
@@ -153,6 +223,7 @@ export function bounceCandela(
   emitters: Emitter[],
   occluders: THREE.Object3D[],
   sun: { dir: THREE.Vector3; lux: number } | null,
+  screens: Screen[] = [],
 ): Map<string, number> {
   const out = new Map<string, number>();
   for (const b of boards) {
@@ -163,11 +234,12 @@ export function bounceCandela(
       const facing = dir.dot(b.normal);
       if (lux <= 0 || facing <= 0) continue;
       if (!clear(b.pos, em.pos, occluders, 0.08)) continue;
-      e += lux * facing;
+      e += lux * facing * throughScreens(em.pos, b.pos, screens);
     }
     if (sun && sun.lux > 0) {
       const facing = sun.dir.dot(b.normal);
-      if (facing > 0 && clear(b.pos, b.pos.clone().addScaledVector(sun.dir, 30), occluders, 0.08)) e += sun.lux * facing;
+      const far = b.pos.clone().addScaledVector(sun.dir, 30);
+      if (facing > 0 && clear(b.pos, far, occluders, 0.08)) e += sun.lux * facing * throughScreens(far, b.pos, screens);
     }
     out.set(b.id, (e * b.reflectance * b.areaM2) / Math.PI);
   }
@@ -192,6 +264,7 @@ export function readMeter(
   occluders: THREE.Object3D[],
   sun: { dir: THREE.Vector3; lux: number; label: string } | null,
   roomLux: number,
+  screens: Screen[] = [],
 ): Reading {
   const toCam = camera.clone().sub(p).normalize();
   const contributions: Contribution[] = [];
@@ -199,7 +272,7 @@ export function readMeter(
   for (const em of emitters) {
     const { lux, dir, d } = luxFrom(em, p);
     let got = 0;
-    if (lux > 0 && clear(p, em.pos, occluders)) got = lux * ((1 + dir.dot(toCam)) / 2);
+    if (lux > 0 && clear(p, em.pos, occluders)) got = lux * ((1 + dir.dot(toCam)) / 2) * throughScreens(em.pos, p, screens);
     const deg = em.sizeM > 0 ? (2 * Math.atan(em.sizeM / 2 / Math.max(0.05, d)) * 180) / Math.PI : 0;
     const key = em.group ?? em.id;
     const prev = byGroup.get(key);
@@ -215,9 +288,10 @@ export function readMeter(
   }
   for (const { degLux: _drop, ...c } of byGroup.values()) contributions.push(c);
   if (sun && sun.lux > 0) {
-    const ok = clear(p, p.clone().addScaledVector(sun.dir, 30), occluders);
+    const far = p.clone().addScaledVector(sun.dir, 30);
+    const ok = clear(p, far, occluders);
     const dome = (1 + sun.dir.dot(toCam)) / 2;
-    contributions.push({ id: "sun", label: sun.label, lux: ok ? sun.lux * dome : 0, sizeM: 0, distM: Infinity });
+    contributions.push({ id: "sun", label: sun.label, lux: ok ? sun.lux * dome * throughScreens(far, p, screens) : 0, sizeM: 0, distM: Infinity });
   }
   if (roomLux > 0) contributions.push({ id: "room", label: "Room bounce", lux: roomLux, sizeM: 0, distM: 0 });
   contributions.sort((a, b) => b.lux - a.lux);

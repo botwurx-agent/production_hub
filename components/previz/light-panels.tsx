@@ -9,10 +9,13 @@ import {
   apparentSizeDeg, bestNd, colorOutput, readsAt, soloReading, softness, stopLabel, stopsLabel, stopsOver, stopsWord,
   type WindowSky,
 } from "@/lib/previz/lighting";
-import { GRIP_NAMES, type GripKind, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
-import type { Contribution, Reading } from "@/lib/previz/meter";
+import { GRIP_NAMES, GRIP_REFLECTANCE, type GripKind, type GripSpec, type LightSpec } from "@/lib/previz/light-build";
+import type { Contribution, PatternRead, Reading } from "@/lib/previz/meter";
+import {
+  LOOK_WORDS, PATTERNS, clampOpen, isPattern, patternLook, patternTransmission, sharpenAdvice, type PatternKind,
+} from "@/lib/previz/patterns";
 import { Chip, Field, Readout, Seg, TrashIcon } from "./ui";
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 
 /**
  * The active shot's stop, ISO and ND, so a light's own panel can say what that
@@ -35,7 +38,7 @@ const RIG_ADDS: { kind: "grid" | "spreader" | "polecat"; label: string }[] = [
   { kind: "polecat", label: "Polecat" },
 ];
 
-const ROLES = ["Key", "Fill", "Rim", "Back", "Hair", "Kicker", "Background"];
+const ROLES = ["Key", "Fill", "Rim", "Back", "Hair", "Kicker", "Window", "Background"];
 const ndLabel = (nd: number) => (nd === 0 ? "None" : nd.toFixed(1));
 
 function Header({ eyebrow, title, onDelete, on, onToggle }: {
@@ -197,9 +200,11 @@ function ColorField({ color, cct, onChange }: {
 }
 
 export function LightInspector({
-  s, targets, reading, targetName, fmt, rigs, hung, onHangNew, pads, onChange, onDelete,
+  s, targets, reading, targetName, fmt, rigs, hung, onHangNew, pads, note, onChange, onDelete,
 }: {
   s: LightSpec;
+  /** Where the light stands, when that is worth saying (outside the room). */
+  note?: string | null;
   /** The controller pads that move and aim this light. */
   pads?: React.ReactNode;
   targets: Target[];
@@ -220,6 +225,7 @@ export function LightInspector({
   return (
     <div className="space-y-5">
       <Header eyebrow="Light" title={`${s.role} · ${fixture.name}`} on={s.on} onToggle={() => onChange({ on: !s.on })} onDelete={onDelete} />
+      {note ? <p className="rounded-[8px] border border-border bg-surface-2 px-2 py-1.5 text-xs text-text">{note}</p> : null}
 
       <Field label="Role">
         <div className="flex flex-wrap gap-1">
@@ -383,10 +389,25 @@ export function LightInspector({
   );
 }
 
-export function WindowInspector({ sky, nd, on, reading, targetName, fmt, onChange }: {
+export type WindowLightStyle = "hard" | "soft12" | "soft20";
+const WINDOW_LIGHT_STYLES: { id: WindowLightStyle; label: string; hint: string }[] = [
+  { id: "hard", label: "Hard, like sun", hint: "An M18 straight through the glass: a crisp patch on the floor and hard shadows." },
+  { id: "soft12", label: "12x12 half grid", hint: "An M18 through a 12x12 of half grid just outside the glass: soft, still directional." },
+  { id: "soft20", label: "20x20 full grid", hint: "An M18 through a 20x20 of full grid: the whole window becomes a soft source." },
+];
+
+export function WindowInspector({
+  sky, nd, on, reading, targetName, fmt, onChange, windows, outside, onLightThrough, onSelectLight,
+}: {
   sky: WindowSky; nd: number; on: boolean; reading: Reading | null; targetName: string; fmt: Fmt;
   onChange: (p: { sky?: WindowSky; nd?: number; on?: boolean }) => void;
+  windows: { id: string; name: string }[];
+  /** Lights already standing outside the room. */
+  outside: { id: string; name: string }[];
+  onLightThrough: (windowId: string, style: WindowLightStyle) => void;
+  onSelectLight: (id: string) => void;
 }) {
+  const [style, setStyle] = useState<WindowLightStyle>("soft12");
   // Every window in the room adds up to one daylight figure.
   const ws = reading?.contributions.filter((x) => x.id.startsWith("window")) ?? [];
   const c = ws.length ? { ...ws[0], label: "Windows", lux: ws.reduce((n, x) => n + x.lux, 0) } : undefined;
@@ -409,6 +430,45 @@ export function WindowInspector({ sky, nd, on, reading, targetName, fmt, onChang
       </Field>
       <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} />
       {sun && sun.lux > 0 ? <Readout k="Direct sun" v={`${Math.round(sun.lux)} lux`} /> : null}
+
+      <div className="space-y-3 border-t border-border pt-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-text-faint">Light a window from outside</p>
+          <p className="mt-1 text-xs text-text-muted">
+            Most day interiors are lit this way rather than left to the weather. The lamp stands outside, aimed in at the subject and kept on them, and you can move it on the map like any other light.
+          </p>
+        </div>
+        <Field label="Diffusion">
+          <div className="flex flex-wrap gap-1">
+            {WINDOW_LIGHT_STYLES.map((x) => <Chip key={x.id} on={style === x.id} onClick={() => setStyle(x.id)}>{x.label}</Chip>)}
+          </div>
+          <p className="mt-1 text-xs text-text-muted">{WINDOW_LIGHT_STYLES.find((x) => x.id === style)?.hint}</p>
+        </Field>
+        <div className="flex flex-col gap-1">
+          {windows.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => onLightThrough(w.id, style)}
+              className="rounded-[8px] border border-dashed border-border px-2 py-1.5 text-left text-xs font-semibold text-text hover:border-accent hover:text-accent"
+            >
+              + Light through {w.name.charAt(0).toLowerCase() + w.name.slice(1)}
+            </button>
+          ))}
+        </div>
+        {outside.length ? (
+          <Field label="Outside now">
+            <div className="flex flex-wrap gap-1">
+              {outside.map((l) => <Chip key={l.id} on={false} onClick={() => onSelectLight(l.id)}>{l.name}</Chip>)}
+            </div>
+          </Field>
+        ) : null}
+        {on ? (
+          <p className="text-xs text-text-muted">
+            The daylight above still comes through as well. Turn it off to light the window with your lamp alone (a night exterior, or full control), or ND it down.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -443,30 +503,45 @@ export function PracticalInspector({ id, dimmer, cct, on, reading, targetName, f
   );
 }
 
-export function GripInspector({ g, targets, reading, targetName, fmt, pads, onChange, onDelete }: {
+export function GripInspector({ g, targets, reading, targetName, fmt, pads, pattern, onChange, onDelete }: {
   g: GripSpec; targets: Target[]; reading: Reading | null; targetName: string; fmt: Fmt;
   /** The controller pads that move and aim this board. */
   pads?: React.ReactNode;
+  /** A pattern grip: the light it is breaking up and how sharp that lands. */
+  pattern?: PatternRead | null;
   onChange: (p: Partial<GripSpec>) => void; onDelete: () => void;
 }) {
   const c = reading?.contributions.find((x) => x.id === g.id);
+  const kinds = Object.keys(GRIP_NAMES) as GripKind[];
+  const boards = kinds.filter((k) => !isPattern(k));
+  const patterns = kinds.filter((k) => isPattern(k));
+  const isPat = isPattern(g.kind);
   return (
     <div className="space-y-5">
-      <Header eyebrow="Grip" title={GRIP_NAMES[g.kind]} onDelete={onDelete} />
+      <Header eyebrow={isPat ? "Pattern" : "Grip"} title={GRIP_NAMES[g.kind]} onDelete={onDelete} />
       {pads ? <Field label="Move and aim">{pads}</Field> : null}
       <Field label="Kind">
         <div className="flex flex-wrap gap-1">
-          {(Object.keys(GRIP_NAMES) as GripKind[]).map((k) => (
+          {boards.map((k) => (
+            <Chip key={k} on={g.kind === k} onClick={() => onChange({ kind: k })}>{GRIP_NAMES[k]}</Chip>
+          ))}
+        </div>
+        <p className="mb-1 mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">Patterns</p>
+        <div className="flex flex-wrap gap-1">
+          {patterns.map((k) => (
             <Chip key={k} on={g.kind === k} onClick={() => onChange({ kind: k })}>{GRIP_NAMES[k]}</Chip>
           ))}
         </div>
         <p className="mt-1 text-xs text-text-muted">
-          {g.kind === "flag" ? "Blocks light: use it to cut a source off a wall or out of the lens." : "Catches light and throws a soft fill back. It only works facing a source."}
+          {isPattern(g.kind)
+            ? PATTERNS[g.kind].hint
+            : g.kind === "flag" ? "Blocks light: use it to cut a source off a wall or out of the lens." : "Catches light and throws a soft fill back. It only works facing a source."}
         </p>
       </Field>
+      {isPattern(g.kind) ? <PatternControls g={g} kind={g.kind} pattern={pattern ?? null} fmt={fmt} onChange={onChange} /> : null}
       <Field label="Size">
         <div className="flex flex-wrap gap-1">
-          {[2, 4, 6, 8, 12].map((ft) => <Chip key={ft} on={g.sizeFt === ft} onClick={() => onChange({ sizeFt: ft })}>{ft}x{ft}</Chip>)}
+          {[2, 3, 4, 6, 8, 12].map((ft) => <Chip key={ft} on={g.sizeFt === ft} onClick={() => onChange({ sizeFt: ft })}>{ft}x{ft}</Chip>)}
         </div>
       </Field>
       <Field label={`Height · ${fmt(g.y)}`}>
@@ -480,8 +555,53 @@ export function GripInspector({ g, targets, reading, targetName, fmt, pads, onCh
           </div>
         ) : null}
       </Field>
-      {g.kind !== "flag" ? <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} /> : null}
+      {GRIP_REFLECTANCE[g.kind] > 0 ? <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} /> : null}
     </div>
+  );
+}
+
+/** What a pattern is doing to the light through it, and the knobs it has. */
+function PatternControls({ g, kind, pattern, fmt, onChange }: {
+  g: GripSpec; kind: PatternKind; pattern: PatternRead | null; fmt: Fmt; onChange: (p: Partial<GripSpec>) => void;
+}) {
+  const t = patternTransmission(kind, g.open);
+  const stops = Math.log2(1 / t);
+  const look = pattern ? patternLook(pattern.blurM, pattern.featureM) : null;
+  const advice = look ? sharpenAdvice(look) : null;
+  return (
+    <>
+      {kind === "blinds" ? (
+        <Field label={`Slats open · ${Math.round(clampOpen(g.open) * 100)}%`}>
+          <Slider label="Slats open" min={0.1} max={1} step={0.05} value={clampOpen(g.open)} onChange={(v) => onChange({ open: v })} />
+        </Field>
+      ) : (
+        <Field label="Pattern">
+          <button
+            type="button"
+            onClick={() => onChange({ seed: Math.floor(Math.random() * 4294967295) })}
+            className="rounded-[8px] border border-border px-2.5 py-1 text-xs font-semibold text-text hover:bg-surface-2"
+          >
+            {kind === "branch" ? "Another branch" : kind === "cookie" ? "Recut the holes" : "Another window"}
+          </button>
+        </Field>
+      )}
+      <div className="space-y-1.5 rounded-[10px] border border-border p-3 text-xs">
+        <p className="text-text">
+          Lets through about {Math.round(t * 100)}% of the light, {stops.toFixed(1)} {stops >= 0.95 && stops < 1.05 ? "stop" : "stops"} down where it falls.
+        </p>
+        {pattern && look ? (
+          <>
+            <p className="font-semibold text-text">{LOOK_WORDS[look]}</p>
+            <p className="text-text-muted">
+              Breaking up the {pattern.lightLabel}: {fmt(pattern.sourceToPatternM)} from the light, {fmt(pattern.patternToSubjectM)} in front of the subject.
+            </p>
+            {advice ? <p className="text-text-muted">{advice}</p> : null}
+          </>
+        ) : (
+          <p className="text-text-muted">No light reaches the subject through it yet. Put it in a light&apos;s path, or aim a light through it.</p>
+        )}
+      </div>
+    </>
   );
 }
 

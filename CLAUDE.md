@@ -8330,6 +8330,67 @@ reach for it during real prep.
   a prop on four inspectors), so the two panels cannot disagree. The key's
   ratio "against everything else" is shown only above 1:1, because room
   bounce plus a window can outweigh a key and "0.8:1" reads as nonsense.
+- LIGHT THROUGH A WINDOW FROM OUTSIDE (2026-10-10, operator: on a real set
+  the window is usually lit by lamps outside it, not left to the weather).
+  The physics already allowed it (lights were never clamped to the room,
+  openings are real holes, walls cast shadows from both sides and block the
+  meter's rays), so the gap was a way to set one up. The Daylight inspector
+  has "Light a window from outside": pick Hard (an M18 straight through),
+  12x12 half grid or 20x20 full grid, then "+ Light through" a window; the
+  add-light list carries the same per window (hard). `throughWindow`
+  (lib/previz/room.ts, 12 assertions) puts the lamp 3 to 4 m out on the line
+  from the subject through the opening, AS HIGH AS IT CAN GO while the beam
+  still clears the window head, so it rakes down like sun, and puts a frame
+  0.25 m outside the glass so its edges hide behind the wall from inside.
+  GOTCHA THAT COST A ROUND: a window has a CENTRE MULLION (the vertical frame
+  bar buildRoom draws at `mid`), so a beam aimed through the window's centre
+  is cut by it and the meter, which samples one ray, reads zero. It aims
+  through the middle of the PANE on the subject's side. A light outside the
+  room says so at the top of its inspector, and says plainly when the wall is
+  blocking it from the subject. "Window" joined the light roles. Daylight is
+  left as it was; the panel says to turn it off (night, or full control) or
+  ND it when the lamp should be the only source.
+- PATTERNS FOR SHADOW PLAY (2026-10-10, operator: "Cucoloris or even
+  practical branches... subtle interesting shadow play"). Four new GRIP kinds
+  (lib/previz/patterns.ts, pure, 26 assertions; drawn in light-build.ts):
+  CUCOLORIS (a plywood board with seeded organic holes), BRANCH (a real 3D
+  dingle: stems plus a few hundred instanced leaf cards), VENETIAN BLINDS
+  (slats about 2 in deep whatever the size, with a "Slats open" slider) and
+  WINDOW PATTERN (a frame-and-mullion cutout). Added from "+ Pattern" under
+  Grip; a new one goes IN THE KEY'S PATH, about a third of the way from the
+  subject toward the light and out of frame, or just in front of the head when
+  everything nearer is in shot. "Recut the holes" / "Another branch" reseed
+  (`GripSpec.seed`; absent = from the id, so a pattern is stable).
+  EACH IS A CUTOUT (alphaMap + alphaTest), which three.js carries into the
+  shadow pass by itself, so the light throws the actual holes, slats or
+  leaves. THE METER DOES NOT TRACE HOLES: one ray per light would flicker
+  between a leaf and a gap as anything moved, so a pattern is a `Screen` that
+  passes its AVERAGE transmission (cookie 45%, branch 55%, window 80%, blinds
+  90% x open) of any ray crossing its square, in readMeter and bounceCandela.
+  WHETHER IT READS is the second fact, and the inspector says it in words:
+  penumbra = source size x (pattern to subject) / (source to pattern),
+  compared with the pattern's own feature size (featureM), giving Crisp / Soft
+  edged / A soft dapple / Washed out, plus what to change. THE PICTURE AGREES:
+  three.js blurs shadows per LIGHT in shadow-map texels, so softenForPattern
+  raises the shadow radius of the light behind a pattern to that penumbra in
+  texels at the subject. A dome key with a cookie at its face really does wash
+  out; an M18 on a Fresnel 6 m back with the cookie near the subject throws it.
+  TWO DEAD ENDS, worth not repeating: (1) a softened shadow through
+  customDepthMaterial does NOT work, because WebGLShadowMap.getDepthMaterial
+  copies the mesh's own alphaMap and alphaTest onto whatever material casts
+  the shadow, custom ones included; (2) alphaHash dithering through VSM, done
+  on an invisible twin mesh to dodge (1), worked but left visible dither noise
+  and striping on everything in the light. The per-light radius is cruder
+  (every shadow from that light softens together) and clean.
+  Patterns reflect nothing (GRIP_REFLECTANCE 0), so they never become bounce
+  emitters. NOT built: a gobo in an ellipsoidal (the lamp-mounted version,
+  needs a projector light), branch sway in a clip, and a softness that differs
+  between the subject and a wall further back (VSM has one blur per light).
+  THE SKY CARD (a glowing sheet 0.35 m outside each window, so the window
+  reads bright from inside) is HIDDEN when daylight is off rather than left at
+  a dim grey: from free view it was an unexplained grey slab beside a lamp
+  lighting through, and with no daylight a real window shows what is really
+  outside it.
 - Setup files are v3; a v2 setup (kitchen or studio, bottle, practical)
   migrates on load. Verified in headless Chromium: add, place, stack, product
   photo, STL import, walk and record, click select, download and open,
