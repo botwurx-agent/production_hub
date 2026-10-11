@@ -16,8 +16,10 @@ import type {
 
 export default async function CallSheetPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { cs?: string };
 }) {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -136,6 +138,7 @@ export default async function CallSheetPage({
         templates={(templates ?? []) as CallSheetTemplate[]}
         logoUrl={logoUrl}
         emailEnabled={emailConfigured()}
+        initialSheetId={searchParams?.cs ?? null}
       />
     </div>
   );

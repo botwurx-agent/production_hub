@@ -2497,6 +2497,28 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   return order. A rate is read from "$1,200/day", "1.2k" or a number; "n/a"
   is reported, never $0, and over $100,000 is a misread. Adds only, emails
   nobody. NOT RUN against a real host.
+- CALL SHEETS (2026-10-11, operator: "we also need the ability to put
+  together a call sheet"). `create_call_sheet` (lib/connector-callsheet-tool.ts,
+  pure half lib/connector-callsheet.ts, 28 assertions). Makes a DRAFT sheet on
+  the project with the day's details (date, crew/shoot call, meals, wrap,
+  location, parking, hospital, weather, sun, company and key contacts, notes)
+  and its people. `from_roster` pulls whole sections off the project's contacts
+  through the SAME blockForCategory/contactLine/alreadyOn the in-app roster
+  import uses (talent and extras are cast, crew and vendors are crew, client is
+  client), and `entries` names people one by one with call times, linking a
+  roster person by contact_id (the roster is the allowlist; an unknown id is
+  reported). Named entries go in first, so their call times win over a bare
+  roster pull, and nobody lands twice. TIMES STAY AS WRITTEN, since the
+  columns are free text. THE JOB'S STANDING FACTS CARRY from the project's
+  latest sheet when not given (company block, producer/director/PM and phones,
+  production title, plus the layout and accent), and the day's facts NEVER do
+  (date, times, weather, location), the duplicate action's rule. NOTHING IS
+  SENT: no recipients, status draft, so the reminder cron ignores it too.
+  `call_sheet_id` instead ADDS people to an existing sheet and leaves its
+  details alone (said in `skipped` if any were passed); on an already-sent
+  sheet the result says recipients see the new rows live. The page gained
+  `?cs=<id>` (CallSheetWorkspace initialSheetId) so the tool's link opens on
+  the sheet it made rather than the first. NOT RUN against a real host.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
