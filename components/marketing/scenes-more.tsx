@@ -280,7 +280,7 @@ export function PipelineScene({ t }: { t: number }) {
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
       <Window
-        title="AI pipeline · Shot 04, The pour"
+        title="AI pipeline · Shot 04, The cafe"
         sub="Video stage · 6 generations imported"
         right={
           t >= DONE_AT ? (
@@ -298,7 +298,7 @@ export function PipelineScene({ t }: { t: number }) {
           </span>
           <p className="min-w-0 flex-1 truncate text-[11.5px] text-text-muted">
             <span className="font-bold text-text">Prompt </span>
-            {typed("slow pour into a cold glass, warm morning light, 50mm", t, 300, 16)}
+            {typed("two friends laugh at a cafe window, morning light, 50mm", t, 300, 16)}
           </p>
         </div>
 

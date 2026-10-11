@@ -5726,6 +5726,42 @@ no mention of the CRM system we have". It did not, anywhere.
 - NOT DONE: the pricing table has no rows for any of this. Tier placement is
   the operator's call, and per the pricing rule a row ships only once decided.
 
+### Marketing scenes show every kind of commercial, not one bottle (2026-10-11)
+Operator: the video review page's five animations all showed the same product
+bottle, and so did most other pages. "This is for all types of commercial
+production." components/marketing/genre-frames.tsx is now the one place frame
+content is drawn: twelve token-drawn stills (runner at dawn, shoe insert, a
+breath close-up, city steps, two friends in a cafe, a testimonial, a family on
+a sofa, a car on a coast road, a chef at the pass, a fashion look on a
+seamless, a pour, an end card), each with a pencil `sketch` mode and a
+warm/cool/dusk `grade`.
+- THE REVIEW PAGE gives each chapter a different job: share = fashion
+  lookbook, pins = family spot (plus its storyboard PDF), video = auto spot,
+  draw = chef at the pass, versions = the runner (v3 cool, v4 warm).
+- `Art` (scenes-shotlist.tsx), which the shot list, storyboard, schedule,
+  tasks, AI and hub scenes all draw thumbnails with, now follows ONE live
+  action spot, `SPOT` ("First light": ridge, shoe, breath, steps, cafe,
+  testimonial, home, end card), so a storyboard still reads as one story.
+  `g` and `grade` pick a still directly (props options, the AI job). The home
+  storyboard panel is a family spot drawn as pencil then final.
+- A STILL IS ALWAYS IN LIGHT TOKENS (`data-theme="light"` on its svg): a
+  photograph does not change with the theme, and the dark set turned hair and
+  silhouettes white.
+- Pins and drawn markup land on the subject through `stillPoint`, which maps
+  the 300x200 grid into whatever box the still fills (slice).
+- Left on purpose: the home hero's review tab (a hand pouring, already live
+  action), the Instagram-only ReviewScene, the previz kitchen (a real preset),
+  and the CGI vendor's pack shot render on the budget page.
+- THE REVIEW PAGE'S "A link, not a login" BAND was drawn as a gradient with a
+  red circle and a pin around NOTHING, under a claim about no-login links and
+  the 9:16 crop (operator: "the image makes no sense"). ReviewMotif now shows
+  exactly the claim: the link arriving by email, the car still under a 9:16
+  crop mask with a pin, and the note signed "typed her name, no account".
+  RULE for any motif: it illustrates the band's sentence, not the feature in
+  general. FOUND ON THE WAY: that band's two grid columns had no min-w-0, so at
+  390px the motif's min-content widened the column to 433 and clipped the
+  words on the right of EVERY feature page; both columns carry min-w-0 now.
+
 ### Scene builder on the marketing site (2026-10-08) — BUILT
 Operator: feature the scene builder in the home page's sliding panels, give it
 its own page, animate it like the rest, and show the phone viewfinder there.

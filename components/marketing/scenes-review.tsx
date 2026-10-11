@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { GenreStill, stillPoint, type Genre } from "./genre-frames";
 import { ActionLabel, Avatar, Burst, Chip, Cursor, Window, arrive, easeOut, lerp, ramp, spring, typed } from "./scene-kit";
 
 /*
@@ -25,20 +26,20 @@ function Btn({ children, press, tone = "accent", on }: { children: ReactNode; pr
   );
 }
 
-/** The frame under review, drawn: a pack shot on a gradient. */
-function Frame({ hue = "cyan", warm = false }: { hue?: string; warm?: boolean }) {
-  return (
-    <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, var(--h-${hue}-bg), ${warm ? "var(--h-amber-bg)" : "var(--h-blue-bg)"} 60%, var(--surface-2))` }}>
-      <svg viewBox="0 0 300 200" className="absolute inset-0 h-full w-full" aria-hidden="true">
-        <ellipse cx="150" cy="180" rx="130" ry="14" fill="var(--surface)" opacity=".7" />
-        <rect x="132" y="30" width="36" height="14" rx="4" fill="var(--h-indigo)" />
-        <path d="M128 44 h44 q10 14 10 30 v96 q0 8 -8 8 h-48 q-8 0 -8 -8 v-96 q0 -16 10 -30z" fill={warm ? "var(--h-orange)" : "var(--h-blue)"} opacity=".85" />
-        <rect x="122" y="92" width="56" height="44" rx="6" fill="var(--surface)" />
-        <path d="M206 120 h40 l-6 52 q-1 6 -7 6 h-14 q-6 0 -7 -6z" fill="var(--surface)" opacity=".75" stroke="var(--h-cyan)" strokeWidth="2" />
-      </svg>
-    </div>
-  );
+/**
+ * The frame under review. Each chapter shows a different kind of job (fashion,
+ * a family at home, an auto spot, a chef, a sportswear run) so the page reads
+ * as review for any commercial, not for pack shots.
+ */
+function Frame({ genre, grade }: { genre: Genre; grade?: "warm" | "cool" | "dusk" }) {
+  return <GenreStill genre={genre} grade={grade} />;
 }
+
+/** A point on a still's grid, in scene pixels, for a box at (left, top). */
+const on = (left: number, top: number, w: number, h: number, vx: number, vy: number) => {
+  const p = stillPoint(w, h, vx, vy);
+  return { x: Math.round(left + p.x), y: Math.round(top + p.y) };
+};
 
 function Pin({ n, x, y, t, at, done }: { n: number; x: number; y: number; t: number; at: number; done?: boolean }) {
   const s = spring(ramp(t, at, 480));
@@ -71,20 +72,20 @@ export function ReviewShareScene({ t }: { t: number }) {
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
       {!portal ? (
-        <Window title="Hero pack shot · v3" sub="Review · Bright Water" right={<Btn tone="quiet" on={t >= EMAIL_AT - 300} press={t >= EMAIL_AT - 60 && t < EMAIL_AT + 80}>Email for review</Btn>}>
+        <Window title="Spring lookbook · look 4" sub="Review · Arden" right={<Btn tone="quiet" on={t >= EMAIL_AT - 300} press={t >= EMAIL_AT - 60 && t < EMAIL_AT + 80}>Email for review</Btn>}>
           <div className="absolute overflow-hidden rounded-[12px]" style={{ left: 16, top: 66, width: 300, height: 200 }}>
-            <Frame />
+            <Frame genre="fashion" />
           </div>
           {t >= EMAIL_AT ? (
             <div className="absolute rounded-[14px] border border-border bg-surface p-4 shadow-[0_24px_60px_-20px_rgba(40,30,90,.55)]" style={{ left: 200, top: 110, width: 400, ...arrive(t, EMAIL_AT, 12) }}>
               <p className="text-[13px] font-extrabold">Send for review</p>
               <div className="mt-2 space-y-2 text-[11.5px]">
-                <div className="flex items-center gap-2"><span className="w-16 text-text-faint">To</span><span className="flex-1 rounded-[7px] border border-border px-2 py-1 font-semibold">maya@brightwater.co</span></div>
+                <div className="flex items-center gap-2"><span className="w-16 text-text-faint">To</span><span className="flex-1 rounded-[7px] border border-border px-2 py-1 font-semibold">maya@arden.co</span></div>
                 <div className="flex items-center gap-2">
                   <span className="w-16 text-text-faint">Respond by</span>
                   <span className="rounded-[7px] border px-2 py-1 font-semibold" style={{ borderColor: t >= DUE_AT - 200 && t < DUE_AT + 800 ? "var(--accent)" : "var(--border)" }}>{t >= DUE_AT ? "Fri, Oct 7" : "Pick a date"}</span>
                 </div>
-                <div className="flex items-start gap-2"><span className="w-16 text-text-faint">Message</span><span className="flex-1 rounded-[7px] border border-border px-2 py-1">Here's v3 with the warmer glass. Pin anything you'd change.</span></div>
+                <div className="flex items-start gap-2"><span className="w-16 text-text-faint">Message</span><span className="flex-1 rounded-[7px] border border-border px-2 py-1">Here's look 4 with the longer coat. Pin anything you'd change.</span></div>
               </div>
               <div className="mt-3 flex justify-end">
                 <Btn press={t >= SEND_AT - 60 && t < SEND_AT + 80}>{t >= SEND_AT ? "Sent ✓" : "Send"}</Btn>
@@ -94,12 +95,12 @@ export function ReviewShareScene({ t }: { t: number }) {
         </Window>
       ) : (
         <div style={arrive(t, OPEN_AT, 10)}>
-          <Window title="studio-flows.com/r/8f2k…" sub="Northline Studio shared Hero pack shot · v3" right={<span className="rounded-full px-2.5 py-1 text-[11px] font-extrabold" style={{ background: "var(--surface-2)" }}>No account needed</span>}>
+          <Window title="studio-flows.com/r/8f2k…" sub="Northline Studio shared Spring lookbook · look 4" right={<span className="rounded-full px-2.5 py-1 text-[11px] font-extrabold" style={{ background: "var(--surface-2)" }}>No account needed</span>}>
             <div className="absolute flex items-center gap-2 rounded-[10px] px-3 py-2 text-[11.5px] font-bold" style={{ left: 16, top: 62, width: 608, background: late ? "var(--h-red-bg)" : "var(--h-amber-bg)", color: late ? "var(--h-red)" : "var(--h-amber)", transition: "all .4s" }}>
               {late ? "Response was due Fri, Oct 7" : "Please respond by Fri, Oct 7"}
             </div>
             <div className="absolute overflow-hidden rounded-[12px]" style={{ left: 16, top: 104, width: 400, height: 310, filter: t < IN_AT ? "blur(3px)" : undefined, transition: "filter .4s" }}>
-              <Frame />
+              <Frame genre="fashion" />
             </div>
             <div className="absolute" style={{ left: 432, top: 104, width: 192 }}>
               <div className="flex gap-1.5">
@@ -161,13 +162,25 @@ export function ReviewShareScene({ t }: { t: number }) {
 export const RV_PINS_MS = 12500;
 
 const IMG_PINS = [
-  { n: 1, x: 210, y: 200, at: 900, text: "Turn the label to camera." },
-  { n: 2, x: 330, y: 250, at: 2200, text: "Warmer light on the glass." },
+  { n: 1, ...on(16, 66, 400, 358, 68, 120), at: 900, text: "Lose the cushion on the arm." },
+  { n: 2, ...on(16, 66, 400, 358, 104, 92), at: 2200, text: "Can Dad look at the kids, not the lens?" },
 ];
 const PDF_AT = 4200;
 const PAGE_AT = 5600;
 const ZOOM_AT = 7000;
-const PDF_PIN = { n: 1, x: 250, y: 220, at: 8600, text: "Frame 3: tighter on the pour." };
+const PDF_PIN = { n: 1, x: 250, y: 220, at: 8600, text: "Frame 6: start on the kids." };
+
+// The director's board for the same family spot, as the PDF arrives.
+const BOARD: { g: Genre; d: string }[] = [
+  { g: "family", d: "Wide: Sunday on the sofa" },
+  { g: "profile", d: "Mum, still half asleep" },
+  { g: "cafe", d: "Coffee at the window" },
+  { g: "interview", d: "Dad tells the story" },
+  { g: "steps", d: "The kids race outside" },
+  { g: "family", d: "Back on the sofa, all four" },
+  { g: "runner", d: "Dawn run, the next day" },
+  { g: "endcard", d: "End card and logo" },
+];
 
 export function ReviewPinsScene({ t }: { t: number }) {
   const pdf = t >= PDF_AT;
@@ -175,11 +188,11 @@ export function ReviewPinsScene({ t }: { t: number }) {
   const zoom = 1 + 0.35 * easeOut(ramp(t, ZOOM_AT, 600));
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title={pdf ? "Director's board · PDF" : "Hero pack shot · v3"} sub={pdf ? "Pinned, page by page" : "Click anywhere to pin a note"} right={<Chip tone="green" t={t}>{pdf ? "PDF" : "Image"}</Chip>}>
+      <Window title={pdf ? "Director's board · PDF" : "Sunday morning · still v3"} sub={pdf ? "Pinned, page by page" : "Click anywhere to pin a note"} right={<Chip tone="green" t={t}>{pdf ? "PDF" : "Image"}</Chip>}>
         {!pdf ? (
           <>
             <div className="absolute overflow-hidden rounded-[12px]" style={{ left: 16, top: 66, width: 400, height: 358 }}>
-              <Frame />
+              <Frame genre="family" />
             </div>
             {IMG_PINS.map((p) => <Pin key={p.n} {...p} t={t} />)}
           </>
@@ -195,12 +208,12 @@ export function ReviewPinsScene({ t }: { t: number }) {
             </div>
             <div className="absolute overflow-hidden rounded-[8px] border border-border bg-white" style={{ left: 16, top: 90, width: 400, height: 334 }}>
               <div style={{ transform: `scale(${zoom})`, transformOrigin: "40% 40%", padding: 16 }}>
-                <p className="text-[9px] font-extrabold tracking-[0.14em] text-[#555]">HERO SPOT · STORYBOARD · PAGE {page}</p>
+                <p className="text-[9px] font-extrabold tracking-[0.14em] text-[#555]">SUNDAY MORNING · STORYBOARD · PAGE {page}</p>
                 <div className="mt-2 grid grid-cols-2 gap-3">
                   {[0, 1, 2, 3].map((i) => (
                     <div key={i}>
-                      <div className="h-[92px] rounded-[4px]" style={{ background: `linear-gradient(135deg, var(--h-${["amber", "cyan", "pink", "blue"][(i + page) % 4]}-bg), #eee)` }} />
-                      <p className="mt-1 text-[8.5px] text-[#333]">{page * 4 - 3 + i}. The pour, from the side</p>
+                      <div className="relative h-[92px] overflow-hidden rounded-[4px] border border-[#ddd]"><GenreStill genre={BOARD[(page - 1) * 4 + i].g} sketch /></div>
+                      <p className="mt-1 text-[8.5px] text-[#333]">{page * 4 - 3 + i}. {BOARD[(page - 1) * 4 + i].d}</p>
                     </div>
                   ))}
                 </div>
@@ -248,7 +261,7 @@ export const RV_VIDEO_MS = 13000;
 
 const DUR = 30;
 const PAUSE_AT = 1500;
-const POINT = { at: 2300, tc: 8.4, text: "Hold on the pour a beat longer." };
+const POINT = { at: 2300, tc: 8.4, text: "Hold on the car a beat longer." };
 const RANGE = { in: 14, out: 21, at: 5200, text: "This whole stretch drags." };
 const GUIDE_AT = 8200;
 const CROP_AT = 9400;
@@ -267,10 +280,10 @@ export function ReviewVideoScene({ t }: { t: number }) {
   const crop = t >= CROP_AT;
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="Hero spot · cut v2" sub="Frame-accurate notes on the cut" right={<span className="rounded-[7px] bg-surface-2 px-2 py-1 font-mono text-[11px] font-bold tabular-nums">{tcode(Math.min(head, DUR))}</span>}>
+      <Window title="Coastline · 30s cut v2" sub="Frame-accurate notes on the cut" right={<span className="rounded-[7px] bg-surface-2 px-2 py-1 font-mono text-[11px] font-bold tabular-nums">{tcode(Math.min(head, DUR))}</span>}>
         <div className="absolute overflow-hidden rounded-[10px]" style={{ left: 16, top: 62, width: 608, height: 262, background: "#0d0d14" }}>
           <div className="absolute inset-[18px] overflow-hidden rounded-[6px]" style={{ opacity: 0.95 }}>
-            <Frame warm={head > 12} />
+            <Frame genre="car" grade={head > 12 ? "dusk" : undefined} />
           </div>
           {t >= GUIDE_AT ? (
             <>
@@ -350,9 +363,9 @@ export function ReviewDrawScene({ t }: { t: number }) {
   const col = t >= COLOR_AT ? "var(--h-amber)" : "var(--h-red)";
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="Hero pack shot · v3" sub="Draw on it, then say why" right={t >= RESOLVE_AT ? <Chip tone="green" t={t} since={RESOLVE_AT}>Resolved</Chip> : <Chip tone="amber" t={t}>1 open</Chip>}>
+      <Window title="The pass · still v3" sub="Draw on it, then say why" right={t >= RESOLVE_AT ? <Chip tone="green" t={t} since={RESOLVE_AT}>Resolved</Chip> : <Chip tone="amber" t={t}>1 open</Chip>}>
         <div className="absolute overflow-hidden rounded-[12px]" style={{ left: 16, top: 104, width: 400, height: 320 }}>
-          <Frame />
+          <Frame genre="chef" />
         </div>
         {/* Draw toolbar */}
         <div className="absolute flex items-center gap-1 rounded-[10px] border border-border bg-surface p-1" style={{ left: 16, top: 62 }}>
@@ -375,10 +388,10 @@ export function ReviewDrawScene({ t }: { t: number }) {
               <path d="M0 0 L10 5 L0 10 z" fill="var(--h-red)" />
             </marker>
           </defs>
-          {t >= ARROW.at ? <path d={`M90 150 L ${lerp(90, 196, a)} ${lerp(150, 236, a)}`} stroke="var(--h-red)" strokeWidth="4" strokeLinecap="round" markerEnd={a > 0.9 ? "url(#rv-ar)" : undefined} /> : null}
-          {t >= BOX.at ? <rect x={270} y={296} width={lerp(0, 90, b)} height={lerp(0, 110, b)} rx="6" fill="none" stroke={col} strokeWidth="4" /> : null}
+          {t >= ARROW.at ? <path d={`M70 214 L ${lerp(70, 132, a)} ${lerp(214, 330, a)}`} stroke="var(--h-red)" strokeWidth="4" strokeLinecap="round" markerEnd={a > 0.9 ? "url(#rv-ar)" : undefined} /> : null}
+          {t >= BOX.at ? <rect x={160} y={316} width={lerp(0, 112, b)} height={lerp(0, 46, b)} rx="6" fill="none" stroke={col} strokeWidth="4" /> : null}
         </svg>
-        <Pin n={1} x={210} y={250} t={t} at={POST_AT} done={t >= RESOLVE_AT} />
+        <Pin n={1} x={286} y={306} t={t} at={POST_AT} done={t >= RESOLVE_AT} />
         {/* Thread */}
         <div className="absolute" style={{ left: 432, top: 104, width: 192 }}>
           {t >= POST_AT ? (
@@ -388,7 +401,7 @@ export function ReviewDrawScene({ t }: { t: number }) {
                 <span className="text-[11.5px] font-bold">Maya</span>
                 <span className="ml-auto text-[9.5px] font-bold" style={{ color: "var(--h-red)" }}>drawing</span>
               </div>
-              <p className="mt-1 text-[11.5px] text-text-muted">Label to camera, and this glass reads cold.</p>
+              <p className="mt-1 text-[11.5px] text-text-muted">Wipe the rim, and the garnish reads small.</p>
               {t >= REACT_AT ? (
                 <div className="mt-1.5 flex gap-1" style={arrive(t, REACT_AT, 4)}>
                   <span className="rounded-full px-1.5 py-0.5 text-[10.5px] font-bold" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>👍 2</span>
@@ -398,7 +411,7 @@ export function ReviewDrawScene({ t }: { t: number }) {
               {t >= REPLY_AT ? (
                 <div className="mt-2 border-l-2 pl-2" style={{ borderColor: "var(--accent)", ...arrive(t, REPLY_AT, 4) }}>
                   <p className="text-[10.5px] font-bold">Studio <span className="font-semibold text-text-faint">· reply</span></p>
-                  <p className="text-[11px] text-text-muted">{typed("On it. Warmer glass in v4 tomorrow.", t, REPLY_AT + 200, 24)}</p>
+                  <p className="text-[11px] text-text-muted">{typed("On it. Clean rim and a bigger garnish in v4.", t, REPLY_AT + 200, 24)}</p>
                 </div>
               ) : null}
             </div>
@@ -410,23 +423,23 @@ export function ReviewDrawScene({ t }: { t: number }) {
           </div>
         </div>
       </Window>
-      <ActionLabel t={t} at={ARROW.at} x={90} y={150} text="Draw an arrow" tone="red" />
-      <ActionLabel t={t} at={BOX.at} x={270} y={296} text="Box the problem" tone="amber" />
+      <ActionLabel t={t} at={ARROW.at} x={70} y={214} text="Draw an arrow" tone="red" />
+      <ActionLabel t={t} at={BOX.at} x={160} y={316} text="Box the problem" tone="amber" />
       <ActionLabel t={t} at={REPLY_AT} x={440} y={200} text="Reply in the thread" after={1000} />
       <ActionLabel t={t} at={REACT_AT} x={440} y={180} text="React" tone="pink" />
-      <ActionLabel t={t} at={RESOLVE_AT} x={210} y={250} text="Resolve when it's done" tone="green" after={1300} />
+      <ActionLabel t={t} at={RESOLVE_AT} x={286} y={306} text="Resolve when it's done" tone="green" after={1300} />
       <Cursor
         t={t}
         travel={600}
         path={[
           { t: 300, x: 320, y: 380 },
           { t: TOOL_AT, x: 30, y: 76, click: true },
-          { t: ARROW.at, x: 90, y: 150, click: true },
-          { t: ARROW.at + ARROW.dur, x: 196, y: 236 },
+          { t: ARROW.at, x: 70, y: 214, click: true },
+          { t: ARROW.at + ARROW.dur, x: 132, y: 330 },
           { t: COLOR_AT, x: 214, y: 76, click: true },
-          { t: BOX.at, x: 270, y: 296, click: true },
-          { t: BOX.at + BOX.dur, x: 360, y: 406 },
-          { t: RESOLVE_AT, x: 212, y: 252, click: true },
+          { t: BOX.at, x: 160, y: 316, click: true },
+          { t: BOX.at + BOX.dur, x: 272, y: 362 },
+          { t: RESOLVE_AT, x: 288, y: 308, click: true },
         ]}
       />
     </div>
@@ -449,7 +462,7 @@ export function ReviewVersionsScene({ t }: { t: number }) {
   const approved = t >= APPROVE_AT;
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="Hero pack shot" sub="Every version kept, every note on the version it was about" right={approved ? <Chip tone="green" t={t} since={APPROVE_AT}>Approved · v4</Chip> : <Chip tone="amber" t={t}>Changes requested · v3</Chip>}>
+      <Window title="First light · hero still" sub="Every version kept, every note on the version it was about" right={approved ? <Chip tone="green" t={t} since={APPROVE_AT}>Approved · v4</Chip> : <Chip tone="amber" t={t}>Changes requested · v3</Chip>}>
         <div className="absolute flex items-center gap-1.5" style={{ left: 16, top: 62 }}>
           {["v1", "v2", "v3"].map((v) => (
             <span key={v} className="rounded-full border border-border px-2 py-0.5 text-[10.5px] font-bold text-text-muted">{v}</span>
@@ -465,14 +478,14 @@ export function ReviewVersionsScene({ t }: { t: number }) {
               ["v4", true],
             ].map(([v, warm]) => (
               <div key={v as string} className="relative overflow-hidden rounded-[12px]">
-                <Frame warm={warm as boolean} />
+                <Frame genre="runner" grade={warm ? "warm" : "cool"} />
                 <span className="absolute left-2 top-2 rounded-full bg-surface px-2 py-0.5 text-[10.5px] font-extrabold">{v as string}</span>
               </div>
             ))}
           </div>
         ) : (
           <div className="absolute overflow-hidden rounded-[12px]" style={{ left: 16, top: 96, width: 400, height: 290 }}>
-            <Frame warm={v4} />
+            <Frame genre="runner" grade={v4 ? "warm" : "cool"} />
           </div>
         )}
         {!compare ? (
@@ -491,7 +504,7 @@ export function ReviewVersionsScene({ t }: { t: number }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
             </svg>
-            <span className="text-[11.5px] font-semibold">Maya approved Hero pack shot v4 · it moves to Approved on the project's Review page</span>
+            <span className="text-[11.5px] font-semibold">Maya approved First light v4 · it moves to Approved on the project's Review page</span>
           </div>
         ) : null}
         <Burst t={t} at={APPROVE_AT} x={480} y={210} spread={1.3} />

@@ -36,7 +36,7 @@ export const SB_GRID_MS = 13000;
 const UP_AT = 900;
 const FIELDS = [
   { k: "Scene", v: "1A · The reveal", at: 2100 },
-  { k: "Description", v: "Morning light finds the bottle on the counter.", at: 3000 },
+  { k: "Description", v: "Dawn. One runner crests the ridge.", at: 3000 },
   { k: "Sound", v: "VO: Start the day clear.", at: 4600 },
 ];
 const ADD_AT = 6200;
@@ -94,7 +94,7 @@ export function StoryboardGridScene({ t }: { t: number }) {
                 {f === 0 && t < UP_AT ? null : <Art i={f === 6 ? 7 : f} />}
                 <span className="absolute left-1 top-1 rounded-[4px] bg-surface px-1 text-[9.5px] font-extrabold">{n + 1}</span>
               </div>
-              <p className="mt-1 truncate text-[10px] text-text-muted">{f === 0 ? (t >= FIELDS[1].at ? "Morning light finds…" : "") : ["", "The bottle, closer", "The pour", "Splash", "Hand reaches", "End card", "A glance to camera"][f]}</p>
+              <p className="mt-1 truncate text-[10px] text-text-muted">{f === 0 ? (t >= FIELDS[1].at ? "Dawn. One runner…" : "") : ["", "The shoe hits the trail", "Her breath", "The city steps", "Coffee after", "Why she runs", "End card"][f]}</p>
             </div>
           );
         })}
@@ -211,7 +211,7 @@ export function StoryboardImportScene({ t }: { t: number }) {
                   </div>
                   <div className="text-[7.5px] leading-[1.45]" style={{ background: t >= SPLIT_AT + i * 900 && t < SPLIT_AT + i * 900 + 900 ? "color-mix(in oklch, var(--h-purple) 15%, transparent)" : undefined }}>
                     <p className="font-extrabold">SHOT {i === 0 ? "1A" : "1B"}</p>
-                    <p><b>ACTION</b> {i === 0 ? "A glass is set down in morning light." : "The pour begins, slow."}</p>
+                    <p><b>ACTION</b> {i === 0 ? "Close on her breath in the cold." : "She takes the city steps two at a time."}</p>
                     <p><b>CAMERA</b> {i === 0 ? "Slow push in." : "Locked off, side on."}</p>
                     <p><b>VO</b> {i === 0 ? "Start the day clear." : "Nothing added."}</p>
                   </div>
@@ -229,7 +229,7 @@ export function StoryboardImportScene({ t }: { t: number }) {
                     <div className="relative h-[52px] w-[80px] shrink-0 overflow-hidden rounded-[5px]"><Art i={i + 2} /></div>
                     <div className="text-[10.5px] leading-[1.4]">
                       <p><span className="font-bold text-text-faint">Scene</span> {i === 0 ? "1A" : "1B"}</p>
-                      <p><span className="font-bold text-text-faint">Action</span> {i === 0 ? "A glass is set down…" : "The pour begins, slow."}</p>
+                      <p><span className="font-bold text-text-faint">Action</span> {i === 0 ? "Her breath in the cold…" : "She takes the steps…"}</p>
                       <p><span className="font-bold text-text-faint">Sound</span> {i === 0 ? "VO: Start the day clear." : "Nothing added."}</p>
                     </div>
                   </div>
@@ -247,7 +247,7 @@ export function StoryboardImportScene({ t }: { t: number }) {
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} style={arrive(t, DONE_AT + i * 90, 6)}>
                   <div className="relative h-[80px] overflow-hidden rounded-[6px] border border-border"><Art i={i + 2} /><span className="absolute left-1 top-1 rounded-[4px] bg-surface px-1 text-[9.5px] font-extrabold">{i + 1}</span></div>
-                  <p className="mt-0.5 truncate text-[10px] text-text-muted">1{String.fromCharCode(65 + (i % 4))} · {["The glass", "The pour", "The splash", "End card"][i % 4]}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-text-muted">{Math.floor(i / 4) + 1}{String.fromCharCode(65 + (i % 4))} · {["Ridge", "The shoe", "Her breath", "The steps", "Coffee after", "Why she runs", "Home", "End card"][(i + 2) % 8]}</p>
                 </div>
               ))}
             </div>
@@ -409,9 +409,9 @@ export function StoryboardExportScene({ t }: { t: number }) {
                   <div key={i}>
                     <div className="relative h-[108px] overflow-hidden rounded-[4px]"><Art i={i} /><span className="absolute left-1.5 top-1.5 rounded-[3px] bg-white px-1 text-[9px] font-extrabold text-[#1a1a2e]">{i + 1}</span></div>
                     <p className="mt-1 text-[8px] font-extrabold tracking-[0.1em] text-[#8a8aa8]">SHOT</p>
-                    <p className="text-[9.5px]">{["Morning light finds the bottle.", "The bottle, closer.", "The pour, from the side.", "Splash, high speed."][i]}</p>
+                    <p className="text-[9.5px]">{["Dawn, a runner on the ridge.", "The shoe hits the trail.", "Her breath in the cold.", "Up the city steps."][i]}</p>
                     <p className="mt-0.5 text-[8px] font-extrabold tracking-[0.1em] text-[#8a8aa8]">SOUND</p>
-                    <p className="text-[9.5px]">{["VO: Start the day clear.", "Room tone.", "The pour, close mic.", "Music hits."][i]}</p>
+                    <p className="text-[9.5px]">{["VO: Some days start before the sun.", "Footfalls, close mic.", "Breath, wild track.", "Music hits."][i]}</p>
                   </div>
                 ))}
               </div>

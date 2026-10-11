@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { GenreStill } from "./genre-frames";
 
 /**
  * Per-page motifs: the feature behaving, drawn in tokens.
@@ -227,19 +228,35 @@ function MoodboardMotif() {
 }
 
 function ReviewMotif() {
+  // The band's claim is "a link, not a login" plus the 9:16 crop, so the
+  // drawing is exactly that: the link arriving, the client in by name alone,
+  // and their note on a frame with the vertical crop mask on.
+  const mask = `${((1 - 9 / 16 / (16 / 9)) / 2) * 100}%`;
   return (
-    <Stage hue="green" label="A frame with a numbered comment pin, drawn markup, and a timecode comment.">
-      <div
-        className="relative w-full overflow-clip rounded-[12px] border border-border"
-        style={{ aspectRatio: "16 / 9", background: "linear-gradient(135deg, var(--surface-2), var(--m-bg))" }}
-      >
-        {/* The drawn circle a client makes when words are slower. */}
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 320 180" fill="none" aria-hidden="true">
-          <ellipse cx="216" cy="76" rx="42" ry="30" stroke="var(--h-red)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="180 40" transform="rotate(-6 216 76)" />
-        </svg>
+    <Stage hue="green" label="A review link arriving by email, the client reviewing by name with no account, and a note on a frame with the 9:16 crop mask on.">
+      <div className="flex items-center gap-2.5 rounded-[10px] border border-border bg-bg p-3">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-bold" style={{ backgroundColor: "var(--m-bg)", color: "var(--m)" }}>
+          NS
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12px] font-semibold text-text">Coastline · cut v2 is ready for you</p>
+          <p className="truncate text-[11px] font-medium text-text-faint">Northline Studio · respond by Fri</p>
+        </div>
+        <span className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ backgroundColor: "var(--m)", color: "var(--accent-fg)" }}>
+          Open link
+        </span>
+      </div>
+
+      <div className="relative mt-3 w-full overflow-clip rounded-[12px] border border-border" style={{ aspectRatio: "16 / 9" }}>
+        <GenreStill genre="car" />
+        <span className="absolute inset-y-0 left-0 bg-black/55" style={{ width: mask }} />
+        <span className="absolute inset-y-0 right-0 bg-black/55" style={{ width: mask }} />
+        <span className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
+          9:16 crop
+        </span>
         <span
-          className="absolute left-[28%] top-[54%] grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold shadow-md"
-          style={{ backgroundColor: "var(--m)", color: "var(--accent-fg)" }}
+          className="absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[11px] font-bold shadow-md ring-2 ring-white"
+          style={{ left: "50%", top: "62%", backgroundColor: "var(--m)", color: "var(--accent-fg)" }}
         >
           1
         </span>
@@ -247,15 +264,17 @@ function ReviewMotif() {
           00:00:12:08
         </span>
       </div>
+
       <div className="mt-3 flex items-start gap-2.5 rounded-[10px] border border-border bg-bg p-3">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold" style={{ backgroundColor: "var(--m-bg)", color: "var(--m)" }}>
-          D
+          MT
         </span>
         <div className="min-w-0">
-          <p className="text-[12px] font-semibold text-text">
-            Logo drifts here. Can it hold to the safe area?
+          <p className="text-[12px] font-semibold text-text">Car clips the edge in the vertical. Can we reframe?</p>
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-text-faint">
+            Maya Torres · typed her name, no account
+            <Tick className="text-[var(--m)]" />
           </p>
-          <p className="mt-0.5 text-[11px] font-medium text-text-faint">Dana · pinned at 12:08 · no login</p>
         </div>
       </div>
     </Stage>
@@ -647,7 +666,7 @@ function GearMotif() {
 
       <div className="mt-3 rounded-[12px] border border-border bg-bg p-3">
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-[12px] font-bold text-text">Hero glassware</span>
+          <span className="text-[12px] font-bold text-text">Hero jacket</span>
           <StatusChip tone="green">Booked or on set</StatusChip>
         </div>
         <div className="flex gap-2">
@@ -682,7 +701,7 @@ function ScheduleMotif() {
     { time: "9:30", what: "1A  Condensation on the shoulder", dur: "1h 30m" },
     { time: "11:00", what: "1B  Cap seal cracks, quarter turn", dur: "1h 45m" },
     { time: "1:00", what: "Lunch", dur: "1h", tone: "amber" },
-    { time: "2:00", what: "1C  Full bottle reveal", dur: "1h 30m" },
+    { time: "2:00", what: "1C  The city steps", dur: "1h 30m" },
   ];
   return (
     <Stage hue="green" label="A shoot day whose times cascade from durations, with lunch anchored and the wrap on target.">

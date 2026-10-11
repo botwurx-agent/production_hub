@@ -811,7 +811,7 @@ export const FEATURES: FeatureDef[] = [
       { t: "Visible grips", d: "Every row shows its handle; drop onto a row's upper half to land before it, lower half after." },
       { t: "Talent today", d: "The day header names who is on set before the rows start." },
       { t: "Frames from the shot list", d: "A row carrying shots shows their thumbnails, so the strip is recognisable." },
-      { t: "Notes on the row", d: "Reset times, backup bottles, whatever the department needs to know." },
+      { t: "Notes on the row", d: "Reset times, a backup wardrobe look, whatever the department needs to know." },
       { t: "Location and set, separately", d: "The address you drive to and the set within it, each in its own column." },
       { t: "Stripboard colors", d: "INT DAY, EXT DAY, INT NIGHT, EXT NIGHT: the industry's four, drawn as the strip's edge." },
       { t: "Read-only for reviewers", d: "A collaborator with review access reads the schedule and cannot change it." },
