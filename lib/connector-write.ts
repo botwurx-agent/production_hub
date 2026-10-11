@@ -173,7 +173,7 @@ export const CONNECTOR_WRITE_TOOLS: McpTool[] = [
 type Json = Record<string, unknown>;
 
 /** Runs `fn` over items a few at a time: downloads, not a stampede. */
-async function inBatches<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+export async function inBatches<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): Promise<R[]> {
   const out: R[] = [];
   for (let i = 0; i < items.length; i += size) {
     out.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
@@ -190,7 +190,7 @@ type Stored =
  * folder. `folder` is built by the caller from a row it has already read
  * through RLS, never from anything the assistant sent.
  */
-async function storeImage(studioId: string, folder: string, url: string): Promise<Stored> {
+export async function storeImage(studioId: string, folder: string, url: string): Promise<Stored> {
   const got = await fetchMediaFromUrl(url);
   if ("error" in got) return { ok: false, reason: got.error };
   if (got.kind !== "image") return { ok: false, reason: "that link is a video, not an image" };

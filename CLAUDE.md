@@ -2519,6 +2519,38 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   sheet the result says recipients see the new rows live. The page gained
   `?cs=<id>` (CallSheetWorkspace initialSheetId) so the tool's link opens on
   the sheet it made rather than the first. NOT RUN against a real host.
+- CLIENTS, PROJECTS, COSTS, PROPS (2026-10-11, operator: "we should be able to
+  add projects but also add clients... then add costs and add props").
+  lib/connector-record-tools.ts, pure half lib/connector-records.ts (43
+  assertions). Every other connector tool needs a project id, so these close
+  the loop: a whole job can now be started from the chat.
+  `add_client` (name, brand|agency, prospect|active|past, notes, people as
+  client contacts). `create_project` (client by id or EXACT name, project
+  type, stage, shoot/due dates, the BRIEF as plain text stored as escaped HTML
+  paragraphs and lists, deliverables with prices to deliverable_pricing never
+  onto the row, and key dates to project_events). `add_costs` (invoices,
+  estimates, receipts onto the ledger; a RECEIPT lands PAID whatever else was
+  said; an amount that cannot be read is NOT added, never $0; a budget line by
+  id or an exact unique name, else unassigned and reported; linked to a roster
+  contact only through matchRosterVendor's exact unique rule, since that link
+  is what the remittance email writes to). `add_props` (props with options by
+  picture link, stored under `<studio>/props/<prop>/` like the app's own
+  upload, and/or a page link through isFetchableUrl; 12 pictures a call; first
+  options move a prop off needed, forward only).
+  A SECOND RUN ADDS NOTHING TWICE, which is the design point of all four,
+  since add-only means a duplicate cannot be cleaned up from the chat: a
+  client with the same name is returned (and only new people added to it), a
+  live project with the same title for the same client is returned, a cost
+  already on the ledger (vendor + invoice number, else vendor + amount + date)
+  is skipped, and a prop with the same name takes the new options rather than
+  becoming a second row. Names compare case- and punctuation-blind.
+  The cost DOCUMENT is not attached (Gmail attachments do not travel by link);
+  the result says so. `props` and `prop_options` joined the query whitelist
+  (lib/agent/schema-map.ts) so the host can read a list before adding to it.
+  storeImage and inBatches are now exported from connector-write for reuse.
+  Live check constraints were read first: only project_costs.status is
+  constrained, and only received/approved/paid are written. NOT RUN against a
+  real host.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
