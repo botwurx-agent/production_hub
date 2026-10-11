@@ -647,7 +647,7 @@ function GearMotif() {
 
       <div className="mt-3 rounded-[12px] border border-border bg-bg p-3">
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-[12px] font-bold text-text">Hero glassware</span>
+          <span className="text-[12px] font-bold text-text">Hero jacket</span>
           <StatusChip tone="green">Booked or on set</StatusChip>
         </div>
         <div className="flex gap-2">
@@ -682,7 +682,7 @@ function ScheduleMotif() {
     { time: "9:30", what: "1A  Condensation on the shoulder", dur: "1h 30m" },
     { time: "11:00", what: "1B  Cap seal cracks, quarter turn", dur: "1h 45m" },
     { time: "1:00", what: "Lunch", dur: "1h", tone: "amber" },
-    { time: "2:00", what: "1C  Full bottle reveal", dur: "1h 30m" },
+    { time: "2:00", what: "1C  The city steps", dur: "1h 30m" },
   ];
   return (
     <Stage hue="green" label="A shoot day whose times cascade from durations, with lunch anchored and the wrap on target.">

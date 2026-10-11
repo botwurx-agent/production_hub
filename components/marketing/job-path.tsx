@@ -47,7 +47,7 @@ const NODES: Node[] = [
     id: "review", x: 360, y: 285, w: 250, label: "Client review", sub: "Maya pinned 3 notes", hue: "pink", t: 0.23, icon: "pin",
     chip: { text: "Round 2", hue: "pink", t: 0.46 },
   },
-  { id: "changes", x: 165, y: 410, w: 200, label: "Changes requested", sub: "Warmer on the bottle", hue: "amber", t: 0.33, icon: "loop" },
+  { id: "changes", x: 165, y: 410, w: 200, label: "Changes requested", sub: "Warmer on her face", hue: "amber", t: 0.33, icon: "loop" },
   {
     id: "approved", x: 555, y: 410, w: 200, label: "Approved", sub: "Signed off by the client", hue: "green", t: 0.5, icon: "check",
   },

@@ -1,6 +1,7 @@
 "use client";
 
 import { GmailGlyph, SlackGlyph, ChatGlyph } from "@/components/communication/comms-ui";
+import { GenreStill, type Genre } from "./genre-frames";
 import {
   Avatar,
   Burst,
@@ -22,93 +23,25 @@ import {
 
 export const BOARD_MS = 8400;
 
-type Frame = { key: string; hue: string; art: (fill: boolean) => JSX.Element };
+type Frame = { key: string; genre: Genre };
 
-const stroke = { fill: "none", strokeWidth: 2.2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-
-// Six frames of a commercial, each a handful of shapes. Drawn as pencil lines
-// first, then coloured in: the "sketch to final" beat the operator agreed.
+// Six frames of a family spot, drawn as pencil first, then the final frame
+// fades up over it: the "sketch to final" beat the operator agreed.
 const FRAMES: Frame[] = [
-  {
-    key: "1A",
-    hue: "amber",
-    art: (f) => (
-      <>
-        <path d="M0 58 H136" {...stroke} />
-        <rect x="20" y="22" width="36" height="36" rx="3" {...stroke} fill={f ? "var(--h-amber-bg)" : "none"} />
-        <rect x="72" y="30" width="44" height="28" rx="3" {...stroke} fill={f ? "var(--h-orange-bg)" : "none"} />
-        <circle cx="112" cy="16" r="8" {...stroke} fill={f ? "var(--h-yellow-bg)" : "none"} />
-      </>
-    ),
-  },
-  {
-    key: "1B",
-    hue: "blue",
-    art: (f) => (
-      <>
-        <rect x="54" y="8" width="28" height="10" rx="3" {...stroke} fill={f ? "var(--h-indigo)" : "none"} />
-        <path d="M50 18 h36 q8 10 8 22 v34 h-52 v-34 q0 -12 8 -22z" {...stroke} fill={f ? "var(--h-blue-bg)" : "none"} />
-        <rect x="52" y="40" width="32" height="18" rx="3" {...stroke} fill={f ? "var(--surface)" : "none"} />
-      </>
-    ),
-  },
-  {
-    key: "2A",
-    hue: "cyan",
-    art: (f) => (
-      <>
-        <path d="M40 6 q18 10 28 30" {...stroke} />
-        <path d="M58 40 h40 l-6 32 h-28z" {...stroke} fill={f ? "var(--h-cyan-bg)" : "none"} />
-        <path d="M62 54 h32 l-3 16 h-26z" {...stroke} fill={f ? "var(--h-amber-bg)" : "none"} />
-      </>
-    ),
-  },
-  {
-    key: "2B",
-    hue: "cyan",
-    art: (f) => (
-      <>
-        {[
-          [68, 40, 14],
-          [44, 26, 7],
-          [96, 24, 8],
-          [36, 56, 5],
-          [102, 58, 6],
-        ].map(([cx, cy, r], i) => (
-          <circle key={i} cx={cx} cy={cy} r={r} {...stroke} fill={f ? "var(--h-cyan-bg)" : "none"} />
-        ))}
-      </>
-    ),
-  },
-  {
-    key: "3A",
-    hue: "pink",
-    art: (f) => (
-      <>
-        <path d="M0 60 q30 -8 56 -20 q12 -6 22 -2 l30 -6" {...stroke} />
-        <rect x="100" y="20" width="18" height="46" rx="5" {...stroke} fill={f ? "var(--h-blue-bg)" : "none"} />
-        <circle cx="62" cy="40" r="10" {...stroke} fill={f ? "var(--h-pink-bg)" : "none"} />
-      </>
-    ),
-  },
-  {
-    key: "3B",
-    hue: "indigo",
-    art: (f) => (
-      <>
-        <rect x="26" y="18" width="84" height="16" rx="4" {...stroke} fill={f ? "var(--h-indigo-bg)" : "none"} />
-        <path d="M40 46 H96 M50 58 H86" {...stroke} />
-      </>
-    ),
-  },
+  { key: "1A", genre: "family" },
+  { key: "1B", genre: "profile" },
+  { key: "2A", genre: "cafe" },
+  { key: "2B", genre: "steps" },
+  { key: "3A", genre: "interview" },
+  { key: "3B", genre: "endcard" },
 ];
 
 const SHOTS = [
-  { desc: "The kitchen, morning light", size: "Wide", move: "Dolly in" },
-  { desc: "Bottle hero on the counter", size: "Close-up", move: "Static" },
-  { desc: "The pour into the glass", size: "Medium", move: "Slider" },
-  { desc: "Splash, high speed", size: "Extreme CU", move: "Locked off" },
-  { desc: "A hand reaches in", size: "Medium", move: "Handheld" },
+  { desc: "Sunday morning on the sofa", size: "Wide", move: "Dolly in" },
+  { desc: "Mum, still half asleep", size: "Close-up", move: "Static" },
+  { desc: "Coffee at the window", size: "Medium", move: "Slider" },
+  { desc: "The kids race outside", size: "Wide", move: "Handheld" },
+  { desc: "Dad tells the story", size: "Medium", move: "Locked off" },
   { desc: "End card and logo", size: "Wide", move: "Locked off" },
 ];
 
@@ -121,18 +54,14 @@ function FrameArt({ f, t, i, w = 136, h = 80 }: { f: Frame; t: number; i: number
   const draw = easeOut(ramp(t, SKETCH_AT(i), 800));
   const color = ramp(t, COLOR_AT(i), 500);
   return (
-    <svg viewBox="0 0 136 80" width={w} height={h} className="block" aria-hidden="true">
-      <rect width="136" height="80" fill={color > 0 ? `var(--h-${f.hue}-bg)` : "var(--surface)"} opacity={0.35 + 0.65 * color} />
-      {/* The coloured version fades up under the pencil */}
-      <g opacity={color} stroke={`var(--h-${f.hue})`}>{f.art(true)}</g>
-      <g
-        stroke="var(--text-faint)"
-        opacity={1 - color * 0.85}
-        style={{ strokeDasharray: 400, strokeDashoffset: 400 * (1 - draw) } as React.CSSProperties}
-      >
-        {f.art(false)}
-      </g>
-    </svg>
+    <div className="relative" style={{ width: w, height: h }}>
+      <div className="absolute inset-0" style={{ clipPath: `inset(0 ${(1 - draw) * 100}% 0 0)` }}>
+        <GenreStill genre={f.genre} sketch />
+      </div>
+      <div className="absolute inset-0" style={{ opacity: color }}>
+        <GenreStill genre={f.genre} />
+      </div>
+    </div>
   );
 }
 
@@ -141,7 +70,7 @@ export function StoryboardScene({ t }: { t: number }) {
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
       <Window
-        title="Storyboard · Hero spot"
+        title="Storyboard · Sunday morning"
         sub="6 frames, sketch to final"
         right={
           t >= LIST_DONE ? (
@@ -217,15 +146,15 @@ const KIND_HUE: Record<string, string> = { call: "indigo", setup: "blue", shot: 
 
 const BASE: SRow[] = [
   { title: "Crew call", kind: "call", dur: 30 },
-  { title: "Set up the kitchen", kind: "setup", dur: 60 },
-  { title: "Kitchen hero", codes: "1A 1B", kind: "shot", dur: 120 },
-  { title: "Pour close-ups", codes: "2A 2B", kind: "shot", dur: 90 },
+  { title: "Set up the living room", kind: "setup", dur: 60 },
+  { title: "The sofa, wide", codes: "1A 1B", kind: "shot", dur: 120 },
+  { title: "Coffee at the window", codes: "2A 2B", kind: "shot", dur: 90 },
   { title: "Reset", kind: "setup", dur: 30 },
   { title: "Lunch", kind: "meal", dur: 60, anchor: 12 * 60 + 30 },
-  { title: "Splash and end card", codes: "3A 3B", kind: "shot", dur: 240 },
+  { title: "Kids outside and end card", codes: "3A 3B", kind: "shot", dur: 240 },
   { title: "Wrap", kind: "wrap", dur: 30 },
 ];
-// +15, +15 on the kitchen, then -15, -15 on the pour.
+// +15, +15 on the sofa, then -15, -15 at the window.
 const CLICKS = [
   { at: 1300, row: 2, d: 15 },
   { at: 1900, row: 2, d: 15 },

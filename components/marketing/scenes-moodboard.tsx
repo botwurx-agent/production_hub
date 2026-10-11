@@ -118,9 +118,11 @@ function Photo({ a, b, kind = 0 }: { a: string; b: string; kind?: number }) {
           </>
         ) : kind === 1 ? (
           <>
-            <rect x="62" y="16" width="26" height="10" rx="3" fill="var(--h-indigo)" />
-            <path d="M58 26 h34 q8 10 8 22 v44 h-50 v-44 q0 -12 8 -22z" fill="var(--h-blue)" opacity=".85" />
-            <rect x="56" y="50" width="38" height="20" rx="3" fill="var(--surface)" />
+            {/* a figure in a long coat: a wardrobe reference */}
+            <circle cx="75" cy="24" r="9" fill="color-mix(in oklch, var(--h-orange) 46%, var(--text) 38%)" />
+            <path d="M66 22 Q66 12 75 12 Q84 12 84 22 Q80 17 75 17 Q70 17 66 22 Z" fill="var(--text)" />
+            <path d="M62 38 Q75 32 88 38 L94 84 Q75 90 56 84 Z" fill="var(--h-orange)" />
+            <path d="M68 84 V98 M82 84 V98" stroke="var(--h-indigo)" strokeWidth="6" strokeLinecap="round" />
           </>
         ) : kind === 2 ? (
           <>
@@ -171,7 +173,7 @@ const B = {
   color: { at: 9300, dur: 800, to: { x: 330, y: 300 } },
 };
 const NOTE_TEXT = "Warm morning light. Nothing staged, nothing glossy.";
-const TODO = ["Find a glass with a thick base", "Two backup bottles", "Lock the linen colour"];
+const TODO = ["Find a cafe with big windows", "Two backup wardrobe looks", "Lock the colour palette"];
 
 export function MoodboardBuildScene({ t }: { t: number }) {
   const from = (k: string) => ({ x: 20, y: railY(k) - 12 });
@@ -629,7 +631,7 @@ const COPIED_AT = 1700;
 const PORTAL_AT = 3000;
 const PINS = [
   { n: 1, x: 190, y: 160, at: 4100, who: "Maya", hue: "pink", text: "Love this light. More of this." },
-  { n: 2, x: 372, y: 118, at: 6300, who: "Jon", hue: "cyan", text: "This glass reads too cold.", draw: true },
+  { n: 2, x: 372, y: 118, at: 6300, who: "Jon", hue: "cyan", text: "This look reads too cold.", draw: true },
 ];
 const REPLY_AT = 8300;
 const APPROVE_AT = 10700;
@@ -678,7 +680,7 @@ export function MoodboardReviewScene({ t }: { t: number }) {
                 <p className="p-2 text-[11px] font-semibold">Warm morning light. Nothing staged.</p>
               </Card>
             </div>
-            {/* The drawn circle Jon makes around the glass */}
+            {/* The drawn circle Jon makes around the look */}
             <svg className="pointer-events-none absolute left-0 top-0" width="640" height="440" aria-hidden="true">
               {t >= PINS[1].at - 900 ? (
                 <ellipse cx="324" cy="156" rx="62" ry="52" fill="none" stroke="var(--h-red)" strokeWidth="3" pathLength={1} strokeDasharray="1" strokeDashoffset={1 - draw} strokeLinecap="round" />
@@ -709,7 +711,7 @@ export function MoodboardReviewScene({ t }: { t: number }) {
                       {p.n === 2 && t >= REPLY_AT ? (
                         <div className="mt-1.5 border-l-2 pl-2" style={{ borderColor: "var(--accent)", ...arrive(t, REPLY_AT, 4) }}>
                           <p className="text-[10.5px] font-bold">Studio <span className="font-semibold text-text-faint">· reply</span></p>
-                          <p className="text-[11px] text-text-muted">{typed("Swapping in the warmer glass today.", t, REPLY_AT + 200, 24)}</p>
+                          <p className="text-[11px] text-text-muted">{typed("Swapping in the warmer look today.", t, REPLY_AT + 200, 24)}</p>
                         </div>
                       ) : null}
                     </div>

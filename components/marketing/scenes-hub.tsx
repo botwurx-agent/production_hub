@@ -72,7 +72,7 @@ function Stepper({ labels, active, t, since }: { labels: string[]; active: numbe
 export const HB_HUB_MS = 13500;
 
 const H_CARDS = [
-  { band: "Plan", hue: "indigo", cards: [["Brief", "Hero pour, morning light"], ["Assets", "24 files"]] },
+  { band: "Plan", hue: "indigo", cards: [["Brief", "A runner at dawn, the city waking"], ["Assets", "24 files"]] },
   { band: "Visualize", hue: "purple", cards: [["Storyboards", "12 frames"], ["Shot list", "18 shots"]] },
   { band: "Review", hue: "pink", cards: [["Review", "2 waiting"], ["Communication", "3 threads"]] },
   { band: "Produce", hue: "green", cards: [["Call sheet", "Oct 4 · 9/12 confirmed"], ["Budget", "$38k of $52k"]] },
@@ -147,7 +147,7 @@ export function HubScene({ t }: { t: number }) {
           )}
           <p className="pt-2 text-[9.5px] font-extrabold uppercase tracking-[0.12em] text-text-faint">Activity</p>
           {[
-            { at: 5400, who: "Kim Ade", txt: "uploaded v3 of the pack shot" },
+            { at: 5400, who: "Kim Ade", txt: "uploaded v3 of the ridge still" },
             { at: 10400, who: "Maya Chen", txt: "approved the shot list" },
           ].map((a) =>
             t >= a.at ? (
@@ -608,7 +608,7 @@ export const HB_BINDER_MS = 13500;
 
 const N_SECTIONS = [
   { k: "Shot list", at: 1400 },
-  { k: "Storyboard · Hero pour", at: 2300 },
+  { k: "Storyboard · First light", at: 2300 },
   { k: "Moodboard · Look", at: 3200 },
   { k: "Call sheet · Day 1", at: 4100 },
   { k: "Schedule", at: -1 },
@@ -661,8 +661,8 @@ export function HubBinderScene({ t }: { t: number }) {
               <div style={arrive(t, N_SECTIONS[0].at, 6)}>
                 <p className="text-[11.5px] font-extrabold">Shot list</p>
                 {[
-                  ["1A", "Hero pour, top light", "Hold two beats on the fill"],
-                  ["1B", "Bottle rotate", "Backup: use the turntable"],
+                  ["1A", "Ridge at dawn, drone", "Hold two beats on the sun"],
+                  ["1B", "Shoe hits the trail", "Backup: shoot it at 120fps"],
                 ].map(([c, d, n]) => (
                   <div key={c} className="flex gap-2 border-b border-border py-1 text-[10.5px]">
                     <b className="w-5">{c}</b>
@@ -676,7 +676,7 @@ export function HubBinderScene({ t }: { t: number }) {
             ) : null}
             {on[1] ? (
               <div style={arrive(t, N_SECTIONS[1].at, 6)}>
-                <p className="text-[11.5px] font-extrabold">Storyboard · Hero pour</p>
+                <p className="text-[11.5px] font-extrabold">Storyboard · First light</p>
                 <div className="mt-1 flex gap-1.5">
                   {[0, 1, 2, 3].map((k) => (
                     <span key={k} className="relative h-[34px] w-[58px] overflow-hidden rounded-[5px]">
