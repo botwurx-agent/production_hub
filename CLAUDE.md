@@ -5736,6 +5736,15 @@ warm/cool/dusk `grade`.
 - Left on purpose: the home hero's review tab (a hand pouring, already live
   action), the Instagram-only ReviewScene, the previz kitchen (a real preset),
   and the CGI vendor's pack shot render on the budget page.
+- THE REVIEW PAGE'S "A link, not a login" BAND was drawn as a gradient with a
+  red circle and a pin around NOTHING, under a claim about no-login links and
+  the 9:16 crop (operator: "the image makes no sense"). ReviewMotif now shows
+  exactly the claim: the link arriving by email, the car still under a 9:16
+  crop mask with a pin, and the note signed "typed her name, no account".
+  RULE for any motif: it illustrates the band's sentence, not the feature in
+  general. FOUND ON THE WAY: that band's two grid columns had no min-w-0, so at
+  390px the motif's min-content widened the column to 433 and clipped the
+  words on the right of EVERY feature page; both columns carry min-w-0 now.
 
 ### Scene builder on the marketing site (2026-10-08) — BUILT
 Operator: feature the scene builder in the home page's sliding panels, give it
