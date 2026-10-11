@@ -2551,7 +2551,6 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   Live check constraints were read first: only project_costs.status is
   constrained, and only received/approved/paid are written. NOT RUN against a
   real host.
-
 - CRM (2026-10-11, operator: "add the ability to add to the CRM").
   lib/connector-crm-tool.ts, pure half lib/connector-crm.ts (29 assertions).
   `add_deal` puts a deal on a client (by id, or exact name; a name matching
@@ -2568,6 +2567,7 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   the same kind, words and day is skipped, an open follow-up with the same
   title is skipped. A deal value goes through the same moneyOf as a cost
   ("n/a" is reported, never $0). NOT RUN against a real host.
+
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
 could say you were $4,200 over but not why, who, or against what document. Actual
