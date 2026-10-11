@@ -29,6 +29,7 @@ import {
   addPropsTool,
   createProjectTool,
 } from "@/lib/connector-record-tools";
+import { addDealTool, CRM_LOG_TOOL, DEAL_TOOL, logCrmTool } from "@/lib/connector-crm-tool";
 
 /**
  * The AI connector's server half: who a link belongs to, a session as that
@@ -163,7 +164,7 @@ const READ_ONLY_TOOLS: McpTool[] = READ_TOOLS.map((t) => ({
   annotations: { readOnlyHint: true, openWorldHint: false },
 }));
 
-export const CONNECTOR_TOOLS: McpTool[] = [...READ_ONLY_TOOLS, ...CONNECTOR_WRITE_TOOLS, SCHEDULE_TOOL, TASK_TOOL, CONTACT_TOOL, CALL_SHEET_TOOL, CLIENT_TOOL, PROJECT_TOOL, COST_TOOL, PROPS_TOOL];
+export const CONNECTOR_TOOLS: McpTool[] = [...READ_ONLY_TOOLS, ...CONNECTOR_WRITE_TOOLS, SCHEDULE_TOOL, TASK_TOOL, CONTACT_TOOL, CALL_SHEET_TOOL, CLIENT_TOOL, PROJECT_TOOL, COST_TOOL, PROPS_TOOL, DEAL_TOOL, CRM_LOG_TOOL];
 
 type ReadFn = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -191,6 +192,8 @@ export async function runConnectorTool(
   if (name === CONTACT_TOOL.name) return addContactsTool(owner, args);
   if (name === CALL_SHEET_TOOL.name) return createCallSheetTool(owner, args);
   if (name === CLIENT_TOOL.name) return addClientTool(owner, args);
+  if (name === DEAL_TOOL.name) return addDealTool(owner, args);
+  if (name === CRM_LOG_TOOL.name) return logCrmTool(owner, args);
   if (name === PROJECT_TOOL.name) return createProjectTool(owner, args);
   if (name === COST_TOOL.name) return addCostsTool(owner, args);
   if (name === PROPS_TOOL.name) return addPropsTool(owner, args);
@@ -213,7 +216,7 @@ export function connectorInstructions(owner: ConnectorOwner): string {
   const today = new Date().toISOString().slice(0, 10);
   return [
     `You are connected to Studio Flows, the production hub for ${owner.studioName}, a commercial production studio. Today is ${today}.`,
-    "You can look anything up. You can also ADD clients (add_client) and new projects (create_project, with the brief, deliverables and key dates), and use the project id it returns for everything below. You can ADD moodboards and storyboards (create_board, then add_to_moodboard or add_storyboard_frames) and shot lists (create_shot_list, then add_shots), with pictures passed as public image links, for example images you or another connected tool just generated. You can build the shooting schedule from the shot lists (build_schedule, which only adds) and add tasks to a project's task board (add_tasks; read its existing tasks first so none is added twice), and add people to a project's contacts (add_contacts: new people, or copies of people from an earlier project with their day rate carried over), and put together call sheets (create_call_sheet: a draft with the day's details and its people, which the producer sends from Studio Flows; it can also add people to an existing sheet), costs on a project's budget (add_costs: invoices, estimates and receipts; read its budget lines first), and props with options to choose between (add_props). Search before adding a client or project, since an existing one is returned rather than made twice. Make one board or list per request and put everything in it; nothing you make can be deleted from here, so a spare one is left for the producer to clean up. You cannot change, delete or send anything, and nothing else can be created yet: if the producer asks for something outside that, say so and tell them where to do it in Studio Flows. Never say something was created unless a tool result says it was, and report what each tool skipped.",
+    "You can look anything up. You can also ADD clients (add_client) and new projects (create_project, with the brief, deliverables and key dates), and use the project id it returns for everything below. On the sales side you can ADD deals to the pipeline (add_deal, on a client; a new company is added as a prospect) and log notes, calls, meetings and emails on a client's or deal's timeline with follow-ups (log_crm). You can ADD moodboards and storyboards (create_board, then add_to_moodboard or add_storyboard_frames) and shot lists (create_shot_list, then add_shots), with pictures passed as public image links, for example images you or another connected tool just generated. You can build the shooting schedule from the shot lists (build_schedule, which only adds) and add tasks to a project's task board (add_tasks; read its existing tasks first so none is added twice), and add people to a project's contacts (add_contacts: new people, or copies of people from an earlier project with their day rate carried over), and put together call sheets (create_call_sheet: a draft with the day's details and its people, which the producer sends from Studio Flows; it can also add people to an existing sheet), costs on a project's budget (add_costs: invoices, estimates and receipts; read its budget lines first), and props with options to choose between (add_props). Search before adding a client, project or deal, since an existing one is returned rather than made twice. Make one board or list per request and put everything in it; nothing you make can be deleted from here, so a spare one is left for the producer to clean up. You cannot change, delete or send anything, and nothing else can be created yet: if the producer asks for something outside that, say so and tell them where to do it in Studio Flows. Never say something was created unless a tool result says it was, and report what each tool skipped.",
     "Start with `search` when they name a project, client, deal or person, so you have its id. `get_project` takes only the sections you need. `get_money` is what is owed, billed and the margin. `get_crm` is the sales side. `get_attention` is what is at risk right now. `query` reads any listed table when nothing else fits.",
     "Money amounts are US dollars. Dates are YYYY-MM-DD. Speak in production terms (projects, shoots, deliverables, call sheets, approvals), not table names.",
   ].join("\n\n");

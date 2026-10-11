@@ -2552,6 +2552,22 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   constrained, and only received/approved/paid are written. NOT RUN against a
   real host.
 
+- CRM (2026-10-11, operator: "add the ability to add to the CRM").
+  lib/connector-crm-tool.ts, pure half lib/connector-crm.ts (29 assertions).
+  `add_deal` puts a deal on a client (by id, or exact name; a name matching
+  no client is added as a PROSPECT, createDeal's own move), writes the
+  "Deal created" system entry, and can carry timeline entries and follow-ups
+  in the same call. A deal is ALWAYS ADDED OPEN (inbound, qualifying,
+  bidding): "won" or "lost" is refused with a sentence, because winning
+  activates the account and losing asks for a reason, both changes to an
+  existing deal. `log_crm` logs notes, calls, meetings and emails on a deal
+  (which also shows on its client) or on a client alone, and adds
+  follow-ups (crm_tasks, assigned to the link's owner). Every entry carries
+  account_id, derived from the deal. A SECOND RUN ADDS NOTHING TWICE: an
+  open deal with the same title on that client is returned, an entry with
+  the same kind, words and day is skipped, an open follow-up with the same
+  title is skipped. A deal value goes through the same moneyOf as a cost
+  ("n/a" is reported, never $0). NOT RUN against a real host.
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
 could say you were $4,200 over but not why, who, or against what document. Actual
