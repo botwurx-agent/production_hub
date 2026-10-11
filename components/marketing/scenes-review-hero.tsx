@@ -11,7 +11,7 @@ import { ActionLabel, Burst, Chip, Cursor, Window, arrive, clamp01, easeInOut, e
  * approval on a link with no login.
  */
 
-export const REVIEW_HERO_MS = 13400;
+export const REVIEW_HERO_MS = 23000;
 
 const FPS = 24;
 const CLIP = 15; // seconds in the cut
@@ -21,20 +21,34 @@ const VW = 400;
 const VH = 225;
 const BAR_Y = 318;
 
-const PAUSE_AT = 900;
-const C1 = { at: 1100, post: 2500, text: "Hold on the pour a beat longer." };
-const DRAW_TOOL = 3000;
-const ARROW = [3300, 3900];
-const RING = [3950, 4500];
-const C2 = { at: 4600, post: 5500, text: "Make the logo bigger here." };
-const SCRUB = [5800, 6200];
-const OUT = [6450, 7000];
-const C3 = { at: 7000, post: 7900, text: "This stretch drags. Trim 2s." };
-const MIC = 8400;
-const REC_END = 9900;
-const C4 = { post: 10300 };
-const PLAY_VOICE = 10600;
-const APPROVE_AT = 11900;
+// Paced to be read, not skimmed: each beat holds long enough to see what
+// happened before the next one starts.
+const TYPE = 55; // ms per character
+const TRAVEL = 750; // ms for the pointer to cross between stops
+const PAUSE_AT = 1400;
+const C1 = { at: 1800, post: 4400, text: "Hold on the pour a beat longer." };
+const DRAW_TOOL = 5200;
+const ARROW = [5700, 6800];
+const RING = [6900, 7900];
+const C2 = { at: 8100, post: 9700, text: "Make the logo bigger here." };
+const SCRUB = [10300, 11000];
+const OUT = [11400, 12300];
+const C3 = { at: 12400, post: 14300, text: "This stretch drags. Trim 2s." };
+const MIC = 15000;
+const REC_END = 17400;
+const C4 = { post: 17900 };
+const PLAY_VOICE = 18400;
+const VOICE_LEN = 2000;
+const APPROVE_AT = 20600;
+
+/*
+ * The shot: a hand pours from the bottle into the glass. The bottle is drawn
+ * upright in its own coordinates (mouth at 0,0, body running down +y) and
+ * placed by POUR, so the label the client circles is always where the
+ * drawing points.
+ */
+const POUR = { x: 252, y: 108, angle: 127 };
+const LABEL = { x: 211, y: 77 }; // the label's centre in frame coordinates
 
 const sx = (s: number) => VX + (VW * s) / CLIP;
 
@@ -76,16 +90,25 @@ function Frame({ s }: { s: number }) {
       </defs>
       <rect width={VW} height={VH} fill="url(#rh-bg)" />
       <ellipse cx="200" cy="212" rx="190" ry="16" fill="var(--surface)" opacity=".7" />
-      {/* bottle, tilted to pour */}
-      <g transform="rotate(-38 170 120)">
-        <rect x="150" y="36" width="34" height="16" rx="4" fill="var(--h-indigo)" />
-        <path d="M146 52 h42 q10 14 10 30 v96 q0 8 -8 8 h-46 q-8 0 -8 -8 v-96 q0 -16 10 -30z" fill="var(--h-blue)" opacity=".88" />
-        <rect x="140" y="104" width="54" height="46" rx="6" fill="var(--surface)" />
-        <rect x="149" y="114" width="36" height="7" rx="3.5" fill="var(--h-indigo)" />
-        <rect x="153" y="127" width="28" height="4" rx="2" fill="var(--text-faint)" />
+      {/* the arm, coming in from the left edge */}
+      <path d="M-20 150 Q90 120 176 66" stroke="var(--h-indigo)" strokeWidth="30" strokeLinecap="round" fill="none" opacity=".85" />
+      <path d="M150 80 L182 62" stroke="color-mix(in oklch, var(--h-orange) 35%, var(--surface))" strokeWidth="22" strokeLinecap="round" fill="none" />
+      {/* the bottle, held and tipped over the glass */}
+      <g transform={`translate(${POUR.x} ${POUR.y}) rotate(${POUR.angle})`}>
+        <rect x="-8" y="-2" width="16" height="22" rx="3" fill="var(--h-blue)" opacity=".9" />
+        <path d="M-8 20 q-12 6 -14 18 v66 q0 8 8 8 h28 q8 0 8 -8 v-66 q-2 -12 -14 -18z" fill="var(--h-blue)" opacity=".9" />
+        <rect x="-20" y="40" width="40" height="30" rx="4" fill="var(--surface)" />
+        <rect x="-13" y="48" width="26" height="6" rx="3" fill="var(--h-indigo)" />
+        <rect x="-10" y="59" width="20" height="3.5" rx="1.75" fill="var(--text-faint)" />
+        {/* the hand round the lower body: palm on one side, fingers wrapping the other */}
+        <rect x="-25" y="78" width="12" height="28" rx="6" fill="color-mix(in oklch, var(--h-orange) 35%, var(--surface))" />
+        {[0, 1, 2, 3].map((i) => (
+          <rect key={i} x="13" y={78 + i * 7.5} width="12" height="7" rx="3.5" fill="color-mix(in oklch, var(--h-orange) 38%, var(--surface))" stroke="color-mix(in oklch, var(--h-orange) 50%, var(--surface))" strokeWidth="0.8" />
+        ))}
+        <rect x="-16" y="76" width="32" height="10" rx="5" fill="color-mix(in oklch, var(--h-orange) 32%, var(--surface))" />
       </g>
-      {/* pour */}
-      <path d={`M246 104 q18 10 22 ${fillY - 104}`} stroke="var(--h-amber)" strokeWidth="5" fill="none" opacity=".7" strokeLinecap="round" />
+      {/* the pour, falling from the mouth into the glass */}
+      <path d={`M${POUR.x + 4} ${POUR.y + 2} Q${POUR.x + 12} ${POUR.y + 14} ${POUR.x + 12} ${fillY}`} stroke="var(--h-amber)" strokeWidth="5" fill="none" opacity=".75" strokeLinecap="round" />
       {/* glass */}
       <path d={`M240 ${glassTop} h56 l-6 ${glassBottom - glassTop} h-44z`} fill="var(--surface)" opacity=".75" stroke="var(--h-cyan)" strokeWidth="2" />
       <path d={`M${242 + (fillY - glassTop) * 0.1} ${fillY} h${52 - (fillY - glassTop) * 0.2} l-${Math.max(0, (glassBottom - fillY) * 0.1)} ${glassBottom - fillY - 2} h-${Math.max(0, 44 - 2)}z`} fill="var(--h-amber)" opacity=".6" />
@@ -153,14 +176,14 @@ export function ReviewHeroScene({ t }: { t: number }) {
   const rangeMode = t >= SCRUB[1] && t < C3.post;
   const recording = t >= MIC && t < REC_END;
   const voiceDraft = t >= REC_END && t < C4.post;
-  const recSecs = Math.min(6, Math.floor((t - MIC) / 250));
+  const recSecs = Math.min(6, Math.floor((t - MIC) / 400));
 
   // The composer: whatever is being written right now.
   let draft = "";
   let draftAt = "";
-  if (t >= C1.at && t < C1.post) [draft, draftAt] = [typed(C1.text, t, C1.at + 200, 26), tc(4.5)];
-  else if (t >= C2.at && t < C2.post) [draft, draftAt] = [typed(C2.text, t, C2.at, 26), tc(4.5)];
-  else if (t >= C3.at && t < C3.post) [draft, draftAt] = [typed(C3.text, t, C3.at, 26), `${tc(7)} to ${tc(10)}`];
+  if (t >= C1.at && t < C1.post) [draft, draftAt] = [typed(C1.text, t, C1.at + 200, TYPE), tc(4.5)];
+  else if (t >= C2.at && t < C2.post) [draft, draftAt] = [typed(C2.text, t, C2.at, TYPE), tc(4.5)];
+  else if (t >= C3.at && t < C3.post) [draft, draftAt] = [typed(C3.text, t, C3.at, TYPE), `${tc(7)} to ${tc(10)}`];
   else if (recording || voiceDraft) draftAt = tc(10);
   else draftAt = tc(s);
 
@@ -189,9 +212,9 @@ export function ReviewHeroScene({ t }: { t: number }) {
           <Frame s={s} />
           {showDraw ? (
             <svg viewBox={`0 0 ${VW} ${VH}`} className="absolute inset-0 h-full w-full" aria-hidden="true">
-              <path d="M330 34 L218 96" pathLength={1} stroke="var(--h-red)" strokeWidth="4" strokeLinecap="round" fill="none" strokeDasharray="1" strokeDashoffset={1 - arrowP} />
-              {arrowP > 0.95 ? <path d="M218 96 l17 -2 M218 96 l7 -15" stroke="var(--h-red)" strokeWidth="4" strokeLinecap="round" fill="none" /> : null}
-              <ellipse cx="190" cy="104" rx="40" ry="26" transform="rotate(-38 190 104)" pathLength={1} stroke="var(--h-red)" strokeWidth="4" fill="none" strokeDasharray="1" strokeDashoffset={1 - ringP} />
+              <path d={`M330 30 L${LABEL.x + 15} ${LABEL.y - 3}`} pathLength={1} stroke="var(--h-red)" strokeWidth="4" strokeLinecap="round" fill="none" strokeDasharray="1" strokeDashoffset={1 - arrowP} />
+              {arrowP > 0.95 ? <path d={`M${LABEL.x + 15} ${LABEL.y - 3} l17 2 M${LABEL.x + 15} ${LABEL.y - 3} l10 -14`} stroke="var(--h-red)" strokeWidth="4" strokeLinecap="round" fill="none" /> : null}
+              <ellipse cx={LABEL.x} cy={LABEL.y} rx="30" ry="23" transform={`rotate(37 ${LABEL.x} ${LABEL.y})`} pathLength={1} stroke="var(--h-red)" strokeWidth="4" fill="none" strokeDasharray="1" strokeDashoffset={1 - ringP} />
             </svg>
           ) : null}
           {drawMode && t < C2.at ? (
@@ -296,8 +319,8 @@ export function ReviewHeroScene({ t }: { t: number }) {
                   </div>
                   {no.voice ? (
                     <div className="mt-1 flex items-center gap-1.5 text-[10.5px] font-bold" style={{ color: "var(--h-pink)" }}>
-                      <span className="grid h-5 w-5 place-items-center rounded-full text-[9px] text-white" style={{ background: "var(--h-pink)" }}>{t >= PLAY_VOICE && t < PLAY_VOICE + 1400 ? "❚❚" : "▶"}</span>
-                      <Wave t={t} n={20} progress={ramp(t, PLAY_VOICE, 1400)} h={14} />
+                      <span className="grid h-5 w-5 place-items-center rounded-full text-[9px] text-white" style={{ background: "var(--h-pink)" }}>{t >= PLAY_VOICE && t < PLAY_VOICE + VOICE_LEN ? "❚❚" : "▶"}</span>
+                      <Wave t={t} n={20} progress={ramp(t, PLAY_VOICE, VOICE_LEN)} h={14} />
                       0:06
                     </div>
                   ) : (
@@ -317,23 +340,23 @@ export function ReviewHeroScene({ t }: { t: number }) {
         </div>
       </Window>
 
-      <ActionLabel t={t} at={C1.at} x={150} y={330} text="Comment on the exact frame" after={1300} />
-      <ActionLabel t={t} at={ARROW[0]} x={24} y={196} text="Draw right on the frame" tone="red" after={1500} />
-      <ActionLabel t={t} at={OUT[0]} x={210} y={262} text="Mark a whole stretch" tone="purple" after={1300} />
-      <ActionLabel t={t} at={MIC} x={250} y={330} text="Or just say it" tone="pink" after={1600} />
-      <ActionLabel t={t} at={APPROVE_AT} x={612} y={350} text="Approve. No login." tone="green" after={1300} />
+      <ActionLabel t={t} at={C1.at} x={150} y={330} text="Comment on the exact frame" before={800} after={2200} />
+      <ActionLabel t={t} at={ARROW[0]} x={24} y={196} text="Draw right on the frame" tone="red" before={800} after={2200} />
+      <ActionLabel t={t} at={OUT[0]} x={210} y={262} text="Mark a whole stretch" tone="purple" before={800} after={2200} />
+      <ActionLabel t={t} at={MIC} x={250} y={330} text="Or just say it" tone="pink" before={800} after={2200} />
+      <ActionLabel t={t} at={APPROVE_AT} x={612} y={350} text="Approve. No login." tone="green" before={800} after={2200} />
       <Cursor
         t={t}
-        travel={420}
+        travel={TRAVEL}
         path={[
-          { t: 300, x: 200, y: 200 },
+          { t: 400, x: 200, y: 200 },
           { t: PAUSE_AT, x: 200, y: 180, click: true },
           { t: C1.post, x: 392, y: 414, click: true },
           { t: DRAW_TOOL, x: 44, y: 412, click: true },
-          { t: ARROW[0], x: VX + 330, y: VY + 34 },
-          { t: ARROW[1], x: VX + 218, y: VY + 96 },
-          { t: RING[0], x: VX + 190, y: VY + 78 },
-          { t: RING[1], x: VX + 196, y: VY + 80 },
+          { t: ARROW[0], x: VX + 330, y: VY + 30 },
+          { t: ARROW[1], x: VX + LABEL.x + 15, y: VY + LABEL.y - 3 },
+          { t: RING[0], x: VX + LABEL.x + 2, y: VY + LABEL.y - 24 },
+          { t: RING[1], x: VX + LABEL.x + 6, y: VY + LABEL.y - 22 },
           { t: C2.post, x: 392, y: 414, click: true },
           { t: SCRUB[0], x: sx(4.5), y: BAR_Y + 3, click: true },
           { t: SCRUB[1], x: sx(7), y: BAR_Y + 3 },
