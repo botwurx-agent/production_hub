@@ -17,6 +17,7 @@ import { assetStorage } from "@/lib/asset-storage";
 import { pathWithinScope } from "@/lib/upload-limits";
 import { reportError } from "@/lib/log";
 import type { Json } from "@/lib/database.types";
+import { planSend, updatePatch, type ShotRowOut } from "@/lib/previz/shot-export";
 
 /**
  * A saved setup crosses a Server Action, so the ~4.5MB serverless request body
@@ -187,4 +188,137 @@ export async function signSceneFiles(projectId: string, paths: string[]): Promis
   const out: Record<string, string> = {};
   for (const d of data ?? []) if (d.path && d.signedUrl) out[d.path] = d.signedUrl;
   return out;
+}
+
+const clip = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
+
+/**
+ * Writes Scene builder cameras into a shot list: a row per camera, matched to
+ * an existing row by its code (1A updates 1A) and appended otherwise. What the
+ * builder sends is checked here rather than trusted: text is capped, and a
+ * picture path is accepted only as a file directly in THIS project's scene
+ * folder, which is where the builder uploaded it. RLS on the shot list tables
+ * is the access check, so review-only access is refused by the database.
+ */
+export async function sendShotsToList(
+  projectId: string,
+  input: { listId?: string | null; newTitle?: string | null; rows: unknown },
+): Promise<{ listId: string; title: string; added: number; updated: number } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const { data: project } = await supabase.from("projects").select("id, studio_id").eq("id", projectId).maybeSingle();
+  if (!project) return { error: "Project not found." };
+
+  const raw = Array.isArray(input.rows) ? input.rows.slice(0, 40) : [];
+  const rows: ShotRowOut[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const code = clip(o.code, 20);
+    if (!code) continue;
+    const path = typeof o.path === "string" && pathWithinScope(o.path, project.studio_id, sceneFolder(project.id)) ? o.path : null;
+    rows.push({
+      code,
+      title: clip(o.title, 200),
+      shotSize: clip(o.shotSize, 60),
+      shotType: clip(o.shotType, 60),
+      movement: clip(o.movement, 60),
+      notesLine: clip(o.notesLine, 600),
+      path,
+    });
+  }
+  if (!rows.length) return { error: "No cameras to send." };
+
+  let group: { id: string; title: string | null } | null = null;
+  if (input.listId) {
+    const { data } = await supabase
+      .from("shot_groups")
+      .select("id, title")
+      .eq("id", input.listId)
+      .eq("project_id", project.id)
+      .maybeSingle();
+    if (!data) return { error: "That shot list could not be found. It may have been deleted." };
+    group = data;
+  } else {
+    // The cover row the shot list page hangs on, made on first use as the
+    // page itself does.
+    const { data: board } = await supabase.from("shot_boards").select("id").eq("project_id", project.id).maybeSingle();
+    if (!board) {
+      const { error } = await supabase
+        .from("shot_boards")
+        .insert({ studio_id: project.studio_id, project_id: project.id, created_by: ctx.userId });
+      if (error) return { error: "The shot list could not be created. You may only have review access to this project." };
+    }
+    const { data: last } = await supabase
+      .from("shot_groups")
+      .select("position")
+      .eq("project_id", project.id)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { data, error } = await supabase
+      .from("shot_groups")
+      .insert({
+        studio_id: project.studio_id,
+        project_id: project.id,
+        position: (last?.position ?? -1) + 1,
+        title: clip(input.newTitle, 120) || "Shot list",
+        created_by: ctx.userId,
+      })
+      .select("id, title")
+      .single();
+    if (error || !data) return { error: "The shot list could not be created. You may only have review access to this project." };
+    group = data;
+  }
+
+  const { data: existing } = await supabase
+    .from("shot_cards")
+    .select("id, code, description, notes, position")
+    .eq("group_id", group.id)
+    .order("position", { ascending: true });
+  const plan = planSend(existing ?? [], rows);
+
+  let updated = 0;
+  for (const p of plan) {
+    if (!p.update) continue;
+    const { data, error } = await supabase
+      .from("shot_cards")
+      .update(updatePatch(p.update, p.out))
+      .eq("id", p.update.id)
+      .select("id");
+    if (error || !data?.length) {
+      if (error) reportError("sendShotsToList update", error);
+      return { error: `Shot ${p.out.code} could not be updated. You may only have review access to this project.` };
+    }
+    updated++;
+  }
+
+  let position = Math.max(-1, ...(existing ?? []).map((r) => r.position)) + 1;
+  const inserts = plan
+    .filter((p) => !p.update)
+    .map((p) => ({
+      studio_id: project.studio_id,
+      group_id: group!.id,
+      position: position++,
+      code: p.out.code,
+      description: p.out.title || null,
+      shot_size: p.out.shotSize || null,
+      shot_type: p.out.shotType || null,
+      movement: p.out.movement || null,
+      notes: p.out.notesLine || null,
+      storage_path: p.out.path,
+      mime_type: p.out.path ? "image/jpeg" : null,
+      image_name: p.out.path ? `${p.out.code}_previz.jpg` : null,
+      tags: [],
+      created_by: ctx.userId,
+    }));
+  if (inserts.length) {
+    const { error } = await supabase.from("shot_cards").insert(inserts);
+    if (error) {
+      reportError("sendShotsToList insert", error);
+      return { error: updated ? `${updated} updated, but the new rows could not be added.` : "The shots could not be added. You may only have review access to this project." };
+    }
+  }
+  revalidatePath(`/projects/${project.id}/shot-list`);
+  return { listId: group.id, title: group.title || "Shot list", added: inserts.length, updated };
 }

@@ -41,6 +41,23 @@ export default async function SceneBuilderPage({
     if (row) active = { id: row.id, data: asSetup(row.data) };
   }
 
+  // The shot lists a camera can be sent to, with the codes already on each so
+  // the send window can say which cameras update a row and which add one.
+  const { data: groups } = await supabase
+    .from("shot_groups")
+    .select("id, title, position")
+    .eq("project_id", project.id)
+    .order("position", { ascending: true });
+  const groupIds = (groups ?? []).map((g) => g.id);
+  const { data: cards } = groupIds.length
+    ? await supabase.from("shot_cards").select("group_id, code").in("group_id", groupIds)
+    : { data: [] as { group_id: string; code: string | null }[] };
+  const shotLists = (groups ?? []).map((g) => ({
+    id: g.id,
+    title: g.title || "Untitled shot list",
+    codes: (cards ?? []).filter((c) => c.group_id === g.id && c.code).map((c) => c.code as string),
+  }));
+
   return (
     <SceneBuilderWorkspace
       projectId={project.id}
@@ -49,6 +66,7 @@ export default async function SceneBuilderPage({
       active={active && active.data ? { id: active.id, data: active.data } : null}
       unreadable={Boolean(active && !active.data)}
       canEdit={canEditProject(ctx, project.id)}
+      shotLists={shotLists}
     />
   );
 }

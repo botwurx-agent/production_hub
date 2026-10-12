@@ -7744,9 +7744,33 @@ and see how it goes." The 3D previz below is now a project page.
   sends one save carrying the setup id. NOT verified end to end against the
   database: a session here cannot reach Supabase, so the first real save is on
   the operator's machine.
-- NOT YET: the outputs in the slice list below (lens and movement onto a shot
-  list row, a render into the storyboard, fixtures into Gear & crew, the
-  diagram onto the call sheet, client review). Each is additive.
+- SEND TO SHOT LIST (2026-10-12, the first output, operator chose it as step
+  one of "render the block scene into something usable"). A toolbar button
+  ("Send to shot list", which took the place of the disabled "Render this
+  frame" placeholder, since the toolbar was already exactly one line wide at
+  1440) opens a window: pick a list or make a new one (named after the setup),
+  tick cameras. Each camera becomes a row: its START frame rendered at the
+  frame's on-screen size with the action posed at its start (frameReq in the
+  render loop, read straight after each render like Save frame), uploaded on
+  the scene_file scope, plus shot size, angle and movement IN THE SHOT LIST'S
+  OWN VOCABULARY (shotSize, cameraAngle, movementWord) and ONE notes line
+  starting "Previz:" carrying body, lens, stop, lens height, focus distance,
+  support, move and setup name, since the list has no columns for those.
+  MATCHED BY CODE: a camera whose code is already on the list UPDATES that
+  row (picture, size, angle, movement replaced; description kept unless
+  blank; the old Previz line replaced and the producer's own notes kept),
+  otherwise a row is added; the window says "Updates 1A" / "Adds 2B" per
+  camera before anything is sent. lib/previz/shot-export.ts is pure (27
+  assertions: movement words incl. a turned camera, notes merge, first-match
+  planning). sendShotsToList (scene-actions.ts) caps text and accepts a
+  picture path only directly in this project's scene folder; RLS on the shot
+  list tables is the write check. A frame that fails to store still writes
+  its row and is named. Unsaved framing on a move is not sent: the saved start
+  is. NOT YET: the reverse (a row seeding a camera), and step 2, "make it
+  real" through the connector.
+- NOT YET: the other outputs in the slice list below (a render into the
+  storyboard, fixtures into Gear & crew, the diagram onto the call sheet,
+  client review). Each is additive.
 - PRESETS ARE A STARTING ROOM, NOT A PLAN (operator, first real test,
   2026-10-08: "talent in front of seamless created three variations with three
   cameras... let's keep it simple"). Every preset is now the room, ONE person,

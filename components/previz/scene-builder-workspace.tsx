@@ -16,7 +16,7 @@ import {
   bathroomSetup, bedroomSetup, blankSetup, kitchenSetup, studioSetup, type Setup,
 } from "@/components/previz/setup";
 import {
-  createSceneSetup, deleteSceneSetup, finishSceneFile, saveSceneSetup, signSceneFiles,
+  createSceneSetup, deleteSceneSetup, finishSceneFile, saveSceneSetup, sendShotsToList, signSceneFiles,
 } from "@/app/(app)/projects/[id]/scene-actions";
 import { uploadDirect } from "@/components/upload/direct-upload";
 
@@ -35,6 +35,7 @@ export function SceneBuilderWorkspace({
   active,
   unreadable,
   canEdit,
+  shotLists,
 }: {
   projectId: string;
   projectTitle: string;
@@ -42,6 +43,7 @@ export function SceneBuilderWorkspace({
   active: { id: string; data: Setup } | null;
   unreadable: boolean;
   canEdit: boolean;
+  shotLists: { id: string; title: string; codes: string[] }[];
 }) {
   const router = useRouter();
   const [busy, startBusy] = useTransition();
@@ -77,6 +79,14 @@ export function SceneBuilderWorkspace({
           } catch {
             return null;
           }
+        },
+        shotLists,
+        shotListHref: `/projects/${projectId}/shot-list`,
+        sendShots: async (req) => {
+          const res = await sendShotsToList(projectId, req);
+          const err = actionError(res);
+          if (err || !res || !("listId" in res)) return { error: err ?? "Could not send to the shot list." };
+          return res;
         },
         fileLinks: async (paths) => {
           const res = await signSceneFiles(projectId, paths);

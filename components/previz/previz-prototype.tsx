@@ -61,6 +61,8 @@ import { AddMenu, ItemInspector, RoomInspector, ScoutDialog, type ScoutChoices }
 import { SHOT_HUES, TopDownMap, type MapPick } from "./top-down-map";
 import { readScoutPhoto } from "@/app/(app)/projects/[id]/scene-actions";
 import type { RoomDraft } from "@/lib/previz/room-draft";
+import { movementWord, previzLine, type ShotRowOut } from "@/lib/previz/shot-export";
+import { SendToShotListDialog, type SendCamera, type SendResult, type SendTarget } from "./send-to-shot-list";
 
 type Selection =
   | { kind: "camera" }
@@ -494,6 +496,13 @@ export type SceneStore = {
   uploadFile?: (blob: Blob, name: string) => Promise<string | null>;
   /** Short-lived links for stored files, by path. */
   fileLinks?: (paths: string[]) => Promise<Record<string, string>>;
+  /** The project's shot lists, and the codes already on each. */
+  shotLists?: { id: string; title: string; codes: string[] }[];
+  shotListHref?: string;
+  /** Writes cameras into a shot list as rows. */
+  sendShots?: (req: { listId: string | null; newTitle: string | null; rows: ShotRowOut[] }) => Promise<
+    { listId: string; title: string; added: number; updated: number } | { error: string }
+  >;
 };
 
 export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: SceneStore; heightClass?: string } = {}) {
@@ -575,6 +584,10 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const [loaded, setLoaded] = useState(false);
   const [adding, setAdding] = useState(false);
   const [scout, setScout] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
+  // The project's shot lists, kept here so a list made by a send (or a code
+  // added to one) shows the next time the window opens, without a reload.
+  const [shotLists, setShotLists] = useState(() => store?.shotLists ?? []);
   // Bumped when a product photo or a model finishes loading, so the set rebuilds.
   const [assetTick, setAssetTick] = useState(0);
 
@@ -647,6 +660,8 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const lastChange = useRef(0);
   const activeDirty = useRef(true);
   const saveFrame = useRef(false);
+  /** Shots whose start frame the render loop should hand back as a JPEG, by id. */
+  const frameReq = useRef<{ ids: string[]; resolve: (out: Record<string, string>) => void } | null>(null);
   const dirty = () => {
     activeDirty.current = true;
     lastChange.current = performance.now();
@@ -1051,6 +1066,26 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           poseRef.current = sc;
           pose(sc);
         }
+      }
+      // Frames asked for by "Send to shot list": each shot's own start frame,
+      // with the action posed at its start, at the full size of the frame on
+      // screen. Read straight after each render, before anything else draws.
+      const req = P.on || P.rec ? null : frameReq.current;
+      if (req) {
+        frameReq.current = null;
+        const out: Record<string, string> = {};
+        const s0 = placeScene(L.talent, L.items, 0);
+        poseRef.current = s0;
+        pose(s0);
+        for (const id of req.ids) {
+          const shot = L.shots.find((x) => x.id === id);
+          if (!shot) continue;
+          renderShot(shot);
+          out[id] = renderer.domElement.toDataURL("image/jpeg", 0.9);
+        }
+        poseRef.current = sc;
+        pose(sc);
+        req.resolve(out);
       }
       const s = view;
       renderShot(s);
@@ -1843,6 +1878,70 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const size = shotSize(frameH);
   const angle = cameraAngle(active.pitch, active.pos.y);
   const focusName = targetName(active.focusOn, scene);
+
+  // ----- Send to shot list. Each camera as a shot list row, read at its own
+  // start frame with the action at its start, in the shot list's words.
+  const sendCameras = (): (SendCamera & { row: Omit<ShotRowOut, "path"> })[] => {
+    const s0 = placeScene(talent, items, 0);
+    return shots.map((s) => {
+      const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
+      const a = imagedArea(b, aspect.ratio);
+      const fM = effectiveFocus(s, s0);
+      const sup = SUPPORTS.find((k) => k.id === s.support) ?? SUPPORTS[0];
+      const stats = s.move ? moveStats(s.support, camKey(s), s.move) : null;
+      const row = {
+        code: s.code,
+        title: s.title,
+        shotSize: shotSize((a.h * fM) / s.focal),
+        shotType: cameraAngle(s.pitch, s.pos.y),
+        movement: movementWord(camKey(s), s.move),
+        notesLine: previzLine({
+          body: b.name,
+          focal: s.focal,
+          stop: s.stop,
+          height: dist(s.pos.y, units),
+          distance: dist(fM, units),
+          support: s.support === "sticks" ? "sticks" : `a ${sup.name}`,
+          moveName: stats?.name ?? null,
+          durationS: s.move?.durationS ?? null,
+          setupName: name,
+        }),
+      };
+      return { id: s.id, ...row, thumb: thumbs[s.id] ?? null, row };
+    });
+  };
+
+  /** Renders each shot's frame, stores it on the project, and writes the rows. */
+  const sendToShotList = async (ids: string[], target: SendTarget): Promise<SendResult> => {
+    const st = storeRef.current;
+    if (!st?.sendShots) return { error: "Sending to a shot list works on a project's Scene builder." };
+    const cams = sendCameras().filter((c) => ids.includes(c.id));
+    setView("lens");
+    const frames = await new Promise<Record<string, string>>((resolve) => {
+      frameReq.current = { ids, resolve };
+    });
+    const unpictured: string[] = [];
+    const rows: ShotRowOut[] = [];
+    for (const c of cams) {
+      let path: string | null = null;
+      const url = frames[c.id];
+      if (url && st.uploadFile) {
+        const blob = await (await fetch(url)).blob();
+        path = await st.uploadFile(blob, `${c.code.replace(/[^A-Za-z0-9_-]+/g, "") || "shot"}_previz.jpg`);
+      }
+      if (!path) unpictured.push(c.code);
+      rows.push({ ...c.row, path });
+    }
+    const res = await st.sendShots({ ...target, rows });
+    if ("error" in res) return res;
+    const sent = rows.map((r) => r.code);
+    setShotLists((ls) =>
+      ls.some((l) => l.id === res.listId)
+        ? ls.map((l) => (l.id === res.listId ? { ...l, codes: [...l.codes, ...sent] } : l))
+        : [...ls, { id: res.listId, title: res.title, codes: sent }],
+    );
+    return { ...res, unpictured };
+  };
 
   // ----- Lights and grip. Letting go of a target keeps the head where it was
   // pointing, so "by hand" starts from the current aim, not from zero.
@@ -2877,14 +2976,16 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         </label>
         <Seg value={units} onChange={(v) => setUnits(v as Units)} options={[{ v: "ft", l: "ft" }, { v: "m", l: "m" }]} />
         <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            disabled
-            title="The photoreal still renderer is slice 3"
-            className="rounded-[10px] border border-border px-3 py-1.5 text-xs font-semibold text-text-faint"
-          >
-            Render this frame
-          </button>
+          {store?.sendShots && store.canEdit ? (
+            <button
+              type="button"
+              onClick={() => setSendOpen(true)}
+              title="Each camera becomes a shot list row, with its frame, size, angle, movement and lens"
+              className="rounded-[10px] border border-border px-3 py-1.5 text-xs font-semibold text-text hover:border-border-strong"
+            >
+              Send to shot list
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => { setView("lens"); saveFrame.current = true; }}
@@ -3441,6 +3542,17 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           Shot from here
         </button>
       </footer>
+      ) : null}
+
+      {sendOpen && store?.sendShots ? (
+        <SendToShotListDialog
+          cameras={sendCameras()}
+          lists={shotLists}
+          defaultTitle={name}
+          shotListHref={store.shotListHref ?? "#"}
+          onSend={sendToShotList}
+          onClose={() => setSendOpen(false)}
+        />
       ) : null}
 
       {scout ? (
