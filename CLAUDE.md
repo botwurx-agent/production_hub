@@ -7611,6 +7611,15 @@ and see how it goes." The 3D previz below is now a project page.
   in hand reads as something to delete before starting. The key stays because
   a stage with nothing lit renders black. The menu and empty-state blurbs say
   "one person, one camera" so the promise matches.
+- OPENING A DOWNLOADED SETUP FILE FAILED with "That did not reach the
+  server" (operator, 2026-10-12). A downloaded .previz.json carries its photos
+  and models PACKED INSIDE IT, and "Open a setup file" on a project sent the
+  whole thing to createSceneSetup, so the request died at the ~4.5MB platform
+  limit before any code ran and came back undefined, which actionError reads
+  as an expired session. The server already dropped `assets`, but only after
+  receiving them. Both create paths now send setupForStore(...).setup, which
+  strips them in the browser; restoreAssets has already unpacked them into
+  this browser's IndexedDB first, so the photos and models still show here.
 - FURNITURE MISSING ON A FRESH LOAD, fixed at the same time: the item cache
   (itemObjs) outlived the 3D engine across React's development double mount,
   so the second, empty engine skipped every piece as already built and a

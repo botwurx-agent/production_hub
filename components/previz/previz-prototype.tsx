@@ -2541,7 +2541,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       : which === "bedroom" ? bedroomSetup()
       : blankSetup(5, 6, 2.8);
     // On a project, New is another setup beside this one, never a replacement.
-    if (store) { flushStore(); void store.create(fresh); return; }
+    if (store) { flushStore(); void store.create(setupForStore(fresh).setup); return; }
     if (!window.confirm("Start a new setup? This one is replaced in this browser. Download it first if you want to keep it.")) return;
     applySetup(fresh);
     if (which === "blank") setSel({ kind: "set" });
@@ -2561,7 +2561,12 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       const parsed = asSetup(raw);
       if (!parsed) { window.alert("That file is not a scene setup this page can open."); return; }
       const n = await restoreAssets((raw as Setup).assets);
-      if (store) { flushStore(); await store.create(parsed); return; }
+      // On a project the scene goes to the server, and a downloaded file can
+      // carry its photos and models packed inside it: tens of megabytes that
+      // would die at the platform's request limit before reaching the save,
+      // which reads as the session having expired. They were just unpacked
+      // into this browser above, so only the scene itself is sent.
+      if (store) { flushStore(); await store.create(setupForStore(parsed).setup); return; }
       applySetup(parsed);
       setSaveNote(`Opened ${parsed.name}${n ? ` with ${n} photo${n === 1 ? "" : "s"} and model${n === 1 ? "" : "s"}` : ""}`);
     });
