@@ -5762,6 +5762,27 @@ warm/cool/dusk `grade`.
   390px the motif's min-content widened the column to 433 and clipped the
   words on the right of EVERY feature page; both columns carry min-w-0 now.
 
+### Footer social icons (2026-10-12) — BUILT, WAITING ON URLS
+Operator: "we need to add social icons to the footer". The icon row is built
+and verified, and it DOES NOT SHOW YET, because no Studio Flows profile address
+exists anywhere in the repo and inventing one would link to an account that is
+not ours (or to a stranger who holds the handle).
+- lib/marketing/socials.ts is the one list (Instagram, LinkedIn, YouTube,
+  Vimeo, X, TikTok), each with an empty `url`. PASTE A REAL https:// PROFILE
+  ADDRESS IN TO SWITCH A NETWORK ON; an entry without one renders nothing, and
+  the whole row is absent while every entry is empty. Delete a network the
+  studio will not use.
+- The same list feeds the Organization `sameAs` in structured-data.tsx, so a
+  profile turned on in the footer is also declared to search engines.
+- components/marketing/social-icons.tsx draws the marks in currentColor
+  (token colour, muted, text on hover), not in brand colours: a row of six
+  brand colours reads as an ad strip and would be the only fixed colours on
+  the page. Each link opens in a new tab with rel noopener noreferrer and an
+  aria-label "Studio Flows on <network>".
+- Placed on the right of the copyright bar on desktop, above the copyright on
+  a phone. Verified in Chromium with placeholder URLs at 1440 and 390: all six
+  render, no horizontal overflow.
+
 ### Scene builder on the marketing site (2026-10-08) — BUILT
 Operator: feature the scene builder in the home page's sliding panels, give it
 its own page, animate it like the rest, and show the phone viewfinder there.

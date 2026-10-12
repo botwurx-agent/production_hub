@@ -2,6 +2,8 @@ import Link from "next/link";
 import { APP_ORIGIN } from "@/lib/marketing/hosts";
 import { StudioTile } from "@/components/brand/studio-mark";
 import { FEATURES, featureHref } from "@/lib/marketing/features";
+import { LIVE_SOCIALS } from "@/lib/marketing/socials";
+import { SocialIcon } from "./social-icons";
 
 const COLUMNS = [
   {
@@ -70,10 +72,28 @@ export function SiteFooter() {
         ))}
       </div>
 
-      <div className="mx-auto mt-12 w-full max-w-[1400px] border-t border-border pt-6">
+      <div className="mx-auto mt-12 flex w-full max-w-[1400px] flex-col-reverse gap-4 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-text-faint">
           © {new Date().getFullYear()} Studio Flows. All rights reserved.
         </p>
+        {LIVE_SOCIALS.length > 0 && (
+          <ul className="-ml-2 flex items-center gap-1 sm:-mr-2 sm:ml-0">
+            {LIVE_SOCIALS.map((s) => (
+              <li key={s.network}>
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Studio Flows on ${s.label}`}
+                  title={s.label}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-text-muted transition hover:bg-surface-2 hover:text-text"
+                >
+                  <SocialIcon network={s.network} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </footer>
   );

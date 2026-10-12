@@ -1,4 +1,5 @@
 import { PLANS, FAQS } from "@/lib/marketing/pricing";
+import { LIVE_SOCIALS } from "@/lib/marketing/socials";
 
 /**
  * Schema.org markup for the marketing site.
@@ -43,6 +44,7 @@ const ORGANIZATION = {
   logo: `${ORIGIN}/icon`,
   description:
     "A connected production hub for commercial production studios: briefs, boards, client approvals, schedules, call sheets and budgets in one place.",
+  ...(LIVE_SOCIALS.length > 0 && { sameAs: LIVE_SOCIALS.map((s) => s.url) }),
 };
 
 /** Site-wide identity. Mounted once in the marketing layout. */
