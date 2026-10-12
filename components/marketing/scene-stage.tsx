@@ -194,17 +194,26 @@ export function LiveScene({
   name,
   className = "",
   box = false,
+  label,
 }: {
   name: SceneName;
   className?: string;
   /** The container has its own height (a pinned panel): fit both dimensions. */
   box?: boolean;
+  /** What a screen reader hears instead of the moving parts. Defaults to the
+      scene's own short label, which names the feature but not the page. */
+  label?: string;
 }) {
   const [ref, inView] = useInView<HTMLDivElement>(0.3);
-  const { ms, C } = SCENES[name];
+  const { ms, C, label: own } = SCENES[name];
   const t = useSceneClock({ duration: ms, playing: inView, loop: true });
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div
+      ref={ref}
+      className={`relative ${className}`}
+      role="img"
+      aria-label={label ?? `Illustration: ${own} in Studio Flows.`}
+    >
       <FitStage className={box ? "lg:absolute lg:inset-0" : ""}>
         <C t={t} />
       </FitStage>
