@@ -54,6 +54,7 @@ import {
 } from "@/lib/previz/set-items";
 import { buildRoom, outsideRoom, roomBounds, roomWindows, throughWindow, windowName, type SetSpec, type WindowInfo } from "@/lib/previz/room";
 import { embedAssets, getAsset, prepareLabel, putAsset, restoreAssets } from "@/lib/previz/asset-store";
+import { unstoredKeys } from "@/lib/previz/scene-files";
 import { MAX_MODEL_BYTES, UNITS, guessUnit, loadModel, modelFormat, rawSize } from "@/lib/previz/model-import";
 import { strideSide, walkSpeed, walkerAt } from "@/lib/previz/talent-walk";
 import { AddMenu, ItemInspector, RoomInspector, ScoutDialog, type ScoutChoices } from "./set-panels";
@@ -488,6 +489,11 @@ export type SceneStore = {
   /** Makes a new setup on the project and switches to it. */
   create: (s: Setup) => Promise<void>;
   canEdit: boolean;
+  /** Uploads a product photo or model to the project; resolves to its storage
+   * path, or null when it could not be stored. */
+  uploadFile?: (blob: Blob, name: string) => Promise<string | null>;
+  /** Short-lived links for stored files, by path. */
+  fileLinks?: (paths: string[]) => Promise<Record<string, string>>;
 };
 
 export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: SceneStore; heightClass?: string } = {}) {
@@ -495,6 +501,12 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const [name, setName] = useState(initial.name);
   const [set, setSet] = useState<SetSpec>(initial.set);
   const [items, setItems] = useState<ItemSpec[]>(initial.items);
+  // Where each photo and model is stored on the project (key -> path).
+  const [files, setFiles] = useState<Record<string, string>>(initial.files ?? {});
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const storeRef = useRef(store);
+  storeRef.current = store;
   const [shots, setShots] = useState<Shot[]>(initial.shots);
   const [activeId, setActiveId] = useState(initial.activeId);
   const [talent, setTalent] = useState<TalentSpec[]>(initial.talent);
@@ -1140,7 +1152,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         const key = it.label;
         art.current.set(key, "loading");
         void (async () => {
-          const a = await getAsset(key);
+          const a = await loadAsset(key, "Product photo");
           if (!a) { art.current.set(key, "missing"); setSaveNote("A product photo this setup uses is not in this browser"); bump(); return; }
           await cacheArt(key, a.blob);
           bump();
@@ -1152,7 +1164,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           const m = it.model;
           models.current.set(ck, "loading");
           void (async () => {
-            const a = await getAsset(m.key);
+            const a = await loadAsset(m.key, m.fileName);
             if (!a) { models.current.set(ck, "missing"); setSaveNote(`${m.fileName} is not in this browser: open the setup file it came in`); bump(); return; }
             try {
               const obj = await loadModel(await a.blob.arrayBuffer(), m.fileName, m.upZ);
@@ -1170,6 +1182,62 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
+
+  /**
+   * A photo or model by key: this browser's copy, or on a project the stored
+   * one, fetched once and kept in this browser after that. This is what lets a
+   * setup open with its files on a computer that never added them.
+   */
+  const loadAsset = async (key: string, name: string) => {
+    const local = await getAsset(key);
+    if (local) return local;
+    const path = filesRef.current[key];
+    const links = storeRef.current?.fileLinks;
+    if (!path || !links) return null;
+    try {
+      const url = (await links([path]))[path];
+      if (!url) return null;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      await putAsset(blob, name, key);
+      return { key, name, type: blob.type, blob };
+    } catch {
+      return null;
+    }
+  };
+  /**
+   * On a project, every photo and model is copied to the project's storage as
+   * it is added, in the background, so anyone who opens the setup gets it.
+   * Nothing to press: the setup simply records where it went.
+   */
+  const sharing = useRef(new Set<string>());
+  const shareFile = async (key: string, blob: Blob, name: string) => {
+    const st = storeRef.current;
+    if (!st?.canEdit || !st.uploadFile || filesRef.current[key] || sharing.current.has(key)) return;
+    sharing.current.add(key);
+    const path = await st.uploadFile(blob, name);
+    sharing.current.delete(key);
+    if (path) setFiles((f) => ({ ...f, [key]: path }));
+    else setSaveNote(`${name} could not be uploaded to the project yet, so only this browser has it`);
+  };
+  // Photos and models added before this existed, or brought in from a setup
+  // file, are only in this browser: copy each one up once, quietly.
+  useEffect(() => {
+    if (!loaded || !store?.canEdit || !store.uploadFile) return;
+    const todo = unstoredKeys(assetKeys(items), files).filter((k) => !sharing.current.has(k));
+    if (!todo.length) return;
+    let alive = true;
+    void (async () => {
+      for (const k of todo) {
+        if (!alive) return;
+        const a = await getAsset(k);
+        if (a) await shareFile(k, a.blob, a.name);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, items, files]);
 
   /** Decodes a product photo for wrapping, with its average colour. */
   const cacheArt = async (key: string, blob: Blob, avg?: string) => {
@@ -2155,6 +2223,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     try {
       const p = await prepareLabel(file);
       const key = await putAsset(p.blob, file.name);
+      void shareFile(key, p.blob, file.name);
       await cacheArt(key, p.blob, p.avg);
       const c = catalogOf(shape);
       const at = placeFor(shape);
@@ -2178,6 +2247,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     try {
       const p = await prepareLabel(file);
       const key = await putAsset(p.blob, file.name);
+      void shareFile(key, p.blob, file.name);
       await cacheArt(key, p.blob, p.avg);
       updateItem(id, { label: key });
     } catch (e) {
@@ -2198,6 +2268,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       const unit = guessUnit(file.name, raw);
       const m = UNITS.find((u) => u.id === unit)?.m ?? 1;
       const key = await putAsset(file, file.name);
+      void shareFile(key, file, file.name);
       models.current.set(`${key}|${upZ}`, { obj, raw: { x: raw.x, y: raw.y, z: raw.z } });
       const big = Math.max(raw.x, raw.z) * m > 4;
       const at = placeFor("model");
@@ -2463,6 +2534,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   // ----- The setup: kept in this browser, and openable from a file.
   const snapshot = (): Setup => ({
     v: 3, name, set, items, shots, activeId, talent, lights, grips, win, units, aspectId,
+    ...(Object.keys(files).length ? { files } : {}),
   });
   const applySetup = (x: Setup) => {
     setName(x.name);
@@ -2476,6 +2548,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     setWin(x.win);
     setUnits(x.units);
     setAspectId(x.aspectId);
+    setFiles(x.files ?? {});
     setPlayhead(0);
     setDrafts({});
     setSel({ kind: "camera" });
@@ -2492,8 +2565,6 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   // opening a setup writes nothing; after that only a real change is sent, and
   // a change still waiting when the builder closes (switching setups) is sent
   // on the way out rather than dropped.
-  const storeRef = useRef(store);
-  storeRef.current = store;
   const lastSaved = useRef<string | null>(null);
   const pending = useRef<Setup | null>(null);
   const flushStore = () => {
@@ -2528,7 +2599,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     }, 600);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, name, set, items, shots, activeId, talent, lights, grips, win, units, aspectId]);
+  }, [loaded, name, set, items, shots, activeId, talent, lights, grips, win, units, aspectId, files]);
   useEffect(() => {
     if (!saveNote) return;
     const t = window.setTimeout(() => setSaveNote(null), 6000);

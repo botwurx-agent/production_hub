@@ -11,6 +11,10 @@ import { aiConfigured, extractRoomFromPhoto } from "@/lib/ai";
 import { MAX_UPLOAD_BYTES } from "@/lib/attachment-limits";
 import { ROOM_KINDS, parseRoomDraft, type RoomDraft } from "@/lib/previz/room-draft";
 import { asSetup, type Setup } from "@/components/previz/setup";
+import { cleanSceneFiles, sceneFolder } from "@/lib/previz/scene-files";
+import { finalizeUpload } from "@/lib/upload-ticket";
+import { assetStorage } from "@/lib/asset-storage";
+import { pathWithinScope } from "@/lib/upload-limits";
 import { reportError } from "@/lib/log";
 import type { Json } from "@/lib/database.types";
 
@@ -24,12 +28,15 @@ const MAX_SETUP_CHARS = 3_500_000;
 
 const rp = (projectId: string) => revalidatePath(`/projects/${projectId}/scene-builder`);
 
-function cleanSetup(raw: unknown): { setup: Setup; json: string } | { error: string } {
+function cleanSetup(raw: unknown, studioId: string, projectId: string): { setup: Setup; json: string } | { error: string } {
   const setup = asSetup(raw);
   if (!setup) return { error: "That is not a scene setup this page can save." };
-  // Embedded photos and models never go to the database: they stay keyed in
-  // the browser that added them.
-  const { assets: _a, ...plain } = setup;
+  // Embedded photos and models never go to the database as bytes: they are
+  // uploaded to the project's storage on their own, and the setup carries only
+  // where they went, checked to be this project's own folder.
+  const { assets: _a, files, ...rest } = setup;
+  const clean = cleanSceneFiles(files, studioId, projectId);
+  const plain: Setup = Object.keys(clean).length ? { ...rest, files: clean } : rest;
   const json = JSON.stringify(plain);
   if (json.length > MAX_SETUP_CHARS) return { error: "This setup is too large to save. Remove some uploaded storyboard frames and try again." };
   return { setup: plain as Setup, json };
@@ -40,10 +47,10 @@ const nameOf = (s: Setup) => (s.name || "").replace(/\s+/g, " ").trim().slice(0,
 export async function createSceneSetup(projectId: string, raw: unknown): Promise<{ id: string } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  const clean = cleanSetup(raw);
-  if ("error" in clean) return clean;
   const { data: project } = await supabase.from("projects").select("id, studio_id").eq("id", projectId).maybeSingle();
   if (!project) return { error: "Project not found." };
+  const clean = cleanSetup(raw, project.studio_id, project.id);
+  if ("error" in clean) return clean;
   const { data: last } = await supabase
     .from("scene_setups")
     .select("position")
@@ -81,7 +88,9 @@ export async function createSceneSetup(projectId: string, raw: unknown): Promise
 export async function saveSceneSetup(id: string, raw: unknown): Promise<{ ok: true } | { error: string }> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
-  const clean = cleanSetup(raw);
+  const { data: row } = await supabase.from("scene_setups").select("studio_id, project_id").eq("id", id).maybeSingle();
+  if (!row) return { error: "This setup could not be found. It may have been deleted." };
+  const clean = cleanSetup(raw, row.studio_id, row.project_id);
   if ("error" in clean) return clean;
   const { data, error } = await supabase
     .from("scene_setups")
@@ -143,4 +152,39 @@ export async function readScoutPhoto(input: {
   } catch (e) {
     return { error: e instanceof Error ? `Could not read the photo: ${e.message.slice(0, 200)}` : "Could not read the photo." };
   }
+}
+
+/**
+ * Confirms a scene file the browser just uploaded straight to Storage (a
+ * product photo or a 3D model), before the setup starts pointing at it. The
+ * path came back from the browser, so it is re-authorized and size-checked
+ * like any other direct upload.
+ */
+export async function finishSceneFile(projectId: string, path: string): Promise<{ ok: true } | { error: string }> {
+  const res = await finalizeUpload({ kind: "scene_file", projectId }, path);
+  if ("error" in res) return res;
+  return { ok: true };
+}
+
+/**
+ * Short-lived links to a setup's stored photos and models, for a browser that
+ * does not have them. Anyone who can read the project can read them, which is
+ * who can open the setup; only paths in this project's own scene folder are
+ * signed, so a doctored setup cannot be used to read another job's files.
+ */
+export async function signSceneFiles(projectId: string, paths: string[]): Promise<Record<string, string> | { error: string }> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const { data: project } = await supabase.from("projects").select("id, studio_id").eq("id", projectId).maybeSingle();
+  if (!project) return { error: "You do not have access to this project." };
+  const ok = Array.from(new Set(paths)).slice(0, 200).filter((p) => pathWithinScope(p, project.studio_id, sceneFolder(project.id)));
+  if (!ok.length) return {};
+  const { data, error } = await assetStorage().createSignedUrls(ok, 3600);
+  if (error) {
+    reportError("signSceneFiles", error);
+    return { error: "Could not fetch the scene's photos and models." };
+  }
+  const out: Record<string, string> = {};
+  for (const d of data ?? []) if (d.path && d.signedUrl) out[d.path] = d.signedUrl;
+  return out;
 }

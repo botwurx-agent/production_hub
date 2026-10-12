@@ -16,8 +16,9 @@ import {
   bathroomSetup, bedroomSetup, blankSetup, kitchenSetup, studioSetup, type Setup,
 } from "@/components/previz/setup";
 import {
-  createSceneSetup, deleteSceneSetup, saveSceneSetup,
+  createSceneSetup, deleteSceneSetup, finishSceneFile, saveSceneSetup, signSceneFiles,
 } from "@/app/(app)/projects/[id]/scene-actions";
+import { uploadDirect } from "@/components/upload/direct-upload";
 
 const PRESETS: { l: string; d: string; make: () => Setup }[] = [
   { l: "Empty room", d: "5 x 6 m with one window. Build it to your location.", make: () => blankSetup(5, 6, 2.8) },
@@ -66,6 +67,21 @@ export function SceneBuilderWorkspace({
           setLiveName(s.name);
           const res = await saveSceneSetup(active.id, s);
           return actionError(res);
+        },
+        uploadFile: async (blob, name) => {
+          try {
+            const file = blob instanceof File ? blob : new File([blob], name, { type: blob.type });
+            const up = await uploadDirect({ kind: "scene_file", projectId }, file);
+            const done = await finishSceneFile(projectId, up.path);
+            return actionError(done) ? null : up.path;
+          } catch {
+            return null;
+          }
+        },
+        fileLinks: async (paths) => {
+          const res = await signSceneFiles(projectId, paths);
+          if (!res || "error" in res) return {};
+          return res as Record<string, string>;
         },
       }
     : undefined;

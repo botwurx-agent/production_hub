@@ -7714,12 +7714,31 @@ and see how it goes." The 3D previz below is now a project page.
   refuses past 3.5M characters. Nothing else in a setup gets near it.
 - readScoutPhoto moved from app/dev/scene-setup/actions.ts (deleted) into
   app/(app)/projects/[id]/scene-actions.ts.
-- KNOWN LIMIT, THE ONE TO FIX NEXT IF IT BITES: product photos and imported 3D
-  models still live in the IndexedDB of the browser that added them; the saved
-  scene holds only their keys. A colleague opening the setup sees the item at
-  its size with no label or model. Moving those bytes to the assets bucket
-  through lib/upload-ticket.ts (a new scope) is the fix; "Download this setup"
-  still embeds them for carrying by hand meanwhile.
+- PHOTOS AND MODELS ARE STORED ON THE PROJECT (2026-10-12, operator: "it
+  should just automatically upload"). They used to live only in the IndexedDB
+  of the browser that added them, so anyone else opening the setup (or a
+  future share link) got each item at its size but with no label or model.
+  Now every product photo and imported model is ALSO uploaded, in the
+  background, to `<studio>/scenes/<project>/` on a new upload-ticket scope
+  `scene_file` (can_edit_project, 160MB, MAX_SCENE_FILE_BYTES), confirmed by
+  finishSceneFile, and the setup carries `files` (asset key -> storage path).
+  NO SCHEMA CHANGE: it rides in the setup's jsonb. The key stays the item's
+  reference, so nothing else in the builder changed.
+  A browser that lacks a file asks signSceneFiles for a one-hour link, fetches
+  it once and keeps it in IndexedDB. A catch-up effect uploads anything a
+  setup uses that has no stored copy yet (files added before this, or brought
+  in from a downloaded setup file), quietly, once each, editors only.
+  TRUST BOUNDARY: `files` comes from the browser, so lib/previz/scene-files.ts
+  cleanSceneFiles keeps only paths directly in THIS project's scene folder
+  (12 assertions: other project, other studio, deeper path, traversal, bad
+  key, cap), run in both create and save; signSceneFiles signs only such
+  paths, after reading the project under RLS.
+  A failed upload says so ("only this browser has it") rather than pretending.
+  Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  builder with a stubbed store: a photo only in IndexedDB was uploaded and
+  appeared in the saved setup's `files`, and a fresh browser with only the
+  path fetched it, cached it and showed no missing-file note. NOT run against
+  real Storage from a session.
 - Verified in Chromium against a throwaway fixture mounting the real workspace
   (deleted): no page errors, no page scroll, opening sends nothing, an edit
   sends one save carrying the setup id. NOT verified end to end against the

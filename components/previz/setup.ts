@@ -80,6 +80,9 @@ export type Setup = {
   aspectId: string;
   /** Only in a downloaded file: the photos and models the items use. */
   assets?: Record<string, EmbeddedAsset>;
+  /** On a project: each photo or model's key to its path in the project's
+   * storage, so the setup opens with its files in any browser. */
+  files?: Record<string, string>;
 };
 
 const deg = (r: number) => (r * 180) / Math.PI;

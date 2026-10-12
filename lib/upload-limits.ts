@@ -32,6 +32,10 @@ export const MAX_IMAGE_BYTES = 100_000_000;
 /** A cut, a master, a walkthrough. The reason any of this exists. */
 export const MAX_MEDIA_BYTES = 2_000_000_000;
 
+/** A scene builder file: a product photo or an imported 3D model (the
+ * builder itself refuses a model over 150MB, lib/previz/model-import.ts). */
+export const MAX_SCENE_FILE_BYTES = 160_000_000;
+
 /**
  * The largest any ticket may authorize. The bucket is configured to this, so a
  * client that lies about its size is refused by Storage itself.
