@@ -523,7 +523,7 @@ export function ScoutDialog({ units, read, onBuild, onClose }: {
   };
   const d = res?.draft;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose} data-previz-own-wheel>
       <div className="max-h-[90vh] w-[620px] max-w-full overflow-y-auto rounded-[16px] border border-border bg-surface p-5 text-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>

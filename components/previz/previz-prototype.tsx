@@ -1759,7 +1759,9 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
   wheelRef.current = (e: WheelEvent) => {
     const onCanvas = e.target === canvasRef.current;
-    const onMap = (e.target as Element | null)?.closest?.("[data-previz-map]");
+    // A panel floating over the stage (the map, the add menu) keeps its own
+    // scrolling: only a pinch is stopped there, so the page does not zoom.
+    const onMap = (e.target as Element | null)?.closest?.("[data-previz-map], [data-previz-own-wheel]");
     if (view === "free") {
       // OrbitControls zooms (and cancels) on the canvas itself; elsewhere on
       // the stage only the page zoom needs stopping.
@@ -3243,7 +3245,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           </div>
 
           {adding ? (
-            <div className="absolute left-3 top-3 z-40">
+            <div className="absolute left-3 top-3 z-40" data-previz-own-wheel>
               <AddMenu onAdd={addItem} onProductPhoto={(s, f) => void addProduct(s, f)} onModelFile={(f) => void importModel(f)} onClose={() => setAdding(false)} />
             </div>
           ) : null}
