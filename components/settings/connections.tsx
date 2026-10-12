@@ -55,6 +55,16 @@ const PROVIDERS: ProviderMeta[] = [
     blurb:
       "Import frames from a Figma file straight into a project's assets, rendered as images.",
   },
+  {
+    key: "higgsfield",
+    label: "Higgsfield",
+    glyph: "H",
+    startPath: "/auth/higgsfield/start",
+    blurb:
+      "Sign in with your Higgsfield account so Studio Flows can work with it on your behalf.",
+    notice:
+      "Anything generated through this connection is charged to your own Higgsfield plan credits, the same as working on higgsfield.ai. Studio Flows never charges for it.",
+  },
 ];
 
 function AccountRow({ account }: { account: ConnectedAccount }) {

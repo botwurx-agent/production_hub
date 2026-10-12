@@ -7819,6 +7819,51 @@ and see how it goes." The 3D previz below is now a project page.
   Suspense boundary) would have hit it. Talent and the room rebuild fully on
   every run and never had the problem.
 
+### Higgsfield connected to the app over MCP (no migration) — SIGN-IN + PROBE BUILT
+Operator, 2026-10-12: connect Higgsfield to the app like Claude, so a finished
+scene builder setup can be sent off and come back as a realistic still for the
+shot list. Step 1 (the connection and a read-only probe) is built; the button
+that generates is NOT, and waits on what the probe prints.
+- WHY MCP AND NOT THE API, settled by evidence and worth not re-deriving: the
+  Higgsfield REST API is a SEPARATE account with its own prepaid dollar balance
+  ($5 minimum top-up, funds expire in a year), and Higgsfield's own help center
+  says "your plan, credits, and Unlimited access exist only on the website".
+  A studio already paying for a plan would pay twice. The MCP connection (the
+  one Claude uses) spends the PLAN'S credits, and its sign-in is one click. Note
+  that Unlimited models and free generations do NOT apply over MCP: it always
+  deducts credits.
+- THE API ALSO HAS NO 3D. Their public catalog is images and video only; the 3D
+  scene builder is MCP only. So "a polished 3D scene" is not on the API at all,
+  and the realistic STILL is what the shot list needs anyway.
+- SIGN-IN, verified against the live server: dynamic client registration is
+  OPEN (POST /oauth2/register answered 201, public client, no secret, no
+  approval), PKCE S256, scopes openid email offline_access, `resource` =
+  https://mcp.higgsfield.ai/mcp. Their protected-resource metadata lists Claude
+  as the expected client and tags our request `surface=custom_mcp`; nothing
+  refused us, but nothing promises third-party apps either. That is the risk
+  this route carries: tool names and shapes are not a published contract and
+  can change without notice.
+- CODE: lib/higgsfield-mcp.ts (registration, PKCE, token exchange and refresh,
+  a minimal Streamable HTTP MCP client that reads plain JSON or an SSE body;
+  readMcpBody 8 assertions), app/auth/higgsfield/{start,callback}. The token
+  lives in `email_accounts` with provider `higgsfield` (no provider constraint,
+  every other reader of that table filters by provider), and external_ref holds
+  the registered client_id and redirect_uri, so a reconnect reuses the client
+  instead of registering again. The Settings card says out loud that
+  generations are charged to the studio's own Higgsfield credits.
+- THE PROBE: /api/diagnostics/higgsfield (staff only) opens a session, prints
+  every tool with its inputs and read-only/destructive hints, prints the full
+  schema of the tools a generate button would use (generate_image, media_upload,
+  media_confirm, media_import_url, jobs_wait, show_generation_by_ids), and calls
+  `balance`. It can only call tools on its own READ_ONLY list AND the live list,
+  so it cannot spend credits. `?call=<tool>&args=<json>` for another read-only
+  tool; add `&x=N` so the browser cannot serve a cached answer.
+- NOT RUN END TO END: a session here cannot sign in to Higgsfield as the
+  operator. The redirect URI is only checked after sign-in, so the first real
+  connect is the test of the callback. NEXT, after the probe prints: one
+  generation from a block frame (a deliberate press, spends credits), then the
+  "Make it real" button in the scene builder feeding Send to shot list.
+
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
 Operator, 2026-10-08: on set a DP or director pulls out a phone app, picks a
 focal length and sees the frame. They wanted that here, plus taking a still

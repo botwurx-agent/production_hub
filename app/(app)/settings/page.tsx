@@ -47,6 +47,11 @@ const connectionError: Record<string, string> = {
   figma_state: "Connection could not be verified. Please try again.",
   figma_exchange: "Could not complete the Figma connection. Please retry.",
   figma_store: "Connected, but saving the account failed. Please retry.",
+  higgsfield_register: "Higgsfield did not accept the connection request. Please retry.",
+  higgsfield_denied: "Higgsfield connection was cancelled.",
+  higgsfield_state: "Connection could not be verified. Please try again.",
+  higgsfield_exchange: "Could not complete the Higgsfield connection. Please retry.",
+  higgsfield_store: "Connected, but saving the account failed. Please retry.",
   no_studio: "No studio found for your account.",
 };
 
@@ -54,6 +59,7 @@ const connectedLabel: Record<string, string> = {
   slack: "Slack",
   figma: "Figma",
   google: "Gmail",
+  higgsfield: "Higgsfield",
 };
 
 export default async function SettingsPage({
@@ -217,6 +223,7 @@ export default async function SettingsPage({
               google: googleConfigured(),
               slack: slackConfigured(),
               figma: figmaConfigured(),
+              higgsfield: true,
             }}
             accounts={accounts ?? []}
           />
