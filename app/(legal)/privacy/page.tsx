@@ -6,7 +6,7 @@ export default function PrivacyPage() {
   return (
     <>
       <h1>Privacy Policy</h1>
-      <p>Last updated: 15 September 2026</p>
+      <p>Last updated: 12 October 2026</p>
       <p>
         This policy explains what information Studio Flows (&ldquo;the
         Service&rdquo;) collects, how it is used, and the choices you have.
@@ -174,7 +174,8 @@ export default function PrivacyPage() {
           authentication.
         </li>
         <li>
-          <strong>Vercel</strong>, for hosting and application delivery.
+          <strong>Vercel</strong>, for hosting, application delivery, and
+          privacy-friendly page analytics (see below).
         </li>
         <li>
           <strong>OpenAI</strong>, for the AI features described above.
@@ -191,6 +192,38 @@ export default function PrivacyPage() {
         Separately, and only if you choose to connect them, Google, Slack, and
         Figma receive requests on your behalf to read or send the specific
         content you link.
+      </p>
+
+      <h2>Cookies and analytics</h2>
+      <p>
+        We do not use advertising or tracking cookies, and we do not show a
+        cookie banner because the only cookies we set are the ones the Service
+        needs to work:
+      </p>
+      <ul>
+        <li>
+          <strong>Sign-in cookies</strong>, set by our authentication provider,
+          which keep you logged in.
+        </li>
+        <li>
+          <strong>Your active studio</strong>, which remembers which studio you
+          are working in if you belong to more than one.
+        </li>
+        <li>
+          <strong>A reviewer key</strong> on client review links, a random
+          value that lets the person who left a comment edit or delete it
+          later. It identifies a browser, not a person.
+        </li>
+        <li>
+          <strong>A short-lived sign-in redirect</strong>, which returns you to
+          the page you asked for after you log in, and expires within minutes.
+        </li>
+      </ul>
+      <p>
+        Some preferences, such as your theme or whether the sidebar is
+        collapsed, are kept in your browser&rsquo;s own storage and never sent to
+        us. We measure page visits with Vercel Web Analytics, which does not use
+        cookies and does not identify or follow you across sites.
       </p>
 
       <h2>Where your data is stored</h2>

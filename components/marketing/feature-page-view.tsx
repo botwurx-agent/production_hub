@@ -98,7 +98,7 @@ export function FeaturePageView({ f, chapters }: { f: FeatureDef; chapters?: Cha
 
           <Canvas hue={f.hue}>
             {chapters ? (
-              <LiveScene name={chapters.hero} />
+              <LiveScene name={chapters.hero} label={`Illustration: ${f.nav} in Studio Flows.`} />
             ) : hasShot ? (
               <BrowserFrame
                 priority
@@ -110,7 +110,7 @@ export function FeaturePageView({ f, chapters }: { f: FeatureDef; chapters?: Cha
                 alt={shot.alt}
               />
             ) : (
-              <Motif slug={f.slug} />
+              <Motif slug={f.slug} label={`Illustration: ${f.nav} in Studio Flows.`} />
             )}
           </Canvas>
         </div>
@@ -259,7 +259,7 @@ export function FeaturePageView({ f, chapters }: { f: FeatureDef; chapters?: Cha
             {/* The motif always lives here: on shot pages it is its first
                 appearance, on motif-hero pages it recurs as the through-line. */}
             <Canvas hue={f.hue}>
-              <Motif slug={f.slug} />
+              <Motif slug={f.slug} label={`Illustration: ${f.nav} in Studio Flows.`} />
             </Canvas>
           </div>
         </div>

@@ -806,7 +806,16 @@ const MOTIFS: Record<string, () => ReactNode> = {
   runner: RunnerMotif,
 };
 
-export function Motif({ slug }: { slug: string }) {
+/**
+ * A motif is a drawing that happens to contain words, so a screen reader would
+ * otherwise read its chips and numbers as loose fragments. It is announced as
+ * one picture instead; the section beside it carries the argument in text.
+ */
+export function Motif({ slug, label }: { slug: string; label: string }) {
   const M = MOTIFS[slug];
-  return M ? <>{M()}</> : null;
+  return M ? (
+    <div role="img" aria-label={label}>
+      {M()}
+    </div>
+  ) : null;
 }
