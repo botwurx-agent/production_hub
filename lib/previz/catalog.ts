@@ -33,6 +33,9 @@ export type ItemSpec = {
   light?: ItemLight | null;
   /** A studio grid's pipe centres, metres. */
   spacing?: number;
+  /** Which variant of a kind it is, where the size alone cannot say (a French
+   * door and a side-by-side fridge are the same size). Set by a preset. */
+  style?: string;
   /** Resolved at runtime, never saved: its base height, and who holds it. */
   y?: number;
   heldBy?: string | null;
@@ -61,7 +64,7 @@ export type CatalogEntry = {
   raise?: number;
   light?: ItemLight;
   /** Fixed sizes worth one tap (apple boxes, paper rolls, flats). */
-  presets?: { label: string; w?: number; d?: number; h?: number }[];
+  presets?: { label: string; w?: number; d?: number; h?: number; style?: string }[];
   colors?: { name: string; hex: string }[];
 };
 
@@ -113,6 +116,24 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "desk", name: "Desk", category: "furniture", hint: "Office or study", w: 1.4, d: 0.7, h: 0.75, color: "#d9d2c6", surface: 1 },
   { kind: "counter", name: "Kitchen counter", category: "furniture", hint: "Base cabinets and a worktop", w: 2.4, d: 0.62, h: 0.9, color: "#7f9182", surface: 1 },
   { kind: "island", name: "Kitchen island", category: "furniture", hint: "Free-standing, worktop all round", w: 1.8, d: 0.95, h: 0.92, color: "#3e4a55", surface: 1 },
+  {
+    kind: "fridge", name: "Fridge", category: "furniture", hint: "Kitchen refrigerator, sized to real models", w: 0.91, d: 0.74, h: 1.78, color: "#c4c8cc", surface: 1,
+    presets: [
+      { label: "French door", w: 0.91, d: 0.74, h: 1.78, style: "french" },
+      { label: "Side by side", w: 0.91, d: 0.74, h: 1.78, style: "side" },
+      { label: "Bottom freezer", w: 0.76, d: 0.74, h: 1.75, style: "bottom" },
+      { label: "Top freezer", w: 0.76, d: 0.74, h: 1.68, style: "top" },
+      { label: "Built-in", w: 0.91, d: 0.62, h: 2.13, style: "builtin" },
+      { label: "Under-counter", w: 0.6, d: 0.6, h: 0.86, style: "under" },
+    ],
+    colors: [
+      { name: "Stainless", hex: "#c4c8cc" },
+      { name: "White", hex: "#f2f2ef" },
+      { name: "Black", hex: "#2b2d30" },
+      { name: "Retro cream", hex: "#e9dcc0" },
+      { name: "Sage", hex: "#a9b9a2" },
+    ],
+  },
   { kind: "wall-cabinet", name: "Wall cabinets", category: "furniture", hint: "Hung above a counter", w: 2.4, d: 0.36, h: 0.7, color: "#7f9182", raise: 1.6 },
   { kind: "sideboard", name: "Sideboard", category: "furniture", hint: "Low storage on legs", w: 1.6, d: 0.45, h: 0.8, color: "#8a6748", surface: 1 },
   { kind: "bookcase", name: "Bookcase", category: "furniture", hint: "Shelves with books", w: 0.9, d: 0.35, h: 1.9, color: "#e9e4da" },

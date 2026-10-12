@@ -256,6 +256,57 @@ export function buildItem(s: ItemSpec, art: LabelArt | null, model: THREE.Object
     g.add(cy(w / 2, w / 2, 0.04, m, 0, h - 0.02, 0, 48));
     g.add(cy(0.05, 0.05, h - 0.04, m, 0, (h - 0.04) / 2, 0));
     g.add(cy(w * 0.25, w * 0.28, 0.04, m, 0, 0.02, 0));
+  } else if (k === "fridge") {
+    // A cabinet on a dark toe kick, its doors drawn as seams and handles on
+    // the front, laid out by style. Satin, so stainless reads as metal.
+    const style = s.style ?? (h < 1.1 ? "under" : "french");
+    const toe = Math.min(0.07, h * 0.05);
+    const bodyH = h - toe;
+    const body = mat(s.color, 0.38, 0.45);
+    g.add(bx(w, bodyH, d - 0.03, body, 0, toe + bodyH / 2, -0.015));
+    g.add(bx(w - 0.04, toe, d - 0.08, mat("#1c1d1f", 0.9), 0, toe / 2, -0.04));
+    const front = d / 2;
+    const seam = mat(shade(s.color, 0.45), 0.6);
+    const handle = mat(style === "builtin" ? shade(s.color, 0.8) : "#d6dade", 0.25, 0.85);
+    const hSeam = (y: number) => g.add(bx(w, 0.008, 0.006, seam, 0, y, front - 0.012));
+    const vSeam = (x: number, y0: number, y1: number) => g.add(bx(0.008, y1 - y0, 0.006, seam, x, (y0 + y1) / 2, front - 0.012));
+    const vBar = (x: number, y0: number, y1: number) => {
+      g.add(bx(0.02, y1 - y0, 0.022, handle, x, (y0 + y1) / 2, front + 0.02));
+      for (const y of [y0 + 0.02, y1 - 0.02]) g.add(bx(0.016, 0.02, 0.03, handle, x, y, front + 0.005));
+    };
+    const hBar = (y: number, len: number) => {
+      g.add(bx(len, 0.02, 0.022, handle, 0, y, front + 0.02));
+      for (const x of [-len / 2 + 0.02, len / 2 - 0.02]) g.add(bx(0.02, 0.016, 0.03, handle, x, y, front + 0.005));
+    };
+    const top = h - 0.01;
+    if (style === "side") {
+      const split = -w * 0.08;
+      vSeam(split, toe, top);
+      vBar(split - 0.035, toe + bodyH * 0.25, toe + bodyH * 0.8);
+      vBar(split + 0.035, toe + bodyH * 0.25, toe + bodyH * 0.8);
+    } else if (style === "top") {
+      const fz = toe + bodyH * 0.7;
+      hSeam(fz);
+      vBar(w / 2 - 0.06, fz + 0.06, top - 0.06);
+      vBar(w / 2 - 0.06, toe + bodyH * 0.35, fz - 0.06);
+    } else if (style === "bottom") {
+      const fz = toe + bodyH * 0.32;
+      hSeam(fz);
+      vBar(w / 2 - 0.06, fz + bodyH * 0.18, top - 0.08);
+      hBar(fz - 0.06, w * 0.55);
+    } else if (style === "under") {
+      hBar(top - 0.07, w * 0.6);
+    } else {
+      // French door and built-in: two doors over a freezer drawer.
+      const fz = toe + bodyH * 0.32;
+      hSeam(fz);
+      vSeam(0, fz, top);
+      const y0 = fz + bodyH * (style === "builtin" ? 0.08 : 0.2);
+      const y1 = top - (style === "builtin" ? 0.06 : 0.1);
+      vBar(-0.035, y0, y1);
+      vBar(0.035, y0, y1);
+      hBar(fz - 0.06, w * (style === "builtin" ? 0.8 : 0.55));
+    }
   } else if (k === "counter" || k === "island") {
     const topT = 0.04;
     g.add(bx(w - 0.04, h - topT, d - 0.04, m, 0, (h - topT) / 2, -0.02));
@@ -622,5 +673,5 @@ function buildRig(s: ItemSpec): THREE.Group {
 
 /** What changes an item's geometry: anything but where it is. */
 export function itemShapeKey(s: ItemSpec, artReady: boolean, modelReady: boolean): string {
-  return [s.kind, s.w, s.d, s.h, s.color, s.spacing ?? "", s.label ?? "", artReady ? 1 : 0, s.model?.key ?? "", modelReady ? 1 : 0].join("|");
+  return [s.kind, s.w, s.d, s.h, s.color, s.spacing ?? "", s.style ?? "", s.label ?? "", artReady ? 1 : 0, s.model?.key ?? "", modelReady ? 1 : 0].join("|");
 }

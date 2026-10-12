@@ -226,8 +226,8 @@ export function ItemInspector({
         <Field label="Size">
           <div className="flex flex-wrap gap-1">
             {c.presets.map((p) => {
-              const on = (p.w === undefined || Math.abs(p.w - item.w) < 0.005) && (p.d === undefined || Math.abs(p.d - item.d) < 0.005) && (p.h === undefined || Math.abs(p.h - item.h) < 0.005);
-              return <Chip key={p.label} on={on} onClick={() => onChange({ ...(p.w !== undefined ? { w: p.w } : {}), ...(p.d !== undefined ? { d: p.d } : {}), ...(p.h !== undefined ? { h: p.h } : {}) })}>{p.label}</Chip>;
+              const on = (p.w === undefined || Math.abs(p.w - item.w) < 0.005) && (p.d === undefined || Math.abs(p.d - item.d) < 0.005) && (p.h === undefined || Math.abs(p.h - item.h) < 0.005) && (p.style === undefined || p.style === (item.style ?? c.presets?.[0]?.style));
+              return <Chip key={p.label} on={on} onClick={() => onChange({ ...(p.w !== undefined ? { w: p.w } : {}), ...(p.d !== undefined ? { d: p.d } : {}), ...(p.h !== undefined ? { h: p.h } : {}), ...(p.style !== undefined ? { style: p.style } : {}) })}>{p.label}</Chip>;
             })}
           </div>
         </Field>
