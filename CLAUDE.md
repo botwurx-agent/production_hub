@@ -7858,11 +7858,47 @@ that generates is NOT, and waits on what the probe prints.
   `balance`. It can only call tools on its own READ_ONLY list AND the live list,
   so it cannot spend credits. `?call=<tool>&args=<json>` for another read-only
   tool; add `&x=N` so the browser cannot serve a cached answer.
-- NOT RUN END TO END: a session here cannot sign in to Higgsfield as the
-  operator. The redirect URI is only checked after sign-in, so the first real
-  connect is the test of the callback. NEXT, after the probe prints: one
-  generation from a block frame (a deliberate press, spends credits), then the
-  "Make it real" button in the scene builder feeding Send to shot list.
+- CONNECTED AND PROBED (2026-10-12): the operator signed in, the callback
+  stored the row, and the probe opened a session, listed 156 tools and read
+  `balance` (structuredContent `{credits, subscription_plan_type}`).
+- "MAKE IT REAL" IS BUILT (same day): a toolbar button in the scene builder
+  opens components/previz/make-it-real.tsx. Pick a camera and a model, edit
+  the description (lib/previz/real-prompt.ts fills it from the setup: keep the
+  camera, positions and poses exactly, replace grey shapes with the real
+  things, the set's item names, the people's poses), and the window states the
+  PRICE AND THE BALANCE before Generate is pressed. Generate renders the
+  camera's start frame (the Send to shot list render path), stores it in the
+  scene folder, then three Server Actions in real-still-actions.ts:
+  `realStillQuote` (balance + generate_image with `get_cost: true`, spends
+  nothing), `startRealStill` (media_import_url on a one-hour signed link, then
+  ONE generate_image with `medias: [{value: media_id, role:
+  "image_references"}]`, `use_unlim: false`; the only call that spends), and
+  `checkRealStill` (jobs_wait up to 10s, repeated by the browser every 1.5s
+  for up to four minutes; when done the full image is copied into
+  `<studio>/scenes/<project>/real_<job>.<ext>` so it outlives Higgsfield's
+  links). The result sits beside the previz frame; "Keep" writes it as that
+  camera's row picture through the existing sendShots, "Try again" is another
+  priced press.
+- MODELS, checked live with get_cost: Nano Banana 2.1 at 2K, 2 credits (the
+  default: reference image in, composition kept), GPT Image 2.5 high at 2K,
+  2.75. Unlimited generations do not cover either (`unlim.available: false`).
+  Aspects map in hfAspect (2.39 goes as 21:9, 1.85 as 16:9).
+- CREDITS ARE THE PRESSER'S OWN: the connection is looked up by user_id, so a
+  colleague's press spends their plan. Writing needs can_edit_project. The frame
+  path is accepted only directly in this project's scene folder.
+- NEVER RESUBMIT BLIND: a transport failure after generate_image says to check
+  Higgsfield history first, since a retry could pay twice for one still.
+- lib/higgsfield-result.ts reads replies tolerantly (structuredContent, JSON in
+  text, or text; ids by key preference, the full `rawUrl` over the `_min`
+  preview, a "completed" with no link is still pending). 17 assertions incl.
+  the real balance, cost and generation bodies. Found by the fixture: an
+  "is the window open" ref set only in a cleanup stays false after React's
+  development double mount and silently dropped every step; it is set on mount.
+- NOT RUN AGAINST THE LIVE SERVER from the app: the shapes of media_import_url's
+  and generate_image's replies were never printed (the probe cannot call
+  them, they write). If the first press says Higgsfield "did not say where it
+  put" the frame or "did not name the job", the reader needs that body; the
+  error is logged with it.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
 Operator, 2026-10-08: on set a DP or director pulls out a phone app, picks a

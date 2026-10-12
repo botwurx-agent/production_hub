@@ -5,6 +5,9 @@ import { asSetup } from "@/components/previz/setup";
 import { SceneBuilderWorkspace } from "@/components/previz/scene-builder-workspace";
 
 export const dynamic = "force-dynamic";
+// "Make it real" waits on Higgsfield inside a Server Action, and an action
+// inherits its page's time limit.
+export const maxDuration = 60;
 
 export const metadata = { title: "Scene builder" };
 

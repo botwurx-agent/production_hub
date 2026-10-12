@@ -18,6 +18,7 @@ import {
 import {
   createSceneSetup, deleteSceneSetup, finishSceneFile, saveSceneSetup, sendShotsToList, signSceneFiles,
 } from "@/app/(app)/projects/[id]/scene-actions";
+import { checkRealStill, realStillQuote, startRealStill } from "@/app/(app)/projects/[id]/real-still-actions";
 import { uploadDirect } from "@/components/upload/direct-upload";
 
 const PRESETS: { l: string; d: string; make: () => Setup }[] = [
@@ -60,6 +61,14 @@ export function SceneBuilderWorkspace({
     router.refresh();
   };
 
+  // Stable across renders: the "Make it real" window re-asks Higgsfield for the
+  // price whenever these change identity.
+  const [makeReal] = useState<NonNullable<SceneStore["makeReal"]>>(() => ({
+    quote: (modelId, aspectId) => realStillQuote(projectId, modelId, aspectId),
+    start: (input) => startRealStill(projectId, input),
+    check: (jobId) => checkRealStill(projectId, jobId),
+  }));
+
   const store: SceneStore | undefined = active
     ? {
         initial: active.data,
@@ -88,6 +97,8 @@ export function SceneBuilderWorkspace({
           if (err || !res || !("listId" in res)) return { error: err ?? "Could not send to the shot list." };
           return res;
         },
+        makeReal,
+        settingsHref: "/settings",
         fileLinks: async (paths) => {
           const res = await signSceneFiles(projectId, paths);
           if (!res || "error" in res) return {};

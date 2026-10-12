@@ -44,7 +44,8 @@ import { FRAME_A, FRAME_B, Timeline } from "./timeline";
 import {
   camAt, constrainEnd, ease, fromLocal, isLockedOff, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
 } from "@/lib/previz/camera-move";
-import { POSES } from "@/lib/previz/poses";
+import { POSES, poseDef } from "@/lib/previz/poses";
+import { realStillPrompt } from "@/lib/previz/real-prompt";
 import { ControlPads, type PadSpec } from "./move-pad";
 import { CLAMP_DROP, POLECAT_MAX, hangOn, isRig, rigHeight, wallToWall, type RigKind } from "@/lib/previz/rigging";
 import { HOUSE_LEVEL, buildHouseView, frameBox, gridSpacing, syncMarkers, type Marker } from "@/lib/previz/house-view";
@@ -63,6 +64,7 @@ import { readScoutPhoto } from "@/app/(app)/projects/[id]/scene-actions";
 import type { RoomDraft } from "@/lib/previz/room-draft";
 import { movementWord, previzLine, type ShotRowOut } from "@/lib/previz/shot-export";
 import { SendToShotListDialog, type SendCamera, type SendResult, type SendTarget } from "./send-to-shot-list";
+import { MakeItRealDialog, type RealActions } from "./make-it-real";
 
 type Selection =
   | { kind: "camera" }
@@ -503,6 +505,13 @@ export type SceneStore = {
   sendShots?: (req: { listId: string | null; newTitle: string | null; rows: ShotRowOut[] }) => Promise<
     { listId: string; title: string; added: number; updated: number } | { error: string }
   >;
+  /** "Make it real" through the person's own Higgsfield connection. */
+  makeReal?: {
+    quote: (modelId: string, aspectId: string) => Promise<{ credits: number | null; cost: number | null; plan: string | null } | { error: string; notConnected?: true }>;
+    start: (input: { path: string; prompt: string; modelId: string; aspectId: string }) => Promise<{ jobId: string } | { error: string; notConnected?: true }>;
+    check: (jobId: string) => Promise<{ state: "pending" } | { state: "done"; path: string; url: string } | { state: "failed"; error: string } | { error: string }>;
+  };
+  settingsHref?: string;
 };
 
 export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: SceneStore; heightClass?: string } = {}) {
@@ -585,6 +594,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const [adding, setAdding] = useState(false);
   const [scout, setScout] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [realOpen, setRealOpen] = useState(false);
   // The project's shot lists, kept here so a list made by a send (or a code
   // added to one) shows the next time the window opens, without a reload.
   const [shotLists, setShotLists] = useState(() => store?.shotLists ?? []);
@@ -1913,15 +1923,34 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     });
   };
 
+  // Read by "Make it real" callbacks that are built once, so they see the
+  // setup as it stands when pressed rather than as it was when built.
+  const sendCamerasRef = useRef(sendCameras);
+  sendCamerasRef.current = sendCameras;
+  const realLatest = useRef({ shots, set, items, talent });
+  realLatest.current = { shots, set, items, talent };
+
+  /** Renders shots' start frames at full size, as data URLs, by shot id. */
+  const renderFrames = (ids: string[]) => {
+    setView("lens");
+    return new Promise<Record<string, string>>((resolve) => {
+      frameReq.current = { ids, resolve };
+    });
+  };
+
+  const noteSent = (res: { listId: string; title: string }, codes: string[]) =>
+    setShotLists((ls) =>
+      ls.some((l) => l.id === res.listId)
+        ? ls.map((l) => (l.id === res.listId ? { ...l, codes: [...l.codes, ...codes] } : l))
+        : [...ls, { id: res.listId, title: res.title, codes }],
+    );
+
   /** Renders each shot's frame, stores it on the project, and writes the rows. */
   const sendToShotList = async (ids: string[], target: SendTarget): Promise<SendResult> => {
     const st = storeRef.current;
     if (!st?.sendShots) return { error: "Sending to a shot list works on a project's Scene builder." };
     const cams = sendCameras().filter((c) => ids.includes(c.id));
-    setView("lens");
-    const frames = await new Promise<Record<string, string>>((resolve) => {
-      frameReq.current = { ids, resolve };
-    });
+    const frames = await renderFrames(ids);
     const unpictured: string[] = [];
     const rows: ShotRowOut[] = [];
     for (const c of cams) {
@@ -1936,14 +1965,55 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     }
     const res = await st.sendShots({ ...target, rows });
     if ("error" in res) return res;
-    const sent = rows.map((r) => r.code);
-    setShotLists((ls) =>
-      ls.some((l) => l.id === res.listId)
-        ? ls.map((l) => (l.id === res.listId ? { ...l, codes: [...l.codes, ...sent] } : l))
-        : [...ls, { id: res.listId, title: res.title, codes: sent }],
-    );
+    noteSent(res, rows.map((r) => r.code));
     return { ...res, unpictured };
   };
+
+  // ----- "Make it real". The actions object is rebuilt only when the store or
+  // the frame shape changes, since the window re-asks the price whenever it
+  // changes identity.
+  const realActions = useMemo<RealActions | null>(() => {
+    const mr = store?.makeReal;
+    if (!mr) return null;
+    return {
+      quote: (modelId) => mr.quote(modelId, aspectId),
+      frame: async (id) => {
+        const st = storeRef.current;
+        if (!st?.uploadFile) return { error: "Frames can only be stored on a project's Scene builder." };
+        const url = (await renderFrames([id]))[id];
+        if (!url) return { error: "That camera's frame could not be rendered." };
+        const blob = await (await fetch(url)).blob();
+        const path = await st.uploadFile(blob, `previz_${Date.now().toString(36)}.jpg`);
+        if (!path) return { error: "The frame could not be stored on the project. Try again." };
+        return { path, url };
+      },
+      start: (path, prompt, modelId) => mr.start({ path, prompt, modelId, aspectId }),
+      check: (jobId) => mr.check(jobId),
+      keep: async (id, path, target) => {
+        const st = storeRef.current;
+        if (!st?.sendShots) return { error: "Sending to a shot list works on a project's Scene builder." };
+        const cam = sendCamerasRef.current().find((c) => c.id === id);
+        if (!cam) return { error: "That camera is no longer in the setup." };
+        const res = await st.sendShots({ ...target, rows: [{ ...cam.row, path }] });
+        if ("error" in res) return res;
+        noteSent(res, [cam.row.code]);
+        return { ...res, unpictured: [] };
+      },
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store?.makeReal, aspectId]);
+
+  const realPromptFor = useCallback((id: string) => {
+    const L = realLatest.current;
+    const shot = L.shots.find((s) => s.id === id);
+    return realStillPrompt({
+      shotTitle: shot?.title ?? "",
+      setKind: L.set.kind,
+      floor: L.set.kind === "room" ? L.set.room.floor : null,
+      items: L.items.map((i) => ({ kind: i.kind, name: i.name })),
+      talent: L.talent.map((t) => ({ poseName: poseDef(t.pose).name })),
+    });
+  }, []);
 
   // ----- Lights and grip. Letting go of a target keeps the head where it was
   // pointing, so "by hand" starts from the current aim, not from zero.
@@ -2978,6 +3048,16 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         </label>
         <Seg value={units} onChange={(v) => setUnits(v as Units)} options={[{ v: "ft", l: "ft" }, { v: "m", l: "m" }]} />
         <div className="ml-auto flex items-center gap-2">
+          {realActions && store?.canEdit ? (
+            <button
+              type="button"
+              onClick={() => setRealOpen(true)}
+              title="Send a camera's frame to your Higgsfield account and bring back a photoreal still"
+              className="rounded-[10px] border border-border px-3 py-1.5 text-xs font-semibold text-text hover:border-border-strong"
+            >
+              Make it real
+            </button>
+          ) : null}
           {store?.sendShots && store.canEdit ? (
             <button
               type="button"
@@ -3554,6 +3634,20 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           shotListHref={store.shotListHref ?? "#"}
           onSend={sendToShotList}
           onClose={() => setSendOpen(false)}
+        />
+      ) : null}
+
+      {realOpen && realActions ? (
+        <MakeItRealDialog
+          cameras={sendCameras()}
+          activeId={activeId}
+          promptFor={realPromptFor}
+          lists={shotLists}
+          defaultTitle={name}
+          shotListHref={store?.shotListHref ?? "#"}
+          settingsHref={store?.settingsHref ?? "/settings"}
+          actions={realActions}
+          onClose={() => setRealOpen(false)}
         />
       ) : null}
 
