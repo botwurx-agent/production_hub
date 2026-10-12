@@ -16,8 +16,9 @@ import {
   bathroomSetup, bedroomSetup, blankSetup, kitchenSetup, studioSetup, type Setup,
 } from "@/components/previz/setup";
 import {
-  createSceneSetup, deleteSceneSetup, saveSceneSetup,
+  createSceneSetup, deleteSceneSetup, finishSceneFile, saveSceneSetup, sendShotsToList, signSceneFiles,
 } from "@/app/(app)/projects/[id]/scene-actions";
+import { uploadDirect } from "@/components/upload/direct-upload";
 
 const PRESETS: { l: string; d: string; make: () => Setup }[] = [
   { l: "Empty room", d: "5 x 6 m with one window. Build it to your location.", make: () => blankSetup(5, 6, 2.8) },
@@ -34,6 +35,7 @@ export function SceneBuilderWorkspace({
   active,
   unreadable,
   canEdit,
+  shotLists,
 }: {
   projectId: string;
   projectTitle: string;
@@ -41,6 +43,7 @@ export function SceneBuilderWorkspace({
   active: { id: string; data: Setup } | null;
   unreadable: boolean;
   canEdit: boolean;
+  shotLists: { id: string; title: string; codes: string[] }[];
 }) {
   const router = useRouter();
   const [busy, startBusy] = useTransition();
@@ -66,6 +69,29 @@ export function SceneBuilderWorkspace({
           setLiveName(s.name);
           const res = await saveSceneSetup(active.id, s);
           return actionError(res);
+        },
+        uploadFile: async (blob, name) => {
+          try {
+            const file = blob instanceof File ? blob : new File([blob], name, { type: blob.type });
+            const up = await uploadDirect({ kind: "scene_file", projectId }, file);
+            const done = await finishSceneFile(projectId, up.path);
+            return actionError(done) ? null : up.path;
+          } catch {
+            return null;
+          }
+        },
+        shotLists,
+        shotListHref: `/projects/${projectId}/shot-list`,
+        sendShots: async (req) => {
+          const res = await sendShotsToList(projectId, req);
+          const err = actionError(res);
+          if (err || !res || !("listId" in res)) return { error: err ?? "Could not send to the shot list." };
+          return res;
+        },
+        fileLinks: async (paths) => {
+          const res = await signSceneFiles(projectId, paths);
+          if (!res || "error" in res) return {};
+          return res as Record<string, string>;
         },
       }
     : undefined;

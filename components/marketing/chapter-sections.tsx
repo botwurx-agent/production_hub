@@ -94,7 +94,7 @@ export function ChapterSections({ chapters, hue }: { chapters: Chapter[]; hue: s
                     background: `linear-gradient(150deg, var(--h-${hue}-bg), color-mix(in oklch, var(--h-${hue}-bg) 45%, var(--surface)))`,
                   }}
                 >
-                  <LiveScene name={c.scene} />
+                  <LiveScene name={c.scene} label={`Illustration: ${c.title}`} />
                 </div>
               </div>
             </div>

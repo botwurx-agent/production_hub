@@ -7,6 +7,7 @@ import {
   MAX_DOCUMENT_BYTES,
   MAX_IMAGE_BYTES,
   MAX_MEDIA_BYTES,
+  MAX_SCENE_FILE_BYTES,
   pathWithinScope,
 } from "@/lib/upload-limits";
 
@@ -35,7 +36,8 @@ export type UploadScope =
   | { kind: "billing_doc"; docId: string }
   | { kind: "cost"; projectId: string }
   | { kind: "board"; boardId: string }
-  | { kind: "location_still"; projectId: string };
+  | { kind: "location_still"; projectId: string }
+  | { kind: "scene_file"; projectId: string };
 
 type Granted = {
   studioId: string;
@@ -156,6 +158,29 @@ async function authorize(scope: UploadScope): Promise<Granted | { error: string 
         studioId: project.studio_id,
         folder: `stills/${project.id}`,
         maxBytes: MAX_IMAGE_BYTES,
+      };
+    }
+
+    case "scene_file": {
+      // A product photo or 3D model in a scene builder setup. scene_setups
+      // reads for anyone on the job and writes for editors (0115), so this is
+      // the same read-then-can_edit_project check as a still.
+      const { data: project } = await supabase
+        .from("projects")
+        .select("id, studio_id")
+        .eq("id", scope.projectId)
+        .maybeSingle();
+      if (!project) return { error: "You do not have access to this project." };
+      const { data: canEdit } = await supabase.rpc("can_edit_project", {
+        p_project_id: scope.projectId,
+      });
+      if (!canEdit) {
+        return { error: "You have review access to this project, so you cannot add files to a scene." };
+      }
+      return {
+        studioId: project.studio_id,
+        folder: `scenes/${project.id}`,
+        maxBytes: MAX_SCENE_FILE_BYTES,
       };
     }
 

@@ -2551,6 +2551,22 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   Live check constraints were read first: only project_costs.status is
   constrained, and only received/approved/paid are written. NOT RUN against a
   real host.
+- CRM (2026-10-11, operator: "add the ability to add to the CRM").
+  lib/connector-crm-tool.ts, pure half lib/connector-crm.ts (29 assertions).
+  `add_deal` puts a deal on a client (by id, or exact name; a name matching
+  no client is added as a PROSPECT, createDeal's own move), writes the
+  "Deal created" system entry, and can carry timeline entries and follow-ups
+  in the same call. A deal is ALWAYS ADDED OPEN (inbound, qualifying,
+  bidding): "won" or "lost" is refused with a sentence, because winning
+  activates the account and losing asks for a reason, both changes to an
+  existing deal. `log_crm` logs notes, calls, meetings and emails on a deal
+  (which also shows on its client) or on a client alone, and adds
+  follow-ups (crm_tasks, assigned to the link's owner). Every entry carries
+  account_id, derived from the deal. A SECOND RUN ADDS NOTHING TWICE: an
+  open deal with the same title on that client is returned, an entry with
+  the same kind, words and day is skipped, an open follow-up with the same
+  title is skipped. A deal value goes through the same moneyOf as a cost
+  ("n/a" is reported, never $0). NOT RUN against a real host.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
@@ -7719,20 +7735,63 @@ and see how it goes." The 3D previz below is now a project page.
   refuses past 3.5M characters. Nothing else in a setup gets near it.
 - readScoutPhoto moved from app/dev/scene-setup/actions.ts (deleted) into
   app/(app)/projects/[id]/scene-actions.ts.
-- KNOWN LIMIT, THE ONE TO FIX NEXT IF IT BITES: product photos and imported 3D
-  models still live in the IndexedDB of the browser that added them; the saved
-  scene holds only their keys. A colleague opening the setup sees the item at
-  its size with no label or model. Moving those bytes to the assets bucket
-  through lib/upload-ticket.ts (a new scope) is the fix; "Download this setup"
-  still embeds them for carrying by hand meanwhile.
+- PHOTOS AND MODELS ARE STORED ON THE PROJECT (2026-10-12, operator: "it
+  should just automatically upload"). They used to live only in the IndexedDB
+  of the browser that added them, so anyone else opening the setup (or a
+  future share link) got each item at its size but with no label or model.
+  Now every product photo and imported model is ALSO uploaded, in the
+  background, to `<studio>/scenes/<project>/` on a new upload-ticket scope
+  `scene_file` (can_edit_project, 160MB, MAX_SCENE_FILE_BYTES), confirmed by
+  finishSceneFile, and the setup carries `files` (asset key -> storage path).
+  NO SCHEMA CHANGE: it rides in the setup's jsonb. The key stays the item's
+  reference, so nothing else in the builder changed.
+  A browser that lacks a file asks signSceneFiles for a one-hour link, fetches
+  it once and keeps it in IndexedDB. A catch-up effect uploads anything a
+  setup uses that has no stored copy yet (files added before this, or brought
+  in from a downloaded setup file), quietly, once each, editors only.
+  TRUST BOUNDARY: `files` comes from the browser, so lib/previz/scene-files.ts
+  cleanSceneFiles keeps only paths directly in THIS project's scene folder
+  (12 assertions: other project, other studio, deeper path, traversal, bad
+  key, cap), run in both create and save; signSceneFiles signs only such
+  paths, after reading the project under RLS.
+  A failed upload says so ("only this browser has it") rather than pretending.
+  Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  builder with a stubbed store: a photo only in IndexedDB was uploaded and
+  appeared in the saved setup's `files`, and a fresh browser with only the
+  path fetched it, cached it and showed no missing-file note. NOT run against
+  real Storage from a session.
 - Verified in Chromium against a throwaway fixture mounting the real workspace
   (deleted): no page errors, no page scroll, opening sends nothing, an edit
   sends one save carrying the setup id. NOT verified end to end against the
   database: a session here cannot reach Supabase, so the first real save is on
   the operator's machine.
-- NOT YET: the outputs in the slice list below (lens and movement onto a shot
-  list row, a render into the storyboard, fixtures into Gear & crew, the
-  diagram onto the call sheet, client review). Each is additive.
+- SEND TO SHOT LIST (2026-10-12, the first output, operator chose it as step
+  one of "render the block scene into something usable"). A toolbar button
+  ("Send to shot list", which took the place of the disabled "Render this
+  frame" placeholder, since the toolbar was already exactly one line wide at
+  1440) opens a window: pick a list or make a new one (named after the setup),
+  tick cameras. Each camera becomes a row: its START frame rendered at the
+  frame's on-screen size with the action posed at its start (frameReq in the
+  render loop, read straight after each render like Save frame), uploaded on
+  the scene_file scope, plus shot size, angle and movement IN THE SHOT LIST'S
+  OWN VOCABULARY (shotSize, cameraAngle, movementWord) and ONE notes line
+  starting "Previz:" carrying body, lens, stop, lens height, focus distance,
+  support, move and setup name, since the list has no columns for those.
+  MATCHED BY CODE: a camera whose code is already on the list UPDATES that
+  row (picture, size, angle, movement replaced; description kept unless
+  blank; the old Previz line replaced and the producer's own notes kept),
+  otherwise a row is added; the window says "Updates 1A" / "Adds 2B" per
+  camera before anything is sent. lib/previz/shot-export.ts is pure (27
+  assertions: movement words incl. a turned camera, notes merge, first-match
+  planning). sendShotsToList (scene-actions.ts) caps text and accepts a
+  picture path only directly in this project's scene folder; RLS on the shot
+  list tables is the write check. A frame that fails to store still writes
+  its row and is named. Unsaved framing on a move is not sent: the saved start
+  is. NOT YET: the reverse (a row seeding a camera), and step 2, "make it
+  real" through the connector.
+- NOT YET: the other outputs in the slice list below (a render into the
+  storyboard, fixtures into Gear & crew, the diagram onto the call sheet,
+  client review). Each is additive.
 - PRESETS ARE A STARTING ROOM, NOT A PLAN (operator, first real test,
   2026-10-08: "talent in front of seamless created three variations with three
   cameras... let's keep it simple"). Every preset is now the room, ONE person,
@@ -7742,6 +7801,15 @@ and see how it goes." The 3D previz below is now a project page.
   in hand reads as something to delete before starting. The key stays because
   a stage with nothing lit renders black. The menu and empty-state blurbs say
   "one person, one camera" so the promise matches.
+- OPENING A DOWNLOADED SETUP FILE FAILED with "That did not reach the
+  server" (operator, 2026-10-12). A downloaded .previz.json carries its photos
+  and models PACKED INSIDE IT, and "Open a setup file" on a project sent the
+  whole thing to createSceneSetup, so the request died at the ~4.5MB platform
+  limit before any code ran and came back undefined, which actionError reads
+  as an expired session. The server already dropped `assets`, but only after
+  receiving them. Both create paths now send setupForStore(...).setup, which
+  strips them in the browser; restoreAssets has already unpacked them into
+  this browser's IndexedDB first, so the photos and models still show here.
 - FURNITURE MISSING ON A FRESH LOAD, fixed at the same time: the item cache
   (itemObjs) outlived the 3D engine across React's development double mount,
   so the second, empty engine skipped every piece as already built and a

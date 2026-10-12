@@ -54,12 +54,15 @@ import {
 } from "@/lib/previz/set-items";
 import { buildRoom, outsideRoom, roomBounds, roomWindows, throughWindow, windowName, type SetSpec, type WindowInfo } from "@/lib/previz/room";
 import { embedAssets, getAsset, prepareLabel, putAsset, restoreAssets } from "@/lib/previz/asset-store";
+import { unstoredKeys } from "@/lib/previz/scene-files";
 import { MAX_MODEL_BYTES, UNITS, guessUnit, loadModel, modelFormat, rawSize } from "@/lib/previz/model-import";
 import { strideSide, walkSpeed, walkerAt } from "@/lib/previz/talent-walk";
 import { AddMenu, ItemInspector, RoomInspector, ScoutDialog, type ScoutChoices } from "./set-panels";
 import { SHOT_HUES, TopDownMap, type MapPick } from "./top-down-map";
 import { readScoutPhoto } from "@/app/(app)/projects/[id]/scene-actions";
 import type { RoomDraft } from "@/lib/previz/room-draft";
+import { movementWord, previzLine, type ShotRowOut } from "@/lib/previz/shot-export";
+import { SendToShotListDialog, type SendCamera, type SendResult, type SendTarget } from "./send-to-shot-list";
 
 type Selection =
   | { kind: "camera" }
@@ -488,6 +491,18 @@ export type SceneStore = {
   /** Makes a new setup on the project and switches to it. */
   create: (s: Setup) => Promise<void>;
   canEdit: boolean;
+  /** Uploads a product photo or model to the project; resolves to its storage
+   * path, or null when it could not be stored. */
+  uploadFile?: (blob: Blob, name: string) => Promise<string | null>;
+  /** Short-lived links for stored files, by path. */
+  fileLinks?: (paths: string[]) => Promise<Record<string, string>>;
+  /** The project's shot lists, and the codes already on each. */
+  shotLists?: { id: string; title: string; codes: string[] }[];
+  shotListHref?: string;
+  /** Writes cameras into a shot list as rows. */
+  sendShots?: (req: { listId: string | null; newTitle: string | null; rows: ShotRowOut[] }) => Promise<
+    { listId: string; title: string; added: number; updated: number } | { error: string }
+  >;
 };
 
 export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: SceneStore; heightClass?: string } = {}) {
@@ -495,6 +510,12 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const [name, setName] = useState(initial.name);
   const [set, setSet] = useState<SetSpec>(initial.set);
   const [items, setItems] = useState<ItemSpec[]>(initial.items);
+  // Where each photo and model is stored on the project (key -> path).
+  const [files, setFiles] = useState<Record<string, string>>(initial.files ?? {});
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const storeRef = useRef(store);
+  storeRef.current = store;
   const [shots, setShots] = useState<Shot[]>(initial.shots);
   const [activeId, setActiveId] = useState(initial.activeId);
   const [talent, setTalent] = useState<TalentSpec[]>(initial.talent);
@@ -563,6 +584,10 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const [loaded, setLoaded] = useState(false);
   const [adding, setAdding] = useState(false);
   const [scout, setScout] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
+  // The project's shot lists, kept here so a list made by a send (or a code
+  // added to one) shows the next time the window opens, without a reload.
+  const [shotLists, setShotLists] = useState(() => store?.shotLists ?? []);
   // Bumped when a product photo or a model finishes loading, so the set rebuilds.
   const [assetTick, setAssetTick] = useState(0);
 
@@ -635,6 +660,8 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const lastChange = useRef(0);
   const activeDirty = useRef(true);
   const saveFrame = useRef(false);
+  /** Shots whose start frame the render loop should hand back as a JPEG, by id. */
+  const frameReq = useRef<{ ids: string[]; resolve: (out: Record<string, string>) => void } | null>(null);
   const dirty = () => {
     activeDirty.current = true;
     lastChange.current = performance.now();
@@ -1040,6 +1067,26 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           pose(sc);
         }
       }
+      // Frames asked for by "Send to shot list": each shot's own start frame,
+      // with the action posed at its start, at the full size of the frame on
+      // screen. Read straight after each render, before anything else draws.
+      const req = P.on || P.rec ? null : frameReq.current;
+      if (req) {
+        frameReq.current = null;
+        const out: Record<string, string> = {};
+        const s0 = placeScene(L.talent, L.items, 0);
+        poseRef.current = s0;
+        pose(s0);
+        for (const id of req.ids) {
+          const shot = L.shots.find((x) => x.id === id);
+          if (!shot) continue;
+          renderShot(shot);
+          out[id] = renderer.domElement.toDataURL("image/jpeg", 0.9);
+        }
+        poseRef.current = sc;
+        pose(sc);
+        req.resolve(out);
+      }
       const s = view;
       renderShot(s);
       if (P.rec && P.comp) {
@@ -1140,7 +1187,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         const key = it.label;
         art.current.set(key, "loading");
         void (async () => {
-          const a = await getAsset(key);
+          const a = await loadAsset(key, "Product photo");
           if (!a) { art.current.set(key, "missing"); setSaveNote("A product photo this setup uses is not in this browser"); bump(); return; }
           await cacheArt(key, a.blob);
           bump();
@@ -1152,7 +1199,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           const m = it.model;
           models.current.set(ck, "loading");
           void (async () => {
-            const a = await getAsset(m.key);
+            const a = await loadAsset(m.key, m.fileName);
             if (!a) { models.current.set(ck, "missing"); setSaveNote(`${m.fileName} is not in this browser: open the setup file it came in`); bump(); return; }
             try {
               const obj = await loadModel(await a.blob.arrayBuffer(), m.fileName, m.upZ);
@@ -1170,6 +1217,62 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
+
+  /**
+   * A photo or model by key: this browser's copy, or on a project the stored
+   * one, fetched once and kept in this browser after that. This is what lets a
+   * setup open with its files on a computer that never added them.
+   */
+  const loadAsset = async (key: string, name: string) => {
+    const local = await getAsset(key);
+    if (local) return local;
+    const path = filesRef.current[key];
+    const links = storeRef.current?.fileLinks;
+    if (!path || !links) return null;
+    try {
+      const url = (await links([path]))[path];
+      if (!url) return null;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      await putAsset(blob, name, key);
+      return { key, name, type: blob.type, blob };
+    } catch {
+      return null;
+    }
+  };
+  /**
+   * On a project, every photo and model is copied to the project's storage as
+   * it is added, in the background, so anyone who opens the setup gets it.
+   * Nothing to press: the setup simply records where it went.
+   */
+  const sharing = useRef(new Set<string>());
+  const shareFile = async (key: string, blob: Blob, name: string) => {
+    const st = storeRef.current;
+    if (!st?.canEdit || !st.uploadFile || filesRef.current[key] || sharing.current.has(key)) return;
+    sharing.current.add(key);
+    const path = await st.uploadFile(blob, name);
+    sharing.current.delete(key);
+    if (path) setFiles((f) => ({ ...f, [key]: path }));
+    else setSaveNote(`${name} could not be uploaded to the project yet, so only this browser has it`);
+  };
+  // Photos and models added before this existed, or brought in from a setup
+  // file, are only in this browser: copy each one up once, quietly.
+  useEffect(() => {
+    if (!loaded || !store?.canEdit || !store.uploadFile) return;
+    const todo = unstoredKeys(assetKeys(items), files).filter((k) => !sharing.current.has(k));
+    if (!todo.length) return;
+    let alive = true;
+    void (async () => {
+      for (const k of todo) {
+        if (!alive) return;
+        const a = await getAsset(k);
+        if (a) await shareFile(k, a.blob, a.name);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, items, files]);
 
   /** Decodes a product photo for wrapping, with its average colour. */
   const cacheArt = async (key: string, blob: Blob, avg?: string) => {
@@ -1656,7 +1759,9 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
   wheelRef.current = (e: WheelEvent) => {
     const onCanvas = e.target === canvasRef.current;
-    const onMap = (e.target as Element | null)?.closest?.("[data-previz-map]");
+    // A panel floating over the stage (the map, the add menu) keeps its own
+    // scrolling: only a pinch is stopped there, so the page does not zoom.
+    const onMap = (e.target as Element | null)?.closest?.("[data-previz-map], [data-previz-own-wheel]");
     if (view === "free") {
       // OrbitControls zooms (and cancels) on the canvas itself; elsewhere on
       // the stage only the page zoom needs stopping.
@@ -1775,6 +1880,70 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const size = shotSize(frameH);
   const angle = cameraAngle(active.pitch, active.pos.y);
   const focusName = targetName(active.focusOn, scene);
+
+  // ----- Send to shot list. Each camera as a shot list row, read at its own
+  // start frame with the action at its start, in the shot list's words.
+  const sendCameras = (): (SendCamera & { row: Omit<ShotRowOut, "path"> })[] => {
+    const s0 = placeScene(talent, items, 0);
+    return shots.map((s) => {
+      const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
+      const a = imagedArea(b, aspect.ratio);
+      const fM = effectiveFocus(s, s0);
+      const sup = SUPPORTS.find((k) => k.id === s.support) ?? SUPPORTS[0];
+      const stats = s.move ? moveStats(s.support, camKey(s), s.move) : null;
+      const row = {
+        code: s.code,
+        title: s.title,
+        shotSize: shotSize((a.h * fM) / s.focal),
+        shotType: cameraAngle(s.pitch, s.pos.y),
+        movement: movementWord(camKey(s), s.move),
+        notesLine: previzLine({
+          body: b.name,
+          focal: s.focal,
+          stop: s.stop,
+          height: dist(s.pos.y, units),
+          distance: dist(fM, units),
+          support: s.support === "sticks" ? "sticks" : `a ${sup.name}`,
+          moveName: stats?.name ?? null,
+          durationS: s.move?.durationS ?? null,
+          setupName: name,
+        }),
+      };
+      return { id: s.id, ...row, thumb: thumbs[s.id] ?? null, row };
+    });
+  };
+
+  /** Renders each shot's frame, stores it on the project, and writes the rows. */
+  const sendToShotList = async (ids: string[], target: SendTarget): Promise<SendResult> => {
+    const st = storeRef.current;
+    if (!st?.sendShots) return { error: "Sending to a shot list works on a project's Scene builder." };
+    const cams = sendCameras().filter((c) => ids.includes(c.id));
+    setView("lens");
+    const frames = await new Promise<Record<string, string>>((resolve) => {
+      frameReq.current = { ids, resolve };
+    });
+    const unpictured: string[] = [];
+    const rows: ShotRowOut[] = [];
+    for (const c of cams) {
+      let path: string | null = null;
+      const url = frames[c.id];
+      if (url && st.uploadFile) {
+        const blob = await (await fetch(url)).blob();
+        path = await st.uploadFile(blob, `${c.code.replace(/[^A-Za-z0-9_-]+/g, "") || "shot"}_previz.jpg`);
+      }
+      if (!path) unpictured.push(c.code);
+      rows.push({ ...c.row, path });
+    }
+    const res = await st.sendShots({ ...target, rows });
+    if ("error" in res) return res;
+    const sent = rows.map((r) => r.code);
+    setShotLists((ls) =>
+      ls.some((l) => l.id === res.listId)
+        ? ls.map((l) => (l.id === res.listId ? { ...l, codes: [...l.codes, ...sent] } : l))
+        : [...ls, { id: res.listId, title: res.title, codes: sent }],
+    );
+    return { ...res, unpictured };
+  };
 
   // ----- Lights and grip. Letting go of a target keeps the head where it was
   // pointing, so "by hand" starts from the current aim, not from zero.
@@ -2155,6 +2324,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     try {
       const p = await prepareLabel(file);
       const key = await putAsset(p.blob, file.name);
+      void shareFile(key, p.blob, file.name);
       await cacheArt(key, p.blob, p.avg);
       const c = catalogOf(shape);
       const at = placeFor(shape);
@@ -2178,6 +2348,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     try {
       const p = await prepareLabel(file);
       const key = await putAsset(p.blob, file.name);
+      void shareFile(key, p.blob, file.name);
       await cacheArt(key, p.blob, p.avg);
       updateItem(id, { label: key });
     } catch (e) {
@@ -2198,6 +2369,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       const unit = guessUnit(file.name, raw);
       const m = UNITS.find((u) => u.id === unit)?.m ?? 1;
       const key = await putAsset(file, file.name);
+      void shareFile(key, file, file.name);
       models.current.set(`${key}|${upZ}`, { obj, raw: { x: raw.x, y: raw.y, z: raw.z } });
       const big = Math.max(raw.x, raw.z) * m > 4;
       const at = placeFor("model");
@@ -2463,6 +2635,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   // ----- The setup: kept in this browser, and openable from a file.
   const snapshot = (): Setup => ({
     v: 3, name, set, items, shots, activeId, talent, lights, grips, win, units, aspectId,
+    ...(Object.keys(files).length ? { files } : {}),
   });
   const applySetup = (x: Setup) => {
     setName(x.name);
@@ -2476,6 +2649,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     setWin(x.win);
     setUnits(x.units);
     setAspectId(x.aspectId);
+    setFiles(x.files ?? {});
     setPlayhead(0);
     setDrafts({});
     setSel({ kind: "camera" });
@@ -2492,8 +2666,6 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   // opening a setup writes nothing; after that only a real change is sent, and
   // a change still waiting when the builder closes (switching setups) is sent
   // on the way out rather than dropped.
-  const storeRef = useRef(store);
-  storeRef.current = store;
   const lastSaved = useRef<string | null>(null);
   const pending = useRef<Setup | null>(null);
   const flushStore = () => {
@@ -2528,7 +2700,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     }, 600);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, name, set, items, shots, activeId, talent, lights, grips, win, units, aspectId]);
+  }, [loaded, name, set, items, shots, activeId, talent, lights, grips, win, units, aspectId, files]);
   useEffect(() => {
     if (!saveNote) return;
     const t = window.setTimeout(() => setSaveNote(null), 6000);
@@ -2541,7 +2713,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       : which === "bedroom" ? bedroomSetup()
       : blankSetup(5, 6, 2.8);
     // On a project, New is another setup beside this one, never a replacement.
-    if (store) { flushStore(); void store.create(fresh); return; }
+    if (store) { flushStore(); void store.create(setupForStore(fresh).setup); return; }
     if (!window.confirm("Start a new setup? This one is replaced in this browser. Download it first if you want to keep it.")) return;
     applySetup(fresh);
     if (which === "blank") setSel({ kind: "set" });
@@ -2561,7 +2733,12 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       const parsed = asSetup(raw);
       if (!parsed) { window.alert("That file is not a scene setup this page can open."); return; }
       const n = await restoreAssets((raw as Setup).assets);
-      if (store) { flushStore(); await store.create(parsed); return; }
+      // On a project the scene goes to the server, and a downloaded file can
+      // carry its photos and models packed inside it: tens of megabytes that
+      // would die at the platform's request limit before reaching the save,
+      // which reads as the session having expired. They were just unpacked
+      // into this browser above, so only the scene itself is sent.
+      if (store) { flushStore(); await store.create(setupForStore(parsed).setup); return; }
       applySetup(parsed);
       setSaveNote(`Opened ${parsed.name}${n ? ` with ${n} photo${n === 1 ? "" : "s"} and model${n === 1 ? "" : "s"}` : ""}`);
     });
@@ -2801,14 +2978,16 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         </label>
         <Seg value={units} onChange={(v) => setUnits(v as Units)} options={[{ v: "ft", l: "ft" }, { v: "m", l: "m" }]} />
         <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            disabled
-            title="The photoreal still renderer is slice 3"
-            className="rounded-[10px] border border-border px-3 py-1.5 text-xs font-semibold text-text-faint"
-          >
-            Render this frame
-          </button>
+          {store?.sendShots && store.canEdit ? (
+            <button
+              type="button"
+              onClick={() => setSendOpen(true)}
+              title="Each camera becomes a shot list row, with its frame, size, angle, movement and lens"
+              className="rounded-[10px] border border-border px-3 py-1.5 text-xs font-semibold text-text hover:border-border-strong"
+            >
+              Send to shot list
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => { setView("lens"); saveFrame.current = true; }}
@@ -3066,7 +3245,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           </div>
 
           {adding ? (
-            <div className="absolute left-3 top-3 z-40">
+            <div className="absolute left-3 top-3 z-40" data-previz-own-wheel>
               <AddMenu onAdd={addItem} onProductPhoto={(s, f) => void addProduct(s, f)} onModelFile={(f) => void importModel(f)} onClose={() => setAdding(false)} />
             </div>
           ) : null}
@@ -3365,6 +3544,17 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           Shot from here
         </button>
       </footer>
+      ) : null}
+
+      {sendOpen && store?.sendShots ? (
+        <SendToShotListDialog
+          cameras={sendCameras()}
+          lists={shotLists}
+          defaultTitle={name}
+          shotListHref={store.shotListHref ?? "#"}
+          onSend={sendToShotList}
+          onClose={() => setSendOpen(false)}
+        />
       ) : null}
 
       {scout ? (
