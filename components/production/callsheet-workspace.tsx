@@ -45,6 +45,7 @@ export function CallSheetWorkspace({
   templates,
   logoUrl,
   emailEnabled = false,
+  initialSheetId = null,
 }: {
   projectId: string;
   projectTitle: string;
@@ -58,10 +59,14 @@ export function CallSheetWorkspace({
   templates: CallSheetTemplate[];
   logoUrl: string | null;
   emailEnabled?: boolean;
+  /** A sheet to open on (?cs=), e.g. one the connector just made. */
+  initialSheetId?: string | null;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
-  const [activeId, setActiveId] = useState<string | null>(sheets[0]?.id ?? null);
+  const [activeId, setActiveId] = useState<string | null>(
+    (initialSheetId && sheets.some((s) => s.id === initialSheetId) ? initialSheetId : null) ?? sheets[0]?.id ?? null
+  );
   const [sendOpen, setSendOpen] = useState(false);
   const [mealOpen, setMealOpen] = useState(false);
   // The sheet whose name should be selected once the server hands it back. A

@@ -2,6 +2,11 @@
 
 import type { ReactNode } from "react";
 import { Art } from "./scenes-shotlist";
+import type { Genre } from "./genre-frames";
+
+// The generated job these scenes follow: Maya in an amber coat, a Paris cafe,
+// a walk down the street. Takes are drawn from those stills.
+const AI_ART: Genre[] = ["cafe", "fashion", "profile", "steps", "cafe", "fashion", "profile", "endcard"];
 import { ActionLabel, Avatar, Burst, Chip, Cursor, Window, arrive, ramp, typed } from "./scene-kit";
 
 /*
@@ -51,7 +56,7 @@ function Toast({ t, at, until, children, y = 392 }: { t: number; at: number; unt
 function Clip({ i, len = "5s", className = "", style }: { i: number; len?: string; className?: string; style?: React.CSSProperties }) {
   return (
     <div className={`relative overflow-hidden rounded-[8px] ${className}`} style={style}>
-      <Art i={i} />
+      <Art i={i} g={AI_ART[((i % AI_ART.length) + AI_ART.length) % AI_ART.length]} />
       <span className="absolute bottom-1 right-1 rounded-[4px] px-1 text-[9px] font-extrabold text-white" style={{ background: "rgba(0,0,0,.55)" }}>
         {len}
       </span>
@@ -76,9 +81,9 @@ function Tick() {
 export const AI_ELEMENTS_MS = 13500;
 
 const E_EL = [
-  { h: "@maya", name: "Maya", kind: "Character", art: 3 },
-  { h: "@bottle_hint", name: "Hint bottle", kind: "Prop", art: 1 },
-  { h: "@cafe_paris", name: "Paris cafe", kind: "Location", art: 0 },
+  { h: "@maya", name: "Maya", kind: "Character", art: "profile" as Genre },
+  { h: "@coat_amber", name: "Amber coat", kind: "Wardrobe", art: "fashion" as Genre },
+  { h: "@cafe_paris", name: "Paris cafe", kind: "Location", art: "cafe" as Genre },
 ];
 const E_TYPE1 = 1000;
 const E_MAYA = 2600;
@@ -96,8 +101,8 @@ export function AiElementsScene({ t }: { t: number }) {
   const parts: ReactNode[] = [];
   parts.push(<span key="a">{typed("Close up of ", t, E_TYPE1, 45)}</span>);
   if (t >= E_MAYA) parts.push(<b key="m" style={{ color: "var(--h-purple)" }}>@maya</b>);
-  if (t >= E_TYPE2) parts.push(<span key="b">{typed(" lifting ", t, E_TYPE2, 45)}</span>);
-  if (t >= E_BOTTLE) parts.push(<b key="bt" style={{ color: "var(--h-purple)" }}>@bottle_hint</b>);
+  if (t >= E_TYPE2) parts.push(<span key="b">{typed(" wearing ", t, E_TYPE2, 45)}</span>);
+  if (t >= E_BOTTLE) parts.push(<b key="bt" style={{ color: "var(--h-purple)" }}>@coat_amber</b>);
   if (t >= E_TYPE3) parts.push(<span key="c">{typed(" at ", t, E_TYPE3, 45)}</span>);
   if (typo) parts.push(<span key="ty" style={{ textDecoration: "underline wavy var(--h-red)" }}>{typed("@cafe", t, E_TYPO, 70)}</span>);
   if (t >= E_FIX) parts.push(<b key="cf" style={{ color: "var(--h-purple)", ...arrive(t, E_FIX, 2) }}>@cafe_paris</b>);
@@ -120,7 +125,7 @@ export function AiElementsScene({ t }: { t: number }) {
                 }}
               >
                 <span className="relative h-7 w-7 overflow-hidden rounded-full">
-                  <Art i={e.art} />
+                  <Art i={0} g={e.art} />
                 </span>
                 <span>
                   <span className="block text-[11.5px] font-extrabold leading-tight">{e.h}</span>
@@ -445,7 +450,7 @@ export function AiPickScene({ t }: { t: number }) {
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
       <Window
-        title={reviewer ? "studio-flows.com/rb/… · Hero pour, options" : "Shot 04 · Send for a pick"}
+        title={reviewer ? "studio-flows.com/rb/… · Her walk, options" : "Shot 04 · Send for a pick"}
         sub={reviewer ? "Maya at Bright Water · no login" : "Choose which candidates they see"}
         right={reviewer ? <Chip tone="pink" t={t} since={P_SWITCH}>Reviewer</Chip> : back ? <Chip tone="green" t={t} since={P_BACK}>1 pick in</Chip> : undefined}
       >
@@ -469,7 +474,7 @@ export function AiPickScene({ t }: { t: number }) {
             </div>
             <div className="mt-4 flex items-center gap-3">
               <div className="flex h-[30px] flex-1 items-center rounded-[8px] border border-border px-2 text-[12px] font-semibold">
-                {typed("Hero pour, options", t, P_TICK[3] + 400, 40)}
+                {typed("Her walk, options", t, P_TICK[3] + 400, 40)}
               </div>
               <Btn tone="accent" on={t >= P_CREATE - 150}>{t >= P_TICK[3] ? "Share 4 options" : "Share options"}</Btn>
             </div>
@@ -513,7 +518,7 @@ export function AiPickScene({ t }: { t: number }) {
                     <span className="rounded-[4px] px-1 text-[10px] font-extrabold" style={{ background: "var(--h-blue-bg)", color: "var(--h-blue)" }}>
                       0:03
                     </span>{" "}
-                    {typed("Love the splash here.", t, P_NOTE + 200, 45)}
+                    {typed("Love the light on her here.", t, P_NOTE + 200, 45)}
                   </div>
                 ) : null}
               </div>
@@ -522,7 +527,7 @@ export function AiPickScene({ t }: { t: number }) {
         ) : null}
         {back ? (
           <div className="absolute" style={{ left: 20, top: 70, right: 20, ...arrive(t, P_BACK, 8) }}>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-text-faint">Hero pour, options · results</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-text-faint">Her walk, options · results</p>
             <div className="mt-2 flex items-center gap-3 rounded-[12px] border border-border p-3">
               <Avatar name="Maya Chen" hue="pink" size={30} />
               <div className="flex-1">
@@ -562,7 +567,7 @@ export function AiPickScene({ t }: { t: number }) {
 
 export const AI_CUT_MS = 15000;
 
-const C_SHOTS = ["Paris cafe", "The pour", "Hero bottle", "Street", "End card"];
+const C_SHOTS = ["Paris cafe", "The coat", "Her walk", "Street", "End card"];
 const C_FILL = [600, 1100, 1600, 2100, 2600];
 const C_VO = [3200, 3600, 4000, 4400, 4800];
 const C_REVIEW = 5800;
@@ -623,7 +628,7 @@ export function AiCutScene({ t }: { t: number }) {
           <div className="mt-2 h-[36px] space-y-1 text-[11px]">
             {!v2 && t >= C_NOTES[0] ? (
               <p style={arrive(t, C_NOTES[0], 3)}>
-                <b>0:07</b> Hold on the pour a beat longer.
+                <b>0:07</b> Hold on her walk a beat longer.
               </p>
             ) : null}
             {!v2 && t >= C_NOTES[1] ? (
@@ -643,7 +648,7 @@ export function AiCutScene({ t }: { t: number }) {
           <div className="absolute rounded-[12px] border border-border p-3" style={{ left: 16, right: 16, top: 330, ...arrive(t, C_HAND, 8) }}>
             <p className="text-[11px] font-extrabold">Editor handoff · picked takes with their voiceover</p>
             <div className="mt-1.5 grid grid-cols-3 gap-x-4 gap-y-1 font-mono text-[10.5px] text-text-muted">
-              {["01_Paris-Cafe.mp4", "01_Paris-Cafe.mp3", "02_The-Pour.mp4", "02_The-Pour.mp3", "03_Hero-Bottle.mp4", "03_Hero-Bottle.mp3"].map((f, i) => (
+              {["01_Paris-Cafe.mp4", "01_Paris-Cafe.mp3", "02_The-Coat.mp4", "02_The-Coat.mp3", "03_Her-Walk.mp4", "03_Her-Walk.mp3"].map((f, i) => (
                 <span key={f} style={arrive(t, C_HAND + 200 + i * 150, 3)}>
                   {f}
                 </span>

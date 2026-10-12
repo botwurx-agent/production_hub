@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FitStage, useInView, useSceneClock } from "./scene-kit";
+import { REVIEW_HERO_MS, ReviewHeroScene } from "./scenes-review-hero";
 import { BUDGET_MS, BudgetScene, CALL_MS, CallSheetScene, REVIEW_MS, ReviewScene } from "./scenes-hero";
 import { SC_BOARD_MS, SC_BUILD_MS, SC_DAY_MS, SC_SHARE_MS, ScheduleBoardScene, ScheduleBuildScene, ScheduleDayScene, ScheduleShareScene } from "./scenes-schedule";
 import { CM_ATTACH_MS, CM_LINK_MS, CM_REPLY_MS, CM_SLACK_MS, CM_STUDIO_MS, CommsAttachScene, CommsLinkScene, CommsReplyScene, CommsSlackScene, CommsStudioScene } from "./scenes-comms";
@@ -93,7 +94,8 @@ import { BOARD_MS, COMMS_MS, CommsScene, SCHEDULE_MS, ScheduleScene, StoryboardS
  * cannot hand a render function across that boundary.
  */
 const SCENES = {
-  review: { ms: REVIEW_MS, C: ReviewScene, label: "Client review", hue: "pink" },
+  review: { ms: REVIEW_HERO_MS, C: ReviewHeroScene, label: "Client review", hue: "pink" },
+  "review-pins": { ms: REVIEW_MS, C: ReviewScene, label: "Client review", hue: "pink" },
   callsheet: { ms: CALL_MS, C: CallSheetScene, label: "Call sheets", hue: "amber" },
   budget: { ms: BUDGET_MS, C: BudgetScene, label: "Budget", hue: "indigo" },
   storyboard: { ms: BOARD_MS, C: StoryboardScene, label: "Storyboards", hue: "purple" },

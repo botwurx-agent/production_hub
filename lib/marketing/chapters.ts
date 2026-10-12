@@ -787,7 +787,7 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
         details: [
           { t: "Options with photos and links", d: "Drop in the pictures and the listing links as you add the prop." },
           { t: "Pick the winner", d: "One option becomes the choice, and the prop shows it." },
-          { t: "Grouped by category", d: "Glassware, linens, furnishings and the rest, each in its own group." },
+          { t: "Grouped by category", d: "Wardrobe, tableware, furnishings, vehicles and the rest, each in its own group." },
           { t: "Status as you go", d: "From needed to options in, approved, booked and on set, moving forward on its own when the first option arrives." },
         ],
         scene: "gr-props",

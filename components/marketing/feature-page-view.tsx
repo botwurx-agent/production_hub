@@ -240,7 +240,7 @@ export function FeaturePageView({ f, chapters }: { f: FeatureDef; chapters?: Cha
           with the motif staged on its color canvas. */}
       <Section tint="tinted">
         <div className="grid items-center gap-12 lg:grid-cols-11 lg:gap-20">
-          <div className="lg:col-span-6">
+          <div className="min-w-0 lg:col-span-6">
             <p
               className="mb-3 text-xs font-semibold uppercase tracking-[0.16em]"
               style={{ color: `var(--h-${f.hue})` }}
@@ -255,7 +255,7 @@ export function FeaturePageView({ f, chapters }: { f: FeatureDef; chapters?: Cha
             </p>
             <PointList points={f.diff.points} className="mt-7" />
           </div>
-          <div className="lg:col-span-5">
+          <div className="min-w-0 lg:col-span-5">
             {/* The motif always lives here: on shot pages it is its first
                 appearance, on motif-hero pages it recurs as the through-line. */}
             <Canvas hue={f.hue}>

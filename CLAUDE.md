@@ -2497,6 +2497,76 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   return order. A rate is read from "$1,200/day", "1.2k" or a number; "n/a"
   is reported, never $0, and over $100,000 is a misread. Adds only, emails
   nobody. NOT RUN against a real host.
+- CALL SHEETS (2026-10-11, operator: "we also need the ability to put
+  together a call sheet"). `create_call_sheet` (lib/connector-callsheet-tool.ts,
+  pure half lib/connector-callsheet.ts, 28 assertions). Makes a DRAFT sheet on
+  the project with the day's details (date, crew/shoot call, meals, wrap,
+  location, parking, hospital, weather, sun, company and key contacts, notes)
+  and its people. `from_roster` pulls whole sections off the project's contacts
+  through the SAME blockForCategory/contactLine/alreadyOn the in-app roster
+  import uses (talent and extras are cast, crew and vendors are crew, client is
+  client), and `entries` names people one by one with call times, linking a
+  roster person by contact_id (the roster is the allowlist; an unknown id is
+  reported). Named entries go in first, so their call times win over a bare
+  roster pull, and nobody lands twice. TIMES STAY AS WRITTEN, since the
+  columns are free text. THE JOB'S STANDING FACTS CARRY from the project's
+  latest sheet when not given (company block, producer/director/PM and phones,
+  production title, plus the layout and accent), and the day's facts NEVER do
+  (date, times, weather, location), the duplicate action's rule. NOTHING IS
+  SENT: no recipients, status draft, so the reminder cron ignores it too.
+  `call_sheet_id` instead ADDS people to an existing sheet and leaves its
+  details alone (said in `skipped` if any were passed); on an already-sent
+  sheet the result says recipients see the new rows live. The page gained
+  `?cs=<id>` (CallSheetWorkspace initialSheetId) so the tool's link opens on
+  the sheet it made rather than the first. NOT RUN against a real host.
+- CLIENTS, PROJECTS, COSTS, PROPS (2026-10-11, operator: "we should be able to
+  add projects but also add clients... then add costs and add props").
+  lib/connector-record-tools.ts, pure half lib/connector-records.ts (43
+  assertions). Every other connector tool needs a project id, so these close
+  the loop: a whole job can now be started from the chat.
+  `add_client` (name, brand|agency, prospect|active|past, notes, people as
+  client contacts). `create_project` (client by id or EXACT name, project
+  type, stage, shoot/due dates, the BRIEF as plain text stored as escaped HTML
+  paragraphs and lists, deliverables with prices to deliverable_pricing never
+  onto the row, and key dates to project_events). `add_costs` (invoices,
+  estimates, receipts onto the ledger; a RECEIPT lands PAID whatever else was
+  said; an amount that cannot be read is NOT added, never $0; a budget line by
+  id or an exact unique name, else unassigned and reported; linked to a roster
+  contact only through matchRosterVendor's exact unique rule, since that link
+  is what the remittance email writes to). `add_props` (props with options by
+  picture link, stored under `<studio>/props/<prop>/` like the app's own
+  upload, and/or a page link through isFetchableUrl; 12 pictures a call; first
+  options move a prop off needed, forward only).
+  A SECOND RUN ADDS NOTHING TWICE, which is the design point of all four,
+  since add-only means a duplicate cannot be cleaned up from the chat: a
+  client with the same name is returned (and only new people added to it), a
+  live project with the same title for the same client is returned, a cost
+  already on the ledger (vendor + invoice number, else vendor + amount + date)
+  is skipped, and a prop with the same name takes the new options rather than
+  becoming a second row. Names compare case- and punctuation-blind.
+  The cost DOCUMENT is not attached (Gmail attachments do not travel by link);
+  the result says so. `props` and `prop_options` joined the query whitelist
+  (lib/agent/schema-map.ts) so the host can read a list before adding to it.
+  storeImage and inBatches are now exported from connector-write for reuse.
+  Live check constraints were read first: only project_costs.status is
+  constrained, and only received/approved/paid are written. NOT RUN against a
+  real host.
+- CRM (2026-10-11, operator: "add the ability to add to the CRM").
+  lib/connector-crm-tool.ts, pure half lib/connector-crm.ts (29 assertions).
+  `add_deal` puts a deal on a client (by id, or exact name; a name matching
+  no client is added as a PROSPECT, createDeal's own move), writes the
+  "Deal created" system entry, and can carry timeline entries and follow-ups
+  in the same call. A deal is ALWAYS ADDED OPEN (inbound, qualifying,
+  bidding): "won" or "lost" is refused with a sentence, because winning
+  activates the account and losing asks for a reason, both changes to an
+  existing deal. `log_crm` logs notes, calls, meetings and emails on a deal
+  (which also shows on its client) or on a client alone, and adds
+  follow-ups (crm_tasks, assigned to the link's owner). Every entry carries
+  account_id, derived from the deal. A SECOND RUN ADDS NOTHING TWICE: an
+  open deal with the same title on that client is returned, an entry with
+  the same kind, words and day is skipped, an open follow-up with the same
+  title is skipped. A deal value goes through the same moneyOf as a cost
+  ("n/a" is reported, never $0). NOT RUN against a real host.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page
@@ -5656,6 +5726,42 @@ no mention of the CRM system we have". It did not, anywhere.
 - NOT DONE: the pricing table has no rows for any of this. Tier placement is
   the operator's call, and per the pricing rule a row ships only once decided.
 
+### Marketing scenes show every kind of commercial, not one bottle (2026-10-11)
+Operator: the video review page's five animations all showed the same product
+bottle, and so did most other pages. "This is for all types of commercial
+production." components/marketing/genre-frames.tsx is now the one place frame
+content is drawn: twelve token-drawn stills (runner at dawn, shoe insert, a
+breath close-up, city steps, two friends in a cafe, a testimonial, a family on
+a sofa, a car on a coast road, a chef at the pass, a fashion look on a
+seamless, a pour, an end card), each with a pencil `sketch` mode and a
+warm/cool/dusk `grade`.
+- THE REVIEW PAGE gives each chapter a different job: share = fashion
+  lookbook, pins = family spot (plus its storyboard PDF), video = auto spot,
+  draw = chef at the pass, versions = the runner (v3 cool, v4 warm).
+- `Art` (scenes-shotlist.tsx), which the shot list, storyboard, schedule,
+  tasks, AI and hub scenes all draw thumbnails with, now follows ONE live
+  action spot, `SPOT` ("First light": ridge, shoe, breath, steps, cafe,
+  testimonial, home, end card), so a storyboard still reads as one story.
+  `g` and `grade` pick a still directly (props options, the AI job). The home
+  storyboard panel is a family spot drawn as pencil then final.
+- A STILL IS ALWAYS IN LIGHT TOKENS (`data-theme="light"` on its svg): a
+  photograph does not change with the theme, and the dark set turned hair and
+  silhouettes white.
+- Pins and drawn markup land on the subject through `stillPoint`, which maps
+  the 300x200 grid into whatever box the still fills (slice).
+- Left on purpose: the home hero's review tab (a hand pouring, already live
+  action), the Instagram-only ReviewScene, the previz kitchen (a real preset),
+  and the CGI vendor's pack shot render on the budget page.
+- THE REVIEW PAGE'S "A link, not a login" BAND was drawn as a gradient with a
+  red circle and a pin around NOTHING, under a claim about no-login links and
+  the 9:16 crop (operator: "the image makes no sense"). ReviewMotif now shows
+  exactly the claim: the link arriving by email, the car still under a 9:16
+  crop mask with a pin, and the note signed "typed her name, no account".
+  RULE for any motif: it illustrates the band's sentence, not the feature in
+  general. FOUND ON THE WAY: that band's two grid columns had no min-w-0, so at
+  390px the motif's min-content widened the column to 433 and clipped the
+  words on the right of EVERY feature page; both columns carry min-w-0 now.
+
 ### Scene builder on the marketing site (2026-10-08) — BUILT
 Operator: feature the scene builder in the home page's sliding panels, give it
 its own page, animate it like the rest, and show the phone viewfinder there.
@@ -5732,6 +5838,26 @@ shell (nav, footer, light theme) so it is judged as a page.
   pattern also matches its OWN command line if that pattern appears anywhere
   in it (even inside a heredoc), and kills the shell. Kill by pid, in a call
   of its own.
+
+### Home hero: the Client review tab sells the whole review kit (2026-10-11)
+Operator: the hero's review animation only showed click-and-comment, and the
+point is to sell the client side. components/marketing/scenes-review-hero.tsx
+(ReviewHeroScene, 23s) is a VIDEO review instead of a still, and runs the
+shipped ways a client leaves a note in order: a comment at the exact frame
+(timecode), drawing on the frame (arrow + circle), a range comment over a
+stretch, a voice note, then Approve on a no-login link. SCENES["review"] now
+points at it; the old still-image pin scene is SCENES["review-pins"] and is
+still what the two Instagram videos import directly, so their tuned windows
+are untouched. Not shown and true if wanted later: transcripts, version
+compare (wipe), marker export to the editor, emoji reactions, replies.
+Second pass, same day (operator): the shot was a bottle tilted away from the
+glass with the pour coming from nowhere, so it is now a HAND holding the
+bottle and pouring into the glass (bottle drawn upright in its own coordinates
+and placed by POUR, with LABEL the point the drawing aims at, so the arrow and
+circle always land on the label). And it was too fast: 13.4s to 23s, typing at
+55ms a character, the pointer at 750ms a move, the arrow drawn over 1.1s, and
+each label held 2.2s. If a beat is retimed, move the constants together; the
+cursor path reads them.
 
 ### Demo clips (scripts/capture-demos.mjs, `npm run demos`): BUILT
 A screenshot cannot show an interaction, and on the canvas pages every claim IS

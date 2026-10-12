@@ -1,5 +1,6 @@
 "use client";
 
+import { GenreStill, SPOT, type Genre } from "./genre-frames";
 import type { ReactNode } from "react";
 import { ActionLabel, Burst, Chip, Cursor, Window, arrive, ramp, spring, typed } from "./scene-kit";
 
@@ -13,39 +14,13 @@ import { ActionLabel, Burst, Chip, Cursor, Window, arrive, ramp, spring, typed }
  * the exports share.
  */
 
-export function Art({ i, sketch = false }: { i: number; sketch?: boolean }) {
-  const hues = ["amber", "blue", "cyan", "pink", "green", "indigo", "orange", "purple"];
-  const h = hues[i % hues.length];
-  return (
-    <svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full" aria-hidden="true">
-      <rect width="160" height="90" fill={sketch ? "var(--surface)" : `var(--h-${h}-bg)`} />
-      <g stroke={sketch ? "var(--text-faint)" : `var(--h-${h})`} strokeWidth="2.5" fill={sketch ? "none" : "var(--surface)"} strokeLinecap="round">
-        {i % 4 === 0 ? (
-          <>
-            <path d="M0 68 H160" fill="none" />
-            <rect x="24" y="30" width="34" height="38" rx="3" />
-            <circle cx="126" cy="22" r="10" />
-          </>
-        ) : i % 4 === 1 ? (
-          <>
-            <rect x="68" y="12" width="24" height="10" rx="3" />
-            <path d="M64 22 h32 q8 10 8 22 v38 h-48 v-38 q0 -12 8 -22z" />
-          </>
-        ) : i % 4 === 2 ? (
-          <>
-            <path d="M52 10 q18 10 26 30" fill="none" />
-            <path d="M70 42 h40 l-6 38 h-28z" />
-          </>
-        ) : (
-          <>
-            <circle cx="80" cy="46" r="16" />
-            <circle cx="50" cy="30" r="7" />
-            <circle cx="114" cy="28" r="8" />
-          </>
-        )}
-      </g>
-    </svg>
-  );
+/**
+ * A shot's frame: one frame of "First light", the live-action spot these
+ * scenes are about (a runner at dawn, the city steps, coffee with a friend,
+ * home). `g` picks a still directly when a scene is about something else.
+ */
+export function Art({ i, sketch = false, g, grade }: { i: number; sketch?: boolean; g?: Genre; grade?: "warm" | "cool" | "dusk" }) {
+  return <GenreStill genre={g ?? SPOT[((i % SPOT.length) + SPOT.length) % SPOT.length].genre} sketch={sketch} grade={grade} />;
 }
 
 function Btn({ children, press, tone = "quiet", on }: { children: ReactNode; press?: boolean; tone?: "accent" | "quiet"; on?: boolean }) {
@@ -104,13 +79,13 @@ const CODE_AT = 8700;
 
 export function ShotRowsScene({ t }: { t: number }) {
   const rows = [
-    { code: "1A", desc: "The kitchen, morning light", size: "Wide", type: "Establishing", move: "Dolly in" },
-    { code: "1B", desc: "Bottle hero on the counter", size: "Close-up", type: "Insert", move: "Static" },
+    { code: "1A", desc: "Dawn, a runner on the ridge", size: "Wide", type: "Establishing", move: "Drone push" },
+    { code: "1B", desc: "The shoe hits the trail", size: "Close-up", type: "Insert", move: "Tracking" },
   ];
   const Y = (i: number) => 104 + i * 44;
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="Shot list · Day 1, kitchen" sub="Every shot, as a row" right={<Chip tone="blue" t={t}>{t >= ADD_AT ? 3 : 2} shots</Chip>}>
+      <Window title="Shot list · Day 1, the ridge" sub="Every shot, as a row" right={<Chip tone="blue" t={t}>{t >= ADD_AT ? 3 : 2} shots</Chip>}>
         <div className="absolute flex text-[10px] font-extrabold uppercase tracking-[0.1em] text-text-faint" style={{ left: 0, top: 70 }}>
           {HEAD.map((h, i) => (
             <span key={i} className="absolute" style={{ left: COLX[i] + 2, width: COLS[i] }}>{h}</span>
@@ -130,7 +105,7 @@ export function ShotRowsScene({ t }: { t: number }) {
             <span className="absolute text-[11px] font-extrabold" style={{ left: COLX[0] + 4, top: Y(2) + 7, color: "var(--accent)" }}>{t >= CODE_AT ? "2A" : ""}</span>
             <div className="absolute rounded-[6px] border border-dashed border-border" style={{ left: COLX[1], top: Y(2), width: COLS[1], height: 38 }} />
             <div className="absolute" style={{ left: COLX[2], top: Y(2) + 5 }}>
-              <Cell w={COLS[2]} lit={t >= DESC_AT - 200 && t < SIZE.at - 300}>{typed("The pour, from the side", t, DESC_AT, 45)}</Cell>
+              <Cell w={COLS[2]} lit={t >= DESC_AT - 200 && t < SIZE.at - 300}>{typed("Her breath in the cold", t, DESC_AT, 45)}</Cell>
             </div>
             <div className="absolute" style={{ left: COLX[3], top: Y(2) + 5 }}><Cell w={COLS[3]} lit={t >= SIZE.at && t < SIZE.pick + 300} faint={t < SIZE.pick}>{t >= SIZE.pick ? "Close-up" : "Size"}</Cell></div>
             <div className="absolute" style={{ left: COLX[4], top: Y(2) + 5 }}><Cell w={COLS[4]} lit={t >= TYPE.at && t < TYPE.pick + 300} faint={t < TYPE.pick}>{t >= TYPE.pick ? "Insert" : "Type"}</Cell></div>
@@ -182,15 +157,15 @@ const MATCH_AT = 6400;
 
 export function ShotFramesScene({ t }: { t: number }) {
   const rows = [
-    { code: "1A", desc: "The kitchen, morning light", frame: t >= PICK_AT ? 0 : null },
-    { code: "1B", desc: "Bottle hero on the counter", frame: t >= UP_AT + 700 ? 1 : null },
-    { code: "2A", desc: "The pour, from the side", frame: t >= MATCH_AT ? 2 : null, matched: true },
-    { code: "2B", desc: "Splash, high speed", frame: t >= MATCH_AT + 300 ? 3 : null, matched: true },
+    { code: "1A", desc: "Dawn, a runner on the ridge", frame: t >= PICK_AT ? 0 : null },
+    { code: "1B", desc: "The shoe hits the trail", frame: t >= UP_AT + 700 ? 1 : null },
+    { code: "2A", desc: "Her breath in the cold", frame: t >= MATCH_AT ? 2 : null, matched: true },
+    { code: "2B", desc: "Up the city steps", frame: t >= MATCH_AT + 300 ? 3 : null, matched: true },
   ];
   const Y = (i: number) => 76 + i * 64;
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="Shot list · Day 1, kitchen" sub="A picture on every shot" right={<Btn on={t >= MATCH_BTN - 300} press={t >= MATCH_BTN - 60 && t < MATCH_BTN + 80}>{t >= MATCH_AT ? "Frames added ✓" : "Add frames to 2 rows"}</Btn>}>
+      <Window title="Shot list · Day 1, the ridge" sub="A picture on every shot" right={<Btn on={t >= MATCH_BTN - 300} press={t >= MATCH_BTN - 60 && t < MATCH_BTN + 80}>{t >= MATCH_AT ? "Frames added ✓" : "Add frames to 2 rows"}</Btn>}>
         {rows.map((r, i) => (
           <div key={r.code} className="absolute flex items-center gap-3" style={{ left: 16, top: Y(i), width: 608, height: 56 }}>
             <span className="w-[26px] text-[11px] font-extrabold" style={{ color: "var(--accent)" }}>{r.code}</span>
@@ -259,12 +234,12 @@ const DROP_AT = 900;
 const READ_END = 3100;
 const FOUND_AT = 3300;
 const BEATS = [
-  "Morning light fills a quiet kitchen",
-  "A hand sets the bottle on the counter",
-  "Close on the label as it turns to camera",
-  "The pour, slow, from the side",
-  "Splash, high speed",
-  "End card: the bottle, the line, the logo",
+  "Dawn on the ridge, one runner",
+  "Her shoe hits the trail, slow motion",
+  "Close on her breath in the cold",
+  "She takes the city steps two at a time",
+  "Coffee with a friend at the window",
+  "End card: the line and the logo",
 ];
 const IMPORT_AT = 7200;
 
@@ -313,7 +288,7 @@ export function ShotImportScene({ t }: { t: number }) {
         ) : null}
         {imported ? (
           <div className="absolute rounded-[10px] px-3 py-2 text-[11.5px] font-bold text-white" style={{ left: 16, bottom: 14, background: "var(--text)", ...arrive(t, IMPORT_AT + 200, 8) }}>
-            6 shots added to “Day 1, kitchen”. Nothing was retyped.
+            6 shots added to “Day 1, the ridge”. Nothing was retyped.
           </div>
         ) : null}
         <Burst t={t} at={IMPORT_AT} x={560} y={380} />
@@ -346,7 +321,7 @@ const SCHED_AT = 8000;
 
 export function ShotOrganizeScene({ t }: { t: number }) {
   const moved = t >= MOVE_TO_AT && t < UNDO_AT;
-  const rows = ["1A · Kitchen wide", "1B · Bottle hero", "2A · The pour", "2B · Splash", "2C · Drip macro", "3A · Hand reach"];
+  const rows = ["1A · Ridge wide", "1B · Shoe insert", "2A · Breath CU", "2B · City steps", "2C · Cafe two-shot", "3A · Home, the kids"];
   const inDay1 = moved ? rows.filter((_, i) => i < 2 || i > 4) : rows;
   const selected = (i: number) => SEL[i - 2] !== undefined && t >= SEL[i - 2] && !moved && t < UNDO_AT + 300;
   const sched = t >= SCHED_AT;
@@ -355,7 +330,7 @@ export function ShotOrganizeScene({ t }: { t: number }) {
       <Window title="Shot lists · Bright Water" sub="As many lists as the job needs" right={<Chip tone="muted" t={t}>Undo · Cmd Z</Chip>}>
         <div className="absolute border-r border-border p-2" style={{ left: 0, top: 52, width: 180, height: 388 }}>
           {[
-            ["Day 1, kitchen", moved ? 3 : 6, true],
+            ["Day 1, the ridge", moved ? 3 : 6, true],
             ["Day 2, liquid", moved ? 7 : 4, false],
           ].map(([n, c, on]) => (
             <div key={n as string} className="mb-1 flex items-center justify-between rounded-[8px] px-2 py-2 text-[12px] font-bold" style={{ background: on ? "var(--accent-soft)" : undefined }}>
@@ -408,9 +383,9 @@ export function ShotOrganizeScene({ t }: { t: number }) {
             <div className="mt-2">
               {[
                 ["7:00 AM", "Setup", "blue"],
-                ["8:00 AM", "1A · Kitchen wide", "green"],
+                ["8:00 AM", "1A · Ridge wide", "green"],
                 ["9:00 AM", "Setup", "blue"],
-                ["9:15 AM", "1B · Bottle hero", "green"],
+                ["9:15 AM", "1B · Shoe insert", "green"],
                 ["10:15 AM", "Setup", "blue"],
                 ["10:30 AM", "3A · Hand reach", "green"],
                 ["11:30 AM", "Wrap", "indigo"],
@@ -464,7 +439,7 @@ export function ShotShareScene({ t }: { t: number }) {
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
       <Window
-        title="Shot list · Day 1, kitchen"
+        title="Shot list · Day 1, the ridge"
         sub="Present it, print it, get it signed off"
         right={
           <span className="flex gap-1.5">
@@ -503,7 +478,7 @@ export function ShotShareScene({ t }: { t: number }) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 p-3">
-              {["1A · Kitchen wide", "1B · Bottle hero", "2A · The pour", "2B · Splash"].map((r, i) => (
+              {["1A · Ridge wide", "1B · Shoe insert", "2A · Breath CU", "2B · City steps"].map((r, i) => (
                 <div key={r} className="relative">
                   <div className="relative h-[92px] overflow-hidden rounded-[4px]"><Art i={i} /></div>
                   <p className="mt-1 text-[9.5px] font-bold">{r}</p>

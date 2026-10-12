@@ -53,9 +53,9 @@ export function ScheduleDayScene({ t }: { t: number }) {
   const dur = t >= DUR_AT ? 90 : 60;
   const rows = [
     { k: "call", title: "Crew call", d: 30 },
-    { k: "setup", title: "Set up the kitchen", d: 60 },
-    { k: "shot", title: "Kitchen hero", d: 90, shots: [0, 1], talent: "Rae Morgan" },
-    ...(saved ? [{ k: "shot", title: "The pour", d: dur, shots: [2, 3], talent: "Rae Morgan", fresh: true }] : []),
+    { k: "setup", title: "Set up on the ridge", d: 60 },
+    { k: "shot", title: "Ridge at dawn", d: 90, shots: [0, 1], talent: "Rae Morgan" },
+    ...(saved ? [{ k: "shot", title: "The city steps", d: dur, shots: [2, 3], talent: "Rae Morgan", fresh: true }] : []),
   ];
   let m = 7 * 60;
   const times = rows.map((r) => {
@@ -111,7 +111,7 @@ export function ScheduleDayScene({ t }: { t: number }) {
             <div className="mt-2 grid grid-cols-[1fr_90px] gap-3">
               <div>
                 <p className="text-[10.5px] font-semibold text-text-faint">What</p>
-                <div className="mt-0.5 h-[28px] rounded-[7px] border px-2 text-[12px] font-semibold leading-[26px]" style={{ borderColor: t >= TITLE_AT - 200 && t < SHOTS_AT ? "var(--accent)" : "var(--border)" }}>{typed("The pour", t, TITLE_AT, 70)}</div>
+                <div className="mt-0.5 h-[28px] rounded-[7px] border px-2 text-[12px] font-semibold leading-[26px]" style={{ borderColor: t >= TITLE_AT - 200 && t < SHOTS_AT ? "var(--accent)" : "var(--border)" }}>{typed("The city steps", t, TITLE_AT, 70)}</div>
               </div>
               <div>
                 <p className="text-[10.5px] font-semibold text-text-faint">Length</p>
@@ -189,8 +189,8 @@ export function ScheduleBoardScene({ t }: { t: number }) {
   const prelight = t >= PRELIGHT_AT;
   const moved = t >= MOVE.at + MOVE.dur;
   const days = [
-    ...(prelight ? [{ name: "Prelight", date: "Wed, Oct 5", strips: [{ n: "Rig the kitchen", ie: "INT DAY" }, { n: "Light tests", ie: "INT DAY" }], pre: true }] : []),
-    { name: "Day 1", date: "Thu, Oct 6", strips: [{ n: "Kitchen hero · 1A 1B", ie: "INT DAY" }, { n: "The pour · 2A 2B", ie: "INT DAY" }, ...(moved ? [] : [{ n: "Porch, golden hour · 4A", ie: "EXT DAY" }])] },
+    ...(prelight ? [{ name: "Prelight", date: "Wed, Oct 5", strips: [{ n: "Rig the cafe", ie: "INT DAY" }, { n: "Light tests", ie: "INT DAY" }], pre: true }] : []),
+    { name: "Day 1", date: "Thu, Oct 6", strips: [{ n: "Ridge at dawn · 1A 1B", ie: "EXT DAY" }, { n: "City steps · 2A 2B", ie: "EXT DAY" }, ...(moved ? [] : [{ n: "Cafe window · 4A", ie: "INT DAY" }])] },
     { name: "Day 2", date: "Fri, Oct 7", strips: [...(moved ? [{ n: "Porch, golden hour · 4A", ie: "EXT DAY" }] : []), { n: "Night street · 5A", ie: "EXT NIGHT" }, { n: "Bar interior · 6A", ie: "INT NIGHT" }] },
   ];
   const colW = prelight ? 190 : 290;
@@ -360,10 +360,10 @@ const PIN_AT = 6800;
 
 export function ScheduleShareScene({ t }: { t: number }) {
   const rows = [
-    { tm: "7:00 AM", k: "setup", n: "Set up the kitchen" },
-    { tm: "8:00 AM", k: "shot", n: "Kitchen hero", shots: [0, 1] },
-    { tm: "9:30 AM", k: "setup", n: "Reset for the pour" },
-    { tm: "9:45 AM", k: "shot", n: "The pour", shots: [2, 3] },
+    { tm: "7:00 AM", k: "setup", n: "Set up on the ridge" },
+    { tm: "8:00 AM", k: "shot", n: "Ridge at dawn", shots: [0, 1] },
+    { tm: "9:30 AM", k: "setup", n: "Company move to the steps" },
+    { tm: "9:45 AM", k: "shot", n: "The city steps", shots: [2, 3] },
     { tm: "1:00 PM", k: "meal", n: "Lunch" },
   ];
   return (
@@ -403,7 +403,7 @@ export function ScheduleShareScene({ t }: { t: number }) {
         {t >= PIN_AT ? (
           <div className="absolute rounded-[10px] border border-border bg-surface px-3 py-2 shadow-[0_16px_40px_-14px_rgba(40,30,90,.5)]" style={{ right: 24, bottom: 24, width: 230, ...arrive(t, PIN_AT + 150, 8) }}>
             <p className="text-[11px] font-bold">Jon · Agency</p>
-            <p className="text-[11.5px] text-text-muted">{typed("Can the pour move before 9? Talent leaves at 3.", t, PIN_AT + 350, 24)}</p>
+            <p className="text-[11.5px] text-text-muted">{typed("Can the steps move before 9? Talent leaves at 3.", t, PIN_AT + 350, 24)}</p>
           </div>
         ) : null}
       </Window>

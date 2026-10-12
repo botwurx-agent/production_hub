@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Art } from "./scenes-shotlist";
+import type { Genre } from "./genre-frames";
 import { ActionLabel, Avatar, Burst, Chip, Cursor, Window, arrive, dragAt, spring, ramp, typed } from "./scene-kit";
 
 /*
@@ -67,8 +68,8 @@ export function TaskBoardScene({ t }: { t: number }) {
   const phase = t >= PHASE_AT;
   const cards = [
     { id: "a", title: "Book the Culver stage", people: ["Kim Ade"], due: "Oct 2", col: 3 },
-    { id: "b", title: "Source hero glassware", people: ["Ava Brooks", "Kim Ade"], check: "2/5", col: t >= MOVES[0].at + MOVES[0].dur ? 1 : 0, img: 2 },
-    { id: "c", title: "Permit for the porch", people: ["Sam Ortiz"], due: "Overdue", col: 0 },
+    { id: "b", title: "Lock the running wardrobe", people: ["Ava Brooks", "Kim Ade"], check: "2/5", col: t >= MOVES[0].at + MOVES[0].dur ? 1 : 0, img: 2 },
+    { id: "c", title: "Permit for the ridge", people: ["Sam Ortiz"], due: "Overdue", col: 0 },
     { id: "d", title: "Casting callbacks", people: ["Dana Reyes"], col: 1 },
     { id: "e", title: "Client sign-off on boards", people: ["Kim Ade"], col: t >= MOVES[1].at + MOVES[1].dur ? 2 : 1, due: "Oct 4" },
     { id: "f", title: "Lock the shot list", people: ["Dana Reyes", "Sam Ortiz"], col: 3 },
@@ -132,10 +133,10 @@ const FILE_AT = 5800;
 const NOTE_AT = 7600;
 
 export function TaskCardScene({ t }: { t: number }) {
-  const items = ["Thick-base tumblers x6", "Two backup bottles", "Linen in warm grey"];
+  const items = ["Two looks, in two sizes", "Backup shoes, size 8", "A layer for the cold dawn"];
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="Source hero glassware" sub="Tasks · Bright Water · Pre-production" right={<Chip tone="indigo" t={t}>In progress</Chip>}>
+      <Window title="Lock the running wardrobe" sub="Tasks · First light · Pre-production" right={<Chip tone="indigo" t={t}>In progress</Chip>}>
         <div className="absolute" style={{ left: 16, top: 64, width: 380 }}>
           <p className="text-[10.5px] font-extrabold uppercase tracking-[0.1em] text-text-faint">People</p>
           <div className="mt-1 flex items-center gap-1.5">
@@ -148,7 +149,7 @@ export function TaskCardScene({ t }: { t: number }) {
           </div>
           <p className="mt-3 text-[10.5px] font-extrabold uppercase tracking-[0.1em] text-text-faint">Checklists</p>
           <div className="mt-1 rounded-[10px] border border-border p-2">
-            <p className="text-[11.5px] font-extrabold">{t >= LIST_AT ? typed("Glassware", t, LIST_AT, 60) : "Steps"}</p>
+            <p className="text-[11.5px] font-extrabold">{t >= LIST_AT ? typed("Wardrobe", t, LIST_AT, 60) : "Steps"}</p>
             {items.map((it, i) => {
               const done = i < 2 && t >= TICKS[i];
               return (
@@ -165,7 +166,7 @@ export function TaskCardScene({ t }: { t: number }) {
             {t >= NOTE_AT ? (
               <div className="flex gap-2 rounded-[10px] bg-surface-2 p-2" style={arrive(t, NOTE_AT, 6)}>
                 <Avatar name="Ava Brooks" hue="pink" size={20} />
-                <p className="text-[11.5px]"><b>Ava</b> <span className="text-text-muted">{typed("Prop house has the tumblers, holding them till Friday.", t, NOTE_AT + 200, 26)}</span></p>
+                <p className="text-[11.5px]"><b>Ava</b> <span className="text-text-muted">{typed("Wardrobe has both looks, holding them till Friday.", t, NOTE_AT + 200, 26)}</span></p>
               </div>
             ) : null}
           </div>
@@ -181,7 +182,7 @@ export function TaskCardScene({ t }: { t: number }) {
           </div>
           <p className="mt-1 text-[10.5px] text-text-faint">Images show on the card itself.</p>
           <div className="mt-3 w-[160px]">
-            <TaskCard title="Source hero glassware" people={["Ava Brooks", "Kim Ade", "Theo Lin"]} check={`${Math.min(2, TICKS.filter((x) => t >= x).length)}/3`} img={2} due="Oct 3" />
+            <TaskCard title="Lock the running wardrobe" people={["Ava Brooks", "Kim Ade", "Theo Lin"]} check={`${Math.min(2, TICKS.filter((x) => t >= x).length)}/3`} img={2} due="Oct 3" />
           </div>
         </div>
       </Window>
@@ -280,7 +281,7 @@ export function TaskListScene({ t }: { t: number }) {
   const list = t >= LIST_SWITCH;
   const rows = [
     { s: "To do", hue: "blue", items: [["Permit for the porch", "Overdue", "Sam Ortiz"], ["Confirm catering count", "Today", "Kim Ade"]] },
-    { s: "In progress", hue: "indigo", items: [["Source hero glassware", "Oct 3", "Ava Brooks"], ["Casting callbacks", "Oct 4", "Dana Reyes"]] },
+    { s: "In progress", hue: "indigo", items: [["Lock the running wardrobe", "Oct 3", "Ava Brooks"], ["Casting callbacks", "Oct 4", "Dana Reyes"]] },
     { s: "Waiting", hue: "amber", items: [["Client sign-off on boards", "Oct 4", "Kim Ade"]] },
   ];
   return (
@@ -383,7 +384,7 @@ export const GR_PROPS_MS = 12500;
 
 const OPTS = [
   { at: 1200, k: 2, src: "Photo from the prop house" },
-  { at: 2400, k: 6, src: "propfinder.com/listing/tumbler" },
+  { at: 2400, k: 6, src: "propfinder.com/listing/shell-jacket" },
   { at: 3600, k: 4, src: "Photo from the prop house" },
 ];
 const PICK2 = 6000;
@@ -393,18 +394,18 @@ export function GearPropsScene({ t }: { t: number }) {
   const picked = t >= PICK2;
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="Props · Bright Water" sub="Options for each prop, and one pick" right={<Btn on={t >= SEND2 - 300} press={t >= SEND2 - 60 && t < SEND2 + 80}>{t >= SEND2 ? "Sent for review ✓" : "Send for review"}</Btn>}>
+      <Window title="Props · First light" sub="Options for each prop, and one pick" right={<Btn on={t >= SEND2 - 300} press={t >= SEND2 - 60 && t < SEND2 + 80}>{t >= SEND2 ? "Sent for review ✓" : "Send for review"}</Btn>}>
         <div className="absolute" style={{ left: 16, top: 64, width: 608 }}>
           <div className="flex items-center gap-2">
-            <p className="text-[13px] font-extrabold">Hero tumbler</p>
-            <span className="text-[11px] text-text-faint">Tableware · for shots 2A, 2B</span>
+            <p className="text-[13px] font-extrabold">Hero jacket</p>
+            <span className="text-[11px] text-text-faint">Wardrobe · for shots 1A, 2B</span>
             <span className="ml-auto">{picked ? <Chip tone="green" t={t} since={PICK2}>Picked</Chip> : <Chip tone="amber" t={t} since={OPTS[0].at}>Options in</Chip>}</span>
           </div>
           <div className="mt-2 grid grid-cols-3 gap-3">
             {OPTS.map((o, i) =>
               t >= o.at ? (
                 <div key={i} className="overflow-hidden rounded-[12px] border bg-surface" style={{ borderColor: picked && i === 1 ? "var(--h-green)" : "var(--border)", boxShadow: picked && i === 1 ? "0 0 0 3px color-mix(in oklch, var(--h-green) 30%, transparent)" : undefined, ...arrive(t, o.at, 10) }}>
-                  <div className="relative h-[110px]"><Art i={o.k} /><span className="absolute left-1.5 top-1.5 rounded-[5px] bg-surface px-1 text-[10px] font-extrabold">Option {i + 1}</span></div>
+                  <div className="relative h-[110px]"><Art i={o.k} g="fashion" grade={(["cool", undefined, "warm"] as const)[i]} /><span className="absolute left-1.5 top-1.5 rounded-[5px] bg-surface px-1 text-[10px] font-extrabold">Option {i + 1}</span></div>
                   <div className="p-2">
                     <p className="truncate text-[10.5px] text-text-faint">{o.src}</p>
                     {picked && i === 1 ? <p className="mt-0.5 text-[11px] font-extrabold" style={{ color: "var(--h-green)" }}>The one</p> : null}
@@ -417,9 +418,9 @@ export function GearPropsScene({ t }: { t: number }) {
           </div>
           <div className="mt-4 space-y-1.5">
             {[
-              ["Linen napkins", "Booked", "purple", 2],
-              ["Marble board", "Needed", "red", 0],
-              ["Glass carafe", "Options in", "amber", 3],
+              ["Running shoes", "Booked", "purple", 2],
+              ["Headband", "Needed", "red", 0],
+              ["Water bottle", "Options in", "amber", 3],
             ].map(([n, s, tone, c]) => (
               <div key={n as string} className="flex items-center gap-3 rounded-[9px] border border-border px-3 py-2">
                 <span className="flex-1 text-[12px] font-bold">{n as string}</span>
@@ -447,14 +448,25 @@ const PIN_AT2 = 1600;
 const PIN_AT3 = 3600;
 const APPROVE2 = 6200;
 
+// What the client is choosing between: three jackets, then the shoes, the
+// headband and the water bottle.
+const PICK_ART: { g: Genre; grade?: "warm" | "cool" | "dusk" }[] = [
+  { g: "fashion", grade: "cool" },
+  { g: "fashion" },
+  { g: "fashion", grade: "warm" },
+  { g: "shoe" },
+  { g: "profile" },
+  { g: "pour" },
+];
+
 export function GearPickScene({ t }: { t: number }) {
   return (
     <div className="relative" style={{ width: 640, height: 440 }}>
-      <Window title="studio-flows.com/r/… · Props review" sub="Maya at Bright Water · no login" right={t >= APPROVE2 ? <Chip tone="green" t={t} since={APPROVE2}>Approved</Chip> : <Chip tone="amber" t={t}>Waiting on you</Chip>}>
+      <Window title="studio-flows.com/r/… · Props review" sub="Maya at Strider · no login" right={t >= APPROVE2 ? <Chip tone="green" t={t} since={APPROVE2}>Approved</Chip> : <Chip tone="amber" t={t}>Waiting on you</Chip>}>
         <div className="absolute grid grid-cols-3 gap-3" style={{ left: 16, top: 66, width: 400 }}>
           {[2, 6, 4, 1, 5, 3].map((k, i) => (
             <div key={i}>
-              <div className="relative h-[82px] overflow-hidden rounded-[8px] border border-border"><Art i={k} /><span className="absolute left-1 top-1 rounded-[4px] bg-surface px-1 text-[9.5px] font-extrabold">{i < 3 ? `Tumbler ${i + 1}` : ["Napkin", "Board", "Carafe"][i - 3]}</span></div>
+              <div className="relative h-[82px] overflow-hidden rounded-[8px] border border-border"><Art i={k} g={PICK_ART[i].g} grade={PICK_ART[i].grade} /><span className="absolute left-1 top-1 rounded-[4px] bg-surface px-1 text-[9.5px] font-extrabold">{i < 3 ? `Jacket ${i + 1}` : ["Shoes", "Headband", "Bottle"][i - 3]}</span></div>
             </div>
           ))}
         </div>
@@ -467,8 +479,8 @@ export function GearPickScene({ t }: { t: number }) {
         })}
         <div className="absolute space-y-2" style={{ left: 432, top: 66, width: 192 }}>
           {[
-            { n: 1, text: "Too heavy for the pour shot.", at: PIN_AT2 },
-            { n: 2, text: "This one. Love the base.", at: PIN_AT3 },
+            { n: 1, text: "Too heavy for a dawn run.", at: PIN_AT2 },
+            { n: 2, text: "This one. Love the colour.", at: PIN_AT3 },
           ].map((c) =>
             t >= c.at ? (
               <div key={c.n} className="rounded-[10px] border border-border bg-surface p-2" style={arrive(t, c.at + 60, 6)}>
