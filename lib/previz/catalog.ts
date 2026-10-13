@@ -134,7 +134,11 @@ export const CATALOG: CatalogEntry[] = [
       { name: "Sage", hex: "#a9b9a2" },
     ],
   },
-  { kind: "wall-cabinet", name: "Wall cabinets", category: "furniture", hint: "Hung above a counter", w: 2.4, d: 0.36, h: 0.7, color: "#7f9182", raise: 1.6 },
+  // Both HANG: their height is the bottom edge off the floor, whatever is
+  // under them. They used to stand on what was below, so sliding one over a
+  // sofa or a counter threw it up by that piece's height.
+  { kind: "wall-cabinet", name: "Wall cabinets", category: "furniture", hint: "Hung above a counter", w: 2.4, d: 0.36, h: 0.7, color: "#7f9182", hangs: true, surface: 1, raise: 1.6 },
+  { kind: "floating-shelf", name: "Floating shelf", category: "furniture", hint: "On the wall, holds props", w: 0.9, d: 0.24, h: 0.04, color: "#6a4a34", hangs: true, surface: 1, raise: 1.4 },
   { kind: "sideboard", name: "Sideboard", category: "furniture", hint: "Low storage on legs", w: 1.6, d: 0.45, h: 0.8, color: "#8a6748", surface: 1 },
   { kind: "bookcase", name: "Bookcase", category: "furniture", hint: "Shelves with books", w: 0.9, d: 0.35, h: 1.9, color: "#e9e4da" },
   { kind: "chair", name: "Chair", category: "furniture", hint: "Dining chair", w: 0.44, d: 0.46, h: 0.9, color: "#6a4a34", surface: 0.5 },
@@ -257,6 +261,22 @@ export function stackHeights(items: ItemSpec[]): Map<string, number> {
   };
   for (const s of items) base(s, 0);
   return out;
+}
+
+/**
+ * Moving an item to (x, z). Something resting on what is under it (raise 0)
+ * still lands on whatever it is slid onto. Something RAISED off it keeps its
+ * height in the room instead, so a shelf dragged across a sofa does not jump
+ * up by the sofa's height: its raise is re-measured from the new thing under
+ * it. Only a surface taller than that height can lift it.
+ */
+export function slideItem(items: ItemSpec[], id: string, x: number, z: number): Partial<ItemSpec> {
+  const s = items.find((i) => i.id === id);
+  if (!s || catalogOf(s.kind).hangs || !(s.raise && s.raise > 0)) return { x, z };
+  const world = stackHeights(items).get(id) ?? s.raise;
+  const moved = items.map((i) => (i.id === id ? { ...i, x, z, raise: 0 } : i));
+  const base = stackHeights(moved).get(id) ?? 0;
+  return { x, z, raise: Math.max(0, world - base) };
 }
 
 /** Lowest top that reads as a seat (a pancake or a plate is not one). */

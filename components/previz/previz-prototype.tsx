@@ -50,7 +50,7 @@ import { ControlPads, type PadSpec } from "./move-pad";
 import { CLAMP_DROP, POLECAT_MAX, hangOn, isRig, rigHeight, wallToWall, type RigKind } from "@/lib/previz/rigging";
 import { HOUSE_LEVEL, buildHouseView, frameBox, gridSpacing, syncMarkers, type Marker } from "@/lib/previz/house-view";
 import {
-  CATEGORIES, bulbLocal, buildItem, catalogOf, containsPoint, itemShapeKey, itemToWorld, newItem, stackHeights, standHeight, seatUnder, groundUnder,
+  CATEGORIES, bulbLocal, buildItem, catalogOf, containsPoint, itemShapeKey, itemToWorld, newItem, slideItem, stackHeights, standHeight, seatUnder, groundUnder,
   type ItemSpec, type LabelArt,
 } from "@/lib/previz/set-items";
 import { buildRoom, outsideRoom, roomBounds, roomWindows, throughWindow, windowName, type SetSpec, type WindowInfo } from "@/lib/previz/room";
@@ -1733,7 +1733,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       d.start.z += (right.z * px - fwd.z * py * stretch) * mpp;
       const { x, z } = d;
       if (d.kind === "item") {
-        setItems((all) => all.map((i) => (i.id === d.id ? { ...i, x, z } : i)));
+        setItems((all) => all.map((i) => (i.id === d.id ? { ...i, ...slideItem(all, d.id, x, z) } : i)));
         // Picking up something held takes it out of the hand, as on the map.
         if (live3d.current.scene.items.find((i) => i.id === d.id)?.heldBy) setTalent((all) => all.map((t) => (t.holding === d.id ? { ...t, holding: null } : t)));
       } else if (d.kind === "talent") setTalent((all) => all.map((t) => (t.id === d.id ? { ...t, x, z } : t)));
@@ -3349,7 +3349,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
             onMark={(id, x, z) => setTalent((all) => all.map((t) => (t.id === id && t.mark ? { ...t, mark: { ...t.mark, x, z } } : t)))}
             onItem={(id, x, z) => {
               // Picking up something held takes it out of the hand.
-              setItems((all) => all.map((i) => (i.id === id ? { ...i, x, z } : i)));
+              setItems((all) => all.map((i) => (i.id === id ? { ...i, ...slideItem(all, id, x, z) } : i)));
               if (scene.items.find((i) => i.id === id)?.heldBy) setTalent((all) => all.map((t) => (t.holding === id ? { ...t, holding: null } : t)));
             }}
             onItemRot={(id, rot) => updateItem(id, { rot })}
