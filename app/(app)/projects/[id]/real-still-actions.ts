@@ -15,10 +15,8 @@
 // rule as any other scene file.
 import { createClient } from "@/lib/supabase/server";
 import { requireStudioContext } from "@/lib/studio";
-import { getHiggsfieldToken, HiggsfieldMcp } from "@/lib/higgsfield-mcp";
-import {
-  findId, hfAspect, readJob, realModel, resultData, resultText, type ToolResult,
-} from "@/lib/higgsfield-result";
+import { openHiggsfield, callTool as call } from "@/lib/higgsfield-session";
+import { findId, hfAspect, readJob, realModel } from "@/lib/higgsfield-result";
 import { assetStorage } from "@/lib/asset-storage";
 import { pathWithinScope } from "@/lib/upload-limits";
 import { sceneFolder } from "@/lib/previz/scene-files";
@@ -38,45 +36,6 @@ async function editableProject(projectId: string): Promise<{ project: Project; u
   const { data: canEdit } = await supabase.rpc("can_edit_project", { p_project_id: projectId });
   if (!canEdit) return { error: "You have review access to this project, so you cannot make stills for it." };
   return { project, userId: ctx.userId };
-}
-
-/** An open MCP session on the caller's own Higgsfield account. */
-async function openHiggsfield(userId: string): Promise<{ mcp: HiggsfieldMcp } | { error: string; notConnected?: true }> {
-  const supabase = createClient();
-  const { data: account } = await supabase
-    .from("email_accounts")
-    .select("id, access_token, refresh_token, token_expiry, external_ref")
-    .eq("provider", "higgsfield")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!account) return { error: "Connect Higgsfield in Settings, Connections first.", notConnected: true };
-  let token: string;
-  try {
-    token = await getHiggsfieldToken(supabase, account);
-  } catch {
-    return { error: "Higgsfield needs reconnecting in Settings, Connections.", notConnected: true };
-  }
-  const mcp = new HiggsfieldMcp(token);
-  const init = await mcp.open();
-  if (!init.message?.result) {
-    return init.status === 401
-      ? { error: "Higgsfield needs reconnecting in Settings, Connections.", notConnected: true }
-      : { error: `Higgsfield did not answer (HTTP ${init.status}). Try again in a moment.` };
-  }
-  return { mcp };
-}
-
-/** One tool call. A tool that reports a failure comes back as its own sentence. */
-async function call(mcp: HiggsfieldMcp, name: string, args: unknown): Promise<{ data: unknown; text: string } | { error: string }> {
-  const r = await mcp.request("tools/call", { name, arguments: args });
-  if (!r.message) return { error: `Higgsfield sent back something unreadable (HTTP ${r.status}).` };
-  if (r.message.error) return { error: r.message.error.message || `Higgsfield refused ${name}.` };
-  const result = r.message.result as ToolResult | undefined;
-  const text = resultText(result);
-  if (result?.isError) return { error: text.slice(0, 400) || `Higgsfield refused ${name}.` };
-  return { data: resultData(result), text };
 }
 
 function genParams(model: NonNullable<ReturnType<typeof realModel>>, aspectId: string) {

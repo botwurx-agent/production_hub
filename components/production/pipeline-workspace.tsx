@@ -35,6 +35,7 @@ import { insertToken } from "@/lib/caret";
 import type { CastReference, CastUse } from "@/lib/cast";
 import { MasterCutBand } from "@/components/production/master-cut-band";
 import { BatchReviewButton } from "@/components/production/batch-review-button";
+import { HiggsfieldBrowser } from "@/components/production/higgsfield-browser";
 import type { AssetWithVersions } from "@/components/projects/asset-types";
 import type { BatchReviewSummary } from "@/lib/batch-review";
 import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
@@ -785,9 +786,11 @@ function AddRefModal({
 
 function StagePanel({
   projectId, studioId, shot, stage, prompt, gens, media, thumbs = {}, library, reviews, refStartId, refEndId, onRun,
-  canSeeCost, allRefs, usedRefs,
+  canSeeCost, allRefs, usedRefs, hfConnected = false,
 }: {
   canSeeCost: boolean;
+  /** The viewer has their own Higgsfield connected, so "From Higgsfield" can list it. */
+  hfConnected?: boolean;
   projectId: string; studioId: string; shot: AiShot; stage: Stage;
   prompt: AiPrompt | null; gens: AiGeneration[]; media: Record<string, string>;
   /** Resized copies for the candidate grid. */
@@ -809,6 +812,7 @@ function StagePanel({
   // would have made "+ Image" in the reference panel add a candidate instead.
   const [addingRef, setAddingRef] = useState(false);
   const [triaging, setTriaging] = useState(false);
+  const [browsingHf, setBrowsingHf] = useState(false);
   const models = stage === "image" ? IMAGE_MODELS : VIDEO_MODELS;
   const label = stage === "image" ? "Image" : "Video";
   const hue = stage === "image" ? "amber" : "blue";
@@ -909,6 +913,12 @@ function StagePanel({
           {pool.length > 0 && (
             <BatchReviewButton projectId={projectId} shotId={shot.id} pool={pool} media={media} reviews={reviews} />
           )}
+          {hfConnected && (
+            <Button size="sm" variant="secondary" onClick={() => setBrowsingHf(true)}
+              title="Pick from your Higgsfield history, no links to copy">
+              From Higgsfield
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={() => setAdding(true)}
             title="Upload files, or paste the links you generated on Higgsfield / etc. to pull them straight in">
             + {stage === "image" ? "Reference" : "Take"}
@@ -952,6 +962,9 @@ function StagePanel({
         <AddGenModal canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={shot} stage={stage}
           promptId={prompt?.id ?? null} basePrompt={pText} refStartId={refStartId} refEndId={refEndId}
           onClose={() => setAdding(false)} />
+      )}
+      {browsingHf && (
+        <HiggsfieldBrowser projectId={projectId} shotId={shot.id} stage={stage} onClose={() => setBrowsingHf(false)} />
       )}
       {addingRef && (
         <AddRefModal projectId={projectId} studioId={studioId} shot={shot} stage={stage}
@@ -1177,9 +1190,12 @@ export function PipelineWorkspace({
   castReferences = [],
   castUses = [],
   thumbUrls = {},
+  hfConnected = false,
 }: {
   projectId: string;
   studioId: string;
+  /** The viewer has their own Higgsfield connected. */
+  hfConnected?: boolean;
   script: AiScript | null;
   shots: AiShot[];
   prompts: AiPrompt[];
@@ -1456,7 +1472,7 @@ export function PipelineWorkspace({
                 {showImageStage && (
                   <>
                     <Flow label="prompt, generate & pick images" />
-                    <StagePanel allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
+                    <StagePanel hfConnected={hfConnected} allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
                       prompt={shotPrompts.get(`${active.id}:image`) ?? null}
                       gens={imgGens} media={media} thumbs={thumbUrls} library={library}
                       reviews={batchReviews[active.id] ?? []}
@@ -1468,7 +1484,7 @@ export function PipelineWorkspace({
                     : inputMode === "video_to_video" ? "add a reference video, then generate"
                     : "prompt & generate video"
                 } />
-                <StagePanel allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
+                <StagePanel hfConnected={hfConnected} allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
                   media={media} thumbs={thumbUrls} library={library}

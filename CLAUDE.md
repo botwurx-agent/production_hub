@@ -7900,6 +7900,34 @@ that generates is NOT, and waits on what the probe prints.
   put" the frame or "did not name the job", the reader needs that body; the
   error is logged with it.
 
+- "FROM HIGGSFIELD" IN THE AI PIPELINE (2026-10-13, no migration). The
+  connection now also READS: a "From Higgsfield" button beside "+ Take" /
+  "+ Reference" on each stage (only for someone with their OWN Higgsfield
+  connected) opens components/production/higgsfield-browser.tsx, a grid of
+  their latest generations of that stage's kind via `show_generations`
+  ({type, size 24, cursor}), newest first, "Show older" for more. Tick up to
+  12 and they come in as candidates with platform Higgsfield, the model
+  (modelLabel: "seedance_2_5" -> "Seedance 2.5"), the full prompt, aspect,
+  duration and seed, stored under the project like any import. Costs no
+  credits. The REAL BODY was printed first (2026-10-13): items[] with id,
+  type image|video|3d, status, model, params {prompt, aspect_ratio, width,
+  height, duration, medias[{role, data:{id, url}}]}, results {rawUrl, minUrl
+  for images}, createdAt in UNIX SECONDS, next_cursor = last createdAt.
+  lib/higgsfield-history.ts is pure (parseGenerationsPage, cleanPicked,
+  frameInputs, modelLabel; 9 assertions). 3D meshes are left out.
+  DEDUPE AND LINEAGE ride in ai_generations.params.higgsfield_id: an item
+  already on the shot shows "On this shot" and is skipped server-side, and a
+  video whose start_image / end_image job ids match frames already on the
+  shot (or in the same batch) gets parent_start_id / parent_end_id, so its
+  lineage reads like one made here. The picked items come back from the
+  browser, so cleanPicked re-checks every field and the download goes
+  through the SSRF-guarded fetch. Writing needs can_edit_project.
+  openHiggsfield + callTool moved to lib/higgsfield-session.ts (server-only),
+  shared with Make it real. NOT RUN against the live server from the app;
+  the parser was tested on the printed body.
+  NOT BUILT: Elements matching from `show_reference_elements` (probe not yet
+  pressed for it).
+
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
 Operator, 2026-10-08: on set a DP or director pulls out a phone app, picks a
 focal length and sees the frame. They wanted that here, plus taking a still

@@ -125,6 +125,13 @@ export default async function PipelinePage({
       }),
   );
 
+  // Only the viewer's own connection counts: the picker lists THEIR history.
+  const { count: hfCount } = await supabase
+    .from("email_accounts")
+    .select("id", { count: "exact", head: true })
+    .eq("provider", "higgsfield")
+    .eq("user_id", ctx.userId);
+
   return (
     <div>
       <ProjectSubhead
@@ -158,6 +165,7 @@ export default async function PipelinePage({
           currentUserId={ctx.userId}
           castReferences={cast.references}
           castUses={cast.uses}
+          hfConnected={(hfCount ?? 0) > 0}
           reviewingShotIds={reviewingShotIds}
         />
       </Card>
