@@ -5771,7 +5771,10 @@ not ours (or to a stranger who holds the handle).
   Vimeo, X, TikTok), each with an empty `url`. PASTE A REAL https:// PROFILE
   ADDRESS IN TO SWITCH A NETWORK ON; an entry without one renders nothing, and
   the whole row is absent while every entry is empty. Instagram
-  (instagram.com/studio.flowss, 2026-10-13) is the only one filled so far;
+  (instagram.com/studio.flowss) and YouTube (youtube.com/@studio-flows) are
+  filled so far (2026-10-13); the YouTube channel banner is
+  public/brand/youtube-banner.png (2560x1440, lockup inside the 1546x423 safe
+  area);
   the operator will send the rest. Delete a network the
   studio will not use.
 - The same list feeds the Organization `sameAs` in structured-data.tsx, so a

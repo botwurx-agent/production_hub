@@ -19,7 +19,7 @@ export type Social = { network: SocialNetwork; label: string; url: string };
 export const SOCIALS: Social[] = [
   { network: "instagram", label: "Instagram", url: "https://www.instagram.com/studio.flowss/" },
   { network: "linkedin", label: "LinkedIn", url: "" },
-  { network: "youtube", label: "YouTube", url: "" },
+  { network: "youtube", label: "YouTube", url: "https://www.youtube.com/@studio-flows" },
   { network: "vimeo", label: "Vimeo", url: "" },
   { network: "x", label: "X", url: "" },
   { network: "tiktok", label: "TikTok", url: "" },
