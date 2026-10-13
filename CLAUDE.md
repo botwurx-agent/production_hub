@@ -5762,7 +5762,7 @@ warm/cool/dusk `grade`.
   390px the motif's min-content widened the column to 433 and clipped the
   words on the right of EVERY feature page; both columns carry min-w-0 now.
 
-### Footer social icons (2026-10-12) — BUILT, WAITING ON URLS
+### Footer social icons (2026-10-12) — BUILT, INSTAGRAM LIVE
 Operator: "we need to add social icons to the footer". The icon row is built
 and verified, and it DOES NOT SHOW YET, because no Studio Flows profile address
 exists anywhere in the repo and inventing one would link to an account that is
@@ -5770,7 +5770,9 @@ not ours (or to a stranger who holds the handle).
 - lib/marketing/socials.ts is the one list (Instagram, LinkedIn, YouTube,
   Vimeo, X, TikTok), each with an empty `url`. PASTE A REAL https:// PROFILE
   ADDRESS IN TO SWITCH A NETWORK ON; an entry without one renders nothing, and
-  the whole row is absent while every entry is empty. Delete a network the
+  the whole row is absent while every entry is empty. Instagram
+  (instagram.com/studio.flowss, 2026-10-13) is the only one filled so far;
+  the operator will send the rest. Delete a network the
   studio will not use.
 - The same list feeds the Organization `sameAs` in structured-data.tsx, so a
   profile turned on in the footer is also declared to search engines.
