@@ -34,15 +34,15 @@ import { ChatGlyph, GmailGlyph, SlackGlyph } from "@/components/communication/co
 
 /* ------------------------------------------------------------- TIMELINE */
 
-const CHAOS_END = 10200;
-const REVEAL = 10000;
-const PORTAL = 13500; // product world starts drawing inside the mark
-const PRODUCT_END = 31200;
-const CONNECT = 31000;
-const PHONES = 35800;
+const CHAOS_END = 15200;
+const REVEAL = 15000;
+const PORTAL = 18500; // product world starts drawing inside the mark
+const PRODUCT_END = 36200;
+const CONNECT = 36000;
+const PHONES = 40800;
 const CLIENT_PHONE = 3700; // local to PHONES
-const OUTRO = 43600;
-export const CHASE_MS = OUTRO + 7400; // 51000
+const OUTRO = 48600;
+export const CHASE_MS = OUTRO + 7400; // 56000
 
 const BLACK = "#030207";
 const INK = "#17142b";
@@ -162,22 +162,50 @@ function Vignette({ strength = 0.6 }: { strength?: number }) {
 
 const CHAT = { bg: "#15131d", panel: "#1c1926", side: "#211936", line: "rgba(255,255,255,.08)", text: "#f1eef9", muted: "#9b96ae" };
 
+/*
+ * The opening was cut at reading speed for nobody: everything before the
+ * logo now takes 15 seconds. M() stretches WHEN things happen (the hook's
+ * lines, each message landing, every camera move) without slowing HOW they
+ * animate, so a message still lands with a snap and then holds to be read.
+ * Times below are written on the original 10s clock and passed through M().
+ */
+const STRETCH: [number, number][] = [
+  [0, 0],
+  [2900, 4400],
+  [3550, 5300],
+  [7100, 11300],
+  [8100, 12500],
+  [9450, 14300],
+  [10200, 15000],
+];
+function M(x: number) {
+  for (let i = 1; i < STRETCH.length; i++) {
+    const [a0, b0] = STRETCH[i - 1];
+    const [a1, b1] = STRETCH[i];
+    if (x <= a1 || i === STRETCH.length - 1) return b0 + ((x - a0) * (b1 - b0)) / (a1 - a0);
+  }
+  return x;
+}
+
+function stretchMsg(m: Msg): Msg {
+  return { ...m, at: M(m.at), react: m.react ? { ...m.react, at: M(m.react.at) } : undefined };
+}
 type Msg = { who: string; role: string; hue: string; text: string; at: number; time: string; react?: { e: string; n: number; at: number }; replies?: number };
 
-const MSGS: Msg[] = [
+const MSGS: Msg[] = ([
   { who: "Jon", role: "Agency", hue: "cyan", text: "which cut did the client approve?? v3 or v3_FINAL", at: 3300, time: "9:41 PM", react: { e: "👀", n: 4, at: 3900 }, replies: 4 },
   { who: "Priya", role: "DP", hue: "blue", text: "not sure, check the email thread?", at: 4000, time: "9:44 PM" },
   { who: "Leo", role: "Gaffer", hue: "amber", text: "is my call 6:45 or 7 tomorrow?", at: 4700, time: "9:52 PM" },
   { who: "Sam", role: "1st AD", hue: "green", text: "we're 40 min behind. do we still make lunch?", at: 5400, time: "10:07 PM", react: { e: "😬", n: 3, at: 5900 } },
   { who: "Morgan", role: "Exec producer", hue: "purple", text: "did we actually make money on this job?", at: 6100, time: "10:58 PM" },
   { who: "Ava", role: "Prop stylist", hue: "pink", text: "who has the prop house invoice??", at: 6800, time: "11:03 PM", react: { e: "🙏", n: 2, at: 7300 } },
-];
-const THREAD: Msg[] = [
+] as Msg[]).map(stretchMsg);
+const THREAD: Msg[] = ([
   { who: "Priya", role: "DP", hue: "blue", text: "v3?", at: 8150, time: "9:45 PM" },
   { who: "Theo", role: "Food stylist", hue: "orange", text: "I've got v3_FINAL_v2 😅", at: 8550, time: "9:47 PM" },
   { who: "Dana", role: "Director", hue: "purple", text: "client said the warm one?", at: 8950, time: "9:49 PM" },
   { who: "Jon", role: "Agency", hue: "cyan", text: "...so which one is it", at: 9350, time: "9:58 PM" },
-];
+] as Msg[]).map(stretchMsg);
 const ROW0 = 200;
 const ROWH = 250;
 const MAIN_X = 470;
@@ -234,16 +262,16 @@ function Row({ m, t, width, at = m.at }: { m: Msg; t: number; width: number; at?
 const CHANNELS: [string, number, number][] = [
   ["general", 0, 0],
   ["hint-shoot", 0, 0],
-  ["crew", 12, 4300],
-  ["post", 7, 5600],
-  ["accounts", 4, 6600],
-  ["client-bright-water", 9, 5000],
+  ["crew", 12, M(4300)],
+  ["post", 7, M(5600)],
+  ["accounts", 4, M(6600)],
+  ["client-bright-water", 9, M(5000)],
   ["random", 0, 0],
 ];
 
 function ChatWorld({ t }: { t: number }) {
-  const unread = Math.round(lerp(1, 47, easeOut(ramp(t, 3300, 5900))));
-  const typing = "one sec, digging through my email...".slice(0, Math.max(0, Math.floor((t - 7000) / 45)));
+  const unread = Math.round(lerp(1, 47, easeOut(ramp(t, M(3300), M(9200) - M(3300)))));
+  const typing = "one sec, digging through my email...".slice(0, Math.max(0, Math.floor((t - M(7000)) / 45)));
   return (
     <div style={{ position: "relative", width: 2300, height: 2050, borderRadius: 48, overflow: "hidden", background: CHAT.bg, boxShadow: "0 0 0 2px rgba(255,255,255,.06), 0 120px 240px -60px rgba(0,0,0,.9)" }}>
       {/* Sidebar */}
@@ -279,8 +307,8 @@ function ChatWorld({ t }: { t: number }) {
         </div>
       ))}
       {/* Composer */}
-      <div style={{ position: "absolute", left: MAIN_X, width: 1020, top: 1720, height: 250, borderRadius: 30, border: `2px solid ${t > 7000 ? "rgba(255,255,255,.3)" : CHAT.line}`, padding: "30px 34px", fontSize: 42, color: CHAT.muted }}>
-        {t > 7000 ? (
+      <div style={{ position: "absolute", left: MAIN_X, width: 1020, top: 1720, height: 250, borderRadius: 30, border: `2px solid ${t > M(7000) ? "rgba(255,255,255,.3)" : CHAT.line}`, padding: "30px 34px", fontSize: 42, color: CHAT.muted }}>
+        {t > M(7000) ? (
           <span style={{ color: CHAT.text }}>
             {typing}
             <span style={{ opacity: Math.floor(t / 260) % 2 ? 1 : 0.15 }}>|</span>
@@ -303,7 +331,7 @@ function ChatWorld({ t }: { t: number }) {
           <span style={{ fontSize: 40, color: CHAT.muted }}>×</span>
         </div>
         <div style={{ position: "absolute", left: 40, top: 190 }}>
-          <Row m={MSGS[0]} t={t} width={640} at={3300} />
+          <Row m={MSGS[0]} t={t} width={640} at={MSGS[0].at} />
         </div>
         <div style={{ position: "absolute", left: 40, right: 40, top: 520, display: "flex", alignItems: "center", gap: 18, fontSize: 28, color: CHAT.muted, fontWeight: 700 }}>
           4 replies <span style={{ flex: 1, height: 2, background: CHAT.line }} />
@@ -313,7 +341,7 @@ function ChatWorld({ t }: { t: number }) {
             <Row m={m} t={t} width={640} />
           </div>
         ))}
-        {t > 9500 ? (
+        {t > M(9500) ? (
           <div style={{ position: "absolute", left: 44, top: 1700, fontSize: 30, color: CHAT.muted, fontStyle: "italic" }}>
             3 people are typing
             {".".repeat(1 + (Math.floor(t / 300) % 3))}
@@ -332,8 +360,8 @@ const focusY = (i: number) => ROW0 + i * ROWH - 170;
 const CHAOS_KEYS: Key[] = (() => {
   const k: Key[] = [
     { t: 0, x: 1250, y: 1050, z: 0.3, rx: 42, ry: -32, rz: 9 },
-    { t: 2950, x: 1100, y: 980, z: 0.42, rx: 30, ry: -20, rz: 5 },
-    { t: 3550, x: 965, y: focusY(0) + 40, z: 1.14, rx: 9, ry: -7, rz: 0, e: easeInOut },
+    { t: M(2950), x: 1100, y: 980, z: 0.42, rx: 30, ry: -20, rz: 5 },
+    { t: M(3550), x: 965, y: focusY(0) + 40, z: 1.14, rx: 9, ry: -7, rz: 0, e: easeInOut },
   ];
   for (let i = 1; i < MSGS.length; i++) {
     const side = i % 2 ? 1 : -1;
@@ -342,19 +370,19 @@ const CHAOS_KEYS: Key[] = (() => {
     k.push({ t: MSGS[i].at + 180, x: 965 + side * 10, y: focusY(i), z: 1.17 + (i % 2) * 0.05, rx: 6 + (i % 2) * 2, ry: side * 4, rz: side * -0.6, e: easeInOut });
   }
   const last = k[k.length - 1];
-  k.push({ ...last, t: 7150, z: last.z * 1.03 });
-  k.push({ t: 7450, x: 990, y: 1560, z: 1.2, rx: 5, ry: 6, rz: 0, e: easeInOut });
-  k.push({ t: 7800, x: 1000, y: 1590, z: 1.24, rx: 5, ry: 7, rz: 0 });
-  k.push({ t: 8100, x: 1930, y: 640, z: 1.12, rx: 4, ry: 20, rz: 0, e: easeInOut });
-  k.push({ t: 9450, x: 1930, y: 1180, z: 1.26, rx: 6, ry: 12, rz: -2 });
-  k.push({ t: 10200, x: 1300, y: 1000, z: 0.1, rx: 24, ry: -32, rz: -28, e: easeIn });
+  k.push({ ...last, t: M(7150), z: last.z * 1.03 });
+  k.push({ t: M(7450), x: 990, y: 1560, z: 1.2, rx: 5, ry: 6, rz: 0, e: easeInOut });
+  k.push({ t: M(7800), x: 1000, y: 1590, z: 1.24, rx: 5, ry: 7, rz: 0 });
+  k.push({ t: M(8100), x: 1930, y: 640, z: 1.12, rx: 4, ry: 20, rz: 0, e: easeInOut });
+  k.push({ t: M(9450), x: 1930, y: 1180, z: 1.26, rx: 6, ry: 12, rz: -2 });
+  k.push({ t: M(10200), x: 1300, y: 1000, z: 0.1, rx: 24, ry: -32, rz: -28, e: easeIn });
   return k;
 })();
 
 function ChaosSection({ t }: { t: number }) {
-  const hook = 1 - ramp(t, 2900, 500); // world sits dim and soft under the hook
+  const hook = 1 - ramp(t, M(2900), 600); // world sits dim and soft under the hook
   return (
-    <div style={{ position: "absolute", inset: 0, opacity: ramp(t, 200, 1100) * (1 - ramp(t, 9900, 300)) }}>
+    <div style={{ position: "absolute", inset: 0, opacity: ramp(t, 200, 1100) * (1 - ramp(t, M(9900), 300)) }}>
       <World
         id="chaos"
         keys={CHAOS_KEYS}
@@ -371,7 +399,7 @@ function ChaosSection({ t }: { t: number }) {
 }
 
 function HookText({ t }: { t: number }) {
-  const out = ramp(t, 2700, 380);
+  const out = ramp(t, M(2700), 380);
   return (
     <div
       className="font-display"
@@ -392,9 +420,9 @@ function HookText({ t }: { t: number }) {
         textShadow: "0 8px 40px rgba(0,0,0,.8)",
       }}
     >
-      <Words text="Every shoot has someone" t={t} at={100} stagger={75} style={{ display: "block" }} />
-      <Words text="chasing answers at 11 PM." t={t} at={480} stagger={75} style={{ display: "block" }} />
-      <div style={{ marginTop: 34, fontSize: 112, color: GLOW, transform: `scale(${0.8 + 0.2 * spring(ramp(t, 1500, 520))})`, opacity: ramp(t, 1500, 160) }}>It&apos;s usually you.</div>
+      <Words text="Every shoot has someone" t={t} at={M(100)} stagger={75} style={{ display: "block" }} />
+      <Words text="chasing answers at 11 PM." t={t} at={M(480)} stagger={75} style={{ display: "block" }} />
+      <div style={{ marginTop: 34, fontSize: 112, color: GLOW, transform: `scale(${0.8 + 0.2 * spring(ramp(t, M(1500), 520))})`, opacity: ramp(t, M(1500), 160) }}>It&apos;s usually you.</div>
     </div>
   );
 }
@@ -1038,7 +1066,7 @@ export function ChaseVideo({ t }: { t: number }) {
   return (
     <div data-theme="light" data-accent="indigo" className="font-body" style={{ position: "relative", width: W, height: H, overflow: "hidden", background: BLACK, color: "var(--text)" }}>
       {t < CHAOS_END ? <ChaosSection t={t} /> : null}
-      {t < 3200 ? <HookText t={t} /> : null}
+      {t < M(3200) ? <HookText t={t} /> : null}
       {t >= REVEAL && t < PORTAL + 1000 ? <RevealSection t={t - REVEAL} /> : null}
 
       {inProduct && portal ? (
