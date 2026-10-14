@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { BrandVideo, H, VIDEO_MS, W } from "./brand-video";
 import { JOURNEY_MS, JourneyVideo } from "./journey-video";
+import { REPLACE_MS, ReplaceVideo } from "./replace-video";
 
 const FILMS = {
   launch: { C: BrandVideo, ms: VIDEO_MS },
   journey: { C: JourneyVideo, ms: JOURNEY_MS },
+  replace: { C: ReplaceVideo, ms: REPLACE_MS },
 };
 
 declare global {
