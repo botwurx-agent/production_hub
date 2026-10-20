@@ -828,6 +828,13 @@ connects to, so the producer recognises where they are.
   not a grey box; the reply is a compose CARD ("Reply to {sender}" header, a
   quiet borderless writing area, Send leading the toolbar, "sends from your
   Gmail, stays in this thread" stated in the header).
+- A THREAD OPENS ON ITS LATEST EMAIL (operator, 2026-10-20: "once you click
+  it, it shows the most recent email"). Every earlier message used to be
+  listed as a one-line row ABOVE the latest, so on a long chain the newest
+  email sat at the bottom of a scroll. Now only the latest shows, open, with
+  "N earlier messages · Show 5 earlier · Show all N" above it; revealed rows
+  appear in date order directly above the latest, each opens on its own
+  (click its header to fold it again), and "Hide earlier" goes back.
 - SLACK and CHAT read like Slack/Chat: FLAT rows on the surface (no bubbles),
   name + timestamp on one baseline, hover row tint, square vs round avatars.
 - PLATFORM FILTER CHIPS (comms-filter.tsx) across the top of BOTH pages, the

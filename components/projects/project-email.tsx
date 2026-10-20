@@ -179,7 +179,10 @@ export function ThreadReader({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  // How many earlier messages are revealed above the latest, and which of
+  // those are opened to their full body. The latest is always open.
+  const [revealed, setRevealed] = useState(0);
+  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [messages, setMessages] = useState<ThreadMessage[] | null>(initialMessages);
   const [error, setError] = useState<string | null>(null);
   const [loading, start] = useTransition();
@@ -246,7 +249,10 @@ export function ThreadReader({
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (!next) setExpanded(false);
+    if (!next) {
+      setRevealed(0);
+      setOpenIds(new Set());
+    }
     if (next) {
       if (messages === null) loadMessages();
       // Opening it here clears it from the Communication badge.
@@ -316,13 +322,111 @@ export function ThreadReader({
     ? shortDate(thread.last_message_at)
     : "";
 
-  // When opened, show only the most recent message; "Show full thread" reveals
-  // the whole chain. Gmail returns messages oldest-first, so the latest is last.
+  // Opening a thread shows the MOST RECENT message, open, at the top of the
+  // panel. A long chain used to list every earlier message as a row above
+  // it, so the newest email sat at the bottom of a scroll. Earlier messages
+  // are revealed a few at a time ("Show 5 earlier", then "Show all"), in
+  // date order directly above the latest, each opening on its own.
+  // Gmail returns messages oldest-first; sort anyway so a seed cannot lie.
   const sorted = [...(messages ?? [])].sort(
     (a, b) => (a.dateMs ?? 0) - (b.dateMs ?? 0)
   );
-  const shownMessages = expanded ? sorted : sorted.slice(-1);
-  const hiddenCount = sorted.length - shownMessages.length;
+  const latest = sorted.length ? sorted[sorted.length - 1] : null;
+  const earlier = sorted.slice(0, -1);
+  const shownEarlier = Math.min(revealed, earlier.length);
+  const hiddenEarlier = earlier.length - shownEarlier;
+  const visibleEarlier = earlier.slice(earlier.length - shownEarlier);
+  const STEP = 5;
+
+  function toggleMessage(id: string) {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function renderFull(m: ThreadMessage, collapsible: boolean) {
+    const who = senderName(m.from);
+    return (
+                <li key={m.id} className="py-3.5 first:pt-1 last:pb-1">
+                  <div className="flex items-start gap-3">
+                    <SenderAvatar name={who} size={34} />
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className={`flex flex-wrap items-baseline justify-between gap-2 ${collapsible ? "cursor-pointer" : ""}`}
+                        onClick={collapsible ? () => toggleMessage(m.id) : undefined}
+                        title={collapsible ? "Collapse this message" : undefined}
+                      >
+                        <span className="text-sm font-bold text-text">
+                          {who}
+                        </span>
+                        <span className="text-xs text-text-faint">
+                          {m.dateMs ? longDate(new Date(m.dateMs).toISOString()) : m.date}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-text-faint">{m.from}</p>
+                      <div className="mt-2">
+                        <MessageBody text={m.bodyText} />
+                      </div>
+                  {m.attachments.length > 0 && (
+                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3">
+                      {m.attachments.map((att) => {
+                        const base = `/api/attachments/gmail?message=${encodeURIComponent(m.id)}&attachment=${encodeURIComponent(att.attachmentId)}&filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType)}`;
+                        return (
+                          <AttachmentCard
+                            key={att.attachmentId}
+                            name={att.filename}
+                            mime={att.mimeType}
+                            size={att.size}
+                            previewUrl={`${base}&disp=inline`}
+                            downloadUrl={base}
+                          >
+                            {/* Destination depends on what the file IS. A cut
+                                or a still is creative work and belongs in
+                                assets; a permit or a spec is paperwork and
+                                belongs in documents. Offering both on
+                                everything would make the common case a choice
+                                rather than a click. */}
+                            {projectId && isDocumentMime(att.mimeType) ? (
+                              <ImportDocument
+                                projectId={projectId}
+                                messageId={m.id}
+                                attachmentId={att.attachmentId}
+                                filename={att.filename}
+                                mimeType={att.mimeType}
+                                from={m.from}
+                                subject={thread.subject}
+                                receivedAt={m.date}
+                              />
+                            ) : null}
+                            <ImportAttachment
+                              projectId={projectId}
+                              messageId={m.id}
+                              attachmentId={att.attachmentId}
+                              filename={att.filename}
+                              mimeType={att.mimeType}
+                            />
+                            {projectId && isCostDocType(att.mimeType) && (
+                              <LogCostAttachment
+                                projectId={projectId}
+                                messageId={m.id}
+                                attachmentId={att.attachmentId}
+                                filename={att.filename}
+                                mimeType={att.mimeType}
+                              />
+                            )}
+                          </AttachmentCard>
+                        );
+                      })}
+                    </div>
+                  )}
+                    </div>
+                  </div>
+                </li>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-[14px] border border-border bg-surface transition hover:-translate-y-px hover:border-border-strong hover:shadow-sm">
@@ -404,130 +508,80 @@ export function ThreadReader({
             </p>
           ) : (
             <>
-            {/* Earlier messages collapse to one-line rows, the way Gmail
-                stacks a thread: sender, a snippet, the date. One click opens
-                the whole conversation. */}
-            {!expanded && hiddenCount > 0 && (
-              <ol className="mb-1">
-                {sorted.slice(0, -1).map((m) => {
-                  const who = senderName(m.from);
-                  const snippet = m.bodyText
-                    .replace(/\s+/g, " ")
-                    .trim()
-                    .slice(0, 90);
-                  return (
-                    <li key={m.id}>
+            {earlier.length > 0 && (
+              <div className="mb-2 flex flex-wrap items-center gap-2 border-b border-border pb-2.5">
+                {hiddenEarlier > 0 ? (
+                  <>
+                    <span className="text-xs font-medium text-text-muted">
+                      {hiddenEarlier} earlier message{hiddenEarlier === 1 ? "" : "s"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRevealed((n) => n + STEP)}
+                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text transition hover:border-border-strong"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M7 14l5-5 5 5" />
+                      </svg>
+                      Show {Math.min(STEP, hiddenEarlier)} earlier
+                    </button>
+                    {hiddenEarlier > STEP && (
                       <button
                         type="button"
-                        onClick={() => setExpanded(true)}
-                        className="flex w-full items-center gap-2.5 border-b border-border px-1 py-2 text-left transition hover:bg-surface-2/60"
-                        title="Show full thread"
+                        onClick={() => setRevealed(earlier.length)}
+                        className="rounded-[8px] px-2 py-1 text-xs font-semibold text-text-muted transition hover:text-text"
                       >
-                        <SenderAvatar name={who} size={24} />
-                        <span className="w-28 shrink-0 truncate text-[13px] font-semibold text-text">
-                          {who}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-[12.5px] text-text-faint">
-                          {snippet}
-                        </span>
-                        <span className="shrink-0 text-[11.5px] text-text-faint">
-                          {m.dateMs ? shortDate(new Date(m.dateMs).toISOString()) : ""}
-                        </span>
+                        Show all {earlier.length}
                       </button>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-            {expanded && sorted.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setExpanded(false)}
-                className="mb-3 inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface-2/60 px-2.5 py-1.5 text-xs font-semibold text-text-muted transition hover:border-border-strong hover:text-text"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7 11l5-5 5 5M7 18l5-5 5 5" />
-                </svg>
-                Collapse to latest message
-              </button>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs font-medium text-text-muted">
+                    Whole conversation, {sorted.length} messages
+                  </span>
+                )}
+                {shownEarlier > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRevealed(0);
+                      setOpenIds(new Set());
+                    }}
+                    className="ml-auto rounded-[8px] px-2 py-1 text-xs font-semibold text-text-muted transition hover:text-text"
+                  >
+                    Hide earlier
+                  </button>
+                )}
+              </div>
             )}
             <ol className="divide-y divide-border">
-              {shownMessages.map((m) => {
+              {visibleEarlier.map((m) => {
+                if (openIds.has(m.id)) return renderFull(m, true);
                 const who = senderName(m.from);
+                const snippet = m.bodyText.replace(/\s+/g, " ").trim().slice(0, 90);
                 return (
-                <li key={m.id} className="py-3.5 first:pt-1 last:pb-1">
-                  <div className="flex items-start gap-3">
-                    <SenderAvatar name={who} size={34} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="text-sm font-bold text-text">
-                          {who}
-                        </span>
-                        <span className="text-xs text-text-faint">
-                          {m.dateMs ? longDate(new Date(m.dateMs).toISOString()) : m.date}
-                        </span>
-                      </div>
-                      <p className="truncate text-xs text-text-faint">{m.from}</p>
-                      <div className="mt-2">
-                        <MessageBody text={m.bodyText} />
-                      </div>
-                  {m.attachments.length > 0 && (
-                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 sm:grid-cols-3">
-                      {m.attachments.map((att) => {
-                        const base = `/api/attachments/gmail?message=${encodeURIComponent(m.id)}&attachment=${encodeURIComponent(att.attachmentId)}&filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType)}`;
-                        return (
-                          <AttachmentCard
-                            key={att.attachmentId}
-                            name={att.filename}
-                            mime={att.mimeType}
-                            size={att.size}
-                            previewUrl={`${base}&disp=inline`}
-                            downloadUrl={base}
-                          >
-                            {/* Destination depends on what the file IS. A cut
-                                or a still is creative work and belongs in
-                                assets; a permit or a spec is paperwork and
-                                belongs in documents. Offering both on
-                                everything would make the common case a choice
-                                rather than a click. */}
-                            {projectId && isDocumentMime(att.mimeType) ? (
-                              <ImportDocument
-                                projectId={projectId}
-                                messageId={m.id}
-                                attachmentId={att.attachmentId}
-                                filename={att.filename}
-                                mimeType={att.mimeType}
-                                from={m.from}
-                                subject={thread.subject}
-                                receivedAt={m.date}
-                              />
-                            ) : null}
-                            <ImportAttachment
-                              projectId={projectId}
-                              messageId={m.id}
-                              attachmentId={att.attachmentId}
-                              filename={att.filename}
-                              mimeType={att.mimeType}
-                            />
-                            {projectId && isCostDocType(att.mimeType) && (
-                              <LogCostAttachment
-                                projectId={projectId}
-                                messageId={m.id}
-                                attachmentId={att.attachmentId}
-                                filename={att.filename}
-                                mimeType={att.mimeType}
-                              />
-                            )}
-                          </AttachmentCard>
-                        );
-                      })}
-                    </div>
-                  )}
-                    </div>
-                  </div>
-                </li>
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => toggleMessage(m.id)}
+                      className="flex w-full items-center gap-2.5 px-1 py-2 text-left transition hover:bg-surface-2"
+                      title="Open this message"
+                    >
+                      <SenderAvatar name={who} size={24} />
+                      <span className="w-28 shrink-0 truncate text-[13px] font-semibold text-text">
+                        {who}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] text-text-faint">
+                        {snippet}
+                      </span>
+                      <span className="shrink-0 text-[11.5px] text-text-faint">
+                        {m.dateMs ? shortDate(new Date(m.dateMs).toISOString()) : ""}
+                      </span>
+                    </button>
+                  </li>
                 );
               })}
+              {latest && renderFull(latest, false)}
             </ol>
             </>
           )}
