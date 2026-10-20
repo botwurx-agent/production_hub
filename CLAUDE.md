@@ -1452,7 +1452,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0125. Recent: 0125 =
+files in supabase/migrations. THROUGH 0126. Recent: 0126 =
+deliverable_delivered_on (deliverables.delivered_on, the day it was
+delivered, beside due_date); 0125 =
 delivery_files (final deliverable files on a project, 0093 read/edit split)
 + delivery_links (one no-login /dl/<token> download link per project,
 is_studio_member); 0124 =
@@ -2604,6 +2606,20 @@ to send them all to the client to download.
   the filename so it downloads instead of opening. Rate-limited. Files added
   later appear on the same link. Copy / open / email (emailDeliveryLink,
   gated on emailConfigured) / turn off, staff only.
+- DUE AND DELIVERED (migration 0126, operator 2026-10-20: "is that the date
+  it's supposed to be delivered, or the date it was delivered?"). The one date
+  box was `due_date` with no visible label, so it could be read either way.
+  It now reads DUE, and `deliverables.delivered_on` (a calendar DAY, compared
+  with due_date) is STAMPED with the producer's local day when the stage
+  moves to Delivered and CLEARED when it moves back, since an undone delivery
+  did not happen on that day. It shows as an editable "Delivered" date only on
+  a delivered row, for work delivered before it was recorded here. Existing
+  delivered rows stay null rather than guessed. One line under each row says
+  where it stands (words in the text colour, hue on the dot): "Delivered Oct
+  26, on time" green, "2 days late" amber, "Due today" / "Due in N days"
+  amber within three days, "Overdue by N days" red. todayIso comes from the
+  SERVER, the slate and dashboard rule. updateDeliverable accepts only a real
+  YYYY-MM-DD for delivered_on.
 - NOT BUILT: download-all as one zip (masters run to gigabytes and a function
   cannot stream that), marking a deliverable Delivered automatically when a
   file lands, and download tracking per file (only last_viewed_at is kept).

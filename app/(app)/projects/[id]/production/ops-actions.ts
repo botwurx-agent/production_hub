@@ -131,10 +131,21 @@ export async function updateDeliverable(
     notes?: string;
     rate?: number | null;
     qty?: number;
+    delivered_on?: string | null;
   }
 ): Promise<void> {
   const ctx = await requireStudioContext();
   const supabase = createClient();
+  // A delivered day comes from the browser, so only a real YYYY-MM-DD is kept.
+  if (patch.delivered_on !== undefined && patch.delivered_on !== null) {
+    const d = patch.delivered_on;
+    const t = new Date(`${d}T00:00:00Z`);
+    const ok =
+      /^\d{4}-\d{2}-\d{2}$/.test(d) &&
+      !Number.isNaN(t.getTime()) &&
+      t.toISOString().slice(0, 10) === d;
+    if (!ok) delete patch.delivered_on;
+  }
   // The client-facing rate lives in its own studio-only table (migration
   // 0074), so it is not part of this patch. qty is a plain count and stays.
   const { rate, ...safe } = patch;

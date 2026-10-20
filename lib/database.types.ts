@@ -809,6 +809,7 @@ export type Database = {
           link: string | null;
           notes: string | null;
           qty: number;
+          delivered_on: string | null;
           created_by: string | null;
           created_at: string;
         };
@@ -824,6 +825,7 @@ export type Database = {
           link?: string | null;
           notes?: string | null;
           qty?: number;
+          delivered_on?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -839,6 +841,7 @@ export type Database = {
           link?: string | null;
           notes?: string | null;
           qty?: number;
+          delivered_on?: string | null;
           created_by?: string | null;
           created_at?: string;
         };

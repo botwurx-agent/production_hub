@@ -76,6 +76,7 @@ export default async function DeliverablesPage({
           canEdit={canEditProject(ctx, project.id)}
           canSend={!ctx.isCollaborator}
           emailEnabled={emailConfigured()}
+          todayIso={new Date().toISOString().slice(0, 10)}
         />
       </Card>
     </div>

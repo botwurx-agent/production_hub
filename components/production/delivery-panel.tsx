@@ -30,8 +30,63 @@ import type { Deliverable, DeliveryFile } from "@/lib/database.types";
 
 const cell =
   "w-full rounded-[8px] border border-transparent bg-transparent px-2 py-1 text-sm text-text outline-none transition hover:border-border focus:border-border-strong focus:bg-surface";
+const dateLabel = "text-[11px] font-bold uppercase tracking-wide text-text-muted";
+const dateInput =
+  "rounded-[8px] border border-transparent bg-transparent px-1.5 py-1 text-sm text-text outline-none transition hover:border-border focus:border-border-strong focus:bg-surface";
 const select =
   "rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold text-text";
+
+/** "Oct 28" from a YYYY-MM-DD, read as a calendar day so no timezone moves it. */
+function dayLabel(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/** Whole days from a to b, both YYYY-MM-DD. */
+function daysBetween(a: string, b: string): number {
+  return Math.round(
+    (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000
+  );
+}
+
+/** The producer's own calendar day, which is the day they pressed Delivered. */
+function localToday(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/**
+ * One line saying where a deliverable stands against its date. Words in the
+ * text colour, hue on the dot (the contrast lesson from the read banner).
+ */
+function dateNote(
+  r: Deliverable,
+  todayIso: string
+): { text: string; dot: string } | null {
+  if (r.status === "delivered") {
+    if (!r.delivered_on) return null;
+    const late = r.due_date ? daysBetween(r.due_date, r.delivered_on) : 0;
+    return late > 0
+      ? {
+          text: `Delivered ${dayLabel(r.delivered_on)}, ${late} day${late === 1 ? "" : "s"} late`,
+          dot: "var(--h-amber)",
+        }
+      : { text: `Delivered ${dayLabel(r.delivered_on)}, on time`, dot: "var(--h-green)" };
+  }
+  if (!r.due_date) return null;
+  const left = daysBetween(todayIso, r.due_date);
+  if (left < 0)
+    return {
+      text: `Overdue by ${-left} day${left === -1 ? "" : "s"}`,
+      dot: "var(--h-red)",
+    };
+  if (left === 0) return { text: "Due today", dot: "var(--h-amber)" };
+  if (left <= 3) return { text: `Due in ${left} day${left === 1 ? "" : "s"}`, dot: "var(--h-amber)" };
+  return null;
+}
 
 const STAGES: Record<string, { label: string; dot: string }> = {
   pending: { label: "Not started", dot: "var(--h-amber)" },
@@ -53,6 +108,7 @@ export function DeliveryPanel({
   canEdit,
   canSend,
   emailEnabled,
+  todayIso,
 }: {
   projectId: string;
   projectTitle: string;
@@ -64,6 +120,8 @@ export function DeliveryPanel({
   /** Sending to the client is the studio's act; collaborators do not see it. */
   canSend: boolean;
   emailEnabled: boolean;
+  /** Computed on the server, so an overdue line cannot differ after hydration. */
+  todayIso: string;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Deliverable[]>(deliverables);
@@ -194,8 +252,13 @@ export function DeliveryPanel({
                     disabled={!canEdit}
                     aria-label="Stage"
                     onChange={(e) => {
-                      edit(r.id, { status: e.target.value });
-                      updateDeliverable(projectId, r.id, { status: e.target.value });
+                      const status = e.target.value;
+                      // Delivered stamps the day; moving back clears it, since
+                      // a delivery that was undone did not happen on that day.
+                      const delivered_on =
+                        status === "delivered" ? r.delivered_on ?? localToday() : null;
+                      edit(r.id, { status, delivered_on });
+                      updateDeliverable(projectId, r.id, { status, delivered_on });
                     }}
                     className={select}
                   >
@@ -217,7 +280,7 @@ export function DeliveryPanel({
                     </button>
                   )}
                 </div>
-                <div className="mt-1 grid grid-cols-1 gap-2 pl-4 sm:grid-cols-2">
+                <div className="mt-1 grid grid-cols-1 gap-2 pl-4 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <input
                     value={r.spec ?? ""}
                     disabled={!canEdit}
@@ -226,18 +289,48 @@ export function DeliveryPanel({
                     placeholder="Spec (1920x1080, ProRes, :30)"
                     className={cell}
                   />
-                  <input
-                    type="date"
-                    value={r.due_date ?? ""}
-                    disabled={!canEdit}
-                    aria-label="Due date"
-                    onChange={(e) => edit(r.id, { due_date: e.target.value })}
-                    onBlur={() =>
-                      updateDeliverable(projectId, r.id, { due_date: r.due_date || null })
-                    }
-                    className={cell}
-                  />
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <label className="flex items-center gap-1.5">
+                      <span className={dateLabel}>Due</span>
+                      <input
+                        type="date"
+                        value={r.due_date ?? ""}
+                        disabled={!canEdit}
+                        onChange={(e) => edit(r.id, { due_date: e.target.value })}
+                        onBlur={() =>
+                          updateDeliverable(projectId, r.id, { due_date: r.due_date || null })
+                        }
+                        className={dateInput}
+                      />
+                    </label>
+                    {r.status === "delivered" && (
+                      <label className="flex items-center gap-1.5">
+                        <span className={dateLabel}>Delivered</span>
+                        <input
+                          type="date"
+                          value={r.delivered_on ?? ""}
+                          disabled={!canEdit}
+                          onChange={(e) => edit(r.id, { delivered_on: e.target.value })}
+                          onBlur={() =>
+                            updateDeliverable(projectId, r.id, {
+                              delivered_on: r.delivered_on || null,
+                            })
+                          }
+                          className={dateInput}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
+                {(() => {
+                  const note = dateNote(r, todayIso);
+                  return note ? (
+                    <p className="mt-1 flex items-center gap-1.5 pl-6 text-xs font-semibold text-text">
+                      <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: note.dot }} />
+                      {note.text}
+                    </p>
+                  ) : null;
+                })()}
               </div>
             ))}
           </div>
