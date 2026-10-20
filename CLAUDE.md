@@ -8961,6 +8961,15 @@ The parked items, so they are findable WHEN friction hits (not before):
 - Review-round edges: due/overdue never surfaces on the INTERNAL review page
   (the client portal shows it, the studio cannot see which reviews are late).
   Version compare (images and video, portal and in-app) is BUILT, see above.
+- READ IN STUDIO FLOWS DOES NOT MARK READ IN GMAIL (operator, 2026-10-20:
+  leave it until feedback asks). markThreadRead only stamps
+  email_threads.last_read_at; the Google connection holds gmail.readonly +
+  gmail.send, and removing the UNREAD label needs gmail.modify (restricted,
+  same tier as readonly; it supersedes readonly, everyone reconnects once,
+  and the privacy policy's scope list gains a line). It would mark the
+  OPENER'S own inbox only. Open choice if it comes back: automatic on open vs
+  a "Mark read in Gmail" button. The reverse direction (read in Gmail clears
+  our badge) is a separate change.
 - Weekly studio digest (lib/outstanding.ts + Resend already exist). Low value
   for a solo operator who is in the app daily; revisit when a second person
   joins or during a long shoot.
