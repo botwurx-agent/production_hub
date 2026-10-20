@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { BrandVideo, H, VIDEO_MS, W } from "./brand-video";
 import { JOURNEY_MS, JourneyVideo } from "./journey-video";
 import { CHASE_MS, ChaseVideo } from "./chase-video";
+import { FLOW_MS, FlowVideo } from "./flow-video";
 
 const FILMS = {
   launch: { C: BrandVideo, ms: VIDEO_MS },
   journey: { C: JourneyVideo, ms: JOURNEY_MS },
   chase: { C: ChaseVideo, ms: CHASE_MS },
+  flow: { C: FlowVideo, ms: FLOW_MS },
 };
 
 declare global {
