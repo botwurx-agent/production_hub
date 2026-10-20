@@ -37,7 +37,8 @@ export type UploadScope =
   | { kind: "cost"; projectId: string }
   | { kind: "board"; boardId: string }
   | { kind: "location_still"; projectId: string }
-  | { kind: "scene_file"; projectId: string };
+  | { kind: "scene_file"; projectId: string }
+  | { kind: "delivery_file"; projectId: string };
 
 type Granted = {
   studioId: string;
@@ -181,6 +182,30 @@ async function authorize(scope: UploadScope): Promise<Granted | { error: string 
         studioId: project.studio_id,
         folder: `scenes/${project.id}`,
         maxBytes: MAX_SCENE_FILE_BYTES,
+      };
+    }
+
+    case "delivery_file": {
+      // A final deliverable. delivery_files reads for anyone on the job and
+      // writes for editors (0125), and the editor who cut the master is often
+      // a collaborator, so this is the project_asset check. MEDIA ceiling,
+      // since a final master is the biggest file a job produces.
+      const { data: project } = await supabase
+        .from("projects")
+        .select("id, studio_id")
+        .eq("id", scope.projectId)
+        .maybeSingle();
+      if (!project) return { error: "You do not have access to this project." };
+      const { data: canEdit } = await supabase.rpc("can_edit_project", {
+        p_project_id: scope.projectId,
+      });
+      if (!canEdit) {
+        return { error: "You have review access to this project, so you cannot upload deliverables." };
+      }
+      return {
+        studioId: project.studio_id,
+        folder: `delivery/${project.id}`,
+        maxBytes: MAX_MEDIA_BYTES,
       };
     }
 

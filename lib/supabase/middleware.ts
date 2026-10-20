@@ -72,6 +72,8 @@ const PUBLIC_PATHS = [
   // The client portal: one link per project listing every review link the
   // studio has shared. Its own prefix because /p is the billing document.
   "/portal",
+  // The client's download page for a project's final deliverables.
+  "/dl",
   // A client's job request link: asks the studio for new work, no login.
   "/request",
   "/c",

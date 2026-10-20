@@ -4713,6 +4713,78 @@ export type Database = {
         };
         Relationships: [];
       };
+      delivery_files: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          deliverable_id: string | null;
+          storage_path: string;
+          file_name: string;
+          size_bytes: number | null;
+          mime_type: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          deliverable_id?: string | null;
+          storage_path: string;
+          file_name: string;
+          size_bytes?: number | null;
+          mime_type?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          deliverable_id?: string | null;
+          storage_path?: string;
+          file_name?: string;
+          size_bytes?: number | null;
+          mime_type?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      delivery_links: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          revoked_at: string | null;
+          last_viewed_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          token: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          token?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       review_links: {
         Row: {
           asset_id: string | null;
@@ -5112,6 +5184,7 @@ export type CostPayment = Tables<"cost_payments">;
 export type GearItem = Tables<"gear_items">;
 export type Deliverable = Tables<"deliverables">;
 export type ProjectBilling = Tables<"project_billing">;
+export type DeliveryFile = Tables<"delivery_files">;
 export type BillingAccount = Tables<"billing_accounts">;
 export type ProjectInvoice = Tables<"project_invoices">;
 export type BillingProfile = Tables<"billing_profiles">;

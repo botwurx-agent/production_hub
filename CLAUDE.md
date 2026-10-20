@@ -1452,7 +1452,10 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0124. Recent: 0124 =
+files in supabase/migrations. THROUGH 0125. Recent: 0125 =
+delivery_files (final deliverable files on a project, 0093 read/edit split)
++ delivery_links (one no-login /dl/<token> download link per project,
+is_studio_member); 0124 =
 connector_tokens (private links for the read-only AI connector, hash only,
 owned by their maker: RLS user_id = auth.uid()); 0123 =
 job_requests (request_links, one no-login link per client, and job_requests,
@@ -2567,6 +2570,47 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   the same kind, words and day is skipped, an open follow-up with the same
   title is skipped. A deal value goes through the same moneyOf as a cost
   ("n/a" is reported, never $0). NOT RUN against a real host.
+
+### Deliverables replaces "Delivery & billing" (migration 0125) — BUILT
+Operator, 2026-10-20: the page should be called Deliverables, the billing
+status block and the per-deliverable rate "don't serve a purpose", and the
+page's real job is to be the FINAL HOME where finished files live, with a way
+to send them all to the client to download.
+- /projects/[id]/delivery (route kept; the label changed in the subhead, the
+  hub card and the project nav). Top half: the deliverables list, set at the
+  start of the job, each with a stage (Not started / In progress / Delivered,
+  the same three `status` values as before, relabelled), spec and due date.
+  Rate and qty inputs are gone. Bottom half: Final files, a dropzone with a
+  "For <deliverable>" picker, files grouped by deliverable (re-fileable per
+  row), and "Send to client".
+- NOTHING WAS DROPPED from the database. project_billing still exists and is
+  still the margin fallback on the budget page and in studio reports (it just
+  has no editor any more, so only figures already typed in count);
+  deliverable_pricing still holds any rate already entered, and Runner's
+  add_deliverable card can still set one.
+- `delivery_files` is NOT assets: the asset library is the working library,
+  and a final master next to forty references is the confusion this ends. The
+  0093 split: anyone on the job reads (the editor who cut it may be a
+  collaborator), editors write. Uploads go DIRECT to Storage on a new
+  `delivery_file` upload-ticket scope (can_edit_project, MAX_MEDIA_BYTES 2GB,
+  folder `<studio>/delivery/<project>/`), confirmed by finalizeUpload in
+  addDeliveryFiles. A deliverable id from the browser is accepted only when it
+  is on that project.
+- `delivery_links` is the client portal's shape: one per project,
+  is_studio_member, turning it off and on issues a NEW token. Public page
+  /dl/<token> (PUBLIC_PATHS, noindex) groups files by deliverable; each file
+  downloads through /dl/<token>/file/<id>, which checks the link is live and
+  the file is on its project, then redirects to a one-hour URL signed WITH
+  the filename so it downloads instead of opening. Rate-limited. Files added
+  later appear on the same link. Copy / open / email (emailDeliveryLink,
+  gated on emailConfigured) / turn off, staff only.
+- NOT BUILT: download-all as one zip (masters run to gigabytes and a function
+  cannot stream that), marking a deliverable Delivered automatically when a
+  file lands, and download tracking per file (only last_viewed_at is kept).
+- Verified in Chromium against a throwaway fixture (deleted) mounting the real
+  panel and client view: light at 1280, dark at 390, no page errors, no
+  overflow. NOT run end to end: a session here cannot reach Supabase Storage,
+  so the first real upload and download is the test.
 
 ### Budget: cost ledger (slice 1 of "dynamic budget", migration 0070) — BUILT
 `budget_lines.actual` used to be a number you typed, with no provenance: the page

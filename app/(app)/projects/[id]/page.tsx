@@ -1088,9 +1088,9 @@ export default async function ProjectDetailPage({
             <HubCard
               href={`/projects/${project.id}/delivery`}
               hue="green"
-              title="Delivery & billing"
+              title="Deliverables"
               sub={`${deliveredCount} of ${deliverTotal} delivered`}
-              footer={deliverTotal > 0 ? "Manage delivery" : "Add deliverables"}
+              footer={deliverTotal > 0 ? "Open deliverables" : "Add deliverables"}
               icon={
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7h13v10H3zM16 10h3l2 3v4h-5" />
@@ -1101,8 +1101,8 @@ export default async function ProjectDetailPage({
             >
               <p className="text-[13px] text-text-muted">
                 {deliverTotal > 0
-                  ? "Final deliverables and billing status."
-                  : "List the final deliverables and invoice."}
+                  ? "Where each one stands, and the final files for the client."
+                  : "List what the job ships, then send the finals to the client."}
               </p>
             </HubCard>
 

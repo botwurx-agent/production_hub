@@ -1,24 +1,22 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { loadDeliverablePricing } from "@/lib/rates";
-import { requireStudioContext } from "@/lib/studio";
+import { requireStudioContext, canEditProject } from "@/lib/studio";
+import { emailConfigured } from "@/lib/email";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
 import { DeliveryPanel } from "@/components/production/delivery-panel";
-import type {
-  Deliverable,
-  ProjectBilling,
-  ProjectInvoice,
-} from "@/lib/database.types";
+import type { Deliverable, DeliveryFile } from "@/lib/database.types";
 
-type ContactOption = {
-  id: string;
-  name: string;
-  email: string | null;
-  company: string | null;
-};
-
-export default async function DeliveryPage({
+/**
+ * Deliverables: what the job ships, the stage each is at, and the final home
+ * for the finished files with one link that sends them to the client.
+ *
+ * The billing-status block and the per-deliverable rate that used to live here
+ * are gone from the page (operator, 2026-10-20). Their tables are untouched:
+ * project_billing.amount is still the margin fallback on the budget and in
+ * reports, and deliverable_pricing still holds any rate already entered.
+ */
+export default async function DeliverablesPage({
   params,
 }: {
   params: { id: string };
@@ -28,107 +26,56 @@ export default async function DeliveryPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title, client_id")
+    .select("id, title")
     .eq("id", params.id)
     .maybeSingle();
   if (!project) notFound();
 
-  const [{ data: deliverables }, { data: billing }, { data: rosterContacts }] =
-    await Promise.all([
-      supabase
-        .from("deliverables")
-        .select("*")
-        .eq("project_id", params.id)
-        .order("position", { ascending: true }),
-      supabase
-        .from("project_billing")
-        .select("*")
-        .eq("project_id", params.id)
-        .maybeSingle(),
-      supabase
-        .from("contacts")
-        .select("id, name, email, company")
-        .eq("project_id", params.id)
-        .order("name"),
-    ]);
-
-  // Recipients: the project's own contacts plus the linked client's contacts.
-  let clientContacts: ContactOption[] = [];
-  if (project.client_id) {
-    const { data } = await supabase
-      .from("contacts")
-      .select("id, name, email, company")
-      .eq("client_id", project.client_id)
-      .order("name");
-    clientContacts = (data ?? []) as ContactOption[];
-  }
-  const contacts: ContactOption[] = [
-    ...((rosterContacts ?? []) as ContactOption[]),
-    ...clientContacts,
-  ];
-
-  // What the client is charged per deliverable lives in its own
-  // is_studio_member table (migration 0074), so a collaborator's query returns
-  // nothing and every rate comes back null with no check here.
-  const pricing = await loadDeliverablePricing(
-    supabase,
-    (deliverables ?? []).map((d) => d.id)
-  );
-  const deliverableList = ((deliverables ?? []) as Deliverable[]).map((d) => ({
-    ...d,
-    rate: pricing.get(d.id) ?? null,
-  }));
-
-  // The native document generator is reachable at /projects/<id>/invoices and
-  // works; this flag only hides the ENTRY POINT to it from this page, which it
-  // has done since the billing area was paused. The FreshBooks half of that
-  // pause is now resolved by deletion, so whether this link comes back is a
-  // product question rather than a platform one.
-  const BILLING_ENABLED = false;
+  const [{ data: deliverables }, { data: files }, link] = await Promise.all([
+    supabase
+      .from("deliverables")
+      .select("*")
+      .eq("project_id", params.id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("delivery_files")
+      .select("*")
+      .eq("project_id", params.id)
+      .order("created_at", { ascending: true }),
+    ctx.isCollaborator
+      ? Promise.resolve({ data: null })
+      : supabase
+          .from("delivery_links")
+          .select("token, revoked_at")
+          .eq("project_id", params.id)
+          .maybeSingle(),
+  ]);
 
   return (
     <div className="space-y-6">
       <ProjectSubhead
         projectId={project.id}
         projectTitle={project.title}
-        section="Delivery & billing"
+        section="Deliverables"
         hue="green"
-        subtitle="Final deliverables, invoices, and billing status."
+        subtitle="What the job ships, where each one stands, and the final files the client downloads."
         icon={
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7h13v10H3zM16 10h3l2 3v4h-5" />
-            <circle cx="7" cy="18" r="2" />
-            <circle cx="18" cy="18" r="2" />
+            <path d="M16.5 9.4 7.5 4.2M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            <path d="M3.3 7 12 12l8.7-5M12 22V12" />
           </svg>
         }
       />
-
-      {BILLING_ENABLED && (
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div>
-            <p className="text-sm font-bold text-text">
-              Build an invoice or estimate in the app
-            </p>
-            <p className="text-xs text-text-muted">
-              A branded, editable invoice or estimate with per-line tax,
-              notes and terms.
-            </p>
-          </div>
-          <a
-            href={`/projects/${project.id}/invoices`}
-            className="inline-flex items-center gap-2 rounded-[11px] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-sm transition hover:bg-accent-strong"
-          >
-            Open invoice generator
-          </a>
-        </Card>
-      )}
-
       <Card className="p-5">
         <DeliveryPanel
           projectId={project.id}
-          deliverables={deliverableList}
-          billing={(billing as ProjectBilling | null) ?? null}
-          canSeePricing={!ctx.isCollaborator}
+          projectTitle={project.title}
+          deliverables={(deliverables ?? []) as Deliverable[]}
+          files={(files ?? []) as DeliveryFile[]}
+          linkToken={link.data && !link.data.revoked_at ? link.data.token : null}
+          canEdit={canEditProject(ctx, project.id)}
+          canSend={!ctx.isCollaborator}
+          emailEnabled={emailConfigured()}
         />
       </Card>
     </div>
