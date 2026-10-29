@@ -8510,6 +8510,17 @@ reach for it during real prep.
   100%) fades the map but never the title bar or its controls. Both persist in
   localStorage ("previz.mapView"). GOTCHA: a save effect must skip the initial
   default, or it overwrites the stored value before readView lands.
+  ZOOM AND PAN (2026-10-29, operator: crowded lights were hard to grab even at
+  Bigger). Pinch, or a mouse wheel notch, zooms under the pointer (1x to 8x);
+  a two-finger scroll or a drag on empty floor pans; - / % / + sit in the title
+  bar, and the % (or a double-click on empty map) fits the whole scene again.
+  The viewBox becomes a window of the scene, its centre clamped inside it.
+  Glyph sizes (`k`) are DIVIDED by the zoom, so handles, labels and strokes keep
+  their size on screen while the floor between them grows, which is what pulls
+  a cluster of lights apart; the camera's field-of-view rays keep the unzoomed
+  length (`k0`). A press on the room floor pans when dragged and still selects
+  the room on a plain click. The wheel listener is native and non-passive on
+  the map's svg. Zoom is not remembered across reloads.
 - THE HEAD PANS, THE RIG STAYS PUT (2026-10-06, operator: a Fisher tracking
   beside the bed could not pan without the track turning with it, and the
   arm's base was always straight behind the camera; they run the base on the
