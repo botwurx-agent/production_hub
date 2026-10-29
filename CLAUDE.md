@@ -8521,6 +8521,24 @@ reach for it during real prep.
   length (`k0`). A press on the room floor pans when dragged and still selects
   the room on a plain click. The wheel listener is native and non-passive on
   the map's svg. Zoom is not remembered across reloads.
+- EACH SHOT SHOWS ONLY ITS OWN GEAR (2026-10-29, operator: switching 5A to
+  5B kept every light and camera on screen; "it'll only display what is in
+  that shot"). Shot gained `gear?: string[] | null`, the ids of the lights and
+  grip it uses; absent or null means everything, so every older setup reads
+  as before. `inShot` / `pinGear` in components/previz/setup.ts. A light not
+  in the active shot is HIDDEN (rig.group.visible = false, which the renderer,
+  the meter's occluders and picking all respect), not lit, not metered, and
+  off the map and the rail. The set, talent and daylight stay shared.
+  A NEW light or board belongs to the shot it was added on only: the first
+  divergence PINS every null shot to the ids that existed, then adds the new
+  id to the active one. The rail's trash takes gear OUT OF THIS SHOT while
+  another shot still uses it, and deletes it only when no shot does. "N more
+  in other shots" under each list brings one in with a press, and a "Used in"
+  chip row at the top of the light and grip inspectors toggles other shots.
+  "Shot from here" copies the active shot's gear. Thumbnails and Send to shot
+  list render each shot with its own gear (renderShot syncs per shot).
+  The map and free view now draw ONLY the active camera too (and the map fits
+  to it), so the others no longer crowd the picture.
 - THE HEAD PANS, THE RIG STAYS PUT (2026-10-06, operator: a Fisher tracking
   beside the bed could not pan without the track turning with it, and the
   arm's base was always straight behind the camera; they run the base on the

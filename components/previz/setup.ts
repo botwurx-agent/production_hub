@@ -56,7 +56,27 @@ export type Shot = {
    * "over" (overslung, onto the baseplate). Absent means underslung.
    */
   robotMount?: "under" | "over";
+  /**
+   * The lights and grip this shot uses, by id. Absent or null means all of
+   * them (every setup made before shots had their own gear). A light not in
+   * the list is not drawn, not lit and not metered for this shot.
+   */
+  gear?: string[] | null;
 };
+
+/** Whether a light or a piece of grip is part of this shot. */
+export function inShot(s: Shot, id: string): boolean {
+  return !s.gear || s.gear.includes(id);
+}
+
+/**
+ * Every shot's gear made explicit, so one shot can change what it uses
+ * without the others following. A shot with no list used everything there
+ * was, so it is pinned to exactly that.
+ */
+export function pinGear(shots: Shot[], allIds: string[]): Shot[] {
+  return shots.map((s) => (s.gear ? s : { ...s, gear: [...allIds] }));
+}
 
 /** The heading of what the camera is on, falling back the way older setups did. */
 export function rigYawOf(s: Pick<Shot, "rigYaw" | "move" | "yaw">): number {
@@ -329,7 +349,11 @@ export function asSetup(x: unknown): Setup | null {
   if (raw.v === 2) s = fromV2(raw as unknown as V2);
   else if (raw.v === 3 && Array.isArray(raw.items)) s = raw as unknown as Setup;
   else return null;
-  const shots = s.shots.map((sh) => ({ ...sh, move: sh.move ?? null }));
+  const shots = s.shots.map((sh) => ({
+    ...sh,
+    move: sh.move ?? null,
+    gear: Array.isArray(sh.gear) ? sh.gear.filter((x): x is string => typeof x === "string") : null,
+  }));
   return { ...s, shots, activeId: shots.some((sh) => sh.id === s.activeId) ? s.activeId : shots[0].id };
 }
 

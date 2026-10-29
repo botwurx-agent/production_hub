@@ -139,7 +139,7 @@ export function TopDownMap({
   const live = sceneBounds(set, [
     ...items.flatMap((i) => footprint(i)),
     ...talent.flatMap((t) => [t, ...(t.mark ? [t.mark] : [])]),
-    ...shots.map((s) => ({ x: s.pos.x, z: s.pos.z })),
+    ...shots.filter((s) => s.id === activeId).map((s) => ({ x: s.pos.x, z: s.pos.z })),
     ...lights, ...grips,
   ]);
   const B = frozen.current ?? live;
@@ -348,7 +348,7 @@ export function TopDownMap({
           <GripDots />
           <span className="truncate">{size === "big" ? "Top-down map" : "Map"}</span>
         </span>
-        <span className="flex shrink-0 items-center gap-2">
+        <span className={`flex shrink-0 items-center ${size === "big" ? "gap-2" : "gap-1.5"}`}>
           {size !== "min" ? (
             <label className="flex items-center gap-1 text-white/70" title={`Map opacity, ${Math.round(view.opacity * 100)}%`}>
               <OpacityIcon />
@@ -356,7 +356,7 @@ export function TopDownMap({
                 aria-label="Map opacity"
                 type="range" min={0.2} max={1} step={0.05} value={view.opacity}
                 onChange={(e) => setView((v) => ({ ...v, opacity: Number(e.target.value) }))}
-                className="h-1 w-14 cursor-pointer accent-white"
+                className={`h-1 cursor-pointer accent-white ${size === "big" ? "w-14" : "w-8"}`}
               />
             </label>
           ) : null}
@@ -591,6 +591,8 @@ export function TopDownMap({
 
         {/* cameras, with their horizontal field of view */}
         {shots.map((s, i) => {
+          // Only the shot being looked at: the other cameras are other shots.
+          if (s.id !== activeId) return null;
           const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
           const half = rad(fovDeg(imagedArea(b, aspectRatio).w, s.focal) / 2);
           const y = rad(s.yaw);
