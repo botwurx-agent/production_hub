@@ -127,6 +127,14 @@ export function TopDownMap({
   // The view is held still while something is dragged, so the map does not
   // rescale under the cursor as a thing is pulled toward its edge.
   const frozen = useRef<Bounds | null>(null);
+  // Zoom: 1 shows the whole scene; above it the map shows a window of the
+  // scene centred on `cx`/`cz` (world metres). The glyphs keep their size on
+  // screen while the floor grows, which is what pulls a crowd of lights apart.
+  const [zoom, setZoom] = useState<{ z: number; cx: number; cz: number }>({ z: 1, cx: 0, cz: 0 });
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  // A drag on empty floor pans; a press that never moves still picks the room.
+  const pan = useRef<{ x: number; y: number; cx: number; cz: number; moved: boolean; pick?: MapPick; id: number } | null>(null);
 
   const live = sceneBounds(set, [
     ...items.flatMap((i) => footprint(i)),
@@ -135,6 +143,76 @@ export function TopDownMap({
     ...lights, ...grips,
   ]);
   const B = frozen.current ?? live;
+  // The window actually drawn: the scene at zoom 1, else a slice of it whose
+  // centre is held inside the scene so the map never pans off into nothing.
+  const fullW = B.x1 - B.x0;
+  const fullH = B.z1 - B.z0;
+  const z = zoom.z;
+  const vw = fullW / z;
+  const vh = fullH / z;
+  const clampC = (c: number, lo: number, hi: number, half: number) => (hi - lo <= 2 * half ? (lo + hi) / 2 : Math.max(lo + half, Math.min(hi - half, c)));
+  const vcx = z <= 1 ? (B.x0 + B.x1) / 2 : clampC(zoom.cx, B.x0, B.x1, vw / 2);
+  const vcz = z <= 1 ? (B.z0 + B.z1) / 2 : clampC(zoom.cz, B.z0, B.z1, vh / 2);
+  const V = { x0: vcx - vw / 2, z0: vcz - vh / 2 };
+  const viewRef = useRef({ V, vw, vh, B });
+  viewRef.current = { V, vw, vh, B };
+
+  /** Zooms by `factor`, keeping the world point under (fx, fy), as 0..1 of the drawing, still. */
+  const zoomAt = (factor: number, fx = 0.5, fy = 0.5) => {
+    const { V: v, vw: w, vh: h, B: b } = viewRef.current;
+    const cur = zoomRef.current.z;
+    const next = Math.max(1, Math.min(MAX_ZOOM, cur * factor));
+    if (next === cur) return;
+    const px = v.x0 + fx * w;
+    const pz = v.z0 + fy * h;
+    const nw = (b.x1 - b.x0) / next;
+    const nh = (b.z1 - b.z0) / next;
+    setZoom({ z: next, cx: px - fx * nw + nw / 2, cz: pz - fy * nh + nh / 2 });
+  };
+  const fit = () => setZoom({ z: 1, cx: 0, cz: 0 });
+
+  // Wheel and pinch on the drawing. Native and non-passive, since React's
+  // onWheel cannot stop a trackpad pinch from zooming the whole page. A pinch
+  // (ctrlKey) or a mouse notch zooms under the pointer; a two-finger scroll pans.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ctm = el.getScreenCTM();
+      if (!ctm || !ctm.a) return;
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+      const dx = e.deltaX * unit;
+      const dy = e.deltaY * unit;
+      const notch = e.deltaMode !== 0 || (dx === 0 && Math.abs(dy) >= 50 && Number.isInteger(dy));
+      if (e.ctrlKey || notch) {
+        const factor = notch && !e.ctrlKey ? (dy < 0 ? 1.25 : 1 / 1.25) : Math.exp(-dy * 0.01);
+        // The drawing can be letterboxed inside the element, so the point under
+        // the pointer is read through the transform rather than the box.
+        const pt = el.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = e.clientY;
+        const w = pt.matrixTransform(ctm.inverse());
+        const { V: v, vw: ww, vh: hh } = viewRef.current;
+        zoomAt(factor, (w.x - v.x0) / ww, (w.y - v.z0) / hh);
+        return;
+      }
+      if (zoomRef.current.z <= 1) return;
+      const { V: v, vw: w, vh: h } = viewRef.current;
+      setZoom((zz) => ({ ...zz, cx: v.x0 + w / 2 + dx / ctm.a, cz: v.z0 + h / 2 + dy / ctm.d }));
+    };
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => el.removeEventListener("wheel", wheel);
+    // zoomAt reads everything through refs, so binding once per mount is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, size]);
+
+  const startPan = (pick?: MapPick) => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    svgRef.current?.setPointerCapture(e.pointerId);
+    pan.current = { x: e.clientX, y: e.clientY, cx: vcx, cz: vcz, moved: false, pick, id: e.pointerId };
+  };
 
   const toWorld = (e: React.PointerEvent) => {
     const svg = svgRef.current!;
@@ -156,10 +234,24 @@ export function TopDownMap({
     onPick(p);
   };
   const end = () => {
+    const p = pan.current;
+    pan.current = null;
+    if (p && !p.moved && p.pick) onPick(p.pick);
     drag.current = null;
     frozen.current = null;
   };
   const move = (e: React.PointerEvent) => {
+    const p = pan.current;
+    if (p) {
+      const ctm = svgRef.current?.getScreenCTM();
+      const ddx = e.clientX - p.x;
+      const ddy = e.clientY - p.y;
+      if (!p.moved && Math.hypot(ddx, ddy) < 4) return;
+      p.moved = true;
+      if (!ctm || !ctm.a || zoomRef.current.z <= 1) return;
+      setZoom((zz) => ({ ...zz, cx: p.cx - ddx / ctm.a, cz: p.cz - ddy / ctm.d }));
+      return;
+    }
     const d = drag.current;
     if (!d || d.kind === "daylight" || d.kind === "room") return;
     const w = toWorld(e);
@@ -225,11 +317,13 @@ export function TopDownMap({
   const svgMaxH = stage.h ? Math.max(80, Math.min(wantH, stage.h - 2 * MARGIN - chrome)) : wantH;
 
   if (!mounted) return null;
-  const W = B.x1 - B.x0;
-  const H = B.z1 - B.z0;
+  const W = fullW;
+  const H = fullH;
   // Text and strokes scale with the map, so a 20 metre warehouse reads as
-  // well as a 4 metre kitchen.
-  const k = Math.max(1, Math.max(W, H) / 9);
+  // well as a 4 metre kitchen. Zooming in divides them back down, so handles
+  // stay the same size on screen while the space between them grows.
+  const k0 = Math.max(1, Math.max(W, H) / 9);
+  const k = k0 / z;
   const isSel = (kind: string, id?: string) => selected.kind === kind && (id === undefined || selected.id === id);
   const room = set.kind === "room" ? set.room : null;
   const sortedItems = [...items].sort((a, b) => b.w * b.d - a.w * a.d);
@@ -267,6 +361,15 @@ export function TopDownMap({
             </label>
           ) : null}
           {size !== "min" ? (
+            <span className="flex items-center gap-0.5" data-map-zoom>
+              <button type="button" aria-label="Zoom out" title="Zoom out" disabled={z <= 1} onClick={() => zoomAt(1 / 1.5)} className="grid h-4 w-4 place-items-center rounded text-white/70 hover:bg-white/15 hover:text-white disabled:opacity-35">−</button>
+              <button type="button" title="Fit the whole scene" onClick={fit} className="min-w-[30px] rounded px-0.5 text-center tabular-nums text-white/70 hover:bg-white/15 hover:text-white">
+                {z <= 1 ? "Fit" : `${Math.round(z * 100)}%`}
+              </button>
+              <button type="button" aria-label="Zoom in" title="Zoom in (or pinch, or scroll the wheel, over the map)" disabled={z >= MAX_ZOOM} onClick={() => zoomAt(1.5)} className="grid h-4 w-4 place-items-center rounded text-white/70 hover:bg-white/15 hover:text-white disabled:opacity-35">+</button>
+            </span>
+          ) : null}
+          {size !== "min" ? (
             <button type="button" onClick={() => setSize(size === "big" ? "small" : "big")} className="text-white/70 hover:text-white">
               {size === "big" ? "Smaller" : "Bigger"}
             </button>
@@ -278,10 +381,12 @@ export function TopDownMap({
       </div>
       <div style={{ opacity: view.opacity, background: "#f4f1ea" }}>
       <svg
-        style={{ display: size === "min" ? "none" : undefined, maxHeight: svgMaxH }}
         ref={svgRef}
-        viewBox={`${B.x0} ${B.z0} ${W} ${H}`}
-        className="mx-auto block w-full touch-none select-none"
+        viewBox={`${V.x0} ${V.z0} ${vw} ${vh}`}
+        className={`mx-auto block w-full touch-none select-none ${z > 1 ? "cursor-grab active:cursor-grabbing" : ""}`}
+        style={{ display: size === "min" ? "none" : undefined, maxHeight: svgMaxH, aspectRatio: `${W} / ${H}` }}
+        onPointerDown={startPan()}
+        onDoubleClick={(e) => { if (e.target === e.currentTarget) fit(); }}
         onPointerMove={move}
         onPointerUp={end}
         onPointerCancel={end}
@@ -301,8 +406,8 @@ export function TopDownMap({
           <g>
             <rect
               x={room.x} y={room.z} width={room.width} height={room.depth}
-              fill="#ece6da" stroke="none" className="cursor-pointer"
-              onPointerDown={(e) => { e.stopPropagation(); onPick({ kind: "room" }); }}
+              fill="#ece6da" stroke="none" className={z > 1 ? "cursor-grab" : "cursor-pointer"}
+              onPointerDown={startPan({ kind: "room" })}
             />
             {WALLS.filter((w) => room.walls[w.id]).map(({ id: w }) => {
               const { a, b } = wallEnds(room, w);
@@ -489,7 +594,7 @@ export function TopDownMap({
           const b = BODIES.find((x) => x.id === s.bodyId) ?? BODIES[0];
           const half = rad(fovDeg(imagedArea(b, aspectRatio).w, s.focal) / 2);
           const y = rad(s.yaw);
-          const L = 4.2 * k;
+          const L = 4.2 * k0;
           const ray = (a: number) => `${s.pos.x - Math.sin(y + a) * L} ${s.pos.z - Math.cos(y + a) * L}`;
           const col = SHOT_HUES[i % SHOT_HUES.length];
           const isA = s.id === activeId;
@@ -592,7 +697,7 @@ export function TopDownMap({
       </svg>
       {size === "big" ? (
         <p className="bg-black/80 px-2.5 py-1 text-[10px] text-white/75">
-          Drag anything to move it. Drag a white dot to aim a light or a camera, or to turn the selected piece.
+          Drag anything to move it. Drag a white dot to aim a light or a camera, or to turn the selected piece. Pinch or scroll to zoom, drag empty floor to pan.
         </p>
       ) : null}
       </div>
@@ -603,6 +708,7 @@ export function TopDownMap({
 type MapView = { r: number; b: number; opacity: number };
 const VIEW_KEY = "previz.mapView";
 const MARGIN = 12;
+const MAX_ZOOM = 8;
 const DEFAULT_VIEW: MapView = { r: MARGIN, b: MARGIN, opacity: 1 };
 function readView(): MapView {
   try {
