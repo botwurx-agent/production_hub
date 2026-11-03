@@ -37,7 +37,7 @@ import { PATTERNS, featureM, isPattern, patternTransmission, type PatternKind } 
 import { ExposurePanel, GripInspector, LightInspector, PracticalInspector, ShotExposure, WindowInspector, type WindowLightStyle } from "./light-panels";
 import { Chip, Field, RailGroup, RailItem, Readout, Seg, Thumb, Toggle, TrashIcon } from "./ui";
 import {
-  aim, asSetup, assetKeys, bathroomSetup, setupForStore, bedroomSetup, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
+  aim, asSetup, assetKeys, inShot, pinGear, bathroomSetup, setupForStore, bedroomSetup, blankSetup, downloadSetup, kitchenSetup, loadSetup, rigYawOf, saveSetup, studioSetup,
   type Setup, type Shot, type Units, type Vec3, type WinState,
 } from "./setup";
 import { FRAME_A, FRAME_B, Timeline } from "./timeline";
@@ -602,6 +602,10 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const [assetTick, setAssetTick] = useState(0);
 
   const rawActive = shots.find((s) => s.id === activeId) ?? shots[0];
+  // The lights and grip this shot uses: everything else in the setup belongs
+  // to other shots and is not drawn, lit or metered here.
+  const shotLights = lights.filter((l) => inShot(rawActive, l.id));
+  const shotGrips = grips.filter((g) => inShot(rawActive, g.id));
   // Talent walk to their marks over the active shot's move, with its ease.
   const actionK = rawActive.move ? ease(rawActive.move.ease, playhead) : 0;
   const scene = useMemo(() => placeScene(talent, items, actionK), [talent, items, actionK]);
@@ -658,7 +662,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     clayMat: THREE.Material;
     lightRigs: Map<string, LightRig>;
     gripRigs: Map<string, GripRig>;
-    syncRigs: (wb: number) => void;
+    syncRigs: (shot: Shot) => void;
     pose: (sc: Scene) => void;
     house: ReturnType<typeof buildHouseView>;
   } | null>(null);
@@ -802,7 +806,10 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     // Places every light and board, and sets every source's strength and its
     // colour as the camera sees it at this white balance. Cheap enough to run
     // every frame; geometry is rebuilt only when a fixture or modifier changes.
-    const syncRigs = (wb: number) => {
+    // Only the gear in this shot is shown (an invisible group's lights are
+    // skipped by the renderer, the meter's occluders and picking alike).
+    const syncRigs = (shot: Shot) => {
+      const wb = shot.wb;
       const L = live.current;
       const sc = poseRef.current;
       const seen = new Set<string>();
@@ -810,6 +817,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       for (const raw of L.lights) {
         const s = effLight(raw, sc);
         seen.add(s.id);
+        const show = inShot(shot, s.id);
         let rig = lightRigs.get(s.id);
         if (!rig || rig.structureKey !== structureKey(s)) {
           if (rig) { world.lightsRoot.remove(rig.group); disposeTree(rig.group); }
@@ -825,13 +833,13 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         const d = Math.max(0.3, dFix - src.offsetM);
         const size = Math.max(src.sourceW, src.sourceH);
         const soft = apparentSizeDeg(size, d);
-        const cast = s.on && shadows < 5;
+        const cast = show && s.on && shadows < 5;
         if (cast) shadows++;
         const lit = { ...src, candela: src.candela * nearFieldScale(size, d) };
         // The beam through a diffusion frame is its own light, at the fixture.
         let through: { candela: number; beamDeg: number; softDeg: number; cast: boolean } | null = null;
         if (src.through) {
-          const castT = s.on && shadows < 5;
+          const castT = show && s.on && shadows < 5;
           if (castT) shadows++;
           through = {
             candela: src.through.candela * nearFieldScale(src.through.sizeM, dFix),
@@ -841,6 +849,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           };
         }
         updateLightRig(rig, s, a, lit, soft, cameraColorRgb(lightRgb(s.cct, fixtureOf(s).rgb ? s.color : null), wb), cast, through);
+        rig.group.visible = show;
       }
       for (const [id, rig] of lightRigs) {
         if (seen.has(id)) continue;
@@ -865,6 +874,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         const gd = gt ? Math.max(0.3, gt.distanceTo(new THREE.Vector3(g.x, g.y, g.z))) : 2;
         const cd = (levels.current.bounce.get(g.id) ?? 0) * nearFieldScale(g.sizeFt * FT, gd);
         updateGripRig(rig, g, aimOf(g, sc), cd, cameraColor(5600, wb));
+        rig.group.visible = inShot(shot, g.id);
         const pr = levels.current.patterns.get(g.id);
         const lr = pr ? lightRigs.get(pr.lightId) : undefined;
         if (lr && pr) softenForPattern(lr, pr.blurM, pr.sourceToPatternM + pr.patternToSubjectM);
@@ -968,7 +978,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       house.fill.intensity = 0;
       (world.scene.background as THREE.Color).copy(stageBg);
       world.scene.overrideMaterial = L.clay ? clayMat : null;
-      syncRigs(s.wb);
+      syncRigs(s);
       const expo = exposureScale(s.stop, s.iso, s.nd);
       renderer.toneMappingExposure = expo;
       renderer.setRenderTarget(rt);
@@ -1022,7 +1032,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         }
         if (finished) finishRef.current(1);
         const fs = L.shots.find((x) => x.id === L.activeId) ?? L.shots[0];
-        syncRigs(fs.wb);
+        syncRigs(fs);
         renderer.toneMappingExposure = exposureScale(fs.stop, fs.iso, fs.nd);
         controls.update();
         world.rigs.visible = true;
@@ -1036,10 +1046,12 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         house.gridMat.uniforms.fadeM.value = Math.max(25, freeCam.position.distanceTo(controls.target) * 4);
         const marks: Marker[] = [];
         for (const l of L.lights) {
+          if (!inShot(fs, l.id)) continue;
           const rig = lightRigs.get(l.id);
           if (rig) marks.push({ id: `l:${l.id}`, pos: rig.head.getWorldPosition(new THREE.Vector3()), color: "#ffc061", dim: !l.on });
         }
         for (const sh of L.shots) {
+          if (sh.id !== L.activeId) continue;
           marks.push({ id: `c:${sh.id}`, pos: new THREE.Vector3(sh.pos.x, sh.pos.y, sh.pos.z), color: "#7fa8ff", dim: sh.id !== L.activeId });
         }
         syncMarkers(house, marks);
@@ -1400,6 +1412,10 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   useEffect(() => {
     finishRef.current(0);
     setPlayhead(0);
+    // A light or board picked on the last shot that this one does not use
+    // has nothing to show here: back to this shot's camera.
+    setSel((cur) => ((cur.kind === "light" || cur.kind === "grip") && !inShot(rawActive, cur.id) ? { kind: "camera" } : cur));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
   // ----- The light meter. Runs when anything that moves light changes, not
@@ -1412,17 +1428,17 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       const s = seenShot(shots.find((x) => x.id === activeId) ?? shots[0], playhead, scene, drafts[activeId], playing);
       poseRef.current = scene;
       e.pose(scene);
-      e.syncRigs(s.wb);
+      e.syncRigs(s);
       e.world.scene.updateMatrixWorld(true);
       const occ = collectOccluders(e.world.scene);
       const roomOn = set.kind === "room";
       const ws = roomOn ? windows : [];
-      const emitters = buildEmitters(lights, win, scene, ws);
+      const emitters = buildEmitters(lights.filter((l) => inShot(s, l.id)), win, scene, ws);
       const tau = win.on && roomOn ? Math.pow(10, -win.nd) : 0;
       const sunLux = WINDOW_SKIES[win.sky].sunLux * tau;
       const dir = roomOn ? sunDirection(ws) : null;
       const sun = sunLux > 0 && dir ? { dir, lux: sunLux, label: "Sun through the window" } : null;
-      const screens: Screen[] = grips.filter((g) => isPattern(g.kind)).map((g) => {
+      const screens: Screen[] = grips.filter((g) => inShot(s, g.id) && isPattern(g.kind)).map((g) => {
         const a = aimOf(g, scene);
         const eu = new THREE.Euler(rad(a.pitch), rad(a.yaw), 0, "YXZ");
         const k = g.kind as PatternKind;
@@ -1432,7 +1448,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           half: (g.sizeFt * FT) / 2, transmission: patternTransmission(k, g.open), featureM: featureM(k, g.sizeFt * FT),
         };
       });
-      const boards: Board[] = grips.filter((g) => GRIP_REFLECTANCE[g.kind] > 0).map((g) => {
+      const boards: Board[] = grips.filter((g) => inShot(s, g.id) && GRIP_REFLECTANCE[g.kind] > 0).map((g) => {
         const a = aimOf(g, scene);
         const side = g.sizeFt * FT;
         return {
@@ -1528,7 +1544,9 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     const e = engine.current;
     if (!e) return;
     clearGroup(e.world.rigs);
+    // Only this shot's camera: the others are other shots' equipment.
     for (const s of shots) {
+      if (s.id !== activeId) continue;
       const at = s.id === activeId ? seenShot(s, playhead, scene, drafts[s.id], playing) : s;
       e.world.rigs.add(unitRef.current(s, at));
       if (s.move) {
@@ -2133,7 +2151,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     const id = `l${Date.now()}`;
     // The first light is a key, three-quarter camera right; after that a
     // fill on the other side from the key. Either way, out of frame.
-    const key = lights.find((l) => l.role === "Key");
+    const key = shotLights.find((l) => l.role === "Key");
     const side = key ? -keySideOf(key) : 1;
     // A palm-sized MC goes in close and low, the way it gets used: a kicker
     // or an eye light just out of frame, not a key from across the room.
@@ -2144,6 +2162,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       cct: f.cctDefault, ...at, y: mini ? subjectAt.y + 0.2 : Math.max(1.6, subjectAt.y + 0.8), yaw: 0, pitch: 0, aimAt: subjectId, frame: null, on: true,
     };
     setLights((all) => [...all, spec]);
+    gearAdd(id);
     setSel({ kind: "light", id });
   };
   /**
@@ -2165,19 +2184,20 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       cct: f.cctDefault, x: at.x, y: at.y, z: at.z, yaw: 0, pitch: 0, aimAt: subjectId, frame, on: true,
     };
     setLights((all) => [...all, spec]);
+    gearAdd(id);
     setSel({ kind: "light", id });
   };
   const addGrip = (kind: GripKind) => {
     const id = `g${Date.now()}`;
     // A bounce goes to the side opposite the key; a flag to the side, ready to cut.
-    const key = lights.find((l) => l.role === "Key" && l.on);
+    const key = shotLights.find((l) => l.role === "Key" && l.on);
     const keySide = key ? keySideOf(key) : 1;
     const sizeFt = kind === "flag" ? 2 : kind === "cookie" || kind === "windowpane" ? 3 : 4;
     if (isPattern(kind)) {
       // A pattern goes in the key's path, about a third of the way from the
       // subject toward the light (close enough to read, out of frame), and
       // faces down that line. With no light on yet it waits beside the subject.
-      const src = key ?? lights.find((l) => l.on);
+      const src = key ?? shotLights.find((l) => l.on);
       let at: { x: number; y: number; z: number } | null = null;
       if (src) {
         const ly = src.hungY ?? src.y;
@@ -2208,6 +2228,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         ...(kind === "blinds" ? { open: 0.6 } : {}),
       };
       setGrips((all) => [...all, spec]);
+      gearAdd(id);
       setSel({ kind: "grip", id });
       return;
     }
@@ -2216,14 +2237,45 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       : findSpot(active, hfov, subjectAt, -keySide, 70, 1.5, (sizeFt * FT) / 2, occupied);
     const spec: GripSpec = { id, kind, sizeFt, ...at, y: Math.max(0.9, subjectAt.y), yaw: 0, pitch: 0, aimAt: subjectId };
     setGrips((all) => [...all, spec]);
+    gearAdd(id);
     setSel({ kind: "grip", id });
   };
+  // ----- Which shots use which gear. Every id in the setup, for pinning.
+  const gearIds = () => [...live.current.lights.map((l) => l.id), ...live.current.grips.map((g) => g.id)];
+  /** A new light or board belongs to the shot it was added on, and only that one. */
+  const gearAdd = (id: string) => {
+    const before = gearIds().filter((x) => x !== id);
+    setShots((all) => pinGear(all, before).map((x) => (x.id === activeId ? { ...x, gear: [...(x.gear ?? []), id] } : x)));
+  };
+  /** Puts a light or board into a shot, or takes it out, leaving the others alone. */
+  const setGearIn = (id: string, shotId: string, on: boolean) => {
+    setShots((all) => pinGear(all, gearIds()).map((x) => {
+      if (x.id !== shotId) return x;
+      const has = (x.gear ?? []).includes(id);
+      if (on === has) return x;
+      return { ...x, gear: on ? [...(x.gear ?? []), id] : (x.gear ?? []).filter((g) => g !== id) };
+    }));
+    if (shotId !== activeId) requeue([shotId]);
+    dirty();
+  };
+  /** The other shots that use this light or board. */
+  const otherShotsWith = (id: string) => shots.filter((x) => x.id !== activeId && inShot(x, id));
+  // Removing a light from a shot only takes it out of that shot while another
+  // shot still uses it; the last shot to let it go deletes it from the setup.
   const removeLight = (id: string) => {
-    setLights((all) => all.filter((l) => l.id !== id));
+    if (otherShotsWith(id).length) setGearIn(id, activeId, false);
+    else {
+      setLights((all) => all.filter((l) => l.id !== id));
+      setShots((all) => all.map((x) => (x.gear ? { ...x, gear: x.gear.filter((g) => g !== id) } : x)));
+    }
     if (sel.kind === "light" && sel.id === id) setSel({ kind: "camera" });
   };
   const removeGrip = (id: string) => {
-    setGrips((all) => all.filter((g) => g.id !== id));
+    if (otherShotsWith(id).length) setGearIn(id, activeId, false);
+    else {
+      setGrips((all) => all.filter((g) => g.id !== id));
+      setShots((all) => all.map((x) => (x.gear ? { ...x, gear: x.gear.filter((g) => g !== id) } : x)));
+    }
     if (sel.kind === "grip" && sel.id === id) setSel({ kind: "camera" });
   };
   // A shot IS its camera, so deleting either deletes both. One always stays:
@@ -3138,15 +3190,15 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
             ))}
             <button type="button" onClick={addPerson} className="mt-1 w-full rounded-[8px] border border-dashed border-border px-2 py-1 text-xs font-semibold text-text-muted hover:text-text">+ Add a person</button>
           </RailGroup>
-          <RailGroup title="Lights">
-            {lights.map((l) => (
+          <RailGroup title={`Lights · ${rawActive.code}`}>
+            {shotLights.map((l) => (
               <RailItem
                 key={l.id}
                 active={sel.kind === "light" && sel.id === l.id}
                 onClick={() => setSel({ kind: "light", id: l.id })}
                 dot={l.on ? "#e4b94a" : "#5b6068"}
                 onDelete={() => removeLight(l.id)}
-                deleteLabel={`Delete ${l.role} light`}
+                deleteLabel={otherShotsWith(l.id).length ? `Take the ${l.role} light out of ${rawActive.code}` : `Delete ${l.role} light`}
                 label={`${l.role}`}
                 sub={l.on ? `${fixtureOf(l).name.replace(/^(Aputure|ARRI|Astera) /, "")}, ${Math.round(l.dimmer * 100)}%` : "off"}
               />
@@ -3165,9 +3217,14 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
                 </optgroup>
               ) : null}
             </select>
+            <OtherShotsGear
+              items={lights.filter((l) => !inShot(rawActive, l.id)).map((l) => ({ id: l.id, label: `${l.role} · ${fixtureOf(l).name.replace(/^(Aputure|ARRI|Astera) /, "")}`, shots: shots.filter((x) => inShot(x, l.id)).map((x) => x.code) }))}
+              code={rawActive.code}
+              onUse={(id) => { setGearIn(id, activeId, true); setSel({ kind: "light", id }); }}
+            />
           </RailGroup>
-          <RailGroup title="Grip">
-            {grips.map((g) => (
+          <RailGroup title={`Grip · ${rawActive.code}`}>
+            {shotGrips.map((g) => (
               <RailItem
                 key={g.id}
                 active={sel.kind === "grip" && sel.id === g.id}
@@ -3175,6 +3232,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
                 dot={GRIP_DOT[g.kind]}
                 label={GRIP_NAMES[g.kind]}
                 onDelete={() => removeGrip(g.id)}
+                deleteLabel={otherShotsWith(g.id).length ? `Take the ${GRIP_NAMES[g.kind].toLowerCase()} out of ${rawActive.code}` : undefined}
                 sub={`${g.sizeFt}x${g.sizeFt}${g.aimAt ? `, on ${targets.find((t) => t.id === g.aimAt)?.name ?? ""}` : ""}`}
               />
             ))}
@@ -3191,6 +3249,11 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
               <option value="">+ Pattern (cookie, branch, blinds)</option>
               {(Object.keys(PATTERNS) as PatternKind[]).map((k) => <option key={k} value={k}>{PATTERNS[k].name}</option>)}
             </select>
+            <OtherShotsGear
+              items={grips.filter((g) => !inShot(rawActive, g.id)).map((g) => ({ id: g.id, label: `${GRIP_NAMES[g.kind]} ${g.sizeFt}x${g.sizeFt}`, shots: shots.filter((x) => inShot(x, g.id)).map((x) => x.code) }))}
+              code={rawActive.code}
+              onUse={(id) => { setGearIn(id, activeId, true); setSel({ kind: "grip", id }); }}
+            />
           </RailGroup>
           <RailGroup title="Cameras">
             {shots.map((s, i) => (
@@ -3315,7 +3378,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
                 Free view · drag a thing to move it, shift-drag to raise it · drag empty space to orbit, scroll to zoom · H house lights · F frame all · V for the lens
               </div>
             )}
-            {!lights.some((l) => l.on) && !items.some((i) => i.light?.on) && !(set.kind === "room" && windows.length && win.on) ? (
+            {!shotLights.some((l) => l.on) && !items.some((i) => i.light?.on) && !(set.kind === "room" && windows.length && win.on) ? (
               <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center">
                 <div className="rounded-[10px] bg-black/60 px-3 py-2 text-center text-xs text-white/90">
                   {set.kind === "room" ? "Nothing is lit. Add a light from the rail, or a window to the room." : "Nothing is lit. A stage has no daylight: add a light from the rail."}
@@ -3339,8 +3402,8 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
             aspectRatio={aspect.ratio}
             set={set}
             winOn={win.on}
-            lights={lights}
-            grips={grips}
+            lights={shotLights}
+            grips={shotGrips}
             selected={sel}
             supportOf={(x, at) => supportPose(x, at)}
             aimOfLight={(l) => aimOf(l, scene)}
@@ -3483,7 +3546,9 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
               onClearLabel={() => updateItem(selItem.id, { label: null })}
               onHold={(tid) => holdItem(selItem.id, tid)}
             />
-          ) : sel.kind === "light" && lights.some((l) => l.id === sel.id) ? (
+          ) : sel.kind === "light" && shotLights.some((l) => l.id === sel.id) ? (
+            <>
+            <GearShots id={sel.id} shots={shots} activeId={activeId} onToggle={setGearIn} />
             <LightInspector
               s={lights.find((l) => l.id === sel.id)!}
               targets={targets} reading={meter} targetName={meterTargetName} fmt={fmt}
@@ -3508,7 +3573,10 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
               onChange={(p) => updateLight(sel.id, p)}
               onDelete={removeSelected}
             />
-          ) : sel.kind === "grip" && grips.some((g) => g.id === sel.id) ? (
+            </>
+          ) : sel.kind === "grip" && shotGrips.some((g) => g.id === sel.id) ? (
+            <>
+            <GearShots id={sel.id} shots={shots} activeId={activeId} onToggle={setGearIn} />
             <GripInspector
               pads={<ControlPads pads={fixturePads("grip", sel.id)} caption="Moves as if you are standing behind the board." />}
               g={grips.find((g) => g.id === sel.id)!}
@@ -3517,12 +3585,13 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
               onChange={(p) => updateGrip(sel.id, p)}
               onDelete={removeSelected}
             />
+            </>
           ) : sel.kind === "daylight" ? (
             <WindowInspector
               sky={win.sky} nd={win.nd} on={win.on} reading={meter} targetName={meterTargetName} fmt={fmt}
               onChange={(p) => setWin((w) => ({ ...w, ...p }))}
               windows={windows.map((w) => ({ id: w.id, name: windowName(windows, w.id) }))}
-              outside={lights.filter((l) => set.kind === "room" && outsideRoom(set.room, l.x, l.z)).map((l) => ({ id: l.id, name: `${l.role} · ${fixtureOf(l).name.replace(/^(Aputure|ARRI|Astera) /, "")}` }))}
+              outside={shotLights.filter((l) => set.kind === "room" && outsideRoom(set.room, l.x, l.z)).map((l) => ({ id: l.id, name: `${l.role} · ${fixtureOf(l).name.replace(/^(Aputure|ARRI|Astera) /, "")}` }))}
               onLightThrough={addWindowLight}
               onSelectLight={(id) => setSel({ kind: "light", id })}
             />
@@ -4095,6 +4164,72 @@ function HelpCard({ onClose }: { onClose: () => void }) {
           <span className="text-xs text-text-muted">{v}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The setup's other lights or boards, the ones this shot does not use, folded
+ * under the list. One press brings one into this shot.
+ */
+function OtherShotsGear({ items, code, onUse }: {
+  items: { id: string; label: string; shots: string[] }[]; code: string; onUse: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!items.length) return null;
+  return (
+    <div className="mt-1">
+      <button type="button" onClick={() => setOpen(!open)} className="w-full px-2 py-1 text-left text-xs font-semibold text-text-muted hover:text-text">
+        {open ? "▾" : "▸"} {items.length} more in other shots
+      </button>
+      {open ? (
+        <div className="space-y-0.5">
+          {items.map((g) => (
+            <div key={g.id} className="flex items-center gap-2 rounded-[8px] px-2 py-1 hover:bg-surface-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold">{g.label}</span>
+                <span className="block truncate text-[11px] text-text-muted">{g.shots.length ? `in ${g.shots.join(", ")}` : "in no shot"}</span>
+              </span>
+              <button type="button" onClick={() => onUse(g.id)} className="shrink-0 rounded-[7px] border border-border px-1.5 py-0.5 text-[11px] font-semibold text-text-muted hover:text-text">
+                + {code}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Which shots use this light or board: a chip per shot, pressed to add or take out. */
+function GearShots({ id, shots, activeId, onToggle }: {
+  id: string; shots: Shot[]; activeId: string; onToggle: (id: string, shotId: string, on: boolean) => void;
+}) {
+  if (shots.length < 2) return null;
+  return (
+    <div className="mb-4">
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-faint">Used in</p>
+      <div className="flex flex-wrap gap-1">
+        {shots.map((x) => {
+          const on = inShot(x, id);
+          return (
+            <button
+              key={x.id}
+              type="button"
+              aria-pressed={on}
+              // The shot being looked at keeps it: taking it out of this shot is the rail's trash button.
+              disabled={x.id === activeId}
+              onClick={() => onToggle(id, x.id, !on)}
+              title={x.id === activeId ? "The shot you are on" : on ? `Take it out of ${x.code}` : `Use it in ${x.code}`}
+              className={`rounded-[7px] border px-2 py-0.5 text-xs font-semibold ${
+                on ? "border-accent bg-accent-soft text-accent" : "border-border text-text-muted hover:text-text"
+              } disabled:cursor-default`}
+            >
+              {x.code}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
