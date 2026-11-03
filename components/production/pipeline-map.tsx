@@ -28,6 +28,8 @@ export type PipelineMapProps = {
   input: MapInput;
   /** Signed thumbnail per generation id (resized copy preferred). */
   thumbs: Record<string, string>;
+  /** Playable URL per video generation id, drawn as its first frame. */
+  videos?: Record<string, string>;
   /** Signed sheet image per element id, if any. */
   elementThumbs?: Record<string, string>;
   cutThumb?: string | null;
@@ -44,6 +46,7 @@ const MAX_Z = 2;
 export function PipelineMap({
   input,
   thumbs,
+  videos = {},
   elementThumbs = {},
   cutThumb = null,
   positions,
@@ -283,6 +286,7 @@ export function PipelineMap({
                 key={n.id}
                 node={n}
                 thumb={thumbFor(n, thumbs, elementThumbs, cutThumb)}
+                video={n.id.startsWith("gen:") ? videos[n.id.slice(4)] ?? null : null}
                 selected={selected === n.id}
                 dim={!!lit && !lit.nodes.has(n.id)}
                 onPointerDown={(e) => onNodeDown(e, n)}
@@ -399,12 +403,14 @@ const TYPE_WORD: Record<string, string> = {
 function NodeCard({
   node: n,
   thumb,
+  video = null,
   selected,
   dim,
   onPointerDown,
 }: {
   node: MapNode;
   thumb: string | null;
+  video?: string | null;
   selected: boolean;
   dim: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
@@ -423,7 +429,11 @@ function NodeCard({
       {media ? (
         <div className="flex h-full flex-col">
           <div className="relative min-h-0 flex-1 bg-surface-2">
-            {thumb ? (
+            {!thumb && video ? (
+              // The first frame, not playback: metadata only, so a map of
+              // forty takes does not download forty clips.
+              <video src={`${video}#t=0.1`} preload="metadata" muted playsInline draggable={false} className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+            ) : thumb ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={thumb} alt="" draggable={false} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
             ) : (

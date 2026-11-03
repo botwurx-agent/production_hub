@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { assetStorage, signThumb } from "@/lib/asset-storage";
 import { loadGenerationCosts } from "@/lib/rates";
-import { requireStudioContext } from "@/lib/studio";
+import { canEditProject, requireStudioContext } from "@/lib/studio";
+import { parsePositions, type MapRef } from "@/lib/pipeline-map";
 import { loadCast } from "@/lib/cast-data";
 import { Card } from "@/components/ui/card";
 import { ProjectSubhead } from "@/components/projects/project-subhead";
@@ -52,6 +53,7 @@ export default async function PipelinePage({
 
   let prompts: AiPrompt[] = [];
   let generations: AiGeneration[] = [];
+  const refs: MapRef[] = [];
   if (shotIds.length) {
     const [{ data: p }, { data: g }] = await Promise.all([
       supabase.from("ai_prompts").select("*").in("shot_id", shotIds),
@@ -62,6 +64,16 @@ export default async function PipelinePage({
         .order("created_at", { ascending: true }),
     ]);
     prompts = (p ?? []) as AiPrompt[];
+    // Recorded inputs (start, end, motion, style...) are what the pipeline map
+    // draws its arrows from. Read once for the whole project.
+    const genIds = (g ?? []).map((r) => r.id);
+    for (let i = 0; i < genIds.length; i += 150) {
+      const { data: rf } = await supabase
+        .from("ai_generation_refs")
+        .select("generation_id, ref_generation_id, role")
+        .in("generation_id", genIds.slice(i, i + 150));
+      refs.push(...((rf ?? []) as MapRef[]));
+    }
     // Spend lives in its own studio-only table (migration 0074) and is merged
     // back on here. A collaborator's query returns nothing, so their rows
     // simply have no cost, with no check needed on this side.
@@ -125,6 +137,14 @@ export default async function PipelinePage({
       }),
   );
 
+  // Where the map was arranged by hand, shared by the whole team.
+  const { data: layout } = await supabase
+    .from("ai_map_layouts")
+    .select("positions")
+    .eq("project_id", params.id)
+    .maybeSingle();
+  const mapPositions = parsePositions(layout?.positions ?? {});
+
   // Only the viewer's own connection counts: the picker lists THEIR history.
   const { count: hfCount } = await supabase
     .from("email_accounts")
@@ -167,6 +187,9 @@ export default async function PipelinePage({
           castUses={cast.uses}
           hfConnected={(hfCount ?? 0) > 0}
           reviewingShotIds={reviewingShotIds}
+          generationRefs={refs}
+          mapPositions={mapPositions}
+          canEditMap={canEditProject(ctx, project.id)}
         />
       </Card>
     </div>
