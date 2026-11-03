@@ -9296,3 +9296,37 @@ Shot cockpit / Triage) was shown to the operator.
     level today). Higgsfield generate-in-app = agent-mediated (MCP) or their HTTP
     API, BYO-account; deferred (organize-first stays intact). The organize-the-
     fan-out trio (flexible refs + import + triage + library) is now complete.
+
+### Pipeline map (no migration) — FIXTURE BUILT, not yet on the real page
+Operator, 2026-11-03, inspired by Weavy (Figma): a broader-scope "chart/mat"
+view of everything on an AI job, with arrows between related assets.
+- IT MAPS, IT DOES NOT GENERATE. Weavy's canvas is a generation graph; ours is
+  a picture of what already happened, drawn from data the pipeline records:
+  element -> shot (ai_shot_cast), shot -> generation (dashed "from the prompt",
+  only when a generation has no recorded input), generation -> generation
+  (parent_start_id / parent_end_id + ai_generation_refs, labelled by role),
+  picked take -> master cut.
+- lib/pipeline-map.ts is pure (buildMap, lineage, withPositions,
+  parsePositions; scratchpad tests): automatic layout in columns Elements |
+  Shots | Images | Videos | Cut, one lane per shot, elements placed at the
+  average height of the shots that use them. Rejected candidates fold away
+  unless something was built FROM them (an arrow must never point at nothing).
+  lineage() walks up and down separately, so a sibling take is not lit.
+- components/production/pipeline-map.tsx: pan (drag), zoom (pinch/wheel,
+  non-passive listener), fit = fit WIDTH from the top (fitting a long job to
+  height lands at ~30%, unreadable). DRAG TO ARRANGE: a shot carries its whole
+  lane, Alt moves the shot alone; "Tidy up" returns to automatic. Positions are
+  overrides keyed by node id and come in/out through props
+  (positions/onPositionsChange), so storage is the page's choice. Click a node
+  to light its lineage + a detail card with Built from / Fed into / Open in
+  pipeline. Status words in the text colour, hue on the dot.
+- /dev/pipeline-map is the fixture (invented "Golden Hour" job), positions in
+  localStorage. NEXT: a Map toggle on the real pipeline page (the page does not
+  yet load ai_generation_refs, add that), and positions per project in the DB
+  (a small jsonb table, project-scoped read/edit split) so an arrangement is
+  shared by the team.
+- GENERATING FROM THE MAP was raised by the operator and is NOT built. It would
+  reuse the "Make it real" pattern (their own Higgsfield plan credits over MCP,
+  price shown before the press, result lands as a candidate with lineage
+  filled in), which does not contradict the 2026-10-10 decision, since that
+  refused generation billed to OUR account.
