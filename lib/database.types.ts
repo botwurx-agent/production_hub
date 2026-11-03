@@ -4302,6 +4302,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      ai_map_layouts: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          positions: Json;
+          updated_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          positions?: Json;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          positions?: Json;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       scene_setups: {
         Row: {
           id: string;

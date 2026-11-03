@@ -36,6 +36,10 @@ import type { CastReference, CastUse } from "@/lib/cast";
 import { MasterCutBand } from "@/components/production/master-cut-band";
 import { BatchReviewButton } from "@/components/production/batch-review-button";
 import { HiggsfieldBrowser } from "@/components/production/higgsfield-browser";
+import { PipelineMap } from "@/components/production/pipeline-map";
+import { saveMapLayout } from "@/app/(app)/projects/[id]/map-actions";
+import type { MapInput, MapPositions, MapRef } from "@/lib/pipeline-map";
+import { toast } from "@/components/ui/toast";
 import type { AssetWithVersions } from "@/components/projects/asset-types";
 import type { BatchReviewSummary } from "@/lib/batch-review";
 import type { AiScript, AiShot, AiPrompt, AiGeneration, AiPromptLibraryEntry } from "@/lib/database.types";
@@ -1191,7 +1195,16 @@ export function PipelineWorkspace({
   castUses = [],
   thumbUrls = {},
   hfConnected = false,
+  generationRefs = [],
+  mapPositions = {},
+  canEditMap = true,
 }: {
+  /** Recorded inputs between generations: the pipeline map's arrows. */
+  generationRefs?: MapRef[];
+  /** Where the team arranged the map by hand (overrides, by node id). */
+  mapPositions?: MapPositions;
+  /** Presentation only: RLS refuses a reviewer's save either way. */
+  canEditMap?: boolean;
   projectId: string;
   studioId: string;
   /** The viewer has their own Higgsfield connected. */
@@ -1233,6 +1246,17 @@ export function PipelineWorkspace({
         .filter((r): r is CastReference => Boolean(r));
   }, [castReferences, castUses]);
   const [scriptOpen, setScriptOpen] = useState(false);
+  // The map remembers whether it was open, per browser: somebody who works
+  // from the map should not have to open it every visit.
+  const [mapOpen, setMapOpenState] = useState(false);
+  useEffect(() => {
+    try { if (localStorage.getItem("pipeline.mapOpen") === "1") setMapOpenState(true); } catch {}
+  }, []);
+  const setMapOpen = (v: boolean) => {
+    setMapOpenState(v);
+    try { localStorage.setItem("pipeline.mapOpen", v ? "1" : "0"); } catch {}
+  };
+  const [positions, setPositions] = useState<MapPositions>(mapPositions);
   const cutVersions = masterCut?.versions?.length ?? 0;
   const [cutOpen, setCutOpen] = useState<boolean>(cutVersions > 0);
 
@@ -1344,6 +1368,81 @@ export function PipelineWorkspace({
     return m;
   }, [generations, shots, media, thumbUrls]);
 
+  // Everything the map draws, from data this page already holds.
+  const mapInput = useMemo<MapInput>(() => ({
+    shots: displayShots.map((s) => ({
+      id: s.id, position: s.position, title: s.title, status: s.status,
+      method: s.method, stage: s.stage, input_mode: s.input_mode,
+    })),
+    generations: generations
+      .filter((g): g is AiGeneration & { shot_id: string } => Boolean(g.shot_id))
+      .map((g) => ({
+        id: g.id, shot_id: g.shot_id, stage: g.stage, kind: g.kind, status: g.status,
+        role: g.role, starred: g.starred, platform: g.platform, model: g.model,
+        prompt: g.prompt, parent_start_id: g.parent_start_id, parent_end_id: g.parent_end_id,
+        created_at: g.created_at,
+      })),
+    refs: generationRefs,
+    elements: castReferences.map((r) => ({ id: r.id, name: r.name, kind: r.kind })),
+    uses: castUses,
+    cut: masterCut
+      ? {
+          name: masterCut.name,
+          versions: masterCut.versions.map((v) => {
+            const latest = [...v.approvals].sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+            return {
+              id: v.id,
+              version_number: v.version_number,
+              review: !latest ? null : latest.status === "approved" ? "approved" : latest.status === "changes_requested" ? "changes" : "pending",
+            };
+          }),
+        }
+      : null,
+    reviewingShotIds,
+  }), [displayShots, generations, generationRefs, castReferences, castUses, masterCut, reviewingShotIds]);
+
+  const mapThumbs = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const g of generations) {
+      if (g.kind === "video" || g.kind === "audio") continue;
+      const u = thumbUrls[g.id] ?? media[g.id] ?? (g.external_url && /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(g.external_url) ? g.external_url : null);
+      if (u) out[g.id] = u;
+    }
+    return out;
+  }, [generations, thumbUrls, media]);
+  const mapVideos = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const g of generations) {
+      if (g.kind !== "video") continue;
+      const u = media[g.id] ?? (g.external_url && /\.(mp4|webm|mov)(\?|$)/i.test(g.external_url) ? g.external_url : null);
+      if (u) out[g.id] = u;
+    }
+    return out;
+  }, [generations, media]);
+  const elementThumbs = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const r of castReferences) {
+      const sheet = r.sheets[0];
+      if (sheet) out[r.id] = sheet.thumbUrl ?? sheet.url;
+    }
+    return out;
+  }, [castReferences]);
+  const cutLatest = masterCut ? [...masterCut.versions].sort((a, b) => b.version_number - a.version_number)[0] : null;
+
+  function saveLayout(next: MapPositions) {
+    setPositions(next);
+    if (!canEditMap) return;
+    void saveMapLayout(projectId, next).then((r) => {
+      if (!r || "error" in r) toast(r && "error" in r ? r.error : "Could not save the arrangement.", "error");
+    });
+  }
+
+  function openShotFromMap(shotId: string) {
+    setActiveId(shotId);
+    setMapOpen(false);
+    requestAnimationFrame(() => document.getElementById("pipeline-shot")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   return (
     <div className="space-y-5">
       {/* Controls */}
@@ -1362,6 +1461,17 @@ export function PipelineWorkspace({
           <span className="grid h-6 w-6 place-items-center rounded-[7px]" style={{ background: "var(--h-green-bg)", color: "var(--h-green)" }}>▦</span>
           Master cut
           {cutVersions > 0 && <span className="rounded-[6px] bg-surface-2 px-1.5 text-xs font-bold text-text-muted">v{cutVersions}</span>}
+        </button>
+        <button onClick={() => setMapOpen(!mapOpen)}
+          aria-pressed={mapOpen}
+          className={`flex items-center gap-2 rounded-[11px] border px-3 py-2 text-sm font-bold transition ${
+            mapOpen ? "border-border-strong text-text" : "border-border text-text hover:border-border-strong"
+          }`}
+          title="Everything on this job as one map, with what was built from what">
+          <span className="grid h-6 w-6 place-items-center rounded-[7px]" style={{ background: "var(--h-cyan-bg)", color: "var(--h-cyan)" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="6" r="2.5" /><circle cx="19" cy="6" r="2.5" /><circle cx="12" cy="18" r="2.5" /><path d="M7.5 6h9M6.5 8.2l4.2 7.6M17.5 8.2l-4.2 7.6" /></svg>
+          </span>
+          Map <span className="text-xs font-normal text-text-faint">{mapOpen ? "hide" : "show"}</span>
         </button>
         <span className="flex-1" />
         <Button size="sm" onClick={() => newShot("generated")}>+ Generated shot</Button>
@@ -1384,6 +1494,21 @@ export function PipelineWorkspace({
           activeId={activeId}
           onSelect={setActiveId}
           onReorder={(ids) => run(() => reorderShots(projectId, ids))}
+        />
+      )}
+
+      {/* The map: the whole job as a graph, arranged automatically or by hand */}
+      {mapOpen && shots.length > 0 && (
+        <PipelineMap
+          input={mapInput}
+          thumbs={mapThumbs}
+          videos={mapVideos}
+          elementThumbs={elementThumbs}
+          cutThumb={cutLatest?.thumbUrl ?? cutLatest?.posterUrl ?? null}
+          positions={positions}
+          onPositionsChange={saveLayout}
+          onOpenShot={openShotFromMap}
+          heightClass="h-[calc(100dvh-260px)] min-h-[480px]"
         />
       )}
 
@@ -1412,7 +1537,7 @@ export function PipelineWorkspace({
         // key by shot id: remount the whole shot editor when you switch shots so
         // every field (title, beat, working prompt, model) re-seeds from THIS
         // shot's data instead of carrying the previous shot's local state over.
-        <div key={active.id} className="space-y-4">
+        <div key={active.id} id="pipeline-shot" className="scroll-mt-4 space-y-4">
             {/* Shot header */}
             <div className="rounded-[14px] border border-border p-4">
               <div className="flex flex-wrap items-center gap-2">

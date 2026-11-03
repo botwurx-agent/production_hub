@@ -1459,7 +1459,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0126. Recent: 0126 =
+files in supabase/migrations. THROUGH 0127. Recent: 0127 =
+ai_map_layouts (pipeline map arrangement per project, jsonb overrides,
+0093 read/edit split); 0126 =
 deliverable_delivered_on (deliverables.delivered_on, the day it was
 delivered, beside due_date); 0125 =
 delivery_files (final deliverable files on a project, 0093 read/edit split)
@@ -9297,7 +9299,7 @@ Shot cockpit / Triage) was shown to the operator.
     API, BYO-account; deferred (organize-first stays intact). The organize-the-
     fan-out trio (flexible refs + import + triage + library) is now complete.
 
-### Pipeline map (no migration) — FIXTURE BUILT, not yet on the real page
+### Pipeline map (migration 0127) — BUILT, on the AI Pipeline page
 Operator, 2026-11-03, inspired by Weavy (Figma): a broader-scope "chart/mat"
 view of everything on an AI job, with arrows between related assets.
 - IT MAPS, IT DOES NOT GENERATE. Weavy's canvas is a generation graph; ours is
@@ -9321,10 +9323,25 @@ view of everything on an AI job, with arrows between related assets.
   to light its lineage + a detail card with Built from / Fed into / Open in
   pipeline. Status words in the text colour, hue on the dot.
 - /dev/pipeline-map is the fixture (invented "Golden Hour" job), positions in
-  localStorage. NEXT: a Map toggle on the real pipeline page (the page does not
-  yet load ai_generation_refs, add that), and positions per project in the DB
-  (a small jsonb table, project-scoped read/edit split) so an arrangement is
-  shared by the team.
+  localStorage.
+- ON THE REAL PAGE (2026-11-03): a "Map" toggle in the pipeline controls
+  (beside Script, Library, Master cut) opens the map between the sequence strip
+  and the master cut band; open/closed is remembered per browser
+  ("pipeline.mapOpen"). The page now loads ai_generation_refs (batched 150 ids
+  per .in()), so the arrows include motion/style/character inputs, not only
+  start and end frames. Video takes draw their first frame (preload metadata,
+  `#t=0.1`) rather than a placeholder. "Open in pipeline" selects the shot,
+  closes the map and scrolls to the cockpit.
+- `ai_map_layouts` (0127): ONE ROW PER PROJECT, `positions` jsonb of
+  overrides, so an arrangement is shared by the team. RLS is the 0093 split
+  (anyone on the job reads, editors write). saveMapLayout
+  (app/(app)/projects/[id]/map-actions.ts) upserts on drag RELEASE only and
+  deliberately does NOT revalidate (the moodboard #482 lesson); parsePositions
+  is the trust boundary both ways. A reviewer can still arrange it for the
+  session; the save is skipped (canEditMap) and RLS would refuse it anyway.
+- NOT VERIFIED against the live database from a session (Supabase is not
+  reachable here): tsc and a production build are clean and the policies were
+  read back. The first real open of a project's map is the test.
 - GENERATING FROM THE MAP was raised by the operator and is NOT built. It would
   reuse the "Make it real" pattern (their own Higgsfield plan credits over MCP,
   price shown before the press, result lands as a candidate with lineage
