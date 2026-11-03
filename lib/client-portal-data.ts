@@ -19,6 +19,16 @@ export type PortalItem = {
   dueDate: string | null;
   sharedAt: string;
   thumbUrl: string | null;
+  /**
+   * Up to three pictures for a storyboard or moodboard, drawn as a strip so
+   * the card reads as the board it opens rather than as a file icon.
+   */
+  frameUrls: string[];
+  /**
+   * A video with no stored poster: the card draws the video itself, paused on
+   * its opening frame, so a cut looks like a cut. Signed for an hour.
+   */
+  videoUrl: string | null;
   /** Drawn when there is no thumbnail: image | video | audio | doc. */
   glyph: "image" | "video" | "audio" | "doc";
 };
@@ -175,7 +185,61 @@ export async function buildPortalView(
     if (v.storage_path && v.mime_type?.startsWith("image/")) return [v.storage_path];
     return [];
   });
-  const thumbs = await signThumbs(thumbPaths);
+  // A board's first pictures, so its card shows the board. Frames in order
+  // for a storyboard; image cards top-down, left to right for a moodboard.
+  const storyboardIds = docLinks
+    .filter((l) => l.target_type === "storyboard")
+    .map((l) => l.target_id as string);
+  const moodboardIds = docLinks
+    .filter((l) => l.target_type === "moodboard")
+    .map((l) => l.target_id as string);
+  const [{ data: frames }, { data: boardImages }] = await Promise.all([
+    storyboardIds.length
+      ? service
+          .from("storyboard_frames")
+          .select("board_id, position, storage_path")
+          .in("board_id", storyboardIds)
+          .not("storage_path", "is", null)
+          .order("position", { ascending: true })
+      : Promise.resolve({ data: [] as { board_id: string; position: number; storage_path: string | null }[] }),
+    moodboardIds.length
+      ? service
+          .from("board_items")
+          .select("board_id, storage_path, mime_type, y, x")
+          .in("board_id", moodboardIds)
+          .eq("kind", "image")
+          .is("parent_id", null)
+          .not("storage_path", "is", null)
+          .order("y", { ascending: true })
+          .order("x", { ascending: true })
+      : Promise.resolve({ data: [] as { board_id: string; storage_path: string | null; mime_type: string | null; y: number; x: number }[] }),
+  ]);
+  const boardPictures = new Map<string, string[]>();
+  for (const f of [...(frames ?? []), ...(boardImages ?? [])]) {
+    if (!f.storage_path) continue;
+    const list = boardPictures.get(f.board_id) ?? [];
+    if (list.length < 3) list.push(f.storage_path);
+    boardPictures.set(f.board_id, list);
+  }
+  const boardPaths = [...boardPictures.values()].flat();
+
+  // Videos with no poster are drawn from the file itself (see videoUrl).
+  const videoPaths = (versions ?? [])
+    .filter((v) => !v.poster_path && v.storage_path && v.mime_type?.startsWith("video/"))
+    .map((v) => v.storage_path as string);
+
+  const [thumbs, boardThumbs, videoSigned] = await Promise.all([
+    signThumbs(thumbPaths),
+    signThumbs(boardPaths, 420),
+    videoPaths.length
+      ? assetStorage().createSignedUrls(videoPaths, 60 * 60)
+      : Promise.resolve({ data: [] as { path: string | null; signedUrl: string }[] }),
+  ]);
+  const videoUrlByPath = new Map(
+    (videoSigned.data ?? [])
+      .filter((r) => r.path && r.signedUrl)
+      .map((r) => [r.path as string, r.signedUrl])
+  );
 
   const decision = (linkId: string, targetId: string | null | undefined) =>
     (approvals ?? []).find((a) => a.review_link_id === linkId && a.target_id === targetId)
@@ -200,6 +264,11 @@ export async function buildPortalView(
       dueDate: l.due_date,
       sharedAt: l.created_at,
       thumbUrl: thumbPath ? (thumbs.get(thumbPath) ?? null) : null,
+      frameUrls: [],
+      videoUrl:
+        !thumbPath && v?.storage_path && v.mime_type?.startsWith("video/")
+          ? (videoUrlByPath.get(v.storage_path) ?? null)
+          : null,
       glyph: glyphFor(v?.mime_type ?? null),
     });
   }
@@ -224,6 +293,10 @@ export async function buildPortalView(
       dueDate: l.due_date,
       sharedAt: l.created_at,
       thumbUrl: null,
+      frameUrls: (boardPictures.get(id) ?? [])
+        .map((p) => boardThumbs.get(p))
+        .filter((u): u is string => Boolean(u)),
+      videoUrl: null,
       glyph: "doc",
     });
   }

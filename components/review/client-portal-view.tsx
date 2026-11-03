@@ -175,6 +175,47 @@ function ItemCard({
             loading="lazy"
             className="absolute inset-0 h-full w-full object-cover"
           />
+        ) : item.videoUrl ? (
+          <>
+            {/* Paused on its opening frame: metadata only, no autoplay, so a
+                grid of cuts costs a few hundred KB rather than the files. The
+                #t fragment skips the black first frame most cuts open on. */}
+            <video
+              src={`${item.videoUrl}#t=0.5`}
+              muted
+              playsInline
+              preload="metadata"
+              controlsList="nodownload"
+              disablePictureInPicture
+              tabIndex={-1}
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            />
+            <span
+              aria-hidden
+              className="absolute left-1/2 top-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white shadow-md transition group-hover:scale-105"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5.5v13l11-6.5z" />
+              </svg>
+            </span>
+          </>
+        ) : item.frameUrls.length > 0 ? (
+          <div
+            className="absolute inset-0 grid gap-px bg-border"
+            style={{ gridTemplateColumns: `repeat(${item.frameUrls.length}, minmax(0, 1fr))` }}
+          >
+            {item.frameUrls.map((u, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={u}
+                alt=""
+                loading="lazy"
+                className="h-full w-full bg-surface-2 object-cover"
+              />
+            ))}
+          </div>
         ) : (
           <div className="absolute inset-0 grid place-items-center text-text-faint">
             <Glyph kind={item.glyph} />
