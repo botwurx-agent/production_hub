@@ -24,5 +24,14 @@ export function createServiceClient() {
   }
   return createSupabaseClient<Database>(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    // Never cached. supabase-js reads through the global fetch, which Next
+    // patches into its Data Cache, and a public page such as the client
+    // portal was found serving a version and approvals the database no
+    // longer held. Everything this client reads is a live answer to "where
+    // does this stand", so a cached one is a wrong one.
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 }
