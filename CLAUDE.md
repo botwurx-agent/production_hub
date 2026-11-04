@@ -8149,6 +8149,15 @@ the side window to the dog, out through the windshield, ending ahead.
   onto every key and zeroes it, so a saved scene looks the same on load.
   Verified in Chromium on the coast road: pan at key 3, keys 1, 2 and 4 still
   centred, key 3 keeps its 6.9 degrees.
+- VEHICLES HAVE REAL ROWS (2026-11-04, operator: the coast road SUV had four
+  rows and "looks like a trolley"). The row count was derived from cabin length
+  (round(cabD / 0.95)), which gave the SUV 4 and the van 5. Each vehicle now
+  states its rows in build.ts: car 2, pickup 2 (crew cab), van 1 plus a cargo
+  floor, SUV 2 plus a cargo floor by default with a "Seating" choice of three
+  rows (BlockObject.seats, from BlockKind.seats; part of the mesh cache key).
+  Seats are 0.95 m apart from 0.55 m behind the windscreen; the front row is
+  two buckets, a rear row is a bench. The coast road's dog moved onto the rear
+  bench behind the passenger; a scene saved before keeps its dog where it was.
 - SEND TO PIPELINE (BUILT, 2026-11-04, no migration). Export > "Send to the
   pipeline..." opens a window with a SHOT PICKER (the project's generated
   shots, the one this scene was sent to before picked first and marked "sent

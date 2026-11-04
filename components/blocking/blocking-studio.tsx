@@ -616,7 +616,7 @@ export function BlockingStudio({
     const seen = new Set<string>();
     for (const o of s.objects) {
       seen.add(o.id);
-      const key = `${s.look}|${o.kind}|${o.size.join(",")}|${o.color}|${o.pose ?? ""}`;
+      const key = `${s.look}|${o.kind}|${o.size.join(",")}|${o.color}|${o.pose ?? ""}|${o.seats ?? ""}`;
       let rec = e.meshes.get(o.id);
       if (!rec || rec.key !== key) {
         if (rec) e.world.objects.remove(rec.g);

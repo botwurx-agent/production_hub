@@ -364,6 +364,13 @@ function ObjectPanel({ api, id }: { api: StudioApi; id: string }) {
             </Select>
           </Row>
         )}
+        {k.seats && (
+          <Row label="Seating">
+            <Select value={o.seats ?? k.seats[0].id} onChange={(v) => api.updateObject(o.id, { seats: v })} disabled={dis}>
+              {k.seats.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </Select>
+          </Row>
+        )}
         <Row label="Rides with">
           <Select value={o.parent ?? ""} onChange={(v) => api.setParent(o.id, v || null)} disabled={dis}>
             <option value="">Nothing</option>

@@ -50,13 +50,13 @@ export function coastRoadScene(): BlockScene {
     { t: 12, p: [1.8, 0, 70], r: [0, 0, 0], ease: "linear" },
   ];
   // In the car's own coordinates: the front row is about 0.9 m ahead of its
-  // middle, the dog sits in the third row.
-  obj("person", [-0.45, 0.5, 0.9], 0, used, { name: "Driver", pose: "seated", parent: car.id, size: [0.5, 1.78, 0.3] });
-  obj("person", [0.45, 0.5, 0.9], 0, used, { name: "Passenger", pose: "seated", parent: car.id, size: [0.5, 1.68, 0.3] });
-  const dog = obj("dog", [0, 0.92, -0.5], 0, used, { name: "Dog", pose: "seated", parent: car.id });
+  // middle, the dog sits on the rear bench behind the passenger.
+  obj("person", [-0.45, 0.5, 0.88], 0, used, { name: "Driver", pose: "seated", parent: car.id, size: [0.5, 1.78, 0.3] });
+  obj("person", [0.45, 0.5, 0.88], 0, used, { name: "Passenger", pose: "seated", parent: car.id, size: [0.5, 1.68, 0.3] });
+  const dog = obj("dog", [0.4, 0.92, -0.07], 0, used, { name: "Dog", pose: "seated", parent: car.id });
   s.objects = used;
   s.camera.parent = car.id;
-  const dogHead: Vec3 = [0, 1.55, -0.4];
+  const dogHead: Vec3 = [0.4, 1.5, 0.1];
   s.camera.keys = [
     ck(0, [0.6, 1.7, -11], [0, 1.2, 0], 28),
     ck(2.5, [-3.2, 1.5, -2.2], [0, 1.2, 0], 28),

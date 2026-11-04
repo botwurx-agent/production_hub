@@ -45,6 +45,8 @@ export type BlockObject = {
   /** Rides along with another object (a passenger in a car). */
   parent?: string | null;
   hidden?: boolean;
+  /** Vehicles: which seating layout is drawn (an SUV with two or three rows). */
+  seats?: string;
 };
 
 export type Shake = { amount: number; speed: number };
@@ -146,6 +148,8 @@ export type BlockKind = {
   hint: string;
   /** Sits on the ground by default (y = 0). Water and sky pieces do not. */
   poses?: string[];
+  /** Vehicles with a choice of seating, first is the default. */
+  seats?: { id: string; name: string }[];
 };
 
 const FT = 0.3048;
@@ -154,7 +158,7 @@ export const BLOCK_KINDS: BlockKind[] = [
   { kind: "child", name: "Child", category: "people", size: [0.35, 1.2, 0.22], color: "#e3b26b", hint: "About eight years old", poses: ["standing", "walking", "seated", "pointing", "arms-crossed", "kneeling"] },
   { kind: "dog", name: "Dog", category: "people", size: [0.32, 0.7, 0.95], color: "#b99a72", hint: "A large dog, sitting or standing", poses: ["standing", "seated"] },
   { kind: "car", name: "Car", category: "vehicles", size: [1.85, 1.45, 4.7], color: "#e7e5df", hint: "A sedan, open cabin with seats" },
-  { kind: "suv", name: "SUV", category: "vehicles", size: [2.0, 1.85, 5.1], color: "#e7e5df", hint: "Three rows, open cabin with seats" },
+  { kind: "suv", name: "SUV", category: "vehicles", size: [2.0, 1.85, 5.1], color: "#e7e5df", hint: "Two rows and a cargo area, or three rows", seats: [{ id: "two", name: "Two rows + cargo" }, { id: "three", name: "Three rows" }] },
   { kind: "van", name: "Van", category: "vehicles", size: [2.05, 2.3, 5.6], color: "#d7d3ca", hint: "A panel van" },
   { kind: "truck", name: "Pickup", category: "vehicles", size: [2.05, 1.95, 5.9], color: "#9aa7b4", hint: "A pickup with an open bed" },
   { kind: "bike", name: "Motorbike", category: "vehicles", size: [0.8, 1.15, 2.1], color: "#3a3d44", hint: "With or without a rider" },
@@ -207,6 +211,7 @@ export function newObject(kind: string, p: Vec3 = [0, 0, 0], yaw = 0, used: Bloc
     size: [...k.size] as Vec3,
     keys: [{ t: 0, p, r: [yaw, 0, 0], ease: "smooth" }],
     pose: k.poses?.[0],
+    seats: k.seats?.[0].id,
     parent: null,
   };
 }
@@ -308,6 +313,7 @@ export function asBlockScene(raw: unknown): BlockScene | null {
       size: vec(r.size, bk.size, 0.01, 2000),
       keys,
       pose: bk.poses ? (bk.poses.includes(r.pose as string) ? (r.pose as string) : bk.poses[0]) : undefined,
+      seats: bk.seats ? (bk.seats.some((x) => x.id === r.seats) ? (r.seats as string) : bk.seats[0].id) : undefined,
       parent: typeof r.parent === "string" ? r.parent : null,
       hidden: r.hidden === true,
     });

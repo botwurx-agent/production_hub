@@ -47,8 +47,10 @@ function part(geo: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0)
 const box = (w: number, h: number, d: number, m: THREE.Material, x = 0, y = 0, z = 0) =>
   part(new THREE.BoxGeometry(w, h, d), m, x, y, z);
 
+const SEAT_PITCH = 0.95;
+
 /** A car-like body: lower hull, open cabin (pillars and a roof), seats, wheels. */
-function vehicle(o: BlockObject, paint: Paint, opts: { cab: number; cabStart: number; bed?: boolean; tall?: boolean }) {
+function vehicle(o: BlockObject, paint: Paint, opts: { cab: number; cabStart: number; rows: number; cargo?: boolean; bed?: boolean; tall?: boolean }) {
   const [W, H, D] = o.size;
   const g = new THREE.Group();
   const wheelR = Math.min(0.4, H * 0.24);
@@ -65,14 +67,31 @@ function vehicle(o: BlockObject, paint: Paint, opts: { cab: number; cabStart: nu
     g.add(box(pillar, cabH, pillar, paint(0.82), sx * (W / 2 - pillar / 2), hullH + cabH / 2, cabZ + sz * (cabD / 2 - pillar / 2)));
   }
   g.add(box(W, 0.07, cabD, paint(1), 0, H - 0.035, cabZ));
-  // Seats in rows.
-  const rows = Math.max(1, Math.round(cabD / 0.95));
-  for (let r = 0; r < rows; r++) {
-    const z = cabZ + cabD / 2 - 0.45 - r * (cabD - 0.4) / Math.max(1, rows);
-    for (const sx of [-1, 1]) {
-      g.add(box(W * 0.34, 0.14, 0.5, paint(0.6), sx * W * 0.22, hullH + 0.05, z));
-      g.add(box(W * 0.34, 0.6, 0.12, paint(0.6), sx * W * 0.22, hullH + 0.35, z - 0.26));
+  // Seats in real rows, spaced as a car is (about 0.95 m seat to seat), so a
+  // sedan has two, an SUV two plus a cargo area (or three), a panel van one.
+  // The count is the vehicle's, never derived from cabin length: that gave an
+  // SUV four rows and a van five, which read as a tram.
+  const front = cabZ + cabD / 2 - 0.55;
+  const seatTop = hullH + 0.12;
+  for (let r = 0; r < opts.rows; r++) {
+    const z = front - r * SEAT_PITCH;
+    if (r === 0) {
+      for (const sx of [-1, 1]) {
+        g.add(box(W * 0.34, 0.14, 0.5, paint(0.6), sx * W * 0.22, hullH + 0.05, z));
+        g.add(box(W * 0.34, 0.6, 0.12, paint(0.6), sx * W * 0.22, hullH + 0.35, z - 0.26));
+      }
+    } else {
+      // A rear row is a bench across the car.
+      g.add(box(W * 0.8, 0.14, 0.5, paint(0.6), 0, hullH + 0.05, z));
+      g.add(box(W * 0.8, 0.58, 0.12, paint(0.6), 0, hullH + 0.34, z - 0.26));
     }
+  }
+  // Behind the last row: a cargo floor (SUV, van) up to the tailgate.
+  const lastBack = front - (opts.rows - 1) * SEAT_PITCH - 0.32;
+  const cabBack = cabZ - cabD / 2;
+  if (opts.cargo && lastBack - cabBack > 0.3) {
+    const len = lastBack - cabBack - 0.05;
+    g.add(box(W * 0.86, 0.04, len, paint(0.7), 0, seatTop - 0.1, cabBack + 0.05 + len / 2));
   }
   // Dash and wheel.
   g.add(box(W * 0.9, 0.22, 0.3, paint(0.5), 0, hullH + 0.1, cabZ + cabD / 2 - 0.1));
@@ -271,10 +290,10 @@ export function buildObject(o: BlockObject, look: Look): THREE.Group {
   switch (o.kind) {
     case "person": case "child": g = person(o, paint); break;
     case "dog": g = dog(o, paint); break;
-    case "car": g = vehicle(o, paint, { cab: 0.48, cabStart: 0.28 }); break;
-    case "suv": g = vehicle(o, paint, { cab: 0.66, cabStart: 0.22, tall: false }); break;
-    case "van": g = vehicle(o, paint, { cab: 0.8, cabStart: 0.12, tall: true }); break;
-    case "truck": g = vehicle(o, paint, { cab: 0.38, cabStart: 0.24, bed: true }); break;
+    case "car": g = vehicle(o, paint, { cab: 0.48, cabStart: 0.28, rows: 2 }); break;
+    case "suv": g = vehicle(o, paint, { cab: 0.66, cabStart: 0.22, rows: o.seats === "three" ? 3 : 2, cargo: true, tall: false }); break;
+    case "van": g = vehicle(o, paint, { cab: 0.8, cabStart: 0.12, rows: 1, cargo: true, tall: true }); break;
+    case "truck": g = vehicle(o, paint, { cab: 0.38, cabStart: 0.24, rows: 2, bed: true }); break;
     case "bike": g = bike(o, paint); break;
     case "road": g = road(o, paint); break;
     case "hill": g = hill(o, paint, false); break;
