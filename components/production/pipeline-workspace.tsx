@@ -1408,6 +1408,13 @@ export function PipelineWorkspace({
       const u = thumbUrls[g.id] ?? media[g.id] ?? (g.external_url && /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(g.external_url) ? g.external_url : null);
       if (u) out[g.id] = u;
     }
+    // A take has no still of its own, and a video element per card is what
+    // runs a phone out of memory, so a take wears the frame it started from.
+    for (const g of generations) {
+      if (g.kind !== "video" || out[g.id]) continue;
+      const start = g.parent_start_id ? out[g.parent_start_id] : undefined;
+      if (start) out[g.id] = start;
+    }
     return out;
   }, [generations, thumbUrls, media]);
   const mapVideos = useMemo(() => {

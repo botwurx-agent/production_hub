@@ -9342,6 +9342,15 @@ view of everything on an AI job, with arrows between related assets.
 - NOT VERIFIED against the live database from a session (Supabase is not
   reachable here): tsc and a production build are clean and the policies were
   read back. The first real open of a project's map is the test.
+- PHONES CRASHED IT (2026-11-04, Zelvara, 85 generations): scrolling the map
+  on an iPhone closed the tab ("Can't open this page" = out of memory). Every
+  video take mounted its own <video>, and every card loaded its picture
+  whether on screen or not. Now pictures load only for cards in view (plus a
+  margin, MEDIA_MARGIN), a touch device mounts NO video elements and a
+  desktop at most eight, and a take with no still wears its START FRAME's
+  thumbnail. Two-finger pinch zoom on touch was added at the same time (it was
+  wheel-only). Verified in Chromium with iPhone emulation: pan and pinch work,
+  images drop from 19 to 1 when zoomed in, zero videos.
 - GENERATING FROM THE MAP was raised by the operator and is NOT built. It would
   reuse the "Make it real" pattern (their own Higgsfield plan credits over MCP,
   price shown before the press, result lands as a candidate with lineage

@@ -42,6 +42,13 @@ export type PipelineMapProps = {
 
 const MIN_Z = 0.2;
 const MAX_Z = 2;
+// Pictures load only for cards on screen (plus this margin, in map units), so
+// a job of a hundred takes holds a screenful of images rather than all of
+// them. A phone that held them all ran out of memory and lost the tab.
+const MEDIA_MARGIN = 360;
+// A <video> is a decoder each, and a phone gets none: a take with no still of
+// its own shows its start frame, or a play mark.
+const MAX_VIDEOS = 8;
 
 export function PipelineMap({
   input,
@@ -77,6 +84,30 @@ export function PipelineMap({
   const [view, setView] = useState({ x: 0, y: 0, z: 0.8 });
   const viewRef = useRef(view);
   viewRef.current = view;
+
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setStageSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    try {
+      setCoarse(window.matchMedia("(pointer: coarse)").matches);
+    } catch {}
+  }, []);
+  // The visible part of the map, in map units, with a margin either side.
+  const seen = {
+    l: -view.x / view.z - MEDIA_MARGIN,
+    t: -view.y / view.z - MEDIA_MARGIN,
+    r: (stageSize.w - view.x) / view.z + MEDIA_MARGIN,
+    b: (stageSize.h - view.y) / view.z + MEDIA_MARGIN,
+  };
+  const onScreen = (n: MapNode) =>
+    stageSize.w > 0 && n.x + n.w >= seen.l && n.x <= seen.r && n.y + n.h >= seen.t && n.y <= seen.b;
 
   const fit = useCallback(() => {
     const el = stageRef.current;
@@ -137,11 +168,37 @@ export function PipelineMap({
   };
 
   // ------------------------------------------------------------- dragging --
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
   const drag = useRef<
+    | { kind: "pinch"; d0: number; z0: number; mx: number; my: number; vx: number; vy: number }
     | { kind: "pan"; sx: number; sy: number; vx: number; vy: number; moved: boolean }
     | { kind: "node"; sx: number; sy: number; ids: string[]; start: MapPositions; moved: boolean; clicked: string }
     | null
   >(null);
+
+  // Every finger is tracked before a card sees it, so a second finger turns
+  // whatever the first one started into a pinch.
+  const onStageDownCapture = (e: React.PointerEvent) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size !== 2) return;
+    e.stopPropagation();
+    const el = stageRef.current;
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    const [a, b] = [...pointers.current.values()];
+    const r = el.getBoundingClientRect();
+    const v = viewRef.current;
+    setLive(null);
+    drag.current = {
+      kind: "pinch",
+      d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      z0: v.z,
+      mx: (a.x + b.x) / 2 - r.left,
+      my: (a.y + b.y) / 2 - r.top,
+      vx: v.x,
+      vy: v.y,
+    };
+  };
 
   const onStageDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -168,8 +225,23 @@ export function PipelineMap({
   };
 
   const onMove = (e: React.PointerEvent) => {
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const d = drag.current;
     if (!d) return;
+    if (d.kind === "pinch") {
+      const pts = [...pointers.current.values()];
+      if (pts.length < 2) return;
+      const [a, b] = pts;
+      const el = stageRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const z = Math.max(MIN_Z, Math.min(MAX_Z, d.z0 * (Math.hypot(a.x - b.x, a.y - b.y) / d.d0)));
+      const mx = (a.x + b.x) / 2 - r.left;
+      const my = (a.y + b.y) / 2 - r.top;
+      // The point under the fingers stays under them, and moving both pans.
+      setView({ z, x: mx - ((d.mx - d.vx) / d.z0) * z, y: my - ((d.my - d.vy) / d.z0) * z });
+      return;
+    }
     const dx = e.clientX - d.sx;
     const dy = e.clientY - d.sy;
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
@@ -184,8 +256,14 @@ export function PipelineMap({
     }
   };
 
-  const onUp = () => {
+  const onUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
     const d = drag.current;
+    if (d?.kind === "pinch") {
+      // Lifting one finger ends the pinch; the other does nothing until lifted.
+      if (pointers.current.size === 0) drag.current = null;
+      return;
+    }
     drag.current = null;
     if (!d) return;
     if (d.kind === "pan") {
@@ -271,6 +349,7 @@ export function PipelineMap({
             backgroundSize: `${20 * view.z}px ${20 * view.z}px`,
             backgroundPosition: `${view.x}px ${view.y}px`,
           }}
+          onPointerDownCapture={onStageDownCapture}
           onPointerDown={onStageDown}
           onPointerMove={onMove}
           onPointerUp={onUp}
@@ -281,17 +360,29 @@ export function PipelineMap({
             style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, width: graph.width, height: graph.height }}
           >
             <Edges edges={graph.edges} byId={byId} lit={lit?.edges ?? null} />
-            {graph.nodes.map((n) => (
-              <NodeCard
-                key={n.id}
-                node={n}
-                thumb={thumbFor(n, thumbs, elementThumbs, cutThumb)}
-                video={n.id.startsWith("gen:") ? videos[n.id.slice(4)] ?? null : null}
-                selected={selected === n.id}
-                dim={!!lit && !lit.nodes.has(n.id)}
-                onPointerDown={(e) => onNodeDown(e, n)}
-              />
-            ))}
+            {(() => {
+              let videoSlots = coarse ? 0 : MAX_VIDEOS;
+              return graph.nodes.map((n) => {
+                const visible = onScreen(n);
+                const thumb = visible ? thumbFor(n, thumbs, elementThumbs, cutThumb) : null;
+                let video: string | null = null;
+                if (visible && !thumb && videoSlots > 0 && n.id.startsWith("gen:")) {
+                  video = videos[n.id.slice(4)] ?? null;
+                  if (video) videoSlots -= 1;
+                }
+                return (
+                  <NodeCard
+                    key={n.id}
+                    node={n}
+                    thumb={thumb}
+                    video={video}
+                    selected={selected === n.id}
+                    dim={!!lit && !lit.nodes.has(n.id)}
+                    onPointerDown={(e) => onNodeDown(e, n)}
+                  />
+                );
+              });
+            })()}
           </div>
         </div>
 
