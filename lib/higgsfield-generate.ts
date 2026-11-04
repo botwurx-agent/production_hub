@@ -33,13 +33,18 @@ export type GenModel = {
   roles: { start?: string; end?: string; refs?: string };
 };
 
+/**
+ * Order matters: the FIRST model of each kind is the default (operator,
+ * 2026-11-04: Nano Banana 2.1 for stills, Seedance 2.5 for video). The others
+ * stay one press away with their own price on the card.
+ */
 export const GEN_MODELS: GenModel[] = [
   {
     id: "nano_banana_2_1",
     name: "Nano Banana 2.1",
     kind: "image",
-    note: "Keeps the composition of a reference. Cheapest still.",
-    aspects: ["16:9", "9:16", "4:5", "1:1", "21:9"],
+    note: "Keeps the composition of a reference. Takes elements and reference images.",
+    aspects: ["16:9", "9:16", "4:5", "1:1", "21:9", "3:2", "2:3", "4:3", "3:4"],
     options: [],
     roles: { refs: "image_references" },
   },
@@ -47,46 +52,16 @@ export const GEN_MODELS: GenModel[] = [
     id: "gpt_image_2_5",
     name: "GPT Image 2.5",
     kind: "image",
-    note: "Best at legible type and packaging.",
-    aspects: ["16:9", "9:16", "4:5", "1:1", "21:9"],
+    note: "Best at legible type and packaging. Takes reference images.",
+    aspects: ["16:9", "9:16", "4:5", "1:1", "21:9", "3:2", "2:3", "4:3", "3:4"],
     options: [],
     roles: { refs: "image_references" },
-  },
-  {
-    id: "kling3_0",
-    name: "Kling 3.0",
-    kind: "video",
-    note: "Start and end frames only. Much cheaper.",
-    aspects: ["16:9", "9:16", "1:1"],
-    duration: { min: 3, max: 15, default: 5 },
-    options: [
-      {
-        key: "mode",
-        label: "Quality",
-        values: [
-          { value: "std", label: "Standard" },
-          { value: "pro", label: "Pro" },
-          { value: "4k", label: "4K" },
-        ],
-        default: "std",
-      },
-      {
-        key: "sound",
-        label: "Sound",
-        values: [
-          { value: "off", label: "Off" },
-          { value: "on", label: "On" },
-        ],
-        default: "off",
-      },
-    ],
-    roles: { start: "start_image", end: "end_image" },
   },
   {
     id: "seedance_2_5",
     name: "Seedance 2.5",
     kind: "video",
-    note: "Frames plus your elements as references, up to 30s.",
+    note: "Start and end frames, plus elements and reference images. Up to 30s.",
     aspects: ["16:9", "9:16", "21:9", "4:3", "1:1", "3:4"],
     duration: { min: 4, max: 30, default: 5 },
     options: [
@@ -111,6 +86,36 @@ export const GEN_MODELS: GenModel[] = [
       },
     ],
     roles: { start: "start_image", end: "end_image", refs: "image_references" },
+  },
+  {
+    id: "kling3_0",
+    name: "Kling 3.0",
+    kind: "video",
+    note: "Start and end frames only, no elements. Far cheaper.",
+    aspects: ["16:9", "9:16", "1:1"],
+    duration: { min: 3, max: 15, default: 5 },
+    options: [
+      {
+        key: "mode",
+        label: "Quality",
+        values: [
+          { value: "std", label: "Standard" },
+          { value: "pro", label: "Pro" },
+          { value: "4k", label: "4K" },
+        ],
+        default: "std",
+      },
+      {
+        key: "sound",
+        label: "Sound",
+        values: [
+          { value: "off", label: "Off" },
+          { value: "on", label: "On" },
+        ],
+        default: "off",
+      },
+    ],
+    roles: { start: "start_image", end: "end_image" },
   },
 ];
 
@@ -185,13 +190,32 @@ export function cleanChoice(v: unknown): GenChoice | null {
   return { modelId: model.id, prompt, aspect, duration, options, inputs };
 }
 
+/** Where an input came from: a frame or picture on the shot, or a saved element. */
+export type GenInputSource = "frame" | "element";
+
+/**
+ * What an input may be used as on this model. A picture on the shot can be the
+ * start frame, the end frame or a reference; an element is only ever a
+ * reference, since it is a character or a product rather than a moment.
+ */
+export function rolesFor(model: GenModel, source: GenInputSource): GenInputRole[] {
+  const out: GenInputRole[] = [];
+  if (source === "frame" && model.roles.start) out.push("start");
+  if (source === "frame" && model.roles.end) out.push("end");
+  if (model.roles.refs) out.push("ref");
+  return out;
+}
+
+export function takesRole(model: GenModel, role: GenInputRole): boolean {
+  return role === "ref" ? !!model.roles.refs : role === "start" ? !!model.roles.start : !!model.roles.end;
+}
+
 /** What a model does not take, said once, so a dropped input is never silent. */
 export function droppedInputs(model: GenModel, inputs: { role: GenInputRole }[]): string | null {
-  const refs = inputs.filter((i) => i.role === "ref").length;
-  if (refs > 0 && !model.roles.refs) {
-    return `${model.name} takes frames only, so ${refs === 1 ? "the element is" : `the ${refs} elements are`} left out.`;
-  }
-  return null;
+  const left = inputs.filter((i) => !takesRole(model, i.role));
+  if (left.length === 0) return null;
+  const what = model.roles.start ? "start and end frames only" : "reference images only, not start or end frames";
+  return `${model.name} takes ${what}, so ${left.length === 1 ? "one input is" : `${left.length} inputs are`} left out.`;
 }
 
 /** The params sent to generate_*, apart from medias (which need Higgsfield's ids). */
@@ -225,8 +249,7 @@ export function provenanceLines(choice: GenChoice, inputLabels: Record<string, s
     if (v) lines.push({ label: opt.label, value: v.label });
   }
   lines.push({ label: "Resolution", value: "Measured from the file" });
-  const takes = (r: GenInputRole) => (r === "ref" ? !!model?.roles.refs : r === "start" ? !!model?.roles.start : !!model?.roles.end);
-  const ins = choice.inputs.filter((i) => takes(i.role)).map((i) => `${i.role === "ref" ? "Element" : i.role === "start" ? "Start" : "End"}: ${inputLabels[i.genId] ?? "a frame"}`);
+  const ins = choice.inputs.filter((i) => !!model && takesRole(model, i.role)).map((i) => `${i.role === "ref" ? "Reference" : i.role === "start" ? "Start" : "End"}: ${inputLabels[i.genId] ?? "a frame"}`);
   lines.push({ label: "Built from", value: ins.length ? ins.join(", ") : "The prompt alone" });
   lines.push({ label: "Seed and job", value: "As Higgsfield reports them" });
   lines.push({ label: "Cost", value: "The credits charged" });

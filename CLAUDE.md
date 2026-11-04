@@ -9368,6 +9368,17 @@ view of everything on an AI job, with arrows between related assets.
   5s 720p = 35 credits, Kling 3.0 5s std sound off = 6.25, a still = 2. The
   price re-quotes on settings, not on prompt keystrokes. /dev/pipeline-map
   mounts it with EXAMPLE prices and nothing sent.
+  DEFAULTS AND INPUTS (operator, same day): Seedance 2.5 is the default
+  video model and Nano Banana 2.1 the default still (the FIRST model of a kind
+  in GEN_MODELS is the default), every model card carries its OWN quoted
+  price so they compare on cost, and "+ Add a frame, reference or element"
+  lists the shot's pictures and elements with only the roles THIS model takes
+  (rolesFor): a picture can be start, end or reference; an element is
+  reference only. Read off models_explore: Seedance takes start, end and image
+  references; Kling 3.0 start and end only; Nano Banana 2.1 and GPT Image 2.5
+  image references only. An input the picked model ignores stays on the list,
+  dimmed, and the window says how many are left out. Seedance and Nano also
+  take VIDEO references, which are not offered yet.
   NOT BUILT, the server half: quote/start/check actions (the real-still-
   actions pattern), import of the start frame and element sheets to
   Higgsfield, and the candidate row written with platform, model, prompt,

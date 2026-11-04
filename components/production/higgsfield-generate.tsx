@@ -14,16 +14,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import {
   creditsWord,
+  cleanChoice,
   droppedInputs,
   genModel,
   modelsFor,
   provenanceLines,
+  rolesFor,
+  takesRole,
   type GenChoice,
   type GenInputRole,
+  type GenInputSource,
   type GenKind,
 } from "@/lib/higgsfield-generate";
 
-export type GenInputOption = { genId: string; label: string; thumb: string | null; role: GenInputRole };
+export type GenInputOption = { genId: string; label: string; thumb: string | null; role: GenInputRole; source: GenInputSource };
+
+const ROLE_WORD: Record<GenInputRole, string> = { start: "Start frame", end: "End frame", ref: "Reference" };
 
 export type GenQuote = { credits: number | null; cost: number | null } | { error: string };
 
@@ -33,6 +39,8 @@ export type GenerateRequest = {
   shotTitle: string;
   /** What it is being made from, preselected. */
   inputs: GenInputOption[];
+  /** Everything else on the shot that could be fed in (pictures and elements). */
+  available: GenInputOption[];
   defaultPrompt: string;
   defaultAspect?: string;
 };
@@ -60,7 +68,8 @@ export function GenerateWindow({
   const [duration, setDuration] = useState<number | null>(null);
   const [options, setOptions] = useState<Record<string, string>>({});
   const [inputs, setInputs] = useState<GenInputOption[]>([]);
-  const [price, setPrice] = useState<GenQuote | null>(null);
+  const [prices, setPrices] = useState<Record<string, GenQuote>>({});
+  const [adding, setAdding] = useState(false);
   const [phase, setPhase] = useState<Phase>({ at: "edit" });
 
   // A fresh request resets the form to what it was opened from.
@@ -73,6 +82,7 @@ export function GenerateWindow({
     setDuration(first?.duration?.default ?? null);
     setOptions(Object.fromEntries((first?.options ?? []).map((o) => [o.key, o.default])));
     setInputs(request.inputs);
+    setAdding(false);
     setPhase({ at: "edit" });
   }, [request]);
 
@@ -101,26 +111,46 @@ export function GenerateWindow({
 
   // The price follows the settings, not the prompt: a quote per keystroke
   // would be a round trip to Higgsfield per letter for a number that does not
-  // move with the words.
-  const priceKey = JSON.stringify({ modelId, aspect, duration, options, n: inputs.length });
+  // move with the words. EVERY model of this kind is quoted (each with the
+  // settings carried over as far as it takes them), so the cards can be
+  // compared on cost before one is picked. A quote spends nothing.
+  const priceKey = JSON.stringify({ aspect, duration, options, ins: inputs.map((i) => i.role), open });
   const seq = useRef(0);
   useEffect(() => {
-    if (!open || !model) return;
+    if (!open) return;
     const n = ++seq.current;
-    setPrice(null);
-    const t = setTimeout(async () => {
-      const q = await quote(choice).catch(() => ({ error: "Could not reach Higgsfield for a price." }));
-      if (n === seq.current) setPrice(q);
+    setPrices({});
+    const t = setTimeout(() => {
+      for (const m of models) {
+        const c = m.id === modelId ? choice : { ...(cleanChoice({ ...choice, inputs: [], modelId: m.id }) ?? choice), inputs: choice.inputs };
+        quote(c)
+          .catch(() => ({ error: "Could not reach Higgsfield for a price." }))
+          .then((q) => {
+            if (n === seq.current) setPrices((p) => ({ ...p, [m.id]: q }));
+          });
+      }
     }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, priceKey]);
+  }, [priceKey, modelId]);
 
+  const price = prices[modelId] ?? null;
   const cost = price && !("error" in price) ? price.cost : null;
   const credits = price && !("error" in price) ? price.credits : null;
   const short = cost != null && credits != null && cost > credits;
   const dropped = model ? droppedInputs(model, inputs) : null;
-  const usable = model ? inputs.filter((i) => (i.role === "ref" ? !!model.roles.refs : i.role === "start" ? !!model.roles.start : !!model.roles.end)) : [];
+  const usable = model ? inputs.filter((i) => takesRole(model, i.role)) : [];
+  const unused = (request?.available ?? []).filter((a) => !inputs.some((i) => i.genId === a.genId));
+
+  /** Put an input in as a role; a second start or end replaces the first. */
+  function putIn(opt: GenInputOption, role: GenInputRole) {
+    setInputs((xs) => {
+      const rest = xs.filter((x) => x.genId !== opt.genId && (role === "ref" || x.role !== role));
+      const next = { ...opt, role };
+      const order: Record<GenInputRole, number> = { start: 0, end: 1, ref: 2 };
+      return [...rest, next].sort((a, b) => order[a.role] - order[b.role]);
+    });
+  }
   const canGo = phase.at === "edit" && cost != null && !short && prompt.trim().length > 0;
 
   async function go() {
@@ -155,7 +185,10 @@ export function GenerateWindow({
                   disabled={phase.at !== "edit"}
                   className={`rounded-lg border p-3 text-left ${m.id === modelId ? "border-accent ring-1 ring-accent" : "border-border hover:border-border-strong"}`}
                 >
-                  <div className="text-sm font-semibold text-text">{m.name}</div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-semibold text-text">{m.name}</span>
+                    <CardPrice q={prices[m.id]} />
+                  </div>
                   <div className="mt-0.5 text-xs text-text-muted">{m.note}</div>
                 </button>
               ))}
@@ -163,36 +196,87 @@ export function GenerateWindow({
           </div>
 
           {/* Built from */}
-          {inputs.length > 0 && (
-            <div>
-              <Label>Built from</Label>
-              <div className="mt-1.5 flex flex-wrap gap-2">
-                {inputs.map((i) => {
-                  const on = usable.includes(i);
-                  return (
-                    <span key={i.genId} className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface py-1 pl-1 pr-2 ${on ? "" : "opacity-45"}`}>
-                      {i.thumb ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={i.thumb} alt="" className="h-8 w-12 rounded object-cover" />
+          <div>
+            <Label>Built from</Label>
+            {inputs.length === 0 && <p className="mt-1.5 text-xs text-text-muted">The prompt alone.</p>}
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {inputs.map((i) => {
+                const on = usable.includes(i);
+                const roles = rolesFor(model, i.source);
+                return (
+                  <span key={i.genId} className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface py-1 pl-1 pr-2 ${on ? "" : "opacity-45"}`}>
+                    <Thumb src={i.thumb} />
+                    <span className="text-xs">
+                      {phase.at === "edit" && roles.length > 1 && roles.includes(i.role) ? (
+                        <select
+                          value={i.role}
+                          onChange={(e) => putIn(i, e.target.value as GenInputRole)}
+                          className="block bg-transparent font-semibold text-text"
+                          aria-label={`Use ${i.label} as`}
+                        >
+                          {roles.map((r) => (
+                            <option key={r} value={r}>
+                              {ROLE_WORD[r]}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
-                        <span className="h-8 w-12 rounded bg-surface-2" />
+                        <span className="block font-semibold text-text">{i.source === "element" ? "Element" : ROLE_WORD[i.role]}</span>
                       )}
-                      <span className="text-xs">
-                        <span className="block font-semibold text-text">{i.role === "start" ? "Start frame" : i.role === "end" ? "End frame" : "Element"}</span>
-                        <span className="block max-w-[140px] truncate text-text-muted">{i.label}</span>
-                      </span>
-                      {phase.at === "edit" && (
-                        <button type="button" onClick={() => setInputs((xs) => xs.filter((x) => x !== i))} className="ml-1 text-text-faint hover:text-text" aria-label={`Remove ${i.label}`}>
-                          ✕
-                        </button>
-                      )}
+                      <span className="block max-w-[140px] truncate text-text-muted">{i.label}</span>
                     </span>
+                    {phase.at === "edit" && (
+                      <button type="button" onClick={() => setInputs((xs) => xs.filter((x) => x !== i))} className="ml-1 text-text-faint hover:text-text" aria-label={`Remove ${i.label}`}>
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+              {phase.at === "edit" && unused.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setAdding((a) => !a)}
+                  className="inline-flex h-11 items-center rounded-lg border border-dashed border-border px-3 text-xs font-semibold text-text-muted hover:border-border-strong hover:text-text"
+                >
+                  {adding ? "Done adding" : "+ Add a frame, reference or element"}
+                </button>
+              )}
+            </div>
+            {dropped && <p className="mt-1.5 text-xs text-text-muted">{dropped}</p>}
+            {adding && phase.at === "edit" && (
+              <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-border bg-surface-2 p-2">
+                {unused.map((a) => {
+                  const roles = rolesFor(model, a.source);
+                  return (
+                    <div key={a.genId} className="flex flex-wrap items-center gap-2 rounded-md bg-surface p-1.5">
+                      <Thumb src={a.thumb} />
+                      <span className="min-w-0 flex-1 text-xs">
+                        <span className="block font-semibold text-text">{a.source === "element" ? "Element" : "Picture on this shot"}</span>
+                        <span className="block truncate text-text-muted">{a.label}</span>
+                      </span>
+                      {roles.length === 0 ? (
+                        <span className="text-xs text-text-muted">{model.name} does not take {a.source === "element" ? "elements" : "this"}</span>
+                      ) : (
+                        <span className="flex gap-1">
+                          {roles.map((r) => (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={() => putIn(a, r)}
+                              className="h-7 rounded-md border border-border px-2 text-xs font-semibold text-text hover:border-accent"
+                            >
+                              {r === "ref" ? "As reference" : `As ${ROLE_WORD[r].toLowerCase()}`}
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                    </div>
                   );
                 })}
               </div>
-              {dropped && <p className="mt-1.5 text-xs text-text-muted">{dropped}</p>}
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Prompt */}
           <div>
@@ -267,6 +351,17 @@ export function GenerateWindow({
       )}
     </Modal>
   );
+}
+
+function CardPrice({ q }: { q: GenQuote | undefined }) {
+  if (!q) return <span className="text-xs text-text-faint">...</span>;
+  if ("error" in q || q.cost == null) return <span className="text-xs text-text-faint">no price</span>;
+  return <span className="shrink-0 text-xs font-semibold tabular-nums text-text">{creditsWord(q.cost)}</span>;
+}
+
+function Thumb({ src }: { src: string | null }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return src ? <img src={src} alt="" className="h-8 w-12 shrink-0 rounded object-cover" /> : <span className="h-8 w-12 shrink-0 rounded bg-surface-2" />;
 }
 
 function PriceLine({ price, short }: { price: GenQuote | null; short: boolean }) {

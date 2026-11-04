@@ -128,7 +128,7 @@ const elName = new Map(INPUT.elements.map((e) => [e.id, e.name]));
 function frameOpt(id: string, role: "start" | "end" | "ref"): GenInputOption | null {
   const x = genById.get(id);
   if (!x) return null;
-  return { genId: id, label: x.prompt ? x.prompt.slice(0, 40) : id.toUpperCase(), thumb: THUMBS[id] ?? null, role };
+  return { genId: id, label: x.prompt ? x.prompt.slice(0, 40) : id.toUpperCase(), thumb: THUMBS[id] ?? null, role, source: "frame" };
 }
 
 /** What the real page does from its own data: frames and elements preselected. */
@@ -139,7 +139,7 @@ function requestFor(ask: GenerateAsk): GenerateRequest | null {
   const from = ask.fromGenId ? genById.get(ask.fromGenId) : undefined;
   const elements: GenInputOption[] = INPUT.uses
     .filter((u) => u.shot_id === shot.id)
-    .map((u) => ({ genId: `el-${u.entity_id}`, label: elName.get(u.entity_id) ?? "Element", thumb: EL_THUMBS[u.entity_id] ?? null, role: "ref" as const }));
+    .map((u) => ({ genId: `el-${u.entity_id}`, label: elName.get(u.entity_id) ?? "Element", thumb: EL_THUMBS[u.entity_id] ?? null, role: "ref" as const, source: "element" as const }));
   const start = gens.find((x) => x.role === "start");
   const end = gens.find((x) => x.role === "end");
   let kind: "image" | "video" = "video";
@@ -155,7 +155,13 @@ function requestFor(ask: GenerateAsk): GenerateRequest | null {
     inputs = [start && frameOpt(start.id, "start"), end && frameOpt(end.id, "end"), ...elements].filter(Boolean) as GenInputOption[];
   }
   const prompt = from?.prompt ?? start?.prompt ?? shot.title;
-  return { kind, shotId: shot.id, shotTitle: shot.title, inputs, defaultPrompt: prompt, defaultAspect: "16:9" };
+  // Everything else on the shot: its still pictures (frames, candidates and
+  // reference images, never rejected ones) and its elements.
+  const available = [
+    ...gens.filter((x) => x.kind === "image" && x.status !== "rejected").map((x) => frameOpt(x.id, x.status === "reference" ? "ref" : x.role === "end" ? "end" : "start")),
+    ...elements,
+  ].filter(Boolean) as GenInputOption[];
+  return { kind, shotId: shot.id, shotTitle: shot.title, inputs, available, defaultPrompt: prompt, defaultAspect: "16:9" };
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
