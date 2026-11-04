@@ -10,6 +10,7 @@
 // key is on, the change sets a keyframe at the playhead. Press I to key
 // something that is still static.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
@@ -72,6 +73,50 @@ function frameRect(w: number, h: number, ratio: number, margin = 28) {
   return { x: (w - fw) / 2, y: (h - fh) / 2, w: fw, h: fh };
 }
 
+type CrossStyle = "cross" | "lines" | "dot";
+type Crosshair = { on: boolean; color: string; style: CrossStyle };
+const CROSS_KEY = "blocking.crosshair";
+// Overlay colours the person picks to stand out against their own scene, so
+// they are chosen values rather than theme tokens, like a line's colour.
+const CROSS_COLORS = [
+  { hex: "#ff3b30", name: "Red" }, { hex: "#ffd60a", name: "Yellow" }, { hex: "#30d158", name: "Green" },
+  { hex: "#64d2ff", name: "Cyan" }, { hex: "#ff2dfd", name: "Magenta" }, { hex: "#ffffff", name: "White" },
+  { hex: "#000000", name: "Black" },
+];
+const CROSS_STYLES: { id: CrossStyle; name: string }[] = [
+  { id: "cross", name: "Cross" }, { id: "lines", name: "Full lines" }, { id: "dot", name: "Dot" },
+];
+
+/** The crosshair, centred in the frame. A thin dark edge keeps it readable on any colour. */
+function CrosshairMark({ color, style }: { color: string; style: CrossStyle }) {
+  const edge = color === "#000000" ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.55)";
+  const line = (pos: React.CSSProperties) => (
+    <div className="absolute" style={{ background: color, boxShadow: `0 0 0 1px ${edge}`, ...pos }} />
+  );
+  if (style === "dot") {
+    return <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ background: color, boxShadow: `0 0 0 1px ${edge}` }} />;
+  }
+  if (style === "lines") {
+    return (
+      <>
+        {line({ left: "50%", top: 0, bottom: 0, width: 1, transform: "translateX(-0.5px)" })}
+        {line({ top: "50%", left: 0, right: 0, height: 1, transform: "translateY(-0.5px)" })}
+      </>
+    );
+  }
+  // A cross with a gap at its centre, so the point being lined up stays visible.
+  const arm = 14;
+  const gap = 4;
+  return (
+    <div className="absolute left-1/2 top-1/2" style={{ width: 0, height: 0 }}>
+      {line({ left: -0.75, top: -(gap + arm), width: 1.5, height: arm })}
+      {line({ left: -0.75, top: gap, width: 1.5, height: arm })}
+      {line({ top: -0.75, left: -(gap + arm), height: 1.5, width: arm })}
+      {line({ top: -0.75, left: gap, height: 1.5, width: arm })}
+    </div>
+  );
+}
+
 const fileStem = (s: string) => s.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "blocking";
 
 export function BlockingStudio({
@@ -99,6 +144,27 @@ export function BlockingStudio({
   const autoRef = useRef(false);
   const [tcMode, setTcMode] = useState<"translate" | "rotate">("translate");
   const [thirds, setThirds] = useState(true);
+  // A crosshair for lining a subject up on the centre of frame. It is drawn
+  // over the canvas, so it never reaches a recorded clip or a saved frame.
+  const [cross, setCross] = useState<Crosshair>({ on: false, color: "#ff3b30", style: "cross" });
+  const [crossOpen, setCrossOpen] = useState(false);
+  const crossRef = useOutside(crossOpen, () => setCrossOpen(false));
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CROSS_KEY) ?? "null");
+      if (raw && typeof raw === "object") {
+        setCross({
+          on: raw.on === true,
+          color: CROSS_COLORS.some((c) => c.hex === raw.color) ? raw.color : "#ff3b30",
+          style: CROSS_STYLES.some((x) => x.id === raw.style) ? raw.style : "cross",
+        });
+      }
+    } catch {}
+  }, []);
+  const saveCross = (next: Crosshair) => {
+    setCross(next);
+    try { localStorage.setItem(CROSS_KEY, JSON.stringify(next)); } catch {}
+  };
   const [recording, setRecording] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [rect, setRect] = useState({ x: 0, y: 0, w: 0, h: 0 });
@@ -941,6 +1007,38 @@ export function BlockingStudio({
           )}
           {view === "free" && <Btn onClick={frameSelection} title="Frame the selection">Frame</Btn>}
           {view === "camera" && <Btn active={thirds} onClick={() => setThirds(!thirds)} title="Rule of thirds">Thirds</Btn>}
+          {view === "camera" && (
+            <div ref={crossRef} className="relative flex">
+              <Btn active={cross.on} onClick={() => saveCross({ ...cross, on: !cross.on })} title="Crosshair at the centre of frame" className="rounded-r-none">
+                <span className="h-2.5 w-2.5 rounded-full border border-border-strong" style={{ background: cross.color }} />
+                Crosshair
+              </Btn>
+              <Btn onClick={() => setCrossOpen((v) => !v)} title="Crosshair colour and style" className="-ml-px rounded-l-none px-1.5">▾</Btn>
+              {crossOpen && (
+                <div className="absolute left-0 top-9 z-30 w-[200px] rounded-[10px] border border-border bg-surface p-2.5 shadow-2xl">
+                  <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-text-faint">Colour</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CROSS_COLORS.map((c) => (
+                      <button key={c.hex} type="button" title={c.name} aria-label={c.name}
+                        onClick={() => saveCross({ ...cross, on: true, color: c.hex })}
+                        className={`h-6 w-6 rounded-full border ${cross.color === c.hex ? "border-text ring-2 ring-accent" : "border-border-strong"}`}
+                        style={{ background: c.hex }} />
+                    ))}
+                  </div>
+                  <p className="mb-1.5 mt-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-text-faint">Style</p>
+                  <div className="flex gap-1">
+                    {CROSS_STYLES.map((x) => (
+                      <button key={x.id} type="button" onClick={() => saveCross({ ...cross, on: true, style: x.id })}
+                        className={`flex-1 rounded-[6px] border px-1.5 py-1 text-[11px] font-semibold ${cross.style === x.id ? "border-accent bg-accent text-accent-fg" : "border-border text-text-muted hover:text-text"}`}>
+                        {x.name}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2.5 text-[10.5px] leading-relaxed text-text-faint">Only on screen: it is never in a recorded clip or a saved frame.</p>
+                </div>
+              )}
+            </div>
+          )}
           <div ref={exportRef} className="relative ml-auto">
             <Btn tone="primary" onClick={() => setExportOpen((v) => !v)} disabled={recording}>{recording ? "Recording…" : "Export"}</Btn>
             {exportOpen && (
@@ -974,6 +1072,7 @@ export function BlockingStudio({
                 {[1, 2].map((i) => <div key={`h${i}`} className="absolute left-0 right-0 h-px bg-white opacity-20" style={{ top: `${(i * 100) / 3}%` }} />)}
               </>
             )}
+            {cross.on && <CrosshairMark color={cross.color} style={cross.style} />}
             <div className="absolute -bottom-6 left-0 right-0 flex items-center justify-between font-mono text-[11px] text-text-muted">
               <span>{body.name} · {Math.round(lens)}mm · {scene.aspect}</span>
               <span className="flex items-center gap-2">

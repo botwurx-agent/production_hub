@@ -8071,6 +8071,12 @@ the side window to the dog, out through the windshield, ending ahead.
   frame" as PNG. GOTCHA hit: Chrome does not fire MediaRecorder's start until
   the canvas has a frame, so the clip canvas is painted from the moment the
   recorder exists and a 600 ms fallback starts the clock.
+- CROSSHAIR (operator, 2026-11-04): a Crosshair toggle in camera view with a
+  colour (red, yellow, green, cyan, magenta, white, black) and a style (a cross
+  with a gap at its centre, full lines, or a dot), remembered per browser
+  ("blocking.crosshair"). Drawn as an HTML overlay with a thin dark edge so it
+  reads on any colour, so it is never in a recorded clip or a saved frame.
+  The colours are picked values, not theme tokens, like a line's colour.
 - TEMPLATES (lib/blocking/templates.ts): Coast road (the reference shot,
   12 s), City street, Living room, Product orbit, Desert reveal, Empty stage.
 - WHERE: a hub card on ai_video projects (Visualize band, after AI Pipeline)
