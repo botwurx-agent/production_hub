@@ -97,7 +97,7 @@ export function buildRequest(ask: GenerateAsk, p: Props): GenerateRequest | null
   ];
 
   const stagePrompt = p.prompts.find((x) => x.shot_id === shot.id && x.stage === kind)?.text?.trim();
-  const defaultPrompt = (from?.prompt ?? "").trim() || stagePrompt || shot.beat || shot.title || "";
+  const defaultPrompt = (ask.prompt ?? "").trim() || (from?.prompt ?? "").trim() || stagePrompt || shot.beat || shot.title || "";
   return {
     kind,
     shotId: shot.id,

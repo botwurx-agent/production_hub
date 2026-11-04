@@ -9435,6 +9435,13 @@ view of everything on an AI job, with arrows between related assets.
   and says so. The server re-validates every choice against the same
   catalogue. app/dev/pipeline-map/catalog-sample.json is a raw copy of the
   video catalogue the fixture runs through the real converter.
-  NOT YET: the same button on the stage panels, and no real generation has
+  ON THE STAGE PANELS TOO (2026-11-04): a "Generate" button in each image
+  and video StagePanel header (beside From Higgsfield), opening the SAME
+  window through askGenerate: the image stage asks for a still (the shot's
+  elements as references), the video stage for a take (the tagged Start and
+  End frames plus elements). The words typed in that panel's prompt box are
+  carried in (GenerateAsk.prompt) and win over the saved prompt. Shown only
+  with the viewer's own Higgsfield connection and edit rights (canGenerate).
+  NOT YET: no real generation has
   been run from the app. The first press is the test; the replies of
   media_import_url and generate_video have never been printed from here.

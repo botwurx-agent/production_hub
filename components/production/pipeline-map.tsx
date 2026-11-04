@@ -52,7 +52,13 @@ export type PipelineMapProps = {
  *   again  another candidate like `fromGenId`, same prompt and inputs
  *   still  a new still for the shot
  */
-export type GenerateAsk = { mode: "take" | "again" | "still"; shotId: string; fromGenId: string | null };
+export type GenerateAsk = {
+  mode: "take" | "again" | "still";
+  shotId: string;
+  fromGenId: string | null;
+  /** The words already typed on a stage panel, which win over the saved prompt. */
+  prompt?: string;
+};
 
 const MIN_Z = 0.2;
 const MAX_Z = 2;

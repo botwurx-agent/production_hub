@@ -792,9 +792,11 @@ function AddRefModal({
 
 function StagePanel({
   projectId, studioId, shot, stage, prompt, gens, media, thumbs = {}, library, reviews, refStartId, refEndId, onRun,
-  canSeeCost, allRefs, usedRefs, hfConnected = false,
+  canSeeCost, allRefs, usedRefs, hfConnected = false, onGenerate,
 }: {
   canSeeCost: boolean;
+  /** Opens the generate window for this stage. Absent without the viewer's own Higgsfield and edit rights. */
+  onGenerate?: (prompt: string) => void;
   /** The viewer has their own Higgsfield connected, so "From Higgsfield" can list it. */
   hfConnected?: boolean;
   projectId: string; studioId: string; shot: AiShot; stage: Stage;
@@ -918,6 +920,12 @@ function StagePanel({
           )}
           {pool.length > 0 && (
             <BatchReviewButton projectId={projectId} shotId={shot.id} pool={pool} media={media} reviews={reviews} />
+          )}
+          {onGenerate && (
+            <Button size="sm" onClick={() => onGenerate(pText)}
+              title={`Make a ${stage === "image" ? "still" : "take"} on your Higgsfield plan. The price is shown before anything is spent.`}>
+              Generate
+            </Button>
           )}
           {hfConnected && (
             <Button size="sm" variant="secondary" onClick={() => setBrowsingHf(true)}
@@ -1633,6 +1641,7 @@ export function PipelineWorkspace({
                   <>
                     <Flow label="prompt, generate & pick images" />
                     <StagePanel hfConnected={hfConnected} allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
+                      onGenerate={canGenerate ? (prompt) => askGenerate({ mode: "still", shotId: active.id, fromGenId: null, prompt }) : undefined}
                       prompt={shotPrompts.get(`${active.id}:image`) ?? null}
                       gens={imgGens} media={media} thumbs={thumbUrls} library={library}
                       reviews={batchReviews[active.id] ?? []}
@@ -1645,6 +1654,7 @@ export function PipelineWorkspace({
                     : "prompt & generate video"
                 } />
                 <StagePanel hfConnected={hfConnected} allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
+                  onGenerate={canGenerate ? (prompt) => askGenerate({ mode: "take", shotId: active.id, fromGenId: null, prompt }) : undefined}
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
                   media={media} thumbs={thumbUrls} library={library}
