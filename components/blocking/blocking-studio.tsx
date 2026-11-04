@@ -19,11 +19,11 @@ import {
   type BlockObject, type BlockScene, type CamKey, type Ease, type Key, type Vec3,
 } from "@/lib/blocking/scene";
 import {
-  applyPreset as mergePreset, evalCamera, evalTrack, keyAt, lookDir, peakSpeed, presetKeys, setKey, shakeAt, snap,
+  aimAt, applyPreset as mergePreset, evalCamera, evalTrack, keyAt, lookDir, pathStats, peakSpeed, presetKeys, setKey, shakeAt, snap,
   timecode, travel, type PresetId,
 } from "@/lib/blocking/keys";
 import {
-  applyEnvironment, buildObject, buildWorld, cameraGizmo, cameraMatrix, objectMatrix, poseMatrix, setFrustum, toLocal,
+  aimPoint, applyEnvironment, buildObject, buildWorld, cameraGizmo, cameraMatrix, objectMatrix, poseMatrix, setFrustum, toLocal,
   type World,
 } from "@/lib/blocking/build";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
@@ -228,9 +228,25 @@ export function BlockingStudio({
   const objMap = useMemo(() => new Map(scene.objects.map((o) => [o.id, o])), [scene.objects]);
   const mapOf = (s: BlockScene) => new Map(s.objects.map((o) => [o.id, o]));
 
+  /**
+   * The camera at a moment, in its parent's frame: the path and lens from the
+   * keys (moved the way the camera's flow says), and, when it is kept aimed
+   * at something, pointed at that thing rather than where the keys point.
+   */
+  const camAt = (s: BlockScene, at: number, m = mapOf(s)): { p: Vec3; r: Vec3; lens: number } => {
+    const cam = s.camera;
+    const c = evalCamera(cam.keys, at, cam.path === "smooth", { flow: cam.flow, easeEnds: cam.easeEnds });
+    const o = cam.aim.target ? m.get(cam.aim.target) : undefined;
+    if (!o) return c;
+    const w = aimPoint(m, o, at);
+    if (cam.parent && m.get(cam.parent)) w.applyMatrix4(objectMatrix(m, cam.parent, at).clone().invert());
+    const a = aimAt(c.p, [w.x, w.y, w.z]);
+    return { ...c, r: [a.yaw + cam.aim.frame[0], Math.max(-89, Math.min(89, a.pitch + cam.aim.frame[1])), c.r[2]] };
+  };
+
   const posedAt = (s: BlockScene, track: Track, at: number): Posed => {
     if (track === "camera") {
-      const c = evalCamera(s.camera.keys, at, s.camera.path === "smooth");
+      const c = camAt(s, at);
       return { p: c.p, r: c.r, lens: c.lens };
     }
     const o = s.objects.find((x) => x.id === track);
@@ -320,7 +336,7 @@ export function BlockingStudio({
       // land at the origin, where a road or a room belongs.
       let p: Vec3 = [0, 0, 0];
       if (k.category === "people" || k.category === "vehicles" || k.category === "shapes" || kind === "table" || kind === "sofa" || kind === "product") {
-        const c = evalCamera(s.camera.keys, tRef.current);
+        const c = camAt(s, tRef.current);
         const parent = s.camera.parent ? objectMatrix(mapOf(s), s.camera.parent, tRef.current) : null;
         const w = new THREE.Vector3(...c.p).applyMatrix4(parent ?? new THREE.Matrix4());
         const d = lookDir(c.r[0], c.r[1]);
@@ -335,7 +351,11 @@ export function BlockingStudio({
       commit((s) => ({
         ...s,
         objects: s.objects.filter((o) => o.id !== id).map((o) => (o.parent === id ? { ...o, parent: null } : o)),
-        camera: s.camera.parent === id ? { ...s.camera, parent: null } : s.camera,
+        camera: {
+          ...s.camera,
+          parent: s.camera.parent === id ? null : s.camera.parent,
+          aim: s.camera.aim.target === id ? { target: null, frame: [0, 0] } : s.camera.aim,
+        },
       }));
       setSel(null);
     },
@@ -381,7 +401,7 @@ export function BlockingStudio({
         const at = snap(tRef.current, s.fps);
         const dur = Math.max(0.5, Math.min(len, s.duration - at > 0.4 ? s.duration - at : s.duration));
         const t0 = s.duration - at > 0.4 ? at : 0;
-        const start = evalCamera(s.camera.keys, t0, s.camera.path === "smooth");
+        const start = camAt(s, t0);
         const m = mapOf(s);
         const parent = s.camera.parent ? objectMatrix(m, s.camera.parent, t0) : null;
         let tgt: THREE.Vector3;
@@ -430,7 +450,12 @@ export function BlockingStudio({
       });
     },
     speedOf: (track) => {
-      const keys = track === "camera" ? scene.camera.keys : objMap.get(track)?.keys ?? [];
+      if (track === "camera") {
+        const cam = scene.camera;
+        if (cam.keys.length < 2) return { peak: 0, travel: 0 };
+        return pathStats((tt) => evalCamera(cam.keys, tt, cam.path === "smooth", { flow: cam.flow, easeEnds: cam.easeEnds }).p, scene.duration, scene.fps);
+      }
+      const keys = objMap.get(track)?.keys ?? [];
       return { peak: peakSpeed(keys, scene.duration, scene.fps), travel: travel(keys, scene.duration, scene.fps) };
     },
   };
@@ -607,7 +632,7 @@ export function BlockingStudio({
     const envKey = JSON.stringify([s.environment, s.look]);
     if (envKey !== e.envKey) { applyEnvironment(e.world, s.environment, s.look); e.envKey = envKey; }
     // Camera
-    const c = evalCamera(s.camera.keys, at, s.camera.path === "smooth");
+    const c = camAt(s, at, m);
     const sh = shakeAt(at, s.camera.shake.amount, s.camera.shake.speed);
     const parent = s.camera.parent ? objectMatrix(m, s.camera.parent, at) : null;
     const local: Vec3 = [c.p[0] + sh.p[0], c.p[1] + sh.p[1], c.p[2] + sh.p[2]];
@@ -629,7 +654,7 @@ export function BlockingStudio({
     const fk = `${hfov.toFixed(2)}|${vfov.toFixed(2)}`;
     if (fk !== e.fovKey) { setFrustum(e.gizmo, hfov, vfov); e.fovKey = fk; }
     // The camera's path, drawn in its parent's frame so it travels with it.
-    const pk = JSON.stringify([s.camera.keys, s.camera.path, s.duration]);
+    const pk = JSON.stringify([s.camera.keys, s.camera.path, s.camera.flow, s.camera.easeEnds, s.duration]);
     if (pk !== e.pathKey) {
       const dots = e.path.children[0] as THREE.Points | undefined;
       const kp = s.camera.keys.map((k) => new THREE.Vector3(...k.p));
@@ -641,7 +666,7 @@ export function BlockingStudio({
       }
       const pts: THREE.Vector3[] = [];
       const n = Math.max(2, Math.round(s.duration * 20));
-      for (let i = 0; i <= n; i++) pts.push(new THREE.Vector3(...evalCamera(s.camera.keys, (i / n) * s.duration, s.camera.path === "smooth").p));
+      for (let i = 0; i <= n; i++) pts.push(new THREE.Vector3(...evalCamera(s.camera.keys, (i / n) * s.duration, s.camera.path === "smooth", { flow: s.camera.flow, easeEnds: s.camera.easeEnds }).p));
       e.path.geometry.dispose();
       e.path.geometry = new THREE.BufferGeometry().setFromPoints(pts);
       e.pathKey = pk;
@@ -727,7 +752,7 @@ export function BlockingStudio({
   function moveCamera(local: THREE.Vector3, coalesce: string) {
     const s = sceneRef.current;
     const at = tRef.current;
-    const c = evalCamera(s.camera.keys, at, s.camera.path === "smooth");
+    const c = camAt(s, at);
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler((c.r[1] * Math.PI) / 180, (c.r[0] * Math.PI) / 180, (-c.r[2] * Math.PI) / 180, "YXZ"));
     const d = local.clone().applyQuaternion(q);
     writePose("camera", { p: [c.p[0] + d.x, c.p[1] + d.y, c.p[2] + d.z] }, coalesce);
@@ -749,7 +774,13 @@ export function BlockingStudio({
     const dy = ev.clientY - l.y;
     l.x = ev.clientX;
     l.y = ev.clientY;
-    if (l.button === 0) {
+    if (l.button === 0 && sceneRef.current.camera.aim.target) {
+      // Kept aimed: dragging moves the subject off centre instead of turning the keys.
+      commit((s) => {
+        const [fy, fp] = s.camera.aim.frame;
+        return { ...s, camera: { ...s.camera, aim: { ...s.camera.aim, frame: [Math.max(-60, Math.min(60, fy - dx * 0.08)), Math.max(-40, Math.min(40, fp - dy * 0.08))] } } };
+      }, "aimframe");
+    } else if (l.button === 0) {
       const c = posedAt(sceneRef.current, "camera", tRef.current);
       const k = 0.12 * Math.min(1, (c.lens ?? 35) / 35) ** 0.6;
       writePose("camera", { r: [c.r[0] - dx * k, Math.max(-89, Math.min(89, c.r[1] - dy * k)), c.r[2]] }, "look");
@@ -990,7 +1021,7 @@ export function BlockingStudio({
 
   /* ---------- layout ---------- */
 
-  const lens = evalCamera(scene.camera.keys, t, scene.camera.path === "smooth").lens;
+  const lens = camAt(scene, t).lens;
   const body = BODIES.find((b) => b.id === scene.camera.body) ?? BODIES[0];
 
   return (

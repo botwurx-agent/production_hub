@@ -8091,6 +8091,42 @@ the side window to the dog, out through the windshield, ending ahead.
   keying, a preset, adding a vehicle, playback, the free view gizmo, a recorded
   8.3 s 1280x720 H.264 clip and the PNG, no page errors. NOT run against the
   database from a session.
+- CAMERA MOTION AND AIM LOCK (2026-11-04, operator on the coast road: the
+  camera "veers off the target" with a "swooping" move away from the dog,
+  and "stops at each keyframe"). TWO CAUSES. (1) Every key's ease was
+  `smooth`, an ease in AND out per segment, so the camera's speed fell to
+  zero at every key (measured: about 0.02 m/s at each of the five interior
+  keys). (2) The camera's rotation was blended separately from its
+  position, so between two keys aimed at the dog the aim drifted off it and
+  swung back. FIXES, both on BlockCamera (no migration, it rides in the jsonb):
+  `flow` = continuous | even | keys. CONTINUOUS (the default, and what an
+  older scene with no flow now gets) is a cubic Hermite through the keys on
+  their REAL times, slopes from the neighbours over the time between them,
+  so velocity is continuous across every key (flowChannel in keys.ts);
+  angles and the lens use monotone (Fritsch-Carlson) slopes so they never
+  overshoot a key. EVEN SPEED reparameterises that curve by arc length
+  (sampled table, cached per keys array) so the camera covers the path at one
+  speed and the keys set the route, not the timing. KEYS is the old
+  behaviour, where each key's ease is used. `easeEnds` (default on) starts
+  and finishes at rest: zero end slopes for continuous, a trapezoid speed
+  profile (20% ramps) for even. Per-key eases are ignored outside "keys" and
+  the keyframe panel says so.
+  `aim` = {target, frame}: KEEP AIMED AT an object, a Track To constraint.
+  camAt() in the studio is now THE camera pose (render, path, panel,
+  presets, fly keys all use it): position from the flow, then yaw and pitch
+  computed toward aimPoint (build.ts: a person's head, lower when seated or
+  kneeling since a seated figure's origin is its seat, a dog's head, the
+  middle of anything else), in the camera's parent frame, plus `frame`
+  (degrees) to sit the subject off centre. Roll still comes from the keys.
+  While aimed, dragging in camera view changes `frame`, not the keys, with a
+  Centre button. Deleting the target clears it. The coast road template
+  aims at the dog, city and desert at the walker, product orbit at the
+  product. A scene the operator already saved gets continuous motion
+  automatically but NOT the aim: pick the subject under Keep aimed at.
+  Verified: a node test (continuous passes every key at its time and keeps
+  0.85 to 2.46 m/s through them; even holds 2.56 m/s; the lens stays inside
+  its keys), and Chromium frames of the coast road during playback with the
+  dog centred from behind the car, through the window and out ahead.
 - SEND TO PIPELINE (BUILT, 2026-11-04, no migration). Export > "Send to the
   pipeline..." opens a window with a SHOT PICKER (the project's generated
   shots, the one this scene was sent to before picked first and marked "sent

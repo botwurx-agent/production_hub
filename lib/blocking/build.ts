@@ -479,3 +479,17 @@ export function setFrustum(g: THREE.Group, hfov: number, vfov: number, d = 1.6) 
     o, c[0], o, c[1], o, c[2], o, c[3], c[0], c[1], c[1], c[2], c[2], c[3], c[3], c[0], up[0], up[1], up[1], up[2],
   ]);
 }
+
+/**
+ * The point a camera kept aimed at an object looks at: a person's head (lower
+ * when seated or kneeling, since a seated figure's origin is its seat), an
+ * animal's head, the middle of anything else.
+ */
+export function aimPoint(objs: Map<string, BlockObject>, o: BlockObject, t: number): THREE.Vector3 {
+  const h = o.size[1];
+  const up =
+    o.kind === "person" || o.kind === "child"
+      ? h * (o.pose === "seated" ? 0.42 : o.pose === "kneeling" ? 0.62 : 0.92)
+      : o.kind === "dog" ? h * 0.85 : h * 0.5;
+  return new THREE.Vector3(0, up, 0).applyMatrix4(objectMatrix(objs, o.id, t));
+}

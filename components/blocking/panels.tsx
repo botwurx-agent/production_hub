@@ -5,7 +5,7 @@
 // how an edit lands on the timeline lives in one place.
 import { useState } from "react";
 import {
-  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, EASES, LOOKS, SUBJECT_COLORS, blockKind,
+  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, LOOKS, SUBJECT_COLORS, blockKind,
   type BlockScene, type Ease, type Environment, type Vec3,
 } from "@/lib/blocking/scene";
 import { PRESETS, type PresetId } from "@/lib/blocking/keys";
@@ -137,6 +137,11 @@ function KeyPanel({ api, track }: { api: StudioApi; track: Track }) {
         </Select>
       </Row>
       <p className="text-[11px] leading-relaxed text-text-faint">{EASES.find((e) => e.id === key.ease)?.hint}</p>
+      {track === "camera" && api.scene.camera.flow !== "keys" && (
+        <p className="text-[11px] leading-relaxed text-text-faint">
+          The camera's motion is set to {api.scene.camera.flow === "even" ? "even speed" : "continuous"}, so it flows through this key and its ease is not used. Choose Stop at keys under Motion to use it.
+        </p>
+      )}
     </Section>
   );
 }
@@ -197,10 +202,47 @@ function CameraPanel({ api }: { api: StudioApi }) {
           <Seg value={cam.path} onChange={(v) => api.updateScene((s) => ({ ...s, camera: { ...s.camera, path: v } }))} disabled={!canEdit}
             options={[{ id: "smooth", name: "Curved", hint: "A smooth curve through every key" }, { id: "linear", name: "Straight", hint: "Straight lines between keys" }]} />
         </Row>
+        <p className="pt-1 text-[11.5px] text-text-muted">Motion</p>
+        <Seg value={cam.flow} options={CAMERA_FLOWS} disabled={!canEdit}
+          onChange={(v) => api.updateScene((s) => ({ ...s, camera: { ...s.camera, flow: v } }))} />
+        <p className="text-[11px] leading-relaxed text-text-faint">{CAMERA_FLOWS.find((f) => f.id === cam.flow)?.hint}.</p>
+        {cam.flow !== "keys" && (
+          <label className="flex cursor-pointer items-center gap-2 text-[11.5px] text-text-muted">
+            <input type="checkbox" checked={cam.easeEnds} disabled={!canEdit}
+              onChange={(e) => api.updateScene((s) => ({ ...s, camera: { ...s.camera, easeEnds: e.target.checked } }))} />
+            Start and finish at rest
+          </label>
+        )}
         {(sp.peak > 0) && (
           <p className="text-[11px] text-text-muted">
             Travels {sp.travel.toFixed(1)} m, peaks at {sp.peak.toFixed(1)} m/s ({(sp.peak * 3.6).toFixed(0)} km/h){cam.parent ? " relative to what it rides with" : ""}.
           </p>
+        )}
+      </Section>
+      <Section title="Keep aimed at">
+        <Row label="Subject">
+          <Select value={cam.aim.target ?? ""} disabled={!canEdit}
+            onChange={(v) => api.updateScene((s) => ({ ...s, camera: { ...s.camera, aim: { target: v || null, frame: [0, 0] } } }))}>
+            <option value="">Nothing (the keys aim the camera)</option>
+            {scene.objects.filter((o) => !["road", "sea", "hill", "mountain", "room"].includes(o.kind)).map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </Select>
+        </Row>
+        {cam.aim.target ? (
+          <>
+            <p className="text-[11px] leading-relaxed text-text-faint">
+              The camera stays locked on {scene.objects.find((o) => o.id === cam.aim.target)?.name} through the whole shot, wherever its path goes. Drag in the camera view to frame them off centre.
+            </p>
+            {(cam.aim.frame[0] !== 0 || cam.aim.frame[1] !== 0) && (
+              <div className="flex items-center justify-between gap-2 text-[11px] text-text-muted">
+                <span>Camera turned {Math.abs(cam.aim.frame[0]).toFixed(1)}° {cam.aim.frame[0] > 0 ? "left" : "right"} and {Math.abs(cam.aim.frame[1]).toFixed(1)}° {cam.aim.frame[1] > 0 ? "up" : "down"} of them</span>
+                <Btn disabled={!canEdit} onClick={() => api.updateScene((s) => ({ ...s, camera: { ...s.camera, aim: { ...s.camera.aim, frame: [0, 0] } } }))}>Centre</Btn>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-[11px] leading-relaxed text-text-faint">Lock the camera on a subject so it never drifts off them between keys.</p>
         )}
       </Section>
       <KeyPanel api={api} track="camera" />

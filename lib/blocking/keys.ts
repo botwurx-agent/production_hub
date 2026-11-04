@@ -5,7 +5,7 @@
 // pace set by the LEAVING key's ease. Angles are unwrapped first, so a yaw
 // going from 350 to 10 turns 20 degrees rather than 340. The lens is
 // interpolated in log space, so a zoom from 24 to 96 passes 48 at the middle.
-import type { CamKey, Ease, Key, Vec3 } from "./scene";
+import type { CamKey, CameraFlow, Ease, Key, Vec3 } from "./scene";
 
 export function easeOf(e: Ease, u: number): number {
   const x = Math.min(1, Math.max(0, u));
@@ -79,7 +79,14 @@ export function evalTrack(keys: Key[], t: number, smooth = true): Pose {
   return { p, r };
 }
 
-export function evalCamera(keys: CamKey[], t: number, smooth = true): CamPose {
+export type FlowOpts = { flow?: CameraFlow; easeEnds?: boolean };
+
+export function evalCamera(keys: CamKey[], t: number, smooth = true, opts: FlowOpts = {}): CamPose {
+  const flow = opts.flow ?? "keys";
+  if (keys.length >= 2 && flow !== "keys") {
+    if (flow === "even") return evenCamera(keys, t, smooth, opts.easeEnds !== false);
+    return flowCamera(keys, t, smooth, opts.easeEnds !== false);
+  }
   const base = evalTrack(keys, t, smooth);
   if (!keys.length) return { ...base, lens: 35 };
   const { i, u } = locate(keys, t);
@@ -87,6 +94,140 @@ export function evalCamera(keys: CamKey[], t: number, smooth = true): CamPose {
   // Not Catmull-Rom: a curve through log lens values overshoots a zoom.
   const l = keys.length === 1 || u === 0 ? logs[i] : logs[i] + (logs[i + 1] - logs[i]) * u;
   return { ...base, lens: Math.exp(l) };
+}
+
+/* ---------- continuous flow ---------- */
+
+/**
+ * A curve through values at given times whose VELOCITY is continuous across
+ * every key, so nothing stops at a key unless the path itself turns back.
+ * Cubic Hermite with each key's slope taken from its neighbours over the time
+ * between them (Catmull-Rom on the real key times, not on key count, which is
+ * what keeps the speed steady where keys are unevenly spaced). `monotone`
+ * flattens a slope where the values turn round, so a lens or an angle never
+ * overshoots its key. `restEnds` starts and ends at zero velocity.
+ */
+export function flowChannel(times: number[], vals: number[], t: number, opts: { monotone?: boolean; restEnds?: boolean; linear?: boolean } = {}): number {
+  const n = vals.length;
+  if (n === 1) return vals[0];
+  if (t <= times[0]) return vals[0];
+  if (t >= times[n - 1]) return vals[n - 1];
+  let i = 0;
+  while (i < n - 2 && times[i + 1] <= t) i++;
+  const h = times[i + 1] - times[i];
+  if (h <= 0) return vals[i + 1];
+  const s = (t - times[i]) / h;
+  if (opts.linear) return vals[i] + (vals[i + 1] - vals[i]) * s;
+  const slope = (j: number): number => {
+    const d = (a: number, b: number) => (vals[b] - vals[a]) / Math.max(1e-6, times[b] - times[a]);
+    if (j === 0) return opts.restEnds ? 0 : d(0, 1);
+    if (j === n - 1) return opts.restEnds ? 0 : d(n - 2, n - 1);
+    const m = d(j - 1, j + 1);
+    if (opts.monotone) {
+      const a = d(j - 1, j);
+      const b = d(j, j + 1);
+      if (a * b <= 0) return 0;
+      // Fritsch-Carlson: never steeper than three times either side.
+      return Math.sign(m) * Math.min(Math.abs(m), 3 * Math.abs(a), 3 * Math.abs(b));
+    }
+    return m;
+  };
+  const m0 = slope(i);
+  const m1 = slope(i + 1);
+  const s2 = s * s;
+  const s3 = s2 * s;
+  return (2 * s3 - 3 * s2 + 1) * vals[i] + (s3 - 2 * s2 + s) * h * m0 + (-2 * s3 + 3 * s2) * vals[i + 1] + (s3 - s2) * h * m1;
+}
+
+function flowCamera(keys: CamKey[], t: number, smooth: boolean, restEnds: boolean): CamPose {
+  const times = keys.map((k) => k.t);
+  const p: Vec3 = [0, 0, 0];
+  const r: Vec3 = [0, 0, 0];
+  for (let c = 0; c < 3; c++) {
+    p[c] = flowChannel(times, keys.map((k) => k.p[c]), t, { restEnds, linear: !smooth });
+    // Angles turn as smoothly as the path but never overshoot a key.
+    r[c] = flowChannel(times, unwrap(keys.map((k) => k.r[c])), t, { restEnds, monotone: true, linear: !smooth });
+  }
+  const lens = Math.exp(flowChannel(times, keys.map((k) => Math.log(Math.max(1, k.lens))), t, { restEnds, monotone: true, linear: !smooth }));
+  return { p, r, lens };
+}
+
+/* ---------- even speed ---------- */
+
+type EvenTable = { t0: number; t1: number; ts: number[]; cum: number[] };
+const evenCache = new WeakMap<CamKey[], Map<string, EvenTable>>();
+
+/** The flowing path sampled finely, with the distance travelled at each sample. */
+function evenTable(keys: CamKey[], smooth: boolean): EvenTable {
+  const k = `${smooth}`;
+  let m = evenCache.get(keys);
+  if (!m) { m = new Map(); evenCache.set(keys, m); }
+  const hit = m.get(k);
+  if (hit) return hit;
+  const t0 = keys[0].t;
+  const t1 = keys[keys.length - 1].t;
+  const N = Math.max(64, Math.min(2000, Math.round((t1 - t0) * 60)));
+  const ts: number[] = [];
+  const cum: number[] = [];
+  let prev = flowCamera(keys, t0, smooth, false).p;
+  let d = 0;
+  for (let i = 0; i <= N; i++) {
+    const tt = t0 + ((t1 - t0) * i) / N;
+    const q = flowCamera(keys, tt, smooth, false).p;
+    d += Math.hypot(q[0] - prev[0], q[1] - prev[1], q[2] - prev[2]);
+    ts.push(tt);
+    cum.push(d);
+    prev = q;
+  }
+  const out = { t0, t1, ts, cum };
+  m.set(k, out);
+  return out;
+}
+
+/**
+ * Share of the distance covered at share u of the time. With rested ends the
+ * speed ramps up over the first fifth and down over the last (a trapezoid),
+ * otherwise it is steady throughout.
+ */
+export function evenProfile(u: number, restEnds: boolean): number {
+  const x = Math.min(1, Math.max(0, u));
+  if (!restEnds) return x;
+  const a = 0.2;
+  const vmax = 1 / (1 - a);
+  if (x < a) return (vmax * x * x) / (2 * a);
+  if (x > 1 - a) { const y = 1 - x; return 1 - (vmax * y * y) / (2 * a); }
+  return vmax * (x - a / 2);
+}
+
+function evenCamera(keys: CamKey[], t: number, smooth: boolean, restEnds: boolean): CamPose {
+  const tb = evenTable(keys, smooth);
+  const total = tb.cum[tb.cum.length - 1];
+  if (total < 1e-4 || tb.t1 <= tb.t0) return flowCamera(keys, t, smooth, restEnds);
+  const u = (t - tb.t0) / (tb.t1 - tb.t0);
+  const want = evenProfile(u, restEnds) * total;
+  // The time along the path at which that distance is reached.
+  let lo = 0;
+  let hi = tb.cum.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (tb.cum[mid] < want) lo = mid; else hi = mid; }
+  const span = tb.cum[hi] - tb.cum[lo];
+  const f = span > 0 ? (want - tb.cum[lo]) / span : 0;
+  const tt = tb.ts[lo] + (tb.ts[hi] - tb.ts[lo]) * f;
+  return flowCamera(keys, tt, smooth, false);
+}
+
+/** Peak speed and distance of any position-over-time function, sampled at the frame rate. */
+export function pathStats(at: (t: number) => Vec3, duration: number, fps: number): { peak: number; travel: number } {
+  let peak = 0;
+  let d = 0;
+  let prev = at(0);
+  for (let f = 1; f <= Math.round(duration * fps); f++) {
+    const p = at(f / fps);
+    const step = Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]);
+    d += step;
+    peak = Math.max(peak, step * fps);
+    prev = p;
+  }
+  return { peak, travel: d };
 }
 
 /** Puts a key at time t, replacing any key within half a frame of it. */

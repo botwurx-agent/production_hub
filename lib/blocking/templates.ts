@@ -53,7 +53,7 @@ export function coastRoadScene(): BlockScene {
   // middle, the dog sits in the third row.
   obj("person", [-0.45, 0.5, 0.9], 0, used, { name: "Driver", pose: "seated", parent: car.id, size: [0.5, 1.78, 0.3] });
   obj("person", [0.45, 0.5, 0.9], 0, used, { name: "Passenger", pose: "seated", parent: car.id, size: [0.5, 1.68, 0.3] });
-  obj("dog", [0, 0.92, -0.5], 0, used, { name: "Dog", pose: "seated", parent: car.id });
+  const dog = obj("dog", [0, 0.92, -0.5], 0, used, { name: "Dog", pose: "seated", parent: car.id });
   s.objects = used;
   s.camera.parent = car.id;
   const dogHead: Vec3 = [0, 1.55, -0.4];
@@ -66,6 +66,8 @@ export function coastRoadScene(): BlockScene {
     ck(10.2, [0, 1.3, 6.5], [0, 1.0, 0], 28),
     ck(12, [0.4, 1.0, 11], [0, 0.9, 0], 32),
   ];
+  // Locked on the dog the whole way, whatever the path does.
+  s.camera.aim = { target: dog.id, frame: [0, 0] };
   return s;
 }
 
@@ -96,6 +98,7 @@ export function cityStreetScene(): BlockScene {
     ck(0, [-7.2, 1.5, 0.5], [-7.2, 1.5, -6], 40, "linear"),
     ck(8, [-7.2, 1.5, 9.5], [-7.2, 1.5, 6], 40),
   ];
+  s.camera.aim = { target: walker.id, frame: [0, 0] };
   return s;
 }
 
@@ -120,9 +123,10 @@ export function productScene(): BlockScene {
   s.environment = { sky: "#1d1f23", ground: "studio", haze: 0, sunAz: 140, sunEl: 55 };
   const used: BlockObject[] = [];
   obj("cylinder", [0, 0, 0], 0, used, { name: "Plinth", size: [0.5, 0.9, 0.5], color: "#e9e6df" });
-  obj("product", [0, 0.9, 0], 0, used, { name: "Hero product" });
+  const hero = obj("product", [0, 0.9, 0], 0, used, { name: "Hero product" });
   s.objects = used;
   s.camera.keys = presetKeys("orbit-half", { p: [0, 1.25, 1.4], r: [0, 0, 0], lens: 65 }, [0, 1.03, 0], 0, 8);
+  s.camera.aim = { target: hero.id, frame: [0, 0] };
   return s;
 }
 
@@ -145,6 +149,7 @@ export function desertScene(): BlockScene {
     ck(0, [-2.6, 0.6, 2.8], [1, 1, -8], 24),
     ck(10, [-2.2, 6.5, 3.5], [1, 0.8, -20], 24),
   ];
+  s.camera.aim = { target: walker.id, frame: [0, 0] };
   return s;
 }
 

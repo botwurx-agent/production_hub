@@ -53,7 +53,29 @@ export type BlockCamera = {
   shake: Shake;
   /** Smooth curves through the keys, or straight lines between them. */
   path: "smooth" | "linear";
+  /**
+   * How the camera moves through its keys. "keys": each key eases in and out
+   * on its own, so the camera settles at every one. "continuous": it flows
+   * through every key at that key's time without stopping. "even": one
+   * steady speed along the whole path (keys set the route, not the timing).
+   */
+  flow: CameraFlow;
+  /** With continuous or even: start from rest and come to rest at the ends. */
+  easeEnds: boolean;
+  /**
+   * Keep the camera pointed at an object, whatever the keys say, like a
+   * Track To constraint. `frame` nudges the subject off centre (yaw, pitch
+   * degrees); the keys' roll still applies.
+   */
+  aim: { target: string | null; frame: [number, number] };
 };
+
+export type CameraFlow = "keys" | "continuous" | "even";
+export const CAMERA_FLOWS: { id: CameraFlow; name: string; hint: string }[] = [
+  { id: "continuous", name: "Continuous", hint: "Flows through every key at its time without stopping" },
+  { id: "even", name: "Even speed", hint: "One steady speed along the whole path; the keys set the route" },
+  { id: "keys", name: "Stop at keys", hint: "Each key eases in and out on its own, so the camera settles at every one" },
+];
 
 export type Environment = {
   sky: string;
@@ -203,6 +225,9 @@ export function blankScene(name = "Untitled blocking"): BlockScene {
       parent: null,
       shake: { amount: 0, speed: 1 },
       path: "smooth",
+      flow: "continuous",
+      easeEnds: true,
+      aim: { target: null, frame: [0, 0] },
     },
   };
 }
@@ -310,6 +335,18 @@ export function asBlockScene(raw: unknown): BlockScene | null {
     parent: typeof camRaw.parent === "string" && byId.has(camRaw.parent) ? camRaw.parent : null,
     shake: { amount: num(shakeRaw.amount, 0, 0, 1), speed: num(shakeRaw.speed, 1, 0.1, 4) },
     path: camRaw.path === "linear" ? "linear" : "smooth",
+    // Older scenes carry no flow: they get the continuous move, which is what
+    // a camera path is almost always meant to be.
+    flow: camRaw.flow === "keys" || camRaw.flow === "even" ? camRaw.flow : "continuous",
+    easeEnds: camRaw.easeEnds !== false,
+    aim: (() => {
+      const a = (camRaw.aim ?? {}) as Record<string, unknown>;
+      const fr = Array.isArray(a.frame) ? a.frame : [];
+      return {
+        target: typeof a.target === "string" && byId.has(a.target) ? a.target : null,
+        frame: [num(fr[0], 0, -60, 60), num(fr[1], 0, -40, 40)] as [number, number],
+      };
+    })(),
   };
   return {
     v: 1,
