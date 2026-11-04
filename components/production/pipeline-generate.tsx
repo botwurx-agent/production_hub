@@ -9,11 +9,11 @@
 // shot already has tagged, the elements it uses, and for "another like this"
 // the very inputs that take was made from.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GenerateWindow, type GenInputOption, type GenQuote, type GenerateRequest } from "@/components/production/higgsfield-generate";
+import { GenerateWindow, type GenInputOption, type GenModelList, type GenQuote, type GenerateRequest } from "@/components/production/higgsfield-generate";
 import type { GenerateAsk } from "@/components/production/pipeline-map";
-import { checkGeneration, dismissGeneration, quoteGenerations, startGeneration } from "@/app/(app)/projects/[id]/generate-actions";
+import { checkGeneration, dismissGeneration, listGenModels, quoteGenerations, startGeneration } from "@/app/(app)/projects/[id]/generate-actions";
 import { actionError } from "@/lib/action-result";
 import { toast } from "@/components/ui/toast";
 import type { CastReference } from "@/lib/cast";
@@ -128,10 +128,22 @@ export function PipelineGenerate({
     return res.costs.map((cost) => ({ credits: res.credits, cost }));
   }
 
+  const projectId = p.projectId;
+  const loadModels = useCallback(
+    async (kind: "image" | "video"): Promise<GenModelList> => {
+      const res = await listGenModels(projectId, kind);
+      const err = actionError(res);
+      if (err || !res || "error" in res) return { error: err ?? "Could not read Higgsfield's models." };
+      return res;
+    },
+    [projectId],
+  );
+
   return (
     <GenerateWindow
       request={open}
       onClose={onClose}
+      loadModels={loadModels}
       quote={quote}
       generate={async (choice, expectedCost, onSubmitted) => {
         if (!open) return { error: "Nothing to generate." };

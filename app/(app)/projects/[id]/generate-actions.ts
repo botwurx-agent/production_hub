@@ -26,15 +26,19 @@ import { requireStudioContext } from "@/lib/studio";
 import { openHiggsfield, callTool } from "@/lib/higgsfield-session";
 import { findId, findSeed, readCost, readJob } from "@/lib/higgsfield-result";
 import {
+  FALLBACK_MODELS,
   cleanChoice,
-  genModel,
+  findModel,
   genParams,
   inputWord,
   mediaRole,
+  modelsFromCatalog,
   type GenChoice,
   type GenInputSource,
+  type GenKind,
   type GenModel,
 } from "@/lib/higgsfield-generate";
+import type { HiggsfieldMcp } from "@/lib/higgsfield-mcp";
 import { assetStorage } from "@/lib/asset-storage";
 import { aspectRatio, fetchMediaFromUrl, resolutionLabel } from "@/lib/media-import";
 import { reportError } from "@/lib/log";
@@ -60,6 +64,90 @@ async function editable(projectId: string, shotId?: string): Promise<Access | { 
   return { userId: ctx.userId, studioId: project.studio_id };
 }
 
+// The catalogue is the same for everyone and changes when Higgsfield adds a
+// model, so it is read once per warm instance per half hour rather than on
+// every open of the window.
+const CATALOG_TTL = 30 * 60 * 1000;
+let catalogCache: { at: number; models: GenModel[] } | null = null;
+
+async function readCatalog(mcp: HiggsfieldMcp): Promise<GenModel[] | null> {
+  const kinds: GenKind[] = ["video", "image"];
+  const lists = await Promise.all(
+    kinds.map(async (kind) => {
+      const items: unknown[] = [];
+      let after: string | undefined;
+      for (let page = 0; page < 4; page++) {
+        const r = await callTool(mcp, "models_explore", { action: "list", type: kind, limit: 100, ...(after ? { after } : {}) });
+        if ("error" in r) return null;
+        let data = r.data as { items?: unknown; has_more?: unknown; next_page_token?: unknown } | null;
+        if (!data || typeof data !== "object") {
+          try {
+            data = JSON.parse(r.text);
+          } catch {
+            return null;
+          }
+        }
+        if (Array.isArray(data?.items)) items.push(...data.items);
+        after = data?.has_more && typeof data.next_page_token === "string" ? data.next_page_token : undefined;
+        if (!after) break;
+      }
+      return modelsFromCatalog(items, kind);
+    }),
+  );
+  if (lists.some((l) => !l || l.length === 0)) return null;
+  return lists.flat() as GenModel[];
+}
+
+/** Every model offered, live when it can be read, else the short fallback list. */
+async function catalogWith(mcp: HiggsfieldMcp): Promise<{ models: GenModel[]; live: boolean }> {
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) return { models: catalogCache.models, live: true };
+  try {
+    const models = await readCatalog(mcp);
+    if (models) {
+      catalogCache = { at: Date.now(), models };
+      return { models, live: true };
+    }
+  } catch (e) {
+    reportError("readCatalog", e);
+  }
+  return { models: FALLBACK_MODELS, live: false };
+}
+
+async function catalogFor(userId: string): Promise<GenModel[]> {
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) return catalogCache.models;
+  const open = await openHiggsfield(userId);
+  if ("error" in open) return FALLBACK_MODELS;
+  try {
+    return (await catalogWith(open.mcp)).models;
+  } finally {
+    await open.mcp.close();
+  }
+}
+
+/**
+ * The models the window offers for one kind, the default first. Read from
+ * Higgsfield's own catalogue so a model they add is in the list with no
+ * deploy. Spends nothing.
+ */
+export async function listGenModels(
+  projectId: string,
+  kind: GenKind,
+): Promise<{ models: GenModel[]; live: boolean } | { error: string; notConnected?: true }> {
+  const access = await editable(projectId);
+  if ("error" in access) return access;
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) {
+    return { models: catalogCache.models.filter((m) => m.kind === kind), live: true };
+  }
+  const open = await openHiggsfield(access.userId);
+  if ("error" in open) return open;
+  try {
+    const { models, live } = await catalogWith(open.mcp);
+    return { models: models.filter((m) => m.kind === kind), live };
+  } finally {
+    await open.mcp.close();
+  }
+}
+
 function toolFor(model: GenModel) {
   return model.kind === "video" ? "generate_video" : "generate_image";
 }
@@ -76,18 +164,19 @@ export async function quoteGenerations(
 ): Promise<{ credits: number | null; costs: (number | null)[] } | { error: string; notConnected?: true }> {
   const access = await editable(projectId);
   if ("error" in access) return access;
-  const clean = (Array.isArray(choices) ? choices.slice(0, 6) : []).map(cleanChoice);
   const open = await openHiggsfield(access.userId);
   if ("error" in open) return open;
   const { mcp } = open;
   try {
+    const { models } = await catalogWith(mcp);
+    const clean = (Array.isArray(choices) ? choices.slice(0, 6) : []).map((c) => cleanChoice(c, models));
     const bal = await callTool(mcp, "balance", {});
     const credits = "error" in bal ? null : num((bal.data as { credits?: unknown } | null)?.credits);
     const costs = await Promise.all(
       clean.map(async (c) => {
-        const model = c && genModel(c.modelId);
+        const model = c && findModel(models, c.modelId);
         if (!c || !model) return null;
-        const r = await callTool(mcp, toolFor(model), { params: { ...genParams(c), prompt: c.prompt || "price check", get_cost: true } });
+        const r = await callTool(mcp, toolFor(model), { params: { ...genParams(c, model), prompt: c.prompt || "price check", get_cost: true } });
         return "error" in r ? null : readCost(r.data);
       }),
     );
@@ -135,8 +224,9 @@ export async function startGeneration(
 ): Promise<{ genId: string } | { error: string; newCost?: number; notConnected?: true }> {
   const access = await editable(projectId, input.shotId);
   if ("error" in access) return access;
-  const choice = cleanChoice(input.choice);
-  const model = choice && genModel(choice.modelId);
+  const models = await catalogFor(access.userId);
+  const choice = cleanChoice(input.choice, models);
+  const model = choice && findModel(models, choice.modelId);
   if (!choice || !model) return { error: "Pick a model." };
   if (!choice.prompt) return { error: "Write a prompt first." };
 
@@ -214,7 +304,7 @@ export async function startGeneration(
       medias.push({ value: mediaId, role: u.role });
     }
 
-    const params: Record<string, unknown> = { ...genParams(choice), prompt: choice.prompt, use_unlim: false };
+    const params: Record<string, unknown> = { ...genParams(choice, model), prompt: choice.prompt, use_unlim: false };
     if (medias.length) params.medias = medias;
 
     // The price again, now with the inputs attached. Spends nothing.

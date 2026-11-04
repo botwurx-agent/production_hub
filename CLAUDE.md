@@ -9415,6 +9415,26 @@ view of everything on an AI job, with arrows between related assets.
   hands over to the strip when closed. buildRequest fills the window from the
   page's own data ("another like this" reuses that take's frames and recorded
   inputs). Gated on the viewer's own Higgsfield connection plus edit rights.
+  EVERY MODEL, LIVE (2026-11-04, operator: "there's so many more models... Kling
+  4.0 now is available"). The model picker is a DROPDOWN of Higgsfield's own
+  catalogue, read with models_explore list (image + video) through the
+  presser's session and cached per warm instance for 30 minutes, so a model
+  they add appears with no deploy. modelsFromCatalog (lib/higgsfield-generate)
+  turns each item into a GenModel: string settings with options and bools
+  become controls, housekeeping keys are hidden, a generation-type `mode`
+  (t2v/omni_reference, or text/image/reference-to-video) is SET FROM THE
+  INPUTS instead of asked, sound defaults OFF, lengths come from durations /
+  duration_range / the param's options (else 3 to 15, and the price check
+  refuses a bad one before anything is spent). Ruled out: utilities
+  (upscale, background, dubbing, lip sync, reframe, edits of a clip, marketing
+  templates, presets) and any model with a REQUIRED setting we cannot fill.
+  29 video models on 2026-11-04. Default stays Seedance 2.5 / Nano Banana 2.1
+  (DEFAULT_MODEL), listed first, the rest grouped by maker. Only the picked
+  model is priced (one get_cost per change, cached per settings). If the
+  catalogue cannot be read, FALLBACK_MODELS (three) keeps the window working
+  and says so. The server re-validates every choice against the same
+  catalogue. app/dev/pipeline-map/catalog-sample.json is a raw copy of the
+  video catalogue the fixture runs through the real converter.
   NOT YET: the same button on the stage panels, and no real generation has
   been run from the app. The first press is the test; the replies of
   media_import_url and generate_video have never been printed from here.

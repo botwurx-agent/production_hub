@@ -14,10 +14,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import {
   creditsWord,
-  cleanChoice,
+  DEFAULT_MODEL,
   droppedInputs,
-  genModel,
-  modelsFor,
+  findModel,
   provenanceLines,
   inputWord,
   rolesFor,
@@ -26,6 +25,7 @@ import {
   type GenInputRole,
   type GenInputSource,
   type GenKind,
+  type GenModel,
 } from "@/lib/higgsfield-generate";
 
 export type GenInputOption = { genId: string; label: string; thumb: string | null; role: GenInputRole; source: GenInputSource };
@@ -34,6 +34,9 @@ const ROLE_WORD: Record<GenInputRole, string> = { start: "Start frame", end: "En
 const SOURCE_WORD: Record<GenInputSource, string> = { frame: "Picture on this shot", element: "Element", video: "Video on this shot" };
 
 export type GenQuote = { credits: number | null; cost: number | null } | { error: string };
+
+/** The models on offer for a kind, read from Higgsfield's catalogue. */
+export type GenModelList = { models: GenModel[]; live: boolean } | { error: string };
 
 export type GenerateRequest = {
   kind: GenKind;
@@ -54,9 +57,12 @@ export function GenerateWindow({
   onClose,
   quote,
   generate,
+  loadModels,
 }: {
   request: GenerateRequest | null;
   onClose: () => void;
+  /** Every model Higgsfield offers for this kind. Spends nothing. */
+  loadModels: (kind: GenKind) => Promise<GenModelList>;
   /** One price per choice, in one call. Spends nothing. */
   quote: (choices: GenChoice[]) => Promise<GenQuote[]>;
   /**
@@ -72,8 +78,10 @@ export function GenerateWindow({
 }) {
   const open = !!request;
   const kind = request?.kind ?? "image";
-  const models = modelsFor(kind);
-  const [modelId, setModelId] = useState(models[0]?.id ?? "");
+  const [catalog, setCatalog] = useState<Partial<Record<GenKind, GenModel[]>>>({});
+  const [catalogNote, setCatalogNote] = useState<string | null>(null);
+  const models = useMemo(() => catalog[kind] ?? [], [catalog, kind]);
+  const [modelId, setModelId] = useState("");
   const [prompt, setPrompt] = useState("");
   const [aspect, setAspect] = useState("16:9");
   const [duration, setDuration] = useState<number | null>(null);
@@ -83,29 +91,66 @@ export function GenerateWindow({
   const [adding, setAdding] = useState(false);
   const [phase, setPhase] = useState<Phase>({ at: "edit" });
 
-  // A fresh request resets the form to what it was opened from.
+  // The catalogue for this kind, read once per window session.
   useEffect(() => {
-    if (!request) return;
-    const first = modelsFor(request.kind)[0];
-    setModelId(first?.id ?? "");
-    setPrompt(request.defaultPrompt);
-    setAspect(request.defaultAspect && first?.aspects.includes(request.defaultAspect) ? request.defaultAspect : first?.aspects[0] ?? "16:9");
-    setDuration(first?.duration?.default ?? null);
-    setOptions(Object.fromEntries((first?.options ?? []).map((o) => [o.key, o.default])));
-    setInputs(request.inputs);
-    setAdding(false);
-    setPhase({ at: "edit" });
-  }, [request]);
+    if (!request || catalog[request.kind]) return;
+    let alive = true;
+    loadModels(request.kind)
+      .then((r) => {
+        if (!alive) return;
+        if ("error" in r) {
+          setCatalogNote(r.error);
+          return;
+        }
+        setCatalogNote(r.live ? null : "Could not read Higgsfield's full model list, so only the usual models are shown.");
+        setCatalog((c) => ({ ...c, [request.kind]: r.models }));
+      })
+      .catch(() => alive && setCatalogNote("Could not reach Higgsfield for its models."));
+    return () => {
+      alive = false;
+    };
+  }, [request, catalog, loadModels]);
 
-  const model = genModel(modelId);
+  function applyModel(m: GenModel, from: { aspect: string; duration: number | null; options: Record<string, string> }) {
+    setModelId(m.id);
+    setAspect(m.aspects.includes(from.aspect) ? from.aspect : m.aspects.includes("16:9") ? "16:9" : m.aspects[0] ?? "");
+    if (!m.duration) setDuration(null);
+    else {
+      const want = from.duration ?? m.duration.default;
+      const clamped = Math.min(m.duration.max, Math.max(m.duration.min, want));
+      const steps = m.duration.steps;
+      setDuration(steps?.length ? steps.reduce((b, s) => (Math.abs(s - clamped) < Math.abs(b - clamped) ? s : b), steps[0]) : clamped);
+    }
+    setOptions(Object.fromEntries(m.options.map((o) => [o.key, from.options[o.key] && o.values.some((v) => v.value === from.options[o.key]) ? from.options[o.key] : o.default])));
+  }
+
+  // A fresh request resets the form to what it was opened from, on the
+  // default model, once the list is in.
+  const resetFor = useRef<GenerateRequest | null>(null);
+  useEffect(() => {
+    if (!request) {
+      resetFor.current = null;
+      return;
+    }
+    if (resetFor.current !== request) {
+      setPrompt(request.defaultPrompt);
+      setInputs(request.inputs);
+      setAdding(false);
+      setPhase({ at: "edit" });
+      setModelId("");
+    }
+    if (models.length === 0 || resetFor.current === request) return;
+    resetFor.current = request;
+    const first = findModel(models, DEFAULT_MODEL[request.kind]) ?? models[0];
+    applyModel(first, { aspect: request.defaultAspect ?? "16:9", duration: null, options: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request, models]);
+
+  const model = findModel(models, modelId);
 
   function pickModel(id: string) {
-    const m = genModel(id);
-    if (!m) return;
-    setModelId(id);
-    if (!m.aspects.includes(aspect)) setAspect(m.aspects[0]);
-    setDuration(m.duration ? Math.min(m.duration.max, Math.max(m.duration.min, duration ?? m.duration.default)) : null);
-    setOptions(Object.fromEntries(m.options.map((o) => [o.key, options[o.key] && o.values.some((v) => v.value === options[o.key]) ? options[o.key] : o.default])));
+    const m = findModel(models, id);
+    if (m) applyModel(m, { aspect, duration, options });
   }
 
   const choice: GenChoice = useMemo(
@@ -120,35 +165,27 @@ export function GenerateWindow({
     [modelId, prompt, aspect, duration, options, inputs],
   );
 
-  // The price follows the settings, not the prompt: a quote per keystroke
-  // would be a round trip to Higgsfield per letter for a number that does not
-  // move with the words. EVERY model of this kind is quoted (each with the
-  // settings carried over as far as it takes them), so the cards can be
-  // compared on cost before one is picked. A quote spends nothing.
-  const priceKey = JSON.stringify({ aspect, duration, options, ins: inputs.map((i) => i.role), open });
+  // The price follows the model and its settings, not the prompt: a quote per
+  // keystroke would be a round trip to Higgsfield per letter for a number
+  // that does not move with the words. Only the picked model is quoted (there
+  // can be thirty), and each price is kept, so going back to a model shows
+  // its price at once. A quote spends nothing.
+  const priceKey = JSON.stringify({ modelId, aspect, duration, options, ins: inputs.map((i) => i.role) });
   const seq = useRef(0);
   useEffect(() => {
-    if (!open) return;
+    if (!open || !modelId) return;
+    if (prices[priceKey]) return;
     const n = ++seq.current;
-    setPrices({});
     const t = setTimeout(async () => {
-      // Each model priced with the settings carried over as far as it takes
-      // them, in one call, so the cards compare like for like.
-      const all = models.map((m) => {
-        if (m.id === modelId) return choice;
-        const c = cleanChoice({ ...choice, modelId: m.id });
-        return c ?? { ...choice, modelId: m.id };
-      });
-      const qs = await quote(all).catch(() => all.map(() => ({ error: "Could not reach Higgsfield for a price." }) as GenQuote));
+      const qs = await quote([choice]).catch(() => [{ error: "Could not reach Higgsfield for a price." } as GenQuote]);
       if (n !== seq.current) return;
-      setPrices(Object.fromEntries(models.map((m, i) => [m.id, qs[i] ?? { error: "No price." }])));
+      setPrices((p) => ({ ...p, [priceKey]: qs[0] ?? { error: "No price." } }));
     }, 350);
     return () => clearTimeout(t);
-    // Picking another model changes its own settings, which is already in the key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceKey]);
+  }, [priceKey, open]);
 
-  const price = prices[modelId] ?? null;
+  const price = prices[priceKey] ?? null;
   const cost = price && !("error" in price) ? price.cost : null;
   const credits = price && !("error" in price) ? price.credits : null;
   const short = cost != null && credits != null && cost > credits;
@@ -176,7 +213,7 @@ export function GenerateWindow({
     if ("error" in res) {
       // A price that went up is shown on the button, so the next press is a
       // deliberate yes to the new figure.
-      if (res.newCost != null) setPrices((p) => ({ ...p, [modelId]: { credits, cost: res.newCost ?? null } }));
+      if (res.newCost != null) setPrices((p) => ({ ...p, [priceKey]: { credits, cost: res.newCost ?? null } }));
       setPhase({ at: "failed", error: res.error });
     }
     else setPhase({ at: "done", title: request?.shotTitle ?? "the shot" });
@@ -187,6 +224,9 @@ export function GenerateWindow({
 
   return (
     <Modal open={open} onClose={onClose} title={`Generate ${what}`} size="lg" id="higgsfield-generate">
+      {request && !model && (
+        <p className="text-sm text-text-muted">{catalogNote ?? "Reading Higgsfield's models..."}</p>
+      )}
       {request && model && (
         <div className="space-y-5">
           <p className="text-sm text-text-muted">
@@ -197,23 +237,23 @@ export function GenerateWindow({
           {/* Model */}
           <div>
             <Label>Model</Label>
-            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-              {models.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => pickModel(m.id)}
-                  disabled={phase.at !== "edit"}
-                  className={`rounded-lg border p-3 text-left ${m.id === modelId ? "border-accent ring-1 ring-accent" : "border-border hover:border-border-strong"}`}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold text-text">{m.name}</span>
-                    <CardPrice q={prices[m.id]} />
-                  </div>
-                  <div className="mt-0.5 text-xs text-text-muted">{m.note}</div>
-                </button>
-              ))}
+            <div className="mt-1.5 flex flex-wrap items-center gap-3">
+              <select
+                value={modelId}
+                onChange={(e) => pickModel(e.target.value)}
+                disabled={phase.at !== "edit"}
+                aria-label="Model"
+                className="h-10 min-w-0 max-w-full flex-1 rounded-lg border border-border bg-surface px-3 text-sm font-semibold text-text sm:max-w-sm"
+              >
+                <ModelOptions models={models} defaultId={DEFAULT_MODEL[kind]} />
+              </select>
+              <CardPrice q={price ?? undefined} />
             </div>
+            <p className="mt-1.5 text-xs text-text-muted">
+              {[model.provider, model.note].filter(Boolean).join(" · ")}
+              {model.id === DEFAULT_MODEL[kind] ? " · The default." : ""}
+            </p>
+            {catalogNote && <p className="mt-1 text-xs text-text-muted">{catalogNote}</p>}
           </div>
 
           {/* Built from */}
@@ -313,10 +353,22 @@ export function GenerateWindow({
 
           {/* Settings */}
           <div className="flex flex-wrap gap-x-5 gap-y-3">
-            <Field label="Aspect">
-              <Seg values={model.aspects.map((a) => ({ value: a, label: a }))} value={aspect} onChange={setAspect} disabled={phase.at !== "edit"} />
-            </Field>
-            {model.duration && (
+            {model.aspects.length > 0 && (
+              <Field label="Aspect">
+                <Seg values={model.aspects.map((a) => ({ value: a, label: a === "auto" ? "Auto" : a }))} value={aspect} onChange={setAspect} disabled={phase.at !== "edit"} />
+              </Field>
+            )}
+            {model.duration?.steps && (
+              <Field label="Length">
+                <Seg
+                  values={model.duration.steps.map((n) => ({ value: String(n), label: `${n}s` }))}
+                  value={String(duration ?? model.duration.default)}
+                  onChange={(v) => setDuration(Number(v))}
+                  disabled={phase.at !== "edit"}
+                />
+              </Field>
+            )}
+            {model.duration && !model.duration.steps && (
               <Field label="Length">
                 <span className="inline-flex items-center gap-2">
                   <input
@@ -343,7 +395,7 @@ export function GenerateWindow({
           <details className="rounded-lg border border-border bg-surface-2 px-3 py-2">
             <summary className="cursor-pointer text-xs font-semibold text-text">Saved with the candidate</summary>
             <dl className="mt-2 grid grid-cols-[110px_1fr] gap-x-3 gap-y-1 text-xs">
-              {provenanceLines(choice, labels).map((l) => (
+              {provenanceLines(choice, model, labels).map((l) => (
                 <div key={l.label} className="contents">
                   <dt className="text-text-faint">{l.label}</dt>
                   <dd className="line-clamp-2 text-text">{l.value}</dd>
@@ -371,6 +423,31 @@ export function GenerateWindow({
         </div>
       )}
     </Modal>
+  );
+}
+
+/** The default on top, then the rest grouped by who makes them. */
+function ModelOptions({ models, defaultId }: { models: GenModel[]; defaultId: string }) {
+  const def = models.find((m) => m.id === defaultId);
+  const groups = new Map<string, GenModel[]>();
+  for (const m of models) {
+    if (m === def) continue;
+    const g = m.provider || "Other";
+    groups.set(g, [...(groups.get(g) ?? []), m]);
+  }
+  return (
+    <>
+      {def && <option value={def.id}>{def.name} (default)</option>}
+      {[...groups.entries()].map(([g, ms]) => (
+        <optgroup key={g} label={g}>
+          {ms.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
   );
 }
 

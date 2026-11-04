@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { PipelineMap, type GenerateAsk } from "@/components/production/pipeline-map";
 import { GenerateWindow, type GenerateRequest, type GenInputOption, type GenQuote } from "@/components/production/higgsfield-generate";
-import type { GenChoice } from "@/lib/higgsfield-generate";
+import { FALLBACK_MODELS, modelsFromCatalog, type GenChoice } from "@/lib/higgsfield-generate";
+// A copy of Higgsfield's video catalogue (models_explore list, 2026-11-04),
+// run through the same converter the live window uses.
+import catalogSample from "./catalog-sample.json";
 import { parsePositions, type MapGeneration, type MapInput, type MapPositions } from "@/lib/pipeline-map";
 
 // Drawn stand-ins, obviously not screenshots.
@@ -116,10 +119,15 @@ function examplePrice(c: GenChoice): number {
     const q = c.options.mode === "4k" ? 3 : c.options.mode === "pro" ? 1.6 : 1;
     return Math.round(1.25 * d * q * (c.options.sound === "on" ? 1.5 : 1) * 100) / 100;
   }
+  if (c.modelId !== "seedance_2_5") return Math.round(1.5 * d * 100) / 100;
   const r = c.options.resolution === "1080p" ? 2.25 : c.options.resolution === "480p" ? 0.5 : 1;
   return Math.round(7 * d * r * (c.options.generate_audio === "true" ? 1.3 : 1) * 100) / 100;
 }
 const EXAMPLE_BALANCE = 1240;
+const LOAD_MODELS = async (kind: "image" | "video") => {
+  await wait(300);
+  return { models: kind === "video" ? modelsFromCatalog(catalogSample, "video") : FALLBACK_MODELS.filter((m) => m.kind === "image"), live: true };
+};
 
 const genById = new Map(INPUT.generations.map((x) => [x.id, x]));
 const shotById = new Map(INPUT.shots.map((x) => [x.id, x]));
@@ -203,6 +211,7 @@ export function MapFixture() {
     <GenerateWindow
       request={gen}
       onClose={() => setGen(null)}
+      loadModels={LOAD_MODELS}
       quote={async (cs): Promise<GenQuote[]> => {
         await wait(400);
         return cs.map((c) => ({ credits: EXAMPLE_BALANCE, cost: examplePrice(c) }));
