@@ -37,8 +37,22 @@ export type PipelineMapProps = {
   onPositionsChange: (next: MapPositions) => void;
   /** Jump to a shot's cockpit in the pipeline. */
   onOpenShot?: (shotId: string) => void;
+  /**
+   * Make a new candidate on Higgsfield from a node. Absent when the viewer has
+   * no Higgsfield connection or cannot edit, so the buttons simply do not show.
+   */
+  onGenerate?: (ask: GenerateAsk) => void;
   heightClass?: string;
 };
+
+/**
+ * What a press on the map asks for. The page turns it into the window's
+ * request, since only the page knows prompts, thumbnails and elements.
+ *   take   a video take, starting from `fromGenId` (a still) when given
+ *   again  another candidate like `fromGenId`, same prompt and inputs
+ *   still  a new still for the shot
+ */
+export type GenerateAsk = { mode: "take" | "again" | "still"; shotId: string; fromGenId: string | null };
 
 const MIN_Z = 0.2;
 const MAX_Z = 2;
@@ -59,6 +73,7 @@ export function PipelineMap({
   positions,
   onPositionsChange,
   onOpenShot,
+  onGenerate,
   heightClass = "h-[calc(100dvh-220px)] min-h-[520px]",
 }: PipelineMapProps) {
   const [showRejected, setShowRejected] = useState(false);
@@ -394,7 +409,7 @@ export function PipelineMap({
 
         <Legend />
 
-        {sel && <Detail node={sel} edges={graph.edges} byId={byId} onOpenShot={onOpenShot} onClose={() => setSelected(null)} />}
+        {sel && <Detail node={sel} edges={graph.edges} byId={byId} onOpenShot={onOpenShot} onGenerate={onGenerate} onClose={() => setSelected(null)} />}
       </div>
       <p className="text-xs text-text-faint">
         Drag to pan, pinch or scroll to zoom. Drag a shot to move its whole row (hold Alt to move the shot alone). Click anything to trace where it came from and what it fed.
@@ -606,19 +621,35 @@ function Detail({
   edges,
   byId,
   onOpenShot,
+  onGenerate,
   onClose,
 }: {
   node: MapNode;
   edges: MapEdge[];
   byId: Map<string, MapNode>;
   onOpenShot?: (shotId: string) => void;
+  onGenerate?: (ask: GenerateAsk) => void;
   onClose: () => void;
 }) {
+  const genId = n.id.startsWith("gen:") ? n.id.slice(4) : null;
+  const rejected = n.state?.label === "Rejected";
+  const asks: { label: string; ask: GenerateAsk }[] = [];
+  if (onGenerate && n.shotId && !rejected) {
+    if (n.type === "shot") {
+      asks.push({ label: "Generate a still", ask: { mode: "still", shotId: n.shotId, fromGenId: null } });
+      asks.push({ label: "Generate a video take", ask: { mode: "take", shotId: n.shotId, fromGenId: null } });
+    } else if (n.type === "image" && genId) {
+      asks.push({ label: "Make a video take from this", ask: { mode: "take", shotId: n.shotId, fromGenId: genId } });
+      asks.push({ label: "Another still like this", ask: { mode: "again", shotId: n.shotId, fromGenId: genId } });
+    } else if (n.type === "video" && genId) {
+      asks.push({ label: "Another take like this", ask: { mode: "again", shotId: n.shotId, fromGenId: genId } });
+    }
+  }
   const ins = edges.filter((e) => e.to === n.id).map((e) => ({ e, node: byId.get(e.from) })).filter((x) => x.node);
   const outs = edges.filter((e) => e.from === n.id).map((e) => ({ e, node: byId.get(e.to) })).filter((x) => x.node);
   return (
     <div
-      className="absolute right-3 top-3 w-[280px] max-w-[calc(100%-24px)] rounded-xl border border-border bg-surface p-4 shadow-lg"
+      className="absolute right-3 top-3 max-h-[calc(100%-24px)] w-[280px] max-w-[calc(100%-24px)] overflow-y-auto rounded-xl border border-border bg-surface p-4 shadow-lg"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="flex items-start justify-between gap-2">
@@ -634,6 +665,24 @@ function Detail({
       {n.sub && n.type !== "shot" && n.type !== "element" && <p className="mt-2 line-clamp-4 text-xs text-text-muted">{n.sub}</p>}
       <Links title="Built from" list={ins} />
       <Links title="Fed into" list={outs} />
+      {asks.length > 0 && (
+        <div className="mt-3 border-t border-border pt-3">
+          <div className="text-[11px] font-semibold text-text-faint">Generate on Higgsfield</div>
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            {asks.map((a) => (
+              <button
+                key={a.label}
+                type="button"
+                onClick={() => onGenerate?.(a.ask)}
+                className="inline-flex h-8 items-center justify-between rounded-md border border-border bg-surface px-2.5 text-sm text-text hover:border-border-strong"
+              >
+                {a.label}
+                <span className="text-xs text-text-faint">price first</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {n.shotId && onOpenShot && (
         <button
           type="button"

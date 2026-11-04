@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PipelineMap } from "@/components/production/pipeline-map";
+import { PipelineMap, type GenerateAsk } from "@/components/production/pipeline-map";
+import { GenerateWindow, type GenerateRequest, type GenInputOption, type GenQuote } from "@/components/production/higgsfield-generate";
+import type { GenChoice } from "@/lib/higgsfield-generate";
 import { parsePositions, type MapGeneration, type MapInput, type MapPositions } from "@/lib/pipeline-map";
 
 // Drawn stand-ins, obviously not screenshots.
@@ -103,14 +105,71 @@ const EL_THUMBS: Record<string, string> = { e1: pic("", "#d9a07b", "#6b3f2a"), e
 
 const KEY = "pipeline.map.fixture";
 
+// EXAMPLE PRICES ONLY. Anchored on three real quotes taken 2026-11-04 (Seedance
+// 2.5 5s 720p = 35, Kling 3.0 5s std sound off = 6.25, Nano Banana 2.1 = 2) and
+// scaled by guesswork for the other settings. The real window asks Higgsfield.
+function examplePrice(c: GenChoice): number {
+  const d = c.duration ?? 5;
+  if (c.modelId === "nano_banana_2_1") return 2;
+  if (c.modelId === "gpt_image_2_5") return 2.75;
+  if (c.modelId === "kling3_0") {
+    const q = c.options.mode === "4k" ? 3 : c.options.mode === "pro" ? 1.6 : 1;
+    return Math.round(1.25 * d * q * (c.options.sound === "on" ? 1.5 : 1) * 100) / 100;
+  }
+  const r = c.options.resolution === "1080p" ? 2.25 : c.options.resolution === "480p" ? 0.5 : 1;
+  return Math.round(7 * d * r * (c.options.generate_audio === "true" ? 1.3 : 1) * 100) / 100;
+}
+const EXAMPLE_BALANCE = 1240;
+
+const genById = new Map(INPUT.generations.map((x) => [x.id, x]));
+const shotById = new Map(INPUT.shots.map((x) => [x.id, x]));
+const elName = new Map(INPUT.elements.map((e) => [e.id, e.name]));
+
+function frameOpt(id: string, role: "start" | "end" | "ref"): GenInputOption | null {
+  const x = genById.get(id);
+  if (!x) return null;
+  return { genId: id, label: x.prompt ? x.prompt.slice(0, 40) : id.toUpperCase(), thumb: THUMBS[id] ?? null, role };
+}
+
+/** What the real page does from its own data: frames and elements preselected. */
+function requestFor(ask: GenerateAsk): GenerateRequest | null {
+  const shot = shotById.get(ask.shotId);
+  if (!shot) return null;
+  const gens = INPUT.generations.filter((x) => x.shot_id === shot.id);
+  const from = ask.fromGenId ? genById.get(ask.fromGenId) : undefined;
+  const elements: GenInputOption[] = INPUT.uses
+    .filter((u) => u.shot_id === shot.id)
+    .map((u) => ({ genId: `el-${u.entity_id}`, label: elName.get(u.entity_id) ?? "Element", thumb: EL_THUMBS[u.entity_id] ?? null, role: "ref" as const }));
+  const start = gens.find((x) => x.role === "start");
+  const end = gens.find((x) => x.role === "end");
+  let kind: "image" | "video" = "video";
+  let inputs: GenInputOption[] = [];
+  if (ask.mode === "still" || (ask.mode === "again" && from?.kind === "image")) {
+    kind = "image";
+    inputs = elements;
+  } else if (ask.mode === "take" && from) {
+    inputs = [frameOpt(from.id, "start"), ...elements].filter(Boolean) as GenInputOption[];
+  } else if (ask.mode === "again" && from) {
+    inputs = [from.parent_start_id && frameOpt(from.parent_start_id, "start"), from.parent_end_id && frameOpt(from.parent_end_id, "end"), ...elements].filter(Boolean) as GenInputOption[];
+  } else {
+    inputs = [start && frameOpt(start.id, "start"), end && frameOpt(end.id, "end"), ...elements].filter(Boolean) as GenInputOption[];
+  }
+  const prompt = from?.prompt ?? start?.prompt ?? shot.title;
+  return { kind, shotId: shot.id, shotTitle: shot.title, inputs, defaultPrompt: prompt, defaultAspect: "16:9" };
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export function MapFixture() {
   const [positions, setPositions] = useState<MapPositions>({});
+  const [gen, setGen] = useState<GenerateRequest | null>(null);
   useEffect(() => {
     try {
       setPositions(parsePositions(JSON.parse(localStorage.getItem(KEY) || "{}")));
     } catch {}
   }, []);
   return (
+    <>
     <PipelineMap
       input={INPUT}
       thumbs={THUMBS}
@@ -124,6 +183,22 @@ export function MapFixture() {
         } catch {}
       }}
       onOpenShot={(id) => alert(`Would open shot ${id} in the pipeline`)}
+      onGenerate={(ask) => setGen(requestFor(ask))}
     />
+    <GenerateWindow
+      request={gen}
+      onClose={() => setGen(null)}
+      quote={async (c): Promise<GenQuote> => {
+        await wait(400);
+        return { credits: EXAMPLE_BALANCE, cost: examplePrice(c) };
+      }}
+      generate={async (_c, onSubmitted) => {
+        await wait(900);
+        onSubmitted();
+        await wait(2500);
+        return { ok: true };
+      }}
+    />
+    </>
   );
 }

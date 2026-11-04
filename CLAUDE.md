@@ -9351,8 +9351,29 @@ view of everything on an AI job, with arrows between related assets.
   thumbnail. Two-finger pinch zoom on touch was added at the same time (it was
   wheel-only). Verified in Chromium with iPhone emulation: pan and pinch work,
   images drop from 19 to 1 when zoomed in, zero videos.
-- GENERATING FROM THE MAP was raised by the operator and is NOT built. It would
-  reuse the "Make it real" pattern (their own Higgsfield plan credits over MCP,
-  price shown before the press, result lands as a candidate with lineage
-  filled in), which does not contradict the 2026-10-10 decision, since that
-  refused generation billed to OUR account.
+- GENERATING FROM THE MAP: PREVIEW BUILT, NOT LIVE (2026-11-04, operator
+  asked to see it first). Their own Higgsfield plan credits over MCP, price
+  first, which does not contradict the 2026-10-10 decision (that refused
+  generation billed to OUR account). The map's detail card gains "Generate on
+  Higgsfield" buttons (shot: a still or a take; still: a take from it, or
+  another like it; take: another like it) via an optional `onGenerate` prop,
+  absent when the viewer has no connection. components/production/
+  higgsfield-generate.tsx GenerateWindow is presentational (quote + generate
+  passed in), so the pipeline's stage panels can open the SAME window later.
+  lib/higgsfield-generate.ts is pure (15 assertions): the model list read off
+  models_explore (Nano Banana 2.1, GPT Image 2.5, Kling 3.0 frames only,
+  Seedance 2.5 frames + element refs), cleanChoice as the trust boundary,
+  genParams, and provenanceLines (what gets saved, listing only inputs the
+  model really takes). REAL QUOTES (get_cost, spends nothing): Seedance 2.5
+  5s 720p = 35 credits, Kling 3.0 5s std sound off = 6.25, a still = 2. The
+  price re-quotes on settings, not on prompt keystrokes. /dev/pipeline-map
+  mounts it with EXAMPLE prices and nothing sent.
+  NOT BUILT, the server half: quote/start/check actions (the real-still-
+  actions pattern), import of the start frame and element sheets to
+  Higgsfield, and the candidate row written with platform, model, prompt,
+  aspect, duration, options, seed and job id (params.higgsfield_id, so the
+  "From Higgsfield" import dedupes it), parent_start_id/parent_end_id, refs
+  in ai_generation_refs, resolution and length measured from the file, and
+  the credits charged. THE WINDOW PROMISES "it lands on the shot either way"
+  if closed, so the build must write a PENDING row with the job id at submit
+  and finish it server-side or on next page load, not in a browser loop.

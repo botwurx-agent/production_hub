@@ -26,6 +26,9 @@ export default function Page() {
               </svg>
             }
           />
+          <p className="mt-4 text-sm text-text-muted">
+            Preview. Click a shot, a still or a take, then a Generate button. Prices here are examples and nothing is sent to Higgsfield.
+          </p>
           <div className="mt-5 rounded-xl border border-border bg-surface p-5 shadow-sm">
             <MapFixture />
           </div>
