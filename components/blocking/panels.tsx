@@ -11,10 +11,15 @@ import {
 import { PRESETS, type PresetId } from "@/lib/blocking/keys";
 import { BODIES } from "@/lib/previz/optics";
 import { POSES } from "@/lib/previz/poses";
+import { ControlPads, type PadSpec } from "@/components/previz/move-pad";
 import type { KeyRef, Track } from "./timeline";
 import { Btn, Num, Row, Section, Seg, Select, Swatches, Vec, useOutside } from "./ui";
 
 export type Posed = { p: Vec3; r: Vec3; lens?: number };
+
+export type CamPadAction =
+  | "boomUp" | "boomDown" | "truckLeft" | "truckRight" | "pushIn" | "pullOut"
+  | "panLeft" | "panRight" | "tiltUp" | "tiltDown" | "zoomIn" | "zoomOut";
 
 export type StudioApi = {
   scene: BlockScene;
@@ -25,6 +30,8 @@ export type StudioApi = {
   updateScene: (fn: (s: BlockScene) => BlockScene, coalesce?: string) => void;
   updateObject: (id: string, patch: Partial<BlockScene["objects"][number]>, coalesce?: string) => void;
   writePose: (track: Track, pose: Partial<Posed>, coalesce?: string) => void;
+  /** The controller pads: `amt` is seconds at the chosen speed. */
+  camPad: (action: CamPadAction, amt: number) => void;
   posed: (track: Track) => Posed;
   addObject: (kind: string) => void;
   deleteObject: (id: string) => void;
@@ -160,6 +167,30 @@ function TransformSection({ api, track, camera }: { api: StudioApi; track: Track
   );
 }
 
+function camPadSpecs(api: StudioApi, aimed: boolean): PadSpec[] {
+  const a = (label: string, action: CamPadAction) => ({ label, act: (t: number) => api.camPad(action, t) });
+  return [
+    {
+      title: "Move",
+      up: a("Boom up", "boomUp"),
+      down: a("Boom down", "boomDown"),
+      left: a("Truck left", "truckLeft"),
+      right: a("Truck right", "truckRight"),
+      outerUp: a("Push in", "pushIn"),
+      outerDown: a("Pull out", "pullOut"),
+    },
+    {
+      title: "Aim",
+      up: a(aimed ? "Frame them lower (tilt up)" : "Tilt up", "tiltUp"),
+      down: a(aimed ? "Frame them higher (tilt down)" : "Tilt down", "tiltDown"),
+      left: a(aimed ? "Frame them right (pan left)" : "Pan left", "panLeft"),
+      right: a(aimed ? "Frame them left (pan right)" : "Pan right", "panRight"),
+      outerUp: a("Zoom in (longer lens)", "zoomIn"),
+      outerDown: a("Zoom out (wider lens)", "zoomOut"),
+    },
+  ];
+}
+
 function CameraPanel({ api }: { api: StudioApi }) {
   const { scene, canEdit } = api;
   const cam = scene.camera;
@@ -219,6 +250,18 @@ function CameraPanel({ api }: { api: StudioApi }) {
           </p>
         )}
       </Section>
+      {canEdit && (
+        <Section title="Position">
+          <ControlPads pads={camPadSpecs(api, !!cam.aim.target)} caption={
+            cam.aim.target
+              ? <>Pan and tilt frame {scene.objects.find((o) => o.id === cam.aim.target)?.name} off centre while the camera is kept aimed. Keys work too: W A S D, Q E.</>
+              : <>Keys work too through the lens: W A S D and Q E.</>
+          } />
+          <p className="text-[11px] leading-relaxed text-text-faint">
+            {cam.keys.length > 1 ? "Each move sets a key at the playhead, the same as dragging in the view." : "Moves the camera. Move the playhead and press I (or turn on Auto key) to make it a move."}
+          </p>
+        </Section>
+      )}
       <Section title="Keep aimed at">
         <Row label="Subject">
           <Select value={cam.aim.target ?? ""} disabled={!canEdit}

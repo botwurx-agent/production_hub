@@ -27,7 +27,7 @@ import {
   type World,
 } from "@/lib/blocking/build";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
-import { Outliner, Properties, type Posed, type StudioApi } from "./panels";
+import { Outliner, Properties, type CamPadAction, type Posed, type StudioApi } from "./panels";
 import { Timeline, type KeyRef, type Track } from "./timeline";
 import { Btn, useOutside } from "./ui";
 import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
@@ -328,6 +328,7 @@ export function BlockingStudio({
     updateScene: commit,
     updateObject: (id, patch, c) => commit((s) => ({ ...s, objects: s.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)) }), c),
     writePose,
+    camPad: (action, amt) => camPad(action, amt),
     posed: (track) => posedAt(scene, track, t),
     addObject: (kind) => {
       const s = sceneRef.current;
@@ -756,6 +757,53 @@ export function BlockingStudio({
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler((c.r[1] * Math.PI) / 180, (c.r[0] * Math.PI) / 180, (-c.r[2] * Math.PI) / 180, "YXZ"));
     const d = local.clone().applyQuaternion(q);
     writePose("camera", { p: [c.p[0] + d.x, c.p[1] + d.y, c.p[2] + d.z] }, coalesce);
+  }
+
+  /**
+   * The controller pads in the camera panel (the scene builder's pads). `amt`
+   * is seconds at the chosen speed. Boom is straight up and down, truck and
+   * push stay level with the floor, the way a dolly moves. While the camera is
+   * kept aimed at a subject, pan and tilt move the subject off centre instead,
+   * since the lock owns the aim.
+   */
+  function camPad(action: CamPadAction, amt: number) {
+    const s = sceneRef.current;
+    const c = camAt(s, tRef.current);
+    const m = 0.4 * amt;
+    const deg = 15 * amt;
+    const y = (c.r[0] * Math.PI) / 180;
+    const level = (side: number, fwd: number) =>
+      writePose("camera", { p: [c.p[0] + (Math.cos(y) * side - Math.sin(y) * fwd) * m, c.p[1], c.p[2] + (-Math.sin(y) * side - Math.cos(y) * fwd) * m] }, `pad-${action}`);
+    const aimed = !!s.camera.aim.target;
+    const turn = (dy: number, dp: number) => {
+      if (aimed) {
+        commit((x) => {
+          const [fy, fp] = x.camera.aim.frame;
+          return { ...x, camera: { ...x.camera, aim: { ...x.camera.aim, frame: [Math.max(-60, Math.min(60, fy + dy)), Math.max(-40, Math.min(40, fp + dp))] } } };
+        }, `pad-${action}`);
+      } else {
+        const p = posedAt(s, "camera", tRef.current);
+        writePose("camera", { r: [p.r[0] + dy, Math.max(-89, Math.min(89, p.r[1] + dp)), p.r[2]] }, `pad-${action}`);
+      }
+    };
+    const lens = (k: number) => {
+      const p = posedAt(s, "camera", tRef.current);
+      writePose("camera", { lens: Math.min(600, Math.max(8, (p.lens ?? 35) * Math.exp(k * 0.6 * amt))) }, `pad-${action}`);
+    };
+    switch (action) {
+      case "boomUp": return writePose("camera", { p: [c.p[0], c.p[1] + m, c.p[2]] }, "pad-boom");
+      case "boomDown": return writePose("camera", { p: [c.p[0], Math.max(0.05, c.p[1] - m), c.p[2]] }, "pad-boom");
+      case "truckLeft": return level(-1, 0);
+      case "truckRight": return level(1, 0);
+      case "pushIn": return level(0, 1);
+      case "pullOut": return level(0, -1);
+      case "panLeft": return turn(deg, 0);
+      case "panRight": return turn(-deg, 0);
+      case "tiltUp": return turn(0, deg);
+      case "tiltDown": return turn(0, -deg);
+      case "zoomIn": return lens(1);
+      case "zoomOut": return lens(-1);
+    }
   }
 
   /* ---------- camera view mouse controls ---------- */

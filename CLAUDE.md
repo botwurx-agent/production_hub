@@ -8127,6 +8127,17 @@ the side window to the dog, out through the windshield, ending ahead.
   0.85 to 2.46 m/s through them; even holds 2.56 m/s; the lens stays inside
   its keys), and Chromium frames of the coast road during playback with the
   dog centred from behind the car, through the window and out ahead.
+- CONTROLLER PADS (2026-11-04, operator: "the camera controls we have built
+  in scene builder"). The camera panel gained a Position section with the
+  scene builder's ControlPads (components/previz/move-pad.tsx, shared, not
+  copied): Move = boom up/down (straight up), truck and push/pull LEVEL with
+  the floor (a dolly), Aim = pan, tilt, zoom. Same rates as the scene builder
+  (0.4 m/s, 15 deg/s, lens e^0.6/s at Normal). Each goes through writePose,
+  so the edit rule is the view's: one key just moves, two or more keys (or
+  Auto key) set a key at the playhead; a hold is one undo (coalesce
+  `pad-<action>`). WHILE KEPT AIMED, pan and tilt move `aim.frame` instead
+  (the lock owns the aim) and the labels say so. camPad in blocking-studio.
+  Editors only. Verified in Chromium on the coast road.
 - SEND TO PIPELINE (BUILT, 2026-11-04, no migration). Export > "Send to the
   pipeline..." opens a window with a SHOT PICKER (the project's generated
   shots, the one this scene was sent to before picked first and marked "sent
