@@ -19,8 +19,9 @@ import {
   genModel,
   modelsFor,
   provenanceLines,
+  inputWord,
   rolesFor,
-  takesRole,
+  takesInput,
   type GenChoice,
   type GenInputRole,
   type GenInputSource,
@@ -30,6 +31,7 @@ import {
 export type GenInputOption = { genId: string; label: string; thumb: string | null; role: GenInputRole; source: GenInputSource };
 
 const ROLE_WORD: Record<GenInputRole, string> = { start: "Start frame", end: "End frame", ref: "Reference" };
+const SOURCE_WORD: Record<GenInputSource, string> = { frame: "Picture on this shot", element: "Element", video: "Video on this shot" };
 
 export type GenQuote = { credits: number | null; cost: number | null } | { error: string };
 
@@ -55,9 +57,18 @@ export function GenerateWindow({
 }: {
   request: GenerateRequest | null;
   onClose: () => void;
-  quote: (choice: GenChoice) => Promise<GenQuote>;
-  /** Submits, waits and stores. Resolves when the candidate is on the shot. */
-  generate: (choice: GenChoice, onSubmitted: () => void) => Promise<{ ok: true } | { error: string }>;
+  /** One price per choice, in one call. Spends nothing. */
+  quote: (choices: GenChoice[]) => Promise<GenQuote[]>;
+  /**
+   * Submits, waits and stores. Resolves when the candidate is on the shot.
+   * `expectedCost` is the price on the button; a generation that would cost
+   * more is refused and comes back with `newCost`.
+   */
+  generate: (
+    choice: GenChoice,
+    expectedCost: number | null,
+    onSubmitted: () => void,
+  ) => Promise<{ ok: true } | { error: string; newCost?: number }>;
 }) {
   const open = !!request;
   const kind = request?.kind ?? "image";
@@ -104,7 +115,7 @@ export function GenerateWindow({
       aspect,
       duration,
       options,
-      inputs: inputs.map((i) => ({ genId: i.genId, role: i.role })),
+      inputs: inputs.map((i) => ({ genId: i.genId, role: i.role, source: i.source })),
     }),
     [modelId, prompt, aspect, duration, options, inputs],
   );
@@ -120,26 +131,29 @@ export function GenerateWindow({
     if (!open) return;
     const n = ++seq.current;
     setPrices({});
-    const t = setTimeout(() => {
-      for (const m of models) {
-        const c = m.id === modelId ? choice : { ...(cleanChoice({ ...choice, inputs: [], modelId: m.id }) ?? choice), inputs: choice.inputs };
-        quote(c)
-          .catch(() => ({ error: "Could not reach Higgsfield for a price." }))
-          .then((q) => {
-            if (n === seq.current) setPrices((p) => ({ ...p, [m.id]: q }));
-          });
-      }
+    const t = setTimeout(async () => {
+      // Each model priced with the settings carried over as far as it takes
+      // them, in one call, so the cards compare like for like.
+      const all = models.map((m) => {
+        if (m.id === modelId) return choice;
+        const c = cleanChoice({ ...choice, modelId: m.id });
+        return c ?? { ...choice, modelId: m.id };
+      });
+      const qs = await quote(all).catch(() => all.map(() => ({ error: "Could not reach Higgsfield for a price." }) as GenQuote));
+      if (n !== seq.current) return;
+      setPrices(Object.fromEntries(models.map((m, i) => [m.id, qs[i] ?? { error: "No price." }])));
     }, 350);
     return () => clearTimeout(t);
+    // Picking another model changes its own settings, which is already in the key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceKey, modelId]);
+  }, [priceKey]);
 
   const price = prices[modelId] ?? null;
   const cost = price && !("error" in price) ? price.cost : null;
   const credits = price && !("error" in price) ? price.credits : null;
   const short = cost != null && credits != null && cost > credits;
   const dropped = model ? droppedInputs(model, inputs) : null;
-  const usable = model ? inputs.filter((i) => takesRole(model, i.role)) : [];
+  const usable = model ? inputs.filter((i) => takesInput(model, i)) : [];
   const unused = (request?.available ?? []).filter((a) => !inputs.some((i) => i.genId === a.genId));
 
   /** Put an input in as a role; a second start or end replaces the first. */
@@ -156,8 +170,15 @@ export function GenerateWindow({
   async function go() {
     if (!canGo) return;
     setPhase({ at: "sending" });
-    const res = await generate(choice, () => setPhase({ at: "working", started: Date.now() })).catch(() => ({ error: "The connection dropped. Check your Higgsfield history before trying again." }));
-    if ("error" in res) setPhase({ at: "failed", error: res.error });
+    const res = await generate(choice, cost, () => setPhase({ at: "working", started: Date.now() })).catch(
+      () => ({ error: "The connection dropped. Check your Higgsfield history before trying again." }) as { error: string; newCost?: number },
+    );
+    if ("error" in res) {
+      // A price that went up is shown on the button, so the next press is a
+      // deliberate yes to the new figure.
+      if (res.newCost != null) setPrices((p) => ({ ...p, [modelId]: { credits, cost: res.newCost ?? null } }));
+      setPhase({ at: "failed", error: res.error });
+    }
     else setPhase({ at: "done", title: request?.shotTitle ?? "the shot" });
   }
 
@@ -221,7 +242,7 @@ export function GenerateWindow({
                           ))}
                         </select>
                       ) : (
-                        <span className="block font-semibold text-text">{i.source === "element" ? "Element" : ROLE_WORD[i.role]}</span>
+                        <span className="block font-semibold text-text">{inputWord(i)}</span>
                       )}
                       <span className="block max-w-[140px] truncate text-text-muted">{i.label}</span>
                     </span>
@@ -252,11 +273,11 @@ export function GenerateWindow({
                     <div key={a.genId} className="flex flex-wrap items-center gap-2 rounded-md bg-surface p-1.5">
                       <Thumb src={a.thumb} />
                       <span className="min-w-0 flex-1 text-xs">
-                        <span className="block font-semibold text-text">{a.source === "element" ? "Element" : "Picture on this shot"}</span>
+                        <span className="block font-semibold text-text">{SOURCE_WORD[a.source]}</span>
                         <span className="block truncate text-text-muted">{a.label}</span>
                       </span>
                       {roles.length === 0 ? (
-                        <span className="text-xs text-text-muted">{model.name} does not take {a.source === "element" ? "elements" : "this"}</span>
+                        <span className="text-xs text-text-muted">{model.name} does not take {a.source === "element" ? "elements" : a.source === "video" ? "video references" : "this"}</span>
                       ) : (
                         <span className="flex gap-1">
                           {roles.map((r) => (
@@ -266,7 +287,7 @@ export function GenerateWindow({
                               onClick={() => putIn(a, r)}
                               className="h-7 rounded-md border border-border px-2 text-xs font-semibold text-text hover:border-accent"
                             >
-                              {r === "ref" ? "As reference" : `As ${ROLE_WORD[r].toLowerCase()}`}
+                              {r === "ref" ? (a.source === "video" ? "As video reference" : "As reference") : `As ${ROLE_WORD[r].toLowerCase()}`}
                             </button>
                           ))}
                         </span>

@@ -53,6 +53,7 @@ export default async function PipelinePage({
 
   let prompts: AiPrompt[] = [];
   let generations: AiGeneration[] = [];
+  let inFlight: AiGeneration[] = [];
   const refs: MapRef[] = [];
   if (shotIds.length) {
     const [{ data: p }, { data: g }] = await Promise.all([
@@ -82,7 +83,12 @@ export default async function PipelinePage({
       supabase,
       rows.map((r) => r.id)
     );
-    generations = rows.map((gen) => ({ ...gen, cost: costs.get(gen.id) ?? null }));
+    // A take still being made on Higgsfield (or one it refused) is not a
+    // candidate yet: it has no file, so it is kept out of the pools, the map
+    // and the strip, and shown in its own line where it can be finished.
+    const all = rows.map((gen) => ({ ...gen, cost: costs.get(gen.id) ?? null }));
+    inFlight = all.filter((r) => r.status === "generating" || r.status === "failed");
+    generations = all.filter((r) => r.status !== "generating" && r.status !== "failed");
   }
 
   // Which shots are already in the review cycle (so the header can show status).
@@ -190,6 +196,7 @@ export default async function PipelinePage({
           generationRefs={refs}
           mapPositions={mapPositions}
           canEditMap={canEditProject(ctx, project.id)}
+          inFlight={inFlight}
         />
       </Card>
     </div>

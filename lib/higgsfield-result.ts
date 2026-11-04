@@ -148,3 +148,37 @@ export type RealModelId = (typeof REAL_MODELS)[number]["id"];
 export function realModel(id: unknown) {
   return REAL_MODELS.find((m) => m.id === id) ?? null;
 }
+
+/**
+ * The seed a finished job reports, as text, or null. Looked for under a key
+ * named exactly "seed" anywhere in the result, since jobs_wait and the
+ * generation records nest it differently. A seed is an identifier, so a number
+ * is kept as its digits rather than rounded through a float.
+ */
+export function findSeed(data: unknown, depth = 0): string | null {
+  if (depth > 8 || !data || typeof data !== "object") return null;
+  if (Array.isArray(data)) {
+    for (const x of data) {
+      const s = findSeed(x, depth + 1);
+      if (s) return s;
+    }
+    return null;
+  }
+  for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+    if (k.toLowerCase() === "seed") {
+      if (typeof v === "number" && Number.isSafeInteger(v) && v >= 0) return String(v);
+      if (typeof v === "string" && /^\d{1,20}$/.test(v.trim())) return v.trim();
+    }
+  }
+  for (const v of Object.values(data as Record<string, unknown>)) {
+    const s = findSeed(v, depth + 1);
+    if (s) return s;
+  }
+  return null;
+}
+
+/** The credits a cost preflight reports (get_cost: true), or null. */
+export function readCost(data: unknown): number | null {
+  const c = (data as { cost?: { credits?: unknown } } | null)?.cost?.credits;
+  return typeof c === "number" && Number.isFinite(c) && c >= 0 ? c : null;
+}

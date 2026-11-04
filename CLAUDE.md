@@ -9377,14 +9377,44 @@ view of everything on an AI job, with arrows between related assets.
   reference only. Read off models_explore: Seedance takes start, end and image
   references; Kling 3.0 start and end only; Nano Banana 2.1 and GPT Image 2.5
   image references only. An input the picked model ignores stays on the list,
-  dimmed, and the window says how many are left out. Seedance and Nano also
-  take VIDEO references, which are not offered yet.
-  NOT BUILT, the server half: quote/start/check actions (the real-still-
-  actions pattern), import of the start frame and element sheets to
-  Higgsfield, and the candidate row written with platform, model, prompt,
-  aspect, duration, options, seed and job id (params.higgsfield_id, so the
-  "From Higgsfield" import dedupes it), parent_start_id/parent_end_id, refs
-  in ai_generation_refs, resolution and length measured from the file, and
-  the credits charged. THE WINDOW PROMISES "it lands on the shot either way"
-  if closed, so the build must write a PENDING row with the job id at submit
-  and finish it server-side or on next page load, not in a browser loop.
+  dimmed, and the window says how many are left out.
+  VIDEO REFERENCES (same day): a video on the shot (a take or a motion clip)
+  is a third input SOURCE, and can only ever be a video reference
+  (`video_references` on Seedance 2.5 and Nano Banana 2.1; Kling and GPT
+  Image take none). A video can never be a start or end frame.
+- THE SERVER HALF IS BUILT, NOT YET RUN LIVE (2026-11-04).
+  app/(app)/projects/[id]/generate-actions.ts, four calls:
+  quoteGenerations (balance plus every model's price in ONE session, spends
+  nothing), startGeneration, checkGeneration, dismissGeneration.
+  THE ROW IS WRITTEN BEFORE THE JOB, status `generating`, then the job id is
+  stamped into params.higgsfield_id (so the "From Higgsfield" import dedupes
+  it). That is what keeps the window's promise: a paid-for take always has a
+  home. A refused submit deletes the row; a dropped connection or an unnamed
+  job marks it `failed` with "check your Higgsfield history", never resubmits.
+  THE PRICE IS CHECKED AGAIN WITH THE INPUTS ATTACHED, and a take that would
+  cost MORE than the button said is not submitted (the window shows the new
+  price, so the next press agrees to it).
+  INPUTS ARE READ UNDER RLS AND THEIR KIND IS THE DATABASE'S, not the
+  browser's: each must be on this shot or be an element sheet, and a video is
+  a video. Anything that came FROM Higgsfield goes in by its job id (a medias
+  value may be a prior job id), so nothing is uploaded; the rest are imported
+  from a one-hour signed link. Higgsfield's import refuses over 50MB, so a
+  larger input is refused up front with its size named.
+  checkGeneration (jobs_wait 10s): on done, copies the result to
+  `<studio>/pipeline/<project>/hf_<job>.<ext>` and turns the row into a
+  candidate with resolution, aspect and length MEASURED from the file and the
+  seed if reported (findSeed); the price goes to generation_costs. Only the
+  presser's own connection can check a job, since it lives on their account.
+  Start and end frames land in parent_start_id / parent_end_id, references in
+  ai_generation_refs (motion for a video, character for an element, ref else).
+  THE PAGE KEEPS generating/failed ROWS OUT of the pools, map and strip (they
+  have no file) and passes them as `inFlight` to InFlightGenerations
+  (components/production/pipeline-generate.tsx): a line per take with its
+  running time, which POLLS and finishes the viewer's own, refreshes when one
+  lands, and lets a failure be dismissed. The window polls while open and
+  hands over to the strip when closed. buildRequest fills the window from the
+  page's own data ("another like this" reuses that take's frames and recorded
+  inputs). Gated on the viewer's own Higgsfield connection plus edit rights.
+  NOT YET: the same button on the stage panels, and no real generation has
+  been run from the app. The first press is the test; the replies of
+  media_import_url and generate_video have never been printed from here.

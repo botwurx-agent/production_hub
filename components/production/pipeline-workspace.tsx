@@ -36,7 +36,9 @@ import type { CastReference, CastUse } from "@/lib/cast";
 import { MasterCutBand } from "@/components/production/master-cut-band";
 import { BatchReviewButton } from "@/components/production/batch-review-button";
 import { HiggsfieldBrowser } from "@/components/production/higgsfield-browser";
-import { PipelineMap } from "@/components/production/pipeline-map";
+import { PipelineMap, type GenerateAsk } from "@/components/production/pipeline-map";
+import { buildRequest, InFlightGenerations, PipelineGenerate } from "@/components/production/pipeline-generate";
+import type { GenerateRequest } from "@/components/production/higgsfield-generate";
 import { saveMapLayout } from "@/app/(app)/projects/[id]/map-actions";
 import type { MapInput, MapPositions, MapRef } from "@/lib/pipeline-map";
 import { toast } from "@/components/ui/toast";
@@ -1198,7 +1200,10 @@ export function PipelineWorkspace({
   generationRefs = [],
   mapPositions = {},
   canEditMap = true,
+  inFlight = [],
 }: {
+  /** Takes still being made on Higgsfield, or refused by it. */
+  inFlight?: AiGeneration[];
   /** Recorded inputs between generations: the pipeline map's arrows. */
   generationRefs?: MapRef[];
   /** Where the team arranged the map by hand (overrides, by node id). */
@@ -1444,6 +1449,23 @@ export function PipelineWorkspace({
     });
   }
 
+  // Generating needs the viewer's own Higgsfield and edit rights on the job.
+  const canGenerate = hfConnected && canEditMap;
+  const [genAsk, setGenAsk] = useState<GenerateRequest | null>(null);
+  const genProps = {
+    projectId,
+    shots: displayShots,
+    generations,
+    prompts,
+    refs: generationRefs,
+    thumbs: mapThumbs,
+    refsFor,
+  };
+  function askGenerate(ask: GenerateAsk) {
+    const req = buildRequest(ask, genProps);
+    if (req) setGenAsk(req);
+  }
+
   function openShotFromMap(shotId: string) {
     setActiveId(shotId);
     setMapOpen(false);
@@ -1485,6 +1507,11 @@ export function PipelineWorkspace({
         <Button size="sm" variant="secondary" onClick={() => newShot("live")}>+ Live shot</Button>
       </div>
 
+      {inFlight.length > 0 && (
+        <InFlightGenerations projectId={projectId} rows={inFlight} shots={displayShots} currentUserId={currentUserId} />
+      )}
+      {canGenerate && <PipelineGenerate {...genProps} open={genAsk} onClose={() => setGenAsk(null)} />}
+
       {scriptOpen && (
         <div>
           <h4 className="mb-2 text-sm font-bold text-text">Script — the copy for this project</h4>
@@ -1515,6 +1542,7 @@ export function PipelineWorkspace({
           positions={positions}
           onPositionsChange={saveLayout}
           onOpenShot={openShotFromMap}
+          onGenerate={canGenerate ? askGenerate : undefined}
           heightClass="h-[calc(100dvh-260px)] min-h-[480px]"
         />
       )}

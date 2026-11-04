@@ -159,6 +159,15 @@ function requestFor(ask: GenerateAsk): GenerateRequest | null {
   // reference images, never rejected ones) and its elements.
   const available = [
     ...gens.filter((x) => x.kind === "image" && x.status !== "rejected").map((x) => frameOpt(x.id, x.status === "reference" ? "ref" : x.role === "end" ? "end" : "start")),
+    ...gens
+      .filter((x) => x.kind === "video" && x.status !== "rejected")
+      .map((x): GenInputOption => ({
+        genId: x.id,
+        label: x.role === "motion" ? "Motion reference" : `Take ${x.id.toUpperCase()}`,
+        thumb: (x.parent_start_id && THUMBS[x.parent_start_id]) || THUMBS[x.id] || null,
+        role: "ref",
+        source: "video",
+      })),
     ...elements,
   ].filter(Boolean) as GenInputOption[];
   return { kind, shotId: shot.id, shotTitle: shot.title, inputs, available, defaultPrompt: prompt, defaultAspect: "16:9" };
@@ -194,11 +203,11 @@ export function MapFixture() {
     <GenerateWindow
       request={gen}
       onClose={() => setGen(null)}
-      quote={async (c): Promise<GenQuote> => {
+      quote={async (cs): Promise<GenQuote[]> => {
         await wait(400);
-        return { credits: EXAMPLE_BALANCE, cost: examplePrice(c) };
+        return cs.map((c) => ({ credits: EXAMPLE_BALANCE, cost: examplePrice(c) }));
       }}
-      generate={async (_c, onSubmitted) => {
+      generate={async (_c, _cost, onSubmitted) => {
         await wait(900);
         onSubmitted();
         await wait(2500);

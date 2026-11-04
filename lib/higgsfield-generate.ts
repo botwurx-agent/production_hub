@@ -29,8 +29,8 @@ export type GenModel = {
   aspects: string[];
   duration?: { min: number; max: number; default: number };
   options: GenOption[];
-  /** The roles this model's medias take. */
-  roles: { start?: string; end?: string; refs?: string };
+  /** The roles this model's medias take. `videoRefs` is a VIDEO as a reference. */
+  roles: { start?: string; end?: string; refs?: string; videoRefs?: string };
 };
 
 /**
@@ -43,10 +43,10 @@ export const GEN_MODELS: GenModel[] = [
     id: "nano_banana_2_1",
     name: "Nano Banana 2.1",
     kind: "image",
-    note: "Keeps the composition of a reference. Takes elements and reference images.",
+    note: "Keeps the composition of a reference. Takes elements, reference images and video references.",
     aspects: ["16:9", "9:16", "4:5", "1:1", "21:9", "3:2", "2:3", "4:3", "3:4"],
     options: [],
-    roles: { refs: "image_references" },
+    roles: { refs: "image_references", videoRefs: "video_references" },
   },
   {
     id: "gpt_image_2_5",
@@ -61,7 +61,7 @@ export const GEN_MODELS: GenModel[] = [
     id: "seedance_2_5",
     name: "Seedance 2.5",
     kind: "video",
-    note: "Start and end frames, plus elements and reference images. Up to 30s.",
+    note: "Start and end frames, elements, reference images and video references. Up to 30s.",
     aspects: ["16:9", "9:16", "21:9", "4:3", "1:1", "3:4"],
     duration: { min: 4, max: 30, default: 5 },
     options: [
@@ -85,7 +85,7 @@ export const GEN_MODELS: GenModel[] = [
         default: "false",
       },
     ],
-    roles: { start: "start_image", end: "end_image", refs: "image_references" },
+    roles: { start: "start_image", end: "end_image", refs: "image_references", videoRefs: "video_references" },
   },
   {
     id: "kling3_0",
@@ -135,6 +135,15 @@ export function modelsFor(kind: GenKind): GenModel[] {
 
 export type GenInputRole = "start" | "end" | "ref";
 
+/**
+ * Where an input came from: a still on the shot (a frame, a candidate or a
+ * reference image), a saved element, or a VIDEO on the shot (a take or a motion
+ * clip), which can only ever be a video reference.
+ */
+export type GenInputSource = "frame" | "element" | "video";
+
+export type GenInput = { genId: string; role: GenInputRole; source: GenInputSource };
+
 export type GenChoice = {
   modelId: string;
   prompt: string;
@@ -142,10 +151,17 @@ export type GenChoice = {
   duration: number | null;
   options: Record<string, string>;
   /** Generations on this shot fed in, with what each is for. */
-  inputs: { genId: string; role: GenInputRole }[];
+  inputs: GenInput[];
 };
 
+function isSource(v: unknown): v is GenInputSource {
+  return v === "frame" || v === "element" || v === "video";
+}
+
 export const MAX_GEN_PROMPT = 3000;
+/** Inputs on one generation. A runaway list is a mistake, not a brief. */
+export const MAX_INPUTS = 12;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The choice as it may be sent: model known, aspect and options among the
@@ -172,33 +188,38 @@ export function cleanChoice(v: unknown): GenChoice | null {
     options[opt.key] = typeof val === "string" && opt.values.some((x) => x.value === val) ? val : opt.default;
   }
   const seen = new Set<string>();
-  const inputs: GenChoice["inputs"] = [];
+  const inputs: GenInput[] = [];
   let start = false;
   let end = false;
-  for (const it of Array.isArray(o.inputs) ? o.inputs.slice(0, 12) : []) {
+  for (const it of Array.isArray(o.inputs) ? o.inputs.slice(0, MAX_INPUTS) : []) {
     if (!it || typeof it !== "object") continue;
-    const { genId, role } = it as { genId?: unknown; role?: unknown };
-    if (typeof genId !== "string" || !/^[0-9a-f-]{36}$/i.test(genId) || seen.has(genId)) continue;
-    if (role === "start" && model.roles.start && !start) start = true;
-    else if (role === "end" && model.roles.end && !end) end = true;
-    else if (role === "ref" && model.roles.refs) {
-      /* any number */
-    } else continue;
+    const { genId, role, source: rawSource } = it as { genId?: unknown; role?: unknown; source?: unknown };
+    if (typeof genId !== "string" || !UUID.test(genId) || seen.has(genId)) continue;
+    const source: GenInputSource = isSource(rawSource) ? rawSource : "frame";
+    if (role !== "start" && role !== "end" && role !== "ref") continue;
+    if (!rolesFor(model, source).includes(role)) continue;
+    if (role === "start") {
+      if (start) continue;
+      start = true;
+    }
+    if (role === "end") {
+      if (end) continue;
+      end = true;
+    }
     seen.add(genId);
-    inputs.push({ genId, role: role as GenInputRole });
+    inputs.push({ genId, role, source });
   }
   return { modelId: model.id, prompt, aspect, duration, options, inputs };
 }
 
-/** Where an input came from: a frame or picture on the shot, or a saved element. */
-export type GenInputSource = "frame" | "element";
-
 /**
- * What an input may be used as on this model. A picture on the shot can be the
+ * What an input may be used as on this model. A still on the shot can be the
  * start frame, the end frame or a reference; an element is only ever a
- * reference, since it is a character or a product rather than a moment.
+ * reference, since it is a character or a product rather than a moment; a
+ * video is only ever a video reference, since a frame has to be a picture.
  */
 export function rolesFor(model: GenModel, source: GenInputSource): GenInputRole[] {
+  if (source === "video") return model.roles.videoRefs ? ["ref"] : [];
   const out: GenInputRole[] = [];
   if (source === "frame" && model.roles.start) out.push("start");
   if (source === "frame" && model.roles.end) out.push("end");
@@ -206,15 +227,27 @@ export function rolesFor(model: GenModel, source: GenInputSource): GenInputRole[
   return out;
 }
 
-export function takesRole(model: GenModel, role: GenInputRole): boolean {
-  return role === "ref" ? !!model.roles.refs : role === "start" ? !!model.roles.start : !!model.roles.end;
+export function takesInput(model: GenModel, input: { role: GenInputRole; source: GenInputSource }): boolean {
+  return rolesFor(model, input.source).includes(input.role);
+}
+
+/** The role name Higgsfield expects for an input on this model, or null. */
+export function mediaRole(model: GenModel, input: { role: GenInputRole; source: GenInputSource }): string | null {
+  if (!takesInput(model, input)) return null;
+  if (input.role === "start") return model.roles.start ?? null;
+  if (input.role === "end") return model.roles.end ?? null;
+  return (input.source === "video" ? model.roles.videoRefs : model.roles.refs) ?? null;
 }
 
 /** What a model does not take, said once, so a dropped input is never silent. */
-export function droppedInputs(model: GenModel, inputs: { role: GenInputRole }[]): string | null {
-  const left = inputs.filter((i) => !takesRole(model, i.role));
+export function droppedInputs(model: GenModel, inputs: { role: GenInputRole; source: GenInputSource }[]): string | null {
+  const left = inputs.filter((i) => !takesInput(model, i));
   if (left.length === 0) return null;
-  const what = model.roles.start ? "start and end frames only" : "reference images only, not start or end frames";
+  const takes: string[] = [];
+  if (model.roles.start) takes.push("start and end frames");
+  if (model.roles.refs) takes.push("reference images");
+  if (model.roles.videoRefs) takes.push("video references");
+  const what = takes.length ? `${takes.join(" and ")} only` : "the prompt only";
   return `${model.name} takes ${what}, so ${left.length === 1 ? "one input is" : `${left.length} inputs are`} left out.`;
 }
 
@@ -249,11 +282,22 @@ export function provenanceLines(choice: GenChoice, inputLabels: Record<string, s
     if (v) lines.push({ label: opt.label, value: v.label });
   }
   lines.push({ label: "Resolution", value: "Measured from the file" });
-  const ins = choice.inputs.filter((i) => !!model && takesRole(model, i.role)).map((i) => `${i.role === "ref" ? "Reference" : i.role === "start" ? "Start" : "End"}: ${inputLabels[i.genId] ?? "a frame"}`);
+  const ins = choice.inputs
+    .filter((i) => !!model && takesInput(model, i))
+    .map((i) => `${inputWord(i)}: ${inputLabels[i.genId] ?? "a frame"}`);
   lines.push({ label: "Built from", value: ins.length ? ins.join(", ") : "The prompt alone" });
   lines.push({ label: "Seed and job", value: "As Higgsfield reports them" });
   lines.push({ label: "Cost", value: "The credits charged" });
   return lines;
+}
+
+/** What an input is called on screen and in the record. */
+export function inputWord(i: { role: GenInputRole; source: GenInputSource }): string {
+  if (i.role === "start") return "Start frame";
+  if (i.role === "end") return "End frame";
+  if (i.source === "element") return "Element";
+  if (i.source === "video") return "Video reference";
+  return "Reference";
 }
 
 /** "35 credits", "6.25 credits", "1 credit". */
