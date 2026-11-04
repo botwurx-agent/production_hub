@@ -58,14 +58,29 @@ export function buildRequest(ask: GenerateAsk, p: Props): GenerateRequest | null
 
   const byId = new Map(onShot.map((g) => [g.id, g]));
   const tagged = (role: "start" | "end") => onShot.find((g) => g.stage === "image" && g.role === role) ?? null;
+  // A blocking clip sent from Shot blocking (a motion reference on the video
+  // stage), and its first frame (a reference on the image stage). The clip goes
+  // into a take as the video reference the camera follows; the frame goes into
+  // a still as the picture to make real.
+  const fromBlocking = (g: AiGeneration) =>
+    (g.params as { source?: unknown } | null)?.source === "blocking" && g.status === "reference";
+  const motion = onShot.filter((g) => g.kind === "video" && g.status === "reference" && (g.role === "motion" || fromBlocking(g)))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 1)
+    .map(video);
+  const blockFrame = onShot.filter((g) => g.kind === "image" && fromBlocking(g))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 1)
+    .map((g) => frame(g, "ref"))
+    .filter(Boolean) as GenInputOption[];
   let kind: "image" | "video" = "video";
   let inputs: GenInputOption[] = [];
 
   if (ask.mode === "still" || (ask.mode === "again" && from?.kind === "image")) {
     kind = "image";
-    inputs = elements;
+    inputs = ask.mode === "still" ? [...blockFrame, ...elements] : elements;
   } else if (ask.mode === "take" && from?.kind === "image") {
-    inputs = [frame(from, "start"), ...elements].filter(Boolean) as GenInputOption[];
+    inputs = [frame(from, "start"), ...motion, ...elements].filter(Boolean) as GenInputOption[];
   } else if (ask.mode === "again" && from) {
     // Another like this one: the same frames and the same recorded inputs.
     const recorded = p.refs
@@ -81,7 +96,7 @@ export function buildRequest(ask: GenerateAsk, p: Props): GenerateRequest | null
       ...elements,
     ].filter(Boolean) as GenInputOption[];
   } else {
-    inputs = [frame(tagged("start"), "start"), frame(tagged("end"), "end"), ...elements].filter(Boolean) as GenInputOption[];
+    inputs = [frame(tagged("start"), "start"), frame(tagged("end"), "end"), ...motion, ...elements].filter(Boolean) as GenInputOption[];
   }
   const seen = new Set<string>();
   inputs = inputs.filter((i) => (seen.has(i.genId) ? false : (seen.add(i.genId), true)));
@@ -97,7 +112,10 @@ export function buildRequest(ask: GenerateAsk, p: Props): GenerateRequest | null
   ];
 
   const stagePrompt = p.prompts.find((x) => x.shot_id === shot.id && x.stage === kind)?.text?.trim();
-  const defaultPrompt = (ask.prompt ?? "").trim() || (from?.prompt ?? "").trim() || stagePrompt || shot.beat || shot.title || "";
+  const blockPrompt = kind === "image" && ask.mode === "still" && blockFrame.length
+    ? (onShot.find((g) => g.id === blockFrame[0].genId)?.prompt ?? "").trim()
+    : "";
+  const defaultPrompt = (ask.prompt ?? "").trim() || (from?.prompt ?? "").trim() || stagePrompt || blockPrompt || shot.beat || shot.title || "";
   return {
     kind,
     shotId: shot.id,

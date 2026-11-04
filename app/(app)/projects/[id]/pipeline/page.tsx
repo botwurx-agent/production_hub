@@ -19,8 +19,10 @@ export const maxDuration = 60;
 
 export default async function PipelinePage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { shot?: string };
 }) {
   const ctx = await requireStudioContext();
   const supabase = createClient();
@@ -174,6 +176,7 @@ export default async function PipelinePage({
       />
       <Card className="p-5">
         <PipelineWorkspace
+          initialShotId={searchParams?.shot ?? null}
         canSeeCost={!ctx.isCollaborator}
           projectId={project.id}
           studioId={ctx.studio.id}

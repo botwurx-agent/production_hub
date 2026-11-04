@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { createAssetUploadUrl } from "@/app/(app)/projects/[id]/upload-actions";
+import { actionError } from "@/lib/action-result";
 
 const BUCKET = "assets";
 
@@ -25,7 +26,9 @@ export async function uploadAssetFile(opts: {
   file: File;
 }): Promise<{ storagePath: string; mimeType: string; sizeBytes: number }> {
   const ticket = await createAssetUploadUrl(opts.projectId, opts.file.name);
-  if ("error" in ticket) throw new Error(ticket.error);
+  // An expired session resolves the action to undefined, not to an error.
+  const failed = actionError(ticket);
+  if (failed || !ticket || "error" in ticket) throw new Error(failed ?? "Could not start the upload.");
 
   const supabase = createClient();
   const { error } = await supabase.storage

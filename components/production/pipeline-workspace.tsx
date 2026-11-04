@@ -1203,6 +1203,7 @@ export function PipelineWorkspace({
   canSeeCost = true,
   castReferences = [],
   castUses = [],
+  initialShotId = null,
   thumbUrls = {},
   hfConnected = false,
   generationRefs = [],
@@ -1243,10 +1244,14 @@ export function PipelineWorkspace({
   canSeeCost?: boolean;
   castReferences?: CastReference[];
   castUses?: CastUse[];
+  /** Opened from a link naming a shot (Send to pipeline). */
+  initialShotId?: string | null;
 }) {
   const router = useRouter();
   const [, start] = useTransition();
-  const [activeId, setActiveId] = useState<string | null>(shots[0]?.id ?? null);
+  const [activeId, setActiveId] = useState<string | null>(
+    (initialShotId && shots.some((s) => s.id === initialShotId) ? initialShotId : null) ?? shots[0]?.id ?? null,
+  );
 
   // The references a shot uses. Resolved here rather than in StagePanel so the
   // image and video panels of one shot cannot disagree about what is in it.

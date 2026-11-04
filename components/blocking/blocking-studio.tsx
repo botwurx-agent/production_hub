@@ -30,6 +30,7 @@ import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
 import { Outliner, Properties, type Posed, type StudioApi } from "./panels";
 import { Timeline, type KeyRef, type Track } from "./timeline";
 import { Btn, useOutside } from "./ui";
+import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
 
 type View = "camera" | "free";
 
@@ -120,11 +121,13 @@ function CrosshairMark({ color, style }: { color: string; style: CrossStyle }) {
 const fileStem = (s: string) => s.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "blocking";
 
 export function BlockingStudio({
-  initial, canEdit, onChange,
+  initial, canEdit, onChange, pipeline,
 }: {
   initial: BlockScene;
   canEdit: boolean;
   onChange: (s: BlockScene) => void;
+  /** Where Send to pipeline puts the clip. Absent in the fixture and for view-only access. */
+  pipeline?: PipelineTarget;
 }) {
   const [scene, setSceneState] = useState(initial);
   const sceneRef = useRef(initial);
@@ -911,66 +914,79 @@ export function BlockingStudio({
     if (e.rec.media.state !== "inactive") e.rec.media.stop();
   }
 
-  const record = () => {
-    const e = eng.current;
-    const mime = pickMime();
-    if (!e || !mime) { setNote("This browser cannot record video: try Chrome"); return; }
-    setExportOpen(false);
-    playRef.current.on = false;
-    setPlaying(false);
-    setSel(null);
-    const r = recRenderer();
-    const media = new MediaRecorder((r.domElement as HTMLCanvasElement).captureStream(sceneRef.current.fps), { mimeType: mime, videoBitsPerSecond: 14_000_000 });
-    const chunks: Blob[] = [];
-    media.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
-    const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
-    const name = `${fileStem(sceneRef.current.name)}_blocking.${ext}`;
-    media.onstop = () => {
-      const blob = new Blob(chunks, { type: mime.split(";")[0] });
-      r.dispose();
-      if (e.rec) e.rec = null;
-      setRecording(false);
-      setT(0);
-      if (!blob.size) { setNote("Nothing was recorded: try again in Chrome"); return; }
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-      setNote(`Saved ${name}`);
-    };
-    e.rec = { renderer: r, media, t0: 0, on: false, chunks };
-    tRef.current = 0;
-    // The clip starts when the recorder does, or its first frames are lost.
-    const go = () => { if (e.rec && !e.rec.on) { e.rec.t0 = performance.now(); e.rec.on = true; } };
-    media.onstart = go;
-    setTimeout(go, 600);
-    setRecording(true);
-    setView("camera");
-    media.start(250);
+  /**
+   * Plays the shot through the camera into its own canvas and resolves with
+   * the recorded clip (null when nothing was recorded). Shared by the
+   * download and by Send to pipeline, so both get the same file.
+   */
+  const captureClip = (): Promise<{ blob: Blob; mime: string; ext: string } | null> =>
+    new Promise((resolve) => {
+      const e = eng.current;
+      const mime = pickMime();
+      if (!e || !mime) { setNote("This browser cannot record video: try Chrome"); resolve(null); return; }
+      setExportOpen(false);
+      playRef.current.on = false;
+      setPlaying(false);
+      setSel(null);
+      const r = recRenderer();
+      const media = new MediaRecorder((r.domElement as HTMLCanvasElement).captureStream(sceneRef.current.fps), { mimeType: mime, videoBitsPerSecond: 14_000_000 });
+      const chunks: Blob[] = [];
+      media.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
+      const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
+      media.onstop = () => {
+        const blob = new Blob(chunks, { type: mime.split(";")[0] });
+        r.dispose();
+        if (e.rec) e.rec = null;
+        setRecording(false);
+        setT(0);
+        if (!blob.size) { setNote("Nothing was recorded: try again in Chrome"); resolve(null); return; }
+        resolve({ blob, mime: mime.split(";")[0], ext });
+      };
+      e.rec = { renderer: r, media, t0: 0, on: false, chunks };
+      tRef.current = 0;
+      // The clip starts when the recorder does, or its first frames are lost.
+      const go = () => { if (e.rec && !e.rec.on) { e.rec.t0 = performance.now(); e.rec.on = true; } };
+      media.onstart = go;
+      setTimeout(go, 600);
+      setRecording(true);
+      setView("camera");
+      media.start(250);
+    });
+
+  /** The first frame through the camera, as a PNG. */
+  const captureFrame = (): Promise<Blob | null> =>
+    new Promise((resolve) => {
+      const e = eng.current;
+      if (!e) { resolve(null); return; }
+      setExportOpen(false);
+      const r = recRenderer();
+      pose(sceneRef.current, 0);
+      e.world.helpers.visible = false;
+      e.tcHelper.visible = false;
+      r.render(e.world.scene, e.shot);
+      r.domElement.toBlob((blob) => { r.dispose(); resolve(blob); }, "image/png");
+    });
+
+  const download = (blob: Blob, name: string) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    setNote(`Saved ${name}`);
   };
 
-  const saveFrame = () => {
-    const e = eng.current;
-    if (!e) return;
-    setExportOpen(false);
-    const r = recRenderer();
-    pose(sceneRef.current, 0);
-    e.world.helpers.visible = false;
-    e.tcHelper.visible = false;
-    r.render(e.world.scene, e.shot);
-    r.domElement.toBlob((blob) => {
-      r.dispose();
-      if (!blob) return;
-      const name = `${fileStem(sceneRef.current.name)}_frame1.png`;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-      setNote(`Saved ${name}`);
-    }, "image/png");
+  const record = async () => {
+    const clip = await captureClip();
+    if (clip) download(clip.blob, `${fileStem(sceneRef.current.name)}_blocking.${clip.ext}`);
   };
+
+  const saveFrame = async () => {
+    const blob = await captureFrame();
+    if (blob) download(blob, `${fileStem(sceneRef.current.name)}_frame1.png`);
+  };
+
+  const [sendOpen, setSendOpen] = useState(false);
 
   /* ---------- layout ---------- */
 
@@ -1048,7 +1064,10 @@ export function BlockingStudio({
                   Upload the clip as a video reference for the camera move, and the first frame (made real) as the start image.
                 </p>
                 <div className="mt-3 space-y-1.5">
-                  <Btn className="w-full" tone="primary" onClick={record}>Record the blocking clip ({scene.duration.toFixed(1)} s)</Btn>
+                  {pipeline && (
+                    <Btn className="w-full" tone="primary" onClick={() => { setExportOpen(false); setSendOpen(true); }}>Send to the pipeline…</Btn>
+                  )}
+                  <Btn className="w-full" tone={pipeline ? "plain" : "primary"} onClick={record}>Record the blocking clip ({scene.duration.toFixed(1)} s)</Btn>
                   <Btn className="w-full" onClick={saveFrame}>Save the first frame (PNG)</Btn>
                 </div>
                 <p className="mt-2 text-[10.5px] text-text-faint">{exportSize().w} x {exportSize().h}, {scene.fps} fps, in the {scene.look} look. Recording plays the shot through in real time.</p>
@@ -1093,6 +1112,20 @@ export function BlockingStudio({
           </div>
         )}
       </div>
+
+      {sendOpen && pipeline && (
+        <SendToPipeline
+          target={pipeline}
+          sceneName={scene.name}
+          duration={scene.duration}
+          size={exportSize()}
+          fps={scene.fps}
+          aspect={scene.aspect}
+          captureClip={captureClip}
+          captureFrame={captureFrame}
+          onClose={() => setSendOpen(false)}
+        />
+      )}
 
       {/* Properties */}
       <aside className="row-span-2 min-h-0 overflow-y-auto border-l border-border bg-surface">

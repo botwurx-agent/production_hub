@@ -14,11 +14,15 @@ import type { BlockScene } from "@/lib/blocking/scene";
 import { createBlockingScene, deleteBlockingScene, saveBlockingScene } from "@/app/(app)/projects/[id]/blocking-actions";
 import { BlockingStudio } from "./blocking-studio";
 import { STUDIO_VARS, useOutside } from "./ui";
+import type { PipelineShot } from "./send-to-pipeline";
 
 
 export function BlockingWorkspace({
-  projectId, projectTitle, scenes, active, canEdit, shotId,
+  projectId, projectTitle, scenes, active, canEdit, shotId, studioId, shots: initialShots, linkedShotId,
 }: {
+  studioId: string;
+  shots: PipelineShot[];
+  linkedShotId: string | null;
   projectId: string;
   projectTitle: string;
   scenes: { id: string; name: string }[];
@@ -32,6 +36,8 @@ export function BlockingWorkspace({
   const menuRef = useOutside(menu, () => setMenu(false));
   const [state, setState] = useState<"saved" | "saving" | "error">("saved");
   const [liveName, setLiveName] = useState<string | null>(null);
+  const [pipeShots, setPipeShots] = useState(initialShots);
+  const [linked, setLinked] = useState(linkedShotId);
   const pending = useRef<BlockScene | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const href = (id: string) => `/projects/${projectId}/blocking?scene=${id}`;
@@ -140,7 +146,11 @@ export function BlockingWorkspace({
       </div>
       <main className="hidden min-h-0 flex-1 lg:block">
         {active ? (
-          <BlockingStudio key={active.id} initial={active.data} canEdit={canEdit} onChange={onChange} />
+          <BlockingStudio key={active.id} initial={active.data} canEdit={canEdit} onChange={onChange}
+            pipeline={canEdit ? {
+              projectId, studioId, sceneId: active.id, shots: pipeShots, linkedShotId: linked,
+              onLinked: (id, list) => { setLinked(id); setPipeShots(list); },
+            } : undefined} />
         ) : (
           <div className="flex h-full items-center justify-center p-6">
             <div className="w-full max-w-[760px]">

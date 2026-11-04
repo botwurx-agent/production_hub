@@ -8091,9 +8091,38 @@ the side window to the dog, out through the windshield, ending ahead.
   keying, a preset, adding a vehicle, playback, the free view gizmo, a recorded
   8.3 s 1280x720 H.264 clip and the PNG, no page errors. NOT run against the
   database from a session.
-- NEXT (agreed order): "Send to pipeline" (the clip as a motion reference and
-  frame 1 made real as the start image, onto the shot, then Seedance from the
-  Generate window); then the Higgsfield option (`generate_3d` turning a photo
+- SEND TO PIPELINE (BUILT, 2026-11-04, no migration). Export > "Send to the
+  pipeline..." opens a window with a SHOT PICKER (the project's generated
+  shots, the one this scene was sent to before picked first and marked "sent
+  before", or a NEW SHOT named after the scene, made with input_mode
+  video_to_video) and a "send the first frame too" tick, on by default.
+  "Record and send" draws frame 1, records the clip in real time (the same
+  captureClip the download uses, so both get the same file), uploads both
+  through uploadAssetFile, then sendBlockingToPipeline
+  (blocking-actions.ts) writes two `ai_generations` REFERENCE rows: the clip
+  on the VIDEO stage, role `motion`, and the frame on the IMAGE stage, role
+  `ref`, both with params {source: "blocking", blocking_scene_id} and a prompt
+  saying what they are. It sets blocking_scenes.shot_id, which is how the
+  picker knows "sent before". Paths are accepted only as
+  `<studio>/<project>/<file>` (the asset ticket's shape), writing needs
+  can_edit_project, a live shot is refused. SENDING AGAIN REPLACES this
+  scene's earlier blocking on that shot, unless a take was built from it
+  (ai_generation_refs or a parent id points at it), since that lineage must
+  not dangle. The done screen links to /projects/<id>/pipeline?shot=<id>,
+  which the pipeline page now honours (initialShotId).
+  THE GENERATE WINDOW USES THEM WITHOUT BEING TOLD: a take (default, or from
+  a still) now includes the shot's latest motion reference as its video
+  reference, and a STILL includes the latest blocking frame as an image
+  reference with that frame's "make it real" prompt as the default, so the
+  flow is: send, Generate a still from the frame, tag it Start, Generate a
+  take. Nothing is generated or spent by sending.
+  Verified in Chromium on /dev/blocking?send=1 (a pretend pipeline): picker,
+  new-shot title, real-time recording with progress, and a refused upload
+  reading as a sentence. NOT run against the database or Storage from a
+  session. FIXED ON THE WAY: uploadAssetFile did `"error" in ticket` on a
+  Server Action result, which throws on the undefined an expired session
+  returns; it goes through actionError now (every asset upload benefits).
+- NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.
 

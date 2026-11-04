@@ -30,6 +30,14 @@ export default async function BlockingPage({
   const byShot = searchParams.shot ? scenes.find((s) => s.shot_id === searchParams.shot) : undefined;
   const activeId = scenes.find((s) => s.id === searchParams.scene)?.id ?? byShot?.id ?? (searchParams.shot ? null : scenes[0]?.id ?? null);
 
+  // The project's generated shots, for Send to pipeline.
+  const { data: shotRows } = await supabase
+    .from("ai_shots").select("id, title, method").eq("project_id", project.id).order("position", { ascending: true });
+  const shots = (shotRows ?? [])
+    .map((s, i) => ({ id: s.id, label: `Shot ${i + 1}${s.title?.trim() ? `, ${s.title.trim()}` : ""}`, method: s.method }))
+    .filter((s) => s.method !== "live")
+    .map(({ id, label }) => ({ id, label }));
+
   let active: { id: string; data: NonNullable<ReturnType<typeof asBlockScene>> } | null = null;
   if (activeId) {
     const { data: row } = await supabase.from("blocking_scenes").select("id, data").eq("id", activeId).maybeSingle();
@@ -43,6 +51,9 @@ export default async function BlockingPage({
       projectTitle={project.title}
       scenes={scenes.map((s) => ({ id: s.id, name: s.name }))}
       active={active}
+      studioId={ctx.studio.id}
+      shots={shots}
+      linkedShotId={scenes.find((x) => x.id === active?.id)?.shot_id ?? null}
       canEdit={canEditProject(ctx, project.id)}
       shotId={searchParams.shot ?? null}
     />
