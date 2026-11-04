@@ -1329,9 +1329,13 @@ export function PipelineWorkspace({
   // image candidates -> Start/End -> video. video_to_video / text_to_video skip
   // the image stage and go straight to a video generation (v2v / video-first).
   const inputMode = active?.input_mode ?? "frames";
+  // A video-first shot still shows the image stage once it holds stills (one
+  // generated from the map, or imported), or they would exist only on the map.
+  const hasImages =
+    !!active && (shotGens.get(`${active.id}:image`) ?? []).length > 0;
   const showImageStage =
     active?.method !== "live" &&
-    (inputMode === "frames" || inputMode === "image_to_video");
+    (inputMode === "frames" || inputMode === "image_to_video" || hasImages);
 
   // Representative thumbnail per shot: final take > take > start > any image > any.
   const shotThumb = useMemo(() => {
