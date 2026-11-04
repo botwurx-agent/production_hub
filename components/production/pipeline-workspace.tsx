@@ -1514,6 +1514,14 @@ export function PipelineWorkspace({
           </span>
           Map <span className="text-xs font-normal text-text-faint">{mapOpen ? "hide" : "show"}</span>
         </button>
+        <Link href={`/projects/${projectId}/blocking${active && active.method !== "live" ? `?shot=${active.id}` : ""}`}
+          className="flex items-center gap-2 rounded-[11px] border border-border px-3 py-2 text-sm font-bold text-text transition hover:border-border-strong"
+          title="Block the shot in 3D with a keyframed camera, for a video model to follow">
+          <span className="grid h-6 w-6 place-items-center rounded-[7px]" style={{ background: "var(--h-amber-bg)", color: "var(--h-amber)" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 22 12 12 22 2 12z" /></svg>
+          </span>
+          Blocking
+        </Link>
         <span className="flex-1" />
         <Button size="sm" onClick={() => newShot("generated")}>+ Generated shot</Button>
         <Button size="sm" variant="secondary" onClick={() => newShot("live")}>+ Live shot</Button>

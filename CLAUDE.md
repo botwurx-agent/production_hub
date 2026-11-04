@@ -1459,7 +1459,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0127. Recent: 0127 =
+files in supabase/migrations. THROUGH 0128. Recent: 0128 =
+blocking_scenes (shot blocking scenes, jsonb per scene, optional shot_id,
+0093 read/edit split); 0127 =
 ai_map_layouts (pipeline map arrangement per project, jsonb overrides,
 0093 read/edit split); 0126 =
 deliverable_delivered_on (deliverables.delivered_on, the day it was
@@ -8001,6 +8003,89 @@ that generates is NOT, and waits on what the probe prints.
   the parser was tested on the printed body.
   NOT BUILT: Elements matching from `show_reference_elements` (probe not yet
   pressed for it).
+
+### Shot blocking: animated 3D blockouts for AI video (migration 0128) — BUILT, slice 1
+Operator, 2026-11-04: "scene blocking is becoming the standard protocol" for
+AI filmmaking. A low-poly blockout with a dynamic camera move is recorded as a
+clip, uploaded to Seedance as a video reference with an image reference as the
+start frame, and Seedance follows the camera. Their own test confirmed it, and
+the reference they sent (a Rivian commercial blocked in Blender through 3D
+Jutsu) does one continuous 15 s move: chase from behind, alongside, in through
+the side window to the dog, out through the windshield, ending ahead.
+- ITS OWN TOOL, NOT THE SCENE BUILDER, on the operator's call: "use the
+  architecture but it should be something totally separate... motion control
+  software meets blender with a timeline". /projects/[id]/blocking renders a
+  FIXED FULL-SCREEN overlay (z-60) over the app shell, its own top bar (back to
+  the project, scenes as tabs, + New scene from a template, Saved state). The
+  scene builder is the lighting and lens previz for a live set; this is motion
+  for a generated shot.
+- DARK BY DESIGN, STILL TOKENS: data-theme="dark" plus STUDIO_VARS
+  (components/blocking/ui.tsx), a neutral charcoal. The accent pair is
+  RESTATED there because the app defines --accent-soft on :root, where var()
+  resolves against the page's own theme; without it a selected row was a pale
+  lilac bar with white text on it.
+- `blocking_scenes` (0128): one row per scene, the whole scene as jsonb
+  (lib/blocking/scene.ts, `v: 1`), optional shot_id to the ai_shot it blocks.
+  0093 read/edit split. Saves do NOT revalidate (the #482 lesson).
+- THE MODEL (lib/blocking/scene.ts, pure): objects and ONE camera, each a list
+  of keys {t, p, r:[yaw,pitch,roll], ease}; camera keys also carry lens.
+  Anything can RIDE WITH another object (parent): its keys are then in the
+  parent's frame, which is what makes the reference shot possible: the SUV
+  drives, the people and the dog sit in it, and the camera's keys are relative
+  to the car so it stays alongside at speed. Changing a parent re-expresses
+  every key so nothing jumps (setParent in the studio). asBlockScene is the
+  trust boundary (cycles in parents are broken, unknown kinds become a box).
+- THE ENGINE (lib/blocking/keys.ts, pure, 24 assertions in the scratchpad):
+  Catmull-Rom through the keys (or straight lines), pace from the LEAVING
+  key's ease (smooth / linear / ease in / ease out / hold), angles unwrapped so
+  350 -> 10 turns 20 degrees, lens in log space, deterministic handheld shake
+  (incommensurate sines, so a scrub and a recording agree), and eleven move
+  presets (push, pull, orbit, half orbit, arc, crane up/down, rise and reveal,
+  fly-by, dolly zoom, whip pan) that start from the camera as it stands at the
+  playhead, aim at a chosen object, and replace the keys inside the move.
+- THE EDIT RULE, one function (writePose): a change to something with ONE key
+  just moves it; once it has two keys, or Auto key is on, a change at the
+  playhead sets a key there. I keys whatever is selected. Undo/redo is
+  snapshot stacks with coalescing (a drag is one undo).
+- THE EDITOR (components/blocking/blocking-studio.tsx): CAMERA VIEW is the
+  frame letterboxed to the aspect, flown like a game camera (drag look,
+  right-drag slide, scroll moves in, Alt+scroll zooms the lens, WASD/QE fly,
+  shift faster). FREE VIEW orbits, draws the camera body and frustum, the path
+  (in the parent's frame, so it travels with the car) with key dots, and a
+  picture-in-picture of the shot; click selects, TransformControls move (G)
+  and turn (R). Outliner left, properties right, dope sheet along the bottom
+  (moving things first, diamonds drag to re-time, bars show motion).
+  Lens truth reuses lib/previz/optics (BODIES, imagedArea, fovDeg).
+- CATALOGUE (lib/blocking/build.ts): people (the previz figure, repainted),
+  child, dog, car / SUV / van / pickup with OPEN CABINS and seats (so a
+  camera can go through a window), motorbike, road with lines, hills,
+  mountains, sea, buildings, trees, rocks, street lights, walls, a four-wall
+  room open at the front, furniture, stairs, a hero product, shapes, and an
+  invisible Target to aim at. People get the next unused SUBJECT COLOUR so two
+  never arrive the same colour.
+- LOOKS: Blockout (flat colour per object, flat shading, almost no shadow: the
+  reference look, and what lets the model tell subjects apart), Clay, Lit.
+- EXPORT: "Record the blocking clip" renders through the camera into its own
+  canvas at 1280 on the long side (even numbers), H.264 MP4 where the browser
+  can (else WebM), in real time for the scene's length, plus "Save the first
+  frame" as PNG. GOTCHA hit: Chrome does not fire MediaRecorder's start until
+  the canvas has a frame, so the clip canvas is painted from the moment the
+  recorder exists and a 600 ms fallback starts the clock.
+- TEMPLATES (lib/blocking/templates.ts): Coast road (the reference shot,
+  12 s), City street, Living room, Product orbit, Desert reveal, Empty stage.
+- WHERE: a hub card on ai_video projects (Visualize band, after AI Pipeline)
+  and a "Blocking" button in the pipeline controls, which passes ?shot= so a
+  scene made from there is tied to that shot. Desktop only (lg); a phone gets
+  a sentence. /dev/blocking?t=<template> is the fixture.
+- VERIFIED in headless Chromium against the fixture: camera look and fly,
+  keying, a preset, adding a vehicle, playback, the free view gizmo, a recorded
+  8.3 s 1280x720 H.264 clip and the PNG, no page errors. NOT run against the
+  database from a session.
+- NEXT (agreed order): "Send to pipeline" (the clip as a motion reference and
+  frame 1 made real as the start image, onto the shot, then Seedance from the
+  Generate window); then the Higgsfield option (`generate_3d` turning a photo
+  into a model in the scene, on the studio's own credits); then describe a
+  scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
 Operator, 2026-10-08: on set a DP or director pulls out a phone app, picks a

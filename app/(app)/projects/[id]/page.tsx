@@ -620,6 +620,28 @@ export default async function ProjectDetailPage({
               </HubCard>
             )}
 
+            {isAiVideo && (
+              <HubCard
+                href={`/projects/${project.id}/blocking`}
+                hue="purple"
+                title="Shot blocking"
+                sub="3D blockouts with a keyframed camera"
+                footer="Open shot blocking"
+                icon={
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 17 9 11l4 4 8-8" />
+                    <path d="M3 21h18" />
+                    <path d="m14 7h7v7" />
+                  </svg>
+                }
+              >
+                <p className="text-[13px] text-text-muted">
+                  Block a scene in 3D and animate the camera, then export the clip
+                  for Seedance to follow the move.
+                </p>
+              </HubCard>
+            )}
+
             {/* ai_video ONLY, matching the AI Pipeline card above. Elements
                 earn their keep next to the pipeline's prompt bar, where a
                 handle gets inserted; cgi_vfx used to see this card without the

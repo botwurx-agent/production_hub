@@ -4329,6 +4329,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      blocking_scenes: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          shot_id: string | null;
+          name: string;
+          data: Json;
+          position: number;
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          shot_id?: string | null;
+          name?: string;
+          data: Json;
+          position?: number;
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          shot_id?: string | null;
+          name?: string;
+          data?: Json;
+          position?: number;
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       scene_setups: {
         Row: {
           id: string;
