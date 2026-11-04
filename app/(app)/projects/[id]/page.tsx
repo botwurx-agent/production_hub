@@ -706,6 +706,11 @@ export default async function ProjectDetailPage({
               </p>
             </HubCard>
 
+            {/* Scene builder and Location stills are live-action tools (a real
+                set, real lenses, a real scout), so an AI job gets Shot
+                blocking instead. Routes stay reachable, per the project-type
+                convention. */}
+            {!isAiVideo && (<>
             <HubCard
               href={`/projects/${project.id}/scene-builder`}
               hue="orange"
@@ -741,6 +746,7 @@ export default async function ProjectDetailPage({
                 Frame a cine lens through your phone on location. Each still can become a scene.
               </p>
             </HubCard>
+            </>)}
 
             <HubCard
               href={`/projects/${project.id}/moodboard`}

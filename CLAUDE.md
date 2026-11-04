@@ -8079,9 +8079,13 @@ the side window to the dog, out through the windshield, ending ahead.
   The colours are picked values, not theme tokens, like a line's colour.
 - TEMPLATES (lib/blocking/templates.ts): Coast road (the reference shot,
   12 s), City street, Living room, Product orbit, Desert reveal, Empty stage.
-- WHERE: a hub card on ai_video projects (Visualize band, after AI Pipeline)
-  and a "Blocking" button in the pipeline controls, which passes ?shot= so a
-  scene made from there is tied to that shot. Desktop only (lg); a phone gets
+- WHERE: a hub card on ai_video projects ONLY (Visualize band, after AI
+  Pipeline). NOT a button on the pipeline page (operator, 2026-11-04: the page
+  is already crowded and blocking is building a reference, not working the
+  shots). It briefly had one passing ?shot=; with it gone nothing sets
+  shot_id yet, and "Send to pipeline" is where a scene gets its shot.
+  The reverse rule: Scene builder and Location stills hub cards are HIDDEN on
+  ai_video projects (live-action tools); their routes stay reachable. Desktop only (lg); a phone gets
   a sentence. /dev/blocking?t=<template> is the fixture.
 - VERIFIED in headless Chromium against the fixture: camera look and fly,
   keying, a preset, adding a vehicle, playback, the free view gizmo, a recorded
