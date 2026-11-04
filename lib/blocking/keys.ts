@@ -40,7 +40,9 @@ export function unwrap(values: number[]): number[] {
 }
 
 export type Pose = { p: Vec3; r: Vec3 };
-export type CamPose = Pose & { lens: number };
+/** `af` is the aim framing offset (see CamKey), interpolated like the angles. */
+export type CamPose = Pose & { lens: number; af: [number, number] };
+const afOf = (k: CamKey, c: 0 | 1) => (k.af ? k.af[c] : 0);
 
 /** Where a track is between which keys, and how far, eased. */
 function locate(keys: Key[], t: number): { i: number; u: number } {
@@ -88,12 +90,12 @@ export function evalCamera(keys: CamKey[], t: number, smooth = true, opts: FlowO
     return flowCamera(keys, t, smooth, opts.easeEnds !== false);
   }
   const base = evalTrack(keys, t, smooth);
-  if (!keys.length) return { ...base, lens: 35 };
+  if (!keys.length) return { ...base, lens: 35, af: [0, 0] };
   const { i, u } = locate(keys, t);
-  const logs = keys.map((k) => Math.log(Math.max(1, k.lens)));
+  const lin = (vals: number[]) => (keys.length === 1 || u === 0 ? vals[i] : vals[i] + (vals[i + 1] - vals[i]) * u);
   // Not Catmull-Rom: a curve through log lens values overshoots a zoom.
-  const l = keys.length === 1 || u === 0 ? logs[i] : logs[i] + (logs[i + 1] - logs[i]) * u;
-  return { ...base, lens: Math.exp(l) };
+  const l = lin(keys.map((k) => Math.log(Math.max(1, k.lens))));
+  return { ...base, lens: Math.exp(l), af: [lin(keys.map((k) => afOf(k, 0))), lin(keys.map((k) => afOf(k, 1)))] };
 }
 
 /* ---------- continuous flow ---------- */
@@ -149,7 +151,9 @@ function flowCamera(keys: CamKey[], t: number, smooth: boolean, restEnds: boolea
     r[c] = flowChannel(times, unwrap(keys.map((k) => k.r[c])), t, { restEnds, monotone: true, linear: !smooth });
   }
   const lens = Math.exp(flowChannel(times, keys.map((k) => Math.log(Math.max(1, k.lens))), t, { restEnds, monotone: true, linear: !smooth }));
-  return { p, r, lens };
+  const af: [number, number] = [0, 1].map((c) =>
+    flowChannel(times, keys.map((k) => afOf(k, c as 0 | 1)), t, { restEnds, monotone: true, linear: !smooth })) as [number, number];
+  return { p, r, lens, af };
 }
 
 /* ---------- even speed ---------- */
@@ -303,7 +307,7 @@ const rad = (d: number) => (d * Math.PI) / 180;
  * target point. The camera's own key at t0 is the first key, so a preset
  * picks up exactly where the shot is.
  */
-export function presetKeys(id: PresetId, start: CamPose, target: Vec3, t0: number, dur: number, steps = 8): CamKey[] {
+export function presetKeys(id: PresetId, start: Pose & { lens: number }, target: Vec3, t0: number, dur: number, steps = 8): CamKey[] {
   const [tx, ty, tz] = target;
   const dx = start.p[0] - tx;
   const dz = start.p[2] - tz;

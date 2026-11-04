@@ -15,7 +15,8 @@ import { ControlPads, type PadSpec } from "@/components/previz/move-pad";
 import type { KeyRef, Track } from "./timeline";
 import { Btn, Num, Row, Section, Seg, Select, Swatches, Vec, useOutside } from "./ui";
 
-export type Posed = { p: Vec3; r: Vec3; lens?: number };
+/** `af` is the camera's aim framing at that moment (see CamKey). */
+export type Posed = { p: Vec3; r: Vec3; lens?: number; af?: [number, number] };
 
 export type CamPadAction =
   | "boomUp" | "boomDown" | "truckLeft" | "truckRight" | "pushIn" | "pullOut"
@@ -275,14 +276,18 @@ function CameraPanel({ api }: { api: StudioApi }) {
         {cam.aim.target ? (
           <>
             <p className="text-[11px] leading-relaxed text-text-faint">
-              The camera stays locked on {scene.objects.find((o) => o.id === cam.aim.target)?.name} through the whole shot, wherever its path goes. Drag in the camera view to frame them off centre.
+              The camera stays locked on {scene.objects.find((o) => o.id === cam.aim.target)?.name} through the whole shot, wherever its path goes. Drag in the camera view, or pan and tilt, to frame them off centre. The framing belongs to the keyframe at the playhead, so each key can sit them differently.
             </p>
-            {(cam.aim.frame[0] !== 0 || cam.aim.frame[1] !== 0) && (
-              <div className="flex items-center justify-between gap-2 text-[11px] text-text-muted">
-                <span>Camera turned {Math.abs(cam.aim.frame[0]).toFixed(1)}° {cam.aim.frame[0] > 0 ? "left" : "right"} and {Math.abs(cam.aim.frame[1]).toFixed(1)}° {cam.aim.frame[1] > 0 ? "up" : "down"} of them</span>
-                <Btn disabled={!canEdit} onClick={() => api.updateScene((s) => ({ ...s, camera: { ...s.camera, aim: { ...s.camera.aim, frame: [0, 0] } } }))}>Centre</Btn>
-              </div>
-            )}
+            {(() => {
+              const af = api.posed("camera").af ?? [0, 0];
+              if (Math.abs(af[0]) < 0.05 && Math.abs(af[1]) < 0.05) return null;
+              return (
+                <div className="flex items-center justify-between gap-2 text-[11px] text-text-muted">
+                  <span>At the playhead the camera is turned {Math.abs(af[0]).toFixed(1)}° {af[0] > 0 ? "left" : "right"} and {Math.abs(af[1]).toFixed(1)}° {af[1] > 0 ? "up" : "down"} of them</span>
+                  <Btn disabled={!canEdit} onClick={() => api.writePose("camera", { af: [0, 0] })}>Centre</Btn>
+                </div>
+              );
+            })()}
           </>
         ) : (
           <p className="text-[11px] leading-relaxed text-text-faint">Lock the camera on a subject so it never drifts off them between keys.</p>

@@ -25,8 +25,12 @@ export const EASES: { id: Ease; name: string; hint: string }[] = [
 
 /** A transform at a moment. `r` is yaw, pitch, roll. */
 export type Key = { t: number; p: Vec3; r: Vec3; ease: Ease };
-/** A camera key also carries the lens. */
-export type CamKey = Key & { lens: number };
+/**
+ * A camera key also carries the lens, and `af`: how far the subject sits off
+ * centre at this key while the camera is kept aimed (yaw, pitch degrees). It
+ * lives on the key, not the shot, so reframing one key leaves the others alone.
+ */
+export type CamKey = Key & { lens: number; af?: [number, number] };
 
 export type BlockObject = {
   id: string;
@@ -323,7 +327,9 @@ export function asBlockScene(raw: unknown): BlockScene | null {
       .map((k) => {
         const base = keyOf(k, duration);
         if (!base) return null;
-        return { ...base, lens: num((k as Record<string, unknown>).lens, 35, 8, 600) } as CamKey;
+        const kr = k as Record<string, unknown>;
+        const af = Array.isArray(kr.af) ? [num(kr.af[0], 0, -60, 60), num(kr.af[1], 0, -40, 40)] as [number, number] : undefined;
+        return { ...base, lens: num(kr.lens, 35, 8, 600), ...(af && (af[0] || af[1]) ? { af } : {}) } as CamKey;
       })
       .filter((k): k is CamKey => !!k),
     fps,
@@ -348,6 +354,14 @@ export function asBlockScene(raw: unknown): BlockScene | null {
       };
     })(),
   };
+  // Framing used to be one offset for the whole shot. A scene saved that way
+  // carries it onto every key, so it looks the same and each key can then be
+  // reframed on its own.
+  const [gy, gp] = camera.aim.frame;
+  if (gy || gp) {
+    camera.keys = camera.keys.map((k) => (k.af ? k : { ...k, af: [gy, gp] as [number, number] }));
+    camera.aim = { ...camera.aim, frame: [0, 0] };
+  }
   return {
     v: 1,
     name: str(s.name, "Untitled blocking").trim() || "Untitled blocking",

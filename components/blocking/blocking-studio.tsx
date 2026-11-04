@@ -233,7 +233,7 @@ export function BlockingStudio({
    * keys (moved the way the camera's flow says), and, when it is kept aimed
    * at something, pointed at that thing rather than where the keys point.
    */
-  const camAt = (s: BlockScene, at: number, m = mapOf(s)): { p: Vec3; r: Vec3; lens: number } => {
+  const camAt = (s: BlockScene, at: number, m = mapOf(s)): { p: Vec3; r: Vec3; lens: number; af: [number, number] } => {
     const cam = s.camera;
     const c = evalCamera(cam.keys, at, cam.path === "smooth", { flow: cam.flow, easeEnds: cam.easeEnds });
     const o = cam.aim.target ? m.get(cam.aim.target) : undefined;
@@ -241,13 +241,13 @@ export function BlockingStudio({
     const w = aimPoint(m, o, at);
     if (cam.parent && m.get(cam.parent)) w.applyMatrix4(objectMatrix(m, cam.parent, at).clone().invert());
     const a = aimAt(c.p, [w.x, w.y, w.z]);
-    return { ...c, r: [a.yaw + cam.aim.frame[0], Math.max(-89, Math.min(89, a.pitch + cam.aim.frame[1])), c.r[2]] };
+    return { ...c, r: [a.yaw + c.af[0] + cam.aim.frame[0], Math.max(-89, Math.min(89, a.pitch + c.af[1] + cam.aim.frame[1])), c.r[2]] };
   };
 
   const posedAt = (s: BlockScene, track: Track, at: number): Posed => {
     if (track === "camera") {
       const c = camAt(s, at);
-      return { p: c.p, r: c.r, lens: c.lens };
+      return { p: c.p, r: c.r, lens: c.lens, af: c.af };
     }
     const o = s.objects.find((x) => x.id === track);
     return o ? evalTrack(o.keys, at) : { p: [0, 0, 0], r: [0, 0, 0] };
@@ -266,7 +266,9 @@ export function BlockingStudio({
       };
       if (track === "camera") {
         const lens = pose.lens ?? cur.lens ?? 35;
-        return { ...s, camera: { ...s.camera, keys: write<CamKey>(s.camera.keys, { lens }) } };
+        const af = pose.af ?? cur.af;
+        const extra: Partial<CamKey> = af && (Math.abs(af[0]) > 1e-3 || Math.abs(af[1]) > 1e-3) ? { lens, af } : { lens, af: undefined };
+        return { ...s, camera: { ...s.camera, keys: write<CamKey>(s.camera.keys, extra) } };
       }
       return { ...s, objects: s.objects.map((o) => (o.id === track ? { ...o, keys: write<Key>(o.keys, {}) } : o)) };
     }, coalesce);
@@ -279,7 +281,7 @@ export function BlockingStudio({
       const cur = posedAt(s, track, at);
       if (track === "camera") {
         const ex = keyAt(s.camera.keys, at, s.fps);
-        return { ...s, camera: { ...s.camera, keys: setKey(s.camera.keys, { t: at, p: cur.p, r: cur.r, lens: cur.lens ?? 35, ease: ex?.ease ?? "smooth" }, s.fps) } };
+        return { ...s, camera: { ...s.camera, keys: setKey(s.camera.keys, { t: at, p: cur.p, r: cur.r, lens: cur.lens ?? 35, ...(cur.af ? { af: cur.af } : {}), ease: ex?.ease ?? "smooth" }, s.fps) } };
       }
       return {
         ...s,
@@ -777,10 +779,8 @@ export function BlockingStudio({
     const aimed = !!s.camera.aim.target;
     const turn = (dy: number, dp: number) => {
       if (aimed) {
-        commit((x) => {
-          const [fy, fp] = x.camera.aim.frame;
-          return { ...x, camera: { ...x.camera, aim: { ...x.camera.aim, frame: [Math.max(-60, Math.min(60, fy + dy)), Math.max(-40, Math.min(40, fp + dp))] } } };
-        }, `pad-${action}`);
+        const [fy, fp] = posedAt(s, "camera", tRef.current).af ?? [0, 0];
+        writePose("camera", { af: [Math.max(-60, Math.min(60, fy + dy)), Math.max(-40, Math.min(40, fp + dp))] }, `pad-${action}`);
       } else {
         const p = posedAt(s, "camera", tRef.current);
         writePose("camera", { r: [p.r[0] + dy, Math.max(-89, Math.min(89, p.r[1] + dp)), p.r[2]] }, `pad-${action}`);
@@ -823,11 +823,10 @@ export function BlockingStudio({
     l.x = ev.clientX;
     l.y = ev.clientY;
     if (l.button === 0 && sceneRef.current.camera.aim.target) {
-      // Kept aimed: dragging moves the subject off centre instead of turning the keys.
-      commit((s) => {
-        const [fy, fp] = s.camera.aim.frame;
-        return { ...s, camera: { ...s.camera, aim: { ...s.camera.aim, frame: [Math.max(-60, Math.min(60, fy - dx * 0.08)), Math.max(-40, Math.min(40, fp - dy * 0.08))] } } };
-      }, "aimframe");
+      // Kept aimed: dragging moves the subject off centre at THIS key (the
+      // same edit rule as any other change), never the whole shot.
+      const [fy, fp] = posedAt(sceneRef.current, "camera", tRef.current).af ?? [0, 0];
+      writePose("camera", { af: [Math.max(-60, Math.min(60, fy - dx * 0.08)), Math.max(-40, Math.min(40, fp - dy * 0.08))] }, "aimframe");
     } else if (l.button === 0) {
       const c = posedAt(sceneRef.current, "camera", tRef.current);
       const k = 0.12 * Math.min(1, (c.lens ?? 35) / 35) ** 0.6;

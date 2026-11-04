@@ -8138,6 +8138,17 @@ the side window to the dog, out through the windshield, ending ahead.
   `pad-<action>`). WHILE KEPT AIMED, pan and tilt move `aim.frame` instead
   (the lock owns the aim) and the labels say so. camPad in blocking-studio.
   Editors only. Verified in Chromium on the coast road.
+- FRAMING IS PER KEYFRAME (2026-11-04, operator: reframing the dog at the
+  third key moved the crosshair at the first key too). `aim.frame` was ONE
+  offset for the whole shot. It now lives on each camera key as `af` (yaw,
+  pitch degrees, CamKey), interpolated like the angles in every flow mode and
+  returned on CamPose, so the aim lock reads it per moment. Drag-to-frame, the
+  Aim pad and Centre all go through writePose, the normal edit rule: at a key
+  it changes that key, between keys it sets a new one, nothing else moves.
+  `aim.frame` survives only for old scenes: asBlockScene copies a non-zero one
+  onto every key and zeroes it, so a saved scene looks the same on load.
+  Verified in Chromium on the coast road: pan at key 3, keys 1, 2 and 4 still
+  centred, key 3 keeps its 6.9 degrees.
 - SEND TO PIPELINE (BUILT, 2026-11-04, no migration). Export > "Send to the
   pipeline..." opens a window with a SHOT PICKER (the project's generated
   shots, the one this scene was sent to before picked first and marked "sent
