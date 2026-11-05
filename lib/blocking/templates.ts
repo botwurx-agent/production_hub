@@ -84,6 +84,10 @@ export function cityStreetScene(): BlockScene {
     if (i % 2 === 0) {
       obj("lamppost", [-6.2, 0, i * 16], 90, used);
       obj("lamppost", [6.2, 0, i * 16 + 8], -90, used);
+    } else {
+      // Street trees between the lamps, set back by the building line.
+      obj("oak", [-8.8, 0, i * 16 + 4], 0, used, { size: [4.2, 6.5, 4.2] });
+      obj("oak", [8.8, 0, i * 16 - 4], 0, used, { size: [4.2, 6.5, 4.2] });
     }
   }
   const walker = obj("person", [-7.2, 0, -6], 0, used, { name: "Lead", pose: "walking" });
@@ -93,6 +97,8 @@ export function cityStreetScene(): BlockScene {
     { t: 8, p: [-7.2, 0, 6], r: [0, 0, 0], ease: "linear" },
   ];
   obj("car", [2.5, 0, 10], 180, used, { name: "Parked car", color: "#6f9bd8" });
+  obj("car", [3.2, 0, 24], 180, used, { name: "Parked car 2", color: "#c96f5b" });
+  obj("van", [-3.2, 0, 30], 0, used, { name: "Parked van", color: "#d9d4c8" });
   s.objects = used;
   s.camera.keys = [
     ck(0, [-7.2, 1.5, 0.5], [-7.2, 1.5, -6], 40, "linear"),

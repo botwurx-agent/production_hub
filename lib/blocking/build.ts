@@ -7,6 +7,8 @@
 // shading, each subject its own colour, which is what lets a video model tell
 // the subjects apart in a reference clip.
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { hipY as poseHipY, poseDef, shoulderY as poseShoulderY, SHIN } from "@/lib/previz/poses";
 import { gestureOf, type BlockObject, type Environment, type GestureKind, type Look, type Vec3 } from "./scene";
 import { evalTrack } from "./keys";
@@ -29,9 +31,13 @@ export function painter(look: Look, color: string): Paint {
   return (k = 1) => {
     let m = cache.get(k);
     if (m) return m;
-    if (look === "clay") m = new THREE.MeshStandardMaterial({ color: shade("#b9b6b0", k), roughness: 0.9 });
+    // Clay is a warm off-white, the look of a 3D blockout under an overcast
+    // sky; the shades of one object (k) still tell its parts apart.
+    if (look === "clay") m = new THREE.MeshStandardMaterial({ color: shade("#e4e0d8", Math.min(k, 1.12)), roughness: 1, metalness: 0 });
     else if (look === "lit") m = new THREE.MeshStandardMaterial({ color: shade(color, k), roughness: 0.75 });
-    else m = new THREE.MeshLambertMaterial({ color: shade(color, k), flatShading: true });
+    // Blockout keeps one flat colour per subject, smooth shaded so a rounded
+    // tree or a head is not drawn in facets.
+    else m = new THREE.MeshLambertMaterial({ color: shade(color, k) });
     cache.set(k, m);
     return m;
   };
@@ -47,6 +53,36 @@ function part(geo: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0)
 const box = (w: number, h: number, d: number, m: THREE.Material, x = 0, y = 0, z = 0) =>
   part(new THREE.BoxGeometry(w, h, d), m, x, y, z);
 
+/**
+ * Many small boxes in one material, merged into a single mesh: a facade's
+ * hundreds of windows and sills cost one draw call rather than hundreds.
+ */
+class Batch {
+  private parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  box(m: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    geo.translate(x, y, z);
+    const list = this.parts.get(m) ?? [];
+    list.push(geo);
+    this.parts.set(m, list);
+  }
+  addTo(g: THREE.Group) {
+    for (const [m, list] of this.parts) {
+      if (!list.length) continue;
+      const merged = mergeGeometries(list, false);
+      for (const geo of list) geo.dispose();
+      if (merged) g.add(part(merged, m));
+    }
+  }
+}
+
+/** A box with softened edges: car bodies, roofs, anything that should not read as a crate. */
+const rbox = (w: number, h: number, d: number, r: number, m: THREE.Material, x = 0, y = 0, z = 0) =>
+  part(new RoundedBoxGeometry(w, h, d, 3, Math.max(0.005, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001))), m, x, y, z);
+
+/** Tinted glass, the same in every look: dark enough to read as a window, clear enough to see who is inside. */
+const GLASS = new THREE.MeshStandardMaterial({ color: "#2b333b", roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.42, depthWrite: false });
+
 const SEAT_PITCH = 0.95;
 
 /** A car-like body: lower hull, open cabin (pillars and a roof), seats, wheels. */
@@ -56,17 +92,41 @@ function vehicle(o: BlockObject, paint: Paint, opts: { cab: number; cabStart: nu
   const wheelR = Math.min(0.4, H * 0.24);
   const hullH = H * (opts.tall ? 0.62 : 0.46);
   const hullY = wheelR * 0.75;
-  g.add(box(W, hullH - hullY + wheelR * 0.5, D, paint(1), 0, hullY + (hullH - hullY + wheelR * 0.5) / 2 - wheelR * 0.25, 0));
+  const bodyH = hullH - hullY + wheelR * 0.5;
+  // A rounded body, slightly narrower than the wheels so they sit out at the
+  // corners, the way a car is drawn rather than a crate on wheels.
+  g.add(rbox(W * 0.98, bodyH, D, Math.min(0.12, bodyH * 0.22), paint(1), 0, hullY + bodyH / 2 - wheelR * 0.25, 0));
+  // Bumpers front and back, and a darker sill along each side.
+  for (const sz of [-1, 1]) g.add(rbox(W * 0.96, 0.2, 0.16, 0.06, paint(0.55), 0, hullY + 0.05, sz * (D / 2 + 0.02)));
+  for (const sx of [-1, 1]) g.add(box(0.04, 0.12, D * 0.7, paint(0.6), sx * W * 0.49, hullY + 0.02, 0));
   // Cabin: four pillars and a roof, open sides, so a camera can pass through
   // a window the way the reference shots do.
   const cabD = D * opts.cab;
   const cabZ = D / 2 - D * opts.cabStart - cabD / 2;
   const cabH = H - hullH;
   const pillar = 0.08;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    g.add(box(pillar, cabH, pillar, paint(0.82), sx * (W / 2 - pillar / 2), hullH + cabH / 2, cabZ + sz * (cabD / 2 - pillar / 2)));
+  // The windscreen rakes forward from the roof to the bonnet, and the front
+  // pillars lean with it; the rear pillars stand up. Sides stay open.
+  const rake = opts.tall ? 0.18 : Math.min(0.6, cabH * 0.75);
+  const lean = Math.atan2(rake, cabH);
+  const len = Math.hypot(rake, cabH);
+  const frontZ = cabZ + cabD / 2;
+  for (const sx of [-1, 1]) {
+    const fp = box(pillar, len, pillar, paint(0.82), sx * (W / 2 - pillar / 2 - 0.02), hullH + cabH / 2, frontZ + rake / 2);
+    fp.rotation.x = -lean;
+    g.add(fp);
+    g.add(box(pillar * 1.4, cabH, pillar * 1.4, paint(0.82), sx * (W / 2 - pillar / 2 - 0.02), hullH + cabH / 2, cabZ - cabD / 2 + pillar));
   }
-  g.add(box(W, 0.07, cabD, paint(1), 0, H - 0.035, cabZ));
+  const screen = box(W * 0.9, len, 0.02, GLASS, 0, hullH + cabH / 2, frontZ + rake / 2);
+  screen.rotation.x = -lean;
+  screen.castShadow = false;
+  g.add(screen);
+  const back = box(W * 0.9, cabH * 0.9, 0.02, GLASS, 0, hullH + cabH * 0.45, cabZ - cabD / 2 + pillar);
+  back.castShadow = false;
+  g.add(back);
+  g.add(rbox(W * 0.94, 0.09, cabD, 0.04, paint(1), 0, H - 0.045, cabZ));
+  // Side mirrors at the foot of the windscreen.
+  for (const sx of [-1, 1]) g.add(rbox(0.14, 0.1, 0.18, 0.03, paint(0.85), sx * (W / 2 + 0.05), hullH + 0.12, frontZ + rake - 0.05));
   // Seats in real rows, spaced as a car is (about 0.95 m seat to seat), so a
   // sedan has two, an SUV two plus a cargo area (or three), a panel van one.
   // The count is the vehicle's, never derived from cabin length: that gave an
@@ -96,10 +156,14 @@ function vehicle(o: BlockObject, paint: Paint, opts: { cab: number; cabStart: nu
   // Dash and wheel.
   g.add(box(W * 0.9, 0.22, 0.3, paint(0.5), 0, hullH + 0.1, cabZ + cabD / 2 - 0.1));
   if (opts.bed) g.add(box(W * 0.9, 0.05, D * 0.32, paint(0.7), 0, hullH + 0.02, -D / 2 + D * 0.17));
-  const wg = new THREE.CylinderGeometry(wheelR, wheelR, 0.28, 14);
+  // A tyre with a lighter hub face, so a wheel reads as turning, not a disc.
+  const wg = new THREE.CylinderGeometry(wheelR, wheelR, 0.26, 20);
   wg.rotateZ(Math.PI / 2);
+  const hub = new THREE.CylinderGeometry(wheelR * 0.55, wheelR * 0.55, 0.27, 16);
+  hub.rotateZ(Math.PI / 2);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     g.add(part(wg, paint(0.25), sx * (W / 2 - 0.12), wheelR, sz * (D / 2 - wheelR * 1.6)));
+    g.add(part(hub, paint(0.7), sx * (W / 2 - 0.115), wheelR, sz * (D / 2 - wheelR * 1.6)));
   }
   // Head and tail lights read the direction of travel from any angle.
   for (const sx of [-1, 1]) {
@@ -567,14 +631,78 @@ function room(o: BlockObject, paint: Paint) {
 function building(o: BlockObject, paint: Paint) {
   const [W, H, D] = o.size;
   const g = new THREE.Group();
+  const r = rng(o.id);
   g.add(box(W, H, D, paint(1), 0, H / 2, 0));
-  const floors = Math.max(1, Math.floor(H / 3.2));
-  for (let f = 0; f < floors; f++) {
-    const y = 1.6 + f * 3.2;
-    if (y > H - 1) break;
-    for (const face of [1, -1]) g.add(box(W * 0.86, 1.2, 0.05, paint(0.55), 0, y, face * (D / 2 + 0.02)));
-    for (const face of [1, -1]) g.add(box(0.05, 1.2, D * 0.86, paint(0.55), face * (W / 2 + 0.02), y, 0));
+  const b = new Batch();
+  // Glass is a cool dark grey whatever colour the building is: a window
+  // painted in a darker brown reads as a hole, not a window.
+  const glass = new THREE.MeshLambertMaterial({ color: "#76808a" });
+  const trim = paint(1.08);
+  const deep = paint(0.88);
+  const tower = H > 40;
+  // Every face: an outward axis (nx, nz), its width along the face and the
+  // face's distance from the centre.
+  const faces = [
+    { nx: 0, nz: 1, len: W, off: D / 2 },
+    { nx: 0, nz: -1, len: W, off: D / 2 },
+    { nx: 1, nz: 0, len: D, off: W / 2 },
+    { nx: -1, nz: 0, len: D, off: W / 2 },
+  ];
+  // A box on a face: u along the face, y up, out = how far it stands proud.
+  const onFace = (m: THREE.Material, f: (typeof faces)[number], u: number, y: number, w: number, h: number, out: number) => {
+    const c = f.off + out / 2;
+    if (f.nz) b.box(m, w, h, out, u, y, f.nz * c);
+    else b.box(m, out, h, w, f.nx * c, y, u);
+  };
+  const gf = H >= 8 ? Math.min(4.4, H * 0.28) : 0;
+  // Plinth, the band above the shops, a cornice and a parapet: the lines a
+  // street is read by.
+  b.box(deep, W + 0.1, 0.45, D + 0.1, 0, 0.225, 0);
+  if (gf) b.box(trim, W + 0.16, 0.32, D + 0.16, 0, gf, 0);
+  b.box(trim, W + 0.4, 0.34, D + 0.4, 0, H - 0.17, 0);
+  for (const f of faces) {
+    const a = f.nz ? f.off : f.off;
+    if (f.nz) b.box(paint(1), f.len, 0.7, 0.22, 0, H + 0.35, f.nz * (a - 0.11));
+    else b.box(paint(1), 0.22, 0.7, f.len - 0.44, f.nx * (a - 0.11), H + 0.35, 0);
   }
+  for (const f of faces) {
+    // Shop windows across the ground floor.
+    if (gf) {
+      const bays = Math.max(1, Math.floor((f.len - 1) / 3.4));
+      const step = (f.len - 1) / bays;
+      for (let i = 0; i < bays; i++) {
+        const u = -f.len / 2 + 0.5 + step * (i + 0.5);
+        const gh = Math.min(2.7, gf - 1.4);
+        onFace(glass, f, u, 0.55 + gh / 2, step * 0.72, gh, 0.04);
+        onFace(trim, f, u, 0.55 + gh + 0.08, step * 0.8, 0.14, 0.1);
+      }
+    }
+    // Upper floors.
+    const top = H - 1.1;
+    if (tower) {
+      // A tower is ribbons of glass between floor slabs.
+      for (let y = gf + 1.9; y < top; y += 3.6) onFace(glass, f, 0, y, f.len - 0.6, 2.4, 0.04);
+      continue;
+    }
+    const cols = Math.max(1, Math.floor((f.len - 1.2) / 2.6));
+    const step = (f.len - 1.2) / cols;
+    for (let y = gf + 0.9 + 0.8; y + 0.8 < top; y += 3.2) {
+      for (let i = 0; i < cols; i++) {
+        const u = -f.len / 2 + 0.6 + step * (i + 0.5);
+        onFace(glass, f, u, y, 1.15, 1.6, 0.04);
+        onFace(trim, f, u, y - 0.86, 1.45, 0.12, 0.16);
+      }
+    }
+  }
+  // A couple of things on the roof: a stair housing, a plant unit.
+  for (let i = 0; i < 2; i++) {
+    const w = 1.6 + r() * 2.2;
+    const d = 1.4 + r() * 2;
+    const h = 1 + r() * 1.6;
+    if (w > W * 0.6 || d > D * 0.6) continue;
+    b.box(deep, w, h, d, (r() - 0.5) * (W - w - 1), H + h / 2, (r() - 0.5) * (D - d - 1));
+  }
+  b.addTo(g);
   return g;
 }
 
@@ -621,8 +749,24 @@ function road(o: BlockObject, paint: Paint) {
 function tree(o: BlockObject, paint: Paint) {
   const [W, H] = o.size;
   const g = new THREE.Group();
-  g.add(part(new THREE.CylinderGeometry(W * 0.06, W * 0.08, H * 0.4, 6), paint(0.55), 0, H * 0.2, 0));
-  g.add(part(new THREE.ConeGeometry(W / 2, H * 0.7, 7), paint(1), 0, H * 0.62, 0));
+  const r = rng(o.id);
+  g.add(cyl(W * 0.05, W * 0.08, H * 0.45, paint(0.55), 0, H * 0.225, 0, 9));
+  // A tapering canopy of soft clumps, widest low and coming to a rounded top.
+  const rows = [
+    { y: 0.4, rad: 0.42, n: 8, s: 0.2 },
+    { y: 0.52, rad: 0.38, n: 7, s: 0.2 },
+    { y: 0.65, rad: 0.3, n: 6, s: 0.18 },
+    { y: 0.78, rad: 0.2, n: 4, s: 0.16 },
+  ];
+  g.add(blob(W * 0.34, paint(0.92), 0, H * 0.6, 0, 1, 1.35, 1));
+  for (const row of rows) {
+    for (let i = 0; i < row.n; i++) {
+      const a = (i / row.n) * Math.PI * 2 + r() * 0.6;
+      const k = W * row.rad * (0.7 + r() * 0.2);
+      g.add(blob(W * row.s * (0.85 + r() * 0.3), paint(0.9 + r() * 0.2), Math.cos(a) * k, H * (row.y + (r() - 0.5) * 0.05), Math.sin(a) * k));
+    }
+  }
+  g.add(blob(W * 0.18, paint(1.05), 0, H * 0.9, 0));
   return g;
 }
 
@@ -679,7 +823,7 @@ type Tint = (hex: string, k?: number) => THREE.Material;
 const cyl = (rt: number, rb: number, h: number, m: THREE.Material, x = 0, y = 0, z = 0, seg = 12) =>
   part(new THREE.CylinderGeometry(rt, rb, h, seg), m, x, y, z);
 const blob = (r: number, m: THREE.Material, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => {
-  const b = part(new THREE.IcosahedronGeometry(r, 1), m, x, y, z);
+  const b = part(new THREE.IcosahedronGeometry(r, 2), m, x, y, z);
   b.scale.set(sx, sy, sz);
   return b;
 };
@@ -755,10 +899,18 @@ function oak(o: BlockObject, paint: Paint) {
   const r = rng(o.id);
   g.add(cyl(W * 0.05, W * 0.07, H * 0.5, paint(0.5), 0, H * 0.25, 0, 7));
   const c = W * 0.32;
+  // A cloud of clumps: a core, a ring round its widest point, a few on top.
+  // The clumps are what catch light and shade, which is what reads as leaves.
   g.add(blob(c, paint(1), 0, H * 0.68, 0, 1.15, 0.9, 1.15));
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + r();
-    g.add(blob(c * (0.6 + r() * 0.2), paint(0.9 + r() * 0.2), Math.cos(a) * W * 0.22, H * (0.58 + r() * 0.15), Math.sin(a) * W * 0.22));
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + r() * 0.5;
+    const k = W * (0.28 + r() * 0.08);
+    g.add(blob(c * (0.38 + r() * 0.16), paint(0.88 + r() * 0.22), Math.cos(a) * k, H * (0.55 + r() * 0.14), Math.sin(a) * k));
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + r();
+    const k = W * (0.12 + r() * 0.08);
+    g.add(blob(c * (0.34 + r() * 0.14), paint(0.95 + r() * 0.2), Math.cos(a) * k, H * (0.78 + r() * 0.08), Math.sin(a) * k));
   }
   return g;
 }
@@ -1486,10 +1638,13 @@ export function buildWorld(): World {
   scene.add(hemi);
   const sun = new THREE.DirectionalLight("#fff4e6", 2.2);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(4096, 4096);
   const sc = sun.shadow.camera;
-  sc.left = -60; sc.right = 60; sc.top = 60; sc.bottom = -60; sc.far = 400;
-  sun.shadow.bias = -0.0005;
+  sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.far = 400;
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.03;
+  // A soft edge, as under a hazy sun rather than a hard noon.
+  sun.shadow.radius = 3;
   scene.add(sun, sun.target);
   const objects = new THREE.Group();
   scene.add(objects);
@@ -1499,19 +1654,40 @@ export function buildWorld(): World {
 }
 
 export function applyEnvironment(w: World, env: Environment, look: Look) {
-  const sky = new THREE.Color(look === "clay" ? "#c9cbce" : env.sky);
+  const clay = look === "clay";
+  // Clay sits in a pale, slightly cool sky so the warm forms read against it.
+  const sky = new THREE.Color(clay ? "#dde1e4" : env.sky);
   w.scene.background = sky;
   w.scene.fog = env.haze > 0 ? new THREE.Fog(sky, 30 + (1 - env.haze) * 600, 120 + (1 - env.haze) * 1400) : null;
   w.ground.visible = env.ground !== "none";
   const gm = w.ground.material as THREE.MeshLambertMaterial;
-  gm.color.set(look === "clay" ? "#a8a6a2" : GROUND[env.ground]);
+  gm.color.set(clay ? "#d3cfc8" : GROUND[env.ground]);
   const az = rad(env.sunAz);
   const el = rad(env.sunEl);
   w.sun.position.set(Math.sin(az) * Math.cos(el) * 150, Math.sin(el) * 150, Math.cos(az) * Math.cos(el) * 150);
-  w.sun.castShadow = look !== "blockout";
-  // Blockout is flat colour: lit almost evenly, so a colour stays one colour.
-  w.hemi.intensity = look === "blockout" ? 2.4 : 1.2;
-  w.sun.intensity = look === "blockout" ? 0.9 : 2.4;
+  // Every look casts shadows now: the shadow under a car and down a street is
+  // what places things on the ground. Blockout keeps a strong sky light so a
+  // subject's colour stays its colour, with a gentler sun than the others.
+  w.sun.castShadow = true;
+  if (clay) {
+    w.hemi.color.set("#ffffff");
+    w.hemi.groundColor.set("#b9b2a6");
+    w.hemi.intensity = 1.15;
+    w.sun.color.set("#fff1dc");
+    w.sun.intensity = 2.9;
+  } else if (look === "blockout") {
+    w.hemi.color.set("#ffffff");
+    w.hemi.groundColor.set("#8a8478");
+    w.hemi.intensity = 1.95;
+    w.sun.color.set("#fff4e6");
+    w.sun.intensity = 1.4;
+  } else {
+    w.hemi.color.set("#ffffff");
+    w.hemi.groundColor.set("#6b6255");
+    w.hemi.intensity = 1.2;
+    w.sun.color.set("#fff4e6");
+    w.sun.intensity = 2.4;
+  }
 }
 
 /** World transform of an object at time t, following any parents. */

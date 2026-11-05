@@ -8351,6 +8351,38 @@ the side window to the dog, out through the windshield, ending ahead.
   session. FIXED ON THE WAY: uploadAssetFile did `"error" in ticket` on a
   Server Action result, which throws on the undefined an expired session
   returns; it goes through actionError now (every asset upload benefits).
+- THE LOOK PASS (2026-11-05, operator after a Cinemap ad: "the quality of
+  the blocking seemed higher... a more polished blocking"). Measured, not
+  guessed: there was NO ambient occlusion, blockout had shadows switched OFF,
+  buildings were a box with window bands, trees a cone. Now:
+  lib/blocking/look-render.ts ShotRenderer = EffectComposer (MSAA half-float)
+  -> RenderPass -> GTAO (radius 2.2 m, the shade under a car and along the
+  foot of a wall) -> OutputPass, drawn into the letterbox through the
+  renderer's own viewport and scissor. One per renderer: the camera view and
+  picture in picture (fx, pixel ratio capped 1.5), the free view (fxFree,
+  1.25), the recording and the saved first frame (their own, ratio 1), so a
+  clip looks like the camera view. SetOnlyAO hides helpers, Line2 paths, the
+  move gizmo and transparent glass from GTAO's normal pass. Every look casts
+  shadows now (4096 map, normal bias); NeutralToneMapping on both renderers.
+  Clay is a warm off-white (#e4e0d8) under a pale cool sky, the Cinemap look;
+  blockout keeps flat colour per subject but smooth shaded with a strong sky
+  light. GEOMETRY: building() is a facade (plinth, shop windows on the ground
+  floor with a fascia, a window grid with sills, cornice, parapet, roof
+  units; a tower gets glass ribbons), all merged per material through a Batch
+  so hundreds of windows are one draw call; glass is a cool grey whatever the
+  building colour. Cars: a rounded body (RoundedBoxGeometry), bumpers, a raked
+  windscreen and leaning front pillars, glass front and back with the sides
+  still OPEN for a camera to pass through, mirrors, tyres with hubs. Trees:
+  "tree" is a tapering stack of soft clumps, oak a cloud of sixteen; blobs are
+  icosahedron detail 2. The city template gained street trees and two more
+  parked vehicles. GOTCHA FOUND: a recorder started while the page drew the
+  occlusion twice a frame got NO FRAMES (a 0-byte clip in headless Chromium):
+  the recording now warms its renderer with one frame before the recorder is
+  made, and while recording the editor's own view draws plainly. In headless
+  swiftshader a clip of an 8 s scene came out 15 s long, almost certainly
+  the software renderer's frame rate; check the length of the first clip
+  recorded on a real machine. NOT DONE (next, in the agreed order): people
+  that walk and run, the scene bar, rig presets, a tram and a bus.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.

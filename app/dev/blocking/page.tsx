@@ -5,7 +5,8 @@
 // ?all=1 lays out every catalogue piece in rows, ?gest=1 lines up a person
 // doing each gesture, both for checking the drawings. ?send=1 adds a pretend pipeline so the Send window opens (sending fails
 // here, since a session cannot reach Supabase). ?ai=1 opens a scene laid out
-// by the connector's create_blocking_scene from a written description. /dev pages
+// by the connector's create_blocking_scene from a written description, and
+// ?look= opens in a chosen look. /dev pages
 // are public in development and auth-gated in production.
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -72,11 +73,14 @@ function Inner() {
         return o;
       });
     }
+    // ?look=blockout|clay|lit opens in that look, for comparing them.
+    const look = q.get("look");
+    const withLook = (x: BlockScene): BlockScene => (look === "blockout" || look === "clay" || look === "lit" ? { ...x, look } : x);
     if (q.get("ai")) {
       const r = buildBlockingScene(AI_EXAMPLE);
-      if (!("error" in r)) { setScene(r.scene); return; }
+      if (!("error" in r)) { setScene(withLook(r.scene)); return; }
     }
-    setScene(s);
+    setScene(withLook(s));
   }, [tp, q]);
   if (!scene) return null;
   return (

@@ -34,6 +34,7 @@ import { Outliner, Properties, type CamPadAction, type Posed, type StudioApi } f
 import { Timeline, type KeyRef, type Track } from "./timeline";
 import { Btn, useOutside } from "./ui";
 import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
+import { ShotRenderer } from "@/lib/blocking/look-render";
 
 type View = "camera" | "free";
 
@@ -44,6 +45,10 @@ const HANDLE_COLOR = "#ff5fa8";
 
 type Engine = {
   renderer: THREE.WebGLRenderer;
+  /** Draws the shot camera with ambient occlusion, into the camera view and the picture in picture. */
+  fx: ShotRenderer;
+  /** The same, through the free camera. */
+  fxFree: ShotRenderer;
   world: World;
   free: THREE.PerspectiveCamera;
   shot: THREE.PerspectiveCamera;
@@ -64,7 +69,7 @@ type Engine = {
   fovKey: string;
   envKey: string;
   size: { w: number; h: number };
-  rec: { renderer: THREE.WebGLRenderer; media: MediaRecorder; t0: number; on: boolean; chunks: Blob[] } | null;
+  rec: { renderer: THREE.WebGLRenderer; fx: ShotRenderer; media: MediaRecorder; t0: number; on: boolean; chunks: Blob[] } | null;
   keys: Set<string>;
   last: number;
 };
@@ -542,6 +547,10 @@ export function BlockingStudio({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // A gentle shoulder on the highlights, so a sunlit wall rolls off
+    // instead of clipping to flat white; it keeps hues, so blockout's subject
+    // colours stay the colours they were picked as.
+    renderer.toneMapping = THREE.NeutralToneMapping;
     const world = buildWorld();
     const free = new THREE.PerspectiveCamera(45, 1, 0.05, 5000);
     free.position.set(14, 10, 18);
@@ -587,8 +596,10 @@ export function BlockingStudio({
     hGroup.add(hLine, out, inn);
     hGroup.visible = false;
     path.add(hGroup);
+    const fx = new ShotRenderer(renderer, world.scene, shot, Math.min(window.devicePixelRatio, 1.5));
+    const fxFree = new ShotRenderer(renderer, world.scene, free, Math.min(window.devicePixelRatio, 1.25));
     const e: Engine = {
-      renderer, world, free, shot, orbit, tc, tcHelper, proxy, meshes: new Map(), gizmo,
+      renderer, fx, fxFree, world, free, shot, orbit, tc, tcHelper, proxy, meshes: new Map(), gizmo,
       path, pathLine, dots, handles: { group: hGroup, line: hLine, out, inn }, lineMats: [pathMat, hMat], handleKey: "",
       pathKey: "", fovKey: "", envKey: "", size: { w: 1, h: 1 }, rec: null, keys: new Set(), last: performance.now(),
     };
@@ -730,7 +741,10 @@ export function BlockingStudio({
       canvas.removeEventListener("pointerup", onUp);
       tc.dispose();
       orbit.dispose();
+      fx.dispose();
+      fxFree.dispose();
       renderer.dispose();
+      e.rec?.fx.dispose();
       e.rec?.renderer.dispose();
       eng.current = null;
     };
@@ -894,11 +908,16 @@ export function BlockingStudio({
     const shotView = (x: number, y: number, fw: number, fh: number) => {
       world.helpers.visible = false;
       e.tcHelper.visible = false;
-      renderer.setScissorTest(true);
-      renderer.setScissor(x, y, fw, fh);
-      renderer.setViewport(x, y, fw, fh);
-      renderer.render(world.scene, e.shot);
-      renderer.setScissorTest(false);
+      // While a clip records, the editor's own view is drawn plainly: the
+      // recording is the frame that matters, and drawing the occlusion twice
+      // a frame can halve the frame rate the clip is recorded at.
+      if (e.rec) {
+        renderer.setScissorTest(true);
+        renderer.setScissor(x, y, fw, fh);
+        renderer.setViewport(x, y, fw, fh);
+        renderer.render(world.scene, e.shot);
+        renderer.setScissorTest(false);
+      } else e.fx.render(s.look, { x, y, w: fw, h: fh });
     };
     if (viewRef.current === "camera") {
       e.orbit.enabled = false;
@@ -921,8 +940,7 @@ export function BlockingStudio({
       for (const d of e.dots.children) sizeTo(d, d.userData.sel ? 11 : 8);
       if (e.handles.group.visible) { sizeTo(e.handles.out, 8); sizeTo(e.handles.inn, 8); }
       e.tcHelper.visible = !!e.tc.object;
-      renderer.setViewport(0, 0, w, h);
-      renderer.render(world.scene, e.free);
+      e.fxFree.render(s.look);
       // Picture in picture: what the camera sees.
       const pw = Math.min(w * 0.3, 380);
       let ph = pw / ratio;
@@ -935,7 +953,7 @@ export function BlockingStudio({
     if (e.rec) {
       world.helpers.visible = false;
       e.tcHelper.visible = false;
-      e.rec.renderer.render(world.scene, e.shot);
+      e.rec.fx.render(s.look);
     }
   }
 
@@ -1182,7 +1200,9 @@ export function BlockingStudio({
     r.setPixelRatio(1);
     r.setSize(w, h, false);
     r.shadowMap.enabled = true;
+    r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.outputColorSpace = THREE.SRGBColorSpace;
+    r.toneMapping = THREE.NeutralToneMapping;
     return r;
   };
 
@@ -1208,20 +1228,29 @@ export function BlockingStudio({
       setPlaying(false);
       setSel(null);
       const r = recRenderer();
+      // Draw one frame before the recorder exists: the first render on a new
+      // context compiles the occlusion shaders, which can hold the page for a
+      // moment, and a recorder already running through that stall got no
+      // frames at all (a 0-byte clip in testing).
+      const fx = new ShotRenderer(r, e.world.scene, e.shot, 1);
+      pose(sceneRef.current, 0);
+      e.world.helpers.visible = false;
+      e.tcHelper.visible = false;
+      fx.render(sceneRef.current.look);
       const media = new MediaRecorder((r.domElement as HTMLCanvasElement).captureStream(sceneRef.current.fps), { mimeType: mime, videoBitsPerSecond: 14_000_000 });
       const chunks: Blob[] = [];
       media.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
       const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
       media.onstop = () => {
         const blob = new Blob(chunks, { type: mime.split(";")[0] });
+        if (e.rec) { e.rec.fx.dispose(); e.rec = null; }
         r.dispose();
-        if (e.rec) e.rec = null;
         setRecording(false);
         setT(0);
         if (!blob.size) { setNote("Nothing was recorded: try again in Chrome"); resolve(null); return; }
         resolve({ blob, mime: mime.split(";")[0], ext });
       };
-      e.rec = { renderer: r, media, t0: 0, on: false, chunks };
+      e.rec = { renderer: r, fx, media, t0: 0, on: false, chunks };
       tRef.current = 0;
       // The clip starts when the recorder does, or its first frames are lost.
       const go = () => { if (e.rec && !e.rec.on) { e.rec.t0 = performance.now(); e.rec.on = true; } };
@@ -1242,8 +1271,9 @@ export function BlockingStudio({
       pose(sceneRef.current, 0);
       e.world.helpers.visible = false;
       e.tcHelper.visible = false;
-      r.render(e.world.scene, e.shot);
-      r.domElement.toBlob((blob) => { r.dispose(); resolve(blob); }, "image/png");
+      const fx = new ShotRenderer(r, e.world.scene, e.shot, 1);
+      fx.render(sceneRef.current.look);
+      r.domElement.toBlob((blob) => { fx.dispose(); r.dispose(); resolve(blob); }, "image/png");
     });
 
   const download = (blob: Blob, name: string) => {

@@ -154,7 +154,7 @@ export type Environment = {
 export type Look = "blockout" | "clay" | "lit";
 export const LOOKS: { id: Look; name: string; hint: string }[] = [
   { id: "blockout", name: "Blockout", hint: "Flat colour per object: what Seedance reads best" },
-  { id: "clay", name: "Clay", hint: "Grey, shaded: reads the forms alone" },
+  { id: "clay", name: "Clay", hint: "Warm white clay, softly shaded: the look of a 3D previz" },
   { id: "lit", name: "Lit", hint: "Colour with sun and shadows" },
 ];
 
