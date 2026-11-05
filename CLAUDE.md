@@ -2608,8 +2608,30 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   no connector change. blocking_scenes (no `data`) joined the query
   whitelist so the host can list a project's scenes. /dev/blocking?ai=1
   opens an example the builder made. NOT RUN against a real host.
-- NEXT for the connector: the same for the SCENE BUILDER (lighting previz),
-  which the operator agreed to after blocking.
+- SCENE BUILDER SETUPS (2026-11-05, the operator's follow-on to blocking).
+  `create_scene_setup` (lib/connector-scene-tool.ts, pure half
+  lib/connector-scene.ts, 23 assertions in the scratchpad) lays out a NEW
+  scene builder setup: a room (size, walls, floor, windows and doors) or an
+  open stage, set pieces from the builder's own CATALOG (with stacking:
+  a glass on an island is aimed at where the builder will put it, via
+  stackHeights), people (pose, height, face_toward, holding a prop, walk to a
+  mark), lights by FIXTURE and ROLE with modifier, dimmer, CCT and a
+  diffusion frame, grip, daylight, and cameras on real bodies and lenses with
+  a move. A light or grip given no position is placed by its role around the
+  subject (key three-quarter CAMERA RIGHT, fill opposite, back behind) and
+  then SWUNG ROUND AND PUSHED BACK until it and its frame are out of every
+  camera's picture, the way the builder places a new light; if nothing clears
+  (a very wide lens in a small room) it says so in `skipped`. A move with no
+  support named gets the one that can make it (along the lens axis Fisher,
+  sideways Dana, else the arm), and an end the named support cannot reach is
+  pulled onto it with constrainEnd and reported. Product photos come by
+  public link through storeImage into `<studio>/scenes/<project>/`, keyed into
+  the setup's `files` map exactly like the builder's own uploads, up to six;
+  a failed one leaves the product plain. The result passes asSetup. ADD ONLY;
+  same name on the project returns the existing setup. scene_setups (no
+  `data`) joined the query whitelist. /dev/scene-setup/ai opens an example it
+  built (verified in Chromium: the wide clear of every light, the pour shot on
+  the glass with a Fisher push). NOT RUN against a real host.
 
 ### Deliverables replaces "Delivery & billing" (migration 0125) — BUILT
 Operator, 2026-10-20: the page should be called Deliverables, the billing
