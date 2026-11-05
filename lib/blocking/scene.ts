@@ -30,7 +30,14 @@ export type Key = { t: number; p: Vec3; r: Vec3; ease: Ease };
  * centre at this key while the camera is kept aimed (yaw, pitch degrees). It
  * lives on the key, not the shot, so reframing one key leaves the others alone.
  */
-export type CamKey = Key & { lens: number; af?: [number, number] };
+/**
+ * `tan` is a curve handle: where the path heads as it leaves this key, as an
+ * offset in metres from the key in the camera's parent frame (the path also
+ * arrives along the mirror of it, so speed stays continuous). Absent means
+ * automatic, the curve the neighbouring keys imply. Used by the continuous
+ * and even flows; Stop at keys ignores it.
+ */
+export type CamKey = Key & { lens: number; af?: [number, number]; tan?: Vec3 };
 
 export type BlockObject = {
   id: string;
@@ -335,7 +342,9 @@ export function asBlockScene(raw: unknown): BlockScene | null {
         if (!base) return null;
         const kr = k as Record<string, unknown>;
         const af = Array.isArray(kr.af) ? [num(kr.af[0], 0, -60, 60), num(kr.af[1], 0, -40, 40)] as [number, number] : undefined;
-        return { ...base, lens: num(kr.lens, 35, 8, 600), ...(af && (af[0] || af[1]) ? { af } : {}) } as CamKey;
+        const tan = Array.isArray(kr.tan) && kr.tan.length === 3 && kr.tan.every((x) => Number.isFinite(Number(x)))
+          ? kr.tan.map((x) => Math.max(-200, Math.min(200, Number(x)))) as Vec3 : undefined;
+        return { ...base, lens: num(kr.lens, 35, 8, 600), ...(af && (af[0] || af[1]) ? { af } : {}), ...(tan ? { tan } : {}) } as CamKey;
       })
       .filter((k): k is CamKey => !!k),
     fps,

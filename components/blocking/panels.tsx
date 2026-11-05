@@ -31,6 +31,7 @@ export type StudioApi = {
   updateScene: (fn: (s: BlockScene) => BlockScene, coalesce?: string) => void;
   updateObject: (id: string, patch: Partial<BlockScene["objects"][number]>, coalesce?: string) => void;
   writePose: (track: Track, pose: Partial<Posed>, coalesce?: string) => void;
+  resetKeyCurve: () => void;
   /** The controller pads: `amt` is seconds at the chosen speed. */
   camPad: (action: CamPadAction, amt: number) => void;
   posed: (track: Track) => Posed;
@@ -150,6 +151,28 @@ function KeyPanel({ api, track }: { api: StudioApi; track: Track }) {
           The camera's motion is set to {api.scene.camera.flow === "even" ? "even speed" : "continuous"}, so it flows through this key and its ease is not used. Choose Stop at keys under Motion to use it.
         </p>
       )}
+      {track === "camera" && (() => {
+        const cam = api.scene.camera;
+        const shaped = !!(key as { tan?: unknown }).tan;
+        const usable = cam.flow !== "keys" && cam.path === "smooth";
+        return (
+          <>
+            <Row label="Curve">
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-text">{shaped ? "Shaped by hand" : "Automatic"}</span>
+                {shaped && api.canEdit && <Btn onClick={api.resetKeyCurve}>Reset</Btn>}
+              </div>
+            </Row>
+            <p className="text-[11px] leading-relaxed text-text-faint">
+              {usable
+                ? "In Free view the arrows sit on this key: drag them to move it. Drag the pink handles either side to bend the path through it. Click any dot on the path to pick its key."
+                : cam.path !== "smooth"
+                  ? "The path is set to Straight, so it has no curve to shape. Choose Curved under Path to bend it."
+                  : "Curve handles work with Continuous or Even speed motion. Stop at keys uses its own curve."}
+            </p>
+          </>
+        );
+      })()}
     </Section>
   );
 }

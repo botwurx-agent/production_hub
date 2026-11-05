@@ -109,7 +109,7 @@ export function evalCamera(keys: CamKey[], t: number, smooth = true, opts: FlowO
  * flattens a slope where the values turn round, so a lens or an angle never
  * overshoots its key. `restEnds` starts and ends at zero velocity.
  */
-export function flowChannel(times: number[], vals: number[], t: number, opts: { monotone?: boolean; restEnds?: boolean; linear?: boolean } = {}): number {
+export function flowChannel(times: number[], vals: number[], t: number, opts: { monotone?: boolean; restEnds?: boolean; linear?: boolean; slopes?: (number | null)[] } = {}): number {
   const n = vals.length;
   if (n === 1) return vals[0];
   if (t <= times[0]) return vals[0];
@@ -121,6 +121,8 @@ export function flowChannel(times: number[], vals: number[], t: number, opts: { 
   const s = (t - times[i]) / h;
   if (opts.linear) return vals[i] + (vals[i + 1] - vals[i]) * s;
   const slope = (j: number): number => {
+    const fixed = opts.slopes?.[j];
+    if (fixed != null) return fixed;
     const d = (a: number, b: number) => (vals[b] - vals[a]) / Math.max(1e-6, times[b] - times[a]);
     if (j === 0) return opts.restEnds ? 0 : d(0, 1);
     if (j === n - 1) return opts.restEnds ? 0 : d(n - 2, n - 1);
@@ -141,12 +143,57 @@ export function flowChannel(times: number[], vals: number[], t: number, opts: { 
   return (2 * s3 - 3 * s2 + 1) * vals[i] + (s3 - 2 * s2 + s) * h * m0 + (-2 * s3 + 3 * s2) * vals[i + 1] + (s3 - s2) * h * m1;
 }
 
+/**
+ * The time a curve handle is measured against: the mean of the gaps either
+ * side of the key. A handle offset of `tan` is a slope of 3 * tan / span, the
+ * Bezier relation, so the handle drawn at key + tan is where the curve heads.
+ */
+export function handleSpan(times: number[], j: number): number {
+  const n = times.length;
+  const gaps: number[] = [];
+  if (j > 0) gaps.push(times[j] - times[j - 1]);
+  if (j < n - 1) gaps.push(times[j + 1] - times[j]);
+  const g = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 1;
+  return Math.max(1e-3, g);
+}
+
+/** The slope (m/s) each key's handle fixes on channel c, or null for automatic. */
+function handleSlopes(keys: CamKey[], c: number): (number | null)[] {
+  const times = keys.map((k) => k.t);
+  return keys.map((k, j) => (k.tan ? (3 * k.tan[c]) / handleSpan(times, j) : null));
+}
+
+/**
+ * Where a key's handle sits, as an offset from the key: its own when set,
+ * otherwise the automatic curve's, so a handle drawn for an untouched key
+ * starts on the path rather than jumping when grabbed.
+ */
+export function keyHandle(keys: CamKey[], j: number, restEnds: boolean): Vec3 {
+  const k = keys[j];
+  if (k.tan) return [...k.tan] as Vec3;
+  const times = keys.map((x) => x.t);
+  const n = keys.length;
+  const span = handleSpan(times, j);
+  const out: Vec3 = [0, 0, 0];
+  for (let c = 0; c < 3; c++) {
+    let m = 0;
+    if (n > 1) {
+      const d = (a: number, b: number) => (keys[b].p[c] - keys[a].p[c]) / Math.max(1e-6, times[b] - times[a]);
+      if (j === 0) m = restEnds ? 0 : d(0, 1);
+      else if (j === n - 1) m = restEnds ? 0 : d(n - 2, n - 1);
+      else m = d(j - 1, j + 1);
+    }
+    out[c] = (m * span) / 3;
+  }
+  return out;
+}
+
 function flowCamera(keys: CamKey[], t: number, smooth: boolean, restEnds: boolean): CamPose {
   const times = keys.map((k) => k.t);
   const p: Vec3 = [0, 0, 0];
   const r: Vec3 = [0, 0, 0];
   for (let c = 0; c < 3; c++) {
-    p[c] = flowChannel(times, keys.map((k) => k.p[c]), t, { restEnds, linear: !smooth });
+    p[c] = flowChannel(times, keys.map((k) => k.p[c]), t, { restEnds, linear: !smooth, slopes: handleSlopes(keys, c) });
     // Angles turn as smoothly as the path but never overshoot a key.
     r[c] = flowChannel(times, unwrap(keys.map((k) => k.r[c])), t, { restEnds, monotone: true, linear: !smooth });
   }

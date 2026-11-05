@@ -14,12 +14,15 @@ import type React from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { Line2 } from "three/examples/jsm/lines/Line2.js";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import {
   aspectRatio, blockKind, newId, newObject, tidyKeys,
   type BlockObject, type BlockScene, type CamKey, type Ease, type Key, type Vec3,
 } from "@/lib/blocking/scene";
 import {
-  aimAt, applyPreset as mergePreset, evalCamera, evalTrack, keyAt, lookDir, pathStats, peakSpeed, presetKeys, setKey, shakeAt, snap,
+  aimAt, applyPreset as mergePreset, evalCamera, evalTrack, keyAt, keyHandle, lookDir, pathStats, peakSpeed, presetKeys, setKey, shakeAt, snap,
   timecode, travel, type PresetId,
 } from "@/lib/blocking/keys";
 import {
@@ -34,6 +37,11 @@ import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
 
 type View = "camera" | "free";
 
+/** The camera path in free view: bright sky blue, apart from the amber camera body and the set's colours. */
+const PATH_COLOR = "#38c6ff";
+const KEY_COLOR = "#ffd166";
+const HANDLE_COLOR = "#ff5fa8";
+
 type Engine = {
   renderer: THREE.WebGLRenderer;
   world: World;
@@ -45,7 +53,13 @@ type Engine = {
   proxy: THREE.Object3D;
   meshes: Map<string, { g: THREE.Group; key: string }>;
   gizmo: THREE.Group;
-  path: THREE.Line;
+  /** The camera's path, its key dots and the selected key's curve handles, all in the camera's parent frame. */
+  path: THREE.Group;
+  pathLine: Line2;
+  dots: THREE.Group;
+  handles: { group: THREE.Group; line: Line2; out: THREE.Mesh; inn: THREE.Mesh };
+  lineMats: LineMaterial[];
+  handleKey: string;
   pathKey: string;
   fovKey: string;
   envKey: string;
@@ -143,6 +157,10 @@ export function BlockingStudio({
   const [sel, setSel] = useState<Track | null>("camera");
   const selRef = useRef<Track | null>("camera");
   const [selectedKey, setSelectedKey] = useState<KeyRef | null>(null);
+  const selKeyRef = useRef<KeyRef | null>(null);
+  selKeyRef.current = selectedKey;
+  /** Which curve handle of the selected camera key the move handles are on, if any. */
+  const handleRef = useRef<"out" | "in" | null>(null);
   const [autoKey, setAutoKey] = useState(false);
   const autoRef = useRef(false);
   const [tcMode, setTcMode] = useState<"translate" | "rotate">("translate");
@@ -281,7 +299,7 @@ export function BlockingStudio({
       const cur = posedAt(s, track, at);
       if (track === "camera") {
         const ex = keyAt(s.camera.keys, at, s.fps);
-        return { ...s, camera: { ...s.camera, keys: setKey(s.camera.keys, { t: at, p: cur.p, r: cur.r, lens: cur.lens ?? 35, ...(cur.af ? { af: cur.af } : {}), ease: ex?.ease ?? "smooth" }, s.fps) } };
+        return { ...s, camera: { ...s.camera, keys: setKey(s.camera.keys, { t: at, p: cur.p, r: cur.r, lens: cur.lens ?? 35, ...(cur.af ? { af: cur.af } : {}), ...(ex?.tan ? { tan: ex.tan } : {}), ease: ex?.ease ?? "smooth" }, s.fps) } };
       }
       return {
         ...s,
@@ -442,6 +460,20 @@ export function BlockingStudio({
         };
       });
     },
+    resetKeyCurve: () => {
+      const k = selectedKey;
+      if (!k || k.track !== "camera") return;
+      handleRef.current = null;
+      commit((s) => {
+        const half = 0.5 / s.fps;
+        return { ...s, camera: { ...s.camera, keys: s.camera.keys.map((x) => {
+          if (Math.abs(x.t - k.t) >= half || !x.tan) return x;
+          const { tan: _drop, ...rest } = x;
+          void _drop;
+          return rest;
+        }) } };
+      });
+    },
     setKeyEase: (e) => {
       const k = selectedKey;
       if (!k) return;
@@ -488,12 +520,39 @@ export function BlockingStudio({
     world.scene.add(tcHelper);
     const gizmo = cameraGizmo("#f2a93b");
     world.helpers.add(gizmo);
-    const path = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: "#f2a93b" }));
+    // The path is drawn thick and on top of everything, in its own colour, so
+    // it reads against the set and through the car it passes into.
+    const path = new THREE.Group();
     path.matrixAutoUpdate = false;
     path.userData.helper = true;
     world.helpers.add(path);
+    const lineMat = (color: string, width: number, opacity = 1) => new LineMaterial({
+      color, linewidth: width, transparent: true, opacity, depthTest: false, depthWrite: false,
+    });
+    const pathMat = lineMat(PATH_COLOR, 4);
+    const pathLine = new Line2(new LineGeometry(), pathMat);
+    pathLine.renderOrder = 20;
+    path.add(pathLine);
+    const dots = new THREE.Group();
+    path.add(dots);
+    const hMat = lineMat(HANDLE_COLOR, 2, 0.9);
+    const hLine = new Line2(new LineGeometry(), hMat);
+    hLine.renderOrder = 21;
+    const ball = (kind: "out" | "in") => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: HANDLE_COLOR, depthTest: false, depthWrite: false }));
+      m.renderOrder = 23;
+      m.userData.handle = kind;
+      return m;
+    };
+    const hGroup = new THREE.Group();
+    const out = ball("out");
+    const inn = ball("in");
+    hGroup.add(hLine, out, inn);
+    hGroup.visible = false;
+    path.add(hGroup);
     const e: Engine = {
-      renderer, world, free, shot, orbit, tc, tcHelper, proxy, meshes: new Map(), gizmo, path,
+      renderer, world, free, shot, orbit, tc, tcHelper, proxy, meshes: new Map(), gizmo,
+      path, pathLine, dots, handles: { group: hGroup, line: hLine, out, inn }, lineMats: [pathMat, hMat], handleKey: "",
       pathKey: "", fovKey: "", envKey: "", size: { w: 1, h: 1 }, rec: null, keys: new Set(), last: performance.now(),
     };
     eng.current = e;
@@ -509,6 +568,25 @@ export function BlockingStudio({
       const s = sceneRef.current;
       const at = tRef.current;
       proxy.updateMatrixWorld();
+      const sk = selKeyRef.current;
+      const keyEdit = track === "camera" && sk?.track === "camera" && tc.mode === "translate";
+      if (keyEdit) {
+        const k = sk!;
+        const parent = s.camera.parent ? objectMatrix(mapOf(s), s.camera.parent, at) : null;
+        const local = new THREE.Vector3().setFromMatrixPosition(proxy.matrixWorld);
+        if (parent) local.applyMatrix4(parent.clone().invert());
+        const which = handleRef.current ?? "key";
+        commit((sc) => {
+          const half = 0.5 / sc.fps;
+          return { ...sc, camera: { ...sc.camera, keys: sc.camera.keys.map((x) => {
+            if (Math.abs(x.t - k.t) >= half) return x;
+            if (which === "key") return { ...x, p: [local.x, local.y, local.z] as Vec3 };
+            const d: Vec3 = [local.x - x.p[0], local.y - x.p[1], local.z - x.p[2]];
+            return { ...x, tan: (which === "out" ? d : [-d[0], -d[1], -d[2]]) as Vec3 };
+          }) } };
+        }, "tan");
+        return;
+      }
       if (track === "camera") {
         const parent = s.camera.parent ? objectMatrix(mapOf(s), s.camera.parent, at) : null;
         const l = toLocal(proxy.matrixWorld.clone(), parent, true);
@@ -527,6 +605,7 @@ export function BlockingStudio({
       const h = host.clientHeight;
       e.size = { w, h };
       renderer.setSize(w, h, false);
+      for (const m of e.lineMats) m.resolution.set(w, h);
       free.aspect = w / Math.max(1, h);
       free.updateProjectionMatrix();
       setRect(frameRect(w, h, aspectRatio(sceneRef.current.aspect)));
@@ -574,6 +653,21 @@ export function BlockingStudio({
       const ndc = new THREE.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
       const ray = new THREE.Raycaster();
       ray.setFromCamera(ndc, free);
+      // Curve handles and key dots first: they are drawn on top, so they win.
+      const top = ray.intersectObjects([...(e.handles.group.visible ? [e.handles.out, e.handles.inn] : []), ...e.dots.children], false);
+      if (top.length) {
+        const o = top[0].object;
+        if (o.userData.handle) { handleRef.current = o.userData.handle; setSel("camera"); return; }
+        if (typeof o.userData.keyT === "number") {
+          handleRef.current = null;
+          setSel("camera");
+          // The playhead stays put: seeking would drive the car, and the path
+          // with it, out of the view being worked in.
+          setSelectedKey({ track: "camera", t: o.userData.keyT });
+          return;
+        }
+      }
+      handleRef.current = null;
       const hits = ray.intersectObjects([...world.objects.children, gizmo], true);
       for (const h of hits) {
         let o: THREE.Object3D | null = h.object;
@@ -659,20 +753,51 @@ export function BlockingStudio({
     // The camera's path, drawn in its parent's frame so it travels with it.
     const pk = JSON.stringify([s.camera.keys, s.camera.path, s.camera.flow, s.camera.easeEnds, s.duration]);
     if (pk !== e.pathKey) {
-      const dots = e.path.children[0] as THREE.Points | undefined;
-      const kp = s.camera.keys.map((k) => new THREE.Vector3(...k.p));
-      if (dots) { dots.geometry.dispose(); dots.geometry = new THREE.BufferGeometry().setFromPoints(kp); }
-      else {
-        const d = new THREE.Points(new THREE.BufferGeometry().setFromPoints(kp), new THREE.PointsMaterial({ color: "#ffd38a", size: 9, sizeAttenuation: false }));
-        d.userData.helper = true;
-        e.path.add(d);
+      const pts: number[] = [];
+      const n = Math.max(2, Math.round(s.duration * 30));
+      for (let i = 0; i <= n; i++) pts.push(...evalCamera(s.camera.keys, (i / n) * s.duration, s.camera.path === "smooth", { flow: s.camera.flow, easeEnds: s.camera.easeEnds }).p);
+      e.pathLine.geometry.dispose();
+      const g = new LineGeometry();
+      g.setPositions(pts);
+      e.pathLine.geometry = g;
+      e.pathLine.computeLineDistances();
+      for (const d of [...e.dots.children]) { e.dots.remove(d); (d as THREE.Mesh).geometry.dispose(); }
+      for (const k of s.camera.keys) {
+        const d = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: KEY_COLOR, depthTest: false, depthWrite: false }));
+        d.position.set(...k.p);
+        d.renderOrder = 22;
+        d.userData.keyT = k.t;
+        e.dots.add(d);
       }
-      const pts: THREE.Vector3[] = [];
-      const n = Math.max(2, Math.round(s.duration * 20));
-      for (let i = 0; i <= n; i++) pts.push(new THREE.Vector3(...evalCamera(s.camera.keys, (i / n) * s.duration, s.camera.path === "smooth", { flow: s.camera.flow, easeEnds: s.camera.easeEnds }).p));
-      e.path.geometry.dispose();
-      e.path.geometry = new THREE.BufferGeometry().setFromPoints(pts);
       e.pathKey = pk;
+      e.handleKey = "";
+    }
+    // The selected key glows; its curve handles show when the motion flows.
+    const sk = selKeyRef.current;
+    const keyIdx = sk && sk.track === "camera" ? s.camera.keys.findIndex((k) => Math.abs(k.t - sk.t) < 0.5 / s.fps) : -1;
+    for (const d of e.dots.children) {
+      const on = keyIdx >= 0 && Math.abs((d.userData.keyT as number) - s.camera.keys[keyIdx].t) < 1e-6;
+      ((d as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(on ? "#ffffff" : KEY_COLOR);
+      d.userData.sel = on;
+    }
+    const curvy = canEdit && keyIdx >= 0 && s.camera.flow !== "keys" && s.camera.path === "smooth" && s.camera.keys.length >= 2;
+    e.handles.group.visible = curvy;
+    if (!curvy && handleRef.current) handleRef.current = null;
+    if (curvy) {
+      const hk = `${pk}|${keyIdx}`;
+      if (hk !== e.handleKey) {
+        const k = s.camera.keys[keyIdx];
+        const tan = keyHandle(s.camera.keys, keyIdx, s.camera.flow === "continuous" && s.camera.easeEnds);
+        const o = new THREE.Vector3(k.p[0] + tan[0], k.p[1] + tan[1], k.p[2] + tan[2]);
+        const i = new THREE.Vector3(k.p[0] - tan[0], k.p[1] - tan[1], k.p[2] - tan[2]);
+        e.handles.out.position.copy(o);
+        e.handles.inn.position.copy(i);
+        const g = new LineGeometry();
+        g.setPositions([i.x, i.y, i.z, ...k.p, o.x, o.y, o.z]);
+        e.handles.line.geometry.dispose();
+        e.handles.line.geometry = g;
+        e.handleKey = hk;
+      }
     }
     e.path.matrix.copy(parent ?? new THREE.Matrix4());
     e.path.matrixWorldNeedsUpdate = true;
@@ -680,7 +805,22 @@ export function BlockingStudio({
     const track = selRef.current;
     const showTc = viewRef.current === "free" && canEdit && !!track && !playRef.current.on;
     if (showTc && !e.tc.dragging) {
-      const wm = track === "camera" ? M : m.get(track!) ? objectMatrix(m, track!, at) : null;
+      let wm: THREE.Matrix4 | null;
+      const keyDot = track === "camera" && keyIdx >= 0 && e.tc.mode === "translate"
+        ? e.dots.children.find((d) => d.userData.sel) : undefined;
+      if (track === "camera" && handleRef.current && e.handles.group.visible) {
+        const hb = handleRef.current === "out" ? e.handles.out : e.handles.inn;
+        e.path.updateMatrixWorld(true);
+        wm = new THREE.Matrix4().setPosition(hb.getWorldPosition(new THREE.Vector3()));
+        if (e.tc.mode !== "translate") e.tc.setMode("translate");
+      } else if (keyDot) {
+        // A selected key moves its own point, at whatever time the playhead is.
+        e.path.updateMatrixWorld(true);
+        wm = new THREE.Matrix4().setPosition(keyDot.getWorldPosition(new THREE.Vector3()));
+      } else if (track === "camera") {
+        // Unshaken, so dragging does not bake the handheld shake into a key.
+        wm = cameraMatrix(c.p, c.r, parent);
+      } else wm = m.get(track!) ? objectMatrix(m, track!, at) : null;
       if (wm) {
         wm.decompose(e.proxy.position, e.proxy.quaternion, e.proxy.scale);
         e.proxy.updateMatrixWorld();
@@ -719,6 +859,17 @@ export function BlockingStudio({
       e.orbit.update();
       world.helpers.visible = true;
       e.gizmo.visible = true;
+      // Dots and handles keep a steady size on screen at any distance.
+      const wp = new THREE.Vector3();
+      const sizeTo = (o: THREE.Object3D, px: number) => {
+        o.getWorldPosition(wp);
+        const dist = wp.distanceTo(e.free.position);
+        const perPx = (2 * Math.tan((e.free.fov * Math.PI) / 360) * dist) / Math.max(1, h);
+        o.scale.setScalar(px * perPx);
+      };
+      e.path.updateMatrixWorld(true);
+      for (const d of e.dots.children) sizeTo(d, d.userData.sel ? 11 : 8);
+      if (e.handles.group.visible) { sizeTo(e.handles.out, 8); sizeTo(e.handles.inn, 8); }
       e.tcHelper.visible = !!e.tc.object;
       renderer.setViewport(0, 0, w, h);
       renderer.render(world.scene, e.free);

@@ -8158,6 +8158,27 @@ the side window to the dog, out through the windshield, ending ahead.
   Seats are 0.95 m apart from 0.55 m behind the windscreen; the front row is
   two buckets, a rear row is a bench. The coast road's dog moved onto the rear
   bench behind the passenger; a scene saved before keeps its dog where it was.
+- THE PATH IS EDITABLE IN FREE VIEW (2026-11-05, operator: the path line was
+  too thin, and they wanted curve handles plus xyz on a keyframe). The path is
+  a Line2 (three's fat lines, 4px, sky blue #38c6ff, apart from the amber
+  camera body) drawn ON TOP (depthTest off) so it reads through the car it
+  passes into; LineMaterial needs its resolution set on resize. Key dots are
+  spheres held at a steady screen size, and CLICKING ONE SELECTS THAT KEY
+  WITHOUT MOVING THE PLAYHEAD (seeking would drive the car, and the path with
+  it, out of the view being worked in). With a camera key selected the move
+  arrows sit ON THE KEY'S OWN POINT and dragging writes that key's p, at any
+  playhead. CURVE HANDLES: CamKey gained `tan` (Vec3, parent frame, absent =
+  automatic). Two pink handles sit at key +/- tan; dragging either sets it
+  (the other mirrors, so speed stays continuous). The slope it fixes is
+  3 * tan / span, span = the mean gap to the neighbouring keys, the Bezier
+  relation, through flowChannel's new `slopes` option (handleSpan,
+  keyHandle in keys.ts). An untouched handle is drawn where the automatic
+  curve already heads, so grabbing it never jumps the path (tested: setting
+  tan to keyHandle's value leaves the curve identical, continuous and even).
+  Handles only in Continuous or Even speed with a Curved path; the key panel
+  says "Automatic" / "Shaped by hand" with Reset, and why when unavailable.
+  The camera's own gizmo is now placed from the UNSHAKEN pose, so dragging no
+  longer bakes handheld shake into a key.
 - SEND TO PIPELINE (BUILT, 2026-11-04, no migration). Export > "Send to the
   pipeline..." opens a window with a SHOT PICKER (the project's generated
   shots, the one this scene was sent to before picked first and marked "sent
