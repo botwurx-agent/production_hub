@@ -4,14 +4,37 @@
 // ?t=road|city|interior|product|desert|stage picks the template, and
 // ?all=1 lays out every catalogue piece in rows, ?gest=1 lines up a person
 // doing each gesture, both for checking the drawings. ?send=1 adds a pretend pipeline so the Send window opens (sending fails
-// here, since a session cannot reach Supabase). /dev pages
+// here, since a session cannot reach Supabase). ?ai=1 opens a scene laid out
+// by the connector's create_blocking_scene from a written description. /dev pages
 // are public in development and auth-gated in production.
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { BLOCK_KINDS, GESTURES, newObject, type BlockScene } from "@/lib/blocking/scene";
 import { TEMPLATES } from "@/lib/blocking/templates";
 import { BlockingStudio } from "@/components/blocking/blocking-studio";
+import { buildBlockingScene } from "@/lib/connector-blocking";
 import { STUDIO_VARS } from "@/components/blocking/ui";
+
+/** The kind of call an assistant makes: a street, a meeting, a push in. */
+const AI_EXAMPLE = {
+  name: "Corner meet", duration: 8, aspect: "16:9",
+  environment: { ground: "asphalt", sky: "golden" },
+  objects: [
+    { kind: "road", x: 0, z: 0, facing: 90, size: [10, 0.02, 120] },
+    { kind: "sidewalk", x: 0, z: -6.5, facing: 90, size: [3, 0.12, 120] },
+    { kind: "shopfront", x: -4, z: -11, size: [8, 4.5, 6] },
+    { kind: "shopfront", x: 5, z: -11, size: [8, 4.5, 6] },
+    { kind: "bench", x: 1.5, z: -7.2 },
+    { kind: "lamppost", x: -1.5, z: -5.4, facing: 180 },
+    { kind: "bush", x: 3.4, z: -7.6 },
+    { ref: "sam", kind: "person", name: "Sam", x: 2.2, z: -6.6, face_toward: "jo", hair: "curly", build: "broad",
+      gestures: [{ gesture: "wave", at: 2, until: 4 }, { gesture: "open", at: 6.5 }] },
+    { ref: "jo", kind: "person", name: "Jo", x: -6, z: -6.3, pose: "walking", hair: "bun", height: 1.66,
+      moves: [{ t: 6.5, x: 1.2, z: -6.4 }] },
+    { kind: "car", x: -9, z: -3.8, facing: 90, name: "Parked car", color: "#6f9bd8" },
+  ],
+  camera: { lens: 40, keys: [{ t: 0, x: -1, y: 1.6, z: 1, look_at: [-1, 1.5, -6.5] }], move: { preset: "push", target: "sam", start: 4, duration: 4 } },
+};
 
 function Inner() {
   const q = useSearchParams();
@@ -48,6 +71,10 @@ function Inner() {
         o.keys = [{ ...o.keys[0], g: [1, 0], ...(g.id === "reach" ? {} : { gk: g.id }) }];
         return o;
       });
+    }
+    if (q.get("ai")) {
+      const r = buildBlockingScene(AI_EXAMPLE);
+      if (!("error" in r)) { setScene(r.scene); return; }
     }
     setScene(s);
   }, [tp, q]);

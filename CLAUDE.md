@@ -2584,6 +2584,33 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   title is skipped. A deal value goes through the same moneyOf as a cost
   ("n/a" is reported, never $0). NOT RUN against a real host.
 
+- BLOCKING SCENES (2026-11-05, operator: "Claude creating scenes using Studio
+  Flows in Studio Flows", since a studio can connect its own Claude or
+  ChatGPT). `create_blocking_scene` (lib/connector-blocking-tool.ts, pure half
+  lib/connector-blocking.ts, scratchpad tests) lays out a NEW shot blocking
+  scene on a project from a description: set pieces from the catalogue,
+  people with pose, build, hair and height, moves as timed points, gestures
+  keyed at a time ({gesture, at, until, toward}), vehicles with passengers
+  (rides_with, in the vehicle's frame), and one camera (timed keys with
+  look_at, a named move such as push or orbit, aim_at, rides_with, handheld).
+  THE ASSISTANT CANNOT SEE THE 3D, so the input is in terms it can reason
+  about blind and the angles are worked out here: face_toward an object
+  instead of a yaw, look_at instead of a pitch, a moving thing faces the way
+  it goes, a move eases linearly (an even walk or drive), and anything put
+  down on a FLAT ground piece (sidewalk, lawn, parking lot, rug, road)
+  stands on top of it unless a y was given. The result goes through
+  asBlockScene, the same boundary a saved scene passes. Unknown kinds,
+  poses, gestures or refs are named in `skipped`, never fatal. A template id
+  starts from that template. ADD ONLY: a scene with the same name on the
+  project is returned rather than made twice; editing an existing scene is
+  not offered. The catalogue, gestures, moves and bodies are written into
+  the tool description from the live lists, so a new catalogue piece needs
+  no connector change. blocking_scenes (no `data`) joined the query
+  whitelist so the host can list a project's scenes. /dev/blocking?ai=1
+  opens an example the builder made. NOT RUN against a real host.
+- NEXT for the connector: the same for the SCENE BUILDER (lighting previz),
+  which the operator agreed to after blocking.
+
 ### Deliverables replaces "Delivery & billing" (migration 0125) — BUILT
 Operator, 2026-10-20: the page should be called Deliverables, the billing
 status block and the per-deliverable rate "don't serve a purpose", and the
