@@ -149,7 +149,8 @@ type ArmRig = {
   side: -1 | 1;
   upper: THREE.Mesh;
   fore: THREE.Mesh;
-  hand: THREE.Mesh;
+  elbow: THREE.Mesh;
+  hand: THREE.Group;
   /** Shoulder, rest elbow and rest wrist, in the upper body's frame. */
   sh: THREE.Vector3;
   el: THREE.Vector3;
@@ -163,47 +164,96 @@ export type PersonRig = {
   upperBody: THREE.Group;
   hipY: number;
   H: number;
+  /** Middle of the head, in the upper body's frame. */
+  headY: number;
   arms: [ArmRig, ArmRig];
   /** How far short of the target the hand stopped, metres (0 when it got there). */
   gap: number;
 };
 
+/** Body proportions per build, as fractions of height. */
+const BUILDS = {
+  slim: { sw: 0.12, chest: 0.09, waist: 0.07, hip: 0.088, limb: 0.9 },
+  average: { sw: 0.128, chest: 0.102, waist: 0.083, hip: 0.098, limb: 1 },
+  broad: { sw: 0.142, chest: 0.12, waist: 0.1, hip: 0.106, limb: 1.13 },
+  curvy: { sw: 0.12, chest: 0.1, waist: 0.076, hip: 0.118, limb: 1.02 },
+} as const;
+
+/** A body segment that tapers: radius ra at its start, rb at its end. */
+function taper(ra: number, rb: number, len: number, m: THREE.Material) {
+  return part(new THREE.CylinderGeometry(rb, ra, Math.max(len, 0.001), 12), m);
+}
+const ball = (r: number, m: THREE.Material) => part(new THREE.SphereGeometry(r, 14, 10), m);
+
+/** A surface of revolution through (radius, height) points, squashed front to back. */
+function lathe(pts: [number, number][], depth: number, m: THREE.Material) {
+  const mesh = part(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), 20), m);
+  mesh.scale.z = depth;
+  return mesh;
+}
+
 /**
- * A stylised figure at true proportions (the scene builder's, see
- * lib/previz/scene-build.ts buildFigure), built so its upper body can lean and
- * turn at the hip and either arm can reach for a point.
+ * A figure at true proportions: a shaped torso (chest, waist and hips by
+ * build), tapered limbs with joints, hands and shoes, a head with a jaw,
+ * nose and ears, and hair. Faceless on purpose. Clothes wear the subject's
+ * colour so two people stay told apart; skin is one neutral tone. The upper
+ * body sits in a group pivoting at the hip so it can lean and turn, and each
+ * arm can reach for a point.
  */
-function person(o: BlockObject, paint: Paint) {
+function person(o: BlockObject, paint: Paint, tint: Tint) {
+  const child = o.kind === "child";
   const H = o.size[1];
+  const B = BUILDS[o.build ?? "average"];
   const pose = poseDef(o.pose);
   const hipY = poseHipY(pose, H);
   const shY = poseShoulderY(pose, H);
   const g = new THREE.Group();
-  const legs = paint(0.8);
-  const body = paint(1);
-  const skin = paint(1.12);
+  const shirt = paint(1);
+  const pants = paint(0.62);
+  const shoes = tint("#3a3b3f");
+  const skin = tint("#cfb9a6");
+  const hairM = tint("#4a3d35");
+  const L = B.limb * (child ? 0.92 : 1);
   const at = (p: [number, number, number], yBase = 0) => new THREE.Vector3(p[0] * H, yBase + p[1] * H, p[2] * H);
 
-  // Legs stay where the pose puts them.
-  const legR = 0.034 * H;
+  // Pelvis: stays with the legs when the upper body leans.
+  g.add(lathe([[0.001, hipY - 0.085 * H], [B.hip * 0.62 * H, hipY - 0.075 * H], [B.hip * 0.95 * H, hipY - 0.03 * H], [B.hip * H, hipY + 0.01 * H]], 0.68, pants));
+
+  // Legs, where the pose puts them.
   for (const i of [0, 1] as const) {
     const side = i === 0 ? -1 : 1;
-    const hip = new THREE.Vector3(side * 0.055 * H, hipY, 0);
+    const hip = new THREE.Vector3(side * B.hip * 0.5 * H, hipY - 0.03 * H, 0);
     const knee = at(pose.knee[i]);
     let ankle = at(pose.ankle[i]);
     if (pose.seatM !== undefined) {
       knee.y = hipY;
-      const L = SHIN * H;
+      const len = SHIN * H;
       const ground = 0.04 * H;
       const drop = knee.y - ground;
-      if (drop >= L) ankle = new THREE.Vector3(knee.x, knee.y - L, knee.z + 0.02 * H);
-      else ankle = new THREE.Vector3(knee.x, ground, knee.z + Math.sqrt(Math.max(0, L * L - drop * drop)));
+      if (drop >= len) ankle = new THREE.Vector3(knee.x, knee.y - len, knee.z + 0.02 * H);
+      else ankle = new THREE.Vector3(knee.x, ground, knee.z + Math.sqrt(Math.max(0, len * len - drop * drop)));
     }
-    const thigh = capsuleMesh(legR, hip.distanceTo(knee), legs);
+    const thigh = taper(0.052 * H * L, 0.034 * H * L, hip.distanceTo(knee), pants);
     spanLimb(thigh, hip, knee);
-    const shin = capsuleMesh(legR * 0.85, knee.distanceTo(ankle), legs);
+    const shin = taper(0.033 * H * L, 0.021 * H * L, knee.distanceTo(ankle), pants);
     spanLimb(shin, knee, ankle);
-    g.add(thigh, shin, box(0.06 * H, 0.05, 0.15 * H, legs, ankle.x, Math.max(0.025, ankle.y - 0.045), ankle.z + 0.04 * H));
+    const kneeJ = ball(0.034 * H * L, pants);
+    kneeJ.position.copy(knee);
+    // A calf: the shin is fuller just below the knee.
+    const calf = ball(0.032 * H * L, pants);
+    calf.scale.set(0.95, 2.1, 0.95);
+    calf.position.copy(knee.clone().lerp(ankle, 0.3)).add(new THREE.Vector3(0, 0, -0.006 * H));
+    // A shoe: heel under the ankle, toe forward.
+    const foot = new THREE.Group();
+    const fl = 0.15 * H;
+    const fy = Math.max(0.022 * H, ankle.y - 0.035 * H);
+    foot.add(box(0.05 * H, 0.045 * H, fl * 0.62, shoes, 0, 0, fl * 0.12));
+    const toe = ball(0.026 * H, shoes);
+    toe.scale.set(0.95, 0.85, 1.5);
+    toe.position.set(0, -0.004 * H, fl * 0.48);
+    foot.add(toe);
+    foot.position.set(ankle.x, fy, ankle.z);
+    g.add(thigh, shin, kneeJ, calf, foot);
   }
 
   // Everything above the hip, in a group pivoting at the hip.
@@ -211,42 +261,103 @@ function person(o: BlockObject, paint: Paint) {
   up.position.set(0, hipY, 0);
   g.add(up);
   const rel = (v: THREE.Vector3) => v.sub(new THREE.Vector3(0, hipY, 0));
-  const torso = capsuleMesh(0.1 * H, 0.17 * H, body);
-  torso.scale.set(1.15, 1, 0.68);
-  torso.position.set(0, (shY - hipY) / 2 + 0.01 * H, 0);
-  up.add(torso);
-  const neck = capsuleMesh(0.028 * H, 0.05 * H, skin);
-  neck.position.set(0, shY - hipY + 0.025 * H, 0);
+  const top = shY - hipY;
+  // Torso: hips, waist, ribs, chest, then the shoulders rounding in to the neck.
+  up.add(lathe([
+    [B.hip * 0.98 * H, -0.01 * H], [B.waist * 1.05 * H, top * 0.32], [B.waist * H, top * 0.42],
+    [B.chest * 0.96 * H, top * 0.62], [B.chest * H, top * 0.78], [B.sw * 0.88 * H, top * 0.93],
+    [B.sw * 0.55 * H, top + 0.012 * H], [0.03 * H, top + 0.022 * H],
+  ], 0.62, shirt));
+  // Neck and head. A child's head is bigger for its height.
+  const hs = child ? 1.22 : 1;
+  const neck = taper(0.03 * H, 0.027 * H, 0.06 * H, skin);
+  neck.position.set(0, top + 0.035 * H, 0.004 * H);
   up.add(neck);
-  const head = part(new THREE.SphereGeometry(0.058 * H, 18, 14), skin, 0, shY - hipY + 0.105 * H, 0.004 * H);
-  head.scale.set(0.9, 1.12, 1);
-  up.add(head);
+  const headY = top + 0.115 * H * (child ? 1.08 : 1);
+  const r = 0.06 * H * hs;
+  const skull = ball(r, skin);
+  skull.scale.set(0.86, 1.06, 0.98);
+  skull.position.set(0, headY, -0.004 * H);
+  const jaw = ball(r * 0.72, skin);
+  jaw.scale.set(0.86, 0.82, 0.92);
+  jaw.position.set(0, headY - r * 0.48, r * 0.22);
+  const nose = part(new THREE.ConeGeometry(r * 0.14, r * 0.32, 6), skin);
+  nose.rotation.x = Math.PI / 2;
+  nose.position.set(0, headY - r * 0.1, r * 0.98);
+  up.add(skull, jaw, nose);
+  for (const sx of [-1, 1]) {
+    const ear = ball(r * 0.2, skin);
+    ear.scale.set(0.5, 1, 0.8);
+    ear.position.set(sx * r * 0.86, headY - r * 0.05, -r * 0.05);
+    up.add(ear);
+  }
+  addHair(up, o.hair ?? "short", r, headY, hairM);
 
   const arms = ([0, 1] as const).map((i) => {
     const side = (i === 0 ? -1 : 1) as -1 | 1;
-    const sh = rel(new THREE.Vector3(side * 0.13 * H, shY - 0.02 * H, 0));
+    const sh = rel(new THREE.Vector3(side * B.sw * H, shY - 0.02 * H, 0));
     const el = rel(at(pose.elbow[i], shY));
     const wr = rel(at(pose.wrist[i], shY));
     const l1 = sh.distanceTo(el);
     const l2 = el.distanceTo(wr);
-    const upper = capsuleMesh(0.026 * H, l1, body);
-    const fore = capsuleMesh(0.022 * H, l2, skin);
-    const hand = part(new THREE.SphereGeometry(0.027 * H, 10, 8), skin);
-    hand.scale.set(0.8, 1.15, 0.8);
-    up.add(upper, fore, hand);
-    const arm: ArmRig = { side, upper, fore, hand, sh, el, wr, l1, l2 };
+    const delt = ball(0.031 * H * L, shirt);
+    delt.position.copy(sh).add(new THREE.Vector3(0, -0.004 * H, 0));
+    const upper = taper(0.033 * H * L, 0.026 * H * L, l1, shirt);
+    const elbow = ball(0.025 * H * L, skin);
+    const fore = taper(0.025 * H * L, 0.018 * H * L, l2, skin);
+    const hand = new THREE.Group();
+    const palm = box(0.046 * H, 0.068 * H, 0.02 * H, skin, 0, 0.034 * H, 0);
+    const fingers = box(0.042 * H, 0.03 * H, 0.016 * H, skin, 0, 0.082 * H, 0.002 * H);
+    const thumb = box(0.014 * H, 0.04 * H, 0.014 * H, skin, -side * 0.026 * H, 0.03 * H, 0.008 * H);
+    thumb.rotation.z = side * 0.4;
+    hand.add(palm, fingers, thumb);
+    up.add(delt, upper, elbow, fore, hand);
+    const arm: ArmRig = { side, upper, fore, elbow, hand, sh, el, wr, l1, l2 };
     placeArm(arm, el, wr);
     return arm;
   }) as [ArmRig, ArmRig];
-  const rig: PersonRig = { upperBody: up, hipY, H, arms, gap: 0 };
+  const rig: PersonRig = { upperBody: up, hipY, H, headY, arms, gap: 0 };
   g.userData.rig = rig;
   return g;
+}
+
+/** Hair as a shell over the top and back of the head. */
+function addHair(up: THREE.Group, style: string, r: number, headY: number, m: THREE.Material) {
+  if (style === "bald") return;
+  const cap = part(new THREE.SphereGeometry(r * 1.07, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), m);
+  cap.scale.set(0.9, 1.02, 1.0);
+  cap.rotation.x = -0.62;
+  cap.position.set(0, headY + r * 0.1, -r * 0.1);
+  up.add(cap);
+  if (style === "long") {
+    const back = part(new THREE.CapsuleGeometry(r * 0.78, r * 1.6, 4, 12), m);
+    back.scale.set(1.05, 1, 0.45);
+    back.position.set(0, headY - r * 1.0, -r * 0.62);
+    up.add(back);
+  } else if (style === "bun") {
+    const bun = ball(r * 0.36, m);
+    bun.position.set(0, headY + r * 0.55, -r * 0.88);
+    up.add(bun);
+  } else if (style === "curly") {
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const c = ball(r * 0.3, m);
+      c.position.set(Math.cos(a) * r * 0.82, headY + r * 0.32 + Math.sin(i * 1.7) * r * 0.12, Math.sin(a) * r * 0.82 - r * 0.12);
+      up.add(c);
+    }
+    const crown = ball(r * 0.5, m);
+    crown.position.set(0, headY + r * 0.85, -r * 0.1);
+    up.add(crown);
+  }
 }
 
 function placeArm(a: ArmRig, el: THREE.Vector3, wr: THREE.Vector3) {
   spanLimb(a.upper, a.sh, el);
   spanLimb(a.fore, el, wr);
+  a.elbow.position.copy(el);
   a.hand.position.copy(wr);
+  const d = wr.clone().sub(el);
+  if (d.lengthSq() > 1e-10) a.hand.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
 }
 
 const twoBone = (a: ArmRig, goal: THREE.Vector3, pole: THREE.Vector3) => {
@@ -296,14 +407,17 @@ function gestureGoals(rig: PersonRig, s: GestureState, local: THREE.Vector3 | nu
     if (!mine) return null;
     const side = a.side;
     const L = a.l1 + a.l2;
-    const headY = a.sh.y + 0.125 * H;
+    const headY = rig.headY;
     const pt = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
     const ext = (dx: number, dy: number, dz: number, f: number) => a.sh.clone().add(pt(dx, dy, dz).normalize().multiplyScalar(L * f));
     const pole = (x: number, y: number, z: number) => pt(x, y, z);
     switch (s.kind) {
       case "reach": {
         if (!local) return null;
+        // The wrist stops a hand's length short, so the hand rests on it.
         const goal = local.clone();
+        const back = goal.clone().sub(a.sh);
+        if (back.lengthSq() > 1e-6) goal.sub(back.normalize().multiplyScalar(0.06 * H));
         if (s.stroke && s.reach > 0.6) {
           // A slow stroke across the top: back and forth along the line from
           // the shoulder to the target, lifting a little on the way back.
@@ -363,6 +477,8 @@ function gestureGoals(rig: PersonRig, s: GestureState, local: THREE.Vector3 | nu
  * arm by how far into the gesture the person is; out of reach it stretches
  * straight at it.
  */
+const FACE = new Set<string>(["phone", "drink", "chin", "cover"]);
+
 export function poseRig(rig: PersonRig, s: GestureState) {
   const up = rig.upperBody;
   const spec = gestureOf(s.kind);
@@ -389,6 +505,11 @@ export function poseRig(rig: PersonRig, s: GestureState) {
   rig.arms.forEach((a, i) => {
     const gl = goals[i];
     if (!gl) { placeArm(a, a.el, a.wr); return; }
+    // At the face the HAND should be at the point, so the wrist stops short.
+    if (FACE.has(s.kind)) {
+      const back = gl.goal.clone().sub(a.sh);
+      if (back.lengthSq() > 1e-6) gl.goal.sub(back.normalize().multiplyScalar(0.05 * rig.H));
+    }
     const target = a.wr.clone().lerp(gl.goal, amount);
     // The elbow swings from where the pose holds it to where the gesture
     // wants it, so a small amount does not snap the arm round.
@@ -1177,7 +1298,7 @@ export function buildObject(o: BlockObject, look: Look): THREE.Group {
   const [W, H, D] = o.size;
   let g: THREE.Group;
   switch (o.kind) {
-    case "person": case "child": g = person(o, paint); break;
+    case "person": case "child": g = person(o, paint, tint); break;
     case "dog": g = dog(o, paint); break;
     case "car": g = vehicle(o, paint, { cab: 0.48, cabStart: 0.28, rows: 2 }); break;
     case "suv": g = vehicle(o, paint, { cab: 0.66, cabStart: 0.22, rows: o.seats === "three" ? 3 : 2, cargo: true, tall: false }); break;

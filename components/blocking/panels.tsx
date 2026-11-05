@@ -5,8 +5,8 @@
 // how an edit lands on the timeline lives in one place.
 import { useState } from "react";
 import {
-  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, GESTURES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind, gestureOf,
-  type BlockObject, type BlockScene, type GestureKind, type Reach, type Ease, type Environment, type Vec3,
+  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, GESTURES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind, gestureOf, BODY_BUILDS, HAIR_STYLES,
+  type BlockObject, type BlockScene, type GestureKind, type BodyBuild, type HairStyle, type Reach, type Ease, type Environment, type Vec3,
 } from "@/lib/blocking/scene";
 import { PRESETS, type PresetId } from "@/lib/blocking/keys";
 import { BODIES } from "@/lib/previz/optics";
@@ -410,6 +410,20 @@ function ObjectPanel({ api, id }: { api: StudioApi; id: string }) {
               {k.poses.map((p) => <option key={p} value={p}>{POSES.find((x) => x.id === p)?.name ?? (p === "seated" ? "Sitting" : "Standing")}</option>)}
             </Select>
           </Row>
+        )}
+        {(o.kind === "person" || o.kind === "child") && (
+          <>
+            <Row label="Build">
+              <Select value={o.build ?? "average"} onChange={(v) => api.updateObject(o.id, { build: v as BodyBuild })} disabled={dis}>
+                {BODY_BUILDS.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </Select>
+            </Row>
+            <Row label="Hair">
+              <Select value={o.hair ?? "short"} onChange={(v) => api.updateObject(o.id, { hair: v as HairStyle })} disabled={dis}>
+                {HAIR_STYLES.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+              </Select>
+            </Row>
+          </>
         )}
         {k.seats && (
           <Row label="Seating">

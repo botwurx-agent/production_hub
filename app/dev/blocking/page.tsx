@@ -35,6 +35,11 @@ function Inner() {
     if (one) {
       const o = newObject("person", [0, 0, 2.5], Number(q.get("yaw") ?? 25), []);
       o.keys = [{ ...o.keys[0], g: [1, 0], ...(one.id === "reach" ? {} : { gk: one.id }) }];
+      const b = q.get("build");
+      const h = q.get("hair");
+      if (b) o.build = b as typeof o.build;
+      if (h) o.hair = h as typeof o.hair;
+      if (q.get("child")) { o.kind = "child"; o.size = [0.35, 1.2, 0.22]; }
       s.objects = [o];
     } else if (q.get("gest")) {
       s.objects = GESTURES.map((g, i) => {

@@ -8225,6 +8225,19 @@ the side window to the dog, out through the windshield, ending ahead.
   pose's own elbow so a small amount does not snap the arm. Picking a gesture
   when the person is not mid-gesture keys 0% 0.6 s before the playhead and
   100% at it, so it starts there rather than creeping from the last key.
+- PEOPLE LOOK LIKE PEOPLE (2026-11-05, operator: "make the people look more
+  realistic"). person() in lib/blocking/build.ts is rebuilt: a lathe-shaped
+  torso (hips, waist, ribs, chest, shoulders rounding into the neck) and a
+  pelvis that stays with the legs, tapered limbs with knee, calf and elbow
+  joints, hands with fingers and a thumb that follow the forearm, shoes, and a
+  head with a jaw, nose and ears. STILL FACELESS on purpose. Clothes wear the
+  subject's colour (shirt, darker trousers) so two people stay told apart;
+  skin and hair are one neutral tone each (tint). BlockObject gained `build`
+  (slim / average / broad / curvy, BUILDS) and `hair` (short / long / tied up
+  / curly / none), both optional and part of the mesh cache key; a child's
+  head is larger for its height. PersonRig gained `headY`, which the face
+  gestures aim at, and the wrist stops a hand's length short for reach and
+  the face gestures so the HAND, not the wrist, lands on the point.
 - EVERYDAY CATALOGUE (same day, operator: "buildings, bushes, etc"). 86 kinds
   in eight groups: ground and landscape (sidewalk, crosswalk, parking lot,
   lawn, dirt path, pond, plus road/hills/sea), trees and plants (leafy tree,

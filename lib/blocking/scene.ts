@@ -88,7 +88,20 @@ export type BlockObject = {
    * there. Which gesture, and how far into it, is keyed (Key.gk, Key.g).
    */
   reach?: Reach;
+  /** People: body shape and hair, so a figure reads as a particular person. */
+  build?: BodyBuild;
+  hair?: HairStyle;
 };
+
+export const BODY_BUILDS = [
+  { id: "slim", name: "Slim" }, { id: "average", name: "Average" }, { id: "broad", name: "Broad" }, { id: "curvy", name: "Curvy" },
+] as const;
+export type BodyBuild = (typeof BODY_BUILDS)[number]["id"];
+export const HAIR_STYLES = [
+  { id: "short", name: "Short" }, { id: "long", name: "Long" }, { id: "bun", name: "Tied up" },
+  { id: "curly", name: "Curly" }, { id: "bald", name: "None" },
+] as const;
+export type HairStyle = (typeof HAIR_STYLES)[number]["id"];
 
 export type Reach = { target: string | null; hand: "right" | "left"; stroke: boolean };
 export const LEAN_MIN = -25;
@@ -428,6 +441,8 @@ export function asBlockScene(raw: unknown): BlockScene | null {
       keys,
       pose: bk.poses ? (bk.poses.includes(r.pose as string) ? (r.pose as string) : bk.poses[0]) : undefined,
       seats: bk.seats ? (bk.seats.some((x) => x.id === r.seats) ? (r.seats as string) : bk.seats[0].id) : undefined,
+      build: (kind === "person" || kind === "child") && BODY_BUILDS.some((x) => x.id === r.build) ? (r.build as BodyBuild) : undefined,
+      hair: (kind === "person" || kind === "child") && HAIR_STYLES.some((x) => x.id === r.hair) ? (r.hair as HairStyle) : undefined,
       parent: typeof r.parent === "string" ? r.parent : null,
       hidden: r.hidden === true,
       reach: (kind === "person" || kind === "child") && r.reach && typeof r.reach === "object" ? reachOf(r.reach as Record<string, unknown>) : undefined,
