@@ -5,7 +5,7 @@
 // pace set by the LEAVING key's ease. Angles are unwrapped first, so a yaw
 // going from 350 to 10 turns 20 degrees rather than 340. The lens is
 // interpolated in log space, so a zoom from 24 to 96 passes 48 at the middle.
-import type { CamKey, CameraFlow, Ease, Key, Vec3 } from "./scene";
+import type { CamKey, CameraFlow, Ease, GestureKind, Key, Vec3 } from "./scene";
 
 export function easeOf(e: Ease, u: number): number {
   const x = Math.min(1, Math.max(0, u));
@@ -82,17 +82,36 @@ export function evalTrack(keys: Key[], t: number, smooth = true): Pose {
 }
 
 /**
- * A person's gesture at time t: how far the hand has reached (0 to 1) and the
- * lean (degrees, back positive). Eased by each key's own ease but straight
- * between keys, never a curve: a reach that overshoots 1 would punch through
- * whatever it is reaching for. A key without `g` counts as 0, 0.
+ * A person's gesture at time t: which gesture, how far into it (0 to 1), and
+ * the lean (degrees, back positive). Eased by each key's own ease but straight
+ * between keys, never a curve: an amount that overshoots 1 would punch through
+ * whatever the hand reaches for. A key without `g` counts as 0, 0; a key
+ * without `gk` is a reach.
+ *
+ * Each key names its own gesture, so a person can wave at 2 s and pick up the
+ * phone at 8 s. Between two keys holding DIFFERENT gestures the first winds
+ * down to nothing over the first half and the second comes up over the
+ * second half, the way a person drops one arm before raising the other,
+ * rather than one gesture morphing into the other.
  */
-export function evalGesture(keys: Key[], t: number): { reach: number; lean: number } {
-  if (!keys.length || !keys.some((k) => k.g)) return { reach: 0, lean: 0 };
+export function evalGesture(keys: Key[], t: number): { reach: number; lean: number; kind: GestureKind } {
+  if (!keys.length || !keys.some((k) => k.g)) return { reach: 0, lean: 0, kind: "reach" };
   const { i, u } = locate(keys, t);
-  const at = (j: number, c: 0 | 1) => keys[j].g?.[c] ?? 0;
-  const lin = (c: 0 | 1) => (u === 0 || i + 1 >= keys.length ? at(i, c) : at(i, c) + (at(i + 1, c) - at(i, c)) * u);
-  return { reach: Math.min(1, Math.max(0, lin(0))), lean: lin(1) };
+  const amt = (j: number) => keys[j].g?.[0] ?? 0;
+  const lean = (j: number) => keys[j].g?.[1] ?? 0;
+  const kind = (j: number): GestureKind => keys[j].gk ?? "reach";
+  const clamp = (x: number) => Math.min(1, Math.max(0, x));
+  if (u === 0 || i + 1 >= keys.length) return { reach: clamp(amt(i)), lean: lean(i), kind: kind(i) };
+  const a = amt(i);
+  const b = amt(i + 1);
+  const l = lean(i) + (lean(i + 1) - lean(i)) * u;
+  const ka = kind(i);
+  const kb = kind(i + 1);
+  if (ka === kb || a <= 1e-4 || b <= 1e-4) {
+    // One gesture across the segment: whichever end is actually doing it.
+    return { reach: clamp(a + (b - a) * u), lean: l, kind: b > 1e-4 ? kb : ka };
+  }
+  return u < 0.5 ? { reach: clamp(a * (1 - 2 * u)), lean: l, kind: ka } : { reach: clamp(b * (2 * u - 1)), lean: l, kind: kb };
 }
 
 export type FlowOpts = { flow?: CameraFlow; easeEnds?: boolean };

@@ -8209,6 +8209,37 @@ the side window to the dog, out through the windshield, ending ahead.
   The scene builder's figures (buildFigure) are untouched. NOT BUILT: the
   target reacting (the dog does not lift its head), reaching with both hands,
   and pointing the head where the hand goes.
+- A MENU OF GESTURES, KEYED PER KEYFRAME (2026-11-05, operator: one reach
+  gesture "is a bit strange", give a selection). GESTURES (lib/blocking/
+  scene.ts): reach and touch, point, hold out, wave, raise a hand, on the
+  phone, drink or eat, hand to chin, show with both hands, arms up, open arms,
+  shrug, hands on hips, clap, hands to face. Key gained `gk` (absent = reach,
+  so older scenes read the same); `g` stays [amount, lean]. Each key names its
+  own gesture, so a person can wave at 2 s and take a call at 8 s; between two
+  keys with DIFFERENT gestures the first winds down over the first half and
+  the second comes up over the second (evalGesture), never a morph.
+  BlockObject.reach is now "Toward / Hand / Stroke" for the whole shot (target
+  is required for reach, optional for point and hold out). gestureGoals in
+  build.ts places each hand on the figure's own proportions (ear, mouth, hips)
+  or as a direction and share of arm length; the elbow pole blends from the
+  pose's own elbow so a small amount does not snap the arm. Picking a gesture
+  when the person is not mid-gesture keys 0% 0.6 s before the playhead and
+  100% at it, so it starts there rather than creeping from the last key.
+- EVERYDAY CATALOGUE (same day, operator: "buildings, bushes, etc"). 86 kinds
+  in eight groups: ground and landscape (sidewalk, crosswalk, parking lot,
+  lawn, dirt path, pond, plus road/hills/sea), trees and plants (leafy tree,
+  pine, palm, bush, hedge, flower bed, tall grass, cactus, log), buildings and
+  walls (tower, house, shop front, garage, warehouse, picket fence, garden
+  wall), street (traffic light, stop sign, street sign, bus stop, bench, trash
+  can, dumpster, hydrant, mailbox, bollard, meter, cone, barrier, utility
+  pole, billboard, bicycle, picnic table, cafe table, planter, fountain,
+  vending machine) and indoors (window wall, coffee table, desk, chair, bar
+  stool, armchair, fridge, dresser, bookshelf, TV, floor lamp, potted plant,
+  rug). A second colour on one object (a light's lamps, a book's spine) goes
+  through `tint` in buildObject. The add menu gained a search box (Enter adds
+  the first match). Everything but ground pieces and a room now lands in
+  front of the camera, far enough back for its size. /dev/blocking?kind=<id>
+  frames one piece, ?gest=<id>&yaw=<deg> one gesture, ?all=1 the lot.
 - SEND TO PIPELINE (BUILT, 2026-11-04, no migration). Export > "Send to the
   pipeline..." opens a window with a SHOT PICKER (the project's generated
   shots, the one this scene was sent to before picked first and marked "sent

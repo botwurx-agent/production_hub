@@ -273,6 +273,7 @@ export function BlockingStudio({
     if (o.keys.some((k) => k.g)) {
       const gs = evalGesture(o.keys, at);
       base.g = [gs.reach, gs.lean];
+      base.gk = gs.kind;
     }
     return base;
   };
@@ -289,7 +290,7 @@ export function BlockingStudio({
         // or lean always keys at the playhead, even when the person has only
         // one key, or the gesture lands on that key (often at 0s) and the whole
         // shot starts mid-reach.
-        const gestureOnly = !!pose.g && !pose.p && !pose.r;
+        const gestureOnly = (!!pose.g || !!pose.gk) && !pose.p && !pose.r;
         if (keys.length >= 2 || autoRef.current || existing || gestureOnly) return setKey(keys, merged, s.fps);
         return [{ ...keys[0], p: merged.p, r: merged.r, ...extra }];
       };
@@ -300,7 +301,11 @@ export function BlockingStudio({
         return { ...s, camera: { ...s.camera, keys: write<CamKey>(s.camera.keys, extra) } };
       }
       const g = pose.g ?? cur.g;
-      const extra: Partial<Key> = g && (g[0] > 1e-4 || Math.abs(g[1]) > 1e-3) ? { g } : { g: undefined };
+      const gk = pose.gk ?? cur.gk;
+      const extra: Partial<Key> = {
+        g: g && (g[0] > 1e-4 || Math.abs(g[1]) > 1e-3) ? g : undefined,
+        gk: gk && gk !== "reach" ? gk : undefined,
+      };
       return { ...s, objects: s.objects.map((o) => (o.id === track ? { ...o, keys: write<Key>(o.keys, extra) } : o)) };
     }, coalesce);
   }, [commit]);
@@ -319,7 +324,7 @@ export function BlockingStudio({
         objects: s.objects.map((o) => {
           if (o.id !== track) return o;
           const ex = keyAt(o.keys, at, s.fps);
-          return { ...o, keys: setKey(o.keys, { t: at, p: cur.p, r: cur.r, ...(cur.g ? { g: cur.g } : {}), ease: ex?.ease ?? "smooth" }, s.fps) };
+          return { ...o, keys: setKey(o.keys, { t: at, p: cur.p, r: cur.r, ...(cur.g ? { g: cur.g } : {}), ...(cur.gk && cur.gk !== "reach" ? { gk: cur.gk } : {}), ease: ex?.ease ?? "smooth" }, s.fps) };
         }),
       };
     });
@@ -366,15 +371,16 @@ export function BlockingStudio({
     addObject: (kind) => {
       const s = sceneRef.current;
       const k = blockKind(kind);
-      // A subject lands in front of the camera; set and environment pieces
-      // land at the origin, where a road or a room belongs.
+      // Almost everything lands in front of the camera, far enough back that
+      // a building does not swallow the lens. Ground and landscape (a road, a
+      // hill, the sea) and a room land at the origin, where they belong.
       let p: Vec3 = [0, 0, 0];
-      if (k.category === "people" || k.category === "vehicles" || k.category === "shapes" || kind === "table" || kind === "sofa" || kind === "product") {
+      if (k.category !== "environment" && kind !== "room") {
         const c = camAt(s, tRef.current);
         const parent = s.camera.parent ? objectMatrix(mapOf(s), s.camera.parent, tRef.current) : null;
         const w = new THREE.Vector3(...c.p).applyMatrix4(parent ?? new THREE.Matrix4());
         const d = lookDir(c.r[0], c.r[1]);
-        const dist = k.category === "vehicles" ? 9 : 4;
+        const dist = k.category === "vehicles" ? 9 : Math.max(4, Math.max(k.size[0], k.size[2]) / 2 + 3, k.size[1] * 0.6);
         p = [w.x + d[0] * dist, 0, w.z + d[2] * dist];
       }
       const o = newObject(kind, p, 0, s.objects);
@@ -510,7 +516,7 @@ export function BlockingStudio({
           const at = snap(Math.min(s.duration, Math.max(0, b.t)), s.fps);
           const cur = evalTrack(keys, at);
           const ex = keyAt(keys, at, s.fps);
-          keys = setKey(keys, { t: at, p: cur.p, r: cur.r, g: b.g, ease: ex?.ease ?? "smooth" }, s.fps);
+          keys = setKey(keys, { t: at, p: cur.p, r: cur.r, g: b.g, ...(b.gk && b.gk !== "reach" ? { gk: b.gk } : {}), ease: ex?.ease ?? "smooth" }, s.fps);
         }
         return { ...o, keys };
       }),
@@ -758,10 +764,13 @@ export function BlockingStudio({
       if (rig) {
         const gs = evalGesture(o.keys, at);
         const tgtObj = o.reach?.target ? m.get(o.reach.target) : undefined;
-        const target = tgtObj && gs.reach > 0 ? touchPoint(m, tgtObj, at).applyMatrix4(rec.g.matrix.clone().invert()) : null;
+        // A reach lands on top of what it touches; a point or a held-out hand
+        // goes toward its middle.
+        const wt = tgtObj && gs.reach > 0 ? (gs.kind === "reach" ? touchPoint(m, tgtObj, at) : aimPoint(m, tgtObj, at)) : null;
+        const target = wt ? wt.applyMatrix4(rec.g.matrix.clone().invert()) : null;
         poseRig(rig, {
-          reach: gs.reach, lean: gs.lean, hand: o.reach?.hand ?? "right", target,
-          stroke: o.reach?.stroke && gs.reach > 0.6 ? at : null,
+          kind: gs.kind, reach: gs.reach, lean: gs.lean, hand: o.reach?.hand ?? "right", target,
+          time: at, stroke: !!o.reach?.stroke,
         });
       }
     }

@@ -25,11 +25,34 @@ export const EASES: { id: Ease; name: string; hint: string }[] = [
 
 /** A transform at a moment. `r` is yaw, pitch, roll. */
 /**
- * `g` is a person's gesture at this key: [reach, lean]. Reach is 0 to 1, how
- * far the hand has gone from its pose toward the object the person reaches
- * for (BlockObject.reach); lean is degrees, back positive. Absent means 0, 0.
+ * `g` is a person's gesture at this key: [amount, lean]. Amount is 0 to 1, how
+ * far into the gesture the person is (0 is the pose's own arms, 1 the gesture
+ * done); lean is degrees, back positive. Absent means 0, 0. `gk` is which
+ * gesture (GESTURES); absent means "reach", what every key written before the
+ * menu existed was.
  */
-export type Key = { t: number; p: Vec3; r: Vec3; ease: Ease; g?: [number, number] };
+export type Key = { t: number; p: Vec3; r: Vec3; ease: Ease; g?: [number, number]; gk?: GestureKind };
+
+/** What a person can do with their arms. `target`: whether it is done toward an object. */
+export const GESTURES = [
+  { id: "reach", name: "Reach and touch", hint: "A hand goes to an object and rests on it, or strokes it", target: "required", hands: 1 },
+  { id: "point", name: "Point", hint: "Points at an object, or straight ahead", target: "optional", hands: 1 },
+  { id: "offer", name: "Hold out", hint: "Holds a hand out, as if handing something over", target: "optional", hands: 1 },
+  { id: "wave", name: "Wave", hint: "A hand up beside the head, waving", target: "none", hands: 1 },
+  { id: "raise", name: "Raise a hand", hint: "A hand straight up, a question or a taxi", target: "none", hands: 1 },
+  { id: "phone", name: "On the phone", hint: "A hand at the ear", target: "none", hands: 1 },
+  { id: "drink", name: "Drink or eat", hint: "A hand at the mouth", target: "none", hands: 1 },
+  { id: "chin", name: "Hand to chin", hint: "Thinking it over", target: "none", hands: 1 },
+  { id: "present", name: "Show with both hands", hint: "Holds something up in front, to the camera", target: "none", hands: 2 },
+  { id: "cheer", name: "Arms up", hint: "Both arms up, celebrating", target: "none", hands: 2 },
+  { id: "open", name: "Open arms", hint: "Arms out wide, a welcome or a hug", target: "none", hands: 2 },
+  { id: "shrug", name: "Shrug", hint: "Hands out, palms up", target: "none", hands: 2 },
+  { id: "hips", name: "Hands on hips", hint: "Both hands on the hips", target: "none", hands: 2 },
+  { id: "clap", name: "Clap", hint: "Clapping in front of the chest", target: "none", hands: 2 },
+  { id: "cover", name: "Hands to face", hint: "Surprise, or laughing behind the hands", target: "none", hands: 2 },
+] as const;
+export type GestureKind = (typeof GESTURES)[number]["id"];
+export const gestureOf = (id: string | undefined) => GESTURES.find((g) => g.id === id) ?? GESTURES[0];
 /**
  * A camera key also carries the lens, and `af`: how far the subject sits off
  * centre at this key while the camera is kept aimed (yaw, pitch degrees). It
@@ -60,9 +83,9 @@ export type BlockObject = {
   /** Vehicles: which seating layout is drawn (an SUV with two or three rows). */
   seats?: string;
   /**
-   * People: what one hand reaches for (another object's id: a dog's head, a
-   * product, a shoulder), with which hand, and whether it strokes once there.
-   * How far it gets at each moment is keyed (Key.g).
+   * People: what a gesture is done toward (another object's id: a dog's head,
+   * a product, a person), with which hand, and whether a reach strokes once
+   * there. Which gesture, and how far into it, is keyed (Key.gk, Key.g).
    */
   reach?: Reach;
 };
@@ -152,12 +175,15 @@ export const aspectRatio = (id: string) => BLOCK_ASPECTS.find((a) => a.id === id
 
 /* ---------- the catalogue ---------- */
 
-export type BlockCategory = "people" | "vehicles" | "environment" | "set" | "shapes";
+export type BlockCategory = "people" | "vehicles" | "environment" | "nature" | "buildings" | "street" | "set" | "shapes";
 export const BLOCK_CATEGORIES: { id: BlockCategory; name: string }[] = [
   { id: "people", name: "People and animals" },
   { id: "vehicles", name: "Vehicles" },
-  { id: "environment", name: "Environment" },
-  { id: "set", name: "Set pieces" },
+  { id: "environment", name: "Ground and landscape" },
+  { id: "nature", name: "Trees and plants" },
+  { id: "buildings", name: "Buildings and walls" },
+  { id: "street", name: "Street" },
+  { id: "set", name: "Indoors" },
   { id: "shapes", name: "Shapes" },
 ];
 
@@ -185,21 +211,77 @@ export const BLOCK_KINDS: BlockKind[] = [
   { kind: "truck", name: "Pickup", category: "vehicles", size: [2.05, 1.95, 5.9], color: "#9aa7b4", hint: "A pickup with an open bed" },
   { kind: "bike", name: "Motorbike", category: "vehicles", size: [0.8, 1.15, 2.1], color: "#3a3d44", hint: "With or without a rider" },
   { kind: "road", name: "Road", category: "environment", size: [8, 0.02, 200], color: "#3b3d42", hint: "Two lanes with a centre line" },
+  { kind: "sidewalk", name: "Sidewalk", category: "environment", size: [3, 0.12, 40], color: "#a9a59d", hint: "Paving slabs with a kerb" },
+  { kind: "crosswalk", name: "Crosswalk", category: "environment", size: [8, 0.03, 3.5], color: "#3b3d42", hint: "Zebra stripes, lay it over a road" },
+  { kind: "parking", name: "Parking lot", category: "environment", size: [24, 0.02, 16], color: "#45474c", hint: "Asphalt with marked bays" },
+  { kind: "lawn", name: "Lawn", category: "environment", size: [12, 0.03, 12], color: "#7c9a52", hint: "A patch of grass" },
+  { kind: "path", name: "Dirt path", category: "environment", size: [1.6, 0.03, 30], color: "#9b8463", hint: "A footpath through a park or a field" },
+  { kind: "pond", name: "Pond", category: "environment", size: [9, 0.04, 6], color: "#4a7d98", hint: "Still water" },
   { kind: "hill", name: "Hill", category: "environment", size: [60, 14, 60], color: "#7d8a58", hint: "A low-poly rise" },
   { kind: "mountain", name: "Mountain", category: "environment", size: [160, 70, 160], color: "#6f7764", hint: "Far away, on the horizon" },
   { kind: "sea", name: "Sea", category: "environment", size: [600, 0.02, 600], color: "#4a7d98", hint: "Water to the horizon" },
-  { kind: "building", name: "Building", category: "environment", size: [12, 18, 12], color: "#b7aea2", hint: "A block with window rows" },
-  { kind: "tree", name: "Tree", category: "environment", size: [4, 8, 4], color: "#5d7a4a", hint: "Trunk and canopy" },
-  { kind: "rock", name: "Rock", category: "environment", size: [2.4, 1.6, 2.0], color: "#8b867d", hint: "A boulder" },
-  { kind: "lamppost", name: "Street light", category: "environment", size: [0.3, 6, 1.2], color: "#55585e", hint: "A pole with an arm" },
+  { kind: "tree", name: "Tree", category: "nature", size: [4, 8, 4], color: "#5d7a4a", hint: "Trunk and a pointed canopy" },
+  { kind: "oak", name: "Leafy tree", category: "nature", size: [6, 7, 6], color: "#6a8a4c", hint: "A broad, rounded canopy" },
+  { kind: "pine", name: "Pine", category: "nature", size: [3, 10, 3], color: "#45633f", hint: "A tall conifer" },
+  { kind: "palm", name: "Palm tree", category: "nature", size: [4, 9, 4], color: "#6c8c46", hint: "A curved trunk and fronds" },
+  { kind: "bush", name: "Bush", category: "nature", size: [1.6, 1.1, 1.6], color: "#62844a", hint: "A rounded shrub" },
+  { kind: "hedge", name: "Hedge", category: "nature", size: [4, 1.3, 0.9], color: "#557a43", hint: "A clipped row" },
+  { kind: "flowers", name: "Flower bed", category: "nature", size: [2.4, 0.45, 1.2], color: "#d9789a", hint: "Soil and blooms" },
+  { kind: "grass", name: "Tall grass", category: "nature", size: [1.4, 0.8, 1.4], color: "#8aa059", hint: "A clump of reeds or grass" },
+  { kind: "cactus", name: "Cactus", category: "nature", size: [1.2, 3, 0.6], color: "#5f8a52", hint: "A saguaro, for the desert" },
+  { kind: "rock", name: "Rock", category: "nature", size: [2.4, 1.6, 2.0], color: "#8b867d", hint: "A boulder" },
+  { kind: "log", name: "Log", category: "nature", size: [0.5, 0.5, 3], color: "#7a5f45", hint: "A fallen trunk" },
+  { kind: "building", name: "Office block", category: "buildings", size: [12, 18, 12], color: "#b7aea2", hint: "A block with window rows" },
+  { kind: "skyscraper", name: "Tower", category: "buildings", size: [20, 80, 20], color: "#8fa0b0", hint: "A glass high-rise" },
+  { kind: "house", name: "House", category: "buildings", size: [8, 7, 9], color: "#d6c7ae", hint: "Pitched roof, front door, windows" },
+  { kind: "shopfront", name: "Shop front", category: "buildings", size: [8, 4.5, 6], color: "#c9b8a0", hint: "A glass front with an awning" },
+  { kind: "garage", name: "Garage", category: "buildings", size: [4, 3, 6.5], color: "#c4beb4", hint: "A roller door" },
+  { kind: "warehouse", name: "Warehouse", category: "buildings", size: [30, 9, 20], color: "#a7a9a6", hint: "A big shed with loading doors" },
+  { kind: "fence", name: "Picket fence", category: "buildings", size: [6, 1.1, 0.08], color: "#ece8de", hint: "A garden fence" },
+  { kind: "lowwall", name: "Garden wall", category: "buildings", size: [6, 1, 0.3], color: "#b9a58c", hint: "Low brick or stone" },
+  { kind: "lamppost", name: "Street light", category: "street", size: [0.3, 6, 1.2], color: "#55585e", hint: "A pole with an arm" },
+  { kind: "trafficlight", name: "Traffic light", category: "street", size: [0.4, 4, 0.4], color: "#3d4046", hint: "Red, amber, green" },
+  { kind: "stopsign", name: "Stop sign", category: "street", size: [0.75, 2.4, 0.1], color: "#c94b42", hint: "An octagon on a post" },
+  { kind: "sign", name: "Street sign", category: "street", size: [0.9, 2.8, 0.1], color: "#3d7a5c", hint: "A name plate on a post" },
+  { kind: "busstop", name: "Bus stop", category: "street", size: [3.6, 2.6, 1.5], color: "#8d9aa6", hint: "A shelter with a bench" },
+  { kind: "bench", name: "Bench", category: "street", size: [1.8, 0.85, 0.65], color: "#8a6a4d", hint: "Park or street seating" },
+  { kind: "bin", name: "Trash can", category: "street", size: [0.55, 0.95, 0.55], color: "#4d5a52", hint: "A litter bin" },
+  { kind: "dumpster", name: "Dumpster", category: "street", size: [2, 1.4, 1.2], color: "#4c6d58", hint: "An alley skip" },
+  { kind: "hydrant", name: "Fire hydrant", category: "street", size: [0.4, 0.8, 0.4], color: "#c9473f", hint: "On the kerb" },
+  { kind: "mailbox", name: "Mailbox", category: "street", size: [0.55, 1.25, 0.5], color: "#3f5e9c", hint: "A collection box" },
+  { kind: "bollard", name: "Bollard", category: "street", size: [0.25, 1, 0.25], color: "#5a5d63", hint: "A short post" },
+  { kind: "meter", name: "Parking meter", category: "street", size: [0.25, 1.4, 0.25], color: "#5a5d63", hint: "On the kerb" },
+  { kind: "cone", name: "Traffic cone", category: "street", size: [0.4, 0.7, 0.4], color: "#e07f3a", hint: "Road works" },
+  { kind: "barrier", name: "Barrier", category: "street", size: [2, 1, 0.5], color: "#e0d36a", hint: "A striped road barrier" },
+  { kind: "pole", name: "Utility pole", category: "street", size: [2.2, 10, 0.35], color: "#7a6a58", hint: "Power or phone lines" },
+  { kind: "billboard", name: "Billboard", category: "street", size: [10, 9, 0.6], color: "#d8d5ce", hint: "A big board on legs" },
+  { kind: "bicycle", name: "Bicycle", category: "street", size: [0.6, 1.05, 1.75], color: "#3f6fa3", hint: "Parked or ridden" },
+  { kind: "picnic", name: "Picnic table", category: "street", size: [1.8, 0.75, 1.6], color: "#9a7a55", hint: "A table with bench seats" },
+  { kind: "parasol", name: "Café table", category: "street", size: [2.4, 2.4, 2.4], color: "#d7c8a8", hint: "A table under an umbrella" },
+  { kind: "planter", name: "Planter", category: "street", size: [1.2, 1.1, 1.2], color: "#9c8a74", hint: "A box with a shrub" },
+  { kind: "fountain", name: "Fountain", category: "street", size: [4, 2, 4], color: "#b9b6ae", hint: "A basin with a spout" },
+  { kind: "vending", name: "Vending machine", category: "street", size: [1, 1.85, 0.8], color: "#c25b4a", hint: "Drinks and snacks" },
   { kind: "wall", name: "Wall", category: "set", size: [6, 2.8, 0.15], color: "#d8d1c4", hint: "A section of wall" },
+  { kind: "window", name: "Window wall", category: "set", size: [3, 2.8, 0.15], color: "#d8d1c4", hint: "A wall with a window in it" },
   { kind: "room", name: "Room", category: "set", size: [5, 2.8, 6], color: "#d8d1c4", hint: "Four walls, open on top" },
-  { kind: "table", name: "Table", category: "set", size: [1.6, 0.75, 0.9], color: "#8a6a4d", hint: "A dining table" },
-  { kind: "sofa", name: "Sofa", category: "set", size: [2.1, 0.85, 0.92], color: "#8b8f97", hint: "Three seater" },
-  { kind: "bed", name: "Bed", category: "set", size: [1.6, 0.55, 2.1], color: "#e9e6df", hint: "Queen" },
-  { kind: "counter", name: "Counter", category: "set", size: [2.4, 0.9, 0.62], color: "#cfc8bb", hint: "Kitchen worktop" },
   { kind: "door", name: "Doorway", category: "set", size: [1.2, 2.4, 0.15], color: "#d8d1c4", hint: "A wall with a door opening" },
   { kind: "stairs", name: "Stairs", category: "set", size: [1.2, 1.8, 3], color: "#bdb5a8", hint: "A straight flight" },
+  { kind: "table", name: "Table", category: "set", size: [1.6, 0.75, 0.9], color: "#8a6a4d", hint: "A dining table" },
+  { kind: "coffeetable", name: "Coffee table", category: "set", size: [1.1, 0.42, 0.6], color: "#8a6a4d", hint: "Low, in front of a sofa" },
+  { kind: "desk", name: "Desk", category: "set", size: [1.4, 0.75, 0.7], color: "#a08060", hint: "With a drawer unit" },
+  { kind: "chair", name: "Chair", category: "set", size: [0.46, 0.9, 0.5], color: "#8a6a4d", hint: "A dining or desk chair" },
+  { kind: "stool", name: "Bar stool", category: "set", size: [0.4, 0.75, 0.4], color: "#55585e", hint: "For a counter or a bar" },
+  { kind: "sofa", name: "Sofa", category: "set", size: [2.1, 0.85, 0.92], color: "#8b8f97", hint: "Three seater" },
+  { kind: "armchair", name: "Armchair", category: "set", size: [0.95, 0.85, 0.9], color: "#9a8f86", hint: "One seat" },
+  { kind: "bed", name: "Bed", category: "set", size: [1.6, 0.55, 2.1], color: "#e9e6df", hint: "Queen" },
+  { kind: "counter", name: "Counter", category: "set", size: [2.4, 0.9, 0.62], color: "#cfc8bb", hint: "Kitchen worktop" },
+  { kind: "fridge", name: "Fridge", category: "set", size: [0.8, 1.8, 0.75], color: "#dcdcd8", hint: "A tall refrigerator" },
+  { kind: "cabinet", name: "Dresser", category: "set", size: [1.2, 0.85, 0.5], color: "#8f7458", hint: "A chest of drawers" },
+  { kind: "bookshelf", name: "Bookshelf", category: "set", size: [1, 1.9, 0.35], color: "#8f7458", hint: "Shelves of books" },
+  { kind: "tv", name: "TV on a stand", category: "set", size: [1.6, 1.25, 0.45], color: "#3a3d44", hint: "A screen on a media unit" },
+  { kind: "lamp", name: "Floor lamp", category: "set", size: [0.45, 1.6, 0.45], color: "#d8cfb8", hint: "A pole with a shade" },
+  { kind: "plant", name: "Potted plant", category: "set", size: [0.5, 1.1, 0.5], color: "#62844a", hint: "A pot with leaves" },
+  { kind: "rug", name: "Rug", category: "set", size: [2.4, 0.01, 1.7], color: "#a86d5b", hint: "On the floor" },
   { kind: "product", name: "Product", category: "set", size: [0.08, 0.26, 0.08], color: "#4fb3a3", hint: "A bottle-sized hero product" },
   { kind: "box", name: "Box", category: "shapes", size: [1, 1, 1], color: "#c9c3b8", hint: "Stands in for anything" },
   { kind: "cylinder", name: "Cylinder", category: "shapes", size: [1, 1, 1], color: "#c9c3b8", hint: "A column or a can" },
@@ -287,6 +369,7 @@ function keyOf(raw: unknown, duration: number): Key | null {
     const g: [number, number] = [num(k.g[0], 0, 0, 1), num(k.g[1], 0, LEAN_MIN, LEAN_MAX)];
     if (g[0] > 0 || g[1] !== 0) out.g = g;
   }
+  if (typeof k.gk === "string" && k.gk !== "reach" && GESTURES.some((x) => x.id === k.gk)) out.gk = k.gk as GestureKind;
   return out;
 }
 

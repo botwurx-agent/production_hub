@@ -5,8 +5,8 @@
 // how an edit lands on the timeline lives in one place.
 import { useState } from "react";
 import {
-  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind,
-  type BlockObject, type BlockScene, type Reach, type Ease, type Environment, type Vec3,
+  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, GESTURES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind, gestureOf,
+  type BlockObject, type BlockScene, type GestureKind, type Reach, type Ease, type Environment, type Vec3,
 } from "@/lib/blocking/scene";
 import { PRESETS, type PresetId } from "@/lib/blocking/keys";
 import { BODIES } from "@/lib/previz/optics";
@@ -16,7 +16,7 @@ import type { KeyRef, Track } from "./timeline";
 import { Btn, Num, Row, Section, Seg, Select, Swatches, Vec, useOutside } from "./ui";
 
 /** `af` is the camera's aim framing at that moment (see CamKey). */
-export type Posed = { p: Vec3; r: Vec3; lens?: number; af?: [number, number]; g?: [number, number] };
+export type Posed = { p: Vec3; r: Vec3; lens?: number; af?: [number, number]; g?: [number, number]; gk?: GestureKind };
 
 export type CamPadAction =
   | "boomUp" | "boomDown" | "truckLeft" | "truckRight" | "pushIn" | "pullOut"
@@ -47,17 +47,21 @@ export type StudioApi = {
   /** Metres a person's reaching hand fell short of its target at the playhead. */
   reachGap: (id: string) => number;
   /** Keys a person's gesture at several moments: g is [reach 0..1, lean degrees]. */
-  gestureKeys: (id: string, beats: { t: number; g: [number, number] }[]) => void;
+  gestureKeys: (id: string, beats: { t: number; g: [number, number]; gk?: GestureKind }[]) => void;
 };
 
 const KIND_ICON: Record<string, string> = {
-  people: "◉", vehicles: "▭", environment: "▲", set: "▦", shapes: "◆",
+  people: "◉", vehicles: "▭", environment: "▲", nature: "♣", buildings: "▤", street: "┃", set: "▦", shapes: "◆",
 };
 
 export function Outliner({ api }: { api: StudioApi }) {
   const { scene, sel, select, canEdit } = api;
   const [adding, setAdding] = useState(false);
+  const [find, setFind] = useState("");
   const ref = useOutside(adding, () => setAdding(false));
+  const q = find.trim().toLowerCase();
+  const matches = (k: (typeof BLOCK_KINDS)[number]) => !q || `${k.name} ${k.hint} ${k.kind}`.toLowerCase().includes(q);
+  const add = (kind: string) => { api.addObject(kind); setAdding(false); setFind(""); };
   const groups = BLOCK_CATEGORIES.map((c) => ({ ...c, items: scene.objects.filter((o) => blockKind(o.kind).category === c.id) }))
     .filter((g) => g.items.length);
   return (
@@ -67,20 +71,36 @@ export function Outliner({ api }: { api: StudioApi }) {
           <Btn tone="primary" className="w-full" onClick={() => setAdding((v) => !v)}>+ Add to scene</Btn>
         )}
         {adding && (
-          <div className="absolute left-2 right-2 top-11 z-30 max-h-[70vh] overflow-y-auto rounded-[10px] border border-border bg-surface p-2 shadow-2xl">
-            {BLOCK_CATEGORIES.map((c) => (
-              <div key={c.id} className="mb-2">
-                <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-text-faint">{c.name}</p>
-                {BLOCK_KINDS.filter((k) => k.category === c.id).map((k) => (
-                  <button key={k.kind} type="button" onClick={() => { api.addObject(k.kind); setAdding(false); }}
-                    className="flex w-full items-center gap-2 rounded-[6px] px-1.5 py-1 text-left hover:bg-surface-2">
-                    <span className="h-3 w-3 shrink-0 rounded-[3px]" style={{ background: k.color }} />
-                    <span className="text-[12px] text-text">{k.name}</span>
-                    <span className="ml-auto truncate text-[10.5px] text-text-faint">{k.hint}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
+          <div className="absolute left-2 right-2 top-11 z-30 flex max-h-[70vh] flex-col rounded-[10px] border border-border bg-surface shadow-2xl">
+            <div className="border-b border-border p-2">
+              <input autoFocus value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find: bench, tree, house..."
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Escape") setAdding(false);
+                  if (e.key === "Enter") { const first = BLOCK_KINDS.find(matches); if (first) add(first.kind); }
+                }}
+                className="w-full rounded-[6px] border border-border bg-surface-2 px-2 py-1 text-[12px] text-text placeholder:text-text-faint focus:border-accent focus:outline-none" />
+            </div>
+            <div className="min-h-0 overflow-y-auto p-2">
+              {BLOCK_CATEGORIES.map((c) => {
+                const items = BLOCK_KINDS.filter((k) => k.category === c.id && matches(k));
+                if (!items.length) return null;
+                return (
+                  <div key={c.id} className="mb-2">
+                    <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-text-faint">{c.name}</p>
+                    {items.map((k) => (
+                      <button key={k.kind} type="button" onClick={() => add(k.kind)}
+                        className="flex w-full items-center gap-2 rounded-[6px] px-1.5 py-1 text-left hover:bg-surface-2">
+                        <span className="h-3 w-3 shrink-0 rounded-[3px]" style={{ background: k.color }} />
+                        <span className="shrink-0 text-[12px] text-text">{k.name}</span>
+                        <span className="ml-auto truncate text-[10.5px] text-text-faint">{k.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+              {!BLOCK_KINDS.some(matches) && <p className="px-1 py-2 text-[12px] text-text-muted">Nothing called that. A Box stands in for anything.</p>}
+            </div>
           </div>
         )}
       </div>
@@ -432,57 +452,83 @@ function GestureSection({ api, o }: { api: StudioApi; o: BlockObject }) {
   const dis = !api.canEdit;
   const reach: Reach = o.reach ?? { target: null, hand: "right", stroke: false };
   const setReach = (patch: Partial<Reach>) => api.updateObject(o.id, { reach: { ...reach, ...patch } });
-  const g = api.posed(o.id).g ?? [0, 0];
+  const posed = api.posed(o.id);
+  const g = posed.g ?? [0, 0];
+  const kind: GestureKind = posed.gk ?? "reach";
+  const spec = gestureOf(kind);
   const others = api.scene.objects.filter((x) => x.id !== o.id && x.id !== o.parent && blockKind(x.kind).category !== "environment");
-  const gap = reach.target ? api.reachGap(o.id) : 0;
+  const gap = kind === "reach" && reach.target ? api.reachGap(o.id) : 0;
   const target = reach.target ? api.scene.objects.find((x) => x.id === reach.target) : undefined;
+  const missing = spec.target === "required" && !reach.target;
+  const leanFor = (k: GestureKind) => (k === "reach" ? Math.max(g[1], 30) : g[1]);
+  // Picking a gesture keys it at the playhead. If the person is not already
+  // mid-gesture, it comes in over the 0.6 s before, so it starts here rather
+  // than creeping up from the previous key.
+  const pick = (k: GestureKind) => {
+    const t0 = api.t;
+    if (g[0] < 0.05) {
+      const beats: { t: number; g: [number, number]; gk?: GestureKind }[] = [];
+      if (t0 >= 0.6) beats.push({ t: t0 - 0.6, g: [0, g[1]], gk: k });
+      beats.push({ t: t0, g: [1, leanFor(k)], gk: k });
+      api.gestureKeys(o.id, beats);
+    } else api.writePose(o.id, { g: [g[0], g[1]], gk: k }, `gk${o.id}`);
+  };
   const beat = () => {
     const t0 = api.t;
+    const into = kind === "reach" ? 0.8 : 0.6;
     api.gestureKeys(o.id, [
-      { t: t0, g: [g[0], g[1]] },
-      { t: t0 + 0.8, g: [1, Math.max(g[1], 30)] },
-      { t: t0 + 3, g: [1, Math.max(g[1], 30)] },
-      { t: t0 + 3.8, g: [0, 0] },
+      { t: t0, g: [0, g[1]], gk: kind },
+      { t: t0 + into, g: [1, leanFor(kind)], gk: kind },
+      { t: t0 + into + 2.2, g: [1, leanFor(kind)], gk: kind },
+      { t: t0 + into + 2.8, g: [0, g[1]], gk: kind },
     ]);
-    if (!reach.stroke) setReach({ stroke: true });
+    if (kind === "reach" && !reach.stroke) setReach({ stroke: true });
   };
   return (
     <Section title="Gesture">
-      <Row label="Reach for">
-        <Select value={reach.target ?? ""} onChange={(v) => setReach({ target: v || null })} disabled={dis}>
-          <option value="">Nothing</option>
-          {others.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+      <Row label="Gesture">
+        <Select value={kind} onChange={(v) => pick(v as GestureKind)} disabled={dis}>
+          {GESTURES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
         </Select>
       </Row>
-      {reach.target && (
-        <>
-          <Row label="Hand">
-            <Seg value={reach.hand} options={[{ id: "right", name: "Right" }, { id: "left", name: "Left" }]} onChange={(v) => setReach({ hand: v })} disabled={dis} />
-          </Row>
-          <Row label="Once there">
-            <Seg value={reach.stroke ? "stroke" : "rest"} options={[{ id: "rest", name: "Rest", hint: "The hand stays put" }, { id: "stroke", name: "Stroke", hint: "Strokes back and forth, like petting" }]}
-              onChange={(v) => setReach({ stroke: v === "stroke" })} disabled={dis} />
-          </Row>
-          <Row label="Reach">
-            <Num value={g[0] * 100} step={5} min={0} max={100} suffix="%" digits={0} onChange={(v) => api.writePose(o.id, { g: [v / 100, g[1]] }, `reach${o.id}`)} disabled={dis} />
-          </Row>
-        </>
+      <p className="-mt-1 mb-2 text-[11px] leading-relaxed text-text-faint">{spec.hint}.</p>
+      {spec.target !== "none" && (
+        <Row label="Toward">
+          <Select value={reach.target ?? ""} onChange={(v) => setReach({ target: v || null })} disabled={dis}>
+            <option value="">{spec.target === "required" ? "Pick something" : "Straight ahead"}</option>
+            {others.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </Select>
+        </Row>
       )}
-      <Row label="Lean back">
-        <Num value={g[1]} step={1} min={LEAN_MIN} max={LEAN_MAX} suffix="°" digits={0} onChange={(v) => api.writePose(o.id, { g: [g[0], v] }, `lean${o.id}`)} disabled={dis} />
+      {spec.hands === 1 && (
+        <Row label="Hand">
+          <Seg value={reach.hand} options={[{ id: "right", name: "Right" }, { id: "left", name: "Left" }]} onChange={(v) => setReach({ hand: v })} disabled={dis} />
+        </Row>
+      )}
+      {kind === "reach" && reach.target && (
+        <Row label="Once there">
+          <Seg value={reach.stroke ? "stroke" : "rest"} options={[{ id: "rest", name: "Rest", hint: "The hand stays put" }, { id: "stroke", name: "Stroke", hint: "Strokes back and forth, like petting" }]}
+            onChange={(v) => setReach({ stroke: v === "stroke" })} disabled={dis} />
+        </Row>
+      )}
+      <Row label="Amount">
+        <Num value={g[0] * 100} step={5} min={0} max={100} suffix="%" digits={0} onChange={(v) => api.writePose(o.id, { g: [v / 100, g[1]], gk: kind }, `reach${o.id}`)} disabled={dis || missing} />
       </Row>
-      {reach.target && api.canEdit && (
-        <Btn className="w-full" onClick={beat}>Reach out from here, hold, and come back</Btn>
+      <Row label="Lean back">
+        <Num value={g[1]} step={1} min={LEAN_MIN} max={LEAN_MAX} suffix="°" digits={0} onChange={(v) => api.writePose(o.id, { g: [g[0], v], gk: kind }, `lean${o.id}`)} disabled={dis} />
+      </Row>
+      {api.canEdit && !missing && (
+        <Btn className="w-full" onClick={beat}>{spec.name} from here, hold, and stop</Btn>
       )}
-      {gap > 0.06 ? (
+      {missing ? (
+        <p className="text-[11px] leading-relaxed text-text-muted">Pick what to reach for (a dog, a product, a person) and the hand goes to it.</p>
+      ) : gap > 0.06 ? (
         <p className="text-[11px] leading-relaxed text-text-muted">
           The hand stops {Math.round(gap * 100)} cm short of {target?.name ?? "it"}. Lean back further, or move {o.name} closer.
         </p>
       ) : (
         <p className="text-[11px] leading-relaxed text-text-faint">
-          {reach.target
-            ? `Reach for is the same for the whole shot; Reach and Lean back are keyed at the playhead, so a key at 0% reach is hands down. Changing them only ever changes the key under the playhead (or adds one there). The upper body turns by itself to bring the hand round to ${target?.name ?? "it"}. The button keys a reach over 0.8 s, holds it 2.2 s and lets go.`
-            : "Pick something to reach for (a dog, a product, a person) and the arm goes to it. Lean back works on its own too."}
+          The gesture and its amount are keyed at the playhead, so each key can be a different gesture: wave at 2 s, the phone at 8 s. A key at 0% is the pose&apos;s own arms. Picking a gesture brings it in over the 0.6 s before the playhead; the button does it, holds 2.2 s and drops it again. Toward and Hand are the same for the whole shot.
         </p>
       )}
     </Section>
