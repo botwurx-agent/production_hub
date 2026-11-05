@@ -8179,6 +8179,28 @@ the side window to the dog, out through the windshield, ending ahead.
   says "Automatic" / "Shaped by hand" with Reset, and why when unavailable.
   The camera's own gizmo is now placed from the UNSHAKEN pose, so dragging no
   longer bakes handheld shake into a key.
+- PEOPLE CAN REACH AND LEAN (2026-11-05, operator: the passenger should raise
+  a hand, lean back and pet the dog). Figures were rigid statues, one pose
+  each. A person is now built by lib/blocking/build.ts person() with its upper
+  body in a group pivoting at the hip and each arm as fixed-length bones
+  (userData.rig, PersonRig), posed every frame by poseRig. BlockObject gained
+  `reach` {target, hand, stroke}; a Key gained `g` [reach 0..1, lean degrees,
+  back positive], absent = 0, 0, evaluated by evalGesture (straight between
+  keys under each key's ease, never a curve, so a reach cannot overshoot into
+  what it touches). Reach and lean go through writePose, the normal edit rule,
+  and insertKey carries them. The arm is a two-bone IK from the shoulder to
+  touchPoint (the top of a dog's or person's head, the top of anything else),
+  elbow out and down; while reaching the upper body TURNS by itself (up to 40
+  degrees, picked to bring that shoulder closest) and leans by the keyed lean.
+  Out of reach the arm stretches straight at it and the Gesture panel says how
+  far short (shown past 6 cm, since the hand sphere sits at the wrist).
+  "Stroke" moves the hand back and forth over the target at 0.9 Hz once the
+  reach passes 60%. The panel's one-press button keys a reach over 0.8 s with
+  30 degrees of lean, holds 2.2 s and lets go. Coast road check: the passenger
+  reaches the dog on the rear bench at 30 degrees of lean (5 cm, measured).
+  The scene builder's figures (buildFigure) are untouched. NOT BUILT: the
+  target reacting (the dog does not lift its head), reaching with both hands,
+  and pointing the head where the hand goes.
 - SEND TO PIPELINE (BUILT, 2026-11-04, no migration). Export > "Send to the
   pipeline..." opens a window with a SHOT PICKER (the project's generated
   shots, the one this scene was sent to before picked first and marked "sent

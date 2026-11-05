@@ -81,6 +81,20 @@ export function evalTrack(keys: Key[], t: number, smooth = true): Pose {
   return { p, r };
 }
 
+/**
+ * A person's gesture at time t: how far the hand has reached (0 to 1) and the
+ * lean (degrees, back positive). Eased by each key's own ease but straight
+ * between keys, never a curve: a reach that overshoots 1 would punch through
+ * whatever it is reaching for. A key without `g` counts as 0, 0.
+ */
+export function evalGesture(keys: Key[], t: number): { reach: number; lean: number } {
+  if (!keys.length || !keys.some((k) => k.g)) return { reach: 0, lean: 0 };
+  const { i, u } = locate(keys, t);
+  const at = (j: number, c: 0 | 1) => keys[j].g?.[c] ?? 0;
+  const lin = (c: 0 | 1) => (u === 0 || i + 1 >= keys.length ? at(i, c) : at(i, c) + (at(i + 1, c) - at(i, c)) * u);
+  return { reach: Math.min(1, Math.max(0, lin(0))), lean: lin(1) };
+}
+
 export type FlowOpts = { flow?: CameraFlow; easeEnds?: boolean };
 
 export function evalCamera(keys: CamKey[], t: number, smooth = true, opts: FlowOpts = {}): CamPose {

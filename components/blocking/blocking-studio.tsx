@@ -22,12 +22,12 @@ import {
   type BlockObject, type BlockScene, type CamKey, type Ease, type Key, type Vec3,
 } from "@/lib/blocking/scene";
 import {
-  aimAt, applyPreset as mergePreset, evalCamera, evalTrack, keyAt, keyHandle, lookDir, pathStats, peakSpeed, presetKeys, setKey, shakeAt, snap,
+  aimAt, applyPreset as mergePreset, evalCamera, evalGesture, evalTrack, keyAt, keyHandle, lookDir, pathStats, peakSpeed, presetKeys, setKey, shakeAt, snap,
   timecode, travel, type PresetId,
 } from "@/lib/blocking/keys";
 import {
-  aimPoint, applyEnvironment, buildObject, buildWorld, cameraGizmo, cameraMatrix, objectMatrix, poseMatrix, setFrustum, toLocal,
-  type World,
+  aimPoint, applyEnvironment, buildObject, buildWorld, cameraGizmo, cameraMatrix, objectMatrix, poseMatrix, poseRig, setFrustum, toLocal, touchPoint,
+  type PersonRig, type World,
 } from "@/lib/blocking/build";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
 import { Outliner, Properties, type CamPadAction, type Posed, type StudioApi } from "./panels";
@@ -268,7 +268,13 @@ export function BlockingStudio({
       return { p: c.p, r: c.r, lens: c.lens, af: c.af };
     }
     const o = s.objects.find((x) => x.id === track);
-    return o ? evalTrack(o.keys, at) : { p: [0, 0, 0], r: [0, 0, 0] };
+    if (!o) return { p: [0, 0, 0], r: [0, 0, 0] };
+    const base: Posed = evalTrack(o.keys, at);
+    if (o.keys.some((k) => k.g)) {
+      const gs = evalGesture(o.keys, at);
+      base.g = [gs.reach, gs.lean];
+    }
+    return base;
   };
 
   /** The edit rule (see the top of the file). */
@@ -288,7 +294,9 @@ export function BlockingStudio({
         const extra: Partial<CamKey> = af && (Math.abs(af[0]) > 1e-3 || Math.abs(af[1]) > 1e-3) ? { lens, af } : { lens, af: undefined };
         return { ...s, camera: { ...s.camera, keys: write<CamKey>(s.camera.keys, extra) } };
       }
-      return { ...s, objects: s.objects.map((o) => (o.id === track ? { ...o, keys: write<Key>(o.keys, {}) } : o)) };
+      const g = pose.g ?? cur.g;
+      const extra: Partial<Key> = g && (g[0] > 1e-4 || Math.abs(g[1]) > 1e-3) ? { g } : { g: undefined };
+      return { ...s, objects: s.objects.map((o) => (o.id === track ? { ...o, keys: write<Key>(o.keys, extra) } : o)) };
     }, coalesce);
   }, [commit]);
 
@@ -306,7 +314,7 @@ export function BlockingStudio({
         objects: s.objects.map((o) => {
           if (o.id !== track) return o;
           const ex = keyAt(o.keys, at, s.fps);
-          return { ...o, keys: setKey(o.keys, { t: at, p: cur.p, r: cur.r, ease: ex?.ease ?? "smooth" }, s.fps) };
+          return { ...o, keys: setKey(o.keys, { t: at, p: cur.p, r: cur.r, ...(cur.g ? { g: cur.g } : {}), ease: ex?.ease ?? "smooth" }, s.fps) };
         }),
       };
     });
@@ -484,6 +492,24 @@ export function BlockingStudio({
         return { ...s, objects: s.objects.map((o) => (o.id === k.track ? { ...o, keys: set(o.keys) } : o)) };
       });
     },
+    reachGap: (id) => {
+      const rig = eng.current?.meshes.get(id)?.g.userData.rig as PersonRig | undefined;
+      return rig ? rig.gap : 0;
+    },
+    gestureKeys: (id, beats) => commit((s) => ({
+      ...s,
+      objects: s.objects.map((o) => {
+        if (o.id !== id) return o;
+        let keys = o.keys;
+        for (const b of beats) {
+          const at = snap(Math.min(s.duration, Math.max(0, b.t)), s.fps);
+          const cur = evalTrack(keys, at);
+          const ex = keyAt(keys, at, s.fps);
+          keys = setKey(keys, { t: at, p: cur.p, r: cur.r, g: b.g, ease: ex?.ease ?? "smooth" }, s.fps);
+        }
+        return { ...o, keys };
+      }),
+    })),
     speedOf: (track) => {
       if (track === "camera") {
         const cam = scene.camera;
@@ -723,6 +749,16 @@ export function BlockingStudio({
       rec.g.visible = !o.hidden;
       rec.g.matrix.copy(objectMatrix(m, o.id, at));
       rec.g.matrixWorldNeedsUpdate = true;
+      const rig = rec.g.userData.rig as PersonRig | undefined;
+      if (rig) {
+        const gs = evalGesture(o.keys, at);
+        const tgtObj = o.reach?.target ? m.get(o.reach.target) : undefined;
+        const target = tgtObj && gs.reach > 0 ? touchPoint(m, tgtObj, at).applyMatrix4(rec.g.matrix.clone().invert()) : null;
+        poseRig(rig, {
+          reach: gs.reach, lean: gs.lean, hand: o.reach?.hand ?? "right", target,
+          stroke: o.reach?.stroke && gs.reach > 0.6 ? at : null,
+        });
+      }
     }
     for (const [id, rec] of e.meshes) if (!seen.has(id)) { e.world.objects.remove(rec.g); e.meshes.delete(id); }
     // Environment

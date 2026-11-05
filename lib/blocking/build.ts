@@ -7,7 +7,7 @@
 // shading, each subject its own colour, which is what lets a video model tell
 // the subjects apart in a reference clip.
 import * as THREE from "three";
-import { buildFigure } from "@/lib/previz/scene-build";
+import { hipY as poseHipY, poseDef, shoulderY as poseShoulderY, SHIN } from "@/lib/previz/poses";
 import type { BlockObject, Environment, Look, Vec3 } from "./scene";
 import { evalTrack } from "./keys";
 
@@ -132,20 +132,209 @@ function dog(o: BlockObject, paint: Paint) {
   return g;
 }
 
+/* ---------- people: a figure whose arm and upper body move ---------- */
+
+function capsuleMesh(radius: number, length: number, m: THREE.Material) {
+  return part(new THREE.CapsuleGeometry(radius, Math.max(length, 0.001), 5, 12), m);
+}
+
+/** Lays a capsule of fixed length along a to b. */
+function spanLimb(mesh: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3) {
+  mesh.position.copy(a).lerp(b, 0.5);
+  const d = b.clone().sub(a);
+  if (d.lengthSq() > 1e-10) mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+}
+
+type ArmRig = {
+  side: -1 | 1;
+  upper: THREE.Mesh;
+  fore: THREE.Mesh;
+  hand: THREE.Mesh;
+  /** Shoulder, rest elbow and rest wrist, in the upper body's frame. */
+  sh: THREE.Vector3;
+  el: THREE.Vector3;
+  wr: THREE.Vector3;
+  l1: number;
+  l2: number;
+};
+
+export type PersonRig = {
+  /** Pivots at the hip: leaning and turning move everything above it. */
+  upperBody: THREE.Group;
+  hipY: number;
+  H: number;
+  arms: [ArmRig, ArmRig];
+  /** How far short of the target the hand stopped, metres (0 when it got there). */
+  gap: number;
+};
+
+/**
+ * A stylised figure at true proportions (the scene builder's, see
+ * lib/previz/scene-build.ts buildFigure), built so its upper body can lean and
+ * turn at the hip and either arm can reach for a point.
+ */
 function person(o: BlockObject, paint: Paint) {
-  const fig = buildFigure({
-    id: o.id, name: o.name, heightM: o.size[1], pose: (o.pose ?? "standing") as never,
-    x: 0, z: 0, facing: 0, top: o.color, bottom: o.color,
-  });
-  const m = paint(1);
-  const m2 = paint(0.8);
-  let i = 0;
-  fig.traverse((c) => {
-    if (c instanceof THREE.Mesh) c.material = i++ % 3 === 0 ? m2 : m;
-  });
-  fig.position.set(0, 0, 0);
-  fig.rotation.set(0, 0, 0);
-  return fig;
+  const H = o.size[1];
+  const pose = poseDef(o.pose);
+  const hipY = poseHipY(pose, H);
+  const shY = poseShoulderY(pose, H);
+  const g = new THREE.Group();
+  const legs = paint(0.8);
+  const body = paint(1);
+  const skin = paint(1.12);
+  const at = (p: [number, number, number], yBase = 0) => new THREE.Vector3(p[0] * H, yBase + p[1] * H, p[2] * H);
+
+  // Legs stay where the pose puts them.
+  const legR = 0.034 * H;
+  for (const i of [0, 1] as const) {
+    const side = i === 0 ? -1 : 1;
+    const hip = new THREE.Vector3(side * 0.055 * H, hipY, 0);
+    const knee = at(pose.knee[i]);
+    let ankle = at(pose.ankle[i]);
+    if (pose.seatM !== undefined) {
+      knee.y = hipY;
+      const L = SHIN * H;
+      const ground = 0.04 * H;
+      const drop = knee.y - ground;
+      if (drop >= L) ankle = new THREE.Vector3(knee.x, knee.y - L, knee.z + 0.02 * H);
+      else ankle = new THREE.Vector3(knee.x, ground, knee.z + Math.sqrt(Math.max(0, L * L - drop * drop)));
+    }
+    const thigh = capsuleMesh(legR, hip.distanceTo(knee), legs);
+    spanLimb(thigh, hip, knee);
+    const shin = capsuleMesh(legR * 0.85, knee.distanceTo(ankle), legs);
+    spanLimb(shin, knee, ankle);
+    g.add(thigh, shin, box(0.06 * H, 0.05, 0.15 * H, legs, ankle.x, Math.max(0.025, ankle.y - 0.045), ankle.z + 0.04 * H));
+  }
+
+  // Everything above the hip, in a group pivoting at the hip.
+  const up = new THREE.Group();
+  up.position.set(0, hipY, 0);
+  g.add(up);
+  const rel = (v: THREE.Vector3) => v.sub(new THREE.Vector3(0, hipY, 0));
+  const torso = capsuleMesh(0.1 * H, 0.17 * H, body);
+  torso.scale.set(1.15, 1, 0.68);
+  torso.position.set(0, (shY - hipY) / 2 + 0.01 * H, 0);
+  up.add(torso);
+  const neck = capsuleMesh(0.028 * H, 0.05 * H, skin);
+  neck.position.set(0, shY - hipY + 0.025 * H, 0);
+  up.add(neck);
+  const head = part(new THREE.SphereGeometry(0.058 * H, 18, 14), skin, 0, shY - hipY + 0.105 * H, 0.004 * H);
+  head.scale.set(0.9, 1.12, 1);
+  up.add(head);
+
+  const arms = ([0, 1] as const).map((i) => {
+    const side = (i === 0 ? -1 : 1) as -1 | 1;
+    const sh = rel(new THREE.Vector3(side * 0.13 * H, shY - 0.02 * H, 0));
+    const el = rel(at(pose.elbow[i], shY));
+    const wr = rel(at(pose.wrist[i], shY));
+    const l1 = sh.distanceTo(el);
+    const l2 = el.distanceTo(wr);
+    const upper = capsuleMesh(0.026 * H, l1, body);
+    const fore = capsuleMesh(0.022 * H, l2, skin);
+    const hand = part(new THREE.SphereGeometry(0.027 * H, 10, 8), skin);
+    hand.scale.set(0.8, 1.15, 0.8);
+    up.add(upper, fore, hand);
+    const arm: ArmRig = { side, upper, fore, hand, sh, el, wr, l1, l2 };
+    placeArm(arm, el, wr);
+    return arm;
+  }) as [ArmRig, ArmRig];
+  const rig: PersonRig = { upperBody: up, hipY, H, arms, gap: 0 };
+  g.userData.rig = rig;
+  return g;
+}
+
+function placeArm(a: ArmRig, el: THREE.Vector3, wr: THREE.Vector3) {
+  spanLimb(a.upper, a.sh, el);
+  spanLimb(a.fore, el, wr);
+  a.hand.position.copy(wr);
+}
+
+const twoBone = (a: ArmRig, goal: THREE.Vector3, pole: THREE.Vector3) => {
+  const toGoal = goal.clone().sub(a.sh);
+  const reachLen = a.l1 + a.l2;
+  const dist = toGoal.length();
+  const dir = dist > 1e-6 ? toGoal.clone().divideScalar(dist) : new THREE.Vector3(0, -1, 0);
+  const d = Math.min(Math.max(dist, Math.abs(a.l1 - a.l2) + 1e-3), reachLen - 1e-4);
+  const along = (a.l1 * a.l1 + d * d - a.l2 * a.l2) / (2 * d);
+  const h = Math.sqrt(Math.max(0, a.l1 * a.l1 - along * along));
+  const perp = pole.clone().sub(dir.clone().multiplyScalar(pole.dot(dir)));
+  if (perp.lengthSq() < 1e-8) perp.set(0, -1, 0);
+  perp.normalize();
+  const el = a.sh.clone().add(dir.clone().multiplyScalar(along)).add(perp.multiplyScalar(h));
+  const wr = a.sh.clone().add(dir.clone().multiplyScalar(d));
+  return { el, wr, gap: Math.max(0, dist - reachLen) };
+};
+
+export type GestureState = {
+  reach: number;
+  lean: number;
+  hand: "right" | "left";
+  /** The point reached for, in the person's own frame; null for none. */
+  target: THREE.Vector3 | null;
+  /** Seconds, for the stroke; null when not stroking. */
+  stroke: number | null;
+};
+
+/**
+ * Poses a person's upper body and arms. The body leans back by `lean` and,
+ * while reaching, turns at the hip so the reaching shoulder comes round
+ * toward the target (as far as a seated person really twists, about 40
+ * degrees). The arm is solved as two fixed-length bones from the shoulder to
+ * the target, elbow out and down; out of reach it stretches straight at it.
+ */
+export function poseRig(rig: PersonRig, s: GestureState) {
+  const up = rig.upperBody;
+  const reach = s.target ? s.reach : 0;
+  const leanRad = rad(s.lean);
+  const arm = rig.arms[s.hand === "right" ? 0 : 1];
+  let twist = 0;
+  if (reach > 0 && s.target) {
+    // Try a handful of turns and keep whichever brings the shoulder closest.
+    let best = Infinity;
+    for (const deg of [-40, -30, -20, -10, 0, 10, 20, 30, 40]) {
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-leanRad, rad(deg * reach), 0, "YXZ"));
+      const sw = arm.sh.clone().applyQuaternion(q).add(up.position);
+      const d = sw.distanceTo(s.target) + Math.abs(deg) * 0.0004;
+      if (d < best) { best = d; twist = rad(deg * reach); }
+    }
+  }
+  up.rotation.set(-leanRad, twist, 0, "YXZ");
+  up.updateMatrix();
+  rig.gap = 0;
+  for (const a of rig.arms) {
+    if (a !== arm || reach <= 0 || !s.target) { placeArm(a, a.el, a.wr); continue; }
+    const goal = s.target.clone().applyMatrix4(up.matrix.clone().invert());
+    if (s.stroke !== null) {
+      // A slow stroke across the top: back and forth along the line from the
+      // shoulder to the target, lifting a little on the way back.
+      const ph = s.stroke * Math.PI * 2 * 0.9;
+      const flat = goal.clone().sub(a.sh).setY(0);
+      if (flat.lengthSq() > 1e-6) flat.normalize();
+      goal.add(flat.multiplyScalar(Math.sin(ph) * 0.05 * reach)).add(new THREE.Vector3(0, (1 - Math.cos(ph)) * 0.008 * reach, 0));
+    }
+    const target = a.wr.clone().lerp(goal, reach);
+    // Elbow: down and out from the body.
+    const pole = new THREE.Vector3(a.side * 1, -0.7, 0.15);
+    const sol = twoBone(a, target, pole);
+    placeArm(a, sol.el, sol.wr);
+    rig.gap = reach > 0.95 ? sol.gap : 0;
+  }
+}
+
+/**
+ * Where a hand lands when it reaches for an object, in world coordinates: the
+ * top of the head for a person or a dog (just above it, so the hand rests on
+ * it rather than in it), the top of anything else.
+ */
+export function touchPoint(objs: Map<string, BlockObject>, o: BlockObject, t: number): THREE.Vector3 {
+  const [, H, D] = o.size;
+  let local: THREE.Vector3;
+  if (o.kind === "dog") local = o.pose === "seated" ? new THREE.Vector3(0, H * 0.93, D * 0.1) : new THREE.Vector3(0, H * 0.97, D * 0.36);
+  else if (o.kind === "person" || o.kind === "child") {
+    const p = poseDef(o.pose);
+    local = new THREE.Vector3(0, poseShoulderY(p, H) + 0.18 * H, 0);
+  } else local = new THREE.Vector3(0, H + 0.02, 0);
+  return local.applyMatrix4(objectMatrix(objs, o.id, t));
 }
 
 function bike(o: BlockObject, paint: Paint) {

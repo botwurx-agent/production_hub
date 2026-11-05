@@ -24,7 +24,12 @@ export const EASES: { id: Ease; name: string; hint: string }[] = [
 ];
 
 /** A transform at a moment. `r` is yaw, pitch, roll. */
-export type Key = { t: number; p: Vec3; r: Vec3; ease: Ease };
+/**
+ * `g` is a person's gesture at this key: [reach, lean]. Reach is 0 to 1, how
+ * far the hand has gone from its pose toward the object the person reaches
+ * for (BlockObject.reach); lean is degrees, back positive. Absent means 0, 0.
+ */
+export type Key = { t: number; p: Vec3; r: Vec3; ease: Ease; g?: [number, number] };
 /**
  * A camera key also carries the lens, and `af`: how far the subject sits off
  * centre at this key while the camera is kept aimed (yaw, pitch degrees). It
@@ -54,7 +59,17 @@ export type BlockObject = {
   hidden?: boolean;
   /** Vehicles: which seating layout is drawn (an SUV with two or three rows). */
   seats?: string;
+  /**
+   * People: what one hand reaches for (another object's id: a dog's head, a
+   * product, a shoulder), with which hand, and whether it strokes once there.
+   * How far it gets at each moment is keyed (Key.g).
+   */
+  reach?: Reach;
 };
+
+export type Reach = { target: string | null; hand: "right" | "left"; stroke: boolean };
+export const LEAN_MIN = -25;
+export const LEAN_MAX = 45;
 
 export type Shake = { amount: number; speed: number };
 
@@ -260,10 +275,19 @@ const str = (v: unknown, d: string, max = 120) => (typeof v === "string" ? v.sli
 const hex = (v: unknown, d: string) => (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : d);
 const ease = (v: unknown): Ease => (EASES.some((e) => e.id === v) ? (v as Ease) : "smooth");
 
+function reachOf(r: Record<string, unknown>): Reach {
+  return { target: typeof r.target === "string" ? r.target.slice(0, 60) : null, hand: r.hand === "left" ? "left" : "right", stroke: r.stroke === true };
+}
+
 function keyOf(raw: unknown, duration: number): Key | null {
   if (!raw || typeof raw !== "object") return null;
   const k = raw as Record<string, unknown>;
-  return { t: num(k.t, 0, 0, duration), p: vec(k.p, [0, 0, 0]), r: vec(k.r, [0, 0, 0], -36000, 36000), ease: ease(k.ease) };
+  const out: Key = { t: num(k.t, 0, 0, duration), p: vec(k.p, [0, 0, 0]), r: vec(k.r, [0, 0, 0], -36000, 36000), ease: ease(k.ease) };
+  if (Array.isArray(k.g)) {
+    const g: [number, number] = [num(k.g[0], 0, 0, 1), num(k.g[1], 0, LEAN_MIN, LEAN_MAX)];
+    if (g[0] > 0 || g[1] !== 0) out.g = g;
+  }
+  return out;
 }
 
 /** Keys in time order, one per frame at most (a later duplicate wins). */
@@ -323,6 +347,7 @@ export function asBlockScene(raw: unknown): BlockScene | null {
       seats: bk.seats ? (bk.seats.some((x) => x.id === r.seats) ? (r.seats as string) : bk.seats[0].id) : undefined,
       parent: typeof r.parent === "string" ? r.parent : null,
       hidden: r.hidden === true,
+      reach: (kind === "person" || kind === "child") && r.reach && typeof r.reach === "object" ? reachOf(r.reach as Record<string, unknown>) : undefined,
     });
   }
   // A parent must exist and must not lead back round to the object itself.
@@ -332,6 +357,7 @@ export function asBlockScene(raw: unknown): BlockScene | null {
     const seen = new Set([o.id]);
     while (p && !seen.has(p.id)) { seen.add(p.id); p = p.parent ? byId.get(p.parent) : undefined; }
     if (!o.parent || !byId.has(o.parent) || p) o.parent = null;
+    if (o.reach?.target && (o.reach.target === o.id || !byId.has(o.reach.target))) o.reach = { ...o.reach, target: null };
   }
 
   const camRaw = (s.camera ?? {}) as Record<string, unknown>;

@@ -5,8 +5,8 @@
 // how an edit lands on the timeline lives in one place.
 import { useState } from "react";
 import {
-  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, LOOKS, SUBJECT_COLORS, blockKind,
-  type BlockScene, type Ease, type Environment, type Vec3,
+  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind,
+  type BlockObject, type BlockScene, type Reach, type Ease, type Environment, type Vec3,
 } from "@/lib/blocking/scene";
 import { PRESETS, type PresetId } from "@/lib/blocking/keys";
 import { BODIES } from "@/lib/previz/optics";
@@ -16,7 +16,7 @@ import type { KeyRef, Track } from "./timeline";
 import { Btn, Num, Row, Section, Seg, Select, Swatches, Vec, useOutside } from "./ui";
 
 /** `af` is the camera's aim framing at that moment (see CamKey). */
-export type Posed = { p: Vec3; r: Vec3; lens?: number; af?: [number, number] };
+export type Posed = { p: Vec3; r: Vec3; lens?: number; af?: [number, number]; g?: [number, number] };
 
 export type CamPadAction =
   | "boomUp" | "boomDown" | "truckLeft" | "truckRight" | "pushIn" | "pullOut"
@@ -44,6 +44,10 @@ export type StudioApi = {
   selectedKey: KeyRef | null;
   setKeyEase: (e: Ease) => void;
   speedOf: (track: Track) => { peak: number; travel: number };
+  /** Metres a person's reaching hand fell short of its target at the playhead. */
+  reachGap: (id: string) => number;
+  /** Keys a person's gesture at several moments: g is [reach 0..1, lean degrees]. */
+  gestureKeys: (id: string, beats: { t: number; g: [number, number] }[]) => void;
 };
 
 const KIND_ICON: Record<string, string> = {
@@ -406,6 +410,7 @@ function ObjectPanel({ api, id }: { api: StudioApi; id: string }) {
       </Section>
       <KeyPanel api={api} track={o.id} />
       <TransformSection api={api} track={o.id} />
+      {(o.kind === "person" || o.kind === "child") && <GestureSection api={api} o={o} />}
       {(vehicle || walker) && canEdit && (
         <Section title={vehicle ? "Drive" : "Walk"}>
           <Row label="Speed">
@@ -420,6 +425,67 @@ function ObjectPanel({ api, id }: { api: StudioApi; id: string }) {
         </Section>
       )}
     </div>
+  );
+}
+
+function GestureSection({ api, o }: { api: StudioApi; o: BlockObject }) {
+  const dis = !api.canEdit;
+  const reach: Reach = o.reach ?? { target: null, hand: "right", stroke: false };
+  const setReach = (patch: Partial<Reach>) => api.updateObject(o.id, { reach: { ...reach, ...patch } });
+  const g = api.posed(o.id).g ?? [0, 0];
+  const others = api.scene.objects.filter((x) => x.id !== o.id && x.id !== o.parent && blockKind(x.kind).category !== "environment");
+  const gap = reach.target ? api.reachGap(o.id) : 0;
+  const target = reach.target ? api.scene.objects.find((x) => x.id === reach.target) : undefined;
+  const beat = () => {
+    const t0 = api.t;
+    api.gestureKeys(o.id, [
+      { t: t0, g: [g[0], g[1]] },
+      { t: t0 + 0.8, g: [1, Math.max(g[1], 30)] },
+      { t: t0 + 3, g: [1, Math.max(g[1], 30)] },
+      { t: t0 + 3.8, g: [0, 0] },
+    ]);
+    if (!reach.stroke) setReach({ stroke: true });
+  };
+  return (
+    <Section title="Gesture">
+      <Row label="Reach for">
+        <Select value={reach.target ?? ""} onChange={(v) => setReach({ target: v || null })} disabled={dis}>
+          <option value="">Nothing</option>
+          {others.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </Select>
+      </Row>
+      {reach.target && (
+        <>
+          <Row label="Hand">
+            <Seg value={reach.hand} options={[{ id: "right", name: "Right" }, { id: "left", name: "Left" }]} onChange={(v) => setReach({ hand: v })} disabled={dis} />
+          </Row>
+          <Row label="Once there">
+            <Seg value={reach.stroke ? "stroke" : "rest"} options={[{ id: "rest", name: "Rest", hint: "The hand stays put" }, { id: "stroke", name: "Stroke", hint: "Strokes back and forth, like petting" }]}
+              onChange={(v) => setReach({ stroke: v === "stroke" })} disabled={dis} />
+          </Row>
+          <Row label="Reach">
+            <Num value={g[0] * 100} step={5} min={0} max={100} suffix="%" digits={0} onChange={(v) => api.writePose(o.id, { g: [v / 100, g[1]] }, `reach${o.id}`)} disabled={dis} />
+          </Row>
+        </>
+      )}
+      <Row label="Lean back">
+        <Num value={g[1]} step={1} min={LEAN_MIN} max={LEAN_MAX} suffix="°" digits={0} onChange={(v) => api.writePose(o.id, { g: [g[0], v] }, `lean${o.id}`)} disabled={dis} />
+      </Row>
+      {reach.target && api.canEdit && (
+        <Btn className="w-full" onClick={beat}>Reach out from here, hold, and come back</Btn>
+      )}
+      {gap > 0.06 ? (
+        <p className="text-[11px] leading-relaxed text-text-muted">
+          The hand stops {Math.round(gap * 100)} cm short of {target?.name ?? "it"}. Lean back further, or move {o.name} closer.
+        </p>
+      ) : (
+        <p className="text-[11px] leading-relaxed text-text-faint">
+          {reach.target
+            ? `Reach and lean are keyed like position: change them at the playhead and they key there. The upper body turns by itself to bring the hand round to ${target?.name ?? "it"}. The button keys a reach over 0.8 s, holds it 2.2 s and lets go.`
+            : "Pick something to reach for (a dog, a product, a person) and the arm goes to it. Lean back works on its own too."}
+        </p>
+      )}
+    </Section>
   );
 }
 
