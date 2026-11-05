@@ -2643,7 +2643,11 @@ filling in on the right, drawn in tokens rather than imitating the 3D view):
 the site until this; the chapter covers the tool and the describe-it route
 together. Runner's "bring your own Claude or ChatGPT" block gained a line, and
 each page's tick grid one item. Claims hold to the rule: the tools only ADD, and
-the copy says the producer checks and adjusts in Studio Flows. GOTCHA hit:
+the copy says the producer checks and adjusts in Studio Flows. PRICING
+(operator, same day): both are STUDIO AND UP, two TEAM rows in the Visualize
+band (shot blocking; describing a scene to your own Claude or ChatGPT) and the
+Studio card's scene builder point now names shot blocking plus a new line for
+assistant-built scenes. Like every tier line, nothing enforces it. GOTCHA hit:
 `arrive()` returns a transform, so it overrides any rotate() on the same
 element; rotate an INNER element.
 

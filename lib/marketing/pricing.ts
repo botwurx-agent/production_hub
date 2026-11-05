@@ -99,7 +99,8 @@ export const PLANS: Plan[] = [
       "600 Runner turns a month",
       "Budget, cost ledger and margin",
       "Clients, deals and the CRM timeline",
-      "Scene builder: 3D previz and the phone viewfinder",
+      "Scene builder, shot blocking and the phone viewfinder",
+      "3D scenes laid out by your own Claude or ChatGPT",
     ],
   },
   {
@@ -194,6 +195,8 @@ export const COMPARE: CompareBand[] = [
       { label: "Moodboards and freeform boards", cells: ALL },
       { label: "Scene builder: 3D previz with real cameras, lenses and lights", cells: TEAM },
       { label: "Phone viewfinder and location stills", cells: TEAM },
+      { label: "Shot blocking: a 3D set and camera move, recorded as the motion reference for a take", cells: TEAM },
+      { label: "Describe a scene builder setup or a blocking scene to your own Claude or ChatGPT, and it lays it out", cells: TEAM },
       { label: "Read a PDF treatment into a shot list or storyboard", cells: ALL },
       { label: "AI pipeline: script, sequence and shot cockpit", cells: ALL },
       { label: "Keyboard-first triage of a generated batch", cells: ALL },
