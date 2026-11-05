@@ -8198,6 +8198,14 @@ the side window to the dog, out through the windshield, ending ahead.
   reach passes 60%. The panel's one-press button keys a reach over 0.8 s with
   30 degrees of lean, holds 2.2 s and lets go. Coast road check: the passenger
   reaches the dog on the rear bench at 30 degrees of lean (5 cm, measured).
+  A GESTURE ALWAYS KEYS AT THE PLAYHEAD (fixed 2026-11-05, operator: setting
+  a reach at 8s also changed the 0s key). The one-key rule ("a change to
+  something with one key just moves it") is right for placement and wrong for
+  an action in time: with the passenger on a single key, a reach set at 8s
+  rewrote that 0s key, so the shot opened mid-reach and the key added after
+  copied it. writePose now keys at the playhead whenever the change is gesture
+  only. "Reach for" (target, hand, stroke) stays per person; a key at 0% reach
+  is hands down.
   The scene builder's figures (buildFigure) are untouched. NOT BUILT: the
   target reacting (the dog does not lift its head), reaching with both hands,
   and pointing the head where the hand goes.

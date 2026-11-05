@@ -285,7 +285,12 @@ export function BlockingStudio({
       const write = <K extends Key>(keys: K[], extra: Partial<K>): K[] => {
         const existing = keyAt(keys, at, s.fps);
         const merged = { ...(existing ?? { ease: "smooth" as Ease }), t: existing?.t ?? at, p: pose.p ?? cur.p, r: pose.r ?? cur.r, ...extra } as K;
-        if (keys.length >= 2 || autoRef.current || existing) return setKey(keys, merged, s.fps);
+        // A gesture is an action at a moment, not a placement: changing reach
+        // or lean always keys at the playhead, even when the person has only
+        // one key, or the gesture lands on that key (often at 0s) and the whole
+        // shot starts mid-reach.
+        const gestureOnly = !!pose.g && !pose.p && !pose.r;
+        if (keys.length >= 2 || autoRef.current || existing || gestureOnly) return setKey(keys, merged, s.fps);
         return [{ ...keys[0], p: merged.p, r: merged.r, ...extra }];
       };
       if (track === "camera") {

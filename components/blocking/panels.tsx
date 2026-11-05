@@ -481,7 +481,7 @@ function GestureSection({ api, o }: { api: StudioApi; o: BlockObject }) {
       ) : (
         <p className="text-[11px] leading-relaxed text-text-faint">
           {reach.target
-            ? `Reach and lean are keyed like position: change them at the playhead and they key there. The upper body turns by itself to bring the hand round to ${target?.name ?? "it"}. The button keys a reach over 0.8 s, holds it 2.2 s and lets go.`
+            ? `Reach for is the same for the whole shot; Reach and Lean back are keyed at the playhead, so a key at 0% reach is hands down. Changing them only ever changes the key under the playhead (or adds one there). The upper body turns by itself to bring the hand round to ${target?.name ?? "it"}. The button keys a reach over 0.8 s, holds it 2.2 s and lets go.`
             : "Pick something to reach for (a dog, a product, a person) and the arm goes to it. Lean back works on its own too."}
         </p>
       )}
