@@ -2633,6 +2633,20 @@ and only then decide whether Runner goes. Nothing about Runner was removed.
   built (verified in Chromium: the wide clear of every light, the pour shot on
   the glass with a Fisher push). NOT RUN against a real host.
 
+### The connector's scene tools on the website (2026-11-05) — BUILT
+Operator: "add these to the website as features" (create_blocking_scene and
+create_scene_setup). Two new chapters with their own animated scenes
+(components/marketing/scenes-assistant.tsx, a chat on the left, a TOP-DOWN plan
+filling in on the right, drawn in tokens rather than imitating the 3D view):
+"Describe it" on /previz-software (scene `pv-assistant`) and "Shot blocking" on
+/ai-video-production (scene `ai-blocking`). Shot blocking itself had NO place on
+the site until this; the chapter covers the tool and the describe-it route
+together. Runner's "bring your own Claude or ChatGPT" block gained a line, and
+each page's tick grid one item. Claims hold to the rule: the tools only ADD, and
+the copy says the producer checks and adjusts in Studio Flows. GOTCHA hit:
+`arrive()` returns a transform, so it overrides any rotate() on the same
+element; rotate an INNER element.
+
 ### Deliverables replaces "Delivery & billing" (migration 0125) — BUILT
 Operator, 2026-10-20: the page should be called Deliverables, the billing
 status block and the per-deliverable rate "don't serve a purpose", and the

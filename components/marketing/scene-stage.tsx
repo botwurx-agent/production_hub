@@ -83,6 +83,7 @@ import {
   MoodboardOrganizeScene,
   MoodboardReviewScene,
 } from "./scenes-moodboard";
+import { AS_BLOCK_MS, AS_SCENE_MS, AssistantBlockingScene, AssistantSceneScene } from "./scenes-assistant";
 import { PV_CAM_MS, PV_FINDER_MS, PV_HERO_MS, PV_LIGHT_MS, PV_MOVE_MS, PV_SET_MS, PrevizCameraScene, PrevizFinderScene, PrevizHeroScene, PrevizLightScene, PrevizMoveScene, PrevizSetScene } from "./scenes-previz";
 import { MOOD_MS, MoodboardScene, PIPELINE_MS, PipelineScene } from "./scenes-more";
 import { DEAL_MS, DealScene } from "./scenes-deal";
@@ -181,6 +182,8 @@ const SCENES = {
   "pv-set": { ms: PV_SET_MS, C: PrevizSetScene, label: "Set", hue: "orange" },
   "pv-move": { ms: PV_MOVE_MS, C: PrevizMoveScene, label: "Moves", hue: "orange" },
   "pv-finder": { ms: PV_FINDER_MS, C: PrevizFinderScene, label: "Viewfinder", hue: "orange" },
+  "pv-assistant": { ms: AS_SCENE_MS, C: AssistantSceneScene, label: "Assistant", hue: "orange" },
+  "ai-blocking": { ms: AS_BLOCK_MS, C: AssistantBlockingScene, label: "Blocking", hue: "purple" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;

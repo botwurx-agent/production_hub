@@ -593,6 +593,7 @@ export const FEATURES: FeatureDef[] = [
       { t: "Zebras", d: "See what clips at the stop and ISO you have set." },
       { t: "Your own models", d: "Import GLB, OBJ or STL, including a LiDAR scan of a real room at true size." },
       { t: "View-only for reviewers", d: "Anyone with review access to the job can look through every camera and change nothing." },
+      { t: "Built from a description", d: "A connected Claude or ChatGPT can lay out a new setup for you to check." },
     ],
     diff: {
       eyebrow: "The difference",
@@ -1274,6 +1275,7 @@ export const FEATURES: FeatureDef[] = [
       { t: "Per-shot review", d: "The pin canvas on frames, the timecode scrubber on takes." },
       { t: "Hybrid jobs", d: "Generated and live-action shots share one sequence; method is per shot." },
       { t: "Costs tracked", d: "Spend per generation recorded, visible to the studio only." },
+      { t: "Shot blocking", d: "A low-poly 3D set and camera move, recorded as the motion reference for a take." },
     ],
     diff: {
       eyebrow: "The difference",
@@ -1343,6 +1345,7 @@ export const FEATURES: FeatureDef[] = [
           "A private link from Settings adds Studio Flows as a connector in Claude or ChatGPT",
           "Ask where a job stands, what is still owed, or which client is slow to sign off",
           "It can build moodboards and storyboards, with images it generated or found",
+          "It can lay out a 3D scene builder setup or a shot blocking scene from a description",
           "It only ever adds, never changes or deletes, and the link turns off in one press",
         ],
       },
