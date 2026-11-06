@@ -22,7 +22,7 @@ import {
   type BlockObject, type BlockScene, type CamKey, type Ease, type Key, type Vec3,
 } from "@/lib/blocking/scene";
 import {
-  aimAt, applyPreset as mergePreset, evalCamera, evalGesture, evalTrack, keyAt, keyHandle, lookDir, pathStats, peakSpeed, presetKeys, setKey, snap,
+  aimAt, applyPreset as mergePreset, subjectsAt, evalCamera, evalGesture, evalTrack, keyAt, keyHandle, lookDir, pathStats, peakSpeed, presetKeys, setKey, snap,
   timecode, travel, type PresetId,
 } from "@/lib/blocking/keys";
 import {
@@ -266,12 +266,41 @@ export function BlockingStudio({
     const c = evalCamera(cam.keys, at, cam.path === "smooth", { flow: cam.flow, easeEnds: cam.easeEnds });
     // On a tripod the camera stays where the shot starts: it turns, it does not travel.
     if (holdsPosition(cam.rig)) c.p = evalCamera(cam.keys, 0, cam.path === "smooth", { flow: cam.flow, easeEnds: cam.easeEnds }).p;
-    const o = cam.aim.target ? m.get(cam.aim.target) : undefined;
-    if (!o) return c;
-    const w = aimPoint(m, o, at);
-    if (cam.parent && m.get(cam.parent)) w.applyMatrix4(objectMatrix(m, cam.parent, at).clone().invert());
-    const a = aimAt(c.p, [w.x, w.y, w.z]);
-    return { ...c, r: [a.yaw + c.af[0] + cam.aim.frame[0], Math.max(-89, Math.min(89, a.pitch + c.af[1] + cam.aim.frame[1])), c.r[2]] };
+    // Each key can name its own subject; between two that differ the camera
+    // pans from one to the other.
+    const sub = subjectsAt(cam.keys, at, cam.aim.target);
+    const pointOf = (id: string | null) => {
+      const o = id ? m.get(id) : undefined;
+      if (!o) return null;
+      const w = aimPoint(m, o, at);
+      if (cam.parent && m.get(cam.parent)) w.applyMatrix4(objectMatrix(m, cam.parent, at).clone().invert());
+      return [w.x, w.y, w.z] as Vec3;
+    };
+    const pa = pointOf(sub.a);
+    const pb = sub.b === sub.a ? pa : pointOf(sub.b);
+    if (!pa && !pb) return c;
+    let yaw: number;
+    let pitch: number;
+    if (pa && pb) {
+      // Both are subjects: the look point travels from one to the other, so
+      // the pan sweeps across the space between them rather than spinning.
+      const a = aimAt(c.p, [0, 1, 2].map((i) => pa[i] + (pb[i] - pa[i]) * sub.u) as Vec3);
+      yaw = a.yaw;
+      pitch = a.pitch;
+    } else {
+      // One side is the keys' own angle: turn between it and the subject.
+      const a = aimAt(c.p, (pa ?? pb) as Vec3);
+      const w = pa ? 1 - sub.u : sub.u;
+      const dy = ((((a.yaw - c.r[0]) % 360) + 540) % 360) - 180;
+      yaw = c.r[0] + dy * w;
+      pitch = c.r[1] + (a.pitch - c.r[1]) * w;
+    }
+    return { ...c, r: [yaw + c.af[0] + cam.aim.frame[0], Math.max(-89, Math.min(89, pitch + c.af[1] + cam.aim.frame[1])), c.r[2]] };
+  };
+  /** Whether the camera is kept aimed at something at this moment (so a drag reframes rather than turns). */
+  const aimedAt = (s: BlockScene, at: number) => {
+    const sub = subjectsAt(s.camera.keys, at, s.camera.aim.target);
+    return !!(sub.a || sub.b);
   };
 
   const posedAt = (s: BlockScene, track: Track, at: number): Posed => {
@@ -417,6 +446,7 @@ export function BlockingStudio({
           ...s.camera,
           parent: s.camera.parent === id ? null : s.camera.parent,
           aim: s.camera.aim.target === id ? { target: null, frame: [0, 0] } : s.camera.aim,
+          keys: s.camera.keys.map((k) => (k.at === id ? (({ at: _gone, ...rest }) => rest)(k) : k)),
         },
       }));
       setSel(null);
@@ -518,6 +548,19 @@ export function BlockingStudio({
           const { tan: _drop, ...rest } = x;
           void _drop;
           return rest;
+        }) } };
+      });
+    },
+    setKeySubject: (id) => {
+      const k = selectedKey;
+      if (!k || k.track !== "camera") return;
+      commit((s) => {
+        const half = 0.5 / s.fps;
+        return { ...s, camera: { ...s.camera, keys: s.camera.keys.map((x) => {
+          if (Math.abs(x.t - k.t) >= half) return x;
+          const { at: _old, ...rest } = x;
+          void _old;
+          return id ? { ...rest, at: id } : rest;
         }) } };
       });
     },
@@ -1019,7 +1062,7 @@ export function BlockingStudio({
     const y = (c.r[0] * Math.PI) / 180;
     const level = (side: number, fwd: number) =>
       writePose("camera", { p: [c.p[0] + (Math.cos(y) * side - Math.sin(y) * fwd) * m, c.p[1], c.p[2] + (-Math.sin(y) * side - Math.cos(y) * fwd) * m] }, `pad-${action}`);
-    const aimed = !!s.camera.aim.target;
+    const aimed = aimedAt(s, tRef.current);
     const turn = (dy: number, dp: number) => {
       if (aimed) {
         const [fy, fp] = posedAt(s, "camera", tRef.current).af ?? [0, 0];
@@ -1065,7 +1108,7 @@ export function BlockingStudio({
     const dy = ev.clientY - l.y;
     l.x = ev.clientX;
     l.y = ev.clientY;
-    if (l.button === 0 && sceneRef.current.camera.aim.target) {
+    if (l.button === 0 && aimedAt(sceneRef.current, tRef.current)) {
       // Kept aimed: dragging moves the subject off centre at THIS key (the
       // same edit rule as any other change), never the whole shot.
       const [fy, fp] = posedAt(sceneRef.current, "camera", tRef.current).af ?? [0, 0];

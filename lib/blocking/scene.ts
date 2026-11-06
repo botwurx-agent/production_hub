@@ -67,7 +67,13 @@ export const gestureOf = (id: string | undefined) => GESTURES.find((g) => g.id =
  * automatic, the curve the neighbouring keys imply. Used by the continuous
  * and even flows; Stop at keys ignores it.
  */
-export type CamKey = Key & { lens: number; af?: [number, number]; tan?: Vec3 };
+/**
+ * `at` names the object the camera looks at from this key on, overriding the
+ * shot's aim for this key (absent = the shot's aim). Between two keys with
+ * different subjects the camera pans from one to the other, so a shot can
+ * watch a man and then settle on his TV.
+ */
+export type CamKey = Key & { lens: number; af?: [number, number]; tan?: Vec3; at?: string };
 
 export type BlockObject = {
   id: string;
@@ -484,7 +490,8 @@ export function asBlockScene(raw: unknown): BlockScene | null {
         const af = Array.isArray(kr.af) ? [num(kr.af[0], 0, -60, 60), num(kr.af[1], 0, -40, 40)] as [number, number] : undefined;
         const tan = Array.isArray(kr.tan) && kr.tan.length === 3 && kr.tan.every((x) => Number.isFinite(Number(x)))
           ? kr.tan.map((x) => Math.max(-200, Math.min(200, Number(x)))) as Vec3 : undefined;
-        return { ...base, lens: num(kr.lens, 35, 8, 600), ...(af && (af[0] || af[1]) ? { af } : {}), ...(tan ? { tan } : {}) } as CamKey;
+        const at = typeof kr.at === "string" && byId.has(kr.at) ? kr.at : undefined;
+        return { ...base, lens: num(kr.lens, 35, 8, 600), ...(af && (af[0] || af[1]) ? { af } : {}), ...(tan ? { tan } : {}), ...(at ? { at } : {}) } as CamKey;
       })
       .filter((k): k is CamKey => !!k),
     fps,

@@ -16,7 +16,7 @@
 // faces +z, which is why "face_toward" is easier to get right than a number.
 
 import { CAMERA_RIGS } from "@/lib/blocking/rigs";
-import { aimAt, evalTrack, presetKeys, PRESETS, type PresetId } from "@/lib/blocking/keys";
+import { aimAt, evalCamera, evalTrack, presetKeys, PRESETS, type PresetId } from "@/lib/blocking/keys";
 import {
   asBlockScene,
   BLOCK_ASPECTS,
@@ -134,6 +134,156 @@ export function orbitRoom(objects: BlockObject[], at: Vec3): { name: string; roo
   return best && { name: best.name, room: best.room };
 }
 
+/* ---------- tidying a layout the model got slightly wrong ---------- */
+
+/** Furniture and props that belong inside a room, never just outside its wall. */
+const INDOOR_KINDS = new Set([
+  "table", "coffeetable", "desk", "chair", "stool", "sofa", "armchair", "bed", "counter", "fridge", "cabinet",
+  "bookshelf", "tv", "lamp", "plant", "rug", "product",
+]);
+/** How far outside a wall something can be and still read as a slip, not a choice. */
+const SLIP = 2.5;
+const WALL_T = 0.12;
+
+type RoomFrame = { o: BlockObject; p: Vec3; c: number; s: number; W: number; D: number };
+function roomsOf(s: BlockScene, parent: string | null): RoomFrame[] {
+  return s.objects
+    .filter((o) => o.kind === "room" && !o.hidden && o.parent === parent && o.keys[0])
+    .map((o) => {
+      const yaw = (o.keys[0].r[0] * Math.PI) / 180;
+      return { o, p: o.keys[0].p, c: Math.cos(yaw), s: Math.sin(yaw), W: o.size[0], D: o.size[2] };
+    });
+}
+const toRoom = (r: RoomFrame, p: Vec3) => {
+  const dx = p[0] - r.p[0];
+  const dz = p[2] - r.p[2];
+  return { lx: dx * r.c - dz * r.s, lz: dx * r.s + dz * r.c };
+};
+const fromRoom = (r: RoomFrame, lx: number, lz: number, y: number): Vec3 =>
+  [r.p[0] + r.c * lx + r.s * lz, y, r.p[2] - r.s * lx + r.c * lz];
+/** How far outside a room's footprint a point is (0 or less = inside), after a margin. */
+const outside = (r: RoomFrame, p: Vec3, hx = 0, hz = 0) => {
+  const { lx, lz } = toRoom(r, p);
+  return Math.max(Math.abs(lx) - (r.W / 2 - WALL_T - hx), Math.abs(lz) - (r.D / 2 - WALL_T - hz));
+};
+
+/**
+ * Before the camera is placed: drop extra walls the model built on top of a
+ * room's own (a room already has three walls and a front wall with a way in),
+ * and bring furniture that landed just outside a room's wall back inside it.
+ * Only still, unparented things are moved, and everything moved is named.
+ */
+export function tidyRoomLayout(s: BlockScene, skipped: string[], only?: Set<string>) {
+  const rooms = roomsOf(s, null);
+  if (!rooms.length) return;
+  const dropped = new Set<string>();
+  for (const o of s.objects) {
+    if (o.kind !== "wall" || o.parent || !o.keys[0] || (only && !only.has(o.id))) continue;
+    const k = o.keys[0];
+    for (const r of rooms) {
+      const { lx, lz } = toRoom(r, k.p);
+      // Which way the wall runs, in the room's frame.
+      const rel = (((k.r[0] - r.o.keys[0].r[0]) % 180) + 180) % 180;
+      const alongOwnX = o.size[0] >= o.size[2];
+      const alongRoomX = alongOwnX ? rel < 45 || rel > 135 : rel >= 45 && rel <= 135;
+      const dup = alongRoomX
+        ? Math.abs(Math.abs(lz) - r.D / 2) < 0.45 && Math.abs(lx) < r.W / 2
+        : Math.abs(Math.abs(lx) - r.W / 2) < 0.45 && Math.abs(lz) < r.D / 2;
+      if (dup) {
+        dropped.add(o.id);
+        skipped.push(`${o.name}: left out, ${r.o.name} already has a wall there`);
+        break;
+      }
+    }
+  }
+  if (dropped.size) s.objects = s.objects.filter((o) => !dropped.has(o.id));
+
+  for (const o of s.objects) {
+    if (!INDOOR_KINDS.has(o.kind) || o.parent || o.keys.filter((k) => !k.g).length > 1 || !o.keys[0] || (only && !only.has(o.id))) continue;
+    const k = o.keys[0];
+    let best: { r: RoomFrame; out: number; hx: number; hz: number } | null = null;
+    let inAny = false;
+    for (const r of rooms) {
+      const rel = ((k.r[0] - r.o.keys[0].r[0]) * Math.PI) / 180;
+      const hx = (Math.abs(Math.cos(rel)) * o.size[0] + Math.abs(Math.sin(rel)) * o.size[2]) / 2;
+      const hz = (Math.abs(Math.sin(rel)) * o.size[0] + Math.abs(Math.cos(rel)) * o.size[2]) / 2;
+      const out = outside(r, k.p, 0, 0);
+      if (out <= 0) { inAny = true; break; }
+      if (out <= SLIP && (!best || out < best.out)) best = { r, out, hx, hz };
+    }
+    if (inAny || !best) continue;
+    const { r, hx, hz } = best;
+    const { lx, lz } = toRoom(r, k.p);
+    const mx = Math.max(0, r.W / 2 - WALL_T - hx - 0.02);
+    const mz = Math.max(0, r.D / 2 - WALL_T - hz - 0.02);
+    const np = fromRoom(r, clamp(lx, -mx, mx), clamp(lz, -mz, mz), k.p[1]);
+    const d: Vec3 = [np[0] - k.p[0], 0, np[2] - k.p[2]];
+    o.keys = o.keys.map((x) => ({ ...x, p: [x.p[0] + d[0], x.p[1], x.p[2] + d[2]] as Vec3 }));
+    skipped.push(`${o.name}: was ${best.out.toFixed(1)} m outside ${r.o.name}; moved inside against the wall`);
+  }
+}
+
+/** A person's or animal's body as an upright cylinder at time t. */
+function bodyAt(o: BlockObject, t: number) {
+  const p = evalTrack(o.keys, t).p;
+  const h = o.size[1];
+  const top = p[1] + (o.pose === "seated" ? 0.58 : o.pose === "kneeling" ? 0.7 : 1) * h;
+  return { p, r: Math.max(o.size[0], o.size[2]) / 2 + 0.12, y0: o.pose === "seated" ? p[1] - 0.1 : p[1], top };
+}
+
+/**
+ * After the camera is placed: a camera that starts inside a room and strays
+ * just past a wall is brought back in, a key that lands inside a person is
+ * pushed clear of them, and a path that still passes through someone between
+ * keys is named, so the producer knows where to look.
+ */
+export function tidyCameraPath(s: BlockScene, skipped: string[]) {
+  const cam = s.camera;
+  if (cam.parent || !cam.keys.length) return;
+  const rooms = roomsOf(s, null);
+  const home = rooms.find((r) => outside(r, cam.keys[0].p, 0.35, 0.35) <= 0.35);
+  if (home) {
+    for (const k of cam.keys) {
+      const out = outside(home, k.p, 0.35, 0.35);
+      if (out <= 0 || out > SLIP) continue;
+      const { lx, lz } = toRoom(home, k.p);
+      const mx = home.W / 2 - WALL_T - 0.35;
+      const mz = home.D / 2 - WALL_T - 0.35;
+      k.p = fromRoom(home, clamp(lx, -mx, mx), clamp(lz, -mz, mz), clamp(k.p[1], 0.2, home.o.size[1] - 0.25));
+      skipped.push(`camera key at ${Math.round(k.t * 10) / 10}s: was past ${home.o.name}'s wall; brought back inside`);
+    }
+  }
+  const bodies = s.objects.filter((o) => (o.kind === "person" || o.kind === "child" || o.kind === "dog") && !o.parent && !o.hidden);
+  for (const k of cam.keys) {
+    for (const o of bodies) {
+      const b = bodyAt(o, k.t);
+      const dx = k.p[0] - b.p[0];
+      const dz = k.p[2] - b.p[2];
+      const d = Math.hypot(dx, dz);
+      if (d >= b.r || k.p[1] < b.y0 || k.p[1] > b.top) continue;
+      const ux = d > 1e-3 ? dx / d : 0;
+      const uz = d > 1e-3 ? dz / d : 1;
+      k.p = [b.p[0] + ux * (b.r + 0.45), k.p[1], b.p[2] + uz * (b.r + 0.45)];
+      skipped.push(`camera key at ${Math.round(k.t * 10) / 10}s: was inside ${o.name}; moved just clear of them`);
+    }
+  }
+  if (cam.keys.length < 2) return;
+  const told = new Set<string>();
+  const end = cam.keys[cam.keys.length - 1].t;
+  for (let i = 1; i < 120; i++) {
+    const t = (end * i) / 120;
+    const c = evalCamera(cam.keys, t, cam.path === "smooth", { flow: cam.flow, easeEnds: cam.easeEnds });
+    for (const o of bodies) {
+      if (told.has(o.id)) continue;
+      const b = bodyAt(o, t);
+      if (Math.hypot(c.p[0] - b.p[0], c.p[2] - b.p[2]) < b.r - 0.05 && c.p[1] > b.y0 && c.p[1] < b.top) {
+        told.add(o.id);
+        skipped.push(`the camera passes through ${o.name} around ${t.toFixed(1)}s; add a key that goes round them`);
+      }
+    }
+  }
+}
+
 function aimPointOf(o: BlockObject, t: number): Vec3 {
   const p = evalTrack(o.keys, t).p;
   return [p[0], p[1] + aimHeight(o), p[2]];
@@ -243,6 +393,7 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
       if (s.camera.parent === o.id) s.camera.parent = null;
       if (s.camera.aim.target === o.id) s.camera.aim = { ...s.camera.aim, target: null };
       for (const x of s.objects) if (x.reach?.target === o.id) x.reach = { ...x.reach, target: null };
+      for (const k of s.camera.keys) if (k.at === o.id) delete k.at;
     }
   }
   rawObjects.slice(0, MAX_OBJECTS_PER_CALL).forEach((raw, i) => {
@@ -466,6 +617,10 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
     o.reach = { target: toward, hand, stroke };
   }
 
+  // Editing, only what this request added or changed is tidied: anything the
+  // producer placed by hand stays where they put it.
+  tidyRoomLayout(s, skipped, base ? new Set(pending.map((x) => x.o.id)) : undefined);
+
   // The camera.
   const cam = isObj(input.camera) ? input.camera : null;
   if (cam || !fromTemplate) {
@@ -521,12 +676,16 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
       look = look ?? defaultLook;
       const a = aimAt(p, look);
       const easeId = text(k.ease, 10);
+      // look_at naming an object makes it this key's SUBJECT: the camera stays
+      // on it from here, and pans to the next key's subject when that differs.
+      const subject = k.look_at !== undefined && !point(k.look_at) ? lookup(k.look_at) : null;
       keys.push({
         t,
         p,
         r: [a.yaw, a.pitch, clamp(num(k.roll) ?? 0, -90, 90)],
         lens: clamp(num(k.lens) ?? lens, 8, 600),
         ease: (EASE_IDS.includes(easeId as Ease) ? easeId : "smooth") as Ease,
+        ...(subject && subject.parent === s.camera.parent ? { at: subject.id } : {}),
       });
     }
 
@@ -597,6 +756,7 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
     if (shake !== null) s.camera.shake = { amount: clamp(shake, 0, 1), speed: 1 };
     const flow = text(c.flow, 20).toLowerCase();
     if (flow === "continuous" || flow === "even" || flow === "keys") s.camera.flow = flow;
+    tidyCameraPath(s, skipped);
   }
 
   const clean = asBlockScene(JSON.parse(JSON.stringify(s)));
@@ -640,6 +800,7 @@ export function sceneForPrompt(s: BlockScene): Json {
         ...(o.pose ? { pose: o.pose } : {}),
         x: r2(k0.p[0]), y: r2(k0.p[1]), z: r2(k0.p[2]), facing: Math.round(k0.r[0]),
         size: o.size.map(r2),
+        ...(o.kind === "room" ? { spans: { x: [r2(k0.p[0] - o.size[0] / 2), r2(k0.p[0] + o.size[0] / 2)], z: [r2(k0.p[2] - o.size[2] / 2), r2(k0.p[2] + o.size[2] / 2)] } } : {}),
         ...(o.parent ? { rides_with: byId.get(o.parent)?.name ?? null } : {}),
         ...(route.length ? { moves: route.map((k) => ({ t: r2(k.t), x: r2(k.p[0]), z: r2(k.p[2]) })) } : {}),
         ...(gestures.length ? { gestures } : {}),
@@ -649,7 +810,7 @@ export function sceneForPrompt(s: BlockScene): Json {
       ...(s.camera.parent ? { rides_with: byId.get(s.camera.parent)?.name ?? null } : {}),
       ...(s.camera.aim.target ? { aim_at: byId.get(s.camera.aim.target)?.name ?? null } : {}),
       ...(s.camera.rig ? { rig: s.camera.rig } : {}),
-      keys: s.camera.keys.map((k) => ({ t: r2(k.t), x: r2(k.p[0]), y: r2(k.p[1]), z: r2(k.p[2]), lens: Math.round(k.lens) })),
+      keys: s.camera.keys.map((k) => ({ t: r2(k.t), x: r2(k.p[0]), y: r2(k.p[1]), z: r2(k.p[2]), lens: Math.round(k.lens), ...(k.at ? { look_at: byId.get(k.at)?.name ?? null } : {}) })),
     },
   };
 }

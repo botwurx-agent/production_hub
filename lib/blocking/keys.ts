@@ -56,6 +56,28 @@ function locate(keys: Key[], t: number): { i: number; u: number } {
   return { i, u: easeOf(keys[i].ease, raw) };
 }
 
+/**
+ * Who the camera is looking at, at time t: each key's own subject (`at`) or
+ * the shot's aim, and when the two keys either side of t disagree, both and
+ * how far the camera has turned from the first to the second (0..1, eased in
+ * and out over the gap between them, whatever the keys' own eases say).
+ */
+export function subjectsAt(keys: CamKey[], t: number, shot: string | null): { a: string | null; b: string | null; u: number } {
+  if (!keys.length) return { a: shot, b: shot, u: 0 };
+  const sub = (k: CamKey) => k.at ?? shot;
+  if (t <= keys[0].t) { const a = sub(keys[0]); return { a, b: a, u: 0 }; }
+  const last = keys.length - 1;
+  if (t >= keys[last].t) { const a = sub(keys[last]); return { a, b: a, u: 0 }; }
+  let i = 0;
+  while (i < last - 1 && keys[i + 1].t <= t) i++;
+  const a = sub(keys[i]);
+  const b = sub(keys[i + 1]);
+  if (a === b) return { a, b, u: 0 };
+  const span = keys[i + 1].t - keys[i].t;
+  const raw = span > 0 ? Math.min(1, Math.max(0, (t - keys[i].t) / span)) : 1;
+  return { a, b, u: raw * raw * (3 - 2 * raw) };
+}
+
 function channel(vals: number[], i: number, u: number, smooth: boolean): number {
   const n = vals.length;
   if (n === 1 || u === 0) return vals[i];

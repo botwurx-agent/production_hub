@@ -8515,6 +8515,40 @@ the side window to the dog, out through the windshield, ending ahead.
   every ask with its summary, and the bar shows the latest three under
   "Asked before", each clickable to put the words back in the box. The
   connector does not record asks (its own chat holds them).
+- THE SECOND RUN, AND THREE MORE FIXES (2026-11-06). The rerun ("Basement
+  over-shoulder to TV") had one room and its prompt saved, but the TV and its
+  stand sat about a metre outside the room, three wall objects duplicated the
+  room's own, and the camera was a straight line down the centre (no move
+  round him) that started behind him, went through his head, out through the
+  front wall, and was locked on the man the whole way, so it could never end
+  on the TV. My orbit clamp never ran, because the model typed keys by hand.
+  (1) A SUBJECT PER CAMERA KEY: CamKey gained `at` (an object id; absent = the
+  shot's aim), no migration. subjectsAt (lib/blocking/keys.ts) gives the two
+  subjects either side of t and an eased 0..1; camAt in the studio blends the
+  LOOK POINT from one to the other (so the pan sweeps across the room rather
+  than spinning), or the angle when one side has no subject. A key's `at`
+  wins over the shot's aim. The keyframe panel has "Looks at"; deleting an
+  object clears keys pointing at it. In the connector and the scene bar, a
+  key's look_at naming an OBJECT now sets that key's subject (it used to set
+  only the starting angles, which the shot's aim_at then overrode).
+  (2) THE BUILDER TIDIES WHAT IT CAN AND SAYS SO (lib/connector-blocking.ts
+  tidyRoomLayout, tidyCameraPath): wall objects lying on a room's own wall
+  line are dropped; furniture and props (INDOOR_KINDS, still, unparented)
+  that landed within 2.5 m outside a room are moved inside against the wall;
+  a camera that starts inside a room and strays within 2.5 m past a wall is
+  brought back 0.35 m inside; a camera key inside a person is pushed clear;
+  and a path that still passes through someone between keys is NAMED with
+  the time, not moved. Every change is in `skipped`, so it shows on the
+  result card. Editing, only what the request added or changed is tidied.
+  (3) THE PROMPT: the tool description now says a room already has walls
+  (front wall with a gap at +z), gives the span rule, says which side of a
+  person shows the face and which the back, that going round someone means
+  changing x as well as z, and never a key inside a person; the scene bar adds
+  a self-check before answering, and edit mode shows each room's span and each
+  key's look_at. Verified in node against a rebuild of the bad run (walls
+  dropped, TV and stand inside, every key inside, the key in his head pushed
+  clear, man -> TV pan mid-shot, ends on the TV) and in Chromium (the control
+  turns the camera, no page errors). NOT RUN against the live model.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.

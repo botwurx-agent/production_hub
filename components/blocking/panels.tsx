@@ -34,6 +34,8 @@ export type StudioApi = {
   updateObject: (id: string, patch: Partial<BlockScene["objects"][number]>, coalesce?: string) => void;
   writePose: (track: Track, pose: Partial<Posed>, coalesce?: string) => void;
   resetKeyCurve: () => void;
+  /** The object this camera key looks at, or null for the shot's own aim. */
+  setKeySubject: (id: string | null) => void;
   /** The controller pads: `amt` is seconds at the chosen speed. */
   camPad: (action: CamPadAction, amt: number) => void;
   posed: (track: Track) => Posed;
@@ -181,8 +183,19 @@ function KeyPanel({ api, track }: { api: StudioApi; track: Track }) {
         const cam = api.scene.camera;
         const shaped = !!(key as { tan?: unknown }).tan;
         const usable = cam.flow !== "keys" && cam.path === "smooth";
+        const at = (key as { at?: string }).at ?? "";
+        const shotName = cam.aim.target ? api.scene.objects.find((o) => o.id === cam.aim.target)?.name : null;
         return (
           <>
+            <Row label="Looks at">
+              <Select value={at} onChange={(v) => api.setKeySubject(v || null)} disabled={!api.canEdit}>
+                <option value="">{shotName ? `Same as the shot (${shotName})` : "Where the key points"}</option>
+                {api.scene.objects.filter((o) => o.kind !== "room").map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </Select>
+            </Row>
+            <p className="text-[11px] leading-relaxed text-text-faint">
+              From this key on the camera looks at what is picked here. When the next key looks at something else, the camera pans across to it between the two, so a shot can watch someone and settle on what they are watching.
+            </p>
             <Row label="Curve">
               <div className="flex items-center gap-2">
                 <span className="text-[12px] text-text">{shaped ? "Shaped by hand" : "Automatic"}</span>
@@ -325,7 +338,7 @@ function CameraPanel({ api }: { api: StudioApi }) {
         {cam.aim.target ? (
           <>
             <p className="text-[11px] leading-relaxed text-text-faint">
-              The camera stays locked on {scene.objects.find((o) => o.id === cam.aim.target)?.name} through the whole shot, wherever its path goes. Drag in the camera view, or pan and tilt, to frame them off centre. The framing belongs to the keyframe at the playhead, so each key can sit them differently.
+              The camera stays locked on {scene.objects.find((o) => o.id === cam.aim.target)?.name} wherever its path goes, except at a keyframe set to look at something else (Looks at, on the selected keyframe), where it pans across to that. Drag in the camera view, or pan and tilt, to frame them off centre. The framing belongs to the keyframe at the playhead, so each key can sit them differently.
             </p>
             {(() => {
               const af = api.posed("camera").af ?? [0, 0];
