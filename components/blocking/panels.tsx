@@ -4,7 +4,7 @@
 // (whatever is selected). Both work through the studio's api, so the rule for
 // how an edit lands on the timeline lives in one place.
 import { gaitWord } from "@/lib/blocking/gait";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, GESTURES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind, gestureOf, BODY_BUILDS, HAIR_STYLES, ROOM_FRONTS,
   type BlockObject, type BlockScene, type GestureKind, type BodyBuild, type HairStyle, type Reach, type Ease, type Environment, type Vec3, type RoomFront,
@@ -66,8 +66,43 @@ export function Outliner({ api }: { api: StudioApi }) {
   const q = find.trim().toLowerCase();
   const matches = (k: (typeof BLOCK_KINDS)[number]) => !q || `${k.name} ${k.hint} ${k.kind}`.toLowerCase().includes(q);
   const add = (kind: string) => { api.addObject(kind); setAdding(false); setFind(""); };
-  const groups = BLOCK_CATEGORIES.map((c) => ({ ...c, items: scene.objects.filter((o) => blockKind(o.kind).category === c.id) }))
+  const catOf = (o: BlockObject) => blockKind(o.kind).category;
+  const byId = new Map(scene.objects.map((o) => [o.id, o]));
+  // Riders sit under the vehicle they ride in, so a car and its passengers
+  // read as one unit rather than being split across two groups.
+  const ridesVehicle = (o: BlockObject) => {
+    const p = o.parent ? byId.get(o.parent) : undefined;
+    return !!p && catOf(p) === "vehicles";
+  };
+  const people = scene.objects.filter((o) => catOf(o) === "people" && !ridesVehicle(o));
+  const vehicles = scene.objects.filter((o) => catOf(o) === "vehicles");
+  const ridersOf = (id: string) => scene.objects.filter((o) => o.parent === id && catOf(o) !== "vehicles");
+  const setGroups = BLOCK_CATEGORIES.filter((c) => c.id !== "people" && c.id !== "vehicles")
+    .map((c) => ({ ...c, items: scene.objects.filter((o) => catOf(o) === c.id && !ridesVehicle(o)) }))
     .filter((g) => g.items.length);
+  const setCount = setGroups.reduce((n, g) => n + g.items.length, 0);
+  // The set folds; a big city scene is mostly buildings and trees nobody
+  // needs to see while blocking the people. Open by default only when small.
+  const [setPref, setSetPref] = useState<boolean | null>(null);
+  useEffect(() => {
+    try { const v = localStorage.getItem("blocking.outlinerSet"); if (v === "1" || v === "0") setSetPref(v === "1"); } catch {}
+  }, []);
+  const setOpen = setPref ?? setCount <= 12;
+  const toggleSet = () => {
+    const next = !setOpen;
+    setSetPref(next);
+    try { localStorage.setItem("blocking.outlinerSet", next ? "1" : "0"); } catch {}
+  };
+  const selInSet = !setOpen && sel && sel !== "camera" ? setGroups.flatMap((g) => g.items).find((o) => o.id === sel) : undefined;
+  const row = (o: BlockObject, indent = false) => (
+    <Item key={o.id} active={sel === o.id} onClick={() => select(o.id)} color={o.color} icon={KIND_ICON[catOf(o)]}
+      name={o.name} meta={o.keys.length > 1 ? `${o.keys.length} keys` : o.parent ? "rides along" : ""}
+      dim={o.hidden} indent={indent || !!o.parent}
+      onEye={canEdit ? () => api.updateObject(o.id, { hidden: !o.hidden }) : undefined} />
+  );
+  const head = (label: string) => (
+    <p className="px-3 pb-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-text-faint">{label}</p>
+  );
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div ref={ref} className="relative border-b border-border p-2">
@@ -111,17 +146,35 @@ export function Outliner({ api }: { api: StudioApi }) {
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         <Item active={sel === "camera"} onClick={() => select("camera")} color="var(--h-amber)" icon="▶"
           name="Camera" meta={`${scene.camera.keys.length} keys`} />
-        {groups.map((g) => (
-          <div key={g.id} className="mt-2">
-            <p className="px-3 pb-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-text-faint">{g.name}</p>
-            {g.items.map((o) => (
-              <Item key={o.id} active={sel === o.id} onClick={() => select(o.id)} color={o.color} icon={KIND_ICON[g.id]}
-                name={o.name} meta={o.keys.length > 1 ? `${o.keys.length} keys` : o.parent ? "rides along" : ""}
-                dim={o.hidden} indent={!!o.parent}
-                onEye={canEdit ? () => api.updateObject(o.id, { hidden: !o.hidden }) : undefined} />
+        {people.length > 0 && (
+          <div className="mt-2">{head("People and animals")}{people.map((o) => row(o))}</div>
+        )}
+        {vehicles.length > 0 && (
+          <div className="mt-2">
+            {head("Vehicles")}
+            {vehicles.map((v) => (
+              <div key={v.id}>{row(v)}{ridersOf(v.id).map((r) => row(r, true))}</div>
             ))}
           </div>
-        ))}
+        )}
+        {setCount > 0 && (
+          <div className="mt-2">
+            <button type="button" onClick={toggleSet}
+              className="flex w-full items-center gap-1.5 px-3 pb-0.5 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-text-faint hover:text-text">
+              <span className="w-3 text-center">{setOpen ? "▾" : "▸"}</span>
+              <span>Set</span>
+              <span className="ml-auto font-normal normal-case tracking-normal">{setCount} {setCount === 1 ? "piece" : "pieces"}</span>
+            </button>
+            {setOpen
+              ? setGroups.map((g) => (
+                  <div key={g.id} className="mt-1">
+                    <p className="pl-8 pr-3 pb-0.5 text-[10px] text-text-faint">{g.name}</p>
+                    {g.items.map((o) => row(o, true))}
+                  </div>
+                ))
+              : selInSet && row(selInSet, true)}
+          </div>
+        )}
         {!scene.objects.length && (
           <p className="px-3 py-4 text-[12px] leading-relaxed text-text-muted">Nothing in the scene yet. Add people, a vehicle, a road, a room.</p>
         )}

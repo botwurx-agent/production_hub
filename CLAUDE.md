@@ -8617,8 +8617,14 @@ the side window to the dog, out through the windshield, ending ahead.
   (remembered per browser, "blocking.timelineStill"). DERIVED from the keys
   every render, never stored: keying a building moves it up on its own,
   clearing its keys drops it back. Nothing about saved scenes changed.
-  AGREED NEXT, in order: group the left-hand outliner (people and animals,
-  vehicles, then the set, folded on a big scene), then movement pads for
+  THE OUTLINER IS GROUPED THE SAME WAY (2026-11-06, built): People and
+  animals, then Vehicles with their riders nested under each one (a person
+  riding a vehicle is listed under it, not under People), then ONE folding
+  "Set: N pieces" holding every other category as subheadings. The set opens
+  by default only at 12 pieces or fewer; the choice is remembered per browser
+  ("blocking.outlinerSet"). A selected piece in a folded set still shows
+  under its header. Derived every render, nothing stored.
+  AGREED NEXT: movement pads for
   things that can move (people, animals, vehicles, bus, tram), relative to
   their own facing (forward/back, step sideways except vehicles, turn),
   keyed by the normal edit rule. Static kinds keep keyframes, just no pad.
