@@ -8449,6 +8449,18 @@ the side window to the dog, out through the windshield, ending ahead.
   AI key). NOT RUN against a live model: the first real description is the
   test, and the thing to watch is whether gpt-5-mini returns well-formed JSON
   for a big set.
+- SPEAK INTO THE SCENE BAR (2026-11-06, operator). A "Speak" microphone
+  button in the scene bar (both the "Describe a change" bar in the editor and
+  the "Describe it" box for a new scene) reuses Runner's Dictation
+  (components/agent/dictation.tsx): the browser's own speech recognition, so
+  no audio is uploaded and nothing is stored. Spoken words are appended to the
+  box (capped at 1500) and nothing is sent until Go is pressed, so the words
+  can be checked first. Chrome and Edge only; the button hides where the
+  browser has no speech recognition (Firefox). The button's mousedown is held
+  so the input keeps focus and the collapsible bar does not fold under the
+  press. TESTING GOTCHA: headless Chromium HAS a native SpeechRecognition and
+  the component prefers it over webkitSpeechRecognition, so a fake must
+  replace both.
 - CAMERA RIGS, A TRAM AND A BUS (2026-11-06, no migration). The camera
   gained `rig` (BlockCamera.rig, absent = free, which is what every older
   scene reads as): what it is on. lib/blocking/rigs.ts is pure (rigMotion,

@@ -6,6 +6,7 @@
 // single Undo away; the card says what was done and what could not be read.
 import { useState } from "react";
 import type { Asked } from "@/lib/blocking/scene";
+import { Dictation } from "@/components/agent/dictation";
 
 export type SceneBarAnswer = { summary: string; skipped: string[] } | { error: string };
 
@@ -95,6 +96,13 @@ export function SceneBar({
           placeholder={busy ? "Laying it out…" : placeholder} maxLength={1500}
           onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape" && collapsible) { setText(""); setOpen(false); } }}
           className="h-8 min-w-0 flex-1 bg-transparent px-1.5 text-[13px] text-text outline-none placeholder:text-text-faint disabled:opacity-60" />
+        {/* Speak the description. mousedown is held so the input keeps focus and
+            the bar does not fold away under the press. */}
+        {!disabled && !busy && (
+          <span className="shrink-0" onMouseDown={(e) => e.preventDefault()}>
+            <Dictation onText={(t) => setText((prev) => (prev.trim() ? `${prev.trimEnd()} ${t}` : t).slice(0, 1500))} />
+          </span>
+        )}
         <button type="submit" disabled={disabled || busy || !text.trim()}
           className="h-8 shrink-0 rounded-[8px] bg-accent px-3 text-[12px] font-semibold text-accent-fg disabled:opacity-40">
           {busy ? "Working…" : "Go"}
