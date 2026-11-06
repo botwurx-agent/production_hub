@@ -90,6 +90,8 @@ export type BlockObject = {
   hidden?: boolean;
   /** Vehicles: which seating layout is drawn (an SUV with two or three rows). */
   seats?: string;
+  /** Rooms: the front wall (+z) closed, with a doorway, or left open. Absent = closed. */
+  front?: RoomFront;
   /**
    * People: what a gesture is done toward (another object's id: a dog's head,
    * a product, a person), with which hand, and whether a reach strokes once
@@ -232,6 +234,13 @@ export type BlockKind = {
   seats?: { id: string; name: string }[];
 };
 
+export type RoomFront = "closed" | "door" | "open";
+export const ROOM_FRONTS: { id: RoomFront; name: string }[] = [
+  { id: "closed", name: "Closed wall" },
+  { id: "door", name: "Wall with a doorway" },
+  { id: "open", name: "Open (no front wall)" },
+];
+
 const FT = 0.3048;
 export const BLOCK_KINDS: BlockKind[] = [
   { kind: "person", name: "Person", category: "people", size: [0.5, 1.75, 0.3], color: "#d98aa8", hint: "Any pose, true proportions", poses: ["standing", "walking", "seated", "pointing", "arms-crossed", "kneeling"] },
@@ -298,7 +307,7 @@ export const BLOCK_KINDS: BlockKind[] = [
   { kind: "vending", name: "Vending machine", category: "street", size: [1, 1.85, 0.8], color: "#c25b4a", hint: "Drinks and snacks" },
   { kind: "wall", name: "Wall", category: "set", size: [6, 2.8, 0.15], color: "#d8d1c4", hint: "A section of wall" },
   { kind: "window", name: "Window wall", category: "set", size: [3, 2.8, 0.15], color: "#d8d1c4", hint: "A wall with a window in it" },
-  { kind: "room", name: "Room", category: "set", size: [5, 2.8, 6], color: "#d8d1c4", hint: "Four walls, open on top" },
+  { kind: "room", name: "Room", category: "set", size: [5, 2.8, 6], color: "#d8d1c4", hint: "Four walls and a floor, open on top" },
   { kind: "door", name: "Doorway", category: "set", size: [1.2, 2.4, 0.15], color: "#d8d1c4", hint: "A wall with a door opening" },
   { kind: "stairs", name: "Stairs", category: "set", size: [1.2, 1.8, 3], color: "#bdb5a8", hint: "A straight flight" },
   { kind: "table", name: "Table", category: "set", size: [1.6, 0.75, 0.9], color: "#8a6a4d", hint: "A dining table" },
@@ -470,6 +479,7 @@ export function asBlockScene(raw: unknown): BlockScene | null {
       keys,
       pose: bk.poses ? (bk.poses.includes(r.pose as string) ? (r.pose as string) : bk.poses[0]) : undefined,
       seats: bk.seats ? (bk.seats.some((x) => x.id === r.seats) ? (r.seats as string) : bk.seats[0].id) : undefined,
+      front: kind === "room" && ROOM_FRONTS.some((x) => x.id === r.front && x.id !== "closed") ? (r.front as RoomFront) : undefined,
       build: (kind === "person" || kind === "child") && BODY_BUILDS.some((x) => x.id === r.build) ? (r.build as BodyBuild) : undefined,
       hair: (kind === "person" || kind === "child") && HAIR_STYLES.some((x) => x.id === r.hair) ? (r.hair as HairStyle) : undefined,
       parent: typeof r.parent === "string" ? r.parent : null,

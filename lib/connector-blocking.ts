@@ -174,7 +174,7 @@ const outside = (r: RoomFrame, p: Vec3, hx = 0, hz = 0) => {
 
 /**
  * Before the camera is placed: drop extra walls the model built on top of a
- * room's own (a room already has three walls and a front wall with a way in),
+ * room's own (a room already has its four walls),
  * and bring furniture that landed just outside a room's wall back inside it.
  * Only still, unparented things are moved, and everything moved is named.
  */
@@ -489,6 +489,8 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
     }
     const seats = text(raw.seats, 20).toLowerCase();
     if (seats && bk.seats?.some((x) => x.id === seats)) o.seats = seats;
+    const front = text(raw.front, 20).toLowerCase();
+    if (kind === "room" && (front === "door" || front === "open")) o.front = front;
     if (kind === "person" || kind === "child") {
       const build = text(raw.build, 20).toLowerCase();
       if (build && BODY_BUILDS.some((b) => b.id === build)) o.build = build as BlockObject["build"];
@@ -524,6 +526,8 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
         if (bk.poses?.includes(pose)) o.pose = pose;
         else skipped.push(`${o.name}: pose "${pose}"${bk.poses ? ` (use ${bk.poses.join(", ")})` : " (this kind has no poses)"}`);
       }
+      const front = text(raw.front, 20).toLowerCase();
+      if (o.kind === "room" && (front === "closed" || front === "door" || front === "open")) o.front = front === "closed" ? undefined : front;
       const size = point(raw.size);
       if (size) o.size = size.map((v) => clamp(v, 0.01, 2000)) as Vec3;
       const height = num(raw.height);
@@ -878,7 +882,7 @@ export function sceneForPrompt(s: BlockScene): Json {
         ...(o.pose ? { pose: o.pose } : {}),
         x: r2(k0.p[0]), y: r2(k0.p[1]), z: r2(k0.p[2]), facing: Math.round(k0.r[0]),
         size: o.size.map(r2),
-        ...(o.kind === "room" ? { spans: { x: [r2(k0.p[0] - o.size[0] / 2), r2(k0.p[0] + o.size[0] / 2)], z: [r2(k0.p[2] - o.size[2] / 2), r2(k0.p[2] + o.size[2] / 2)] } } : {}),
+        ...(o.kind === "room" ? { front: o.front ?? "closed", spans: { x: [r2(k0.p[0] - o.size[0] / 2), r2(k0.p[0] + o.size[0] / 2)], z: [r2(k0.p[2] - o.size[2] / 2), r2(k0.p[2] + o.size[2] / 2)] } } : {}),
         ...(o.parent ? { rides_with: byId.get(o.parent)?.name ?? null } : {}),
         ...(route.length ? { moves: route.map((k) => ({ t: r2(k.t), x: r2(k.p[0]), z: r2(k.p[2]) })) } : {}),
         ...(gestures.length ? { gestures } : {}),

@@ -6,8 +6,8 @@
 import { gaitWord } from "@/lib/blocking/gait";
 import { useState } from "react";
 import {
-  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, GESTURES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind, gestureOf, BODY_BUILDS, HAIR_STYLES,
-  type BlockObject, type BlockScene, type GestureKind, type BodyBuild, type HairStyle, type Reach, type Ease, type Environment, type Vec3,
+  BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, GESTURES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind, gestureOf, BODY_BUILDS, HAIR_STYLES, ROOM_FRONTS,
+  type BlockObject, type BlockScene, type GestureKind, type BodyBuild, type HairStyle, type Reach, type Ease, type Environment, type Vec3, type RoomFront,
 } from "@/lib/blocking/scene";
 import { PRESETS, type PresetId } from "@/lib/blocking/keys";
 import { CAMERA_RIGS, rigOf } from "@/lib/blocking/rigs";
@@ -465,6 +465,13 @@ function ObjectPanel({ api, id }: { api: StudioApi; id: string }) {
           <Row label="Seating">
             <Select value={o.seats ?? k.seats[0].id} onChange={(v) => api.updateObject(o.id, { seats: v })} disabled={dis}>
               {k.seats.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </Select>
+          </Row>
+        )}
+        {o.kind === "room" && (
+          <Row label="Front wall">
+            <Select value={o.front ?? "closed"} onChange={(v) => api.updateObject(o.id, { front: v === "closed" ? undefined : (v as RoomFront) })} disabled={dis}>
+              {ROOM_FRONTS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </Select>
           </Row>
         )}

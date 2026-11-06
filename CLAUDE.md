@@ -8580,6 +8580,18 @@ the side window to the dog, out through the windshield, ending ahead.
   see-through glass. A tabletop piece placed by the builder over a table,
   coffee table, desk, counter, dresser, stool or bed stands on its top.
   /dev/blocking?table=1 shows them on a table.
+- THE ROOM'S FRONT WALL IS CLOSED (2026-11-06, operator: "fix the opening
+  in the wall"). A room used to have a hardcoded gap in its front wall so the
+  camera had a way in, which then showed in shots that looked back at it.
+  BlockObject gained `front` ("door" | "open"; absent = closed, which is what
+  every older scene now reads as), a "Front wall" choice on the room (Closed
+  wall / Wall with a doorway / Open), and the connector and scene bar take
+  `front` too (only when asked). Walls carry userData.wall (their outward
+  side) and `cutaway(world, eye)` in build.ts hides, IN FREE VIEW ONLY, each
+  wall the free camera is outside of, so the room can still be seen into from
+  any side; through the camera, in a clip and in a saved frame every wall is
+  solid. A camera placed outside a closed room now sees the wall, which is
+  correct: pick Open or a doorway for that shot.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.

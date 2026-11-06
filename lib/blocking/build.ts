@@ -988,12 +988,24 @@ function room(o: BlockObject, paint: Paint) {
   const [W, H, D] = o.size;
   const t = 0.12;
   const g = new THREE.Group();
-  g.add(box(W, H, t, paint(1), 0, H / 2, -D / 2));
-  g.add(box(t, H, D, paint(0.92), -W / 2, H / 2, 0));
-  g.add(box(t, H, D, paint(0.92), W / 2, H / 2, 0));
-  // The front wall has a gap in the middle, so the camera has a way in.
-  const side = W * 0.35;
-  for (const sx of [-1, 1]) g.add(box(side, H, t, paint(0.96), sx * (W / 2 - side / 2), H / 2, D / 2));
+  // Each wall knows which way is outside, so free view can cut away the
+  // one between it and the room (cutaway); through the camera they are solid.
+  const wall = (m: THREE.Mesh, nx: number, nz: number) => {
+    m.userData.wall = [nx, nz];
+    g.add(m);
+  };
+  wall(box(W, H, t, paint(1), 0, H / 2, -D / 2), 0, -1);
+  wall(box(t, H, D, paint(0.92), -W / 2, H / 2, 0), -1, 0);
+  wall(box(t, H, D, paint(0.92), W / 2, H / 2, 0), 1, 0);
+  const front = o.front ?? "closed";
+  if (front === "closed") wall(box(W, H, t, paint(0.96), 0, H / 2, D / 2), 0, 1);
+  else if (front === "door") {
+    const dw = Math.min(0.9, W * 0.4);
+    const dh = Math.min(2.1, H - 0.1);
+    const side = (W - dw) / 2;
+    for (const sx of [-1, 1]) wall(box(side, H, t, paint(0.96), sx * (dw / 2 + side / 2), H / 2, D / 2), 0, 1);
+    wall(box(dw, H - dh, t, paint(0.96), 0, dh + (H - dh) / 2, D / 2), 0, 1);
+  }
   g.add(box(W, 0.02, D, paint(0.7), 0, 0.01, 0));
   return g;
 }
@@ -2258,5 +2270,23 @@ export function aimPoint(objs: Map<string, BlockObject>, o: BlockObject, t: numb
 export function showMarkers(world: World, on: boolean) {
   world.objects.traverse((o) => {
     if (o.userData.helper && (o as THREE.Mesh).isMesh) o.visible = on;
+  });
+}
+
+/**
+ * Free view only: hide each room wall the free camera is outside of, so the
+ * room can be seen into from any side. Pass null to show every wall again
+ * (through the camera, in a clip and in a saved frame, walls are solid).
+ */
+export function cutaway(world: World, eye: THREE.Vector3 | null) {
+  const n = new THREE.Vector3();
+  const p = new THREE.Vector3();
+  world.objects.traverse((o) => {
+    const w = o.userData.wall as [number, number] | undefined;
+    if (!w) return;
+    if (!eye) { o.visible = true; return; }
+    o.getWorldPosition(p);
+    n.set(w[0], 0, w[1]).transformDirection(o.parent!.matrixWorld);
+    o.visible = n.dot(p.clone().sub(eye).negate()) <= 0;
   });
 }

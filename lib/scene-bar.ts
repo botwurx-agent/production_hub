@@ -33,7 +33,7 @@ const RULES = [
 const EDIT_RULES = [
   "EDITING: the scene as it stands is given below. Return ONLY what changes, never the whole scene again:",
   "- \"objects\": new things to add, same shape as a new scene's objects. They may point at existing things by their name (face_toward, rides_with, gestures toward, camera look_at).",
-  "- \"change\": [{name (exactly as listed), rename?, x?, y?, z?, facing?, face_toward?, moves?, gestures?, pose?, color?, size?, height?, rides_with?}] for things already there. Giving a position, facing or moves restarts that thing's route from there; giving gestures replaces its gestures; anything left out stays as it is.",
+  "- \"change\": [{name (exactly as listed), rename?, x?, y?, z?, facing?, face_toward?, moves?, gestures?, pose?, color?, size?, height?, rides_with?, front? (a room: closed, door or open)}] for things already there. Giving a position, facing or moves restarts that thing's route from there; giving gestures replaces its gestures; anything left out stays as it is.",
   "- \"remove\": [names] to take out.",
   "- \"camera\": only when the camera should change. Keys given replace the camera's keys; a move given alone is added to the camera as it is.",
   "- \"duration\", \"look\", \"environment\" only when they change. Leave out \"name\" and \"template\".",

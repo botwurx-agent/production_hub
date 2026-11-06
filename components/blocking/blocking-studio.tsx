@@ -26,7 +26,7 @@ import {
   timecode, travel, type PresetId,
 } from "@/lib/blocking/keys";
 import {
-  aimPoint, applyEnvironment, buildObject, buildWorld, cameraGizmo, cameraMatrix, objectMatrix, poseMatrix, poseRig, setFrustum, showMarkers, toLocal, touchPoint,
+  aimPoint, applyEnvironment, buildObject, buildWorld, cameraGizmo, cameraMatrix, cutaway, objectMatrix, poseMatrix, poseRig, setFrustum, showMarkers, toLocal, touchPoint,
   type PersonRig, type World,
 } from "@/lib/blocking/build";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
@@ -845,7 +845,7 @@ export function BlockingStudio({
     const seen = new Set<string>();
     for (const o of s.objects) {
       seen.add(o.id);
-      const key = `${s.look}|${o.kind}|${o.size.join(",")}|${o.color}|${o.pose ?? ""}|${o.seats ?? ""}|${o.build ?? ""}|${o.hair ?? ""}`;
+      const key = `${s.look}|${o.kind}|${o.size.join(",")}|${o.color}|${o.pose ?? ""}|${o.seats ?? ""}|${o.front ?? ""}|${o.build ?? ""}|${o.hair ?? ""}`;
       let rec = e.meshes.get(o.id);
       if (!rec || rec.key !== key) {
         if (rec) e.world.objects.remove(rec.g);
@@ -993,6 +993,7 @@ export function BlockingStudio({
     const shotView = (x: number, y: number, fw: number, fh: number) => {
       world.helpers.visible = false;
       showMarkers(world, false);
+      cutaway(world, null);
       e.tcHelper.visible = false;
       // While a clip records, the editor's own view is drawn plainly: the
       // recording is the frame that matters, and drawing the occlusion twice
@@ -1027,6 +1028,7 @@ export function BlockingStudio({
       if (e.handles.group.visible) { sizeTo(e.handles.out, 8); sizeTo(e.handles.inn, 8); }
       e.tcHelper.visible = !!e.tc.object;
       showMarkers(world, true);
+      cutaway(world, e.free.position);
       e.fxFree.render(s.look);
       // Picture in picture: what the camera sees.
       const pw = Math.min(w * 0.3, 380);
@@ -1040,6 +1042,7 @@ export function BlockingStudio({
     if (e.rec) {
       world.helpers.visible = false;
       showMarkers(world, false);
+      cutaway(world, null);
       e.tcHelper.visible = false;
       e.rec.fx.render(s.look);
     }
