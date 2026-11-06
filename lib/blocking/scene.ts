@@ -177,7 +177,12 @@ export type BlockScene = {
   environment: Environment;
   objects: BlockObject[];
   camera: BlockCamera;
+  /** What was typed into the scene bar, oldest first, and what it did. */
+  asked?: Asked[];
 };
+
+export type Asked = { at: string; text: string; result?: string };
+export const MAX_ASKED = 20;
 
 export const FPS: (24 | 25 | 30)[] = [24, 25, 30];
 export const MAX_DURATION = 30;
@@ -523,6 +528,18 @@ export function asBlockScene(raw: unknown): BlockScene | null {
     environment,
     objects,
     camera,
+    ...(() => {
+      const asked = (Array.isArray(s.asked) ? s.asked : [])
+        .filter((a): a is Record<string, unknown> => !!a && typeof a === "object" && typeof (a as Record<string, unknown>).text === "string")
+        .slice(-MAX_ASKED)
+        .map((a) => ({
+          at: str(a.at, "", 40),
+          text: str(a.text, "", 1500),
+          ...(typeof a.result === "string" ? { result: str(a.result, "", 300) } : {}),
+        }))
+        .filter((a) => a.text.trim());
+      return asked.length ? { asked } : {};
+    })(),
   };
 }
 

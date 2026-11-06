@@ -124,7 +124,7 @@ function Inner() {
     <div data-theme="dark" className="fixed inset-0 bg-bg"
       style={STUDIO_VARS}>
       <BlockingStudio initial={scene} canEdit onChange={() => {}}
-        describe={q.get("bar") ? async (_prompt, cur) => {
+        describe={q.get("bar") ? async (prompt, cur) => {
           // A pretend answer, since a session has no AI key: the same builder
           // the real bar runs, on a canned edit, after a short wait.
           await new Promise((r) => setTimeout(r, 900));
@@ -137,7 +137,10 @@ function Inner() {
             ],
             camera: { move: { preset: "push", target: cur.objects[0]?.name ?? "", start: Math.max(0, cur.duration - 3), duration: 3 } },
           }, cur);
-          return "error" in r ? r : { scene: r.scene, summary: "Added a cyclist riding past behind the lead and pushed in on her for the last three seconds.", skipped: r.skipped };
+          const summary = "Added a cyclist riding past behind the lead and pushed in on her for the last three seconds.";
+          // The server keeps what was asked on the scene; the pretend one does too.
+          const asked = [...(cur.asked ?? []), { at: new Date().toISOString(), text: prompt, result: summary }];
+          return "error" in r ? r : { scene: { ...r.scene, asked }, summary, skipped: r.skipped };
         } : undefined}
         pipeline={q.get("send") ? {
           projectId: "00000000-0000-0000-0000-000000000001",

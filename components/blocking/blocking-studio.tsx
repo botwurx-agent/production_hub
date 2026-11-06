@@ -1417,7 +1417,7 @@ export function BlockingStudio({
 
         {describe && canEdit && !recording && (
           <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 flex justify-center">
-            <SceneBar collapsible
+            <SceneBar collapsible history={scene.asked}
               placeholder="Change the scene: add a cyclist passing behind her at 3 s, push in slower…"
               onUndo={() => undo()}
               onSubmit={async (prompt) => {

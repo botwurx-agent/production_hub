@@ -2,7 +2,7 @@ import "server-only";
 import { BLOCKING_TOOL } from "@/lib/connector-blocking-tool";
 import { buildBlockingScene, jsonFromText, sceneForPrompt } from "@/lib/connector-blocking";
 import { draftBlockingScene } from "@/lib/ai";
-import type { BlockScene } from "@/lib/blocking/scene";
+import { MAX_ASKED, type BlockScene } from "@/lib/blocking/scene";
 
 /**
  * The shot blocking scene bar: a producer types what they want and the scene
@@ -25,6 +25,7 @@ const SHAPE = (() => {
 const RULES = [
   "You lay out shot blocking scenes for a commercial production studio: low-poly 3D sets whose camera move is recorded as a motion reference for an AI video model. The producer describes a shot in plain words; you answer with ONE JSON object and nothing else (no prose, no code fences).",
   "Be generous with set dressing that the description implies (a city street has a road, sidewalks, buildings both sides, street lights, a few parked cars; a kitchen has counters, cabinets and an island), and keep everything at real sizes in metres. Put the action near the middle of the set, and give the camera a move that serves the shot when one is implied. People and vehicles that travel have moves with times inside the duration.",
+  "THE CAMERA STAYS IN THE SET. When the action is inside a room, every camera key stays inside that room's walls (at least 0.4 m from each wall), and an orbit or arc round someone in a room is sized to fit it: in an ordinary room prefer an arc or a half orbit over a full circle. Keep a camera off the far side of anything that would fill the frame (a TV, a cabinet, a wall) unless the shot is about that. Keep moves steady: a camera that circles someone should travel under about 2 m/s (a full orbit of radius 2 m needs about 6 seconds), so give the move time or make it smaller. Keep aim_at on the subject for any move that circles or passes them.",
   "Also put a field \"summary\" in the object: one short plain sentence saying what you made or changed, for the producer. No em dashes anywhere.",
 ].join("\n\n");
 
@@ -44,7 +45,7 @@ export async function runSceneBar(prompt: string, current: BlockScene | null): P
     RULES,
     BLOCKING_TOOL.description,
     `The fields of the JSON object (a JSON schema of each): ${SHAPE}`,
-    current ? EDIT_RULES : "NEW SCENE: give it a short \"name\". You may start from a template when one fits.",
+    current ? EDIT_RULES : "NEW SCENE: give it a short \"name\" and build the whole set yourself from the catalogue. Do NOT use \"template\": the scene starts empty.",
   ].join("\n\n");
   const user = current
     ? `The scene now:\n${JSON.stringify(sceneForPrompt(current))}\n\nThe producer asks: ${prompt}`
@@ -58,8 +59,15 @@ export async function runSceneBar(prompt: string, current: BlockScene | null): P
   }
   const input = jsonFromText(raw);
   if (!input) return { error: "That came back in a shape the scene could not be built from. Try saying it another way." };
+  // A new scene from the bar starts empty: a template's own set would stay
+  // under whatever the model builds, two rooms on top of each other.
+  if (!current) delete input.template;
   const built = buildBlockingScene(input, current ?? undefined);
   if ("error" in built) return built;
-  const summary = typeof input.summary === "string" ? input.summary.replace(/\s+/g, " ").trim().slice(0, 300) : "";
-  return { scene: built.scene, summary: summary || (current ? "Scene changed." : "Scene laid out."), skipped: built.skipped.slice(0, 12) };
+  const summary = (typeof input.summary === "string" ? input.summary.replace(/\s+/g, " ").trim().slice(0, 300) : "")
+    || (current ? "Scene changed." : "Scene laid out.");
+  // What was asked travels with the scene, so the producer (and anyone
+  // checking a result later) can see the words that made it.
+  const asked = [...(current?.asked ?? []), { at: new Date().toISOString(), text: prompt, result: summary }].slice(-MAX_ASKED);
+  return { scene: { ...built.scene, asked }, summary, skipped: built.skipped.slice(0, 12) };
 }

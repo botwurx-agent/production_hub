@@ -8479,6 +8479,30 @@ the side window to the dog, out through the windshield, ending ahead.
   gauge in a strip of setts, a flat ground piece, so things put on it stand on
   it). /dev/blocking?transit=1[&rig=fpv|tripod|...] is a city street with
   both, filmed on that rig.
+- THE FIRST REAL SCENE BAR RUN, AND THREE FIXES (2026-11-06). The operator
+  described a basement TV shot; the result ("Basement TV orbit to TV focus")
+  was read back from blocking_scenes and played through in a local editor.
+  (1) TWO SETS ON TOP OF EACH OTHER: the new-scene prompt said "you may start
+  from a template", the model picked Living room and then built its own
+  basement, and the builder keeps a template's objects, so there were two
+  rooms, two sofas and two people sitting behind the TV. A new scene from the
+  bar now STARTS EMPTY: the prompt says not to use a template and runSceneBar
+  deletes `template` from the input anyway. (2) A 360 ORBIT IN 3 s, 3 m OUT IN
+  A 5 m ROOM: it peaked at 8 m/s, started outside the room and swung behind
+  the TV. The prompt now says the camera stays inside the set, orbits are
+  sized to the room (prefer an arc), keep under about 2 m/s and keep aim_at on
+  the subject. And the BUILDER enforces the size: orbit, half orbit and arc
+  presets find the smallest room round the target (orbitRoom in
+  lib/connector-blocking.ts, read in the room's own turned frame) and pull the
+  start in to 0.35 m off the nearest wall, saying so in `skipped`; a move
+  that still travels over 2.5 m/s is named as a whip. Explicit keys are NOT
+  clamped, since a room is open at the front and a shot from outside it is
+  legitimate. (3) THE PROMPT WAS LOST: nothing kept what was typed.
+  BlockScene gained `asked` [{at, text, result}] (last 20, trust boundary in
+  asBlockScene, no migration since it rides in the jsonb); runSceneBar appends
+  every ask with its summary, and the bar shows the latest three under
+  "Asked before", each clickable to put the words back in the box. The
+  connector does not record asks (its own chat holds them).
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.

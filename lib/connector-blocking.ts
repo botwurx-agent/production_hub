@@ -109,6 +109,31 @@ function aimHeight(o: BlockObject): number {
 }
 
 /** An object's aim point at time t, in its own parent's frame. */
+/**
+ * The smallest room whose walls surround a point, and how far a camera can
+ * circle that point before reaching a wall (keeping 0.35 m clear). Rooms are
+ * read at their first key, in their own turned frame.
+ */
+export function orbitRoom(objects: BlockObject[], at: Vec3): { name: string; room: number } | null {
+  let best: { name: string; room: number; area: number } | null = null;
+  for (const o of objects) {
+    if (o.kind !== "room" || o.hidden) continue;
+    const k = o.keys[0];
+    if (!k) continue;
+    const yaw = (k.r[0] * Math.PI) / 180;
+    const dx = at[0] - k.p[0];
+    const dz = at[2] - k.p[2];
+    const lx = dx * Math.cos(yaw) - dz * Math.sin(yaw);
+    const lz = dx * Math.sin(yaw) + dz * Math.cos(yaw);
+    const [W, , D] = o.size;
+    if (Math.abs(lx) >= W / 2 || Math.abs(lz) >= D / 2) continue;
+    const room = Math.min(W / 2 - Math.abs(lx), D / 2 - Math.abs(lz)) - 0.35;
+    const area = W * D;
+    if (!best || area < best.area) best = { name: o.name, room, area };
+  }
+  return best && { name: best.name, room: best.room };
+}
+
 function aimPointOf(o: BlockObject, t: number): Vec3 {
   const p = evalTrack(o.keys, t).p;
   return [p[0], p[1] + aimHeight(o), p[2]];
@@ -516,7 +541,28 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
         const d = clamp(num(move.duration) ?? s.duration - t0, 0.3, s.duration - t0 || s.duration);
         const target = (move.target !== undefined ? lookPoint(move.target, t0) : null) ?? defaultLook;
         const from = keys.filter((k) => k.t <= t0).pop() ?? keys[0];
-        const startP: Vec3 = from?.p ?? [target[0], Math.max(1.4, target[1]), target[2] + 5];
+        let startP: Vec3 = from?.p ?? [target[0], Math.max(1.4, target[1]), target[2] + 5];
+        // A move that circles the target stays inside the room the target is
+        // in: an orbit as wide as the start distance otherwise swings through
+        // the walls and spends half the shot looking at plaster.
+        if (id === "orbit" || id === "orbit-half" || id === "arc") {
+          const fit = orbitRoom(s.objects.filter((o) => o.parent === s.camera.parent), target);
+          if (fit) {
+            const dx = startP[0] - target[0];
+            const dz = startP[2] - target[2];
+            const r = Math.hypot(dx, dz);
+            if (fit.room < 0.8) skipped.push(`camera ${id}: ${fit.name} is too tight round the subject for a ${id}; it was left as asked`);
+            else if (r > fit.room) {
+              const k = fit.room / Math.max(r, 1e-6);
+              startP = [target[0] + dx * k, startP[1], target[2] + dz * k];
+              skipped.push(`camera ${id}: pulled in from ${r.toFixed(1)} m to ${fit.room.toFixed(1)} m so it stays inside ${fit.name}`);
+            }
+          }
+          const r = Math.hypot(startP[0] - target[0], startP[2] - target[2]);
+          const sweep = id === "orbit" ? 2 * Math.PI : id === "orbit-half" ? Math.PI : Math.PI / 3;
+          const speed = (r * sweep) / d;
+          if (speed > 2.5) skipped.push(`camera ${id}: travels ${speed.toFixed(1)} m/s, which reads as a whip; give it longer for a steady move`);
+        }
         const a = aimAt(startP, target);
         const made = presetKeys(id, { p: startP, r: [a.yaw, a.pitch, 0], lens: from?.lens ?? lens }, target, t0, d);
         const half = 0.5 / s.fps;

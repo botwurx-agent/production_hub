@@ -5,12 +5,15 @@
 // lands as ONE undoable edit, so a layout the producer does not like is a
 // single Undo away; the card says what was done and what could not be read.
 import { useState } from "react";
+import type { Asked } from "@/lib/blocking/scene";
 
 export type SceneBarAnswer = { summary: string; skipped: string[] } | { error: string };
 
 export function SceneBar({
-  onSubmit, onUndo, placeholder, disabled, collapsible = false,
+  onSubmit, onUndo, placeholder, disabled, collapsible = false, history,
 }: {
+  /** What was asked before on this scene, oldest first; the latest few show under the bar. */
+  history?: Asked[];
   /** Folds to a small pill when idle, so it does not sit over the picture. */
   collapsible?: boolean;
   onSubmit: (prompt: string) => Promise<SceneBarAnswer>;
@@ -64,6 +67,24 @@ export function SceneBar({
               {answer.skipped.map((s, i) => <li key={i} className="list-disc">Left out: {s}</li>)}
             </ul>
           )}
+        </div>
+      )}
+      {!answer && !busy && !!history?.length && (
+        <div className="mb-1.5 rounded-[10px] border border-border bg-surface px-3 py-2 shadow-xl">
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-text-faint">Asked before</div>
+          <ul className="mt-1 space-y-1">
+            {history.slice(-3).reverse().map((a, i) => (
+              <li key={i}>
+                <button type="button" title="Use these words again" disabled={disabled}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setText(a.text)}
+                  className="block w-full text-left text-[12px] leading-snug text-text hover:text-accent">
+                  <span className="line-clamp-2">{a.text}</span>
+                  {a.result && <span className="mt-0.5 block line-clamp-1 text-[11px] text-text-muted">{a.result}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       <form onSubmit={(e) => { e.preventDefault(); void send(); }}
