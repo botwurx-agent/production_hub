@@ -844,3 +844,14 @@ export async function extractRoomFromPhoto(
   if (provider === "anthropic") return anthropicReadDocument(system, user, doc, 6000);
   throw new Error("No AI provider configured.");
 }
+
+/**
+ * The shot blocking scene bar: a producer's sentence in, the scene builder's
+ * JSON out (lib/connector-blocking.ts reads it, exactly as it reads what a
+ * connected Claude or ChatGPT sends). The system prompt is the connector
+ * tool's own guide, so the two routes cannot drift apart. Returns raw text;
+ * the caller finds the JSON in it.
+ */
+export async function draftBlockingScene(system: string, request: string): Promise<string> {
+  return complete(system, request, { maxTokens: 16000 });
+}

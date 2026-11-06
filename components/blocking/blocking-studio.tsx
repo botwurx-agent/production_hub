@@ -35,6 +35,7 @@ import { Timeline, type KeyRef, type Track } from "./timeline";
 import { Btn, useOutside } from "./ui";
 import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
 import { ShotRenderer } from "@/lib/blocking/look-render";
+import { SceneBar } from "./scene-bar";
 import { gaitAt } from "@/lib/blocking/gait";
 
 type View = "camera" | "free";
@@ -141,11 +142,13 @@ function CrosshairMark({ color, style }: { color: string; style: CrossStyle }) {
 const fileStem = (s: string) => s.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "blocking";
 
 export function BlockingStudio({
-  initial, canEdit, onChange, pipeline,
+  initial, canEdit, onChange, pipeline, describe,
 }: {
   initial: BlockScene;
   canEdit: boolean;
   onChange: (s: BlockScene) => void;
+  /** The scene bar: changes the open scene from a sentence. Absent without AI or edit access. */
+  describe?: (prompt: string, scene: BlockScene) => Promise<{ scene: BlockScene; summary: string; skipped: string[] } | { error: string }>;
   /** Where Send to pipeline puts the clip. Absent in the fixture and for view-only access. */
   pipeline?: PipelineTarget;
 }) {
@@ -1391,6 +1394,24 @@ export function BlockingStudio({
           onContextMenu={(e) => e.preventDefault()}>
           <canvas ref={canvasRef} className="block h-full w-full" style={{ cursor: view === "camera" && canEdit ? "grab" : "default" }} />
         </div>
+
+        {describe && canEdit && !recording && (
+          <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 flex justify-center">
+            <SceneBar collapsible
+              placeholder="Change the scene: add a cyclist passing behind her at 3 s, push in slower…"
+              onUndo={() => undo()}
+              onSubmit={async (prompt) => {
+                const res = await describe(prompt, sceneRef.current);
+                if ("error" in res) return res;
+                commit(() => res.scene);
+                if (tRef.current > res.scene.duration) setT(res.scene.duration);
+                const ids = new Set(res.scene.objects.map((o) => o.id));
+                if (sel && sel !== "camera" && !ids.has(sel)) setSel("camera");
+                return { summary: res.summary, skipped: res.skipped };
+              }}
+            />
+          </div>
+        )}
 
         {view === "camera" && rect.w > 0 && (
           <div className="pointer-events-none absolute" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}>

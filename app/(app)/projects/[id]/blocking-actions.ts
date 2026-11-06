@@ -9,6 +9,9 @@ import { requireStudioContext } from "@/lib/studio";
 import { reportError } from "@/lib/log";
 import { asBlockScene, type BlockScene } from "@/lib/blocking/scene";
 import type { Json } from "@/lib/database.types";
+import { aiConfigured } from "@/lib/ai";
+import { allow } from "@/lib/rate-limit";
+import { MAX_PROMPT, runSceneBar, type SceneBarResult } from "@/lib/scene-bar";
 
 /** A save crosses a Server Action; a scene is a few hundred KB at the very most. */
 const MAX_CHARS = 2_000_000;
@@ -269,4 +272,40 @@ export async function sendBlockingToPipeline(
   const generated = shots.filter((s) => s.method !== "live").map(({ id, label }) => ({ id, label }));
   const label = shots.find((s) => s.id === shotId)?.label ?? "the shot";
   return { shotId, label, replaced, shots: generated };
+}
+
+/**
+ * The scene bar: lays a scene out from a description, or changes the open one.
+ * It WRITES NOTHING: the scene comes back to the editor, which applies it as
+ * one undoable edit and saves it the usual way, so a result the producer does
+ * not like is one Undo away. Runs on the studio's AI key, so it is bounded per
+ * person and per studio (best effort, in memory, like the other limits).
+ */
+export async function describeBlockingScene(
+  projectId: string,
+  prompt: string,
+  current: unknown,
+): Promise<SceneBarResult | { error: string }> {
+  const ctx = await requireStudioContext();
+  if (ctx.isCollaborator) return { error: "Describing a scene is for studio members." };
+  if (!aiConfigured()) return { error: "AI is not set up on this deployment." };
+  const ask = typeof prompt === "string" ? prompt.replace(/\s+/g, " ").trim() : "";
+  if (!ask) return { error: "Say what the shot is." };
+  if (ask.length > MAX_PROMPT) return { error: `Keep it under ${MAX_PROMPT} characters.` };
+  const supabase = createClient();
+  const { data: canEdit } = await supabase.rpc("can_edit_project", { p_project_id: projectId });
+  if (!canEdit) return { error: "You have review access to this project, so it cannot be changed." };
+  if (!allow(`scenebar:${ctx.userId}`, 10, 5 * 60_000)) return { error: "That is a lot of scenes in a few minutes. Give it a moment." };
+  if (!allow(`scenebar-day:${ctx.studio.id}`, 150, 24 * 3600_000)) return { error: "The studio has used today's scene descriptions. It resets tomorrow." };
+  let base: BlockScene | null = null;
+  if (current != null) {
+    base = asBlockScene(current);
+    if (!base) return { error: "The open scene could not be read." };
+  }
+  try {
+    return await runSceneBar(ask, base);
+  } catch (e) {
+    reportError("describeBlockingScene", e);
+    return { error: "Something went wrong laying that out. Try again." };
+  }
 }

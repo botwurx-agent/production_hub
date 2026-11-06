@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { canEditProject, requireStudioContext } from "@/lib/studio";
 import { asBlockScene } from "@/lib/blocking/scene";
 import { BlockingWorkspace } from "@/components/blocking/blocking-workspace";
+import { aiConfigured } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Shot blocking" };
@@ -56,6 +57,7 @@ export default async function BlockingPage({
       linkedShotId={scenes.find((x) => x.id === active?.id)?.shot_id ?? null}
       canEdit={canEditProject(ctx, project.id)}
       shotId={searchParams.shot ?? null}
+      aiEnabled={aiConfigured() && !ctx.isCollaborator}
     />
   );
 }

@@ -11,15 +11,18 @@ import { toast } from "@/components/ui/toast";
 import { actionError } from "@/lib/action-result";
 import { TEMPLATES } from "@/lib/blocking/templates";
 import type { BlockScene } from "@/lib/blocking/scene";
-import { createBlockingScene, deleteBlockingScene, saveBlockingScene } from "@/app/(app)/projects/[id]/blocking-actions";
+import { createBlockingScene, deleteBlockingScene, describeBlockingScene, saveBlockingScene } from "@/app/(app)/projects/[id]/blocking-actions";
+import { SceneBar, type SceneBarAnswer } from "./scene-bar";
 import { BlockingStudio } from "./blocking-studio";
 import { STUDIO_VARS, useOutside } from "./ui";
 import type { PipelineShot } from "./send-to-pipeline";
 
 
 export function BlockingWorkspace({
-  projectId, projectTitle, scenes, active, canEdit, shotId, studioId, shots: initialShots, linkedShotId,
+  projectId, projectTitle, scenes, active, canEdit, shotId, studioId, shots: initialShots, linkedShotId, aiEnabled = false,
 }: {
+  /** The scene bar runs on the studio's AI key; hidden when none is set or for view-only access. */
+  aiEnabled?: boolean;
   studioId: string;
   shots: PipelineShot[];
   linkedShotId: string | null;
@@ -76,6 +79,26 @@ export function BlockingWorkspace({
     router.push(href(res.id));
   };
 
+  const describe = async (prompt: string, current: BlockScene | null) => {
+    const res = await describeBlockingScene(projectId, prompt, current);
+    const err = actionError(res);
+    if (err || !res) return { error: err ?? "That did not reach the server. Try again." };
+    return res;
+  };
+
+  /** A new scene from a description: laid out, saved, then opened. */
+  const startFromWords = async (prompt: string): Promise<SceneBarAnswer> => {
+    const res = await describe(prompt, null);
+    if ("error" in res) return res;
+    const made = await createBlockingScene(projectId, res.scene, shotId);
+    const err = actionError(made);
+    if (err || !made || !("id" in made)) return { error: err ?? "Could not create the scene." };
+    setMenu(false);
+    router.push(href(made.id));
+    return { summary: res.summary, skipped: res.skipped };
+  };
+  const bar = aiEnabled && canEdit;
+
   const remove = async () => {
     if (!active) return;
     const ok = await confirmAction({ title: `Delete "${liveName ?? active.data.name}"?`, body: "The scene and its keyframes go. This cannot be undone.", confirmLabel: "Delete scene" });
@@ -124,7 +147,14 @@ export function BlockingWorkspace({
                 + New scene
               </button>
               {menu && (
-                <div className="absolute right-0 top-9 z-40 w-[300px] rounded-[10px] border border-border bg-surface p-1.5 shadow-2xl">
+                <div className={`absolute right-0 top-9 z-40 ${bar ? "w-[420px]" : "w-[300px]"} rounded-[10px] border border-border bg-surface p-1.5 shadow-2xl`}>
+                  {bar && (
+                    <div className="border-b border-border p-1.5 pb-2.5">
+                      <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-text-faint">Describe it</p>
+                      <SceneBar placeholder="A woman walks her dog along a city sidewalk, tracking side on…" onSubmit={startFromWords} />
+                      <p className="mb-0.5 mt-2.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-text-faint">Or start from</p>
+                    </div>
+                  )}
                   {TEMPLATES.map((tp) => (
                     <button key={tp.id} type="button" onClick={() => create(tp.make)}
                       className="block w-full rounded-[7px] px-2.5 py-2 text-left hover:bg-surface-2">
@@ -147,6 +177,7 @@ export function BlockingWorkspace({
       <main className="hidden min-h-0 flex-1 lg:block">
         {active ? (
           <BlockingStudio key={active.id} initial={active.data} canEdit={canEdit} onChange={onChange}
+            describe={bar ? (p, sc) => describe(p, sc) : undefined}
             pipeline={canEdit ? {
               projectId, studioId, sceneId: active.id, shots: pipeShots, linkedShotId: linked,
               onLinked: (id, list) => { setLinked(id); setPipeShots(list); },
@@ -161,8 +192,15 @@ export function BlockingWorkspace({
               <p className="mt-2 max-w-[560px] text-[14px] leading-relaxed text-text-muted">
                 A low-poly scene with a keyframed camera. Record it as a blocking clip and Seedance follows the camera move, with the first frame as its start image.
               </p>
+              {bar && (
+                <div className="mt-6">
+                  <p className="mb-2 text-[12px] font-semibold text-text">Describe the shot</p>
+                  <SceneBar placeholder="A runner crosses a coastal road at dawn, camera tracking alongside, then pulls ahead…" onSubmit={startFromWords} />
+                  <p className="mt-5 text-[12px] font-semibold text-text">Or start from a template</p>
+                </div>
+              )}
               {canEdit ? (
-                <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div className={`${bar ? "mt-2" : "mt-6"} grid gap-2 sm:grid-cols-2 lg:grid-cols-3`}>
                   {TEMPLATES.map((tp) => (
                     <button key={tp.id} type="button" disabled={busy} onClick={() => create(tp.make)}
                       className="rounded-[12px] border border-border bg-surface p-4 text-left transition hover:border-accent disabled:opacity-50">

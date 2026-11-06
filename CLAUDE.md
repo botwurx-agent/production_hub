@@ -8381,8 +8381,8 @@ the side window to the dog, out through the windshield, ending ahead.
   made, and while recording the editor's own view draws plainly. In headless
   swiftshader a clip of an 8 s scene came out 15 s long, almost certainly
   the software renderer's frame rate; check the length of the first clip
-  recorded on a real machine. NOT DONE (next, in the agreed order): the
-  scene bar, rig presets, a tram and a bus.
+  recorded on a real machine. NOT DONE (next, in the agreed order): rig
+  presets, a tram and a bus.
 - PEOPLE WALK AND RUN (2026-11-06, no migration). A person whose track moves
   steps at that speed: nothing to set, the legs follow the keys.
   lib/blocking/gait.ts is pure: speed and direction in the person's OWN frame
@@ -8411,6 +8411,44 @@ the side window to the dog, out through the windshield, ending ahead.
   a run, a sprint). /dev/blocking?gait=<m/s> is one person crossing frame
   side on (&back=1 from behind, &child=1 a child). Turning on the spot does
   not step.
+- THE SCENE BAR (2026-11-06, no migration). Say what the shot is, or what
+  to change, and the scene is laid out or changed. In the editor it is a
+  "Describe a change" pill under the camera frame that opens into a bar
+  (components/blocking/scene-bar.tsx, collapsible so it never sits over the
+  picture); to START a scene it is "Describe it" in the + New scene menu and
+  "Describe the shot" on the empty page, which lay the scene out, create it
+  with createBlockingScene and open it.
+  ONE BUILDER FOR BOTH ROUTES: the model writes the SAME JSON the connector's
+  create_blocking_scene takes, and the same pure buildBlockingScene turns it
+  into a scene; lib/scene-bar.ts builds its system prompt from BLOCKING_TOOL's
+  own description and input schema, so a scene from the bar and one from a
+  connected Claude cannot drift apart.
+  EDIT MODE: buildBlockingScene(input, base) starts from the open scene
+  instead of a template. The model is shown the scene (sceneForPrompt: every
+  object by NAME, where it starts, its route, gestures, the camera keys) and
+  returns only changes: `objects` to add (they may point at existing things by
+  name), `change` [{name, ...}] for existing ones (a position, facing or moves
+  restarts that thing's route; gestures replace its gestures; anything else
+  left out stays), `remove` [names] (riders, aim and reach pointing at a
+  removed thing are let go), `camera` only when it changes (keys replace the
+  camera's; a move alone starts from the camera as it is). Untouched objects
+  keep their ids and keys exactly. Names it cannot find are listed as left out.
+  THE ACTION WRITES NOTHING: describeBlockingScene (blocking-actions.ts)
+  returns the scene and the editor applies it through commit, so the whole
+  change is ONE UNDO, with an Undo on the result card that says what was done
+  and lists what was left out. The normal autosave then saves it.
+  ON OUR AI KEY (draftBlockingScene in lib/ai.ts, 16k token budget), gated on
+  aiConfigured, staff only (not collaborators) and can_edit_project, prompt
+  capped at 1,500 characters, and bounded IN MEMORY (best effort, like the
+  other limits): 10 per person per 5 minutes, 150 per studio per day. Nothing
+  records tokens yet. Pricing still lists only the connector route for
+  describing a scene; whether the bar is a tier line is the operator's call.
+  Verified in node (edit keeps ids, removes, adds a rider in a vehicle frame,
+  adds a push from the existing camera) and in Chromium on /dev/blocking?bar=1,
+  which answers with a canned edit through the real builder (a session has no
+  AI key). NOT RUN against a live model: the first real description is the
+  test, and the thing to watch is whether gpt-5-mini returns well-formed JSON
+  for a big set.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.

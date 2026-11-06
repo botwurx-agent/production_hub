@@ -107,6 +107,21 @@ function Inner() {
     <div data-theme="dark" className="fixed inset-0 bg-bg"
       style={STUDIO_VARS}>
       <BlockingStudio initial={scene} canEdit onChange={() => {}}
+        describe={q.get("bar") ? async (_prompt, cur) => {
+          // A pretend answer, since a session has no AI key: the same builder
+          // the real bar runs, on a canned edit, after a short wait.
+          await new Promise((r) => setTimeout(r, 900));
+          const r = buildBlockingScene({
+            summary: "Added a cyclist riding past behind the lead and pushed in on her for the last three seconds.",
+            objects: [
+              { ref: "cyc", kind: "bike", name: "Cyclist", x: 3.5, z: -14, moves: [{ t: cur.duration, x: 3.5, z: 10 }] },
+              { ref: "rider", kind: "person", name: "Rider", rides_with: "cyc", x: 0, y: 0.55, z: -0.1, pose: "seated" },
+              { kind: "unicorn", name: "Unicorn" },
+            ],
+            camera: { move: { preset: "push", target: cur.objects[0]?.name ?? "", start: Math.max(0, cur.duration - 3), duration: 3 } },
+          }, cur);
+          return "error" in r ? r : { scene: r.scene, summary: "Added a cyclist riding past behind the lead and pushed in on her for the last three seconds.", skipped: r.skipped };
+        } : undefined}
         pipeline={q.get("send") ? {
           projectId: "00000000-0000-0000-0000-000000000001",
           studioId: "00000000-0000-0000-0000-000000000002",

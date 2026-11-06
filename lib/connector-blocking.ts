@@ -133,16 +133,26 @@ function gestureKey(keys: Key[], t: number, fps: number, g: [number, number], gk
  * `skipped`, rather than refusing the whole scene: a dropped tree costs a
  * line, a refused scene costs the conversation.
  */
-export function buildBlockingScene(input: Json): BuildResult | { error: string } {
+export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult | { error: string } {
   const skipped: string[] = [];
 
-  // Start from a template when asked, else an empty stage.
-  const templateId = text(input.template, 40).toLowerCase();
-  const template = templateId ? TEMPLATES.find((t) => t.id === templateId || t.name.toLowerCase() === templateId) : undefined;
-  if (templateId && !template) skipped.push(`template "${templateId}" is not one of ${TEMPLATES.map((t) => t.id).join(", ")}; started from an empty stage`);
-  const s: BlockScene = template ? template.make() : blankScene();
-  const fromTemplate = !!template;
-  if (!fromTemplate) s.objects = [];
+  // EDIT MODE: with a base scene, everything below changes that scene rather
+  // than starting one. Its objects keep their ids and keys unless a `change`
+  // names them, and its camera is kept unless `camera` is given.
+  let s: BlockScene;
+  let fromTemplate: boolean;
+  if (base) {
+    s = JSON.parse(JSON.stringify(base)) as BlockScene;
+    fromTemplate = true;
+  } else {
+    // Start from a template when asked, else an empty stage.
+    const templateId = text(input.template, 40).toLowerCase();
+    const template = templateId ? TEMPLATES.find((t) => t.id === templateId || t.name.toLowerCase() === templateId) : undefined;
+    if (templateId && !template) skipped.push(`template "${templateId}" is not one of ${TEMPLATES.map((t) => t.id).join(", ")}; started from an empty stage`);
+    s = template ? template.make() : blankScene();
+    fromTemplate = !!template;
+    if (!fromTemplate) s.objects = [];
+  }
 
   const name = text(input.name, 120);
   if (name) s.name = name;
@@ -188,8 +198,27 @@ export function buildBlockingScene(input: Json): BuildResult | { error: string }
   const byRef = new Map<string, BlockObject>();
   const rawObjects = Array.isArray(input.objects) ? input.objects : [];
   if (rawObjects.length > MAX_OBJECTS_PER_CALL) skipped.push(`${rawObjects.length - MAX_OBJECTS_PER_CALL} objects past the ${MAX_OBJECTS_PER_CALL} per call`);
-  type Pending = { o: BlockObject; raw: Json; ref: string };
+  type Pending = { o: BlockObject; raw: Json; ref: string; change?: boolean };
   const pending: Pending[] = [];
+  const findByName = (v: unknown): BlockObject | undefined => {
+    const r = text(v, 60).toLowerCase();
+    return r ? s.objects.find((o) => o.name.toLowerCase() === r) : undefined;
+  };
+
+  // Edit mode: take things out first, so a `change` or a new object cannot
+  // point at something that is about to go.
+  if (base && Array.isArray(input.remove)) {
+    for (const r of input.remove.slice(0, MAX_OBJECTS_PER_CALL)) {
+      const o = findByName(r);
+      if (!o) { skipped.push(`remove "${text(r, 60)}": nothing here is called that`); continue; }
+      s.objects = s.objects.filter((x) => x.id !== o.id);
+      // Anything riding with it now stands where it was, in the world.
+      for (const x of s.objects) if (x.parent === o.id) x.parent = null;
+      if (s.camera.parent === o.id) s.camera.parent = null;
+      if (s.camera.aim.target === o.id) s.camera.aim = { ...s.camera.aim, target: null };
+      for (const x of s.objects) if (x.reach?.target === o.id) x.reach = { ...x.reach, target: null };
+    }
+  }
   rawObjects.slice(0, MAX_OBJECTS_PER_CALL).forEach((raw, i) => {
     if (!isObj(raw)) return;
     const kind = text(raw.kind, 30).toLowerCase();
@@ -243,6 +272,43 @@ export function buildBlockingScene(input: Json): BuildResult | { error: string }
     }
     pending.push({ o, raw, ref });
   });
+  // Edit mode: changes to things already in the scene, named as they are in
+  // the studio's list. Only what a change says is touched.
+  if (base && Array.isArray(input.change)) {
+    for (const raw of input.change.slice(0, MAX_OBJECTS_PER_CALL)) {
+      if (!isObj(raw)) continue;
+      const o = findByName(raw.name);
+      if (!o) { skipped.push(`change "${text(raw.name, 60)}": nothing here is called that`); continue; }
+      const bk = blockKind(o.kind);
+      const rename = text(raw.rename, 60);
+      if (rename) o.name = rename;
+      const color = text(raw.color, 7);
+      if (/^#[0-9a-f]{6}$/i.test(color)) o.color = color;
+      const pose = text(raw.pose, 20).toLowerCase();
+      if (pose) {
+        if (bk.poses?.includes(pose)) o.pose = pose;
+        else skipped.push(`${o.name}: pose "${pose}"${bk.poses ? ` (use ${bk.poses.join(", ")})` : " (this kind has no poses)"}`);
+      }
+      const size = point(raw.size);
+      if (size) o.size = size.map((v) => clamp(v, 0.01, 2000)) as Vec3;
+      const height = num(raw.height);
+      if (!size && height !== null && (o.kind === "person" || o.kind === "child")) {
+        const k = clamp(height, 0.5, 2.4) / o.size[1];
+        o.size = [o.size[0] * k, clamp(height, 0.5, 2.4), o.size[2] * k];
+      }
+      // A new position, facing or route starts the object's track again from
+      // there; gestures alone are added to the track it has.
+      const placed = raw.x !== undefined || raw.z !== undefined || raw.y !== undefined || raw.facing !== undefined || raw.face_toward !== undefined || Array.isArray(raw.moves);
+      if (placed) {
+        const at = o.keys[0];
+        o.keys = [{ ...at, p: [num(raw.x) ?? at.p[0], num(raw.y) ?? at.p[1], num(raw.z) ?? at.p[2]], r: [...at.r] as Vec3 }];
+        if (raw.facing === undefined && raw.face_toward === undefined) (raw as Json).facing = at.r[0];
+      }
+      if (Array.isArray(raw.gestures)) o.keys = o.keys.filter((k) => !k.g || k.t === o.keys[0].t);
+      byRef.set(o.name.toLowerCase(), o);
+      pending.push({ o, raw, ref: o.name, change: !placed });
+    }
+  }
   const lookup = (v: unknown): BlockObject | undefined => {
     const r = text(v, 60).toLowerCase();
     return r ? byRef.get(r) ?? s.objects.find((o) => o.name.toLowerCase() === r) : undefined;
@@ -257,7 +323,8 @@ export function buildBlockingScene(input: Json): BuildResult | { error: string }
   }
 
   // Facing, then moves.
-  for (const { o, raw } of pending) {
+  for (const { o, raw, change } of pending) {
+    if (change) continue;
     const start = o.keys[0].p;
     let yaw = num(raw.facing) ?? 0;
     if (raw.face_toward !== undefined) {
@@ -316,7 +383,8 @@ export function buildBlockingScene(input: Json): BuildResult | { error: string }
     }
     return top;
   };
-  for (const { o, raw } of pending) {
+  for (const { o, raw, change } of pending) {
+    if (change) continue;
     if (o.parent || FLAT_GROUND.has(o.kind) || blockKind(o.kind).category === "environment") continue;
     const moves = Array.isArray(raw.moves) ? raw.moves.filter(isObj) : [];
     o.keys = o.keys.map((k, i) => {
@@ -437,6 +505,8 @@ export function buildBlockingScene(input: Json): BuildResult | { error: string }
     }
 
     const move = isObj(c.move) ? c.move : null;
+    // Editing, a move with no keys of its own starts from the camera as it is.
+    if (base && move && !keys.length) keys.push(...s.camera.keys.map((k) => ({ ...k })));
     if (move) {
       const id = text(move.preset, 20).toLowerCase() as PresetId;
       if (!PRESET_IDS.includes(id)) skipped.push(`camera move "${id}" (use ${PRESET_IDS.join(", ")})`);
@@ -488,4 +558,56 @@ export function describeScene(s: BlockScene): string[] {
     const rides = o.parent ? `, rides with ${byId.get(o.parent)?.name ?? "?"}` : "";
     return `${o.name} (${o.kind}${o.pose ? `, ${o.pose}` : ""}), ${moves}${rides}${gestures.length ? `, gestures: ${gestures.join(", ")}` : ""}`;
   });
+}
+
+/**
+ * The scene as the scene bar's model reads it before an edit: every object by
+ * its name (which is how a change or a remove names it), where it starts,
+ * where it goes, what it does, and what the camera does. Rounded, so the
+ * prompt stays short and the model is not tempted to echo noise back.
+ */
+export function sceneForPrompt(s: BlockScene): Json {
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const byId = new Map(s.objects.map((o) => [o.id, o]));
+  return {
+    name: s.name,
+    duration: s.duration,
+    aspect: s.aspect,
+    look: s.look,
+    environment: { ground: s.environment.ground, sky: s.environment.sky },
+    objects: s.objects.map((o) => {
+      const k0 = o.keys[0];
+      const route = o.keys.filter((k) => !k.g && k.t > 0);
+      const gestures = o.keys.filter((k) => k.g && k.g[0] > 0.5).map((k) => ({ gesture: k.gk ?? "reach", at: r2(k.t) }));
+      return {
+        name: o.name,
+        kind: o.kind,
+        ...(o.pose ? { pose: o.pose } : {}),
+        x: r2(k0.p[0]), y: r2(k0.p[1]), z: r2(k0.p[2]), facing: Math.round(k0.r[0]),
+        size: o.size.map(r2),
+        ...(o.parent ? { rides_with: byId.get(o.parent)?.name ?? null } : {}),
+        ...(route.length ? { moves: route.map((k) => ({ t: r2(k.t), x: r2(k.p[0]), z: r2(k.p[2]) })) } : {}),
+        ...(gestures.length ? { gestures } : {}),
+      };
+    }),
+    camera: {
+      ...(s.camera.parent ? { rides_with: byId.get(s.camera.parent)?.name ?? null } : {}),
+      ...(s.camera.aim.target ? { aim_at: byId.get(s.camera.aim.target)?.name ?? null } : {}),
+      keys: s.camera.keys.map((k) => ({ t: r2(k.t), x: r2(k.p[0]), y: r2(k.p[1]), z: r2(k.p[2]), lens: Math.round(k.lens) })),
+    },
+  };
+}
+
+/** The JSON object in a model's answer: fences stripped, prose around it ignored. */
+export function jsonFromText(raw: string): Json | null {
+  const t = raw.replace(/```(?:json)?/gi, "").trim();
+  const a = t.indexOf("{");
+  const b = t.lastIndexOf("}");
+  if (a < 0 || b <= a) return null;
+  try {
+    const v = JSON.parse(t.slice(a, b + 1));
+    return isObj(v) ? v : null;
+  } catch {
+    return null;
+  }
 }
