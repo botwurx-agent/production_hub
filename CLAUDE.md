@@ -8592,6 +8592,20 @@ the side window to the dog, out through the windshield, ending ahead.
   any side; through the camera, in a clip and in a saved frame every wall is
   solid. A camera placed outside a closed room now sees the wall, which is
   correct: pick Open or a doorway for that shot.
+- THE TIMELINE LISTS ONLY WHAT MOVES (2026-11-06, operator: on a city
+  scene every building and tree had a row). components/blocking/timeline.tsx
+  now shows the camera, anything with two or more keys, anyone riding with
+  something that moves (INDENTED under it: the driver, passenger and dog sit
+  under the SUV), and whatever is selected, so a still object can still be
+  keyed. Everything else folds into one "Set: N still" row that expands
+  (remembered per browser, "blocking.timelineStill"). DERIVED from the keys
+  every render, never stored: keying a building moves it up on its own,
+  clearing its keys drops it back. Nothing about saved scenes changed.
+  AGREED NEXT, in order: group the left-hand outliner (people and animals,
+  vehicles, then the set, folded on a big scene), then movement pads for
+  things that can move (people, animals, vehicles, bus, tram), relative to
+  their own facing (forward/back, step sideways except vehicles, turn),
+  keyed by the normal edit rule. Static kinds keep keyframes, just no pad.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.

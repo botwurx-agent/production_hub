@@ -1,10 +1,10 @@
 "use client";
 
-// Shot blocking: the dope sheet. One row for the camera and one per object,
-// each key a diamond on a shared ruler. Click the ruler or an empty stretch to
+// Shot blocking: the dope sheet. A row for the camera and for each thing
+// that moves (the still set folds into one row), each key a diamond on a shared ruler. Click the ruler or an empty stretch to
 // move the playhead, click a diamond to select it, drag it to re-time it
 // (snapped to frames). Bars between keys show where something is moving.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BlockScene, Key } from "@/lib/blocking/scene";
 import { snap, timecode } from "@/lib/blocking/keys";
 import { Btn, Num, Select } from "./ui";
@@ -47,14 +47,57 @@ export function Timeline({
     return snap(Math.min(D, Math.max(0, ((clientX - r.left) / r.width) * D)), fps);
   };
   const pct = (x: number) => `${(Math.min(D, Math.max(0, x)) / D) * 100}%`;
-  const rows: { id: Track; name: string; color: string; keys: Key[] }[] = [
-    { id: "camera", name: "Camera", color: "var(--h-amber)", keys: scene.camera.keys },
-    // What moves comes first: on a big set the hills and the road would
-    // otherwise push the car and the people off the bottom of the sheet.
-    ...[...scene.objects]
-      .sort((x, y) => Number(y.keys.length > 1) - Number(x.keys.length > 1) || Number(!!y.parent) - Number(!!x.parent))
-      .map((o) => ({ id: o.id, name: o.name, color: o.color, keys: o.keys })),
-  ];
+  // Only what moves earns a row: the camera, anything with two or more keys,
+  // anyone riding along with something that moves (indented under it), and
+  // whatever is selected, so it can be keyed. The rest of the set folds into
+  // one row. Worked out from the keys every render, never stored, so keying a
+  // building moves it up and clearing its keys drops it back.
+  const [showStill, setShowStill] = useState(false);
+  useEffect(() => {
+    try { setShowStill(localStorage.getItem("blocking.timelineStill") === "1"); } catch { /* fine */ }
+  }, []);
+  const toggleStill = () => {
+    const v = !showStill;
+    setShowStill(v);
+    try { localStorage.setItem("blocking.timelineStill", v ? "1" : "0"); } catch { /* fine */ }
+  };
+  const byId = new Map(scene.objects.map((o) => [o.id, o]));
+  const movingMemo = new Map<string, boolean>();
+  const moves = (id: string, seen = new Set<string>()): boolean => {
+    if (movingMemo.has(id)) return movingMemo.get(id)!;
+    const o = byId.get(id);
+    if (!o || seen.has(id)) return false;
+    seen.add(id);
+    const v = o.keys.length > 1 || (!!o.parent && moves(o.parent, seen));
+    movingMemo.set(id, v);
+    return v;
+  };
+  type Row = { id: Track; name: string; color: string; keys: Key[]; depth: number; still?: boolean };
+  const rows: Row[] = [{ id: "camera", name: "Camera", color: "var(--h-amber)", keys: scene.camera.keys, depth: 0 }];
+  const placed = new Set<string>();
+  const kids = (pid: string) => scene.objects.filter((o) => o.parent === pid);
+  const place = (id: string, depth: number) => {
+    const o = byId.get(id);
+    if (!o || placed.has(id)) return;
+    placed.add(id);
+    rows.push({ id: o.id, name: o.name, color: o.color, keys: o.keys, depth, still: !moves(id) });
+    for (const k of kids(id)) if (moves(k.id) || k.id === selected) place(k.id, depth + 1);
+  };
+  // A moving thing is listed at the top of its own chain: a passenger sits
+  // under its car, the car at the left edge.
+  const topMover = (id: string) => {
+    let cur = byId.get(id);
+    const seen = new Set<string>();
+    while (cur?.parent && byId.has(cur.parent) && moves(cur.parent) && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      cur = byId.get(cur.parent);
+    }
+    return cur?.id ?? id;
+  };
+  for (const o of scene.objects) if (moves(o.id)) place(topMover(o.id), 0);
+  if (selected && selected !== "camera" && byId.has(selected) && !placed.has(selected)) place(selected, 0);
+  const stillOnes = scene.objects.filter((o) => !placed.has(o.id));
+  const stillRows: Row[] = stillOnes.map((o) => ({ id: o.id, name: o.name, color: o.color, keys: o.keys, depth: 1, still: true }));
   // Second ticks, thinned out so labels never collide.
   const every = D <= 10 ? 1 : D <= 20 ? 2 : 5;
   const ticks: number[] = [];
@@ -108,16 +151,16 @@ export function Timeline({
       <div className="flex min-h-0 flex-1 overflow-y-auto">
         <div className="w-[170px] shrink-0 border-r border-border">
           <div className="h-6 border-b border-border" />
-          {rows.map((r) => (
-            <button key={r.id} type="button" onClick={() => onSelectTrack(r.id)}
-              className={`flex h-7 w-full items-center gap-2 border-b border-border px-2 text-left text-[11.5px] ${
-                selected === r.id ? "bg-accent-soft text-text" : "text-text-muted hover:bg-surface-2"
-              }`}>
-              <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: r.color }} />
-              <span className="truncate">{r.name}</span>
-              {r.keys.length > 1 && <span className="ml-auto text-[10px] text-text-faint">{r.keys.length}</span>}
+          {rows.map((r) => <NameRow key={r.id} r={r} selected={selected} onSelectTrack={onSelectTrack} />)}
+          {stillOnes.length > 0 && (
+            <button type="button" onClick={toggleStill}
+              title={showStill ? "Fold the still objects away" : "Show the objects that do not move"}
+              className="flex h-7 w-full items-center gap-2 border-b border-border px-2 text-left text-[11.5px] text-text-faint hover:bg-surface-2">
+              <span className="w-2.5 shrink-0 text-center text-[9px]">{showStill ? "▾" : "▸"}</span>
+              <span className="truncate">Set: {stillOnes.length} still</span>
             </button>
-          ))}
+          )}
+          {showStill && stillRows.map((r) => <NameRow key={r.id} r={r} selected={selected} onSelectTrack={onSelectTrack} />)}
         </div>
         <div ref={area} className="relative min-w-0 flex-1 select-none">
           <div className="relative h-6 cursor-ew-resize border-b border-border bg-surface-2"
@@ -129,7 +172,8 @@ export function Timeline({
               </div>
             ))}
           </div>
-          {rows.map((r) => {
+          {[...rows, ...(stillOnes.length ? [null] : []), ...(showStill ? stillRows : [])].map((r, ri) => {
+            if (!r) return <div key={`still-${ri}`} className="h-7 border-b border-border" />;
             const keys = r.keys;
             return (
               <div key={r.id}
@@ -186,5 +230,24 @@ export function Timeline({
         </div>
       </div>
     </div>
+  );
+}
+
+function NameRow({ r, selected, onSelectTrack }: {
+  r: { id: Track; name: string; color: string; keys: Key[]; depth: number; still?: boolean };
+  selected: Track | null;
+  onSelectTrack: (track: Track) => void;
+}) {
+  return (
+    <button type="button" onClick={() => onSelectTrack(r.id)}
+      style={{ paddingLeft: 8 + r.depth * 14 }}
+      className={`flex h-7 w-full items-center gap-2 border-b border-border pr-2 text-left text-[11.5px] ${
+        selected === r.id ? "bg-accent-soft text-text" : "text-text-muted hover:bg-surface-2"
+      }`}>
+      {r.depth > 0 && <span className="-ml-1 text-[10px] text-text-faint">└</span>}
+      <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: r.color }} />
+      <span className="truncate">{r.name}</span>
+      {r.keys.length > 1 && <span className="ml-auto text-[10px] text-text-faint">{r.keys.length}</span>}
+    </button>
   );
 }
