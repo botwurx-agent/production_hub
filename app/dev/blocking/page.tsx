@@ -51,6 +51,8 @@ function Inner() {
     const kd = BLOCK_KINDS.find((k) => k.kind === q.get("kind"));
     if (kd) {
       const o = newObject(kd.kind, [0, 0, 0], 0, []);
+      const sz = q.get("size");
+      if (sz) o.size = sz.split(",").map(Number) as [number, number, number];
       const d = Math.max(kd.size[0], kd.size[1], kd.size[2]) * 1.9 + 1.2;
       s.objects = [o];
       s.camera = { ...s.camera, aim: { target: o.id, frame: [0, 0] }, keys: [{ ...s.camera.keys[0], p: [d * 0.55, kd.size[1] * 0.5 + d * 0.35, d * 0.8] }] };

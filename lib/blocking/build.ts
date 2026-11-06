@@ -1769,14 +1769,20 @@ function bookshelf(o: BlockObject, paint: Paint, tint: Tint) {
 function tvStand(o: BlockObject, paint: Paint, tint: Tint) {
   const [W, H, D] = o.size;
   const g = new THREE.Group();
-  const unit = 0.5;
-  g.add(box(W, unit, D, tint("#8f7458"), 0, unit / 2, 0));
+  // The screen is always 16:9 off the width, whatever height was given, so a
+  // short or thin size never squashes it into a sliver; the media unit takes
+  // what height is left, within the range real ones come in.
   const sw = W * 0.8;
-  const sh = Math.min(H - unit - 0.08, sw * 0.5625);
+  const sh = sw * 0.5625;
+  const unit = Math.min(0.6, Math.max(0.35, H - sh - 0.1));
+  const ud = Math.max(0.35, D);
+  g.add(box(W, unit, ud, tint("#8f7458"), 0, unit / 2, 0));
   g.add(box(0.3, 0.04, 0.2, paint(1), 0, unit + 0.02, 0));
   g.add(box(0.05, 0.06, 0.05, paint(1), 0, unit + 0.07, 0));
   g.add(box(sw, sh, 0.05, paint(1), 0, unit + 0.1 + sh / 2, 0));
-  g.add(box(sw - 0.04, sh - 0.04, 0.01, paint(0.4), 0, unit + 0.1 + sh / 2, 0.026));
+  // The glass reads as a screen rather than a black slab: a cool grey that
+  // stays a screen in clay and blockout alike.
+  g.add(box(sw - 0.05, sh - 0.05, 0.01, tint("#4b5a6b"), 0, unit + 0.1 + sh / 2, 0.026));
   return g;
 }
 
