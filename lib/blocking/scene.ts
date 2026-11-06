@@ -29,7 +29,7 @@ export const EASES: { id: Ease; name: string; hint: string }[] = [
 /**
  * `g` is a person's gesture at this key: [amount, lean]. Amount is 0 to 1, how
  * far into the gesture the person is (0 is the pose's own arms, 1 the gesture
- * done); lean is degrees, back positive. Absent means 0, 0. `gk` is which
+ * done); lean is degrees, back positive and forward negative. Absent means 0, 0. `gk` is which
  * gesture (GESTURES); absent means "reach", what every key written before the
  * menu existed was.
  */
@@ -114,7 +114,7 @@ export const HAIR_STYLES = [
 export type HairStyle = (typeof HAIR_STYLES)[number]["id"];
 
 export type Reach = { target: string | null; hand: "right" | "left"; stroke: boolean };
-export const LEAN_MIN = -25;
+export const LEAN_MIN = -40;
 export const LEAN_MAX = 45;
 
 export type Shake = { amount: number; speed: number };

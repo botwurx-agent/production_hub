@@ -54,6 +54,18 @@ function Inner() {
       const put = (kind: string, x: number, z: number) => newObject(kind, [x, 0.75, z], 0, []);
       s.objects = [table, put("plate", -0.35, 0.15), put("bowl", 0.05, 0.25), put("glass", -0.1, -0.1), put("wineglass", 0.25, -0.1), put("bottle", 0.45, 0.15), put("can", 0.6, -0.15), put("mug", -0.6, -0.15)];
       s.camera = { ...s.camera, parent: null, flow: "keys", aim: { target: null, frame: [0, 0] }, keys: [{ t: 0, p: [-0.35, 1.25, 0.9], r: [0, -28, 0], lens: 35, ease: "linear" }] };
+      if (q.get("table") === "diner") {
+        // A man at the table reaching for his plate: the reach leans him in.
+        const chair = newObject("chair", [-0.35, 0, -0.75], 0, []);
+        const man = newObject("person", [-0.35, 0, -0.7], 0, []);
+        man.pose = "seated";
+        s.objects[1].keys = [{ ...s.objects[1].keys[0], p: [-0.35, 0.75, -0.18] }];
+        man.reach = { target: s.objects[1].id, hand: "right", stroke: false };
+        const amt = Number(q.get("amt") ?? 1);
+        man.keys = [{ ...man.keys[0], g: [amt, Number(q.get("lean") ?? 0)] }];
+        s.objects.push(chair, man);
+        s.camera = { ...s.camera, keys: [{ t: 0, p: [2.4, 1.3, -0.3], r: [90, -12, 0], lens: 35, ease: "linear" }] };
+      }
     }
     const kd = BLOCK_KINDS.find((k) => k.kind === q.get("kind"));
     if (kd) {

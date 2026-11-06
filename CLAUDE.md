@@ -8592,6 +8592,22 @@ the side window to the dog, out through the windshield, ending ahead.
   any side; through the camera, in a clip and in a saved frame every wall is
   solid. A camera placed outside a closed room now sees the wall, which is
   correct: pick Open or a doorway for that shot.
+- LEAN FORWARD, AND A REACH LEANS BY ITSELF (2026-11-06, operator: a
+  seated man reaching for his plate "unnaturally" stretched his arm, and
+  there was only Lean back). Two parts. (1) LEAN IS SIGNED and the panel says
+  so: "Lean" is Forward / Upright / Back plus "Forward by" or "Back by" in
+  degrees; it is still Key.g[1], back positive, forward negative, and
+  LEAN_MIN went -25 to -40 (no migration, older keys read the same). The
+  one-press reach no longer forces 30 degrees back. (2) poseRig searches lean
+  WITH the hip turn for a reach: a relaxed reach is 78% of the arm plus the
+  hand, and past that the body leans toward the target (forward over a table,
+  back toward a dog on the rear seat), up to 40 degrees on top of the keyed
+  lean, cheapest change first (AUTO_LEANS in build.ts), eased in by the reach
+  amount. So the keyed lean is posture and the reach finishes the job. A plate
+  at a normal place setting gets a slight lean with a bent elbow; one mid-table
+  gets a deep lean. /dev/blocking?table=diner (&amt, &lean) is a seated man at
+  the table reaching for his plate. The connector and scene bar describe
+  negative lean as forward.
 - THE TIMELINE LISTS ONLY WHAT MOVES (2026-11-06, operator: on a city
   scene every building and tree had a row). components/blocking/timeline.tsx
   now shows the camera, anything with two or more keys, anyone riding with

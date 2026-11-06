@@ -522,7 +522,9 @@ function GestureSection({ api, o }: { api: StudioApi; o: BlockObject }) {
   const gap = kind === "reach" && reach.target ? api.reachGap(o.id) : 0;
   const target = reach.target ? api.scene.objects.find((x) => x.id === reach.target) : undefined;
   const missing = spec.target === "required" && !reach.target;
-  const leanFor = (k: GestureKind) => (k === "reach" ? Math.max(g[1], 30) : g[1]);
+  const leanFor = (_k: GestureKind) => g[1];
+  const leanDir = g[1] < -0.5 ? "forward" : g[1] > 0.5 ? "back" : "upright";
+  const setLean = (v: number) => api.writePose(o.id, { g: [g[0], v], gk: kind }, `lean${o.id}`);
   // Picking a gesture keys it at the playhead. If the person is not already
   // mid-gesture, it comes in over the 0.6 s before, so it starts here rather
   // than creeping up from the previous key.
@@ -576,9 +578,16 @@ function GestureSection({ api, o }: { api: StudioApi; o: BlockObject }) {
       <Row label="Amount">
         <Num value={g[0] * 100} step={5} min={0} max={100} suffix="%" digits={0} onChange={(v) => api.writePose(o.id, { g: [v / 100, g[1]], gk: kind }, `reach${o.id}`)} disabled={dis || missing} />
       </Row>
-      <Row label="Lean back">
-        <Num value={g[1]} step={1} min={LEAN_MIN} max={LEAN_MAX} suffix="°" digits={0} onChange={(v) => api.writePose(o.id, { g: [g[0], v], gk: kind }, `lean${o.id}`)} disabled={dis} />
+      <Row label="Lean">
+        <Seg value={leanDir} options={[{ id: "forward", name: "Forward", hint: "Over a table, toward a plate" }, { id: "upright", name: "Upright" }, { id: "back", name: "Back", hint: "Sitting back, away from it" }]}
+          onChange={(v) => setLean(v === "upright" ? 0 : v === "forward" ? -Math.max(Math.abs(g[1]), 20) : Math.max(Math.abs(g[1]), 20))} disabled={dis} />
       </Row>
+      {leanDir !== "upright" && (
+        <Row label={leanDir === "forward" ? "Forward by" : "Back by"}>
+          <Num value={Math.abs(g[1])} step={1} min={0} max={leanDir === "forward" ? -LEAN_MIN : LEAN_MAX} suffix="°" digits={0}
+            onChange={(v) => setLean(leanDir === "forward" ? -v : v)} disabled={dis} />
+        </Row>
+      )}
       {api.canEdit && !missing && (
         <Btn className="w-full" onClick={beat}>{spec.name} from here, hold, and stop</Btn>
       )}
@@ -586,11 +595,11 @@ function GestureSection({ api, o }: { api: StudioApi; o: BlockObject }) {
         <p className="text-[11px] leading-relaxed text-text-muted">Pick what to reach for (a dog, a product, a person) and the hand goes to it.</p>
       ) : gap > 0.06 ? (
         <p className="text-[11px] leading-relaxed text-text-muted">
-          The hand stops {Math.round(gap * 100)} cm short of {target?.name ?? "it"}. Lean back further, or move {o.name} closer.
+          The hand stops {Math.round(gap * 100)} cm short of {target?.name ?? "it"}, even leaning toward it. Move {o.name} closer.
         </p>
       ) : (
         <p className="text-[11px] leading-relaxed text-text-faint">
-          The gesture and its amount are keyed at the playhead, so each key can be a different gesture: wave at 2 s, the phone at 8 s. A key at 0% is the pose&apos;s own arms. Picking a gesture brings it in over the 0.6 s before the playhead; the button does it, holds 2.2 s and drops it again. Toward and Hand are the same for the whole shot.
+          The gesture and its amount are keyed at the playhead, so each key can be a different gesture: wave at 2 s, the phone at 8 s. A key at 0% is the pose&apos;s own arms. Picking a gesture brings it in over the 0.6 s before the playhead; the button does it, holds 2.2 s and drops it again. Toward and Hand are the same for the whole shot. A reach leans the body toward what it touches by itself when the arm alone falls short; Lean sets the posture on top of that.
         </p>
       )}
     </Section>

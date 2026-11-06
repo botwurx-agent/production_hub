@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { hipY as poseHipY, poseDef, shoulderY as poseShoulderY, SHIN } from "@/lib/previz/poses";
-import { gestureOf, type BlockObject, type Environment, type GestureKind, type Look, type Vec3 } from "./scene";
+import { gestureOf, LEAN_MAX, LEAN_MIN, type BlockObject, type Environment, type GestureKind, type Look, type Vec3 } from "./scene";
 import { evalTrack } from "./keys";
 import { footPhase, type Gait } from "./gait";
 
@@ -898,8 +898,9 @@ function gestureGoals(rig: PersonRig, s: GestureState, local: THREE.Vector3 | nu
 }
 
 /**
- * Poses a person's upper body and arms for a gesture. The body leans back by
- * `lean` and, for a gesture done toward something, turns at the hip so the
+ * Poses a person's upper body and arms for a gesture. The body leans by
+ * `lean` (back positive, forward negative), a reach leans it further toward
+ * what it touches when the arm alone falls short, and, for a gesture done toward something, turns at the hip so the
  * working shoulder comes round toward it (as far as a person really twists,
  * about 40 degrees). Each arm is solved as two fixed-length bones from the
  * shoulder to where the gesture puts the hand, blended from the pose's own
@@ -907,6 +908,8 @@ function gestureGoals(rig: PersonRig, s: GestureState, local: THREE.Vector3 | nu
  * straight at it.
  */
 const FACE = new Set<string>(["phone", "drink", "chin", "cover"]);
+/** Extra lean (degrees, back positive) a reach may add to get the hand there. */
+const AUTO_LEANS = [-40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30];
 
 export function poseRig(rig: PersonRig, s: GestureState) {
   const up = rig.upperBody;
@@ -919,17 +922,30 @@ export function poseRig(rig: PersonRig, s: GestureState) {
   const leanRad = rad(s.lean + (legs?.lean ?? 0));
   const arm = rig.arms[s.hand === "right" ? 0 : 1];
   let twist = 0;
+  let bodyLean = leanRad;
   if (amount > 0 && s.target && spec.target !== "none") {
-    // Try a handful of turns and keep whichever brings the shoulder closest.
-    let best = Infinity;
-    for (const deg of [-40, -30, -20, -10, 0, 10, 20, 30, 40]) {
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-leanRad, rad(deg * amount), 0, "YXZ"));
-      const sw = arm.sh.clone().applyQuaternion(q).add(up.position);
-      const d = sw.distanceTo(s.target) + Math.abs(deg) * 0.0004;
-      if (d < best) { best = d; twist = rad(deg * amount); }
+    // Turn toward it: try a handful of turns and keep whichever brings the
+    // shoulder closest. For a reach the body also LEANS toward it, forward
+    // over a plate or back toward a dog on the rear seat, but only as far as
+    // the arm needs: within easy reach it stays as keyed.
+    // A relaxed reach keeps the elbow soft, so "easy" is well short of a
+    // straight arm; past it the body leans before the arm locks out.
+    const comfy = (arm.l1 + arm.l2) * 0.78 + (s.kind === "reach" ? 0.06 * rig.H : 0);
+    const leans = s.kind === "reach" ? AUTO_LEANS : [0];
+    const base = s.lean + (legs?.lean ?? 0);
+    let bestCost = Infinity;
+    for (const e of leans) {
+      const total = rad(Math.min(LEAN_MAX + 5, Math.max(LEAN_MIN - 5, base + e * amount)));
+      for (const deg of [-40, -30, -20, -10, 0, 10, 20, 30, 40]) {
+        const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-total, rad(deg * amount), 0, "YXZ"));
+        const sw = arm.sh.clone().applyQuaternion(q).add(up.position);
+        const d = sw.distanceTo(s.target);
+        const cost = Math.max(0, d - comfy) + d * 0.03 + Math.abs(e) * 0.0012 + Math.abs(deg) * 0.0008;
+        if (cost < bestCost) { bestCost = cost; twist = rad(deg * amount); bodyLean = total; }
+      }
     }
   }
-  up.rotation.set(-leanRad, twist, 0, "YXZ");
+  up.rotation.set(-bodyLean, twist, 0, "YXZ");
   up.updateMatrix();
   rig.gap = 0;
   const local = s.target ? s.target.clone().applyMatrix4(up.matrix.clone().invert()) : null;

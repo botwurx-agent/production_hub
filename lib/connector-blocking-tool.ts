@@ -104,7 +104,7 @@ export const BLOCKING_TOOL: McpTool = {
             },
             gestures: {
               type: "array",
-              description: "People only: [{gesture, at, until?, toward?, hand: 'right'|'left', lean (degrees back, -25 to 45), stroke (reach: keeps stroking)}].",
+              description: "People only: [{gesture, at, until?, toward?, hand: 'right'|'left', lean (degrees: negative leans FORWARD, e.g. -25 over a plate on a table; positive leans back; -40 to 45. A reach leans toward what it touches by itself when the arm is short, so lean is only needed for a deliberate posture), stroke (reach: keeps stroking)}].",
               items: { type: "object" },
             },
           },
