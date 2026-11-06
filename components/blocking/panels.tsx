@@ -24,6 +24,11 @@ export type CamPadAction =
   | "boomUp" | "boomDown" | "truckLeft" | "truckRight" | "pushIn" | "pullOut"
   | "panLeft" | "panRight" | "tiltUp" | "tiltDown" | "zoomIn" | "zoomOut";
 
+/** The movement pads on a person, animal or vehicle, relative to its own facing. */
+export type ObjPadAction =
+  | "forward" | "back" | "stepLeft" | "stepRight" | "steerLeft" | "steerRight"
+  | "turnLeft" | "turnRight" | "raise" | "lower";
+
 export type StudioApi = {
   scene: BlockScene;
   t: number;
@@ -38,6 +43,8 @@ export type StudioApi = {
   setKeySubject: (id: string | null) => void;
   /** The controller pads: `amt` is seconds at the chosen speed. */
   camPad: (action: CamPadAction, amt: number) => void;
+  /** The movement pads on something that moves: `amt` is seconds at the chosen speed. */
+  objPad: (id: string, action: ObjPadAction, amt: number) => void;
   posed: (track: Track) => Posed;
   addObject: (kind: string) => void;
   deleteObject: (id: string) => void;
@@ -307,6 +314,16 @@ function camPadSpecs(api: StudioApi, aimed: boolean): PadSpec[] {
   ];
 }
 
+function objPadSpecs(api: StudioApi, id: string, vehicle: boolean): PadSpec[] {
+  const a = (label: string, action: ObjPadAction) => ({ label, act: (t: number) => api.objPad(id, action, t) });
+  return [
+    vehicle
+      ? { title: "Drive", up: a("Drive forward", "forward"), down: a("Reverse", "back"), left: a("Steer left", "steerLeft"), right: a("Steer right", "steerRight") }
+      : { title: "Move", up: a("Forward", "forward"), down: a("Back", "back"), left: a("Step left", "stepLeft"), right: a("Step right", "stepRight") },
+    { title: "Turn", up: a("Raise", "raise"), down: a("Lower", "lower"), left: a("Turn left", "turnLeft"), right: a("Turn right", "turnRight") },
+  ];
+}
+
 function CameraPanel({ api }: { api: StudioApi }) {
   const { scene, canEdit } = api;
   const cam = scene.camera;
@@ -544,6 +561,18 @@ function ObjectPanel({ api, id }: { api: StudioApi; id: string }) {
         )}
       </Section>
       <KeyPanel api={api} track={o.id} />
+      {(k.category === "people" || vehicle) && canEdit && (
+        <Section title="Move it">
+          <ControlPads pads={objPadSpecs(api, o.id, vehicle)} caption={
+            vehicle
+              ? <>Forward and reverse go the way it faces; steering turns it as it rolls.</>
+              : <>Forward, back and the steps go the way {o.name} faces, not the way the view does.</>
+          } />
+          <p className="text-[11px] leading-relaxed text-text-faint">
+            {o.keys.length > 1 ? "Each move sets a key at the playhead." : "Moves it. Move the playhead and press I (or turn on Auto key) to make it a move."}
+          </p>
+        </Section>
+      )}
       <TransformSection api={api} track={o.id} />
       {(o.kind === "person" || o.kind === "child") && <GestureSection api={api} o={o} />}
       {(vehicle || walker) && canEdit && (

@@ -30,7 +30,7 @@ import {
   type PersonRig, type World,
 } from "@/lib/blocking/build";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
-import { Outliner, Properties, type CamPadAction, type Posed, type StudioApi } from "./panels";
+import { Outliner, Properties, type CamPadAction, type ObjPadAction, type Posed, type StudioApi } from "./panels";
 import { Timeline, type KeyRef, type Track } from "./timeline";
 import { Btn, useOutside } from "./ui";
 import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
@@ -433,6 +433,7 @@ export function BlockingStudio({
     updateObject: (id, patch, c) => commit((s) => ({ ...s, objects: s.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)) }), c),
     writePose,
     camPad: (action, amt) => camPad(action, amt),
+    objPad: (id, action, amt) => objPad(id, action, amt),
     posed: (track) => posedAt(scene, track, t),
     addObject: (kind) => {
       const s = sceneRef.current;
@@ -1113,6 +1114,44 @@ export function BlockingStudio({
       case "tiltDown": return turn(0, -deg);
       case "zoomIn": return lens(1);
       case "zoomOut": return lens(-1);
+    }
+  }
+
+  /**
+   * The movement pads on a person, animal or vehicle. Everything is relative
+   * to the thing's own facing (yaw 0 faces +Z, its left is +X), in the frame
+   * its keys live in, so a rider moves about inside the car. Same edit rule as
+   * every other change: one key moves, two or more set a key at the playhead.
+   */
+  function objPad(id: string, action: ObjPadAction, amt: number) {
+    const s = sceneRef.current;
+    const o = s.objects.find((x) => x.id === id);
+    if (!o) return;
+    const vehicle = blockKind(o.kind).category === "vehicles";
+    const cur = posedAt(s, id, tRef.current);
+    const m = (vehicle ? 4 : 1.2) * amt;
+    const deg = (vehicle ? 20 : 45) * amt;
+    const y = (cur.r[0] * Math.PI) / 180;
+    const fwd: Vec3 = [Math.sin(y), 0, Math.cos(y)];
+    const left: Vec3 = [Math.cos(y), 0, -Math.sin(y)];
+    const go = (f: number, l: number, turn = 0) =>
+      writePose(id, {
+        p: [cur.p[0] + (fwd[0] * f + left[0] * l) * m, cur.p[1], cur.p[2] + (fwd[2] * f + left[2] * l) * m],
+        ...(turn ? { r: [cur.r[0] + turn, cur.r[1], cur.r[2]] as Vec3 } : {}),
+      }, `pad-${id}-${action}`);
+    const turn = (d: number) => writePose(id, { r: [cur.r[0] + d, cur.r[1], cur.r[2]] }, `pad-${id}-${action}`);
+    switch (action) {
+      case "forward": return go(1, 0);
+      case "back": return go(vehicle ? -0.5 : -0.6, 0);
+      case "stepLeft": return go(0, 0.6);
+      case "stepRight": return go(0, -0.6);
+      // A car turns only as it rolls: steering creeps forward while it turns.
+      case "steerLeft": return go(0.5, 0, deg);
+      case "steerRight": return go(0.5, 0, -deg);
+      case "turnLeft": return turn(deg);
+      case "turnRight": return turn(-deg);
+      case "raise": return writePose(id, { p: [cur.p[0], cur.p[1] + 0.4 * amt, cur.p[2]] }, `pad-${id}-${action}`);
+      case "lower": return writePose(id, { p: [cur.p[0], Math.max(0, cur.p[1] - 0.4 * amt), cur.p[2]] }, `pad-${id}-${action}`);
     }
   }
 

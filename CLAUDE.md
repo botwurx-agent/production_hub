@@ -8624,10 +8624,21 @@ the side window to the dog, out through the windshield, ending ahead.
   by default only at 12 pieces or fewer; the choice is remembered per browser
   ("blocking.outlinerSet"). A selected piece in a folded set still shows
   under its header. Derived every render, nothing stored.
-  AGREED NEXT: movement pads for
-  things that can move (people, animals, vehicles, bus, tram), relative to
-  their own facing (forward/back, step sideways except vehicles, turn),
-  keyed by the normal edit rule. Static kinds keep keyframes, just no pad.
+- MOVEMENT PADS ON THINGS THAT MOVE (2026-11-06, no migration). Anything in
+  the people or vehicles category (people, children, the dog, cars, bus,
+  tram, motorbike) gets a "Move it" section in its panel with the scene
+  builder's ControlPads. People and animals: Move = forward, back, step left,
+  step right; vehicles: Drive = forward, reverse, steer left/right (steering
+  creeps forward while it turns, since a car only turns as it rolls). The
+  second pad is Turn (left/right) plus Raise/Lower. ALL RELATIVE TO THE
+  THING'S OWN FACING (yaw 0 faces +Z, its left is +X), in the frame its keys
+  live in, so a rider moves about inside its car. Rates at Normal: people
+  1.2 m/s and 45 deg/s, vehicles 4 m/s and 20 deg/s, height 0.4 m/s; the
+  pad's Fine/Normal/Fast applies. objPad in blocking-studio.tsx reads the
+  live scene each tick and goes through writePose (coalesce
+  `pad-<id>-<action>`, so a hold is one undo): one key moves it, two or more
+  (or Auto key) set a key at the playhead. Static kinds keep keyframes and
+  the numbers, just no pad.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.
