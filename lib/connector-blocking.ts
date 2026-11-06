@@ -140,7 +140,12 @@ export function orbitRoom(objects: BlockObject[], at: Vec3): { name: string; roo
 const INDOOR_KINDS = new Set([
   "table", "coffeetable", "desk", "chair", "stool", "sofa", "armchair", "bed", "counter", "fridge", "cabinet",
   "bookshelf", "tv", "lamp", "plant", "rug", "product",
+  "plate", "bowl", "glass", "wineglass", "bottle", "can", "mug",
 ]);
+/** Food and drink: put down over a table or a counter, it stands on the top. */
+const TABLETOP = new Set(["plate", "bowl", "glass", "wineglass", "bottle", "can", "mug", "product"]);
+/** What a tabletop piece can stand on, and the height of its top. */
+const SURFACES = new Set(["table", "coffeetable", "desk", "counter", "cabinet", "stool", "bed"]);
 /** How far outside a wall something can be and still read as a slip, not a choice. */
 const SLIP = 2.5;
 const WALL_T = 0.12;
@@ -281,6 +286,59 @@ export function tidyCameraPath(s: BlockScene, skipped: string[]) {
         skipped.push(`the camera passes through ${o.name} around ${t.toFixed(1)}s; add a key that goes round them`);
       }
     }
+  }
+}
+
+/** Shapes a model reaches for when it wants "a point to aim at" rather than a thing in the shot. */
+const HELPER_KINDS = new Set(["target", "box", "sphere", "cylinder"]);
+const HELPER_NAME = /\b(target|marker|aim|look[ -]?at|focus point|point of interest)\b/i;
+const NOT_A_SUBJECT = new Set(["room", "target"]);
+
+/**
+ * The camera aims at the real person or thing, never at a stand-in: a box
+ * called "Back of head target" is a solid box in the clip, and a model
+ * reading the clip will draw it. Aim helpers added in this request are taken
+ * out and whatever pointed at them points at the nearest real subject.
+ */
+function dropAimHelpers(s: BlockScene, skipped: string[], only: Set<string>) {
+  const helpers = s.objects.filter(
+    (o) => only.has(o.id) && !o.parent && (o.kind === "target" || (HELPER_KINDS.has(o.kind) && HELPER_NAME.test(o.name))),
+  );
+  if (!helpers.length) return;
+  const gone = new Set(helpers.map((h) => h.id));
+  const real = s.objects.filter(
+    (o) => !gone.has(o.id) && !NOT_A_SUBJECT.has(o.kind) && blockKind(o.kind).category !== "environment" && !FLAT_GROUND.has(o.kind),
+  );
+  const swap = new Map<string, string | null>();
+  for (const h of helpers) {
+    const hp = h.keys[0]?.p ?? [0, 0, 0];
+    let best: BlockObject | null = null;
+    let bestD = Infinity;
+    for (const o of real) {
+      const p = aimPointOf(o, 0);
+      const d = Math.hypot(p[0] - hp[0], p[1] - hp[1], p[2] - hp[2]);
+      // A person within a couple of metres wins over furniture nearer by,
+      // since a helper is almost always standing in for somebody.
+      const w = o.kind === "person" || o.kind === "child" || o.kind === "dog" ? d - 1 : d;
+      if (w < bestD) { bestD = w; best = o; }
+    }
+    swap.set(h.id, best && bestD < 4 ? best.id : null);
+    skipped.push(best && bestD < 4
+      ? `${h.name}: left out, the camera aims at ${best.name} itself`
+      : `${h.name}: left out, a helper would show in the clip`);
+  }
+  const to = (id: string | null | undefined) => (id && swap.has(id) ? swap.get(id)! : id ?? null);
+  s.objects = s.objects.filter((o) => !gone.has(o.id));
+  if (s.camera.aim.target && gone.has(s.camera.aim.target)) s.camera.aim = { ...s.camera.aim, target: to(s.camera.aim.target) };
+  s.camera.keys = s.camera.keys.map((k) => {
+    if (!k.at || !gone.has(k.at)) return k;
+    const next = to(k.at);
+    const { at: _a, ...rest } = k;
+    void _a;
+    return next ? { ...rest, at: next } : rest;
+  });
+  for (const o of s.objects) {
+    if (o.reach?.target && gone.has(o.reach.target)) o.reach = { ...o.reach, target: to(o.reach.target) };
   }
 }
 
@@ -560,13 +618,31 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
     }
     return top;
   };
+  // A plate or a glass put down over a table, a counter or a desk stands on
+  // its top: a model naming where the meal goes rarely knows a table's height.
+  const tops = s.objects.filter((o) => SURFACES.has(o.kind) && !o.parent);
+  const surfaceAt = (x: number, z: number, self: string): number => {
+    let top = 0;
+    for (const f of tops) {
+      if (f.id === self) continue;
+      const [fx, fy, fz] = f.keys[0].p;
+      const a = (-f.keys[0].r[0] * Math.PI) / 180;
+      const dx = x - fx, dz = z - fz;
+      const lx = dx * Math.cos(a) + dz * Math.sin(a);
+      const lz = -dx * Math.sin(a) + dz * Math.cos(a);
+      if (Math.abs(lx) <= f.size[0] / 2 && Math.abs(lz) <= f.size[2] / 2) top = Math.max(top, fy + f.size[1]);
+    }
+    return top;
+  };
   for (const { o, raw, change } of pending) {
     if (change) continue;
     if (o.parent || FLAT_GROUND.has(o.kind) || blockKind(o.kind).category === "environment") continue;
     const moves = Array.isArray(raw.moves) ? raw.moves.filter(isObj) : [];
+    const onTop = TABLETOP.has(o.kind);
     o.keys = o.keys.map((k, i) => {
       const given = i === 0 ? raw.y !== undefined : moves.some((m) => num(m.t) === k.t && m.y !== undefined);
-      return given ? k : { ...k, p: [k.p[0], groundAt(k.p[0], k.p[2]), k.p[2]] as Vec3 };
+      const floor = Math.max(groundAt(k.p[0], k.p[2]), onTop ? surfaceAt(k.p[0], k.p[2], o.id) : 0);
+      return given ? k : { ...k, p: [k.p[0], floor, k.p[2]] as Vec3 };
     });
   }
 
@@ -758,6 +834,8 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
     if (flow === "continuous" || flow === "even" || flow === "keys") s.camera.flow = flow;
     tidyCameraPath(s, skipped);
   }
+
+  dropAimHelpers(s, skipped, new Set(pending.map((x) => x.o.id)));
 
   const clean = asBlockScene(JSON.parse(JSON.stringify(s)));
   if (!clean) return { error: "That scene could not be put together." };

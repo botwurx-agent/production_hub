@@ -48,6 +48,13 @@ function Inner() {
       const kinds = BLOCK_KINDS.filter((k) => k.category !== "environment" && !["skyscraper", "warehouse", "room"].includes(k.kind));
       s.objects = kinds.map((k, i) => newObject(k.kind, [(i % 10) * 7 - 31, 0, -Math.floor(i / 10) * 9 - 6], 0, []));
     }
+    if (q.get("table")) {
+      // Food and drink at true size on a table, filmed close.
+      const table = newObject("table", [0, 0, 0], 0, []);
+      const put = (kind: string, x: number, z: number) => newObject(kind, [x, 0.75, z], 0, []);
+      s.objects = [table, put("plate", -0.35, 0.15), put("bowl", 0.05, 0.25), put("glass", -0.1, -0.1), put("wineglass", 0.25, -0.1), put("bottle", 0.45, 0.15), put("can", 0.6, -0.15), put("mug", -0.6, -0.15)];
+      s.camera = { ...s.camera, parent: null, flow: "keys", aim: { target: null, frame: [0, 0] }, keys: [{ t: 0, p: [-0.35, 1.25, 0.9], r: [0, -28, 0], lens: 35, ease: "linear" }] };
+    }
     const kd = BLOCK_KINDS.find((k) => k.kind === q.get("kind"));
     if (kd) {
       const o = newObject(kd.kind, [0, 0, 0], 0, []);

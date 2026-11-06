@@ -1814,6 +1814,92 @@ function pottedPlant(o: BlockObject, paint: Paint, tint: Tint) {
   return g;
 }
 
+/* ---------- tabletop: food and drink, at real size ---------- */
+
+/** A turned shape from a profile of [radius, height] pairs, as fractions of the object's width and height. */
+function turned(profile: [number, number][], W: number, H: number, m: THREE.Material, seg = 28): THREE.Mesh {
+  const pts = profile.map(([r, y]) => new THREE.Vector2(Math.max(0.0005, r * W), y * H));
+  return part(new THREE.LatheGeometry(pts, seg), m);
+}
+/** See-through glass that still reads in a blockout: pale, lightly tinted, and not writing depth. */
+const DRINK_GLASS = new THREE.MeshStandardMaterial({ color: "#dfe8ee", roughness: 0.08, metalness: 0, transparent: true, opacity: 0.32, depthWrite: false });
+
+function plateOfFood(o: BlockObject, paint: Paint, tint: Tint) {
+  const [W, H] = o.size;
+  const g = new THREE.Group();
+  // A rimmed plate: a shallow well inside a raised edge.
+  g.add(turned([[0, 0], [0.36, 0], [0.4, 0.12], [0.5, 0.22], [0.5, 0.26], [0.42, 0.18], [0.34, 0.1], [0, 0.1]], W, H, paint(1)));
+  const r = rng(o.id);
+  const top = H * 0.1;
+  // A main, a side and a garnish, in three colours so the plate reads as food.
+  const main = blob(W * 0.13, tint("#a8673f"), -W * 0.06, top + H * 0.22, W * 0.02, 1.3, 0.55, 1);
+  const side = blob(W * 0.1, tint("#e2c47a"), W * 0.12, top + H * 0.18, -W * 0.06, 1, 0.6, 1.2);
+  const greens = blob(W * 0.07, tint("#6f9a4a"), W * 0.06, top + H * 0.2, W * 0.13, 1.2, 0.7, 1);
+  for (const b of [main, side, greens]) b.rotation.y = r() * Math.PI;
+  g.add(main, side, greens);
+  return g;
+}
+
+function drinkGlass(o: BlockObject, tint: Tint) {
+  const [W, H] = o.size;
+  const g = new THREE.Group();
+  // A tumbler, a little wider at the rim, two thirds full.
+  const glass = turned([[0, 0], [0.42, 0], [0.44, 0.06], [0.5, 1], [0.47, 1], [0.41, 0.07], [0, 0.07]], W, H, DRINK_GLASS);
+  glass.castShadow = false;
+  g.add(glass);
+  g.add(turned([[0, 0.07], [0.41, 0.07], [0.46, 0.66], [0, 0.66]], W, H, tint(o.color)));
+  return g;
+}
+
+function wineGlass(o: BlockObject, tint: Tint) {
+  const [W, H] = o.size;
+  const g = new THREE.Group();
+  const glass = turned([[0, 0], [0.42, 0], [0.42, 0.015], [0.06, 0.03], [0.05, 0.45], [0.3, 0.52], [0.5, 0.7], [0.42, 1], [0.4, 1], [0.48, 0.7], [0.28, 0.54], [0, 0.5]], W, H, DRINK_GLASS);
+  glass.castShadow = false;
+  g.add(glass);
+  g.add(turned([[0, 0.5], [0.27, 0.54], [0.44, 0.66], [0, 0.66]], W, H, tint(o.color)));
+  return g;
+}
+
+function drinkBottle(o: BlockObject, paint: Paint, tint: Tint) {
+  const [W, H] = o.size;
+  const g = new THREE.Group();
+  g.add(turned([[0, 0], [0.48, 0], [0.5, 0.03], [0.5, 0.6], [0.44, 0.68], [0.2, 0.8], [0.17, 0.95], [0, 0.95]], W, H, paint(1)));
+  // A paper label round the body and a cap on top, so it reads as a bottle.
+  g.add(cyl(W * 0.505, W * 0.505, H * 0.24, tint("#f1ede4"), 0, H * 0.32, 0, 28));
+  g.add(cyl(W * 0.19, W * 0.19, H * 0.06, tint("#d9b35a"), 0, H * 0.97, 0, 20));
+  return g;
+}
+
+function can(o: BlockObject, paint: Paint, tint: Tint) {
+  const [W, H] = o.size;
+  const g = new THREE.Group();
+  g.add(turned([[0, 0], [0.42, 0], [0.5, 0.06], [0.5, 0.92], [0.42, 1], [0, 1]], W, H, paint(1)));
+  g.add(cyl(W * 0.505, W * 0.505, H * 0.3, tint("#f4f2ee"), 0, H * 0.48, 0, 28));
+  g.add(cyl(W * 0.4, W * 0.4, H * 0.01, tint("#b9bcc0"), 0, H * 1.0, 0, 24));
+  return g;
+}
+
+function mug(o: BlockObject, paint: Paint, tint: Tint) {
+  const [W, H] = o.size;
+  const g = new THREE.Group();
+  const body = W * 0.78;
+  g.add(turned([[0, 0], [0.5, 0], [0.5, 1], [0.44, 1], [0.44, 0.08], [0, 0.08]], body, H, paint(1)));
+  g.add(cyl(body * 0.44, body * 0.44, H * 0.02, tint("#5a3a24"), 0, H * 0.85, 0, 24));
+  const handle = part(new THREE.TorusGeometry(H * 0.26, W * 0.06, 8, 16, Math.PI), paint(1), body / 2, H * 0.5, 0);
+  handle.rotation.z = -Math.PI / 2;
+  g.add(handle);
+  return g;
+}
+
+function bowl(o: BlockObject, paint: Paint, tint: Tint) {
+  const [W, H] = o.size;
+  const g = new THREE.Group();
+  g.add(turned([[0, 0], [0.28, 0], [0.42, 0.4], [0.5, 1], [0.46, 1], [0.38, 0.42], [0.25, 0.12], [0, 0.12]], W, H, paint(1)));
+  g.add(blob(W * 0.36, tint("#d7a85e"), 0, H * 0.72, 0, 1, 0.32, 1));
+  return g;
+}
+
 /** An object's own geometry, in its own frame. */
 export function buildObject(o: BlockObject, look: Look): THREE.Group {
   const paint = painter(look, o.color);
@@ -1938,6 +2024,13 @@ export function buildObject(o: BlockObject, look: Look): THREE.Group {
     case "bookshelf": g = bookshelf(o, paint, tint); break;
     case "tv": g = tvStand(o, paint, tint); break;
     case "lamp": g = floorLamp(o, paint, tint); break;
+    case "plate": g = plateOfFood(o, paint, tint); break;
+    case "glass": g = drinkGlass(o, tint); break;
+    case "wineglass": g = wineGlass(o, tint); break;
+    case "bottle": g = drinkBottle(o, paint, tint); break;
+    case "can": g = can(o, paint, tint); break;
+    case "mug": g = mug(o, paint, tint); break;
+    case "bowl": g = bowl(o, paint, tint); break;
     case "plant": g = pottedPlant(o, paint, tint); break;
     case "room": g = room(o, paint); break;
     case "door": g = door(o, paint); break;

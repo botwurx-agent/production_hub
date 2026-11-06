@@ -8560,6 +8560,26 @@ the side window to the dog, out through the windshield, ending ahead.
   angle; aimedAt is `w >= 0.5`; picking a new subject for a key clears its
   `af`. The operator's Zelvara scene key 4 was repaired in the database
   (tilt 89 -> aimed at the TV, af removed).
+- NO AIM HELPERS, AND FOOD AND DRINK (2026-11-06, operator: the "diamond"
+  was still in the camera view, and the camera should aim at the person, not
+  at a pad behind them). The AI had added a solid BOX called "Back of head
+  target" and looked at it, so it would have been in the recorded clip.
+  dropAimHelpers (lib/connector-blocking.ts) removes any object added in the
+  request that is kind `target`, or a box/sphere/cylinder named like a
+  target, marker, aim or look-at point, and points whatever aimed at it
+  (camera aim, key `at`, a reach) at the nearest real subject (people win
+  within a metre), saying so in `skipped`. The tool description now says
+  never add a helper and to look_at the person (aimed at their head).
+  Separately, a kind `target` (still in the catalogue for manual use) is
+  hidden from the camera view, recordings and saved frames by showMarkers in
+  build.ts. The operator's Zelvara scene had its box removed and key 3
+  pointed at the man in the database.
+  New catalogue kinds at true size: plate (plate of food), bowl, glass (a
+  tumbler two thirds full, colour = the drink), wineglass, bottle (label and
+  cap), can, mug, all turned from profiles (`turned` in build.ts) with
+  see-through glass. A tabletop piece placed by the builder over a table,
+  coffee table, desk, counter, dresser, stool or bed stands on its top.
+  /dev/blocking?table=1 shows them on a table.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.
