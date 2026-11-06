@@ -8381,8 +8381,36 @@ the side window to the dog, out through the windshield, ending ahead.
   made, and while recording the editor's own view draws plainly. In headless
   swiftshader a clip of an 8 s scene came out 15 s long, almost certainly
   the software renderer's frame rate; check the length of the first clip
-  recorded on a real machine. NOT DONE (next, in the agreed order): people
-  that walk and run, the scene bar, rig presets, a tram and a bus.
+  recorded on a real machine. NOT DONE (next, in the agreed order): the
+  scene bar, rig presets, a tram and a bus.
+- PEOPLE WALK AND RUN (2026-11-06, no migration). A person whose track moves
+  steps at that speed: nothing to set, the legs follow the keys.
+  lib/blocking/gait.ts is pure: speed and direction in the person's OWN frame
+  (so sideways and backward steps go the right way), a cadence that rises
+  with speed (about 1.05 cycles a second at 1.4 m/s, scaled by height so a
+  child steps quicker), walk weight easing in from 0.12 to 0.45 m/s, a walk
+  becoming a run between 2.0 and 2.9 m/s, and a duty factor (share of the
+  cycle a foot is down) from 0.6 walking to 0.32 running and 0.24 sprinting.
+  THE PHASE IS CADENCE INTEGRATED OVER TIME (a table per keys array, 1/120 s,
+  in a WeakMap), never cadence x t, so speeding up does not jump the legs.
+  A foot's stance distance is the distance the body covers while it is down,
+  which is what makes the feet NOT SLIDE; when that would outrun the leg
+  (maxExcursion, 1.05 x leg walking, 0.82 running, legs being 0.45 of
+  height) the cadence rises instead. poseLegs in build.ts rolls the foot:
+  heel strike (12 degrees toes up, walking only), flat, then heel off about
+  the toe (up to 32 degrees), and whichever part is down stays put; measured
+  in node, the planted point holds to the millimetre through a stance. Swing
+  lifts the foot (a run kicks the heel up behind). The pelvis and upper body
+  sit in a new `torso` group that drops just enough for both feet to reach
+  (the dip at each step), and a run bounces the other way, lowest with a foot
+  down. Arms swing opposite their legs (standing and walking poses only); a
+  run bends them with the forearm up and in. Walking leans the body forward
+  2 degrees, running 9. Seated and kneeling people glide rather than walk,
+  and someone riding in a car does not walk (their own keys are still). The
+  person panel says what the speed reads as on foot (a stroll, a walk, a jog,
+  a run, a sprint). /dev/blocking?gait=<m/s> is one person crossing frame
+  side on (&back=1 from behind, &child=1 a child). Turning on the spot does
+  not step.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.

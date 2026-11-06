@@ -12,6 +12,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { hipY as poseHipY, poseDef, shoulderY as poseShoulderY, SHIN } from "@/lib/previz/poses";
 import { gestureOf, type BlockObject, type Environment, type GestureKind, type Look, type Vec3 } from "./scene";
 import { evalTrack } from "./keys";
+import { footPhase, type Gait } from "./gait";
 
 const rad = (d: number) => (d * Math.PI) / 180;
 
@@ -221,6 +222,23 @@ type ArmRig = {
   wr: THREE.Vector3;
   l1: number;
   l2: number;
+  /** The arm a walk swings from: the pose's own, or a standing arm for the walking pose. */
+  nel: THREE.Vector3;
+  nwr: THREE.Vector3;
+};
+
+type LegRig = {
+  hip: THREE.Vector3;
+  thigh: THREE.Mesh;
+  shin: THREE.Mesh;
+  kneeJ: THREE.Mesh;
+  calf: THREE.Mesh;
+  foot: THREE.Group;
+  l1: number;
+  l2: number;
+  restKnee: THREE.Vector3;
+  restAnkle: THREE.Vector3;
+  restFoot: THREE.Vector3;
 };
 
 export type PersonRig = {
@@ -231,6 +249,15 @@ export type PersonRig = {
   /** Middle of the head, in the upper body's frame. */
   headY: number;
   arms: [ArmRig, ArmRig];
+  legs: [LegRig, LegRig];
+  /** The pelvis and everything above it: drops and bobs with each step. */
+  torso: THREE.Group;
+  /** Upright poses walk when their track moves; seated and kneeling do not. */
+  canWalk: boolean;
+  /** Standing and walking poses swing their arms; the others keep theirs. */
+  swings: boolean;
+  /** The legs are off their rest pose and must be put back when the walk stops. */
+  walking: boolean;
   /** How far short of the target the hand stopped, metres (0 when it got there). */
   gap: number;
 };
@@ -280,10 +307,15 @@ function person(o: BlockObject, paint: Paint, tint: Tint) {
   const L = B.limb * (child ? 0.92 : 1);
   const at = (p: [number, number, number], yBase = 0) => new THREE.Vector3(p[0] * H, yBase + p[1] * H, p[2] * H);
 
+  // The pelvis and the upper body sit in one group that drops and bobs with
+  // each step; the legs stay in the figure's own frame, where the feet are.
+  const torso = new THREE.Group();
+  g.add(torso);
   // Pelvis: stays with the legs when the upper body leans.
-  g.add(lathe([[0.001, hipY - 0.085 * H], [B.hip * 0.62 * H, hipY - 0.075 * H], [B.hip * 0.95 * H, hipY - 0.03 * H], [B.hip * H, hipY + 0.01 * H]], 0.68, pants));
+  torso.add(lathe([[0.001, hipY - 0.085 * H], [B.hip * 0.62 * H, hipY - 0.075 * H], [B.hip * 0.95 * H, hipY - 0.03 * H], [B.hip * H, hipY + 0.01 * H]], 0.68, pants));
 
   // Legs, where the pose puts them.
+  const legs: LegRig[] = [];
   for (const i of [0, 1] as const) {
     const side = i === 0 ? -1 : 1;
     const hip = new THREE.Vector3(side * B.hip * 0.5 * H, hipY - 0.03 * H, 0);
@@ -318,12 +350,16 @@ function person(o: BlockObject, paint: Paint, tint: Tint) {
     foot.add(toe);
     foot.position.set(ankle.x, fy, ankle.z);
     g.add(thigh, shin, kneeJ, calf, foot);
+    legs.push({
+      hip, thigh, shin, kneeJ, calf, foot, l1: hip.distanceTo(knee), l2: knee.distanceTo(ankle),
+      restKnee: knee.clone(), restAnkle: ankle.clone(), restFoot: foot.position.clone(),
+    });
   }
 
   // Everything above the hip, in a group pivoting at the hip.
   const up = new THREE.Group();
   up.position.set(0, hipY, 0);
-  g.add(up);
+  torso.add(up);
   const rel = (v: THREE.Vector3) => v.sub(new THREE.Vector3(0, hipY, 0));
   const top = shY - hipY;
   // Torso: hips, waist, ribs, chest, then the shoulders rounding in to the neck.
@@ -376,11 +412,20 @@ function person(o: BlockObject, paint: Paint, tint: Tint) {
     thumb.rotation.z = side * 0.4;
     hand.add(palm, fingers, thumb);
     up.add(delt, upper, elbow, fore, hand);
-    const arm: ArmRig = { side, upper, fore, elbow, hand, sh, el, wr, l1, l2 };
+    // The walking pose holds its arms mid-swing; a walk swings from standing ones.
+    const stand = pose.id === "walking" ? poseDef("standing") : pose;
+    const nel = pose.id === "walking" ? rel(at(stand.elbow[i], shY)) : el.clone();
+    const nwr = pose.id === "walking" ? rel(at(stand.wrist[i], shY)) : wr.clone();
+    const arm: ArmRig = { side, upper, fore, elbow, hand, sh, el, wr, l1, l2, nel, nwr };
     placeArm(arm, el, wr);
     return arm;
   }) as [ArmRig, ArmRig];
-  const rig: PersonRig = { upperBody: up, hipY, H, headY, arms, gap: 0 };
+  const rig: PersonRig = {
+    upperBody: up, hipY, H, headY, arms, legs: legs as [LegRig, LegRig], torso,
+    canWalk: pose.seatM === undefined && pose.id !== "kneeling",
+    swings: pose.id === "standing" || pose.id === "walking",
+    walking: false, gap: 0,
+  };
   g.userData.rig = rig;
   return g;
 }
@@ -440,6 +485,167 @@ const twoBone = (a: ArmRig, goal: THREE.Vector3, pole: THREE.Vector3) => {
   return { el, wr, gap: Math.max(0, dist - reachLen) };
 };
 
+/**
+ * A leg as two fixed-length bones from the hip to an ankle, the knee bending
+ * forward. Out of reach the leg goes straight at the ankle.
+ */
+function legIK(l: LegRig, hip: THREE.Vector3, ankle: THREE.Vector3) {
+  const to = ankle.clone().sub(hip);
+  const dist = to.length();
+  const dir = dist > 1e-6 ? to.clone().divideScalar(dist) : new THREE.Vector3(0, -1, 0);
+  const d = Math.min(Math.max(dist, Math.abs(l.l1 - l.l2) + 1e-3), l.l1 + l.l2 - 1e-4);
+  const along = (l.l1 * l.l1 + d * d - l.l2 * l.l2) / (2 * d);
+  const h = Math.sqrt(Math.max(0, l.l1 * l.l1 - along * along));
+  const pole = new THREE.Vector3(0, 0, 1);
+  const perp = pole.sub(dir.clone().multiplyScalar(pole.dot(dir)));
+  if (perp.lengthSq() < 1e-8) perp.set(0, 0, 1);
+  perp.normalize();
+  const knee = hip.clone().add(dir.clone().multiplyScalar(along)).add(perp.multiplyScalar(h));
+  return { knee, ankle: hip.clone().add(dir.multiplyScalar(d)) };
+}
+
+function placeLeg(l: LegRig, hip: THREE.Vector3, knee: THREE.Vector3, ankle: THREE.Vector3, foot: THREE.Vector3, pitch: number) {
+  spanLimb(l.thigh, hip, knee);
+  spanLimb(l.shin, knee, ankle);
+  l.kneeJ.position.copy(knee);
+  l.calf.position.copy(knee.clone().lerp(ankle, 0.3));
+  l.calf.quaternion.copy(l.shin.quaternion);
+  l.foot.position.copy(foot);
+  l.foot.rotation.set(pitch, 0, 0);
+}
+
+function restLegs(rig: PersonRig) {
+  for (const l of rig.legs) {
+    placeLeg(l, l.hip, l.restKnee, l.restAnkle, l.restFoot, 0);
+    l.calf.quaternion.identity();
+  }
+  rig.torso.position.set(0, 0, 0);
+  rig.walking = false;
+}
+
+/** A point on the shoe relative to the shoe's own origin, rotated by its pitch. */
+const onFoot = (v: THREE.Vector3, pitch: number) => v.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch);
+
+/**
+ * The legs for a walk or a run. Each foot is either on the ground or in the
+ * air (see footPhase). On the ground it rolls the way a foot does: it lands
+ * on the heel, goes flat, then lifts the heel and pushes off the toe, and
+ * whichever part is down stays where it was put while the body passes over
+ * it. In the air it swings forward, clearing the ground (a run kicks the heel
+ * up behind). The hips drop just enough for the feet to reach, which is the
+ * dip a real walk has at each step; a run bounces the other way, lowest with
+ * a foot down and highest in the air between steps.
+ *
+ * Returns how far the torso dropped, the forward lean, and how far each arm
+ * swings (degrees, forward positive), opposite to its leg.
+ */
+function poseLegs(rig: PersonRig, gt: Gait): { lean: number; swing: [number, number] } {
+  const H = rig.H;
+  const w = gt.walk;
+  const run = gt.run;
+  const [dx, dz] = gt.dir;
+  const fwd = Math.max(0, dz);
+  const E = gt.excursion;
+  const lift = (0.055 + (0.08 + 0.03 * Math.min(gt.speed, 5)) * run) * H * w;
+  // A walk lands on the heel; a run lands nearer the middle of the foot.
+  const heel0 = rad(-12) * fwd * w * (1 - run);
+  const toe1 = rad(32 - 8 * run) * fwd * w;
+  const heelOff = new THREE.Vector3(0, -0.0225 * H, -0.0285 * H);
+  const toeOff = new THREE.Vector3(0, -0.024 * H, 0.1 * H);
+  const ankleUp = new THREE.Vector3(0, 0.035 * H, 0);
+  const s1 = 0.12 - 0.09 * run;
+  const s2 = 0.62 - 0.07 * run;
+  // Where in the stance the foot passes under the hip: midway through the flat
+  // part for a walk, later for a run, which lands its feet further forward.
+  const sm = (s1 + s2) / 2 + 0.2 * run;
+  // Where the shoe's origin is along the line of travel during the flat part,
+  // and the heel and toe points that are planted either side of it.
+  const along = (u: number) => -(u - sm) * E;
+  // From where a standing foot is, whatever the pose holds its feet in.
+  const at = (l: LegRig, a: number) => new THREE.Vector3(l.restFoot.x + dx * a, 0.022 * H, dz * a);
+  const stanceFoot = (l: LegRig, u: number): { o: THREE.Vector3; pitch: number } => {
+    if (u < s1) {
+      const k = u / s1;
+      const pitch = heel0 * (1 - k * k * (3 - 2 * k));
+      const heel = at(l, along(s1) + (s1 - u) * E).add(heelOff);
+      return { o: heel.sub(onFoot(heelOff, pitch)), pitch };
+    }
+    if (u <= s2) return { o: at(l, along(u)), pitch: 0 };
+    const k = (u - s2) / (1 - s2);
+    const pitch = toe1 * Math.pow(k, 1.3);
+    const toe = at(l, along(s2) - (u - s2) * E).add(toeOff);
+    return { o: toe.sub(onFoot(toeOff, pitch)), pitch };
+  };
+  const target = (l: LegRig, i: 0 | 1) => {
+    const f = footPhase(gt.phase, i, gt.duty);
+    if (f.stance) return stanceFoot(l, f.s);
+    const a = stanceFoot(l, 1);
+    const b = stanceFoot(l, 0);
+    const u = f.s;
+    const e = 0.5 - 0.5 * Math.cos(Math.PI * u);
+    const o = a.o.clone().lerp(b.o, e);
+    // A run lifts the heel high early in the swing and folds it in behind.
+    const up = run > 0 ? Math.pow(Math.sin(Math.PI * Math.pow(u, 0.75)), 1.2) : Math.sin(Math.PI * u);
+    o.y += lift * up;
+    const kick = 0.12 * H * run * w * Math.sin(Math.PI * u) * (1 - u);
+    o.x -= dx * kick;
+    o.z -= dz * kick;
+    const pitch = a.pitch * Math.pow(1 - Math.min(1, u / 0.6), 2) + b.pitch * Math.max(0, (u - 0.6) / 0.4);
+    return { o, pitch };
+  };
+  // Blend from the pose's own feet as the walk eases in.
+  const feet = rig.legs.map((l, i) => {
+    const t = target(l, i as 0 | 1);
+    const o = l.restFoot.clone().lerp(t.o, w);
+    const pitch = t.pitch;
+    const ankle = o.clone().add(onFoot(ankleUp, pitch));
+    return { o, pitch, ankle };
+  });
+  // Drop the hips just enough that both feet are in reach, knees a little soft.
+  let drop = (0.008 + 0.014 * run) * H * w;
+  rig.legs.forEach((l, i) => {
+    const a = feet[i].ankle;
+    const horiz = Math.hypot(a.x - l.hip.x, a.z - l.hip.z);
+    const reach = 0.985 * (l.l1 + l.l2);
+    const vert = Math.sqrt(Math.max(0, reach * reach - horiz * horiz));
+    drop = Math.max(drop, l.hip.y - a.y - vert);
+  });
+  drop = Math.min(drop, 0.14 * H);
+  // A run is lowest with a foot down and highest in the air between steps.
+  const bounce = run > 0 ? -0.02 * H * run * w * Math.cos(2 * Math.PI * (2 * gt.phase - gt.duty)) : 0;
+  const dy = -drop + bounce;
+  rig.torso.position.set(0, dy, 0);
+  rig.legs.forEach((l, i) => {
+    const hip = l.hip.clone().add(new THREE.Vector3(0, dy, 0));
+    const { knee, ankle } = legIK(l, hip, feet[i].ankle);
+    placeLeg(l, hip, knee, ankle, feet[i].o, feet[i].pitch);
+  });
+  rig.walking = true;
+  // Arms swing opposite their legs: the right arm comes forward with the left foot.
+  const amp = (12 + 10 * Math.min(1, gt.speed / 1.5) + 12 * run) * w * fwd;
+  const c = Math.cos(2 * Math.PI * gt.phase);
+  return { lean: -(2 * w + 9 * run) * fwd, swing: [-amp * c, amp * c] };
+}
+
+/**
+ * An arm at rest for a walk or a run: swung about the shoulder, and for a
+ * run bent at the elbow with the forearm carried forward.
+ */
+function swingArm(a: ArmRig, deg: number, run: number): { el: THREE.Vector3; wr: THREE.Vector3 } {
+  let el = a.nel.clone();
+  let wr = a.nwr.clone();
+  if (run > 0) {
+    const rEl = a.sh.clone().add(new THREE.Vector3(a.side * 0.01, -0.96, -0.28).normalize().multiplyScalar(a.l1));
+    // The forearm angles up and in toward the body's centre line.
+    const rWr = rEl.clone().add(new THREE.Vector3(-a.side * 0.3, 0.7, 0.75).normalize().multiplyScalar(a.l2));
+    el = el.lerp(rEl, run);
+    wr = wr.lerp(rWr, run);
+  }
+  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -rad(deg));
+  const pivot = (v: THREE.Vector3) => v.sub(a.sh).applyQuaternion(q).add(a.sh);
+  return { el: pivot(el), wr: pivot(wr) };
+}
+
 export type GestureState = {
   kind: GestureKind;
   /** 0 to 1: how far into the gesture (0 is the pose's own arms). */
@@ -452,6 +658,8 @@ export type GestureState = {
   time: number;
   /** A reach strokes back and forth once it is there. */
   stroke: boolean;
+  /** The walk or run the person's track carries them at, if any. */
+  gait?: Gait;
 };
 
 type ArmGoal = { goal: THREE.Vector3; pole: THREE.Vector3 };
@@ -548,7 +756,10 @@ export function poseRig(rig: PersonRig, s: GestureState) {
   const spec = gestureOf(s.kind);
   const needs = spec.target === "required";
   const amount = needs && !s.target ? 0 : Math.min(1, Math.max(0, s.reach));
-  const leanRad = rad(s.lean);
+  const gt = rig.canWalk && s.gait && s.gait.walk > 1e-3 ? s.gait : null;
+  const legs = gt ? poseLegs(rig, gt) : null;
+  if (!gt && rig.walking) restLegs(rig);
+  const leanRad = rad(s.lean + (legs?.lean ?? 0));
   const arm = rig.arms[s.hand === "right" ? 0 : 1];
   let twist = 0;
   if (amount > 0 && s.target && spec.target !== "none") {
@@ -568,16 +779,18 @@ export function poseRig(rig: PersonRig, s: GestureState) {
   const goals = amount > 0 ? gestureGoals(rig, s, local) : [null, null];
   rig.arms.forEach((a, i) => {
     const gl = goals[i];
-    if (!gl) { placeArm(a, a.el, a.wr); return; }
+    // A walk swings the arms that are not doing anything else.
+    const base = legs && rig.swings ? swingArm(a, legs.swing[i], gt!.run * gt!.walk) : { el: a.el, wr: a.wr };
+    if (!gl) { placeArm(a, base.el, base.wr); return; }
     // At the face the HAND should be at the point, so the wrist stops short.
     if (FACE.has(s.kind)) {
       const back = gl.goal.clone().sub(a.sh);
       if (back.lengthSq() > 1e-6) gl.goal.sub(back.normalize().multiplyScalar(0.05 * rig.H));
     }
-    const target = a.wr.clone().lerp(gl.goal, amount);
+    const target = base.wr.clone().lerp(gl.goal, amount);
     // The elbow swings from where the pose holds it to where the gesture
     // wants it, so a small amount does not snap the arm round.
-    const restPole = a.el.clone().sub(a.sh).normalize();
+    const restPole = base.el.clone().sub(a.sh).normalize();
     const pole = restPole.lerp(gl.pole.normalize(), Math.min(1, amount * 1.5));
     const sol = twoBone(a, target, pole);
     placeArm(a, sol.el, sol.wr);

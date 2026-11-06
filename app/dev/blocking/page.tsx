@@ -73,6 +73,26 @@ function Inner() {
         return o;
       });
     }
+    // ?gait=<m/s> is one person crossing frame at that speed, filmed side on,
+    // for judging a walk or a run (&back=1 films them from behind).
+    const gv = Number(q.get("gait"));
+    if (gv > 0) {
+      const len = 8;
+      const x0 = (-gv * len) / 2;
+      const o = newObject(q.get("child") ? "child" : "person", [x0, 0, 0], 90, []);
+      o.keys = [
+        { t: 0, p: [x0, 0, 0], r: [90, 0, 0], ease: "linear" },
+        { t: len, p: [-x0, 0, 0], r: [90, 0, 0], ease: "linear" },
+      ];
+      s.objects = [o];
+      const back = !!q.get("back");
+      const cp = (x: number): [number, number, number] => (back ? [x - 4.5, 1.3, 0.6] : [x, 1.0, 5.5]);
+      s.camera = { ...s.camera, parent: null, aim: { target: null, frame: [0, 0] }, flow: "keys", keys: [
+        { t: 0, p: cp(x0), r: [back ? -90 : 0, -2, 0], lens: back ? 40 : 30, ease: "linear" },
+        { t: len, p: cp(-x0), r: [back ? -90 : 0, -2, 0], lens: back ? 40 : 30, ease: "linear" },
+      ] };
+      s.duration = len;
+    }
     // ?look=blockout|clay|lit opens in that look, for comparing them.
     const look = q.get("look");
     const withLook = (x: BlockScene): BlockScene => (look === "blockout" || look === "clay" || look === "lit" ? { ...x, look } : x);

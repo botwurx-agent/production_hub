@@ -3,6 +3,7 @@
 // Shot blocking: the outliner (what is in the scene) and the properties panel
 // (whatever is selected). Both work through the studio's api, so the rule for
 // how an edit lands on the timeline lives in one place.
+import { gaitWord } from "@/lib/blocking/gait";
 import { useState } from "react";
 import {
   BLOCK_ASPECTS, BLOCK_CATEGORIES, BLOCK_KINDS, CAMERA_FLOWS, EASES, GESTURES, LOOKS, SUBJECT_COLORS, LEAN_MAX, LEAN_MIN, blockKind, gestureOf, BODY_BUILDS, HAIR_STYLES,
@@ -439,7 +440,12 @@ function ObjectPanel({ api, id }: { api: StudioApi; id: string }) {
           </Select>
         </Row>
         {(sp.peak > 0) && (
-          <p className="text-[11px] text-text-muted">Moves {sp.travel.toFixed(1)} m, peaks at {(sp.peak * 3.6).toFixed(0)} km/h.</p>
+          <p className="text-[11px] text-text-muted">
+            Moves {sp.travel.toFixed(1)} m, peaks at {(sp.peak * 3.6).toFixed(0)} km/h.
+            {(o.kind === "person" || o.kind === "child") && (o.pose === "seated" || o.pose === "kneeling"
+              ? " Seated and kneeling people glide rather than walk; stand them up to walk."
+              : ` On foot that is ${gaitWord(sp.peak, o.size[1])}, and the legs step to match.`)}
+          </p>
         )}
       </Section>
       <KeyPanel api={api} track={o.id} />

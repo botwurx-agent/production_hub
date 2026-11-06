@@ -35,6 +35,7 @@ import { Timeline, type KeyRef, type Track } from "./timeline";
 import { Btn, useOutside } from "./ui";
 import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
 import { ShotRenderer } from "@/lib/blocking/look-render";
+import { gaitAt } from "@/lib/blocking/gait";
 
 type View = "camera" | "free";
 
@@ -784,7 +785,7 @@ export function BlockingStudio({
         const target = wt ? wt.applyMatrix4(rec.g.matrix.clone().invert()) : null;
         poseRig(rig, {
           kind: gs.kind, reach: gs.reach, lean: gs.lean, hand: o.reach?.hand ?? "right", target,
-          time: at, stroke: !!o.reach?.stroke,
+          time: at, stroke: !!o.reach?.stroke, gait: gaitAt(o.keys, at, o.size[1]),
         });
       }
     }
