@@ -57,6 +57,10 @@ export type StudioApi = {
   speedOf: (track: Track) => { peak: number; travel: number };
   /** Metres a person's reaching hand fell short of its target at the playhead. */
   reachGap: (id: string) => number;
+  /** Opens "Model from a photo"; absent without edit access or a Higgsfield connection. */
+  openPhotoModel?: () => void;
+  /** Where a model from a photo stands, or null for anything else. */
+  modelState: (id: string) => "making" | "loading" | "ready" | "failed" | null;
   /** Keys a person's gesture at several moments: g is [reach 0..1, lean degrees]. */
   gestureKeys: (id: string, beats: { t: number; g: [number, number]; gk?: GestureKind }[]) => void;
 };
@@ -71,7 +75,7 @@ export function Outliner({ api }: { api: StudioApi }) {
   const [find, setFind] = useState("");
   const ref = useOutside(adding, () => setAdding(false));
   const q = find.trim().toLowerCase();
-  const matches = (k: (typeof BLOCK_KINDS)[number]) => !q || `${k.name} ${k.hint} ${k.kind}`.toLowerCase().includes(q);
+  const matches = (k: (typeof BLOCK_KINDS)[number]) => !k.hidden && (!q || `${k.name} ${k.hint} ${k.kind}`.toLowerCase().includes(q));
   const add = (kind: string) => { api.addObject(kind); setAdding(false); setFind(""); };
   const catOf = (o: BlockObject) => blockKind(o.kind).category;
   const byId = new Map(scene.objects.map((o) => [o.id, o]));
@@ -103,7 +107,7 @@ export function Outliner({ api }: { api: StudioApi }) {
   const selInSet = !setOpen && sel && sel !== "camera" ? setGroups.flatMap((g) => g.items).find((o) => o.id === sel) : undefined;
   const row = (o: BlockObject, indent = false) => (
     <Item key={o.id} active={sel === o.id} onClick={() => select(o.id)} color={o.color} icon={KIND_ICON[catOf(o)]}
-      name={o.name} meta={o.keys.length > 1 ? `${o.keys.length} keys` : o.parent ? "rides along" : ""}
+      name={o.name} meta={o.gen ? "being made" : o.keys.length > 1 ? `${o.keys.length} keys` : o.parent ? "rides along" : ""}
       dim={o.hidden} indent={indent || !!o.parent}
       onEye={canEdit ? () => api.updateObject(o.id, { hidden: !o.hidden }) : undefined} />
   );
@@ -128,6 +132,16 @@ export function Outliner({ api }: { api: StudioApi }) {
                 className="w-full rounded-[6px] border border-border bg-surface-2 px-2 py-1 text-[12px] text-text placeholder:text-text-faint focus:border-accent focus:outline-none" />
             </div>
             <div className="min-h-0 overflow-y-auto p-2">
+              {api.openPhotoModel && (!q || "model from a photo higgsfield 3d scan".includes(q)) && (
+                <button type="button" onClick={() => { setAdding(false); setFind(""); api.openPhotoModel?.(); }}
+                  className="mb-2 flex w-full items-start gap-2 rounded-[7px] border border-border px-2 py-1.5 text-left hover:bg-surface-2">
+                  <span className="mt-0.5 h-3 w-3 shrink-0 rotate-45 rounded-[2px] bg-accent" />
+                  <span className="min-w-0">
+                    <span className="block text-[12px] font-semibold text-text">Model from a photo…</span>
+                    <span className="block text-[10.5px] text-text-faint">The real object, made in 3D on your Higgsfield credits</span>
+                  </span>
+                </button>
+              )}
               {BLOCK_CATEGORIES.map((c) => {
                 const items = BLOCK_KINDS.filter((k) => k.category === c.id && matches(k));
                 if (!items.length) return null;
@@ -506,6 +520,17 @@ function ObjectPanel({ api, id }: { api: StudioApi; id: string }) {
             onKeyDown={(e) => e.stopPropagation()}
             className="h-7 w-full rounded-[6px] border border-border bg-surface-2 px-2 text-[12px] text-text outline-none" />
         </Row>
+        {o.kind === "model" && (
+          <p className="text-[11px] leading-relaxed text-text-muted">
+            {(() => {
+              const st = api.modelState(o.id);
+              if (st === "making") return "Being made on Higgsfield. The outline fills in when it is ready, usually two or three minutes after sending.";
+              if (st === "loading") return "Loading the model.";
+              if (st === "failed") return "Higgsfield could not make this one. Delete it and try another photo.";
+              return "Made from a photo. Blockout and Clay draw it in one flat colour like everything else; Lit shows its own surface.";
+            })()}
+          </p>
+        )}
         <Row label="Colour"><Swatches value={o.color} colors={SUBJECT_COLORS} onChange={(c) => api.updateObject(o.id, { color: c }, `col${o.id}`)} /></Row>
         <Row label="Size">
           <Vec value={o.size} labels={["W", "H", "D"]} step={0.05} onChange={(v) => api.updateObject(o.id, { size: v.map((x) => Math.max(0.01, x)) as Vec3 }, `size${o.id}`)} disabled={dis} />

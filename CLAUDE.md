@@ -8639,9 +8639,51 @@ the side window to the dog, out through the windshield, ending ahead.
   `pad-<id>-<action>`, so a hold is one undo): one key moves it, two or more
   (or Auto key) set a key at the playhead. Static kinds keep keyframes and
   the numbers, just no pad.
-- NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
-  into a model in the scene, on the studio's own credits); then describe a
-  scene and have it laid out.
+- MODEL FROM A PHOTO (2026-11-06, objects first, no migration). "+ Add to
+  scene" opens with "Model from a photo..." for anyone with edit rights AND
+  their OWN Higgsfield connected (the page reads email_accounts for the
+  viewer). components/blocking/photo-model-window.tsx: one to four photos,
+  a name, Tripo H3.1 (9 credits, one photo or two to four views via its
+  multiview model, auto_size so it arrives at its REAL size, the default) or
+  Meshy 7 (38 credits, one photo), each card priced live and the balance
+  stated before anything is spent. Photos go DIRECT to Storage on the
+  existing `scene_file` scope; app/(app)/projects/[id]/blocking-model-actions.ts
+  is the Make it real shape: quotePhotoModel (get_cost, spends nothing),
+  startPhotoModel (finalizeUpload re-checks every path, media_import_url,
+  ONE generate_3d with role image_references, use_unlim false, never
+  resubmitted on a dropped connection), checkPhotoModel (jobs_wait 10s; on
+  done fetches the GLB through safeFetch, refuses anything over 150MB or
+  without the glTF v2 signature, stores it at
+  `<studio>/scenes/<project>/model_<job>.glb`, and a repeat check finds the
+  stored copy first). lib/blocking/photo-model.ts is pure (15 assertions):
+  photoParams, readModelJob (prefers a link ending .glb over the preview a
+  3D job may also carry), isGlb, arrivalSize (a box under 2 cm or over 60 m
+  is not a real size and is scaled to the stand-in's height).
+  IN THE SCENE: a hidden catalogue kind `model` (BlockKind.hidden keeps it out
+  of the add menu and the connector's catalogue and refuses it from the
+  assistant). BlockObject gained `model` (the stored path, validated by a
+  regex in asBlockScene) and `gen` {job, model, at} while it is being made;
+  both ride in the jsonb. Pressing Make drops a see-through OUTLINE 2.5 m in
+  front of the camera at once, with "being made" in the outliner; the studio
+  checks every 5 s (only for someone who can generate; a check that errors,
+  e.g. a colleague's job on their own Higgsfield, stops for the session and
+  says so once), and on arrival sets `model`, clears `gen` and sizes the
+  object to the model's own box. A reload carries on checking, since `gen`
+  is saved. lib/blocking/model-cache.ts loads each stored GLB once per
+  session (signSceneFiles, then the scene builder's loadModel, which centres
+  it and sits it on the floor); buildObject's "model" case draws it stretched
+  to the object's size, recoloured flat in Blockout and Clay so a scan does
+  not stand out as the one detailed thing, with its own textures in Lit. The
+  mesh cache key includes whether the model is ready, so it swaps in on the
+  next frame. A failed job renames the object "(not made)" and leaves the
+  outline to delete. Rigging and Higgsfield's animations are NOT offered:
+  people stay ours. /dev/blocking?photo=1 runs it against a pretend
+  Higgsfield that returns a bottle exported in the browser (verified in
+  Chromium: window, prices, outline, swap at 0.07 x 0.30 m, no errors).
+  NOT RUN against the live Higgsfield from the app: the first real press is
+  the test, and the thing to watch is which link a finished 3D job carries
+  (an unexpected one is logged with the body).
+- NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
 Operator, 2026-10-08: on set a DP or director pulls out a phone app, picks a

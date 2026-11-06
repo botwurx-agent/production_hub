@@ -6,7 +6,8 @@
 // doing each gesture, both for checking the drawings. ?send=1 adds a pretend pipeline so the Send window opens (sending fails
 // here, since a session cannot reach Supabase). ?ai=1 opens a scene laid out
 // by the connector's create_blocking_scene from a written description, and
-// ?look= opens in a chosen look. /dev pages
+// ?look= opens in a chosen look. ?photo=1 offers "Model from a photo" against a
+// pretend Higgsfield that finishes after three checks with a bottle built here. /dev pages
 // are public in development and auth-gated in production.
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -15,6 +16,39 @@ import { TEMPLATES } from "@/lib/blocking/templates";
 import { BlockingStudio } from "@/components/blocking/blocking-studio";
 import { buildBlockingScene } from "@/lib/connector-blocking";
 import { STUDIO_VARS } from "@/components/blocking/ui";
+import type { PhotoModelService } from "@/components/blocking/photo-model-window";
+
+/** A small bottle exported as a GLB in the browser, standing in for Higgsfield's result. */
+async function fakeGlbUrl(): Promise<string> {
+  const THREE = await import("three");
+  const { GLTFExporter } = await import("three/examples/jsm/exporters/GLTFExporter.js");
+  const g = new THREE.Group();
+  const glass = new THREE.MeshStandardMaterial({ color: "#3f8f5a" });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 24), glass);
+  body.position.y = 0.1;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, 0.08, 24), glass);
+  neck.position.y = 0.24;
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.02, 16), new THREE.MeshStandardMaterial({ color: "#d4b24a" }));
+  cap.position.y = 0.29;
+  g.add(body, neck, cap);
+  const buf = await new GLTFExporter().parseAsync(g, { binary: true }) as ArrayBuffer;
+  return URL.createObjectURL(new Blob([buf], { type: "model/gltf-binary" }));
+}
+
+const FAKE_PATH = (job: string) => `00000000-0000-0000-0000-000000000002/scenes/00000000-0000-0000-0000-000000000001/model_${job}.glb`;
+const fakeChecks = new Map<string, number>();
+const FAKE_MODELS: PhotoModelService = {
+  sign: async () => fakeGlbUrl(),
+  generate: {
+    quote: async (photos) => { await new Promise((r) => setTimeout(r, 400)); return { credits: 212, plan: "creator", costs: photos > 1 ? { tripo: 9 } : { tripo: 9, meshy: 38 } }; },
+    start: async () => { await new Promise((r) => setTimeout(r, 700)); return { jobId: "11111111-2222-4333-8444-555555555555" }; },
+    check: async (job) => {
+      const n = (fakeChecks.get(job) ?? 0) + 1;
+      fakeChecks.set(job, n);
+      return n < 3 ? { state: "pending" } : { state: "done", path: FAKE_PATH(job) };
+    },
+  },
+};
 
 /** The kind of call an assistant makes: a street, a meeting, a push in. */
 const AI_EXAMPLE = {
@@ -145,6 +179,7 @@ function Inner() {
     <div data-theme="dark" className="fixed inset-0 bg-bg"
       style={STUDIO_VARS}>
       <BlockingStudio initial={scene} canEdit onChange={() => {}}
+        models={q.get("photo") ? FAKE_MODELS : undefined}
         describe={q.get("bar") ? async (prompt, cur) => {
           // A pretend answer, since a session has no AI key: the same builder
           // the real bar runs, on a canned edit, after a short wait.

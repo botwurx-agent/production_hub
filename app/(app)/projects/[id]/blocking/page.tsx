@@ -39,6 +39,10 @@ export default async function BlockingPage({
     .filter((s) => s.method !== "live")
     .map(({ id, label }) => ({ id, label }));
 
+  // Whether this person has their own Higgsfield connected, for "Model from a photo".
+  const { data: hf } = await supabase
+    .from("email_accounts").select("id").eq("provider", "higgsfield").eq("user_id", ctx.userId).limit(1).maybeSingle();
+
   let active: { id: string; data: NonNullable<ReturnType<typeof asBlockScene>> } | null = null;
   if (activeId) {
     const { data: row } = await supabase.from("blocking_scenes").select("id, data").eq("id", activeId).maybeSingle();
@@ -58,6 +62,7 @@ export default async function BlockingPage({
       canEdit={canEditProject(ctx, project.id)}
       shotId={searchParams.shot ?? null}
       aiEnabled={aiConfigured() && !ctx.isCollaborator}
+      higgsfield={!!hf}
     />
   );
 }

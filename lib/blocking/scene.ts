@@ -101,6 +101,13 @@ export type BlockObject = {
   /** People: body shape and hair, so a figure reads as a particular person. */
   build?: BodyBuild;
   hair?: HairStyle;
+  /**
+   * Made from a photo: the stored GLB in the project's scene folder, once it
+   * exists. Until then `gen` names the Higgsfield job making it (and which
+   * model), so the editor can keep checking and draw a placeholder.
+   */
+  model?: string;
+  gen?: { job: string; model: string; at: number };
 };
 
 export const BODY_BUILDS = [
@@ -232,6 +239,8 @@ export type BlockKind = {
   poses?: string[];
   /** Vehicles with a choice of seating, first is the default. */
   seats?: { id: string; name: string }[];
+  /** Not offered in the add menu or to the assistant (a model made from a photo). */
+  hidden?: boolean;
 };
 
 export type RoomFront = "closed" | "door" | "open";
@@ -339,7 +348,21 @@ export const BLOCK_KINDS: BlockKind[] = [
   { kind: "sphere", name: "Sphere", category: "shapes", size: [1, 1, 1], color: "#c9c3b8", hint: "A ball or a head" },
   { kind: "ramp", name: "Ramp", category: "shapes", size: [2, 1, 3], color: "#c9c3b8", hint: "A wedge" },
   { kind: "target", name: "Target", category: "shapes", size: [0.4, 0.4, 0.4], color: "#f2c14e", hint: "An invisible point to aim the camera at" },
+  { kind: "model", name: "Model from a photo", category: "set", size: [0.5, 0.5, 0.5], color: "#c8c4bc", hint: "Made from a photo on Higgsfield", hidden: true },
 ];
+const MODEL_PATH = /^[0-9a-f-]{36}\/scenes\/[0-9a-f-]{36}\/[A-Za-z0-9._-]{1,120}\.glb$/i;
+const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A photo model's stored file and pending job, read defensively out of jsonb. */
+function modelFields(r: Record<string, unknown>): Pick<BlockObject, "model" | "gen"> {
+  const out: Pick<BlockObject, "model" | "gen"> = {};
+  if (typeof r.model === "string" && MODEL_PATH.test(r.model)) out.model = r.model;
+  const g = r.gen as Record<string, unknown> | undefined;
+  if (!out.model && g && typeof g === "object" && typeof g.job === "string" && JOB_ID.test(g.job)) {
+    out.gen = { job: g.job, model: typeof g.model === "string" ? g.model.slice(0, 60) : "", at: Number.isFinite(Number(g.at)) ? Number(g.at) : 0 };
+  }
+  return out;
+}
+
 export const blockKind = (kind: string): BlockKind => BLOCK_KINDS.find((k) => k.kind === kind) ?? BLOCK_KINDS.find((k) => k.kind === "box")!;
 
 /** Colours a blockout cycles through, so neighbouring subjects read apart. */
@@ -485,6 +508,7 @@ export function asBlockScene(raw: unknown): BlockScene | null {
       parent: typeof r.parent === "string" ? r.parent : null,
       hidden: r.hidden === true,
       reach: (kind === "person" || kind === "child") && r.reach && typeof r.reach === "object" ? reachOf(r.reach as Record<string, unknown>) : undefined,
+      ...(kind === "model" ? modelFields(r) : {}),
     });
   }
   // A parent must exist and must not lead back round to the object itself.

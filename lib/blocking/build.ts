@@ -13,6 +13,7 @@ import { hipY as poseHipY, poseDef, shoulderY as poseShoulderY, SHIN } from "@/l
 import { gestureOf, LEAN_MAX, LEAN_MIN, type BlockObject, type Environment, type GestureKind, type Look, type Vec3 } from "./scene";
 import { evalTrack } from "./keys";
 import { footPhase, type Gait } from "./gait";
+import { modelEntry } from "./model-cache";
 
 const rad = (d: number) => (d * Math.PI) / 180;
 
@@ -1928,6 +1929,39 @@ function bowl(o: BlockObject, paint: Paint, tint: Tint) {
   return g;
 }
 
+/**
+ * A model made from a photo. Once loaded it is stretched to the object's size
+ * (it arrives at its own size, so that is a no-op until somebody resizes it).
+ * Blockout and clay recolour it flat like every other object, so a textured
+ * scan does not stand out as the one detailed thing in a blockout; Lit keeps
+ * its own textures. Until it has loaded, or while Higgsfield is still making
+ * it, a see-through box with an outline holds its place.
+ */
+function photoModel(o: BlockObject, paint: Paint, look: Look): THREE.Group {
+  const [W, H, D] = o.size;
+  const g = new THREE.Group();
+  const e = modelEntry(o.model);
+  if (e?.state === "ready") {
+    const m = e.model.clone(true);
+    const [w, h, d] = e.size;
+    m.scale.set(w > 0 ? W / w : 1, h > 0 ? H / h : 1, d > 0 ? D / d : 1);
+    if (look !== "lit") {
+      const flat = paint(1);
+      m.traverse((x) => { const mesh = x as THREE.Mesh; if (mesh.isMesh) mesh.material = flat; });
+    }
+    g.add(m);
+    return g;
+  }
+  const ghost = new THREE.MeshBasicMaterial({ color: new THREE.Color(o.color), transparent: true, opacity: 0.18, depthWrite: false });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), ghost);
+  body.position.y = H / 2;
+  g.add(body);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W, H, D)), new THREE.LineBasicMaterial({ color: new THREE.Color(o.color) }));
+  edges.position.y = H / 2;
+  g.add(edges);
+  return g;
+}
+
 /** An object's own geometry, in its own frame. */
 export function buildObject(o: BlockObject, look: Look): THREE.Group {
   const paint = painter(look, o.color);
@@ -1941,6 +1975,7 @@ export function buildObject(o: BlockObject, look: Look): THREE.Group {
   let g: THREE.Group;
   switch (o.kind) {
     case "person": case "child": g = person(o, paint, tint); break;
+    case "model": g = photoModel(o, paint, look); break;
     case "dog": g = dog(o, paint); break;
     case "car": g = vehicle(o, paint, { cab: 0.48, cabStart: 0.28, rows: 2 }); break;
     case "suv": g = vehicle(o, paint, { cab: 0.66, cabStart: 0.22, rows: o.seats === "three" ? 3 : 2, cargo: true, tall: false }); break;

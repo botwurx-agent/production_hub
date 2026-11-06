@@ -88,6 +88,7 @@ const faceYaw = (from: Vec3, to: Vec3) => deg(Math.atan2(to[0] - from[0], to[2] 
 export function catalogueText(): string {
   const byCat = new Map<string, string[]>();
   for (const k of BLOCK_KINDS) {
+    if (k.hidden) continue;
     const list = byCat.get(k.category) ?? [];
     list.push(k.poses ? `${k.kind} (poses: ${k.poses.join(", ")})` : k.seats ? `${k.kind} (seats: ${k.seats.map((s) => s.id).join(", ")})` : k.kind);
     byCat.set(k.category, list);
@@ -458,7 +459,7 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
     if (!isObj(raw)) return;
     const kind = text(raw.kind, 30).toLowerCase();
     const label = text(raw.name, 60) || text(raw.ref, 60) || kind || `object ${i + 1}`;
-    if (!BLOCK_KINDS.some((k) => k.kind === kind)) {
+    if (!BLOCK_KINDS.some((k) => k.kind === kind && !k.hidden)) {
       skipped.push(`${label}: kind "${kind}" is not in the catalogue (use a box, cylinder or sphere for anything else)`);
       return;
     }

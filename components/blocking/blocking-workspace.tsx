@@ -5,7 +5,7 @@
 // scene from a template, save state) over the editor.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { confirmAction } from "@/components/ui/confirm";
 import { toast } from "@/components/ui/toast";
 import { actionError } from "@/lib/action-result";
@@ -16,11 +16,17 @@ import { SceneBar, type SceneBarAnswer } from "./scene-bar";
 import { BlockingStudio } from "./blocking-studio";
 import { STUDIO_VARS, useOutside } from "./ui";
 import type { PipelineShot } from "./send-to-pipeline";
+import type { PhotoModelService } from "./photo-model-window";
+import { checkPhotoModel, quotePhotoModel, startPhotoModel } from "@/app/(app)/projects/[id]/blocking-model-actions";
+import { signSceneFiles } from "@/app/(app)/projects/[id]/scene-actions";
+import { uploadDirect } from "@/components/upload/direct-upload";
 
 
 export function BlockingWorkspace({
-  projectId, projectTitle, scenes, active, canEdit, shotId, studioId, shots: initialShots, linkedShotId, aiEnabled = false,
+  projectId, projectTitle, scenes, active, canEdit, shotId, studioId, shots: initialShots, linkedShotId, aiEnabled = false, higgsfield = false,
 }: {
+  /** The viewer has their own Higgsfield connected, so "Model from a photo" can be offered. */
+  higgsfield?: boolean;
   /** The scene bar runs on the studio's AI key; hidden when none is set or for view-only access. */
   aiEnabled?: boolean;
   studioId: string;
@@ -34,6 +40,27 @@ export function BlockingWorkspace({
   shotId: string | null;
 }) {
   const router = useRouter();
+  // Models made from a photo: anyone who can open the scene loads stored ones;
+  // making a new one needs edit rights and the viewer's own Higgsfield.
+  const models = useMemo<PhotoModelService>(() => ({
+    sign: async (path) => {
+      const res = await signSceneFiles(projectId, [path]);
+      return res && !("error" in res) ? (res as Record<string, string>)[path] ?? null : null;
+    },
+    generate: canEdit && higgsfield ? {
+      quote: (photos) => quotePhotoModel(projectId, photos),
+      start: async (files, modelId) => {
+        const paths: string[] = [];
+        try {
+          for (const f of files) paths.push((await uploadDirect({ kind: "scene_file", projectId }, f)).path);
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : "A photo could not be uploaded." };
+        }
+        return startPhotoModel(projectId, { paths, modelId });
+      },
+      check: (jobId) => checkPhotoModel(projectId, jobId),
+    } : undefined,
+  }), [projectId, canEdit, higgsfield]);
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState(false);
   const menuRef = useOutside(menu, () => setMenu(false));
@@ -176,7 +203,7 @@ export function BlockingWorkspace({
       </div>
       <main className="hidden min-h-0 flex-1 lg:block">
         {active ? (
-          <BlockingStudio key={active.id} initial={active.data} canEdit={canEdit} onChange={onChange}
+          <BlockingStudio key={active.id} initial={active.data} canEdit={canEdit} onChange={onChange} models={models}
             describe={bar ? (p, sc) => describe(p, sc) : undefined}
             pipeline={canEdit ? {
               projectId, studioId, sceneId: active.id, shots: pipeShots, linkedShotId: linked,

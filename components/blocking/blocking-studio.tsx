@@ -36,6 +36,9 @@ import { Btn, useOutside } from "./ui";
 import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
 import { ShotRenderer } from "@/lib/blocking/look-render";
 import { SceneBar } from "./scene-bar";
+import { PhotoModelWindow, type PhotoModelService } from "./photo-model-window";
+import { ensureModel, modelReady } from "@/lib/blocking/model-cache";
+import { arrivalSize, type PhotoModelId } from "@/lib/blocking/photo-model";
 import { gaitAt } from "@/lib/blocking/gait";
 import { holdsPosition, rigMotion } from "@/lib/blocking/rigs";
 
@@ -143,8 +146,10 @@ function CrosshairMark({ color, style }: { color: string; style: CrossStyle }) {
 const fileStem = (s: string) => s.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "blocking";
 
 export function BlockingStudio({
-  initial, canEdit, onChange, pipeline, describe,
+  initial, canEdit, onChange, pipeline, describe, models,
 }: {
+  /** Models made from a photo: loading stored ones, and (with a connection) making new ones. */
+  models?: PhotoModelService;
   initial: BlockScene;
   canEdit: boolean;
   onChange: (s: BlockScene) => void;
@@ -198,6 +203,7 @@ export function BlockingStudio({
   };
   const [recording, setRecording] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [photoOpen, setPhotoOpen] = useState(false);
   const [rect, setRect] = useState({ x: 0, y: 0, w: 0, h: 0 });
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useOutside(exportOpen, () => setExportOpen(false));
@@ -424,6 +430,95 @@ export function BlockingStudio({
     });
   }, [commit]);
 
+  /** Where a newly added object lands: in front of the camera, or at the origin for ground and rooms. */
+  function placeFor(kind: string): Vec3 {
+    const s = sceneRef.current;
+    const k = blockKind(kind);
+    // Almost everything lands in front of the camera, far enough back that
+    // a building does not swallow the lens. Ground and landscape (a road, a
+    // hill, the sea) and a room land at the origin, where they belong.
+    let p: Vec3 = [0, 0, 0];
+    if (k.category !== "environment" && kind !== "room") {
+      const c = camAt(s, tRef.current);
+      const parent = s.camera.parent ? objectMatrix(mapOf(s), s.camera.parent, tRef.current) : null;
+      const w = new THREE.Vector3(...c.p).applyMatrix4(parent ?? new THREE.Matrix4());
+      const d = lookDir(c.r[0], c.r[1]);
+      // A model from a photo is usually a prop, so it lands close enough to see.
+    const dist = kind === "model" ? 2.5 : k.category === "vehicles" ? 9 : Math.max(4, Math.max(k.size[0], k.size[2]) / 2 + 3, k.size[1] * 0.6);
+      p = [w.x + d[0] * dist, 0, w.z + d[2] * dist];
+    }
+    return p;
+  }
+
+  /**
+   * A model was sent to Higgsfield: an outline stands in the scene at once,
+   * sized like a small prop, and the job id rides on it so the check below
+   * (and any reload) knows what to swap in.
+   */
+  function onPhotoStarted(jobId: string, modelId: PhotoModelId, name: string) {
+    const o = newObject("model", placeFor("model"), 0, sceneRef.current.objects);
+    const made: BlockObject = { ...o, name, gen: { job: jobId, model: modelId, at: Date.now() } };
+    commit((x) => ({ ...x, objects: [...x.objects, made] }));
+    setSel(made.id);
+    setPhotoOpen(false);
+    setNote("Sent to Higgsfield. The outline fills in when the model is ready, in two or three minutes");
+  }
+
+  // Load every stored model the scene uses (anyone who can open the scene).
+  useEffect(() => {
+    if (!models) return;
+    for (const o of scene.objects) {
+      if (o.kind === "model" && o.model && !modelReady(o.model)) void ensureModel(o.model, () => models.sign(o.model!));
+    }
+  }, [scene.objects, models]);
+
+  // Check on models still being made, every few seconds, until each lands.
+  const checking = useRef(new Set<string>());
+  const gaveUp = useRef(new Set<string>());
+  useEffect(() => {
+    const gen = models?.generate;
+    if (!gen || !canEdit) return;
+    const tick = async () => {
+      for (const o of sceneRef.current.objects) {
+        const job = o.gen?.job;
+        if (!job || checking.current.has(job) || gaveUp.current.has(job)) continue;
+        checking.current.add(job);
+        try {
+          const res = await gen.check(job);
+          if (!res) { gaveUp.current.add(job); continue; }
+          if ("state" in res && res.state === "failed") {
+            commit((x) => ({ ...x, objects: x.objects.map((y) => (y.id === o.id ? { ...y, gen: undefined, name: `${y.name} (not made)` } : y)) }));
+            setNote(res.error);
+            continue;
+          }
+          if ("error" in res) {
+            // Somebody else's job (their Higgsfield, not ours), or the
+            // connection is gone: stop asking for this session, say so once.
+            gaveUp.current.add(job);
+            setNote(`${o.name}: ${res.error}`);
+            continue;
+          }
+          if (res.state === "pending") continue;
+          const natural = await ensureModel(res.path, () => models!.sign(res.path));
+          commit((x) => ({
+            ...x,
+            objects: x.objects.map((y) => (y.id === o.id
+              ? { ...y, gen: undefined, model: res.path, size: natural ? arrivalSize(natural, y.size) : y.size }
+              : y)),
+          }));
+          setNote(`${o.name} is in the scene`);
+        } finally {
+          checking.current.delete(job);
+        }
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 5000);
+    return () => clearInterval(id);
+    // commit is stable for the life of the editor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [models, canEdit]);
+
   /* ---------- the api the panels use ---------- */
 
   const api: StudioApi = {
@@ -436,23 +531,17 @@ export function BlockingStudio({
     objPad: (id, action, amt) => objPad(id, action, amt),
     posed: (track) => posedAt(scene, track, t),
     addObject: (kind) => {
-      const s = sceneRef.current;
-      const k = blockKind(kind);
-      // Almost everything lands in front of the camera, far enough back that
-      // a building does not swallow the lens. Ground and landscape (a road, a
-      // hill, the sea) and a room land at the origin, where they belong.
-      let p: Vec3 = [0, 0, 0];
-      if (k.category !== "environment" && kind !== "room") {
-        const c = camAt(s, tRef.current);
-        const parent = s.camera.parent ? objectMatrix(mapOf(s), s.camera.parent, tRef.current) : null;
-        const w = new THREE.Vector3(...c.p).applyMatrix4(parent ?? new THREE.Matrix4());
-        const d = lookDir(c.r[0], c.r[1]);
-        const dist = k.category === "vehicles" ? 9 : Math.max(4, Math.max(k.size[0], k.size[2]) / 2 + 3, k.size[1] * 0.6);
-        p = [w.x + d[0] * dist, 0, w.z + d[2] * dist];
-      }
-      const o = newObject(kind, p, 0, s.objects);
+      const o = newObject(kind, placeFor(kind), 0, sceneRef.current.objects);
       commit((x) => ({ ...x, objects: [...x.objects, o] }));
       setSel(o.id);
+    },
+    openPhotoModel: models?.generate && canEdit ? () => setPhotoOpen(true) : undefined,
+    modelState: (id) => {
+      const o = sceneRef.current.objects.find((x) => x.id === id);
+      if (!o || o.kind !== "model") return null;
+      if (o.gen) return "making";
+      if (!o.model) return "failed";
+      return modelReady(o.model) ? "ready" : "loading";
     },
     deleteObject: (id) => {
       commit((s) => ({
@@ -846,7 +935,7 @@ export function BlockingStudio({
     const seen = new Set<string>();
     for (const o of s.objects) {
       seen.add(o.id);
-      const key = `${s.look}|${o.kind}|${o.size.join(",")}|${o.color}|${o.pose ?? ""}|${o.seats ?? ""}|${o.front ?? ""}|${o.build ?? ""}|${o.hair ?? ""}`;
+      const key = `${s.look}|${o.kind}|${o.size.join(",")}|${o.color}|${o.pose ?? ""}|${o.seats ?? ""}|${o.front ?? ""}|${o.build ?? ""}|${o.hair ?? ""}|${o.model ?? ""}|${modelReady(o.model) ? 1 : 0}`;
       let rec = e.meshes.get(o.id);
       if (!rec || rec.key !== key) {
         if (rec) e.world.objects.remove(rec.g);
@@ -1571,6 +1660,10 @@ export function BlockingStudio({
           </div>
         )}
       </div>
+
+      {photoOpen && models?.generate && (
+        <PhotoModelWindow service={models.generate} onClose={() => setPhotoOpen(false)} onStarted={onPhotoStarted} />
+      )}
 
       {sendOpen && pipeline && (
         <SendToPipeline
