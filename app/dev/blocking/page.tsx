@@ -96,6 +96,23 @@ function Inner() {
     // ?look=blockout|clay|lit opens in that look, for comparing them.
     const look = q.get("look");
     const withLook = (x: BlockScene): BlockScene => (look === "blockout" || look === "clay" || look === "lit" ? { ...x, look } : x);
+    // ?transit=1 is a street with tram tracks, a tram and a bus, filmed on
+    // the rig named by &rig= (fpv by default flies a turn past them).
+    if (q.get("transit")) {
+      const rig = q.get("rig") ?? "steadicam";
+      const r = buildBlockingScene({
+        project_id: "x", name: "Transit", template: "city",
+        objects: [
+          { kind: "rails", x: 0, z: -40, size: [3, 0.06, 120] },
+          { ref: "tram", kind: "tram", x: 0, z: -12, facing: 0, moves: [{ t: 8, x: 0, z: 20 }] },
+          { ref: "bus", kind: "bus", x: -3.2, z: -30, facing: 180 },
+        ],
+        camera: rig === "fpv"
+          ? { rig, aim_at: "tram", lens: 20, keys: [{ t: 0, x: 8, y: 4, z: 20 }, { t: 4, x: 2, y: 3, z: 0 }, { t: 8, x: -8, y: 5, z: -14 }] }
+          : { rig, aim_at: "tram", lens: 28, keys: [{ t: 0, x: 4.5, y: 1.6, z: 10 }, { t: 8, x: 4.5, y: 1.6, z: 2 }] },
+      } as Parameters<typeof buildBlockingScene>[0]);
+      if (!("error" in r)) { setScene(withLook(r.scene)); return; }
+    }
     if (q.get("ai")) {
       const r = buildBlockingScene(AI_EXAMPLE);
       if (!("error" in r)) { setScene(withLook(r.scene)); return; }

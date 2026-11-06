@@ -11,6 +11,8 @@
 // so a car drives along +Z at yaw 0. A camera at yaw 0 looks down -Z (three's
 // own convention), pitch up is positive, roll clockwise is positive.
 
+import { isRig, type CameraRig } from "./rigs";
+
 export type Vec3 = [number, number, number];
 
 /** How a key leaves toward the next one. */
@@ -115,6 +117,12 @@ export type BlockCamera = {
   /** Keys are relative to this object, so the camera rides along with it. */
   parent: string | null;
   shake: Shake;
+  /**
+   * What the camera is on: a tripod (does not travel), a gimbal, a Steadicam,
+   * handheld, a drone or an FPV drone (lib/blocking/rigs.ts). Absent is free,
+   * the keys exactly, which is what every scene saved before rigs reads as.
+   */
+  rig?: CameraRig;
   /** Smooth curves through the keys, or straight lines between them. */
   path: "smooth" | "linear";
   /**
@@ -222,8 +230,11 @@ export const BLOCK_KINDS: BlockKind[] = [
   { kind: "suv", name: "SUV", category: "vehicles", size: [2.0, 1.85, 5.1], color: "#e7e5df", hint: "Two rows and a cargo area, or three rows", seats: [{ id: "two", name: "Two rows + cargo" }, { id: "three", name: "Three rows" }] },
   { kind: "van", name: "Van", category: "vehicles", size: [2.05, 2.3, 5.6], color: "#d7d3ca", hint: "A panel van" },
   { kind: "truck", name: "Pickup", category: "vehicles", size: [2.05, 1.95, 5.9], color: "#9aa7b4", hint: "A pickup with an open bed" },
+  { kind: "bus", name: "Bus", category: "vehicles", size: [2.55, 3.1, 12], color: "#3f7fc4", hint: "A city bus, doors on the right, seats inside" },
+  { kind: "tram", name: "Tram", category: "vehicles", size: [2.65, 3.7, 30], color: "#d24b45", hint: "Three sections with a pantograph, drives either way" },
   { kind: "bike", name: "Motorbike", category: "vehicles", size: [0.8, 1.15, 2.1], color: "#3a3d44", hint: "With or without a rider" },
   { kind: "road", name: "Road", category: "environment", size: [8, 0.02, 200], color: "#3b3d42", hint: "Two lanes with a centre line" },
+  { kind: "rails", name: "Tram tracks", category: "environment", size: [3, 0.06, 60], color: "#8d8a83", hint: "Grooved rails set in the street, lay a tram on them" },
   { kind: "sidewalk", name: "Sidewalk", category: "environment", size: [3, 0.12, 40], color: "#a9a59d", hint: "Paving slabs with a kerb" },
   { kind: "crosswalk", name: "Crosswalk", category: "environment", size: [8, 0.03, 3.5], color: "#3b3d42", hint: "Zebra stripes, lay it over a road" },
   { kind: "parking", name: "Parking lot", category: "environment", size: [24, 0.02, 16], color: "#45474c", hint: "Asphalt with marked bays" },
@@ -479,6 +490,7 @@ export function asBlockScene(raw: unknown): BlockScene | null {
     keys: camKeys.length ? camKeys : blankScene().camera.keys,
     parent: typeof camRaw.parent === "string" && byId.has(camRaw.parent) ? camRaw.parent : null,
     shake: { amount: num(shakeRaw.amount, 0, 0, 1), speed: num(shakeRaw.speed, 1, 0.1, 4) },
+    ...(isRig(camRaw.rig) && camRaw.rig !== "free" ? { rig: camRaw.rig } : {}),
     path: camRaw.path === "linear" ? "linear" : "smooth",
     // Older scenes carry no flow: they get the continuous move, which is what
     // a camera path is almost always meant to be.

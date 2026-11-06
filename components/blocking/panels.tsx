@@ -10,6 +10,7 @@ import {
   type BlockObject, type BlockScene, type GestureKind, type BodyBuild, type HairStyle, type Reach, type Ease, type Environment, type Vec3,
 } from "@/lib/blocking/scene";
 import { PRESETS, type PresetId } from "@/lib/blocking/keys";
+import { CAMERA_RIGS, rigOf } from "@/lib/blocking/rigs";
 import { BODIES } from "@/lib/previz/optics";
 import { POSES } from "@/lib/previz/poses";
 import { ControlPads, type PadSpec } from "@/components/previz/move-pad";
@@ -353,7 +354,7 @@ function CameraPanel({ api }: { api: StudioApi }) {
         <Row label="Over">
           <Num value={plen} onChange={(v) => setLen(v)} step={0.5} min={0.5} max={scene.duration} suffix="s" digits={1} />
         </Row>
-        <p className="text-[11px] leading-relaxed text-text-faint">Starts from the camera as it stands at the playhead and replaces any keys inside the move.</p>
+        <p className="text-[11px] leading-relaxed text-text-faint">Starts from the camera as it stands at the playhead and replaces any keys inside the move.{cam.rig === "tripod" ? " On a tripod only the whip pan stays put; any other move takes the camera off it." : ""}</p>
         <div className="grid grid-cols-2 gap-1">
           {PRESETS.map((p) => (
             <button key={p.id} type="button" disabled={!canEdit} title={p.hint}
@@ -364,16 +365,37 @@ function CameraPanel({ api }: { api: StudioApi }) {
           ))}
         </div>
       </Section>
-      <Section title="Handheld">
-        <Row label="Amount">
-          <Num value={cam.shake.amount * 100} step={5} min={0} max={100} suffix="%" digits={0} disabled={!canEdit}
-            onChange={(v) => api.updateScene((s) => ({ ...s, camera: { ...s.camera, shake: { ...s.camera.shake, amount: v / 100 } } }), "shake")} />
-        </Row>
-        <Row label="Energy">
-          <Num value={cam.shake.speed} step={0.1} min={0.1} max={4} suffix="x" digits={1} disabled={!canEdit}
-            onChange={(v) => api.updateScene((s) => ({ ...s, camera: { ...s.camera, shake: { ...s.camera.shake, speed: v } } }), "shakes")} />
-        </Row>
-        <p className="text-[11px] leading-relaxed text-text-faint">A wobble on top of the path. 20% reads as a stabilised rig, 70% as loose handheld.</p>
+      <Section title="Rig">
+        <div className="grid grid-cols-2 gap-1">
+          {CAMERA_RIGS.map((r) => {
+            const on = (cam.rig ?? "free") === r.id;
+            return (
+              <button key={r.id} type="button" disabled={!canEdit} title={r.hint} aria-pressed={on}
+                onClick={() => api.updateScene((s) => {
+                  const camera = { ...s.camera, shake: { ...r.shake } };
+                  if (r.id === "free") delete camera.rig; else camera.rig = r.id;
+                  return { ...s, camera };
+                }, "rig")}
+                className={`rounded-[6px] border px-2 py-1.5 text-left text-[11.5px] font-semibold disabled:opacity-40 ${on ? "border-accent bg-accent-soft text-text" : "border-border text-text hover:border-accent"}`}>
+                {r.name}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] leading-relaxed text-text-faint">{rigOf(cam.rig).hint}</p>
+        {cam.rig !== "tripod" && (
+          <>
+            <Row label="Shake">
+              <Num value={cam.shake.amount * 100} step={5} min={0} max={100} suffix="%" digits={0} disabled={!canEdit}
+                onChange={(v) => api.updateScene((s) => ({ ...s, camera: { ...s.camera, shake: { ...s.camera.shake, amount: v / 100 } } }), "shake")} />
+            </Row>
+            <Row label="Energy">
+              <Num value={cam.shake.speed} step={0.1} min={0.1} max={4} suffix="x" digits={1} disabled={!canEdit}
+                onChange={(v) => api.updateScene((s) => ({ ...s, camera: { ...s.camera, shake: { ...s.camera.shake, speed: v } } }), "shakes")} />
+            </Row>
+            <p className="text-[11px] leading-relaxed text-text-faint">Picking a rig sets its usual shake; change it here. The step and sway of a walking operator, and an FPV's bank, come from how fast the camera moves.</p>
+          </>
+        )}
       </Section>
     </div>
   );

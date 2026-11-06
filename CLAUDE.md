@@ -8381,8 +8381,8 @@ the side window to the dog, out through the windshield, ending ahead.
   made, and while recording the editor's own view draws plainly. In headless
   swiftshader a clip of an 8 s scene came out 15 s long, almost certainly
   the software renderer's frame rate; check the length of the first clip
-  recorded on a real machine. NOT DONE (next, in the agreed order): rig
-  presets, a tram and a bus.
+  recorded on a real machine. Rig presets, a tram and a bus are now BUILT
+  (see "CAMERA RIGS" below).
 - PEOPLE WALK AND RUN (2026-11-06, no migration). A person whose track moves
   steps at that speed: nothing to set, the legs follow the keys.
   lib/blocking/gait.ts is pure: speed and direction in the person's OWN frame
@@ -8449,6 +8449,36 @@ the side window to the dog, out through the windshield, ending ahead.
   AI key). NOT RUN against a live model: the first real description is the
   test, and the thing to watch is whether gpt-5-mini returns well-formed JSON
   for a big set.
+- CAMERA RIGS, A TRAM AND A BUS (2026-11-06, no migration). The camera
+  gained `rig` (BlockCamera.rig, absent = free, which is what every older
+  scene reads as): what it is on. lib/blocking/rigs.ts is pure (rigMotion,
+  CAMERA_RIGS; 12 assertions in the scratchpad) and replaces the bare shake in
+  the render step, so the viewport, the recorded clip and a scrub agree.
+  FREE is the keys exactly. TRIPOD holds the position of the shot's start
+  (camAt evaluates the path at 0), adds no shake, and the path draws as a
+  point; moving a tripod camera (pads, gizmo, numbers) moves EVERY key by the
+  same amount rather than keying, and any preset but a whip pan takes the
+  camera off the tripod and says so. GIMBAL and DRONE hold the horizon (the
+  shake never rolls). GIMBAL, STEADICAM and HANDHELD add the operator's
+  stride: a dip per step every 0.72 m of ground travelled (cumulative distance
+  per keys array, cached like the gait phase), a sway across the direction of
+  travel per stride, a nod and (Steadicam, handheld) a roll, weighted in from
+  0.15 m/s and OUT above 5 to 8 m/s, so a camera riding in a car does not
+  walk. Measured: Steadicam bobs 1.2 cm, handheld 2.4. FPV DRONE banks into
+  turns at the angle a craft would (tan(bank) = v·yaw rate / g, read over
+  0.2 s, capped at 40 degrees; left turn rolls left, checked both ways).
+  Picking a rig sets its usual shake, which the Shake and Energy fields still
+  change. The Rig section replaced the camera panel's Handheld section.
+  The connector and the scene bar take `camera.rig` (also "sticks" and
+  "shoulder"); sceneForPrompt reports it.
+  CATALOGUE: `bus` (12 m, a window band with pillars, glazed doors on the
+  kerb side -X, seats visible inside, a lit destination sign, wheel arches),
+  `tram` (30 m, three sections and two bellows, a cab and windscreen at both
+  ends, double doors both sides, skirts over the bogies, a pantograph on the
+  middle section) and `rails` ("Tram tracks": two grooved rails at 1.435 m
+  gauge in a strip of setts, a flat ground piece, so things put on it stand on
+  it). /dev/blocking?transit=1[&rig=fpv|tripod|...] is a city street with
+  both, filmed on that rig.
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.

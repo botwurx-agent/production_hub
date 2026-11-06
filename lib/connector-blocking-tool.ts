@@ -1,4 +1,5 @@
 import "server-only";
+import { CAMERA_RIGS } from "@/lib/blocking/rigs";
 import { createClient } from "@/lib/supabase/server";
 import { siteOrigin } from "@/lib/site-url";
 import { reportError } from "@/lib/log";
@@ -123,7 +124,8 @@ export const BLOCKING_TOOL: McpTool = {
           },
           aim_at: s("Keep the camera pointed at this object's ref for the whole shot."),
           rides_with: s("Travel with a vehicle; keys are then in its frame."),
-          handheld: n("0 to 1, handheld shake."),
+          rig: s(`What the camera is on: ${CAMERA_RIGS.map((r) => `${r.id} (${r.hint.split(".")[0].toLowerCase()})`).join("; ")}. Default free. Picking one sets its usual shake.`),
+          handheld: n("0 to 1, shake on top of the rig. Leave out to keep the rig's own."),
           flow: s("continuous (default, flows through the keys), even (one steady speed), keys (settles at each key)."),
         },
         additionalProperties: false,

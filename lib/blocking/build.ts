@@ -174,6 +174,163 @@ function vehicle(o: BlockObject, paint: Paint, opts: { cab: number; cabStart: nu
   return g;
 }
 
+/**
+ * The side of a bus or tram between its sill and roof: glass along the whole
+ * length, with a pillar every `bay` metres, so the people inside show through
+ * and a camera can still look in. Drawn into a batch, one draw call.
+ */
+function windowBand(b: Batch, g: THREE.Group, pillar: THREE.Material, W: number, z0: number, len: number, sill: number, roof: number, bay: number) {
+  const h = roof - sill;
+  for (const sx of [-1, 1]) {
+    const pane = box(0.02, h, len, GLASS, sx * (W / 2 - 0.02), sill + h / 2, z0);
+    pane.castShadow = false;
+    g.add(pane);
+    const n = Math.max(1, Math.round(len / bay));
+    for (let i = 0; i <= n; i++) b.box(pillar, 0.06, h, 0.1, sx * (W / 2 - 0.02), sill + h / 2, z0 - len / 2 + (i / n) * len);
+  }
+}
+
+/** Pairs of seats down both sides, leaving gaps where the doors are. */
+function seatRows(b: Batch, m: THREE.Material, W: number, from: number, to: number, floor: number, skip: [number, number][]) {
+  for (let z = from; z > to; z -= 0.82) {
+    if (skip.some(([a, c]) => z < a && z > c)) continue;
+    for (const sx of [-1, 1]) {
+      b.box(m, 0.9, 0.12, 0.44, sx * (W / 2 - 0.55), floor + 0.42, z);
+      b.box(m, 0.9, 0.5, 0.08, sx * (W / 2 - 0.55), floor + 0.7, z - 0.22);
+    }
+  }
+}
+
+/** A city bus: low floor, a long window band, doors on its right (-X), seats you can see through the glass. */
+function bus(o: BlockObject, paint: Paint, tint: Tint) {
+  const [W, H, D] = o.size;
+  const g = new THREE.Group();
+  const b = new Batch();
+  const base = 0.3;
+  const floor = 0.4;
+  const sill = Math.min(1.15, H * 0.37);
+  const roof = H * 0.86;
+  const top = H * 0.94;
+  g.add(rbox(W, sill - base, D, 0.12, paint(1), 0, base + (sill - base) / 2, 0));
+  g.add(rbox(W, top - roof, D, 0.2, paint(1), 0, roof + (top - roof) / 2, 0));
+  // The air-conditioning pod on the roof, toward the back.
+  g.add(rbox(W * 0.55, H - top, D * 0.2, 0.08, paint(0.85), 0, top + (H - top) / 2, -D * 0.25));
+  // Front and back: a tall windscreen, a rear panel with a small window.
+  const fh = roof - 0.95;
+  const screen = box(W * 0.94, fh, 0.03, GLASS, 0, 0.95 + fh / 2, D / 2 + 0.005);
+  screen.castShadow = false;
+  g.add(screen);
+  g.add(box(W * 0.98, roof - sill, 0.05, paint(0.95), 0, sill + (roof - sill) / 2, -D / 2 + 0.02));
+  const doors: [number, number][] = [[D / 2 - 0.6, D / 2 - 1.9], [0.3, -1.0]];
+  windowBand(b, g, paint(0.8), W, 0, D - 0.1, sill, roof, 1.5);
+  for (const [a, c] of doors) {
+    // A glazed double door, floor to roof, on the kerb side.
+    const len = a - c;
+    b.box(paint(0.35), 0.04, roof - base, len, -(W / 2 + 0.01), base + (roof - base) / 2, (a + c) / 2);
+    const glass = box(0.02, roof - base - 0.25, len - 0.16, GLASS, -(W / 2 + 0.035), base + 0.12 + (roof - base - 0.25) / 2, (a + c) / 2);
+    glass.castShadow = false;
+    g.add(glass);
+  }
+  // Inside: the floor and the seats.
+  b.box(paint(0.55), W - 0.12, 0.04, D - 0.3, 0, floor, 0);
+  seatRows(b, tint("#5a6472"), W, D / 2 - 2.4, -D / 2 + 0.6, floor, [[0.5, -1.2]]);
+  // The lit destination sign over the windscreen, head and tail lights.
+  g.add(box(W * 0.7, 0.24, 0.04, tint("#f2c14e", 1.2), 0, roof - 0.14, D / 2 + 0.02));
+  for (const sx of [-1, 1]) {
+    b.box(paint(1.6), 0.32, 0.12, 0.04, sx * W * 0.36, 0.62, D / 2 + 0.01);
+    b.box(paint(0.4), 0.22, 0.32, 0.04, sx * W * 0.4, 0.75, -D / 2 - 0.01);
+    // Mirrors out on arms at the front corners.
+    b.box(paint(0.4), 0.08, 0.32, 0.14, sx * (W / 2 + 0.22), roof - 0.55, D / 2 - 0.15);
+  }
+  // Wheels under arches: front axle in the overhang behind the door, rear at the back.
+  const wr = 0.5;
+  const wg = new THREE.CylinderGeometry(wr, wr, 0.3, 20);
+  wg.rotateZ(Math.PI / 2);
+  for (const z of [D / 2 - 2.65, -D / 2 + 3.1]) for (const sx of [-1, 1]) {
+    g.add(part(wg, paint(0.25), sx * (W / 2 - 0.12), wr, z));
+    b.box(paint(0.3), 0.02, 0.72, 1.25, sx * (W / 2 + 0.006), base + 0.32, z);
+  }
+  b.addTo(g);
+  return g;
+}
+
+/**
+ * A low-floor tram in three sections joined by bellows, a cab and windscreen
+ * at both ends (it drives either way), doors on both sides, and a pantograph
+ * up to the wire on the middle section. The skirts hide the bogies.
+ */
+function tram(o: BlockObject, paint: Paint, tint: Tint) {
+  const [W, H, D] = o.size;
+  const g = new THREE.Group();
+  const b = new Batch();
+  const gap = 0.5;
+  const secLen = (D - gap * 2) / 3;
+  const base = 0.12;
+  const floor = 0.35;
+  const sill = 0.95;
+  const top = Math.min(H - 0.45, 3.2);
+  const roof = top - 0.35;
+  for (let i = 0; i < 3; i++) {
+    const z = (1 - i) * (secLen + gap);
+    g.add(rbox(W, sill - base, secLen, 0.18, paint(1), 0, base + (sill - base) / 2, z));
+    g.add(rbox(W, top - roof, secLen, 0.22, paint(1), 0, roof + (top - roof) / 2, z));
+    // Roof gear: converters and cooling in long low boxes.
+    g.add(rbox(W * 0.6, 0.22, secLen * 0.42, 0.06, paint(0.8), 0, top + 0.11, z + (i === 1 ? -secLen * 0.25 : 0)));
+    windowBand(b, g, paint(0.8), W, z, secLen - 0.1, sill, roof, 1.3);
+    // A double door on each side, in the middle of a section (toward the cab on the end ones).
+    const dz = i === 1 ? z : z + (i === 0 ? -1 : 1) * secLen * 0.15;
+    for (const sx of [-1, 1]) {
+      b.box(paint(0.35), 0.04, roof - base, 1.3, sx * (W / 2 + 0.01), base + (roof - base) / 2, dz);
+      const glass = box(0.02, roof - base - 0.22, 1.14, GLASS, sx * (W / 2 + 0.035), base + 0.11 + (roof - base - 0.22) / 2, dz);
+      glass.castShadow = false;
+      g.add(glass);
+    }
+    b.box(paint(0.55), W - 0.12, 0.04, secLen - 0.2, 0, floor, z);
+    seatRows(b, tint("#5a6472"), W, z + secLen / 2 - (i === 0 ? 2 : 0.6), z - secLen / 2 + (i === 2 ? 2 : 0.6), floor, [[dz + 0.9, dz - 0.9]]);
+    // Skirts down the sides over the bogies, darker so the tram reads as on rails.
+    for (const sx of [-1, 1]) b.box(paint(0.4), 0.03, base + 0.1, secLen * 0.96, sx * (W / 2 + 0.005), (base + 0.1) / 2, z);
+  }
+  // Bellows between the sections.
+  for (const sz of [-1, 1]) b.box(paint(0.32), W * 0.9, top - base - 0.1, gap, 0, base + (top - base - 0.1) / 2, sz * (secLen / 2 + gap / 2));
+  // Both ends are cabs: windscreen, a lit sign, lamps.
+  for (const sz of [-1, 1]) {
+    const fh = roof - 0.9;
+    const screen = box(W * 0.9, fh, 0.03, GLASS, 0, 0.9 + fh / 2, sz * (D / 2 + 0.005));
+    screen.castShadow = false;
+    g.add(screen);
+    g.add(box(W * 0.6, 0.22, 0.04, tint("#f2c14e", 1.2), 0, roof - 0.12, sz * (D / 2 + 0.02)));
+    for (const sx of [-1, 1]) b.box(sz > 0 ? paint(1.6) : paint(0.45), 0.3, 0.12, 0.04, sx * W * 0.32, 0.55, sz * (D / 2 + 0.01));
+  }
+  // The pantograph: a base on the roof, a folded arm, the collector head at the wire.
+  const pz = secLen * 0.2;
+  b.box(paint(0.4), 1.2, 0.12, 0.9, 0, top + 0.06, pz);
+  const steel = tint("#3d4046");
+  const reach = Math.max(0.3, H - top - 0.1);
+  const lower = Math.hypot(0.9, reach / 2);
+  const arm1 = box(0.05, lower, 0.05, steel, 0, top + 0.12 + reach / 4, pz + 0.45 - 0.45);
+  arm1.rotation.x = Math.atan2(0.9, reach / 2);
+  g.add(arm1);
+  const arm2 = box(0.05, lower, 0.05, steel, 0, top + 0.12 + (reach * 3) / 4, pz);
+  arm2.rotation.x = -Math.atan2(0.9, reach / 2);
+  g.add(arm2);
+  g.add(box(1.6, 0.05, 0.12, steel, 0, H - 0.04, pz - 0.0));
+  b.addTo(g);
+  return g;
+}
+
+/** Street tram tracks: two grooved rails at standard gauge, set in a strip of setts. */
+function rails(o: BlockObject, paint: Paint, tint: Tint) {
+  const [W, , D] = o.size;
+  const g = new THREE.Group();
+  g.add(box(W, 0.04, D, paint(1), 0, 0.02, 0));
+  const steel = tint("#b9bec4", 1.1);
+  for (const sx of [-1, 1]) {
+    g.add(box(0.07, 0.025, D, steel, sx * 0.7175, 0.05, 0));
+    g.add(box(0.03, 0.026, D, paint(0.45), sx * (0.7175 - 0.05), 0.05, 0));
+  }
+  return g;
+}
+
 function dog(o: BlockObject, paint: Paint) {
   const [W, H, D] = o.size;
   const g = new THREE.Group();
@@ -1669,6 +1826,9 @@ export function buildObject(o: BlockObject, look: Look): THREE.Group {
     case "suv": g = vehicle(o, paint, { cab: 0.66, cabStart: 0.22, rows: o.seats === "three" ? 3 : 2, cargo: true, tall: false }); break;
     case "van": g = vehicle(o, paint, { cab: 0.8, cabStart: 0.12, rows: 1, cargo: true, tall: true }); break;
     case "truck": g = vehicle(o, paint, { cab: 0.38, cabStart: 0.24, rows: 2, bed: true }); break;
+    case "bus": g = bus(o, paint, tint); break;
+    case "tram": g = tram(o, paint, tint); break;
+    case "rails": g = rails(o, paint, tint); break;
     case "bike": g = bike(o, paint); break;
     case "road": g = road(o, paint); break;
     case "hill": g = hill(o, paint, false); break;

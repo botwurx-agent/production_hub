@@ -22,7 +22,7 @@ import {
   type BlockObject, type BlockScene, type CamKey, type Ease, type Key, type Vec3,
 } from "@/lib/blocking/scene";
 import {
-  aimAt, applyPreset as mergePreset, evalCamera, evalGesture, evalTrack, keyAt, keyHandle, lookDir, pathStats, peakSpeed, presetKeys, setKey, shakeAt, snap,
+  aimAt, applyPreset as mergePreset, evalCamera, evalGesture, evalTrack, keyAt, keyHandle, lookDir, pathStats, peakSpeed, presetKeys, setKey, snap,
   timecode, travel, type PresetId,
 } from "@/lib/blocking/keys";
 import {
@@ -37,6 +37,7 @@ import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
 import { ShotRenderer } from "@/lib/blocking/look-render";
 import { SceneBar } from "./scene-bar";
 import { gaitAt } from "@/lib/blocking/gait";
+import { holdsPosition, rigMotion } from "@/lib/blocking/rigs";
 
 type View = "camera" | "free";
 
@@ -263,6 +264,8 @@ export function BlockingStudio({
   const camAt = (s: BlockScene, at: number, m = mapOf(s)): { p: Vec3; r: Vec3; lens: number; af: [number, number] } => {
     const cam = s.camera;
     const c = evalCamera(cam.keys, at, cam.path === "smooth", { flow: cam.flow, easeEnds: cam.easeEnds });
+    // On a tripod the camera stays where the shot starts: it turns, it does not travel.
+    if (holdsPosition(cam.rig)) c.p = evalCamera(cam.keys, 0, cam.path === "smooth", { flow: cam.flow, easeEnds: cam.easeEnds }).p;
     const o = cam.aim.target ? m.get(cam.aim.target) : undefined;
     if (!o) return c;
     const w = aimPoint(m, o, at);
@@ -303,6 +306,16 @@ export function BlockingStudio({
         if (keys.length >= 2 || autoRef.current || existing || gestureOnly) return setKey(keys, merged, s.fps);
         return [{ ...keys[0], p: merged.p, r: merged.r, ...extra }];
       };
+      if (track === "camera" && holdsPosition(s.camera.rig) && pose.p) {
+        // A tripod is moved, not keyed: every key moves with it, so the
+        // camera stays put for the whole shot in its new place.
+        const d: Vec3 = [pose.p[0] - cur.p[0], pose.p[1] - cur.p[1], pose.p[2] - cur.p[2]];
+        const moved = s.camera.keys.map((k) => ({ ...k, p: [k.p[0] + d[0], k.p[1] + d[1], k.p[2] + d[2]] as Vec3 }));
+        const rest = { ...pose, p: undefined };
+        if (!rest.r && !rest.lens && !rest.af) return { ...s, camera: { ...s.camera, keys: moved } };
+        s = { ...s, camera: { ...s.camera, keys: moved } };
+        pose = rest;
+      }
       if (track === "camera") {
         const lens = pose.lens ?? cur.lens ?? 35;
         const af = pose.af ?? cur.af;
@@ -446,6 +459,7 @@ export function BlockingStudio({
       });
     },
     applyPreset: (id: PresetId, target, len) => {
+      let offSticks = false;
       commit((s) => {
         const at = snap(tRef.current, s.fps);
         const dur = Math.max(0.5, Math.min(len, s.duration - at > 0.4 ? s.duration - at : s.duration));
@@ -463,10 +477,15 @@ export function BlockingStudio({
           tgt = new THREE.Vector3(start.p[0] + d[0] * 5, start.p[1] + d[1] * 5, start.p[2] + d[2] * 5);
         }
         const made = presetKeys(id, start, [tgt.x, tgt.y, tgt.z], t0, dur).map((k) => ({ ...k, t: snap(k.t, s.fps) }));
-        return { ...s, camera: { ...s.camera, keys: tidyKeys(mergePreset(s.camera.keys, made, s.fps), s.fps) } };
+        // Every move but a whip pan travels, which a tripod cannot: the move
+        // takes the camera off it rather than being silently held in place.
+        offSticks = holdsPosition(s.camera.rig) && id !== "whip";
+        const camera = { ...s.camera, keys: tidyKeys(mergePreset(s.camera.keys, made, s.fps), s.fps) };
+        if (offSticks) delete camera.rig;
+        return { ...s, camera };
       });
       setSel("camera");
-      setNote(`${id.replace("-", " ")} keyed`);
+      setNote(offSticks ? `${id.replace("-", " ")} keyed, and taken off the tripod so it can travel` : `${id.replace("-", " ")} keyed`);
     },
     drive: (id, speed, len) => {
       commit((s) => {
@@ -798,7 +817,7 @@ export function BlockingStudio({
     if (envKey !== e.envKey) { applyEnvironment(e.world, s.environment, s.look); e.envKey = envKey; }
     // Camera
     const c = camAt(s, at, m);
-    const sh = shakeAt(at, s.camera.shake.amount, s.camera.shake.speed);
+    const sh = rigMotion(s.camera.rig, s.camera.keys, at, { smooth: s.camera.path === "smooth", flow: s.camera.flow, easeEnds: s.camera.easeEnds }, s.camera.shake);
     const parent = s.camera.parent ? objectMatrix(m, s.camera.parent, at) : null;
     const local: Vec3 = [c.p[0] + sh.p[0], c.p[1] + sh.p[1], c.p[2] + sh.p[2]];
     const rot: Vec3 = [c.r[0] + sh.r[0], c.r[1] + sh.r[1], c.r[2] + sh.r[2]];
@@ -819,11 +838,12 @@ export function BlockingStudio({
     const fk = `${hfov.toFixed(2)}|${vfov.toFixed(2)}`;
     if (fk !== e.fovKey) { setFrustum(e.gizmo, hfov, vfov); e.fovKey = fk; }
     // The camera's path, drawn in its parent's frame so it travels with it.
-    const pk = JSON.stringify([s.camera.keys, s.camera.path, s.camera.flow, s.camera.easeEnds, s.duration]);
+    const pk = JSON.stringify([s.camera.keys, s.camera.path, s.camera.flow, s.camera.easeEnds, s.duration, holdsPosition(s.camera.rig)]);
     if (pk !== e.pathKey) {
       const pts: number[] = [];
       const n = Math.max(2, Math.round(s.duration * 30));
-      for (let i = 0; i <= n; i++) pts.push(...evalCamera(s.camera.keys, (i / n) * s.duration, s.camera.path === "smooth", { flow: s.camera.flow, easeEnds: s.camera.easeEnds }).p);
+      const still = holdsPosition(s.camera.rig);
+      for (let i = 0; i <= n; i++) pts.push(...evalCamera(s.camera.keys, still ? 0 : (i / n) * s.duration, s.camera.path === "smooth", { flow: s.camera.flow, easeEnds: s.camera.easeEnds }).p);
       e.pathLine.geometry.dispose();
       const g = new LineGeometry();
       g.setPositions(pts);

@@ -15,6 +15,7 @@
 // camera's usual side (the front of the set is +z), y up. An object at yaw 0
 // faces +z, which is why "face_toward" is easier to get right than a number.
 
+import { CAMERA_RIGS } from "@/lib/blocking/rigs";
 import { aimAt, evalTrack, presetKeys, PRESETS, type PresetId } from "@/lib/blocking/keys";
 import {
   asBlockScene,
@@ -64,7 +65,7 @@ const SKIES: Record<string, string> = {
 };
 const GROUNDS: Environment["ground"][] = ["grass", "asphalt", "sand", "dirt", "snow", "studio", "water", "none"];
 /** Flat ground pieces something can stand on. */
-const FLAT_GROUND = new Set(["road", "sidewalk", "crosswalk", "parking", "lawn", "path", "rug"]);
+const FLAT_GROUND = new Set(["road", "sidewalk", "crosswalk", "parking", "lawn", "path", "rug", "rails"]);
 const EASE_IDS: Ease[] = ["smooth", "linear", "in", "out", "hold"];
 
 const num = (v: unknown): number | null => {
@@ -538,6 +539,14 @@ export function buildBlockingScene(input: Json, base?: BlockScene): BuildResult 
       if (ob) s.camera.aim = { target: ob.id, frame: [0, 0] };
       else skipped.push(`camera aim_at "${text(c.aim_at, 60)}" is not an object here`);
     }
+    const rigName = text(c.rig, 20).toLowerCase().replace(/[\s_-]/g, "");
+    if (rigName) {
+      const rig = CAMERA_RIGS.find((r) => r.id === rigName || r.name.toLowerCase().replace(/\s/g, "") === rigName || (rigName === "sticks" && r.id === "tripod") || (rigName === "shoulder" && r.id === "handheld"));
+      if (rig) {
+        s.camera.shake = { ...rig.shake };
+        if (rig.id === "free") delete s.camera.rig; else s.camera.rig = rig.id;
+      } else skipped.push(`camera rig "${text(c.rig, 30)}" is not one of ${CAMERA_RIGS.map((r) => r.id).join(", ")}`);
+    }
     const shake = num(c.handheld);
     if (shake !== null) s.camera.shake = { amount: clamp(shake, 0, 1), speed: 1 };
     const flow = text(c.flow, 20).toLowerCase();
@@ -593,6 +602,7 @@ export function sceneForPrompt(s: BlockScene): Json {
     camera: {
       ...(s.camera.parent ? { rides_with: byId.get(s.camera.parent)?.name ?? null } : {}),
       ...(s.camera.aim.target ? { aim_at: byId.get(s.camera.aim.target)?.name ?? null } : {}),
+      ...(s.camera.rig ? { rig: s.camera.rig } : {}),
       keys: s.camera.keys.map((k) => ({ t: r2(k.t), x: r2(k.p[0]), y: r2(k.p[1]), z: r2(k.p[2]), lens: Math.round(k.lens) })),
     },
   };
