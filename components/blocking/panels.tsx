@@ -18,7 +18,7 @@ import type { KeyRef, Track } from "./timeline";
 import { Btn, Num, Row, Section, Seg, Select, Swatches, Vec, useOutside } from "./ui";
 
 /** `af` is the camera's aim framing at that moment (see CamKey). */
-export type Posed = { p: Vec3; r: Vec3; lens?: number; af?: [number, number]; g?: [number, number]; gk?: GestureKind };
+export type Posed = { p: Vec3; r: Vec3; raw?: Vec3; lens?: number; af?: [number, number]; g?: [number, number]; gk?: GestureKind };
 
 export type CamPadAction =
   | "boomUp" | "boomDown" | "truckLeft" | "truckRight" | "pushIn" | "pullOut"

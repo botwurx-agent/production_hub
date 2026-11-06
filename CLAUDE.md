@@ -8549,6 +8549,17 @@ the side window to the dog, out through the windshield, ending ahead.
   dropped, TV and stand inside, every key inside, the key in his head pushed
   clear, man -> TV pan mid-shot, ends on the TV) and in Chromium (the control
   turns the camera, no page errors). NOT RUN against the live model.
+- EDITING A KEY WITHOUT A SUBJECT DRIFTED (2026-11-06, operator: the 4th
+  key "moves in random places"). Every camera write stored the DISPLAYED
+  angle (which already carried the per-key framing offset `af`) back into the
+  key's own `r` and kept `af` too, so at a key whose angle comes from its own
+  `r` each edit added the offset again, until the tilt clamped at 89 degrees
+  and yaw spun. Now camAt returns `raw` (the keys' own angle) and `w` (how
+  much a subject drives the aim); `af` and aim.frame belong to the SUBJECT
+  side only; writePose stores raw plus the change made, never the displayed
+  angle; aimedAt is `w >= 0.5`; picking a new subject for a key clears its
+  `af`. The operator's Zelvara scene key 4 was repaired in the database
+  (tilt 89 -> aimed at the TV, af removed).
 - NEXT (agreed order): the Higgsfield option (`generate_3d` turning a photo
   into a model in the scene, on the studio's own credits); then describe a
   scene and have it laid out.
