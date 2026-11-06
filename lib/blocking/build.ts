@@ -2151,3 +2151,13 @@ export function aimPoint(objs: Map<string, BlockObject>, o: BlockObject, t: numb
       : o.kind === "dog" ? h * 0.85 : h * 0.5;
   return new THREE.Vector3(0, up, 0).applyMatrix4(objectMatrix(objs, o.id, t));
 }
+
+/**
+ * Aim markers (a Target's diamond) are for working in free view only: they
+ * must never appear through the camera, in a recorded clip or a saved frame.
+ */
+export function showMarkers(world: World, on: boolean) {
+  world.objects.traverse((o) => {
+    if (o.userData.helper && (o as THREE.Mesh).isMesh) o.visible = on;
+  });
+}

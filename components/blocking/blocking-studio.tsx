@@ -26,7 +26,7 @@ import {
   timecode, travel, type PresetId,
 } from "@/lib/blocking/keys";
 import {
-  aimPoint, applyEnvironment, buildObject, buildWorld, cameraGizmo, cameraMatrix, objectMatrix, poseMatrix, poseRig, setFrustum, toLocal, touchPoint,
+  aimPoint, applyEnvironment, buildObject, buildWorld, cameraGizmo, cameraMatrix, objectMatrix, poseMatrix, poseRig, setFrustum, showMarkers, toLocal, touchPoint,
   type PersonRig, type World,
 } from "@/lib/blocking/build";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
@@ -974,6 +974,7 @@ export function BlockingStudio({
     renderer.clear();
     const shotView = (x: number, y: number, fw: number, fh: number) => {
       world.helpers.visible = false;
+      showMarkers(world, false);
       e.tcHelper.visible = false;
       // While a clip records, the editor's own view is drawn plainly: the
       // recording is the frame that matters, and drawing the occlusion twice
@@ -1007,6 +1008,7 @@ export function BlockingStudio({
       for (const d of e.dots.children) sizeTo(d, d.userData.sel ? 11 : 8);
       if (e.handles.group.visible) { sizeTo(e.handles.out, 8); sizeTo(e.handles.inn, 8); }
       e.tcHelper.visible = !!e.tc.object;
+      showMarkers(world, true);
       e.fxFree.render(s.look);
       // Picture in picture: what the camera sees.
       const pw = Math.min(w * 0.3, 380);
@@ -1019,6 +1021,7 @@ export function BlockingStudio({
     // has a first frame to start on (Chrome waits for one).
     if (e.rec) {
       world.helpers.visible = false;
+      showMarkers(world, false);
       e.tcHelper.visible = false;
       e.rec.fx.render(s.look);
     }
@@ -1302,6 +1305,7 @@ export function BlockingStudio({
       const fx = new ShotRenderer(r, e.world.scene, e.shot, 1);
       pose(sceneRef.current, 0);
       e.world.helpers.visible = false;
+      showMarkers(e.world, false);
       e.tcHelper.visible = false;
       fx.render(sceneRef.current.look);
       const media = new MediaRecorder((r.domElement as HTMLCanvasElement).captureStream(sceneRef.current.fps), { mimeType: mime, videoBitsPerSecond: 14_000_000 });
@@ -1337,6 +1341,7 @@ export function BlockingStudio({
       const r = recRenderer();
       pose(sceneRef.current, 0);
       e.world.helpers.visible = false;
+      showMarkers(e.world, false);
       e.tcHelper.visible = false;
       const fx = new ShotRenderer(r, e.world.scene, e.shot, 1);
       fx.render(sceneRef.current.look);
