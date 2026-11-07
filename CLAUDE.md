@@ -8070,6 +8070,20 @@ that generates is NOT, and waits on what the probe prints.
   the parser was tested on the printed body.
   NOT BUILT: Elements matching from `show_reference_elements` (probe not yet
   pressed for it).
+  HIGGSFIELD'S HISTORY LEAVES MODELS OUT (found 2026-11-07, operator: newest
+  images missing from the picker). `show_generations` returned Oct 26 as the
+  newest image while Nano Banana 2.1 / Pro images from Oct 28 to Nov 7 exist
+  on the account: `show_generation_by_ids` finds them (type image,
+  completed), the credit log lists them, yet the history omits them filtered
+  or not. Checked every other list the MCP offers (Marketing Studio history,
+  projects incl. "All generations", show_medias, transactions): none carries
+  their job ids. So the list cannot be made complete from our side. The
+  picker gained "Paste a Higgsfield link": jobIdsFrom (lib/higgsfield-history,
+  any UUID in the text, so a page link, the CDN file link whose name carries
+  the job id, or bare ids all work) -> lookupHiggsfieldGenerations
+  (show_generation_by_ids) -> found items go to the top, ticked; wrong kind
+  and not-found are counted in a note. If Higgsfield fixes its history the
+  paste box is still harmless.
 
 ### Shot blocking: animated 3D blockouts for AI video (migration 0128) — BUILT, slice 1
 Operator, 2026-11-04: "scene blocking is becoming the standard protocol" for

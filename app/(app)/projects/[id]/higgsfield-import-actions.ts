@@ -11,7 +11,7 @@ import { requireStudioContext } from "@/lib/studio";
 import { assetStorage } from "@/lib/asset-storage";
 import { fetchMediaFromUrl, aspectRatio, resolutionLabel } from "@/lib/media-import";
 import { openHiggsfield, callTool } from "@/lib/higgsfield-session";
-import { cleanPicked, frameInputs, modelLabel, parseGenerationsPage, type HfGeneration } from "@/lib/higgsfield-history";
+import { cleanPicked, frameInputs, jobIdsFrom, modelLabel, parseGenerationsPage, type HfGeneration } from "@/lib/higgsfield-history";
 import { reportError } from "@/lib/log";
 import type { Json } from "@/lib/database.types";
 
@@ -45,6 +45,41 @@ export async function listHiggsfieldGenerations(
     return { items: page.items.filter((g) => g.kind === input.kind), nextCursor: page.nextCursor };
   } catch (e) {
     reportError("listHiggsfieldGenerations", e);
+    return { error: "Could not reach Higgsfield. Try again in a moment." };
+  } finally {
+    await mcp.close();
+  }
+}
+
+/**
+ * Looks up specific generations by the links or ids the producer pasted.
+ * Higgsfield's history list leaves some newer models out entirely, but a
+ * lookup by job id finds them, so this is how the picker reaches every item
+ * on the account. Read-only, costs nothing.
+ */
+export async function lookupHiggsfieldGenerations(
+  projectId: string,
+  input: { kind: "image" | "video"; text: string },
+): Promise<{ items: HfGeneration[]; missing: number; wrongKind: number } | { error: string; notConnected?: true }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const { data: project } = await supabase.from("projects").select("id").eq("id", projectId).maybeSingle();
+  if (!project) return { error: "You do not have access to this project." };
+  const ids = jobIdsFrom(typeof input.text === "string" ? input.text : "");
+  if (ids.length === 0) {
+    return { error: "That does not contain a Higgsfield link or id. Copy the link from the image or video on higgsfield.ai." };
+  }
+  const open = await openHiggsfield(ctx.userId);
+  if ("error" in open) return open;
+  const { mcp } = open;
+  try {
+    const res = await callTool(mcp, "show_generation_by_ids", { jobs: ids.map((job_id, index) => ({ index, job_id })) });
+    if ("error" in res) return { error: res.error };
+    const found = parseGenerationsPage(res.data).items;
+    const items = found.filter((g) => g.kind === input.kind);
+    return { items, missing: ids.length - found.length, wrongKind: found.length - items.length };
+  } catch (e) {
+    reportError("lookupHiggsfieldGenerations", e);
     return { error: "Could not reach Higgsfield. Try again in a moment." };
   } finally {
     await mcp.close();

@@ -170,3 +170,23 @@ export function cleanPicked(v: unknown): HfGeneration | null {
     inputs,
   };
 }
+
+const UUID_ANY = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/**
+ * Higgsfield job ids found in whatever was pasted: a page link, a file link
+ * (the file name carries the job id after its timestamp), or bare ids, one
+ * per line. Higgsfield's history list leaves some newer models out (Nano
+ * Banana 2.1 and Pro, seen 2026-11-07), so a pasted link is how those come
+ * in: each id is looked up on its own. A user id in a CDN path
+ * (`user_<letters>`) is not a UUID, so it never matches.
+ */
+export function jobIdsFrom(text: string, max = 12): string[] {
+  const out: string[] = [];
+  for (const m of text.slice(0, 20_000).match(UUID_ANY) ?? []) {
+    const id = m.toLowerCase();
+    if (!out.includes(id)) out.push(id);
+    if (out.length >= max) break;
+  }
+  return out;
+}

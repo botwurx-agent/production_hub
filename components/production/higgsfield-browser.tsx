@@ -13,6 +13,7 @@ import {
   higgsfieldIdsOnShot,
   importHiggsfieldGenerations,
   listHiggsfieldGenerations,
+  lookupHiggsfieldGenerations,
 } from "@/app/(app)/projects/[id]/higgsfield-import-actions";
 
 const MAX_PICK = 12;
@@ -75,6 +76,36 @@ export function HiggsfieldBrowser({
       .catch(() => {});
   }, [loadPage, projectId, shotId]);
 
+  const [finding, setFinding] = useState(false);
+  const findByLink = async (text: string): Promise<boolean> => {
+    setFinding(true);
+    setError(null);
+    setNote(null);
+    const res = await lookupHiggsfieldGenerations(projectId, { kind: stage, text }).catch(() => undefined);
+    if (!alive.current) return false;
+    setFinding(false);
+    const err = actionError(res);
+    if (err || !res || "error" in res) {
+      setError(err ?? "Could not look that up on Higgsfield.");
+      if (res && "notConnected" in res && res.notConnected) setNotConnected(true);
+      return false;
+    }
+    const found = res.items;
+    // Found ones go to the top, ticked, so the next press brings them in.
+    setItems((prev) => [...found, ...prev.filter((g) => !found.some((f) => f.id === g.id))]);
+    setPicked((p) => {
+      const add = found.map((g) => g.id).filter((id) => !p.includes(id) && !onShot.has(id));
+      return [...p, ...add].slice(0, MAX_PICK);
+    });
+    const kind = stage === "image" ? "image" : "video";
+    const bits: string[] = [];
+    if (found.length) bits.push(`Found ${found.length} and ticked ${found.length === 1 ? "it" : "them"}.`);
+    if (res.wrongKind) bits.push(`${res.wrongKind} ${res.wrongKind === 1 ? "is not a" : "are not"} ${kind}${res.wrongKind === 1 ? "" : "s"}, so ${res.wrongKind === 1 ? "it was" : "they were"} left out.`);
+    if (res.missing) bits.push(`${res.missing} could not be found on your Higgsfield account.`);
+    setNote(bits.join(" ") || "Nothing found.");
+    return found.length > 0;
+  };
+
   const toggle = (id: string) =>
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= MAX_PICK ? p : [...p, id]));
 
@@ -126,6 +157,8 @@ export function HiggsfieldBrowser({
         note={note}
         canLoadMore={!!cursor && !loading}
         onToggle={toggle}
+        finding={finding}
+        onFind={findByLink}
         onLoadMore={() => void loadPage(cursor)}
         onImport={() => void doImport()}
         onCancel={onClose}
@@ -152,6 +185,8 @@ export function HiggsfieldBrowserBody({
   note,
   canLoadMore,
   onToggle,
+  finding = false,
+  onFind,
   onLoadMore,
   onImport,
   onCancel,
@@ -167,6 +202,9 @@ export function HiggsfieldBrowserBody({
   note: string | null;
   canLoadMore: boolean;
   onToggle: (id: string) => void;
+  finding?: boolean;
+  /** Looks up pasted links; resolves true when something was found. */
+  onFind?: (text: string) => Promise<boolean>;
   onLoadMore: () => void;
   onImport: () => void;
   onCancel: () => void;
@@ -179,6 +217,8 @@ export function HiggsfieldBrowserBody({
         this shot and they come in as {stage === "image" ? "references" : "takes"}, with the model and prompt they were
         made with. Bringing them in costs no credits.
       </p>
+
+      {onFind && <FindByLink stage={stage} finding={finding} onFind={onFind} />}
 
       {error && (
         <div className="rounded-[10px] border border-border bg-red-bg px-3 py-2 text-sm text-text">
@@ -282,6 +322,47 @@ export function HiggsfieldBrowserBody({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function FindByLink({
+  stage,
+  finding,
+  onFind,
+}: {
+  stage: "image" | "video";
+  finding: boolean;
+  onFind: (text: string) => Promise<boolean>;
+}) {
+  const [text, setText] = useState("");
+  const go = async () => {
+    if (!text.trim() || finding) return;
+    if (await onFind(text)) setText("");
+  };
+  return (
+    <div className="rounded-[10px] border border-border bg-surface-2 p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void go();
+            }
+          }}
+          placeholder={`Paste a Higgsfield ${stage} link (or several)`}
+          className="min-w-0 flex-1 rounded-[8px] border border-border bg-surface px-2.5 py-1.5 text-sm text-text placeholder:text-text-faint focus:border-accent focus:outline-none"
+        />
+        <Button size="sm" variant="secondary" onClick={() => void go()} disabled={!text.trim() || finding}>
+          {finding ? "Finding…" : "Find"}
+        </Button>
+      </div>
+      <p className="mt-1.5 text-xs text-text-muted">
+        Not in the list? Higgsfield leaves some newer models out of the history it shares, such as Nano Banana 2.1
+        and Pro. Copy the {stage}&apos;s link on higgsfield.ai and paste it here to bring it in.
+      </p>
     </div>
   );
 }
