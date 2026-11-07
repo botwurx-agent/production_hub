@@ -82,7 +82,8 @@ export function retimeKeys<K extends Key>(keys: K[], length: number, duration: n
 /** What can be copied: one key, or a whole move, from the camera or an object. */
 export type Clip =
   | { kind: "key"; from: "camera" | "object"; key: Key | CamKey }
-  | { kind: "move"; from: "camera" | "object"; keys: (Key | CamKey)[]; name: string };
+  | { kind: "move"; from: "camera" | "object"; keys: (Key | CamKey)[]; name: string }
+  | GroupClip;
 
 export const CLIP_KEY = "blocking.clipboard";
 
@@ -116,6 +117,16 @@ export function parseClip(raw: string | null): Clip | null {
   if (!raw) return null;
   try {
     const v = JSON.parse(raw) as Record<string, unknown>;
+    if (v.kind === "group" && Array.isArray(v.tracks)) {
+      const tracks = v.tracks.slice(0, 60).map((t: unknown) => {
+        const r = t as Record<string, unknown>;
+        if (!r || typeof r.track !== "string" || r.track.length > 80 || !Array.isArray(r.keys)) return null;
+        const keys = r.keys.slice(0, 400).map(cleanKey).filter((k): k is Key => !!k);
+        if (!keys.length) return null;
+        return { track: r.track, from: r.track === "camera" ? ("camera" as const) : ("object" as const), keys: sorted(keys) };
+      }).filter((t): t is GroupClip["tracks"][number] => !!t);
+      return tracks.length ? { kind: "group", tracks } : null;
+    }
     const from = v.from === "camera" ? "camera" : v.from === "object" ? "object" : null;
     if (!from) return null;
     if (v.kind === "key") {
@@ -181,3 +192,68 @@ export function pasteMove<K extends Key>(
   const kept = keys.filter((k) => k.t < start - half || k.t > end + half);
   return { keys: sorted([...kept, ...placed]), dropped };
 }
+
+/* ---------- mirror ---------- */
+
+export type MirrorAxis = "x" | "z";
+
+/**
+ * The move flipped so it travels the other way across: "x" swaps left and
+ * right (a cross from left to right becomes right to left), "z" swaps near and
+ * far. It is flipped about the middle of its own route (halfway between the
+ * first and last key), so it stays where it was and only its direction
+ * changes. Facing, roll, framing and curve handles flip with it. Positions are
+ * in the frame the keys live in, so a rider is mirrored inside its car.
+ */
+export function mirrorKeys<K extends Key>(keys: K[], axis: MirrorAxis): K[] {
+  const ks = sorted(keys);
+  if (!ks.length) return ks;
+  const c = axis === "x" ? 0 : 2;
+  const mid = (ks[0].p[c] + ks[ks.length - 1].p[c]) / 2;
+  const yaw = (y: number) => {
+    const v = axis === "x" ? -y : 180 - y;
+    return ((((v + 180) % 360) + 360) % 360) - 180;
+  };
+  return ks.map((k) => {
+    const p = [...k.p] as Vec3;
+    p[c] = 2 * mid - p[c];
+    const next = { ...k, p, r: [yaw(k.r[0]), k.r[1], -k.r[2]] as Vec3 } as K;
+    const ck = k as unknown as CamKey;
+    const nk = next as unknown as CamKey;
+    if (ck.tan) { const t = [...ck.tan] as Vec3; t[c] = -t[c]; nk.tan = t; }
+    if (ck.af) nk.af = [-ck.af[0], ck.af[1]];
+    return next;
+  });
+}
+
+/* ---------- several keys at once ---------- */
+
+/** Which keys of a list are picked, by frame. */
+export const isPicked = (k: Key, times: number[], fps: number) => times.some((t) => Math.abs(t - k.t) < 0.5 / fps);
+
+/**
+ * The picked keys slid together by dt, the rest left where they are. The slide
+ * is cut short so no picked key falls off either end of the scene; a picked
+ * key landing on an unpicked key's frame takes its place, as a single drag
+ * does. `moved` is how far they really went.
+ */
+export function shiftPicked<K extends Key>(keys: K[], times: number[], dt: number, duration: number, fps: number): { keys: K[]; moved: number } {
+  const pick = keys.filter((k) => isPicked(k, times, fps));
+  if (!pick.length) return { keys, moved: 0 };
+  const lo = -Math.min(...pick.map((k) => k.t));
+  const hi = duration - Math.max(...pick.map((k) => k.t));
+  const d = snap(Math.min(hi, Math.max(lo, dt)), fps);
+  if (Math.abs(d) < EPS) return { keys, moved: 0 };
+  let out = keys.filter((k) => !isPicked(k, times, fps));
+  for (const k of pick) out = setKey(out, { ...k, t: snap(k.t + d, fps) }, fps);
+  return { keys: sorted(out), moved: d };
+}
+
+/** The keys of a list that are picked, kept in order. */
+export const pickedKeys = <K extends Key>(keys: K[], times: number[], fps: number) => sorted(keys.filter((k) => isPicked(k, times, fps)));
+
+/** A copy of keys from several tracks, which pastes back onto the same tracks. */
+export type GroupClip = { kind: "group"; tracks: { track: string; from: "camera" | "object"; keys: (Key | CamKey)[] }[] };
+
+/** The earliest key time across a group, which lands on the playhead when pasted. */
+export const groupStart = (g: GroupClip) => Math.min(...g.tracks.flatMap((t) => t.keys.map((k) => k.t)));

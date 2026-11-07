@@ -12,16 +12,18 @@ import { Btn, Num, Select } from "./ui";
 
 export type Track = "camera" | string;
 export type KeyRef = { track: Track; t: number };
-export type TrackAction = "copy" | "paste" | "reverse" | "shift" | "retime" | "clear";
+export type TrackAction = "copy" | "paste" | "reverse" | "mirrorX" | "mirrorZ" | "shift" | "retime" | "clear";
+export type GroupAction = "copy" | "delete" | "ease" | "shift";
 export type KeyAction = "jump" | "copy" | "duplicate" | "ease" | "delete";
 
 type Menu =
   | { kind: "key"; x: number; y: number; ref: KeyRef }
-  | { kind: "track"; x: number; y: number; track: Track };
+  | { kind: "track"; x: number; y: number; track: Track }
+  | { kind: "group"; x: number; y: number };
 
 export function Timeline({
   scene, t, setT, playing, onPlay, loop, setLoop, selected, onSelectTrack, selectedKey, onSelectKey,
-  onMoveKey, onCopyKeyTo, onTrackAction, onKeyAction, onPaste, onDeleteKey, onInsertKey, autoKey, setAutoKey, onDuration, onFps, canEdit,
+  onMoveKey, onCopyKeyTo, picked, onPick, onGroupAction, onTrackAction, onKeyAction, onPaste, onDeleteKey, onInsertKey, autoKey, setAutoKey, onDuration, onFps, canEdit,
 }: {
   scene: BlockScene;
   t: number;
@@ -37,6 +39,10 @@ export function Timeline({
   onMoveKey: (track: Track, from: number, to: number) => void;
   /** Alt-drag: drop a copy of the key where it is let go. */
   onCopyKeyTo: (track: Track, from: number, to: number) => void;
+  /** Several keys picked at once: Shift-click a diamond, or Shift-drag a box. */
+  picked: KeyRef[];
+  onPick: (refs: KeyRef[]) => void;
+  onGroupAction: (refs: KeyRef[], action: GroupAction, arg?: number | string) => void;
   onTrackAction: (track: Track, action: TrackAction, arg?: number) => void;
   onKeyAction: (ref: KeyRef, action: KeyAction, arg?: string) => void;
   /** Paste the clipboard (a key or a whole move) onto a track at the playhead. */
@@ -50,7 +56,8 @@ export function Timeline({
   canEdit: boolean;
 }) {
   const area = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ track: Track; from: number; to: number; copy: boolean } | null>(null);
+  const [drag, setDrag] = useState<{ track: Track; from: number; to: number; copy: boolean; group: boolean } | null>(null);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [clip, setClip] = useState<Clip | null>(null);
   const openMenu = (e: React.MouseEvent, m: Menu) => {
@@ -66,6 +73,43 @@ export function Timeline({
     const r = area.current?.getBoundingClientRect();
     if (!r) return 0;
     return snap(Math.min(D, Math.max(0, ((clientX - r.left) / r.width) * D)), fps);
+  };
+  const isIn = (refs: KeyRef[], track: Track, t: number) => refs.some((r) => r.track === track && Math.abs(r.t - t) < 0.5 / fps);
+  const togglePick = (ref: KeyRef) =>
+    onPick(isIn(picked, ref.track, ref.t) ? picked.filter((r) => !(r.track === ref.track && Math.abs(r.t - ref.t) < 0.5 / fps)) : [...picked, ref]);
+  // Shift-drag on the timeline draws a box; every diamond it touches is picked.
+  const boxStart = (e: React.PointerEvent) => {
+    if (!e.shiftKey || e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("[data-key]")) return;
+    const r = area.current?.getBoundingClientRect();
+    if (!r) return;
+    e.preventDefault();
+    e.stopPropagation();
+    area.current!.setPointerCapture(e.pointerId);
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    setBox({ x0: x, y0: y, x1: x, y1: y });
+  };
+  const boxMove = (e: React.PointerEvent) => {
+    if (!box) return;
+    const r = area.current!.getBoundingClientRect();
+    setBox({ ...box, x1: e.clientX - r.left, y1: e.clientY - r.top });
+  };
+  const boxEnd = () => {
+    if (!box || !area.current) return;
+    const r = area.current.getBoundingClientRect();
+    const L = Math.min(box.x0, box.x1) + r.left, R = Math.max(box.x0, box.x1) + r.left;
+    const T = Math.min(box.y0, box.y1) + r.top, B = Math.max(box.y0, box.y1) + r.top;
+    const hit: KeyRef[] = [];
+    area.current.querySelectorAll<HTMLElement>("[data-key]").forEach((el) => {
+      const b = el.getBoundingClientRect();
+      if (b.right >= L && b.left <= R && b.bottom >= T && b.top <= B) hit.push({ track: el.dataset.track!, t: Number(el.dataset.t) });
+    });
+    setBox(null);
+    if (!hit.length) return;
+    const merged = [...picked];
+    for (const h of hit) if (!isIn(merged, h.track, h.t)) merged.push(h);
+    onPick(merged);
+    onSelectKey(hit[0]);
   };
   const pct = (x: number) => `${(Math.min(D, Math.max(0, x)) / D) * 100}%`;
   // Only what moves earns a row: the camera, anything with two or more keys,
@@ -129,6 +173,7 @@ export function Timeline({
     scrubbing.current = true;
     setT(timeAt(e.clientX));
     onSelectKey(null);
+    if (picked.length) onPick([]);
   };
   const scrubMove = (e: React.PointerEvent) => { if (scrubbing.current) setT(timeAt(e.clientX)); };
   const scrubEnd = () => (scrubbing.current = false);
@@ -156,6 +201,11 @@ export function Timeline({
             <Btn onClick={onInsertKey} title="Set a keyframe for the selected thing at the playhead (I)">◆ Keyframe</Btn>
             <Btn onClick={onDeleteKey} disabled={!selectedKey} title="Delete the selected keyframe (Delete)">Delete key</Btn>
           </>
+        )}
+        {picked.length > 1 && (
+          <span className="rounded-[6px] bg-accent-soft px-2 py-1 text-[11.5px] text-text">
+            {picked.length} keys picked <span className="text-text-faint">· drag one to move them all · right-click for more · Esc clears</span>
+          </span>
         )}
         <div className="ml-auto flex items-center gap-1.5">
           <span className="text-[11px] text-text-faint">Length</span>
@@ -185,7 +235,8 @@ export function Timeline({
           {showStill && stillRows.map((r) => <NameRow key={r.id} r={r} selected={selected} onSelectTrack={onSelectTrack}
             onMenu={(e) => { onSelectTrack(r.id); openMenu(e, { kind: "track", x: e.clientX, y: e.clientY, track: r.id }); }} />)}
         </div>
-        <div ref={area} className="relative min-w-0 flex-1 select-none">
+        <div ref={area} className="relative min-w-0 flex-1 select-none"
+          onPointerDownCapture={boxStart} onPointerMove={box ? boxMove : undefined} onPointerUp={box ? boxEnd : undefined}>
           <div className="relative h-6 cursor-ew-resize border-b border-border bg-surface-2"
             onPointerDown={scrubStart} onPointerMove={scrubMove} onPointerUp={scrubEnd}>
             {ticks.map((s) => (
@@ -216,16 +267,19 @@ export function Timeline({
                   );
                 })}
                 {keys.map((k) => {
-                  const dragging = drag && drag.track === r.id && Math.abs(drag.from - k.t) < 1e-6;
-                  const kt = dragging ? drag!.to : k.t;
-                  const sel = selectedKey && selectedKey.track === r.id && Math.abs(selectedKey.t - k.t) < 0.5 / fps;
+                  const inPick = isIn(picked, r.id, k.t);
+                  const dragging = drag && (drag.group ? inPick : drag.track === r.id && Math.abs(drag.from - k.t) < 1e-6);
+                  const kt = dragging ? (drag!.group ? Math.min(D, Math.max(0, k.t + drag!.to - drag!.from)) : drag!.to) : k.t;
+                  const sel = inPick || (selectedKey && selectedKey.track === r.id && Math.abs(selectedKey.t - k.t) < 0.5 / fps);
                   return (
-                    <button key={k.t} type="button" title={`${timecode(k.t, fps)} · ${k.ease}. Right-click for more, Alt-drag to copy`}
+                    <button key={k.t} type="button" data-key="" data-track={r.id} data-t={k.t}
+                      title={`${timecode(k.t, fps)} · ${k.ease}. Right-click for more, Shift-click to pick several, Alt-drag to copy`}
                       className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border ${
                         sel ? "border-text bg-amber" : "border-border-strong bg-amber opacity-80 hover:opacity-100"
                       }`}
                       style={{ left: pct(kt) }}
                       onContextMenu={(e) => {
+                        if (inPick && picked.length > 1) { openMenu(e, { kind: "group", x: e.clientX, y: e.clientY }); return; }
                         onSelectTrack(r.id);
                         onSelectKey({ track: r.id, t: k.t });
                         openMenu(e, { kind: "key", x: e.clientX, y: e.clientY, ref: { track: r.id, t: k.t } });
@@ -233,14 +287,37 @@ export function Timeline({
                       onPointerDown={(e) => {
                         if (e.button !== 0) return;
                         e.stopPropagation();
+                        if (e.shiftKey) {
+                          togglePick({ track: r.id, t: k.t });
+                          onSelectKey({ track: r.id, t: k.t });
+                          return;
+                        }
+                        if (inPick && picked.length > 1) {
+                          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                          if (canEdit) setDrag({ track: r.id, from: k.t, to: k.t, copy: false, group: true });
+                          return;
+                        }
+                        if (picked.length) onPick([]);
                         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                         onSelectTrack(r.id);
                         onSelectKey({ track: r.id, t: k.t });
                         setT(k.t);
-                        if (canEdit) setDrag({ track: r.id, from: k.t, to: k.t, copy: e.altKey });
+                        if (canEdit) setDrag({ track: r.id, from: k.t, to: k.t, copy: e.altKey, group: false });
                       }}
                       onPointerMove={(e) => { if (drag) setDrag({ ...drag, to: timeAt(e.clientX) }); }}
                       onPointerUp={() => {
+                        if (drag?.group) {
+                          if (Math.abs(drag.to - drag.from) > 1e-6) onGroupAction(picked, "shift", drag.to - drag.from);
+                          else {
+                            // A plain click on one of the picked keys goes back to that key alone.
+                            onPick([]);
+                            onSelectTrack(r.id);
+                            onSelectKey({ track: r.id, t: k.t });
+                            setT(k.t);
+                          }
+                          setDrag(null);
+                          return;
+                        }
                         if (drag && Math.abs(drag.to - drag.from) > 1e-6) {
                           if (drag.copy) onCopyKeyTo(drag.track, drag.from, drag.to);
                           else onMoveKey(drag.track, drag.from, drag.to);
@@ -255,6 +332,10 @@ export function Timeline({
               </div>
             );
           })}
+          {box && (
+            <div className="pointer-events-none absolute z-10 rounded-[3px] border border-accent bg-accent-soft"
+              style={{ left: Math.min(box.x0, box.x1), top: Math.min(box.y0, box.y1), width: Math.abs(box.x1 - box.x0), height: Math.abs(box.y1 - box.y0), opacity: 0.6 }} />
+          )}
           <div className="pointer-events-none absolute bottom-0 top-0 w-px bg-red" style={{ left: pct(t) }}>
             <div className="absolute -left-[5px] top-0 h-2.5 w-[11px] rounded-b-[3px] bg-red" />
           </div>
@@ -262,6 +343,7 @@ export function Timeline({
       </div>
       {menu && (
         <TimelineMenu menu={menu} scene={scene} t={t} clip={clip} canEdit={canEdit} onClose={() => setMenu(null)}
+          picked={picked} onGroupAction={onGroupAction}
           onTrackAction={onTrackAction} onKeyAction={onKeyAction} onPaste={onPaste} />
       )}
     </div>
@@ -271,15 +353,17 @@ export function Timeline({
 const fmtS = (v: number) => `${v.toFixed(2).replace(/\.?0+$/, "")}s`;
 
 /** The right-click menu: one for a keyframe, one for a whole track. */
-function TimelineMenu({ menu, scene, t, clip, canEdit, onClose, onTrackAction, onKeyAction, onPaste }: {
+function TimelineMenu({ menu, scene, t, clip, canEdit, onClose, picked, onGroupAction, onTrackAction, onKeyAction, onPaste }: {
   menu: Menu; scene: BlockScene; t: number; clip: Clip | null; canEdit: boolean; onClose: () => void;
+  picked: KeyRef[];
+  onGroupAction: (refs: KeyRef[], action: GroupAction, arg?: number | string) => void;
   onTrackAction: (track: Track, action: TrackAction, arg?: number) => void;
   onKeyAction: (ref: KeyRef, action: KeyAction, arg?: string) => void;
   onPaste: (track: Track) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: menu.x, y: menu.y });
-  const track = menu.kind === "key" ? menu.ref.track : menu.track;
+  const track = menu.kind === "key" ? menu.ref.track : menu.kind === "track" ? menu.track : picked[0]?.track ?? "camera";
   const keys: Key[] = track === "camera" ? scene.camera.keys : scene.objects.find((o) => o.id === track)?.keys ?? [];
   const name = track === "camera" ? "Camera" : scene.objects.find((o) => o.id === track)?.name ?? "Track";
   const len = moveLength(keys);
@@ -310,6 +394,7 @@ function TimelineMenu({ menu, scene, t, clip, canEdit, onClose, onTrackAction, o
 
   const pasteLabel = !clip ? "Paste (nothing copied yet)"
     : clip.kind === "key" ? `Paste keyframe at ${timecode(t, fps)}`
+    : clip.kind === "group" ? `Paste ${clip.tracks.reduce((a, x) => a + x.keys.length, 0)} keys onto their tracks at ${timecode(t, fps)}`
     : `Paste the move of ${clip.name} at ${timecode(t, fps)}`;
   const item = (label: string, act: () => void, opts: { disabled?: boolean; hint?: string; keep?: boolean; danger?: boolean } = {}) => (
     <button type="button" disabled={opts.disabled}
@@ -331,7 +416,39 @@ function TimelineMenu({ menu, scene, t, clip, canEdit, onClose, onTrackAction, o
   );
 
   let body: React.ReactNode;
-  if (menu.kind === "key") {
+  if (menu.kind === "group") {
+    const tracks = new Set(picked.map((p) => p.track)).size;
+    body = (
+      <>
+        {head(`${picked.length} keys picked${tracks > 1 ? ` on ${tracks} tracks` : ""}`)}
+        {item("Copy these keys", () => onGroupAction(picked, "copy"), { hint: "⌘C" })}
+        {canEdit && (
+          <>
+            {sep}
+            {head("Shift in time")}
+            <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+              {chip("−1s", () => onGroupAction(picked, "shift", -1))}
+              {chip("−1f", () => onGroupAction(picked, "shift", -1 / fps))}
+              {chip("+1f", () => onGroupAction(picked, "shift", 1 / fps))}
+              {chip("+1s", () => onGroupAction(picked, "shift", 1))}
+            </div>
+            <div className="flex items-center gap-1.5 px-2 pb-1">
+              <div className="w-20"><Num value={shiftBy} onChange={setShiftBy} step={0.25} min={0.04} max={30} suffix="s" digits={2} /></div>
+              {chip("Earlier", () => onGroupAction(picked, "shift", -shiftBy))}
+              {chip("Later", () => onGroupAction(picked, "shift", shiftBy))}
+            </div>
+            {sep}
+            {head("Leaving each of these")}
+            <div className="flex flex-wrap gap-1 px-2 pb-1">
+              {EASES.map((e) => <span key={e.id} title={e.hint}>{chip(e.name, () => onGroupAction(picked, "ease", e.id))}</span>)}
+            </div>
+            {sep}
+            {item(`Delete ${picked.length} keys`, () => onGroupAction(picked, "delete"), { danger: true, hint: "Del" })}
+          </>
+        )}
+      </>
+    );
+  } else if (menu.kind === "key") {
     const ref = menu.ref;
     const k = keys.find((x) => Math.abs(x.t - ref.t) < 0.5 / fps);
     const atSame = Math.abs(snap(t, fps) - ref.t) < 0.5 / fps;
@@ -366,6 +483,8 @@ function TimelineMenu({ menu, scene, t, clip, canEdit, onClose, onTrackAction, o
           <>
             {sep}
             {item("Reverse the move", () => onTrackAction(track, "reverse"), { disabled: !moving, hint: moving ? "plays backwards" : undefined })}
+            {item("Mirror left to right", () => onTrackAction(track, "mirrorX"), { disabled: !moving, hint: moving ? "crosses the other way" : undefined })}
+            {item("Mirror front to back", () => onTrackAction(track, "mirrorZ"), { disabled: !moving, hint: moving ? "near becomes far" : undefined })}
             {moving && (
               <>
                 {sep}

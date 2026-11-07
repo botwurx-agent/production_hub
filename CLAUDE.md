@@ -8708,8 +8708,28 @@ the side window to the dog, out through the windshield, ending ahead.
   numbers in the target's own frame (a move copied off something riding in
   a car lands in the target's frame), which is fine within a scene and worth
   knowing across scenes. lib/blocking/track-ops.ts is pure (19 assertions);
-  every action is one undo. NOT BUILT (proposed, to follow if wanted):
-  mirror left to right, and selecting several keys at once.
+  every action is one undo.
+  MIRROR AND SEVERAL KEYS AT ONCE (same day, operator: "build mirror and
+  multi-select too"). The track menu gained "Mirror left to right" (world X)
+  and "Mirror front to back" (world Z), flipped about the middle of the move's
+  own route (halfway between its first and last key) so it stays put and only
+  its direction changes; yaw, roll, framing (af) and curve handles flip with it
+  (mirrorKeys; the mirror of yaw y is -y across X and 180-y across Z, true for
+  both the camera's and an object's facing convention). Multi-select: SHIFT-
+  CLICK a diamond to add or drop it, or SHIFT-DRAG a box on the timeline (it
+  adds to what is picked, across tracks). Dragging any picked key moves them
+  all together, by one amount cut short so none leaves the scene; a plain click
+  on a picked key goes back to that key alone; clicking empty timeline or Esc
+  clears. Right-clicking a picked key opens a group menu: copy, shift
+  (-1s/-1f/+1f/+1s or a number), set the ease of each, delete (each track keeps
+  at least one key, and says so). Cmd/Ctrl+C copies them and Delete deletes
+  them. A copy off ONE track is an ordinary move clip; off several it is a
+  GROUP clip that pastes back onto the SAME tracks, matched by id (the camera
+  always matches, an object only in the scene it came from; the rest are named
+  as left out), the earliest key on the playhead and the spacing kept. picked
+  lives in the studio (KeyRef[]), never saved. 10 more assertions in the
+  scratchpad. NOT BUILT: a box that replaces rather than adds, and copying a
+  group into another scene's differently named objects.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
