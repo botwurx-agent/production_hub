@@ -1330,17 +1330,12 @@ export function PipelineWorkspace({
   const videoGens = active ? shotGens.get(`${active.id}:video`) ?? [] : [];
   const pickedTake = videoGens.find((g) => g.role === "take" || g.role === "final") ?? null;
 
-  // Input mode tailors the generated flow. Default 'frames' = the classic
-  // image candidates -> Start/End -> video. video_to_video / text_to_video skip
-  // the image stage and go straight to a video generation (v2v / video-first).
-  const inputMode = active?.input_mode ?? "frames";
-  // A video-first shot still shows the image stage once it holds stills (one
-  // generated from the map, or imported), or they would exist only on the map.
-  const hasImages =
-    !!active && (shotGens.get(`${active.id}:image`) ?? []).length > 0;
-  const showImageStage =
-    active?.method !== "live" &&
-    (inputMode === "frames" || inputMode === "image_to_video" || hasImages);
+  // Every generated shot shows both stages. Which mix of frames, references
+  // and clips feeds a take is decided in the Generate window, not by a mode
+  // picked up front (operator, 2026-11-07: a reference, an element or a video
+  // is almost always in the mix, so a "Video to video" choice only confused).
+  // ai_shots.input_mode is still written by older code and is simply not read.
+  const showImageStage = active?.method !== "live";
 
   // Representative thumbnail per shot: final take > take > start > any image > any.
   const shotThumb = useMemo(() => {
@@ -1612,17 +1607,6 @@ export function PipelineWorkspace({
                   className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold">
                   {["script", "image", "video", "post", "delivered"].map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
-                {active.method !== "live" && (
-                  <select value={active.input_mode ?? "frames"}
-                    onChange={(e) => run(() => updateShot(projectId, active.id, { input_mode: e.target.value }))}
-                    className="rounded-[8px] border border-border bg-surface px-2 py-1 text-xs font-semibold"
-                    title="How this shot is generated">
-                    <option value="frames">Start + End frames</option>
-                    <option value="image_to_video">Image → video</option>
-                    <option value="video_to_video">Video → video</option>
-                    <option value="text_to_video">Text → video</option>
-                  </select>
-                )}
                 <SendToReviewControl
                   projectId={projectId}
                   shot={active}
@@ -1648,7 +1632,7 @@ export function PipelineWorkspace({
               <>
                 {showImageStage && (
                   <>
-                    <Flow label="prompt, generate & pick images" />
+                    <Flow label="pictures for the shot: references, stills, start and end frames" />
                     <StagePanel hfConnected={hfConnected} allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="image"
                       onGenerate={canGenerate ? (prompt) => askGenerate({ mode: "still", shotId: active.id, fromGenId: null, prompt }) : undefined}
                       prompt={shotPrompts.get(`${active.id}:image`) ?? null}
@@ -1657,19 +1641,15 @@ export function PipelineWorkspace({
                       refStartId={null} refEndId={null} onRun={run} />
                   </>
                 )}
-                <Flow label={
-                  showImageStage ? "lock start + end, then generate video"
-                    : inputMode === "video_to_video" ? "add a reference video, then generate"
-                    : "prompt & generate video"
-                } />
+                <Flow label="generate the video from any mix of frames, references and clips" />
                 <StagePanel hfConnected={hfConnected} allRefs={castReferences} usedRefs={refsFor(active.id)} canSeeCost={canSeeCost} projectId={projectId} studioId={studioId} shot={active} stage="video"
                   onGenerate={canGenerate ? (prompt) => askGenerate({ mode: "take", shotId: active.id, fromGenId: null, prompt }) : undefined}
                   prompt={shotPrompts.get(`${active.id}:video`) ?? null}
                   gens={shotGens.get(`${active.id}:video`) ?? []}
                   media={media} thumbs={thumbUrls} library={library}
                   reviews={batchReviews[active.id] ?? []}
-                  refStartId={showImageStage ? approvedStart?.id ?? null : null}
-                  refEndId={showImageStage ? approvedEnd?.id ?? null : null} onRun={run} />
+                  refStartId={approvedStart?.id ?? null}
+                  refEndId={approvedEnd?.id ?? null} onRun={run} />
                 {/* Voiceover last, because it is written against the picture
                     rather than the other way round. */}
                 <Flow label="add the read that plays over it" />

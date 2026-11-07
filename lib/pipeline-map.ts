@@ -230,7 +230,7 @@ export function buildMap(input: MapInput, opts: MapOptions = {}): MapGraph {
       id: `shot:${s.id}`,
       type: "shot",
       title: `${s.position + 1}. ${s.title || "Untitled shot"}`,
-      sub: inputModeWord(s.input_mode),
+      sub: null,
       state: shotState(s, reviewing.has(s.id)),
       starred: false,
       shotId: s.id,
@@ -355,16 +355,6 @@ function rank(g: MapGeneration): number {
   if (g.starred) return 4;
   if (g.status === "rejected") return 9;
   return 5;
-}
-
-function inputModeWord(mode: string | null): string | null {
-  switch (mode) {
-    case "image_to_video": return "Image to video";
-    case "video_to_video": return "Video to video";
-    case "text_to_video": return "Text to video";
-    case "frames": return "Start and end frames";
-    default: return null;
-  }
 }
 
 function elementWord(kind: string): string {

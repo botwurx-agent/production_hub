@@ -9808,6 +9808,16 @@ Shot cockpit / Triage) was shown to the operator.
     that makes the IMAGE STAGE OPTIONAL. frames/image_to_video show the image
     candidates -> Start/End stage; video_to_video / text_to_video skip it and go
     straight to the video stage (video-first / v2v). updateShot gained input_mode.
+  - THE MODE PICKER IS GONE (operator, 2026-11-07, after the first real
+    blocking -> Seedance run: "an image reference, element or video is almost
+    always in the mix"). The shot header's Start + End / Image to video /
+    Video to video / Text to video select was removed, and every generated
+    shot shows BOTH the image stage and the video stage. What feeds a take is
+    decided in the Generate window's "Built from" row (frames, references,
+    elements, clips, each with its role), which is where the choice was really
+    being made anyway. ai_shots.input_mode stays in the database and is still
+    written by blocking's new-shot path, but nothing reads it; the map no
+    longer prints it under a shot.
   - References area on BOTH stages (BUILT): AddRefModal + ReferencesPanel let you
     attach references as status='reference' generations, kept out of the
     candidate/take grid (StagePanel splits gens into refs (status==='reference')
