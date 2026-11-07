@@ -8728,8 +8728,15 @@ the side window to the dog, out through the windshield, ending ahead.
   always matches, an object only in the scene it came from; the rest are named
   as left out), the earliest key on the playhead and the spacing kept. picked
   lives in the studio (KeyRef[]), never saved. 10 more assertions in the
-  scratchpad. NOT BUILT: a box that replaces rather than adds, and copying a
-  group into another scene's differently named objects.
+  scratchpad. NOT BUILT: copying a group into another scene's differently named
+  objects.
+  A PLAIN DRAG on empty track space draws a box that REPLACES what is picked
+  (operator, 2026-11-07: "I use that often in other software"), Shift-drag
+  still adds, the AE/Premiere convention. A press that moves under 4px is a
+  click: it moves the playhead, selects that track and clears picks, as
+  before. The cost: dragging along a TRACK ROW no longer scrubs; the RULER
+  (data-ruler) always scrubs. Rows carry data-row; a box overlay draws only
+  once the drag has moved.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone

@@ -57,7 +57,7 @@ export function Timeline({
 }) {
   const area = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ track: Track; from: number; to: number; copy: boolean; group: boolean } | null>(null);
-  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number; add: boolean; row: string | null; moved: boolean } | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [clip, setClip] = useState<Clip | null>(null);
   const openMenu = (e: React.MouseEvent, m: Menu) => {
@@ -77,26 +77,42 @@ export function Timeline({
   const isIn = (refs: KeyRef[], track: Track, t: number) => refs.some((r) => r.track === track && Math.abs(r.t - t) < 0.5 / fps);
   const togglePick = (ref: KeyRef) =>
     onPick(isIn(picked, ref.track, ref.t) ? picked.filter((r) => !(r.track === ref.track && Math.abs(r.t - ref.t) < 0.5 / fps)) : [...picked, ref]);
-  // Shift-drag on the timeline draws a box; every diamond it touches is picked.
+  // A drag on empty timeline draws a box. Plain, it replaces what is picked;
+  // with Shift it adds to it. A press that does not move is a click: it moves
+  // the playhead and selects that track, as before. The ruler always scrubs.
   const boxStart = (e: React.PointerEvent) => {
-    if (!e.shiftKey || e.button !== 0) return;
-    if ((e.target as HTMLElement).closest("[data-key]")) return;
+    if (e.button !== 0) return;
+    const el = e.target as HTMLElement;
+    if (el.closest("[data-key]") || el.closest("[data-ruler]")) return;
+    const row = el.closest<HTMLElement>("[data-row]");
+    if (!e.shiftKey && !row) return;
+    if (!e.shiftKey && row && el !== row) return;
     const r = area.current?.getBoundingClientRect();
     if (!r) return;
     e.preventDefault();
     e.stopPropagation();
     area.current!.setPointerCapture(e.pointerId);
     const x = e.clientX - r.left, y = e.clientY - r.top;
-    setBox({ x0: x, y0: y, x1: x, y1: y });
+    setBox({ x0: x, y0: y, x1: x, y1: y, add: e.shiftKey, row: row?.dataset.row ?? null, moved: false });
   };
   const boxMove = (e: React.PointerEvent) => {
     if (!box) return;
     const r = area.current!.getBoundingClientRect();
-    setBox({ ...box, x1: e.clientX - r.left, y1: e.clientY - r.top });
+    const x1 = e.clientX - r.left, y1 = e.clientY - r.top;
+    setBox({ ...box, x1, y1, moved: box.moved || Math.hypot(x1 - box.x0, y1 - box.y0) > 4 });
   };
   const boxEnd = () => {
     if (!box || !area.current) return;
     const r = area.current.getBoundingClientRect();
+    if (!box.moved) {
+      setBox(null);
+      if (box.add) return;
+      if (box.row) onSelectTrack(box.row);
+      setT(timeAt(box.x0 + r.left));
+      onSelectKey(null);
+      if (picked.length) onPick([]);
+      return;
+    }
     const L = Math.min(box.x0, box.x1) + r.left, R = Math.max(box.x0, box.x1) + r.left;
     const T = Math.min(box.y0, box.y1) + r.top, B = Math.max(box.y0, box.y1) + r.top;
     const hit: KeyRef[] = [];
@@ -105,6 +121,11 @@ export function Timeline({
       if (b.right >= L && b.left <= R && b.bottom >= T && b.top <= B) hit.push({ track: el.dataset.track!, t: Number(el.dataset.t) });
     });
     setBox(null);
+    if (!box.add) {
+      onPick(hit);
+      onSelectKey(hit[0] ?? null);
+      return;
+    }
     if (!hit.length) return;
     const merged = [...picked];
     for (const h of hit) if (!isIn(merged, h.track, h.t)) merged.push(h);
@@ -237,7 +258,7 @@ export function Timeline({
         </div>
         <div ref={area} className="relative min-w-0 flex-1 select-none"
           onPointerDownCapture={boxStart} onPointerMove={box ? boxMove : undefined} onPointerUp={box ? boxEnd : undefined}>
-          <div className="relative h-6 cursor-ew-resize border-b border-border bg-surface-2"
+          <div data-ruler className="relative h-6 cursor-ew-resize border-b border-border bg-surface-2"
             onPointerDown={scrubStart} onPointerMove={scrubMove} onPointerUp={scrubEnd}>
             {ticks.map((s) => (
               <div key={s} className="absolute top-0 h-full" style={{ left: pct(s) }}>
@@ -250,7 +271,7 @@ export function Timeline({
             if (!r) return <div key={`still-${ri}`} className="h-7 border-b border-border" />;
             const keys = r.keys;
             return (
-              <div key={r.id}
+              <div key={r.id} data-row={r.id}
                 className={`relative h-7 border-b border-border ${selected === r.id ? "bg-surface-2" : ""}`}
                 onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelectTrack(r.id); scrubStart(e); } }}
                 onPointerMove={scrubMove} onPointerUp={scrubEnd}
@@ -332,7 +353,7 @@ export function Timeline({
               </div>
             );
           })}
-          {box && (
+          {box?.moved && (
             <div className="pointer-events-none absolute z-10 rounded-[3px] border border-accent bg-accent-soft"
               style={{ left: Math.min(box.x0, box.x1), top: Math.min(box.y0, box.y1), width: Math.abs(box.x1 - box.x0), height: Math.abs(box.y1 - box.y0), opacity: 0.6 }} />
           )}
