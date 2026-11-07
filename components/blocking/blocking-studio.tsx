@@ -31,7 +31,8 @@ import {
 } from "@/lib/blocking/build";
 import { BODIES, fovDeg, imagedArea } from "@/lib/previz/optics";
 import { Outliner, Properties, type CamPadAction, type ObjPadAction, type Posed, type StudioApi } from "./panels";
-import { Timeline, type KeyRef, type Track } from "./timeline";
+import { Timeline, type KeyAction, type KeyRef, type Track, type TrackAction } from "./timeline";
+import { CLIP_KEY, parseClip, pasteKey, pasteMove, retimeKeys, reverseKeys, shiftKeys, type Clip } from "@/lib/blocking/track-ops";
 import { Btn, useOutside } from "./ui";
 import { SendToPipeline, type PipelineTarget } from "./send-to-pipeline";
 import { ShotRenderer } from "@/lib/blocking/look-render";
@@ -429,6 +430,128 @@ export function BlockingStudio({
       return { ...s, objects: s.objects.map((o) => (o.id === track ? { ...o, keys: move(o.keys) } : o)) };
     });
   }, [commit]);
+
+  /* ---------- the timeline's right-click menu ---------- */
+
+  const keysOfTrack = (s: BlockScene, track: Track): Key[] =>
+    track === "camera" ? s.camera.keys : s.objects.find((o) => o.id === track)?.keys ?? [];
+  const writeTrack = (s: BlockScene, track: Track, keys: Key[]): BlockScene =>
+    track === "camera"
+      ? { ...s, camera: { ...s.camera, keys: keys as CamKey[] } }
+      : { ...s, objects: s.objects.map((o) => (o.id === track ? { ...o, keys } : o)) };
+  const trackName = (s: BlockScene, track: Track) => (track === "camera" ? "the camera" : s.objects.find((o) => o.id === track)?.name ?? "it");
+  const pasteOpts = (s: BlockScene) => ({ lens: camAt(s, snap(tRef.current, s.fps)).lens ?? 35, ids: new Set(s.objects.map((o) => o.id)) });
+  const saveClip = (clip: Clip) => { try { localStorage.setItem(CLIP_KEY, JSON.stringify(clip)); } catch { /* fine */ } };
+  const readClip = () => { try { return parseClip(localStorage.getItem(CLIP_KEY)); } catch { return null; } };
+
+  const trackAction = useCallback((track: Track, action: TrackAction, arg?: number) => {
+    const s0 = sceneRef.current;
+    const keys0 = keysOfTrack(s0, track);
+    const name = trackName(s0, track);
+    const to = track === "camera" ? "camera" : "object";
+    if (action === "copy") {
+      saveClip({ kind: "move", from: to, keys: keys0, name: track === "camera" ? "Camera" : name });
+      setNote(keys0.length > 1 ? `Copied the move of ${name} (${keys0.length} keys). Paste it on any track, in any scene` : `Copied where ${name} stands`);
+      return;
+    }
+    if (!canEdit) return;
+    if (action === "paste") {
+      const clip = readClip();
+      if (!clip) { setNote("Nothing copied yet"); return; }
+      const keys = clip.kind === "move" ? clip.keys : [clip.key];
+      const res = pasteMove(keys0, keys, to, tRef.current, s0.duration, s0.fps, pasteOpts(s0));
+      commit((s) => writeTrack(s, track, res.keys));
+      setNote(`Pasted onto ${name} at ${timecode(tRef.current, s0.fps)}${res.dropped ? `. ${res.dropped} key${res.dropped === 1 ? "" : "s"} ran past the end and were left off` : ""}`);
+      setSelectedKey(null);
+      return;
+    }
+    if (action === "clear") {
+      const at = snap(tRef.current, s0.fps);
+      const cur = posedAt(s0, track, at);
+      const k: CamKey = { t: 0, p: cur.p, r: cur.raw ?? cur.r, ease: "smooth", lens: cur.lens ?? 35 };
+      const one: Key = track === "camera" ? k : { t: 0, p: cur.p, r: cur.r, ease: "smooth" };
+      commit((s) => writeTrack(s, track, [one]));
+      setSelectedKey(null);
+      setNote(`${name === "the camera" ? "The camera" : name} now stays where it was at ${timecode(at, s0.fps)}`);
+      return;
+    }
+    if (keys0.length < 2) { setNote(`${name === "the camera" ? "The camera" : name} has no move yet: set a second keyframe first`); return; }
+    if (action === "reverse") {
+      commit((s) => writeTrack(s, track, reverseKeys(keysOfTrack(s, track), s.fps)));
+      setSelectedKey(null);
+      setNote(`Reversed the move of ${name}`);
+      return;
+    }
+    if (action === "shift" && arg != null) {
+      const res = shiftKeys(keys0, arg, s0.duration, s0.fps);
+      if (!res.moved) { setNote("It is already against that end of the timeline"); return; }
+      commit((s) => writeTrack(s, track, res.keys));
+      setSelectedKey(null);
+      const cut = Math.abs(res.moved - arg) > 1e-6;
+      setNote(`Moved ${name} ${Math.abs(res.moved).toFixed(2).replace(/\.?0+$/, "")}s ${res.moved > 0 ? "later" : "earlier"}${cut ? ", as far as the timeline goes" : ""}`);
+      return;
+    }
+    if (action === "retime" && arg != null) {
+      const res = retimeKeys(keys0, arg, s0.duration, s0.fps);
+      commit((s) => writeTrack(s, track, res.keys));
+      setSelectedKey(null);
+      const cut = Math.abs(res.length - arg) > 0.5 / s0.fps;
+      setNote(`The move of ${name} now runs ${res.length.toFixed(2).replace(/\.?0+$/, "")}s${cut ? " (as far as the timeline allows)" : ""}`);
+    }
+  }, [commit, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const keyAction = useCallback((ref: KeyRef, action: KeyAction, arg?: string) => {
+    const s0 = sceneRef.current;
+    const k = keyAt(keysOfTrack(s0, ref.track), ref.t, s0.fps);
+    const to = ref.track === "camera" ? "camera" : "object";
+    if (action === "jump") { setT(ref.t); return; }
+    if (action === "copy") {
+      if (!k) return;
+      saveClip({ kind: "key", from: to, key: k });
+      setNote(`Copied the keyframe at ${timecode(ref.t, s0.fps)}. Paste it on any track, in any scene`);
+      return;
+    }
+    if (!canEdit) return;
+    if (action === "duplicate") {
+      if (!k) return;
+      const at = snap(tRef.current, s0.fps);
+      if (Math.abs(at - ref.t) < 0.5 / s0.fps) { setNote("Move the playhead to where the copy should go first"); return; }
+      commit((s) => writeTrack(s, ref.track, pasteKey(keysOfTrack(s, ref.track), k, to, at, s.fps, pasteOpts(s))));
+      setSelectedKey({ track: ref.track, t: at });
+      setNote(`Copied the keyframe to ${timecode(at, s0.fps)}`);
+      return;
+    }
+    if (action === "ease" && arg && k) {
+      const e = arg as Ease;
+      commit((s) => writeTrack(s, ref.track, keysOfTrack(s, ref.track).map((x) => (Math.abs(x.t - ref.t) < 0.5 / s.fps ? { ...x, ease: e } : x))));
+      return;
+    }
+    if (action === "delete") {
+      if (keysOfTrack(s0, ref.track).length <= 1) { setNote("Everything keeps at least one keyframe: delete the object instead"); return; }
+      commit((s) => writeTrack(s, ref.track, keysOfTrack(s, ref.track).filter((x) => Math.abs(x.t - ref.t) >= 0.5 / s.fps)));
+      setSelectedKey(null);
+    }
+  }, [commit, canEdit, setT]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Paste whatever is on the clipboard onto a track at the playhead. */
+  const pasteOnto = useCallback((track: Track) => {
+    const clip = readClip();
+    if (!clip) { setNote("Nothing copied yet"); return; }
+    if (clip.kind === "move") { trackAction(track, "paste"); return; }
+    const s0 = sceneRef.current;
+    const at = snap(tRef.current, s0.fps);
+    commit((s) => writeTrack(s, track, pasteKey(keysOfTrack(s, track), clip.key, track === "camera" ? "camera" : "object", at, s.fps, pasteOpts(s))));
+    setSelectedKey({ track, t: at });
+    setNote(`Pasted the keyframe onto ${trackName(s0, track)} at ${timecode(at, s0.fps)}`);
+  }, [commit, trackAction]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Alt-drag on a keyframe drops a copy where it is let go. */
+  const copyKeyTo = useCallback((track: Track, from: number, to: number) => {
+    const s0 = sceneRef.current;
+    const k = keyAt(keysOfTrack(s0, track), from, s0.fps);
+    if (!k) return;
+    commit((s) => writeTrack(s, track, pasteKey(keysOfTrack(s, track), k, track === "camera" ? "camera" : "object", to, s.fps, pasteOpts(s))));
+  }, [commit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Where a newly added object lands: in front of the camera, or at the origin for ground and rooms. */
   function placeFor(kind: string): Vec3 {
@@ -1314,6 +1437,17 @@ export function BlockingStudio({
       if ((ev.metaKey || ev.ctrlKey) && k === "z") { ev.preventDefault(); undo(ev.shiftKey); return; }
       if ((ev.metaKey || ev.ctrlKey) && k === "y") { ev.preventDefault(); undo(true); return; }
       if ((ev.metaKey || ev.ctrlKey) && k === "d") { ev.preventDefault(); if (selRef.current && selRef.current !== "camera") api.duplicateObject(selRef.current); return; }
+      if ((ev.metaKey || ev.ctrlKey) && (k === "c" || k === "v") && !window.getSelection()?.toString()) {
+        // Copy the selected keyframe, or the selected thing's whole move;
+        // paste onto the selected thing at the playhead. Stored in the
+        // browser, so it carries into another scene.
+        const track = selRef.current;
+        if (!track) return;
+        ev.preventDefault();
+        if (k === "c") { if (selKeyRef.current) keyAction(selKeyRef.current, "copy"); else trackAction(track, "copy"); }
+        else if (canEdit) pasteOnto(track);
+        return;
+      }
       if (ev.metaKey || ev.ctrlKey) return;
       if (k === " ") { ev.preventDefault(); togglePlay(); return; }
       if (k === "tab") { ev.preventDefault(); setView((v) => (v === "camera" ? "free" : "camera")); return; }
@@ -1689,7 +1823,7 @@ export function BlockingStudio({
         <Timeline
           scene={scene} t={t} setT={setT} playing={playing} onPlay={togglePlay} loop={loop} setLoop={setLoop}
           selected={sel} onSelectTrack={(tr) => { setSel(tr); }} selectedKey={selectedKey} onSelectKey={setSelectedKey}
-          onMoveKey={moveKey} onDeleteKey={deleteKey} onInsertKey={insertKey} autoKey={autoKey} setAutoKey={setAutoKey}
+          onMoveKey={moveKey} onCopyKeyTo={copyKeyTo} onTrackAction={trackAction} onKeyAction={keyAction} onPaste={pasteOnto} onDeleteKey={deleteKey} onInsertKey={insertKey} autoKey={autoKey} setAutoKey={setAutoKey}
           onDuration={(d) => commit((s) => ({ ...s, duration: d, camera: { ...s.camera, keys: s.camera.keys.filter((k) => k.t <= d) .length ? s.camera.keys.filter((k) => k.t <= d) : [s.camera.keys[0]] }, objects: s.objects.map((o) => { const ks = o.keys.filter((k) => k.t <= d); return { ...o, keys: ks.length ? ks : [o.keys[0]] }; }) }), "dur")}
           onFps={(f) => commit((s) => ({ ...s, fps: f }))}
           canEdit={canEdit}

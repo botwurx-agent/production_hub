@@ -8683,6 +8683,33 @@ the side window to the dog, out through the windshield, ending ahead.
   NOT RUN against the live Higgsfield from the app: the first real press is
   the test, and the thing to watch is which link a finished 3D job carries
   (an unexpected one is logged with the body).
+- TIMELINE RIGHT-CLICK MENU (2026-11-07, no migration). Operator asked for
+  timeline options: reverse a path, quick options on right-click, copy and
+  paste. Right-click a KEYFRAME: go to it, copy it, paste at the playhead,
+  copy it to the playhead (also Alt-drag the diamond), set how the move
+  leaves it (the five eases), delete. Right-click a TRACK (its row or its
+  name): copy the whole move, paste, REVERSE THE MOVE (whole track, the
+  operator's call: the move plays backwards over the same stretch, each key
+  keeps what it holds including what the camera looks at, the ease a segment
+  leaves with moves to the key that now starts it with in/out swapped, and a
+  hand-shaped curve handle is flipped), shift in time (-1s/-1f/+1f/+1s or a
+  number, cut short at either end of the scene and said so), change the
+  length of the move (same route, starts where it starts; Half/Double; never
+  two keys on one frame), and clear keys keeping it where it is at the
+  playhead. Cmd/Ctrl+C copies the selected key, else the selected thing's
+  whole move; Cmd/Ctrl+V pastes onto the selected thing at the playhead.
+  THE CLIPBOARD CARRIES INTO OTHER SCENES (operator's call): localStorage
+  "blocking.clipboard", read back through parseClip (junk reads as empty).
+  A pasted move starts at the playhead, replaces keys inside its stretch and
+  keeps the rest; keys past the scene's end are left off and counted. A
+  camera key onto an object keeps only position and facing; an object key
+  onto the camera takes the camera's lens there; a key's look-at subject is
+  dropped if that object is not in this scene. Positions are pasted as
+  numbers in the target's own frame (a move copied off something riding in
+  a car lands in the target's frame), which is fine within a scene and worth
+  knowing across scenes. lib/blocking/track-ops.ts is pure (19 assertions);
+  every action is one undo. NOT BUILT (proposed, to follow if wanted):
+  mirror left to right, and selecting several keys at once.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone

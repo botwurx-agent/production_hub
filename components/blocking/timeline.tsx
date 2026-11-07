@@ -5,16 +5,23 @@
 // move the playhead, click a diamond to select it, drag it to re-time it
 // (snapped to frames). Bars between keys show where something is moving.
 import { useEffect, useRef, useState } from "react";
-import type { BlockScene, Key } from "@/lib/blocking/scene";
+import { EASES, type BlockScene, type Key } from "@/lib/blocking/scene";
 import { snap, timecode } from "@/lib/blocking/keys";
+import { CLIP_KEY, moveLength, parseClip, type Clip } from "@/lib/blocking/track-ops";
 import { Btn, Num, Select } from "./ui";
 
 export type Track = "camera" | string;
 export type KeyRef = { track: Track; t: number };
+export type TrackAction = "copy" | "paste" | "reverse" | "shift" | "retime" | "clear";
+export type KeyAction = "jump" | "copy" | "duplicate" | "ease" | "delete";
+
+type Menu =
+  | { kind: "key"; x: number; y: number; ref: KeyRef }
+  | { kind: "track"; x: number; y: number; track: Track };
 
 export function Timeline({
   scene, t, setT, playing, onPlay, loop, setLoop, selected, onSelectTrack, selectedKey, onSelectKey,
-  onMoveKey, onDeleteKey, onInsertKey, autoKey, setAutoKey, onDuration, onFps, canEdit,
+  onMoveKey, onCopyKeyTo, onTrackAction, onKeyAction, onPaste, onDeleteKey, onInsertKey, autoKey, setAutoKey, onDuration, onFps, canEdit,
 }: {
   scene: BlockScene;
   t: number;
@@ -28,6 +35,12 @@ export function Timeline({
   selectedKey: KeyRef | null;
   onSelectKey: (k: KeyRef | null) => void;
   onMoveKey: (track: Track, from: number, to: number) => void;
+  /** Alt-drag: drop a copy of the key where it is let go. */
+  onCopyKeyTo: (track: Track, from: number, to: number) => void;
+  onTrackAction: (track: Track, action: TrackAction, arg?: number) => void;
+  onKeyAction: (ref: KeyRef, action: KeyAction, arg?: string) => void;
+  /** Paste the clipboard (a key or a whole move) onto a track at the playhead. */
+  onPaste: (track: Track) => void;
   onDeleteKey: () => void;
   onInsertKey: () => void;
   autoKey: boolean;
@@ -37,7 +50,15 @@ export function Timeline({
   canEdit: boolean;
 }) {
   const area = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ track: Track; from: number; to: number } | null>(null);
+  const [drag, setDrag] = useState<{ track: Track; from: number; to: number; copy: boolean } | null>(null);
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const [clip, setClip] = useState<Clip | null>(null);
+  const openMenu = (e: React.MouseEvent, m: Menu) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try { setClip(parseClip(localStorage.getItem(CLIP_KEY))); } catch { setClip(null); }
+    setMenu(m);
+  };
   const scrubbing = useRef(false);
   const D = scene.duration;
   const fps = scene.fps;
@@ -151,7 +172,8 @@ export function Timeline({
       <div className="flex min-h-0 flex-1 overflow-y-auto">
         <div className="w-[170px] shrink-0 border-r border-border">
           <div className="h-6 border-b border-border" />
-          {rows.map((r) => <NameRow key={r.id} r={r} selected={selected} onSelectTrack={onSelectTrack} />)}
+          {rows.map((r) => <NameRow key={r.id} r={r} selected={selected} onSelectTrack={onSelectTrack}
+            onMenu={(e) => { onSelectTrack(r.id); openMenu(e, { kind: "track", x: e.clientX, y: e.clientY, track: r.id }); }} />)}
           {stillOnes.length > 0 && (
             <button type="button" onClick={toggleStill}
               title={showStill ? "Fold the still objects away" : "Show the objects that do not move"}
@@ -160,7 +182,8 @@ export function Timeline({
               <span className="truncate">Set: {stillOnes.length} still</span>
             </button>
           )}
-          {showStill && stillRows.map((r) => <NameRow key={r.id} r={r} selected={selected} onSelectTrack={onSelectTrack} />)}
+          {showStill && stillRows.map((r) => <NameRow key={r.id} r={r} selected={selected} onSelectTrack={onSelectTrack}
+            onMenu={(e) => { onSelectTrack(r.id); openMenu(e, { kind: "track", x: e.clientX, y: e.clientY, track: r.id }); }} />)}
         </div>
         <div ref={area} className="relative min-w-0 flex-1 select-none">
           <div className="relative h-6 cursor-ew-resize border-b border-border bg-surface-2"
@@ -179,7 +202,8 @@ export function Timeline({
               <div key={r.id}
                 className={`relative h-7 border-b border-border ${selected === r.id ? "bg-surface-2" : ""}`}
                 onPointerDown={(e) => { if (e.target === e.currentTarget) { onSelectTrack(r.id); scrubStart(e); } }}
-                onPointerMove={scrubMove} onPointerUp={scrubEnd}>
+                onPointerMove={scrubMove} onPointerUp={scrubEnd}
+                onContextMenu={(e) => { onSelectTrack(r.id); openMenu(e, { kind: "track", x: e.clientX, y: e.clientY, track: r.id }); }}>
                 {/* Motion bars: a key that leaves toward a different value. */}
                 {keys.slice(0, -1).map((k, i) => {
                   const n = keys[i + 1];
@@ -196,23 +220,30 @@ export function Timeline({
                   const kt = dragging ? drag!.to : k.t;
                   const sel = selectedKey && selectedKey.track === r.id && Math.abs(selectedKey.t - k.t) < 0.5 / fps;
                   return (
-                    <button key={k.t} type="button" title={`${timecode(k.t, fps)} · ${k.ease}`}
+                    <button key={k.t} type="button" title={`${timecode(k.t, fps)} · ${k.ease}. Right-click for more, Alt-drag to copy`}
                       className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border ${
                         sel ? "border-text bg-amber" : "border-border-strong bg-amber opacity-80 hover:opacity-100"
                       }`}
                       style={{ left: pct(kt) }}
+                      onContextMenu={(e) => {
+                        onSelectTrack(r.id);
+                        onSelectKey({ track: r.id, t: k.t });
+                        openMenu(e, { kind: "key", x: e.clientX, y: e.clientY, ref: { track: r.id, t: k.t } });
+                      }}
                       onPointerDown={(e) => {
+                        if (e.button !== 0) return;
                         e.stopPropagation();
                         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                         onSelectTrack(r.id);
                         onSelectKey({ track: r.id, t: k.t });
                         setT(k.t);
-                        if (canEdit) setDrag({ track: r.id, from: k.t, to: k.t });
+                        if (canEdit) setDrag({ track: r.id, from: k.t, to: k.t, copy: e.altKey });
                       }}
                       onPointerMove={(e) => { if (drag) setDrag({ ...drag, to: timeAt(e.clientX) }); }}
                       onPointerUp={() => {
                         if (drag && Math.abs(drag.to - drag.from) > 1e-6) {
-                          onMoveKey(drag.track, drag.from, drag.to);
+                          if (drag.copy) onCopyKeyTo(drag.track, drag.from, drag.to);
+                          else onMoveKey(drag.track, drag.from, drag.to);
                           onSelectKey({ track: drag.track, t: drag.to });
                           setT(drag.to);
                         }
@@ -229,17 +260,162 @@ export function Timeline({
           </div>
         </div>
       </div>
+      {menu && (
+        <TimelineMenu menu={menu} scene={scene} t={t} clip={clip} canEdit={canEdit} onClose={() => setMenu(null)}
+          onTrackAction={onTrackAction} onKeyAction={onKeyAction} onPaste={onPaste} />
+      )}
     </div>
   );
 }
 
-function NameRow({ r, selected, onSelectTrack }: {
+const fmtS = (v: number) => `${v.toFixed(2).replace(/\.?0+$/, "")}s`;
+
+/** The right-click menu: one for a keyframe, one for a whole track. */
+function TimelineMenu({ menu, scene, t, clip, canEdit, onClose, onTrackAction, onKeyAction, onPaste }: {
+  menu: Menu; scene: BlockScene; t: number; clip: Clip | null; canEdit: boolean; onClose: () => void;
+  onTrackAction: (track: Track, action: TrackAction, arg?: number) => void;
+  onKeyAction: (ref: KeyRef, action: KeyAction, arg?: string) => void;
+  onPaste: (track: Track) => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ x: menu.x, y: menu.y });
+  const track = menu.kind === "key" ? menu.ref.track : menu.track;
+  const keys: Key[] = track === "camera" ? scene.camera.keys : scene.objects.find((o) => o.id === track)?.keys ?? [];
+  const name = track === "camera" ? "Camera" : scene.objects.find((o) => o.id === track)?.name ?? "Track";
+  const len = moveLength(keys);
+  const [newLen, setNewLen] = useState(len || 1);
+  const [shiftBy, setShiftBy] = useState(1);
+  const fps = scene.fps;
+
+  useEffect(() => {
+    const r = box.current?.getBoundingClientRect();
+    if (!r) return;
+    setPos({
+      x: Math.max(8, Math.min(menu.x, window.innerWidth - r.width - 8)),
+      y: Math.max(8, Math.min(menu.y, window.innerHeight - r.height - 8)),
+    });
+  }, [menu.x, menu.y]);
+  useEffect(() => {
+    const down = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) onClose(); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("keydown", key, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
+  const pasteLabel = !clip ? "Paste (nothing copied yet)"
+    : clip.kind === "key" ? `Paste keyframe at ${timecode(t, fps)}`
+    : `Paste the move of ${clip.name} at ${timecode(t, fps)}`;
+  const item = (label: string, act: () => void, opts: { disabled?: boolean; hint?: string; keep?: boolean; danger?: boolean } = {}) => (
+    <button type="button" disabled={opts.disabled}
+      onClick={() => { act(); if (!opts.keep) onClose(); }}
+      className={`flex w-full items-center justify-between gap-4 rounded-[5px] px-2 py-1.5 text-left text-[12px] disabled:opacity-40 ${
+        opts.danger ? "text-red hover:bg-red-bg" : "text-text hover:bg-surface-2"
+      } disabled:hover:bg-transparent`}>
+      <span>{label}</span>
+      {opts.hint && <span className="text-[10.5px] text-text-faint">{opts.hint}</span>}
+    </button>
+  );
+  const sep = <div className="my-1 h-px bg-border" />;
+  const head = (text: string) => <div className="px-2 pb-1 pt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-text-faint">{text}</div>;
+  const chip = (label: string, act: () => void, on = false) => (
+    <button type="button" onClick={act}
+      className={`rounded-[5px] border px-1.5 py-0.5 text-[11px] ${on ? "border-accent bg-accent-soft text-text" : "border-border text-text-muted hover:bg-surface-2 hover:text-text"}`}>
+      {label}
+    </button>
+  );
+
+  let body: React.ReactNode;
+  if (menu.kind === "key") {
+    const ref = menu.ref;
+    const k = keys.find((x) => Math.abs(x.t - ref.t) < 0.5 / fps);
+    const atSame = Math.abs(snap(t, fps) - ref.t) < 0.5 / fps;
+    body = (
+      <>
+        {head(`${name} · keyframe at ${timecode(ref.t, fps)}`)}
+        {item("Go to this keyframe", () => onKeyAction(ref, "jump"))}
+        {item("Copy keyframe", () => onKeyAction(ref, "copy"), { hint: "⌘C" })}
+        {canEdit && item(pasteLabel, () => onPaste(track), { disabled: !clip, hint: "⌘V" })}
+        {canEdit && item(atSame ? "Copy to the playhead (move it first)" : `Copy to the playhead (${timecode(t, fps)})`, () => onKeyAction(ref, "duplicate"), { disabled: atSame, hint: "Alt-drag" })}
+        {canEdit && k && (
+          <>
+            {sep}
+            {head("Leaving this keyframe")}
+            <div className="flex flex-wrap gap-1 px-2 pb-1">
+              {EASES.map((e) => <span key={e.id} title={e.hint}>{chip(e.name, () => onKeyAction(ref, "ease", e.id), k.ease === e.id)}</span>)}
+            </div>
+            {sep}
+            {item("Delete keyframe", () => onKeyAction(ref, "delete"), { danger: true, disabled: keys.length <= 1, hint: "Del" })}
+          </>
+        )}
+      </>
+    );
+  } else {
+    const moving = keys.length > 1;
+    body = (
+      <>
+        {head(moving ? `${name} · ${keys.length} keys over ${fmtS(len)}` : `${name} · not moving`)}
+        {item(moving ? "Copy the move" : "Copy where it stands", () => onTrackAction(track, "copy"), { hint: "⌘C" })}
+        {canEdit && item(pasteLabel, () => onPaste(track), { disabled: !clip, hint: "⌘V" })}
+        {canEdit && (
+          <>
+            {sep}
+            {item("Reverse the move", () => onTrackAction(track, "reverse"), { disabled: !moving, hint: moving ? "plays backwards" : undefined })}
+            {moving && (
+              <>
+                {sep}
+                {head("Shift in time")}
+                <div className="flex flex-wrap items-center gap-1 px-2 pb-1">
+                  {chip("−1s", () => onTrackAction(track, "shift", -1))}
+                  {chip("−1f", () => onTrackAction(track, "shift", -1 / fps))}
+                  {chip("+1f", () => onTrackAction(track, "shift", 1 / fps))}
+                  {chip("+1s", () => onTrackAction(track, "shift", 1))}
+                </div>
+                <div className="flex items-center gap-1.5 px-2 pb-1">
+                  <div className="w-20"><Num value={shiftBy} onChange={setShiftBy} step={0.25} min={0.04} max={30} suffix="s" digits={2} /></div>
+                  {chip("Earlier", () => onTrackAction(track, "shift", -shiftBy))}
+                  {chip("Later", () => onTrackAction(track, "shift", shiftBy))}
+                </div>
+                {head(`Length of the move (now ${fmtS(len)})`)}
+                <div className="flex items-center gap-1.5 px-2 pb-1">
+                  <div className="w-20"><Num value={newLen} onChange={setNewLen} step={0.25} min={(keys.length - 1) / fps} max={scene.duration} suffix="s" digits={2} /></div>
+                  {chip("Apply", () => { onTrackAction(track, "retime", newLen); onClose(); })}
+                  {chip("Half", () => { onTrackAction(track, "retime", len / 2); onClose(); })}
+                  {chip("Double", () => { onTrackAction(track, "retime", len * 2); onClose(); })}
+                </div>
+                <p className="px-2 pb-1 text-[10.5px] leading-snug text-text-faint">Same route, faster or slower. It starts where it starts now.</p>
+              </>
+            )}
+            {sep}
+            {item("Clear keys, stay here", () => onTrackAction(track, "clear"), { danger: true, disabled: !moving, hint: timecode(t, fps) })}
+          </>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div ref={box} role="menu" onContextMenu={(e) => e.preventDefault()}
+      className="fixed z-[90] w-[290px] rounded-[8px] border border-border bg-surface p-1 shadow-2xl"
+      style={{ left: pos.x, top: pos.y }}>
+      {body}
+    </div>
+  );
+}
+
+function NameRow({ r, selected, onSelectTrack, onMenu }: {
   r: { id: Track; name: string; color: string; keys: Key[]; depth: number; still?: boolean };
   selected: Track | null;
   onSelectTrack: (track: Track) => void;
+  onMenu: (e: React.MouseEvent) => void;
 }) {
   return (
-    <button type="button" onClick={() => onSelectTrack(r.id)}
+    <button type="button" onClick={() => onSelectTrack(r.id)} onContextMenu={onMenu} title="Right-click for move options"
       style={{ paddingLeft: 8 + r.depth * 14 }}
       className={`flex h-7 w-full items-center gap-2 border-b border-border pr-2 text-left text-[11.5px] ${
         selected === r.id ? "bg-accent-soft text-text" : "text-text-muted hover:bg-surface-2"
