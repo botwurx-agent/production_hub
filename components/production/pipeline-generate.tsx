@@ -143,7 +143,7 @@ export function PipelineGenerate({
     const res = await quoteGenerations(p.projectId, choices);
     const err = actionError(res);
     if (err || !res || "error" in res) return choices.map(() => ({ error: err ?? "No price." }));
-    return res.costs.map((cost) => ({ credits: res.credits, cost }));
+    return res.costs.map((cost, i) => ({ credits: res.credits, cost, reason: res.reasons?.[i] ?? null }));
   }
 
   const projectId = p.projectId;

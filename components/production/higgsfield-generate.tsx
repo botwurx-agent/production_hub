@@ -33,10 +33,10 @@ export type GenInputOption = { genId: string; label: string; thumb: string | nul
 const ROLE_WORD: Record<GenInputRole, string> = { start: "Start frame", end: "End frame", ref: "Reference" };
 const SOURCE_WORD: Record<GenInputSource, string> = { frame: "Picture on this shot", element: "Element", video: "Video on this shot" };
 
-export type GenQuote = { credits: number | null; cost: number | null } | { error: string };
+export type GenQuote = { credits: number | null; cost: number | null; reason?: string | null } | { error: string };
 
 /** The models on offer for a kind, read from Higgsfield's catalogue. */
-export type GenModelList = { models: GenModel[]; live: boolean } | { error: string };
+export type GenModelList = { models: GenModel[]; live: boolean; reason?: string } | { error: string };
 
 export type GenerateRequest = {
   kind: GenKind;
@@ -102,7 +102,11 @@ export function GenerateWindow({
           setCatalogNote(r.error);
           return;
         }
-        setCatalogNote(r.live ? null : "Could not read Higgsfield's full model list, so only the usual models are shown.");
+        setCatalogNote(
+          r.live
+            ? null
+            : `Could not read Higgsfield's full model list, so only the usual models are shown.${r.reason ? ` Higgsfield said: ${r.reason}` : ""}`,
+        );
         setCatalog((c) => ({ ...c, [request.kind]: r.models }));
       })
       .catch(() => alive && setCatalogNote("Could not reach Higgsfield for its models."));
@@ -465,7 +469,13 @@ function Thumb({ src }: { src: string | null }) {
 function PriceLine({ price, short }: { price: GenQuote | null; short: boolean }) {
   if (!price) return <span className="text-sm text-text-muted">Checking the price on Higgsfield...</span>;
   if ("error" in price) return <span className="text-sm text-text">{price.error}</span>;
-  if (price.cost == null) return <span className="text-sm text-text">Higgsfield did not give a price, so nothing can be generated.</span>;
+  if (price.cost == null)
+    return (
+      <span className="text-sm text-text">
+        Higgsfield did not give a price, so nothing can be generated.
+        {price.reason && <span className="mt-1 block break-words text-text-muted">{price.reason}</span>}
+      </span>
+    );
   return (
     <span className="inline-flex items-center gap-2 text-sm text-text">
       <span className="h-2 w-2 rounded-full" style={{ background: short ? "var(--h-red)" : "var(--h-green)" }} />

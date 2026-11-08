@@ -70,6 +70,10 @@ async function editable(projectId: string, shotId?: string): Promise<Access | { 
 const CATALOG_TTL = 30 * 60 * 1000;
 let catalogCache: { at: number; models: GenModel[] } | null = null;
 
+// Why the last catalogue read failed, in Higgsfield's own words, so the window
+// can say it instead of only "could not read". Per warm instance.
+let catalogFailure: string | null = null;
+
 async function readCatalog(mcp: HiggsfieldMcp): Promise<GenModel[] | null> {
   const kinds: GenKind[] = ["video", "image"];
   const lists = await Promise.all(
@@ -78,12 +82,16 @@ async function readCatalog(mcp: HiggsfieldMcp): Promise<GenModel[] | null> {
       let after: string | undefined;
       for (let page = 0; page < 4; page++) {
         const r = await callTool(mcp, "models_explore", { action: "list", type: kind, limit: 100, ...(after ? { after } : {}) });
-        if ("error" in r) return null;
+        if ("error" in r) {
+          catalogFailure = r.error;
+          return null;
+        }
         let data = r.data as { items?: unknown; has_more?: unknown; next_page_token?: unknown } | null;
         if (!data || typeof data !== "object") {
           try {
             data = JSON.parse(r.text);
           } catch {
+            catalogFailure = `Higgsfield's model list came back unreadable: ${r.text.slice(0, 200)}`;
             return null;
           }
         }
@@ -99,8 +107,9 @@ async function readCatalog(mcp: HiggsfieldMcp): Promise<GenModel[] | null> {
 }
 
 /** Every model offered, live when it can be read, else the short fallback list. */
-async function catalogWith(mcp: HiggsfieldMcp): Promise<{ models: GenModel[]; live: boolean }> {
+async function catalogWith(mcp: HiggsfieldMcp): Promise<{ models: GenModel[]; live: boolean; reason?: string }> {
   if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) return { models: catalogCache.models, live: true };
+  catalogFailure = null;
   try {
     const models = await readCatalog(mcp);
     if (models) {
@@ -109,8 +118,10 @@ async function catalogWith(mcp: HiggsfieldMcp): Promise<{ models: GenModel[]; li
     }
   } catch (e) {
     reportError("readCatalog", e);
+    catalogFailure = e instanceof Error ? e.message : String(e);
   }
-  return { models: FALLBACK_MODELS, live: false };
+  if (catalogFailure) console.error("[higgsfield] model list:", catalogFailure);
+  return { models: FALLBACK_MODELS, live: false, reason: catalogFailure ?? undefined };
 }
 
 async function catalogFor(userId: string): Promise<GenModel[]> {
@@ -132,7 +143,7 @@ async function catalogFor(userId: string): Promise<GenModel[]> {
 export async function listGenModels(
   projectId: string,
   kind: GenKind,
-): Promise<{ models: GenModel[]; live: boolean } | { error: string; notConnected?: true }> {
+): Promise<{ models: GenModel[]; live: boolean; reason?: string } | { error: string; notConnected?: true }> {
   const access = await editable(projectId);
   if ("error" in access) return access;
   if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL) {
@@ -141,8 +152,8 @@ export async function listGenModels(
   const open = await openHiggsfield(access.userId);
   if ("error" in open) return open;
   try {
-    const { models, live } = await catalogWith(open.mcp);
-    return { models: models.filter((m) => m.kind === kind), live };
+    const { models, live, reason } = await catalogWith(open.mcp);
+    return { models: models.filter((m) => m.kind === kind), live, reason };
   } finally {
     await open.mcp.close();
   }
@@ -161,7 +172,7 @@ function toolFor(model: GenModel) {
 export async function quoteGenerations(
   projectId: string,
   choices: unknown[],
-): Promise<{ credits: number | null; costs: (number | null)[] } | { error: string; notConnected?: true }> {
+): Promise<{ credits: number | null; costs: (number | null)[]; reasons: (string | null)[] } | { error: string; notConnected?: true }> {
   const access = await editable(projectId);
   if ("error" in access) return access;
   const open = await openHiggsfield(access.userId);
@@ -172,15 +183,28 @@ export async function quoteGenerations(
     const clean = (Array.isArray(choices) ? choices.slice(0, 6) : []).map((c) => cleanChoice(c, models));
     const bal = await callTool(mcp, "balance", {});
     const credits = "error" in bal ? null : num((bal.data as { credits?: unknown } | null)?.credits);
-    const costs = await Promise.all(
-      clean.map(async (c) => {
+    // Each price comes back with the reason when there is none: Higgsfield's
+    // own sentence, or what it sent instead of a price. A bare "no price" left
+    // nobody able to say why.
+    const quotes = await Promise.all(
+      clean.map(async (c): Promise<{ cost: number | null; reason: string | null }> => {
         const model = c && findModel(models, c.modelId);
-        if (!c || !model) return null;
+        if (!c || !model) return { cost: null, reason: "That model is not in Higgsfield's list." };
         const r = await callTool(mcp, toolFor(model), { params: { ...genParams(c, model), prompt: c.prompt || "price check", get_cost: true } });
-        return "error" in r ? null : readCost(r.data);
+        if ("error" in r) {
+          console.error("[higgsfield] price check refused:", model.id, r.error);
+          return { cost: null, reason: `Higgsfield said: ${r.error}` };
+        }
+        const cost = readCost(r.data);
+        if (cost == null) {
+          console.error("[higgsfield] price check had no cost:", model.id, r.text.slice(0, 400));
+          return { cost: null, reason: `Higgsfield answered without a price: ${r.text.slice(0, 200) || "(empty)"}` };
+        }
+        return { cost, reason: null };
       }),
     );
-    return { credits, costs };
+    if ("error" in bal) console.error("[higgsfield] balance refused:", bal.error);
+    return { credits, costs: quotes.map((q) => q.cost), reasons: quotes.map((q) => q.reason) };
   } catch (e) {
     reportError("quoteGenerations", e);
     return { error: "Could not reach Higgsfield for a price." };
