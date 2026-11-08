@@ -444,7 +444,12 @@ function ReferenceCard({
         <span className="truncate font-display text-[13.5px] font-bold">
           {reference.name}
         </span>
-        <span className="mt-0.5 text-[11px] text-text-faint">{meta.label}</span>
+        <span className="mt-0.5 text-[11px] text-text-faint">
+          {meta.label}
+          {/* A kept-across-projects element shows on every project, so it
+              says so: otherwise it reads as another job's element leaking in. */}
+          {reference.project_id === null && " · On every project"}
+        </span>
         <span className="mt-2 flex flex-wrap gap-1">
           {reference.handles.length > 0 ? (
             reference.handles.map((h) => (
