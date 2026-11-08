@@ -23,11 +23,60 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, EmailAccount } from "@/lib/database.types";
 
-const ISSUER = "https://mcp.higgsfield.ai";
-export const HF_MCP_URL = `${ISSUER}/mcp`;
-const AUTHORIZE_URL = `${ISSUER}/oauth2/authorize`;
-const TOKEN_URL = `${ISSUER}/oauth2/token`;
-const REGISTER_URL = `${ISSUER}/oauth2/register`;
+export const HF_MCP_URL = "https://mcp.higgsfield.ai/mcp";
+
+// WHERE TO SIGN IN IS DISCOVERED, NOT HARDCODED. Until November 2026 the
+// sign-in lived on mcp.higgsfield.ai/oauth2/*; Higgsfield then moved it to
+// Clerk (clerk.higgsfield.ai/oauth/*). The old register endpoint started
+// refusing, and tokens it had issued began failing their backend's check on
+// every tool ("FNF API GET /mcp/workspaces failed (401)"). The MCP spec says to
+// read the protected resource's metadata for its authorization server, then
+// that server's metadata for its endpoints, which is what Claude does, so a
+// move like that is followed with no deploy. The constant below is only used
+// when discovery itself fails.
+export type HfEndpoints = { issuer: string; authorize: string; token: string; register: string };
+const FALLBACK_ENDPOINTS: HfEndpoints = {
+  issuer: "https://clerk.higgsfield.ai",
+  authorize: "https://clerk.higgsfield.ai/oauth/authorize",
+  token: "https://clerk.higgsfield.ai/oauth/token",
+  register: "https://clerk.higgsfield.ai/oauth/register",
+};
+let endpointCache: { at: number; ep: HfEndpoints } | null = null;
+
+async function getJson(url: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function higgsfieldEndpoints(): Promise<HfEndpoints> {
+  if (endpointCache && Date.now() - endpointCache.at < 60 * 60 * 1000) return endpointCache.ep;
+  const pr = await getJson("https://mcp.higgsfield.ai/.well-known/oauth-protected-resource");
+  const servers = Array.isArray(pr?.authorization_servers) ? pr.authorization_servers : [];
+  const as = typeof servers[0] === "string" ? servers[0].replace(/\/$/, "") : null;
+  if (as && /^https:\/\//.test(as)) {
+    const meta =
+      (await getJson(`${as}/.well-known/oauth-authorization-server`)) ??
+      (await getJson(`${as}/.well-known/openid-configuration`));
+    const str = (k: string) => (typeof meta?.[k] === "string" && /^https:\/\//.test(meta[k] as string) ? (meta[k] as string) : null);
+    const authorize = str("authorization_endpoint");
+    const token = str("token_endpoint");
+    const register = str("registration_endpoint");
+    if (authorize && token && register) {
+      const ep = { issuer: str("issuer") ?? as, authorize, token, register };
+      endpointCache = { at: Date.now(), ep };
+      return ep;
+    }
+  }
+  console.error("[higgsfield] sign-in discovery failed, using the fallback endpoints");
+  return FALLBACK_ENDPOINTS;
+}
+
 export const HF_SCOPE = "openid email offline_access";
 const MCP_PROTOCOL = "2025-06-18";
 
@@ -37,7 +86,9 @@ export function higgsfieldConfigured(): boolean {
 }
 
 /** What the connection row keeps in external_ref. */
-export type HfRef = { client_id: string; redirect_uri: string; sub?: string };
+/** `issuer` is the sign-in server the client id was registered with; a row
+ *  without one predates the move to Clerk and its client id is no good. */
+export type HfRef = { client_id: string; redirect_uri: string; sub?: string; issuer?: string };
 
 export function hfRef(raw: unknown): HfRef | null {
   if (!raw || typeof raw !== "object") return null;
@@ -47,12 +98,13 @@ export function hfRef(raw: unknown): HfRef | null {
     client_id: r.client_id,
     redirect_uri: r.redirect_uri,
     sub: typeof r.sub === "string" ? r.sub : undefined,
+    issuer: typeof r.issuer === "string" ? r.issuer : undefined,
   };
 }
 
 /** Registers Studio Flows as a client for this redirect URI. */
-export async function registerHiggsfieldClient(redirectUri: string): Promise<string> {
-  const res = await fetch(REGISTER_URL, {
+export async function registerHiggsfieldClient(redirectUri: string, ep: HfEndpoints): Promise<string> {
+  const res = await fetch(ep.register, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
@@ -67,6 +119,7 @@ export async function registerHiggsfieldClient(redirectUri: string): Promise<str
   });
   const body = (await res.json().catch(() => null)) as { client_id?: unknown } | null;
   if (!res.ok || typeof body?.client_id !== "string") {
+    console.error("[higgsfield] client registration refused:", ep.register, res.status, JSON.stringify(body).slice(0, 300));
     throw new Error(`Higgsfield client registration failed (${res.status}).`);
   }
   return body.client_id;
@@ -91,6 +144,7 @@ export function buildHiggsfieldAuthUrl(opts: {
   redirectUri: string;
   state: string;
   challenge: string;
+  ep: HfEndpoints;
 }): string {
   const params = new URLSearchParams({
     response_type: "code",
@@ -102,7 +156,7 @@ export function buildHiggsfieldAuthUrl(opts: {
     code_challenge_method: "S256",
     resource: HF_MCP_URL,
   });
-  return `${AUTHORIZE_URL}?${params.toString()}`;
+  return `${opts.ep.authorize}?${params.toString()}`;
 }
 
 export type HfTokens = {
@@ -114,7 +168,8 @@ export type HfTokens = {
 };
 
 async function tokenRequest(body: URLSearchParams): Promise<HfTokens> {
-  const res = await fetch(TOKEN_URL, {
+  const ep = await higgsfieldEndpoints();
+  const res = await fetch(ep.token, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body,
@@ -124,6 +179,7 @@ async function tokenRequest(body: URLSearchParams): Promise<HfTokens> {
     | null;
   if (!res.ok || !data?.access_token) {
     const why = data?.error_description || data?.error || `HTTP ${res.status}`;
+    console.error("[higgsfield] token request refused:", body.get("grant_type"), why);
     throw new Error(`Higgsfield token request failed: ${why}`);
   }
   return data;
@@ -180,7 +236,10 @@ export async function getHiggsfieldToken(
   const exp = account.token_expiry ? new Date(account.token_expiry).getTime() : 0;
   if (account.access_token && exp - 60_000 > Date.now()) return account.access_token;
   const ref = hfRef(account.external_ref);
-  if (!account.refresh_token || !ref) {
+  // A connection made on the old sign-in server cannot be refreshed on the new
+  // one: its client id and refresh token belong to the old system.
+  const ep = await higgsfieldEndpoints();
+  if (!account.refresh_token || !ref || ref.issuer !== ep.issuer) {
     throw new Error("Higgsfield needs reconnecting in Settings.");
   }
   const tokens = await tokenRequest(

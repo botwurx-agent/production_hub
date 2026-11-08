@@ -7986,6 +7986,19 @@ that generates is NOT, and waits on what the probe prints.
   refused us, but nothing promises third-party apps either. That is the risk
   this route carries: tool names and shapes are not a published contract and
   can change without notice.
+- SIGN-IN MOVED TO CLERK (found 2026-11-08). Higgsfield moved its OAuth from
+  mcp.higgsfield.ai/oauth2/* to clerk.higgsfield.ai/oauth/*. The old register
+  endpoint started refusing (so reconnecting failed with "did not accept the
+  connection request") and tokens from the old server failed Higgsfield's
+  backend check on EVERY tool, which surfaced as "FNF API GET /mcp/workspaces
+  failed (401)" and read as no price and no model list. The endpoints are now
+  DISCOVERED per the MCP spec (protected-resource metadata -> authorization
+  server metadata, cached an hour, Clerk as the fallback) in
+  higgsfieldEndpoints(), and external_ref records the `issuer` a client id was
+  registered with: a row from another issuer is re-registered on connect and
+  refused on refresh ("needs reconnecting"). callTool reads an inner 401 as
+  needing a reconnect. The generate window now prints Higgsfield's own reason
+  under "no price" and "could not read the model list".
 - CODE: lib/higgsfield-mcp.ts (registration, PKCE, token exchange and refresh,
   a minimal Streamable HTTP MCP client that reads plain JSON or an SSE body;
   readMcpBody 8 assertions), app/auth/higgsfield/{start,callback}. The token

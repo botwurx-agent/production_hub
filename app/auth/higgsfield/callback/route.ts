@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
   if (url.searchParams.get("error")) return settings("error=higgsfield_denied");
 
-  let saved: { state?: string; verifier?: string; clientId?: string } = {};
+  let saved: { state?: string; verifier?: string; clientId?: string; issuer?: string } = {};
   try {
     saved = JSON.parse(request.cookies.get(HF_COOKIE)?.value ?? "{}");
   } catch {
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       refresh_token: tokens.refresh_token ?? null,
       token_expiry: expiryFrom(tokens),
       scope: tokens.scope ?? HF_SCOPE,
-      external_ref: { client_id: saved.clientId, redirect_uri: redirectUri, sub: who.sub },
+      external_ref: { client_id: saved.clientId, redirect_uri: redirectUri, sub: who.sub, issuer: saved.issuer },
     },
     { onConflict: "user_id,provider,email" }
   );
