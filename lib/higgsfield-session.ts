@@ -42,7 +42,17 @@ export async function callTool(mcp: HiggsfieldMcp, name: string, args: unknown):
   if (r.message.error) return { error: r.message.error.message || `Higgsfield refused ${name}.` };
   const result = r.message.result as ToolResult | undefined;
   const text = resultText(result);
-  if (result?.isError) return { error: text.slice(0, 400) || `Higgsfield refused ${name}.` };
+  if (result?.isError) {
+    // Higgsfield accepts the token at its front door and then checks it again
+    // against its own backend on every tool. When that inner check fails it
+    // comes back as a tool error like "FNF API GET /mcp/workspaces failed
+    // (401)" (seen 2026-11-08, after a token refresh). Say what fixes it, and
+    // keep Higgsfield's words so a reconnect that does not help is visible.
+    if (/failed \(401\)|unauthori[sz]ed/i.test(text)) {
+      return { error: `Higgsfield needs reconnecting in Settings, Connections (it said: ${text.slice(0, 160)}).` };
+    }
+    return { error: text.slice(0, 400) || `Higgsfield refused ${name}.` };
+  }
   return { data: resultData(result), text };
 }
 

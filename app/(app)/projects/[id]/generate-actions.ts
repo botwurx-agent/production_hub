@@ -193,7 +193,7 @@ export async function quoteGenerations(
         const r = await callTool(mcp, toolFor(model), { params: { ...genParams(c, model), prompt: c.prompt || "price check", get_cost: true } });
         if ("error" in r) {
           console.error("[higgsfield] price check refused:", model.id, r.error);
-          return { cost: null, reason: `Higgsfield said: ${r.error}` };
+          return { cost: null, reason: r.error.startsWith("Higgsfield") ? r.error : `Higgsfield said: ${r.error}` };
         }
         const cost = readCost(r.data);
         if (cost == null) {
