@@ -3446,10 +3446,9 @@ window and the read-back all sit above the auth layer.
   went into a state where every statement that ADDED an object succeeded and
   every one that DROPPED timed out, repeatably, with no lock and no stuck
   transaction visible in pg_stat_activity. A half-made `bill_accounts` could not
-  be removed, so the real table took a clean name rather than waiting. LITTER
-  STILL IN THE LIVE DATABASE, to drop when removal works again and referenced by
-  nothing: `bill_accounts`, `zz_probe_tmp`, `zz_probe_b`, `zz_probe_c`,
-  `zz_probe_d`. Also: a multi-statement batch timed out where the same
+  be removed, so the real table took a clean name rather than waiting. That
+  litter (`bill_accounts`, `zz_probe_tmp`, `zz_probe_b`, `zz_probe_c`,
+  `zz_probe_d`, all empty) was DROPPED 2026-11-09, one statement per call. Also: a multi-statement batch timed out where the same
   statements sent one at a time went through, so send DDL one statement per call
   and verify each with a read.
 - NEW ENV: `BILL_DEV_KEY` (ours, identifies the integration rather than a
