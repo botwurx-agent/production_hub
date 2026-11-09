@@ -154,6 +154,18 @@ export function BillConnection({
               {connection.orgName && (
                 <div className="truncate text-xs text-text-faint">{connection.username}</div>
               )}
+              {/* STATED BOTH WAYS. Production used to be signalled only by
+                  the sandbox banner being absent, and an absence is easy to
+                  misread while a deploy is still building. */}
+              <div className="mt-0.5 flex items-center gap-1.5 text-xs text-text-muted">
+                <span
+                  aria-hidden
+                  className={`h-1.5 w-1.5 rounded-full ${sandbox ? "bg-amber" : "bg-green"}`}
+                />
+                {sandbox
+                  ? "BILL sandbox: test data, no real money moves"
+                  : "Real BILL account: payments move real money"}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <StatusTag hue={trusted ? "green" : "amber"}>
