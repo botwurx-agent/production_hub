@@ -2323,8 +2323,8 @@ into an inbound deal with the brief and files attached.
 - LITTER, because the Supabase MCP refused DELETE (timed out, the failure
   mode recorded under 0113): a "ZZ test request" deal on the DEMO studio's
   Bright Water account, marked Lost with "safe to delete", one job_requests
-  row under it, and a revoked request link. Delete the deal from its page;
-  the request row's deal_id is set null by the FK.
+  row under it, and a revoked request link. All three were DELETED
+  2026-11-09, so this litter is gone.
 - NOT BUILT: Timeliner's PRICED menu (pick "short-form reel $160" and see a
   running total), which needs a service catalogue the studio does not keep
   today, and an email to the studio on top of the bell.
@@ -7044,6 +7044,17 @@ info." Recorded because it is a live product question and nothing is decided.
   exist: an email from the studio saying BILL's is coming, what it is, that it
   is free, and that this is how they get paid by ACH. That does not remove the
   account, it removes the part where somebody stops halfway through.
+- THE WARM-UP EMAIL IS BUILT (2026-11-09, operator's go). lib/payment-heads-up.ts
+  (pure, 14 assertions) is the wording; requestPaymentDetails sends it to each
+  person right AFTER BILL accepts their invite (so nobody is told to expect an
+  email that never comes), best effort, reply-to the presser. It names the
+  studio and the job, says BILL's email is genuine and free, and that their
+  bank details go to BILL and never to the studio. It carries NO link and NO
+  button, and its footnote says the studio will never ask for bank details by
+  email: a note vouching for the real request must not look like the thing it
+  vouches for. It does NOT claim a BILL account works for other studios (that
+  is unconfirmed). The confirm window says the note goes; a toast says so
+  only when it did NOT send. NOT RUN against a real freelancer yet.
 - MY RECOMMENDATION, for the record: keep the account path, send the warm-up
   email, and look at those three things before building a form. If "no account,
   ever" turns out to be hard, that is an argument about the RAIL rather than
@@ -9563,7 +9574,8 @@ again; the process date already defaults to the next day BILL will take. Until
 then nothing about the rail can be verified and the ACH marketing claim stays
 gated. Open beside it, and theirs rather than ours: whether a freelancer should
 have to open a BILL account at all (see "The freelancer had to open a BILL
-account" above, which carries the three cheap checks and the recommendation).
+account" above, which carries the three cheap checks and the recommendation;
+the warm-up email from that section is now BUILT).
 
 FOUR OTHER THINGS ARE GENUINELY WAITING ON THE OPERATOR, and all of them are
 theirs to answer rather than ours to start:
