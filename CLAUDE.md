@@ -5826,6 +5826,16 @@ screenshots, recordings and filters per feature.
   deliverables, CRM pipeline, settings (team, connections, AI connector).
 - Wired into PUBLIC_PATHS ("/help", prefix), the sitemap, desktop + mobile nav
   ("Help") and the footer ("Help center").
+- CAPTURES CAN RUN FROM A SESSION NOW (2026-11-09), which corrects every
+  older note here saying the proxy blocks Supabase: the host answers, the demo
+  login returns 200, and `ONLY=dashboard node scripts/capture-shots.mjs` against
+  a dev server started with the real NEXT_PUBLIC_SUPABASE_URL + anon key (from
+  the Supabase MCP get_publishable_keys) saved a real dashboard shot. Two
+  gotchas: the script imports `playwright` as ESM, which ignores the global
+  install, so symlink /opt/node-tools/node_modules/playwright into node_modules
+  first; and the script ALWAYS retakes the portal and phone shots whatever ONLY
+  says, so check git status and restore any live shot that was not meant to
+  change.
 
 ### THE WEBSITE'S BIGGEST REMAINING PROBLEM: /moodboard-maker is empty
 Audited 2026-09-08 and not yet fixed. The page is the reference implementation
