@@ -102,7 +102,8 @@ export function inviteConfirm(rows: Readiness[]): ConfirmRequest {
     body:
       `BILL emails ${who} and asks them to add their own bank details, so they` +
       " can be paid by ACH instead of a posted check. Their details go to BILL" +
-      " and never to this app.",
+      " and never to this app. A short note from your studio goes with it," +
+      " saying BILL's email is coming and that it is genuine.",
     confirmLabel: rows.length === 1 ? "Send the request" : `Send ${rows.length} requests`,
     destructive: false,
   };
@@ -168,8 +169,19 @@ function PaymentReadinessPanel({
     if (err) {
       toast(err, "error");
     } else {
-      const { sent, skipped } = res as InviteResult;
+      const { sent, notified, skipped } = res as InviteResult;
       if (sent > 0) toast(sent === 1 ? "Request sent." : `${sent} requests sent.`, "success");
+      // Said only when the studio's note did NOT go, since the confirm window
+      // promised it. The BILL invite went regardless.
+      if (sent > notified) {
+        const missed = sent - notified;
+        toast(
+          missed === sent
+            ? "BILL's email went, but the heads-up note from your studio did not send."
+            : `${missed} heads-up ${missed === 1 ? "note" : "notes"} from your studio did not send. BILL's emails went.`,
+          "error"
+        );
+      }
       // Each skip names the person and the reason, so one missing email does
       // not read as the whole press having failed.
       for (const line of skipped.slice(0, 4)) toast(line, "error");

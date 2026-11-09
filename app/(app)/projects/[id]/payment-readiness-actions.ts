@@ -34,6 +34,9 @@ import {
   type BillAddress,
 } from "@/lib/bill";
 import { isEmailAddress } from "@/lib/contact";
+import { emailConfigured, sendEmail } from "@/lib/email";
+import { renderEmail } from "@/lib/email-template";
+import { headsUpEmail, headsUpSubject } from "@/lib/payment-heads-up";
 import {
   applyVendorDetail,
   matchReadiness,
@@ -140,6 +143,12 @@ export async function loadPaymentReadiness(
 export type InviteResult = {
   /** How many invites BILL accepted. */
   sent: number;
+  /**
+   * How many of those also got the studio's own heads-up note. Lower than
+   * `sent` when email is not set up here or a send failed; the BILL invite
+   * went either way.
+   */
+  notified: number;
   /** One line per person it could not be sent for, naming why. */
   skipped: string[];
 };
@@ -186,11 +195,14 @@ export async function requestPaymentDetails(
   const supabase = createClient();
   // Scoped to the project, so an id from the browser cannot reach a contact on
   // another job: the filter is the authorization, not the id.
-  const { data: rows } = await supabase
-    .from("contacts")
-    .select("id, name, email")
-    .eq("project_id", projectId)
-    .in("id", ids);
+  const [{ data: rows }, { data: project }] = await Promise.all([
+    supabase
+      .from("contacts")
+      .select("id, name, email")
+      .eq("project_id", projectId)
+      .in("id", ids),
+    supabase.from("projects").select("title").eq("id", projectId).maybeSingle(),
+  ]);
   const people = (rows ?? []) as { id: string; name: string; email: string | null }[];
   if (people.length === 0) return { error: "Those contacts are not on this project." };
 
@@ -207,6 +219,8 @@ export async function requestPaymentDetails(
 
   const skipped: string[] = [];
   let sent = 0;
+  let notified = 0;
+  const canEmail = emailConfigured();
 
   for (const person of people) {
     const email = (person.email ?? "").trim();
@@ -232,6 +246,23 @@ export async function requestPaymentDetails(
       }
       await sendBillVendorInvite(session, { vendorId: vendor.id, email });
       sent += 1;
+
+      // THE STUDIO'S OWN NOTE, sent only once BILL has accepted the invite,
+      // so nobody is told to expect an email that never comes. Best effort:
+      // the invite is what matters, and a mail failure must not read as the
+      // request having failed. Replies go to whoever pressed the button.
+      if (canEmail) {
+        const facts = { studio: ctx.studio.name, project: project?.title ?? null, name: person.name };
+        const { html, text } = renderEmail(headsUpEmail(facts));
+        const res = await sendEmail({
+          to: email,
+          subject: headsUpSubject(facts),
+          html,
+          text,
+          replyTo: ctx.email ?? undefined,
+        });
+        if (res.ok) notified += 1;
+      }
     } catch (e) {
       // BILL's own sentence, which is how every payload here was learned. Only
       // `email` has been proven required, so a refusal naming another field is
@@ -241,5 +272,5 @@ export async function requestPaymentDetails(
     }
   }
 
-  return { sent, skipped };
+  return { sent, notified, skipped };
 }
