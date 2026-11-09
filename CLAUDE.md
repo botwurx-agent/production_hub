@@ -5803,6 +5803,30 @@ because nobody asked for one.
   path today, same as `feedback`. Worth adding when volume justifies it;
   `handled_at` is already there for it.
 
+### Help center (/help, no migration) — BUILT 2026-11-09
+Operator asked for a help section with extensive step-by-step guides,
+screenshots, recordings and filters per feature.
+- lib/help/articles.ts is THE WHOLE HELP CENTER (categories, 31 articles,
+  steps, tips, media, search text), read by the index, the article pages, the
+  sitemap and the search, the features.ts pattern. Writing rules are at the top
+  of that file: every step names a real control in the words on the button.
+- /help (app/(marketing)/help/page.tsx): two-column fold (heading left, "start
+  here" list right), then components/marketing/help/help-browser.tsx, a sticky
+  search ("/" focuses it) plus one filter chip per topic, `?topic=` in the URL
+  so a filtered view can be linked. Cards show a real screenshot when one
+  exists, else the guide's own numbered steps on the topic tint.
+- /help/[slug]: numbered steps with media, "Good to know", a link to the
+  feature page, prev/next, a sticky rail (same-topic guides, on this page,
+  other topics), and HowTo JSON-LD. Statically generated.
+- components/marketing/help/help-media.tsx renders NOTHING when the capture is
+  missing (unlike <Shot>), so an article can name a screenshot or clip before it
+  exists and it appears once captured. Only 14 shots, 4 closeups and 1 usable
+  clip exist today, so most guides are text-only for now. The biggest gaps
+  worth capturing: dashboard, project hub, assets, review page, schedule still,
+  deliverables, CRM pipeline, settings (team, connections, AI connector).
+- Wired into PUBLIC_PATHS ("/help", prefix), the sitemap, desktop + mobile nav
+  ("Help") and the footer ("Help center").
+
 ### THE WEBSITE'S BIGGEST REMAINING PROBLEM: /moodboard-maker is empty
 Audited 2026-09-08 and not yet fixed. The page is the reference implementation
 of the show-don't-argue pattern, so it was given six demo sections and

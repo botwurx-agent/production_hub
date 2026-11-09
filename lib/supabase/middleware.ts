@@ -42,6 +42,8 @@ const PUBLIC_PATHS = [
   // which is the one audience the page exists for.
   "/pricing",
   "/contact",
+  // Prefix-matched, so this covers the help index and every article under it.
+  "/help",
   // Prefix-matched (see the test below), so this covers the /features
   // overview in one entry.
   "/features",

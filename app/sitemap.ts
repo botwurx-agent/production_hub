@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { FEATURE_SLUGS } from "@/lib/marketing/feature-slugs";
+import { HELP_ARTICLES } from "@/lib/help/articles";
 
 /**
  * The sitemap exists for the MARKETING site only: the app lives behind auth
@@ -21,6 +22,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${ORIGIN}/pricing`, lastModified: now, priority: 0.9 },
     { url: `${ORIGIN}/features`, lastModified: now, priority: 0.8 },
     { url: `${ORIGIN}/contact`, lastModified: now, priority: 0.6 },
+    { url: `${ORIGIN}/help`, lastModified: now, priority: 0.7 },
+    ...HELP_ARTICLES.map((a) => ({
+      url: `${ORIGIN}/help/${a.slug}`,
+      lastModified: now,
+      priority: 0.5,
+    })),
     ...FEATURE_SLUGS.map((slug) => ({
       url: `${ORIGIN}/${slug}`,
       lastModified: now,

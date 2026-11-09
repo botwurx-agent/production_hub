@@ -154,6 +154,12 @@ export function SiteNavMobile() {
                       Pricing
                     </Link>
                     <Link
+                      href="/help"
+                      className="block rounded-[10px] py-2.5 text-[15px] font-semibold text-text transition hover:bg-surface-2"
+                    >
+                      Help
+                    </Link>
+                    <Link
                       href="/contact"
                       className="block rounded-[10px] py-2.5 text-[15px] font-semibold text-text transition hover:bg-surface-2"
                     >

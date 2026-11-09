@@ -145,6 +145,12 @@ export function SiteNav() {
               Pricing
             </Link>
             <Link
+              href="/help"
+              className="text-[15px] font-medium text-text-muted transition hover:text-text"
+            >
+              Help
+            </Link>
+            <Link
               href="/contact"
               className="text-[15px] font-medium text-text-muted transition hover:text-text"
             >
