@@ -55,8 +55,8 @@ export function headsUpEmail(f: HeadsUpFacts): EmailContent {
 
   const greeting = first ? `Hi ${first},` : "Hi,";
   const thanks = project
-    ? `Thanks for your work on ${project}. We would like to pay you by direct deposit rather than a mailed check.`
-    : "We would like to pay you by direct deposit rather than a mailed check.";
+    ? `Thanks for your work on ${project}. We would like to pay you by direct deposit.`
+    : "We would like to pay you by direct deposit.";
 
   return {
     heading: "An email from BILL is coming",
