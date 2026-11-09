@@ -91,6 +91,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Create your account and studio",
     summary: "Sign up, confirm your email and land in your own studio.",
     minutes: 2,
+    hero: { shot: "signup", alt: "The Create your studio form" },
     keywords: ["sign up", "register", "login", "password", "confirm email"],
     steps: [
       {
@@ -117,6 +118,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Find your way around",
     summary: "The sidebar, the dashboard, notifications and the guided tour.",
     minutes: 3,
+    hero: { shot: "dashboard", alt: "The dashboard with project counts, My day, Needs you, the calendar and tasks" },
     keywords: ["navigation", "sidebar", "dashboard", "tour", "dark mode", "theme"],
     steps: [
       {
@@ -146,6 +148,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Start a project",
     summary: "Create a job, tie it to a client and pick the kind of production.",
     minutes: 2,
+    hero: { shot: "project-hub", alt: "A project hub with its stage stepper, counts, AI summary and module cards" },
     keywords: ["new project", "create job", "wizard", "project type", "ai video", "live action"],
     steps: [
       {
@@ -194,6 +197,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Add the brief and upload assets",
     summary: "Store the creative brief and keep every file and version in one library.",
     minutes: 3,
+    hero: { shot: "project-assets", alt: "The asset library with an upload area and versioned files" },
     keywords: ["upload", "files", "versions", "library", "drive", "figma", "documents"],
     steps: [
       {
@@ -349,6 +353,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Previz a setup in the scene builder",
     summary: "Build a 3D set with real cameras, lenses and lights, then send shots to the shot list.",
     minutes: 6,
+    hero: { shot: "project-scene-builder", alt: "The scene builder's starting rooms: empty room, seamless, kitchen, bathroom and bedroom" },
     keywords: ["3d", "previz", "lighting", "lens", "camera", "diagram", "viewfinder"],
     steps: [
       {
@@ -445,6 +450,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Compare versions and sign off",
     summary: "Upload the next cut, compare it with the last, and record approvals.",
     minutes: 3,
+    hero: { shot: "project-review", alt: "The Review page grouping work by awaiting review and changes requested" },
     keywords: ["compare", "wipe", "v2", "revision rounds", "approve", "request changes"],
     steps: [
       {
@@ -484,6 +490,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       {
         title: "Adjust the day",
         body: "Change a row's duration and everything after it moves. Pin a row (like lunch at 1:00) to hold its time; the schedule then shows how far the morning runs over or under it.",
+        media: { shot: "project-schedule", alt: "A schedule day with call, setup and shoot rows, their durations and the scheduled wrap" },
       },
       {
         title: "Drag rows between days",
@@ -592,6 +599,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Deliver final files to the client",
     summary: "Track deliverables and send the client one link to download everything.",
     minutes: 3,
+    hero: { shot: "project-delivery", alt: "The Deliverables page with each deliverable's stage and due date, and the final files" },
     keywords: ["delivery", "masters", "download link", "deliverables", "due date"],
     steps: [
       {
@@ -713,6 +721,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Read your studio reports",
     summary: "See revenue, margin, on-time delivery and client response times across jobs.",
     minutes: 2,
+    hero: { shot: "reports", alt: "Studio reports with billed, cost, margin, on-time delivery and client response" },
     keywords: ["reports", "analytics", "profit", "turnaround", "quarter"],
     steps: [
       {
@@ -737,6 +746,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Manage clients and the deal pipeline",
     summary: "Track prospects, move deals through stages and log every touchpoint.",
     minutes: 4,
+    hero: { shot: "pipeline", alt: "The deal pipeline with Inbound, Qualifying, Bidding, Awarded and Lost columns" },
     keywords: ["crm", "leads", "prospects", "pipeline", "deals", "follow up", "accounts"],
     steps: [
       {
@@ -764,6 +774,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Let clients request new work by link",
     summary: "Give a client one link that turns their request into a deal with the brief attached.",
     minutes: 2,
+    hero: { shot: "client", alt: "A client page with its Request link button, contacts, projects and deals" },
     keywords: ["intake form", "request", "new job", "inbound"],
     steps: [
       {
@@ -877,6 +888,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Connect your own Claude or ChatGPT",
     summary: "Make a private connector link so your own assistant can read and add to Studio Flows.",
     minutes: 3,
+    hero: { shot: "settings-ai-connector", alt: "The AI connector card in Settings with Make a link" },
     keywords: ["mcp", "connector", "claude", "chatgpt", "integration"],
     steps: [
       {
@@ -906,6 +918,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Invite your team and collaborators",
     summary: "Add studio members, or give crew access to one project only.",
     minutes: 3,
+    hero: { shot: "settings", alt: "Settings with the Team card and the invite form" },
     keywords: ["invite", "team", "members", "roles", "collaborator", "reviewer", "permissions"],
     steps: [
       {
@@ -932,6 +945,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Set your branding and connections",
     summary: "Add your logo and studio name, and connect Google, Slack, Figma and BILL.",
     minutes: 2,
+    hero: { shot: "settings-connections", alt: "The Connections card with Google and Slack connected" },
     keywords: ["logo", "branding", "studio name", "settings", "integrations", "figma", "drive"],
     steps: [
       {

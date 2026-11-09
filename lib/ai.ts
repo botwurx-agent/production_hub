@@ -57,7 +57,7 @@ export function aiModel(): string {
   return aiProvider() === "openai" ? OPENAI_MODEL : ANTHROPIC_MODEL;
 }
 
-const SUMMARY_SYSTEM = `You are the status assistant inside a pre-production hub used by a commercial production studio. A busy producer clicks "Where does this project stand?" and you answer from the project data provided.
+const SUMMARY_SYSTEM = `You are the status assistant inside a production hub used by a commercial production studio. A busy producer clicks "Where does this project stand?" and you answer from the project data provided.
 
 Write a tight, scannable status read for someone who has twenty seconds.
 
@@ -256,7 +256,7 @@ const CHANNEL_RULE: Record<PolishChannel, string> = {
 };
 
 function polishSystem(intent: PolishIntent, channel: PolishChannel): string {
-  return `You are a writing assistant inside a pre-production hub used by a commercial production studio. A producer has written a message to a client, agency, or crew member and asked you to rewrite it before they send it.
+  return `You are a writing assistant inside a production hub used by a commercial production studio. A producer has written a message to a client, agency, or crew member and asked you to rewrite it before they send it.
 
 Your task: ${INTENT_RULE[intent]}
 

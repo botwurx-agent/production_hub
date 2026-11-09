@@ -18,7 +18,7 @@ export default function AuthLayout({
         {children}
       </div>
       <p className="mt-8 text-center text-xs text-text-faint">
-        A connected pre-production hub for commercial production studios.
+        A connected production hub for commercial production studios.
       </p>
       <p className="mt-2 text-center text-xs text-text-faint">
         <Link href="/terms" className="hover:text-text-muted hover:underline">

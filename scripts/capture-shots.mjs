@@ -62,15 +62,24 @@ const SHOTS = [
   // the review canvas is the one surface that belongs on a dark ground, since
   // that is how the product itself asks you to judge a frame
   ["project-hub-dark", `/projects/${PROJECT}`, "dark", 3500],
+  // Help center (lib/help/articles.ts). An optional fifth entry names a heading
+  // to scroll to, for the settings cards that sit below the fold.
+  ["project-delivery", `/projects/${PROJECT}/delivery`, "light", 3000],
+  ["project-scene-builder", `/projects/${PROJECT}/scene-builder`, "light", 6000],
+  ["reports", "/reports", "light", 3000],
+  ["settings", "/settings", "light", 2500],
+  ["settings-connections", "/settings", "light", 2500, "Connections"],
+  ["settings-ai-connector", "/settings", "light", 2500, "AI connector"],
 ];
 
 // ONLY=project-schedule (comma-separated for several) captures a subset, so a
 // new page's shot can land without retaking and re-committing the other
 // fourteen PNGs. Unset, every shot is taken as before.
 const only = process.env.ONLY?.split(",").map((s) => s.trim()).filter(Boolean);
+const EXTRAS = ["client-review-portal", "board-review-portal", "signup", "phone-project-hub"];
 const wanted = only?.length ? SHOTS.filter(([name]) => only.includes(name)) : SHOTS;
-if (only?.length && wanted.length !== only.length) {
-  const known = new Set(SHOTS.map(([n]) => n));
+if (only?.length && only.some((n) => !SHOTS.some(([s]) => s === n) && !EXTRAS.includes(n))) {
+  const known = new Set([...SHOTS.map(([n]) => n), ...EXTRAS]);
   console.error("Unknown shot name(s):", only.filter((n) => !known.has(n)).join(", "));
   process.exit(1);
 }
@@ -88,7 +97,7 @@ const browser = await chromium.launch(
     : undefined,
 );
 
-async function shoot(page, name, path, theme, settle) {
+async function shoot(page, name, path, theme, settle, heading) {
   await page.goto(BASE + path, { waitUntil: "domcontentloaded" });
   await page.evaluate((t) => {
     document.documentElement.setAttribute("data-theme", t);
@@ -107,6 +116,18 @@ async function shoot(page, name, path, theme, settle) {
     } catch {}
   }, theme);
   await page.waitForTimeout(settle);
+  if (heading) {
+    await page
+      .locator("h2", { hasText: heading })
+      .first()
+      // start minus the sticky topbar, or the heading lands under it
+      .evaluate((el) => {
+        el.scrollIntoView({ block: "start" });
+        window.scrollBy(0, -88);
+      })
+      .catch(() => console.warn(`  no heading "${heading}" on ${path}`));
+    await page.waitForTimeout(600);
+  }
   await page.screenshot({ path: join(OUT, `${name}.png`) });
   console.log(`shot  ${name}`);
 }
@@ -135,9 +156,13 @@ if (!/\/dashboard/.test(page.url())) {
   process.exit(1);
 }
 
-for (const [name, path, theme, settle] of wanted) {
-  await shoot(page, name, path, theme, settle);
+for (const [name, path, theme, settle, heading] of wanted) {
+  await shoot(page, name, path, theme, settle, heading);
 }
+
+// With ONLY set, the signed-out portal and phone shots below are taken only
+// when named, so a subset run cannot overwrite live images nobody asked for.
+const extra = (name) => !only?.length || only.includes(name);
 
 // the client portal, signed out, because that is how a client sees it
 const clean = await browser.newContext({
@@ -146,8 +171,11 @@ const clean = await browser.newContext({
   deviceScaleFactor: 2,
 });
 const guest = await clean.newPage();
-await shoot(guest, "client-review-portal", `/r/${REVIEW_TOKEN}`, "light", 3500);
-await shoot(guest, "board-review-portal", `/r/${BOARD_REVIEW_TOKEN}`, "light", 4000);
+if (extra("client-review-portal"))
+  await shoot(guest, "client-review-portal", `/r/${REVIEW_TOKEN}`, "light", 3500);
+if (extra("board-review-portal"))
+  await shoot(guest, "board-review-portal", `/r/${BOARD_REVIEW_TOKEN}`, "light", 4000);
+if (extra("signup")) await shoot(guest, "signup", "/signup", "light", 2000);
 
 // phone, for the responsive band on the site
 const phone = await browser.newContext({
@@ -156,13 +184,15 @@ const phone = await browser.newContext({
   isMobile: true,
   hasTouch: true,
 });
-const small = await phone.newPage();
-await small.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-await small.fill('input[type="email"]', DEMO_EMAIL);
-await small.fill('input[type="password"]', DEMO_PASSWORD);
-await small.click('button[type="submit"]');
-await small.waitForURL(/\/dashboard/, { timeout: 30000 }).catch(() => {});
-await shoot(small, "phone-project-hub", `/projects/${PROJECT}`, "light", 3500);
+const small = extra("phone-project-hub") ? await phone.newPage() : null;
+if (small) {
+  await small.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await small.fill('input[type="email"]', DEMO_EMAIL);
+  await small.fill('input[type="password"]', DEMO_PASSWORD);
+  await small.click('button[type="submit"]');
+  await small.waitForURL(/\/dashboard/, { timeout: 30000 }).catch(() => {});
+  await shoot(small, "phone-project-hub", `/projects/${PROJECT}`, "light", 3500);
+}
 
 await browser.close();
 console.log(`\nDone. ${SHOTS.length + 2} images in public/marketing/shots/`);

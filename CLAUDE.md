@@ -5820,10 +5820,11 @@ screenshots, recordings and filters per feature.
   other topics), and HowTo JSON-LD. Statically generated.
 - components/marketing/help/help-media.tsx renders NOTHING when the capture is
   missing (unlike <Shot>), so an article can name a screenshot or clip before it
-  exists and it appears once captured. Only 14 shots, 4 closeups and 1 usable
-  clip exist today, so most guides are text-only for now. The biggest gaps
-  worth capturing: dashboard, project hub, assets, review page, schedule still,
-  deliverables, CRM pipeline, settings (team, connections, AI connector).
+  exists and it appears once captured. 29 of the 31 guides now have a hero (all
+  but pay-vendors-with-bill and send-feedback). The help shots are in
+  scripts/capture-shots.mjs SHOTS (project-delivery, project-scene-builder,
+  reports, settings, settings-connections, settings-ai-connector, plus signup in
+  the signed-out extras); an optional fifth entry names an h2 to scroll to.
 - Wired into PUBLIC_PATHS ("/help", prefix), the sitemap, desktop + mobile nav
   ("Help") and the footer ("Help center").
 - CAPTURES CAN RUN FROM A SESSION NOW (2026-11-09), which corrects every
@@ -5833,9 +5834,13 @@ screenshots, recordings and filters per feature.
   the Supabase MCP get_publishable_keys) saved a real dashboard shot. Two
   gotchas: the script imports `playwright` as ESM, which ignores the global
   install, so symlink /opt/node-tools/node_modules/playwright into node_modules
-  first; and the script ALWAYS retakes the portal and phone shots whatever ONLY
-  says, so check git status and restore any live shot that was not meant to
-  change.
+  first. With ONLY set, the signed-out portal, signup and phone shots are taken
+  only when named. START THE DEV SERVER WITH DUMMY CONNECTOR AND AI ENV
+  (GOOGLE_/SLACK_/FIGMA_CLIENT_ID+SECRET=x, BILL_DEV_KEY=x, BILL_CRED_KEY=64 hex,
+  OPENAI_API_KEY=dummy): without them Settings shows amber "not configured"
+  banners, the hub shows "add an API key" instead of the stored summary, and
+  the sidebar loses its Runner row, so shots disagree with production. Nothing
+  is ever called with those values during a capture.
 
 ### THE WEBSITE'S BIGGEST REMAINING PROBLEM: /moodboard-maker is empty
 Audited 2026-09-08 and not yet fixed. The page is the reference implementation
