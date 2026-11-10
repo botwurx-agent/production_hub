@@ -42,6 +42,8 @@ import { ensureModel, modelReady } from "@/lib/blocking/model-cache";
 import { arrivalSize, type PhotoModelId } from "@/lib/blocking/photo-model";
 import { gaitAt } from "@/lib/blocking/gait";
 import { holdsPosition, rigMotion } from "@/lib/blocking/rigs";
+import { PhonePanel, usePhoneCamera, type LivePose } from "./phone-camera";
+import { thinTake } from "@/lib/phone-cam";
 
 type View = "camera" | "free";
 
@@ -212,6 +214,14 @@ export function BlockingStudio({
   const [rect, setRect] = useState({ x: 0, y: 0, w: 0, h: 0 });
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useOutside(exportOpen, () => setExportOpen(false));
+  // The phone as the camera (components/blocking/phone-camera.tsx). While it
+  // drives, the studio draws its pose instead of the keys; a take records it.
+  const phone = usePhoneCamera({ record: () => phoneRecord(), stop: () => phoneStop() });
+  const phoneRef = useRef(phone);
+  phoneRef.current = phone;
+  const liveRef = useRef<LivePose | null>(null);
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const phoneMenuRef = useOutside(phoneOpen, () => setPhoneOpen(false));
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const eng = useRef<Engine | null>(null);
@@ -1074,7 +1084,14 @@ export function BlockingStudio({
       const s = sceneRef.current;
       // Time
       const P = playRef.current;
-      if (e.rec?.on) {
+      const tk = phoneRef.current.take.current;
+      if (tk.mode === "count") {
+        tRef.current = tk.startT;
+        if (now >= tk.until) { tk.mode = "rec"; tk.t0 = now; tk.samples = []; }
+      }
+      if (tk.mode === "rec") {
+        tRef.current = Math.min(s.duration, tk.startT + (now - tk.t0) / 1000);
+      } else if (e.rec?.on) {
         const tt = (now - e.rec.t0) / 1000;
         tRef.current = Math.min(s.duration, tt);
         if (tt >= s.duration + 0.05) stopRecording();
@@ -1085,11 +1102,20 @@ export function BlockingStudio({
         }
         tRef.current = tt;
       }
-      if (P.on || e.rec?.on) setTState(tRef.current);
+      if (P.on || e.rec?.on || tk.mode !== "idle") setTState(tRef.current);
+      // The phone drives whenever the shot is not playing or being exported.
+      const lv = !P.on && !e.rec
+        ? phoneRef.current.frame(dt, () => { const c = camAt(s, tRef.current); return { p: c.p, r: c.r, lens: c.lens }; })
+        : null;
+      liveRef.current = lv;
       // Fly keys move the camera in camera view.
-      if (e.keys.size && viewRef.current === "camera" && canEdit && !P.on) flyKeys(dt);
+      if (!lv && e.keys.size && viewRef.current === "camera" && canEdit && !P.on) flyKeys(dt);
       pose(s, tRef.current);
       draw(s);
+      if (tk.mode === "rec") {
+        if (lv) tk.samples.push({ t: tRef.current, p: [...lv.p] as Vec3, r: [...lv.r] as Vec3, lens: lv.lens });
+        if (tRef.current >= s.duration) finishTake();
+      }
     };
     raf = requestAnimationFrame(frame);
 
@@ -1202,8 +1228,11 @@ export function BlockingStudio({
     const c = camAt(s, at, m);
     const sh = rigMotion(s.camera.rig, s.camera.keys, at, { smooth: s.camera.path === "smooth", flow: s.camera.flow, easeEnds: s.camera.easeEnds }, s.camera.shake);
     const parent = s.camera.parent ? objectMatrix(m, s.camera.parent, at) : null;
-    const local: Vec3 = [c.p[0] + sh.p[0], c.p[1] + sh.p[1], c.p[2] + sh.p[2]];
-    const rot: Vec3 = [c.r[0] + sh.r[0], c.r[1] + sh.r[1], c.r[2] + sh.r[2]];
+    // The phone's pose replaces the keys while it drives (never in an export).
+    const lv = e.rec ? null : liveRef.current;
+    if (lv) c.lens = lv.lens;
+    const local: Vec3 = lv ? lv.p : [c.p[0] + sh.p[0], c.p[1] + sh.p[1], c.p[2] + sh.p[2]];
+    const rot: Vec3 = lv ? lv.r : [c.r[0] + sh.r[0], c.r[1] + sh.r[1], c.r[2] + sh.r[2]];
     const M = cameraMatrix(local, rot, parent);
     M.decompose(e.shot.position, e.shot.quaternion, e.shot.scale);
     const body = BODIES.find((b) => b.id === s.camera.body) ?? BODIES[0];
@@ -1480,7 +1509,8 @@ export function BlockingStudio({
 
   const look = useRef<{ x: number; y: number; button: number } | null>(null);
   const onViewportDown = (ev: React.PointerEvent) => {
-    if (view !== "camera" || !canEdit) return;
+    // While the phone drives, the mouse would write keys nobody sees.
+    if (view !== "camera" || !canEdit || liveRef.current) return;
     (ev.target as HTMLElement).setPointerCapture(ev.pointerId);
     look.current = { x: ev.clientX, y: ev.clientY, button: ev.shiftKey ? 2 : ev.button };
     history.current.lastKey = "";
@@ -1513,7 +1543,7 @@ export function BlockingStudio({
     const onWheel = (ev: WheelEvent) => {
       if (viewRef.current !== "camera") return;
       ev.preventDefault();
-      if (!canEdit) return;
+      if (!canEdit || liveRef.current) return;
       if (ev.altKey || ev.ctrlKey) {
         const c = posedAt(sceneRef.current, "camera", tRef.current);
         writePose("camera", { lens: Math.min(600, Math.max(8, (c.lens ?? 35) * Math.exp(-ev.deltaY * 0.002))) }, "zoom");
@@ -1673,6 +1703,77 @@ export function BlockingStudio({
     r.toneMapping = THREE.NeutralToneMapping;
     return r;
   };
+
+  /* ---------- the phone camera's takes ---------- */
+
+  /** Where a take starts: the playhead, or the top when it is near the end. */
+  const takeStart = () => (tRef.current < sceneRef.current.duration - 0.5 ? snap(tRef.current, sceneRef.current.fps) : 0);
+
+  function phoneRecord() {
+    if (!canEdit || eng.current?.rec) return;
+    playRef.current.on = false;
+    setPlaying(false);
+    setView("camera");
+    setPhoneOpen(false);
+    if (!phoneRef.current.beginTake(takeStart())) setNote("The phone is not sending yet");
+  }
+
+  function phoneStop() {
+    const tk = phoneRef.current.take.current;
+    if (tk.mode === "rec") finishTake();
+    else if (tk.mode === "count") { phoneRef.current.endTake("Take cancelled"); setNote("Take cancelled"); }
+  }
+
+  /**
+   * Writes a take into the camera's keys: the recording thinned to the moments
+   * that matter, replacing the keys inside the take and keeping the rest. The
+   * camera becomes free, unaimed and continuous, because the phone already
+   * aimed it and a rig or an aim on top would change the move that was made.
+   */
+  function finishTake() {
+    const { samples, startT } = phoneRef.current.endTake();
+    if (samples.length < 3) {
+      phoneRef.current.endTake("That take was too short to keep");
+      setNote("That take was too short to keep");
+      return;
+    }
+    const s0 = sceneRef.current;
+    const fps = s0.fps;
+    const kept = thinTake(samples);
+    const keys: CamKey[] = [];
+    for (const k of kept) {
+      const t = snap(k.t, fps);
+      const key: CamKey = { t, p: k.p, r: k.r, lens: k.lens, ease: "smooth" };
+      if (keys.length && Math.abs(keys[keys.length - 1].t - t) < 0.5 / fps) keys[keys.length - 1] = key;
+      else keys.push(key);
+    }
+    const endT = keys[keys.length - 1].t;
+    const half = 0.5 / fps;
+    const wasAimed = !!s0.camera.aim.target;
+    const rig = s0.camera.rig ?? "free";
+    commit((s) => {
+      const outside = s.camera.keys.filter((k) => k.t < startT - half || k.t > endT + half);
+      return {
+        ...s,
+        camera: {
+          ...s.camera,
+          keys: [...outside, ...keys].sort((a, b) => a.t - b.t),
+          rig: "free",
+          aim: { target: null, frame: [0, 0] },
+          flow: "continuous",
+          path: "smooth",
+          easeEnds: false,
+        },
+      };
+    });
+    const extra = [wasAimed ? "Keep aimed at was turned off" : "", rig !== "free" ? `the ${rig} rig was set to Free` : ""].filter(Boolean).join(", and ");
+    const msg = `Take kept: ${keys.length} keys from ${timecode(startT, fps)} to ${timecode(endT, fps)}. Press play to watch it${extra ? `. ${extra[0].toUpperCase()}${extra.slice(1)}, since the phone made the move` : ""}`;
+    phoneRef.current.endTake(`Take kept: ${keys.length} keys, ${timecode(startT, fps)} to ${timecode(endT, fps)}`);
+    phoneRef.current.setDriving(false);
+    setSel("camera");
+    setT(startT);
+    setNote(msg);
+  }
 
   function stopRecording() {
     const e = eng.current;
@@ -1834,7 +1935,21 @@ export function BlockingStudio({
               )}
             </div>
           )}
-          <div ref={exportRef} className="relative ml-auto">
+          {canEdit && (
+            <div ref={phoneMenuRef} className="relative ml-auto">
+              <Btn active={phoneOpen} onClick={() => { phone.start(); setPhoneOpen((v) => !v); }} title="Use your phone as the camera">
+                {phone.status !== "off" && (
+                  <span className="h-2 w-2 rounded-full" style={{ background: `var(--h-${phone.status === "live" ? "green" : "amber"})` }} />
+                )}
+                Phone camera
+              </Btn>
+              {phoneOpen && (
+                <PhonePanel phone={phone} onTake={phoneRecord}
+                  startLabel={takeStart() > 0 ? `from ${timecode(takeStart(), scene.fps)}` : "from the top"} />
+              )}
+            </div>
+          )}
+          <div ref={exportRef} className={`relative ${canEdit ? "" : "ml-auto"}`}>
             <Btn tone="primary" onClick={() => setExportOpen((v) => !v)} disabled={recording}>{recording ? "Recording…" : "Export"}</Btn>
             {exportOpen && (
               <div className="absolute right-0 top-9 z-30 w-[290px] rounded-[10px] border border-border bg-surface p-3 shadow-2xl">
@@ -1861,7 +1976,7 @@ export function BlockingStudio({
           <canvas ref={canvasRef} className="block h-full w-full" style={{ cursor: view === "camera" && canEdit ? "grab" : "default" }} />
         </div>
 
-        {describe && canEdit && !recording && (
+        {describe && canEdit && !recording && phone.takeMode === "idle" && (
           <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 flex justify-center">
             <SceneBar collapsible history={scene.asked}
               placeholder="Change the scene: add a cyclist passing behind her at 3 s, push in slower…"
@@ -1892,11 +2007,23 @@ export function BlockingStudio({
             <div className="absolute -bottom-6 left-0 right-0 flex items-center justify-between font-mono text-[11px] text-text-muted">
               <span>{body.name} · {Math.round(lens)}mm · {scene.aspect}</span>
               <span className="flex items-center gap-2">
-                {recording && <span className="flex items-center gap-1 text-red"><span className="h-2 w-2 rounded-full bg-red" />REC</span>}
+                {(recording || phone.takeMode === "rec") && <span className="flex items-center gap-1 text-red"><span className="h-2 w-2 rounded-full bg-red" />REC</span>}
                 {timecode(t, scene.fps)}
               </span>
             </div>
           </div>
+        )}
+        {phone.takeMode === "count" && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <span className="font-display text-[120px] font-bold text-white drop-shadow-lg">
+              {Math.max(1, Math.ceil((phone.take.current.until - performance.now()) / 1000))}
+            </span>
+          </div>
+        )}
+        {phone.status === "live" && phone.driving && !playing && phone.takeMode === "idle" && (
+          <p className="pointer-events-none absolute left-1/2 top-12 z-10 -translate-x-1/2 rounded-full border border-border bg-surface px-3 py-1 text-[11.5px] font-semibold text-text">
+            Your phone is driving the camera
+          </p>
         )}
         {view === "free" && (
           <p className="pointer-events-none absolute bottom-3 left-3 rounded-[6px] bg-surface px-2 py-1 text-[11px] text-text-muted">

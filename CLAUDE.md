@@ -8838,7 +8838,36 @@ the side window to the dog, out through the windshield, ending ahead.
   at 30 Hz), so the phone itself drops beats now and then: the feature needs
   a short interpolation buffer (about 50 ms) on the desk so a missed beat
   glides rather than jumps. Direct when it connects, relay as the fallback.
-  NOT BUILT: the feature itself, awaiting the operator's go.
+  THE FEATURE IS BUILT (2026-11-10, option 1: turn to aim, thumb controls
+  to travel; walking moves would need a native iPhone app with ARKit or
+  Android WebXR, discussed and deferred). In shot blocking a "Phone camera"
+  button (editors, camera toolbar) opens a QR code; the phone opens
+  /phone-camera?room=... (sign-in required, not in PUBLIC_PATHS, app/
+  phone-camera/page.tsx, dark, components/phone-cam/phone-remote.tsx) with
+  two hold-to-move pads (Move: push in/pull out/truck; Height and lens: boom
+  and zoom), Fine/Normal/Fast, Record/Stop and Recentre. The link moved to
+  components/phone-cam/link.ts (shared with the test); the desk tries direct
+  automatically once the phone appears and keeps the relay otherwise. Room ids
+  are 12 characters. The desk half is components/blocking/phone-camera.tsx
+  (usePhoneCamera + PhonePanel). WHILE THE PHONE DRIVES (and the shot is not
+  playing or exporting) the studio draws the phone's pose instead of the
+  keys: liveRef in blocking-studio, read in pose(); mouse look, wheel and fly
+  keys are off so they cannot write keys nobody sees. The phone's heading at
+  connect/Recentre becomes the camera's heading; pitch is the phone's own;
+  roll is zeroed unless "Phone roll on". Travel and zoom start from where the
+  camera stands, in its parent frame (so riding a car works). Poses play 60 ms
+  behind on the phone's clock (PoseTrack in lib/phone-cam.ts) so a skipped
+  beat glides. A TAKE counts down 3 s, plays the scene in real time from the
+  playhead (the top if near the end), samples every frame, then thinTake (RDP:
+  1.5 cm, 0.6 degrees, 1.5% lens, never more than 1 s between keys) writes the
+  keys, replacing camera keys inside the take and keeping the rest, as ONE
+  undo; the camera becomes rig Free, unaimed, Continuous, Curved, no ease at
+  the ends, and the note says what was turned off. After a take "Show the keys"
+  is on so play shows the recorded move; the phone's "Take the camera" or a new
+  Record drives again. Pure half tested in the scratchpad (wrap, interp,
+  thinning within tolerance). Verified in Chromium with a simulated phone
+  (synthetic orientation events): connect, turn, countdown, a 7 s take with a
+  push held, 14 keys kept, both layouts. NOT run on a real phone yet.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
