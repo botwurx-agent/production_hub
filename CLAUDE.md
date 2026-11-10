@@ -8830,8 +8830,15 @@ the side window to the dog, out through the windshield, ending ahead.
   answers "granted", so only an explicit "denied" counts as refused. iPhone
   Safari gives a page ORIENTATION ONLY (no position: no WebXR AR), so the
   feature would be aim by turning, move by thumb pads; Android Chrome could
-  track walking. NOT BUILT: the feature itself, pending the operator's real
-  phone numbers.
+  track walking.
+  REAL PHONE NUMBERS (operator's iPhone, 2026-11-10, 30 updates a second):
+  relay 31 ms typical, 91 ms p95, round trip 67 ms, nothing lost; direct
+  4 ms typical, 66 ms p95, round trip 8 ms, 1 lost. Both read "Feels live".
+  The p95 gap between updates was 92 to 97 ms on both links (33 ms expected
+  at 30 Hz), so the phone itself drops beats now and then: the feature needs
+  a short interpolation buffer (about 50 ms) on the desk so a missed beat
+  glides rather than jumps. Direct when it connects, relay as the fallback.
+  NOT BUILT: the feature itself, awaiting the operator's go.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
