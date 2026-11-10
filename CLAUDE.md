@@ -8813,6 +8813,25 @@ the side window to the dog, out through the windshield, ending ahead.
   before. The cost: dragging along a TRACK ROW no longer scrubs; the RULER
   (data-ruler) always scrubs. Rows carry data-row; a box overlay draws only
   once the drag has moved.
+- PHONE AS THE CAMERA: LATENCY TEST BUILT (2026-11-10, operator: the
+  feature draws attention on Instagram). /dev/phone-cam: the desk shows a QR
+  code and a 3D view the phone aims; the phone opens ?room=... and streams its
+  orientation. Two links: RELAY (a Supabase Realtime broadcast channel
+  `phonecam:<room>`, no table, no migration) and DIRECT (a WebRTC data channel,
+  unordered with no retransmits, signalled over the relay, Google STUN only, so
+  it fails across strict NATs and says so). It reports ONE-WAY pose delay, not
+  half a round trip: the desk estimates the phone's clock offset from its pings
+  (shortest-RTT sample) and ages each pose (lib/phone-cam.ts, pure, 11
+  assertions). Verdict on the 95th percentile: under 100 ms reads live.
+  Measured from a session (two tabs on one machine, so it proves the plumbing
+  rather than a phone on wifi): relay 37 ms typical, 50 ms p95, 60 updates a
+  second, nothing lost; direct 2 ms. GOTCHA: Chromium's
+  DeviceOrientationEvent.requestPermission answers "prompt" where iPhone
+  answers "granted", so only an explicit "denied" counts as refused. iPhone
+  Safari gives a page ORIENTATION ONLY (no position: no WebXR AR), so the
+  feature would be aim by turning, move by thumb pads; Android Chrome could
+  track walking. NOT BUILT: the feature itself, pending the operator's real
+  phone numbers.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
