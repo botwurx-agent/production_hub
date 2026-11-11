@@ -30,3 +30,6 @@ next-env.d.ts
 # vercel
 .vercel
 public/pdf.worker.min.mjs
+
+# Source frames for marketing films (scripts/film). Regenerated, never committed.
+/public/film-src

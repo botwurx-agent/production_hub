@@ -9714,6 +9714,44 @@ reach for it during real prep.
   photo, STL import, walk and record, click select, download and open,
   migration, both presets; production build clean (232 kB on that route).
 
+### Product tour film, 16:9, cut from real footage (2026-11-11) — BUILT
+Operator wanted a dynamic 16:9 screen-recording film for a launch post (them
+talking on one half, the film on the other). `marketing-video/
+studio-flows-tour.mp4` (1920x1080, 30fps, 75.5s, no audio) plus
+`marketing-video/studio-flows-tour-script.md` (beat sheet with a suggested
+line to say per beat).
+- THE FOOTAGE IS STOP MOTION OF THE REAL APP, not a screen recorder.
+  scripts/film/capture-tour.mjs drives the demo studio one small step at a
+  time (pointer, scroll, a video seeked frame by frame) and photographs each
+  step at 2x into `public/film-src/<take>/` (gitignored, regenerate it) with a
+  `take.json` of pointer positions. So the edit sets the pace, the picture is
+  sharp under a zoom, and the pointer is drawn by the film. `ONLY=mood,cut`
+  re-records named takes. Needs real Chrome (`/usr/bin/google-chrome`):
+  Playwright's Chromium cannot decode the H.264 hero cut.
+- THE EDIT is components/marketing/tour-film.tsx on tour-kit.tsx (camera with
+  log-space zoom, drawn pointer and click ring, Lens, Spot, Tag, Caption, Shot
+  transitions), a pure function of time like the brand videos. Positions are
+  PAGE pixels of the 1280x720 app. Preview at /dev/tour-film, render with
+  `node scripts/film/render-tour.mjs` (STILLS=ms,ms writes check frames).
+- THREE THINGS THAT COST A ROUND EACH: (1) the take manifests are read by the
+  page on the SERVER, because a fetched .json is redirected to /login by the
+  middleware and every shot then sits on its first frame, which looks like a
+  finished render; (2) footage images are keyed by src and awaited with
+  decode() before a frame is taken, or the previous picture is photographed;
+  (3) a dev server that dies mid-render leaves blank white shots, so the
+  render now stops on a failed picture. Start the dev server with a long
+  background time limit before a full render (about ten minutes).
+- THE TAKES WRITE TO THE DEMO STUDIO. The moodboard take drags a card and puts
+  it back; an early version left two cards out of place and they were reset by
+  SQL (grid is x 60/392/724, y 90/348). The schedule take lengthens a shot
+  three times and shortens it again. Nothing is posted in review. A scene
+  builder setup named "Kitchen" was added to Bright Water for the 3D shot and
+  is still there.
+- The captions are designed lines, not a transcript: real subtitles of the
+  operator's voice go on their half once they have recorded. The client portal
+  and AI pipeline shots are the existing site screenshots (the portal needs
+  the service role key, which a local server does not have).
+
 ### Next step
 NOTHING IS QUEUED FROM A BACKLOG, and that rule still holds: every item in the
 2026-08 sessions came from the operator hitting something in real use. As of
