@@ -26,8 +26,12 @@ import {
 import { parseTodo, type TodoRow } from "@/lib/board-todo";
 import { videoEmbed } from "@/lib/video-embed";
 import { parseMediaMeta, serializeMediaMeta } from "@/lib/board-media";
+import type { BoardConnection } from "@/app/(app)/boards/actions";
+// Over fetch, not Server Actions: a Server Action in flight while the canvas
+// re-renders is what crashed the app. See lib/board-api.
 import {
   moveItem,
+  moveItems,
   resizeItem,
   bringToFront,
   updateItemText,
@@ -40,8 +44,8 @@ import {
   addConnection,
   deleteConnection,
   deleteItem,
-  type BoardConnection,
-} from "@/app/(app)/boards/actions";
+  deleteItems,
+} from "@/lib/board-api";
 
 // One-time "here's what this is" hint shown the first time a card type is used,
 // anchored to the freshly created item (Milanote-style).
@@ -115,6 +119,18 @@ type DragRef = {
    * follow its ACTUAL delta, so a group cannot drift apart at the canvas edge.
    */
   others?: { id: string; x: number; y: number }[];
+  /**
+   * False until the pointer has travelled DRAG_SLOP screen pixels. A press
+   * that never gets there is a click: it selects and moves nothing, so a hand
+   * that twitches on the way down does not nudge the card by two pixels and
+   * save that.
+   */
+  live: boolean;
+  /** The move so far, in canvas units (already clamped). */
+  dx: number;
+  dy: number;
+  /** The DOM nodes being carried, looked up once when the drag goes live. */
+  els: HTMLElement[];
   corner?: ResizeCorner;
   startX: number;
   startY: number;
@@ -123,6 +139,76 @@ type DragRef = {
   origW: number;
   origH: number;
 } | null;
+
+/** Screen pixels a press must travel before it counts as a drag or a box. */
+const DRAG_SLOP = 4;
+
+/** The geometry a corner resize produces. Pure, so the frame being drawn and
+ *  the value saved on release come from one calculation. */
+function resizedGeom(
+  d: { corner?: ResizeCorner; origX: number; origY: number; origW: number; origH: number },
+  dx: number,
+  dy: number
+) {
+  // Corner-aware: a west corner moves x and shrinks w, a north corner moves y
+  // and shrinks h, so the OPPOSITE corner stays pinned. Sizes clamp first and
+  // the position is derived from the clamped size, so hitting the minimum
+  // cannot make the card creep.
+  const c = d.corner ?? "se";
+  const fromW = c === "nw" || c === "sw";
+  const fromN = c === "nw" || c === "ne";
+  const w = Math.max(80, fromW ? d.origW - dx : d.origW + dx);
+  const h = Math.max(60, fromN ? d.origH - dy : d.origH + dy);
+  const x = fromW ? Math.max(0, d.origX + (d.origW - w)) : d.origX;
+  const y = fromN ? Math.max(0, d.origY + (d.origH - h)) : d.origY;
+  return {
+    x,
+    y,
+    // At the canvas edge the position clamps, so the size is re-derived from
+    // it to keep the pinned edge pinned.
+    w: fromW ? d.origX + d.origW - x : w,
+    h: fromN ? d.origY + d.origH - y : h,
+  };
+}
+
+/** Where a line ends up for a drag to canvas point p. Pure, same reason. */
+function draggedLine(
+  d: { mode: "a" | "b" | "move" | "mid"; startX: number; startY: number; orig: LineData },
+  p: { x: number; y: number }
+): LineData {
+  const data = { ...d.orig };
+  if (d.mode === "a") {
+    data.ax = Math.round(p.x);
+    data.ay = Math.round(p.y);
+  } else if (d.mode === "b") {
+    data.bx = Math.round(p.x);
+    data.by = Math.round(p.y);
+  } else if (d.mode === "mid") {
+    // Bend: store the offset of the dragged point from the straight mid.
+    data.bendX = Math.round(p.x - (d.orig.ax + d.orig.bx) / 2);
+    data.bendY = Math.round(p.y - (d.orig.ay + d.orig.by) / 2);
+  } else {
+    const dx = p.x - d.startX;
+    const dy = p.y - d.startY;
+    data.ax = Math.round(d.orig.ax + dx);
+    data.ay = Math.round(d.orig.ay + dy);
+    data.bx = Math.round(d.orig.bx + dx);
+    data.by = Math.round(d.orig.by + dy);
+  }
+  return data;
+}
+
+type Box = { x: number; y: number; w: number; h: number };
+/** An arrow between two cards, edge to edge. */
+function connPath(a: Box, b: Box) {
+  const acx = a.x + a.w / 2;
+  const acy = a.y + a.h / 2;
+  const bcx = b.x + b.w / 2;
+  const bcy = b.y + b.h / 2;
+  const p1 = edgePoint(acx, acy, a.w / 2, a.h / 2, bcx, bcy);
+  const p2 = edgePoint(bcx, bcy, b.w / 2, b.h / 2, acx, acy);
+  return { p1, p2, d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}` };
+}
 
 // Is the point inside any rendered column (other than excludeId)? Used to drop
 // a dragged card into a column. Reads DOM rects so it ignores z-occlusion.
@@ -266,7 +352,15 @@ export function BoardCanvas({
     x1: number;
     y1: number;
   } | null>(null);
-  const marqueeRef = useRef<{ x0: number; y0: number } | null>(null);
+  const marqueeRef = useRef<{
+    x0: number;
+    y0: number;
+    /** Where the press landed on screen, to measure the slop from. */
+    sx: number;
+    sy: number;
+    /** False until the press has travelled far enough to be a box. */
+    live: boolean;
+  } | null>(null);
   /**
    * Every selectable card's box in CANVAS coords, measured ONCE when the
    * marquee starts. Read from the DOM rather than from x/y/w/h because a
@@ -294,6 +388,18 @@ export function BoardCanvas({
   const onReloadRef = useRef(onReload);
   onReloadRef.current = onReload;
   scaleRef.current = scale;
+  // What the window-level gesture handlers read. They are mounted once, so
+  // anything they closed over directly would be the first render's copy.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const connectionsRef = useRef(connections);
+  connectionsRef.current = connections;
+  const beforeChangeRef = useRef(onBeforeChange);
+  beforeChangeRef.current = onBeforeChange;
+  // True while a card is actually being carried. Hides the resize handles and
+  // the connect anchor, which are drawn from the card's stored position and
+  // would otherwise be left behind where the drag started.
+  const [carrying, setCarrying] = useState(false);
 
   // Undo support: snapshot the pre-gesture state when a drag/resize/line-drag
   // begins, but only push it to history (via onBeforeChange) once the gesture
@@ -311,61 +417,91 @@ export function BoardCanvas({
     connections: connections.map((c) => ({ ...c })),
   });
 
+  /**
+   * DRAGGING A CARD DOES NOT GO THROUGH REACT.
+   *
+   * It used to: every frame of a drag called setItems, which re-rendered the
+   * whole workspace and every card on the board, then measured every card's
+   * layout, sixty times a second. That is the choppiness on a board of
+   * photographs, and it is also what turned a slow save into a crash, since a
+   * tree that re-renders a hundred times while the router is waiting on a
+   * Server Action is exactly what React gives up on.
+   *
+   * Now the card (and its group) is carried by a CSS transform written
+   * straight onto its element, which the browser composites without laying
+   * anything out. React hears about the move ONCE, on release, when the final
+   * position goes into state and is saved. Arrows attached to a moving card
+   * are redrawn the same way, by attribute.
+   *
+   * RESIZE still renders per frame: a card's contents have to reflow to its
+   * new size, which is React's job, and it is one card rather than the board.
+   */
   useEffect(() => {
-    // Pointer events can fire at 120-240Hz on a fast mouse, far above the
-    // display's frame rate. Coalesce them through requestAnimationFrame so a
-    // drag re-renders once per frame, not once per input event.
     let raf = 0;
     let lastEvent: PointerEvent | null = null;
+
+    function redrawArrows(d: NonNullable<DragRef>) {
+      const stage = contentRef.current;
+      if (!stage) return;
+      const moving = new Set([d.id, ...(d.others ?? []).map((o) => o.id)]);
+      const box = (id: string): Box | null => {
+        const it = itemsRef.current.find((i) => i.id === id);
+        if (!it || it.parentId) return null;
+        const off = moving.has(id);
+        return { x: it.x + (off ? d.dx : 0), y: it.y + (off ? d.dy : 0), w: it.w, h: it.h };
+      };
+      for (const c of connectionsRef.current) {
+        if (!moving.has(c.fromItemId) && !moving.has(c.toItemId)) continue;
+        const a = box(c.fromItemId);
+        const b = box(c.toItemId);
+        if (!a || !b) continue;
+        stage
+          .querySelector(`path[data-conn="${CSS.escape(c.id)}"]`)
+          ?.setAttribute("d", connPath(a, b).d);
+      }
+    }
+
     function applyMove(e: PointerEvent) {
       const d = drag.current;
       if (!d) return;
       const s = scaleRef.current;
+      if (!d.live) {
+        if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < DRAG_SLOP) return;
+        d.live = true;
+        if (d.mode === "move") {
+          const stage = contentRef.current;
+          const ids = [d.id, ...(d.others ?? []).map((o) => o.id)];
+          d.els = ids
+            .map((id) =>
+              stage?.querySelector<HTMLElement>(
+                `:scope > [data-item-id="${CSS.escape(id)}"]`
+              )
+            )
+            .filter((el): el is HTMLElement => Boolean(el));
+          for (const el of d.els) el.style.willChange = "transform";
+          setCarrying(true);
+        }
+      }
       const rawX = (e.clientX - d.startX) / s;
       const rawY = (e.clientY - d.startY) / s;
-      // CLAMP THE DELTA, NOT EACH CARD. A group dragged into the canvas edge
-      // has to stay rigid: clamping every member's own position at 0 would
-      // pile them onto the edge and they would not come back apart. So the
-      // whole group stops when its leftmost (or topmost) member reaches 0.
-      // For a single card, minX is its own x and this is exactly the old
-      // Math.max(0, origX + dx).
-      const minX = Math.min(d.origX, ...(d.others ?? []).map((o) => o.x));
-      const minY = Math.min(d.origY, ...(d.others ?? []).map((o) => o.y));
-      const dx = d.mode === "move" ? Math.max(rawX, -minX) : rawX;
-      const dy = d.mode === "move" ? Math.max(rawY, -minY) : rawY;
-      const followers = d.mode === "move" ? d.others : undefined;
-      setItems((prev) =>
-        prev.map((it) => {
-          if (followers?.length) {
-            const o = followers.find((f) => f.id === it.id);
-            if (o) return { ...it, x: o.x + dx, y: o.y + dy };
-          }
-          if (it.id !== d.id) return it;
-          if (d.mode === "move") {
-            return { ...it, x: d.origX + dx, y: d.origY + dy };
-          }
-          // Corner-aware resize: a west corner moves x and shrinks w, a north
-          // corner moves y and shrinks h, so the OPPOSITE corner stays pinned.
-          // Sizes clamp first and the position is derived from the clamped
-          // size, so hitting the minimum cannot make the card creep.
-          const c = d.corner ?? "se";
-          const fromW = c === "nw" || c === "sw";
-          const fromN = c === "nw" || c === "ne";
-          const w = Math.max(80, fromW ? d.origW - dx : d.origW + dx);
-          const h = Math.max(60, fromN ? d.origH - dy : d.origH + dy);
-          const x = fromW ? Math.max(0, d.origX + (d.origW - w)) : d.origX;
-          const y = fromN ? Math.max(0, d.origY + (d.origH - h)) : d.origY;
-          return {
-            ...it,
-            x,
-            y,
-            // At the canvas edge the position clamps, so the size is re-derived
-            // from it to keep the pinned edge pinned.
-            w: fromW ? d.origX + d.origW - x : w,
-            h: fromN ? d.origY + d.origH - y : h,
-          };
-        })
-      );
+      if (d.mode === "move") {
+        // CLAMP THE DELTA, NOT EACH CARD. A group dragged into the canvas edge
+        // has to stay rigid: clamping every member's own position at 0 would
+        // pile them onto the edge and they would not come back apart. So the
+        // whole group stops when its leftmost (or topmost) member reaches 0.
+        const minX = Math.min(d.origX, ...(d.others ?? []).map((o) => o.x));
+        const minY = Math.min(d.origY, ...(d.others ?? []).map((o) => o.y));
+        d.dx = Math.max(rawX, -minX);
+        d.dy = Math.max(rawY, -minY);
+        const t = `translate3d(${d.dx}px, ${d.dy}px, 0)`;
+        for (const el of d.els) el.style.transform = t;
+        redrawArrows(d);
+        return;
+      }
+      d.dx = rawX;
+      d.dy = rawY;
+      const g = resizedGeom(d, rawX, rawY);
+      setItems((prev) => prev.map((it) => (it.id === d.id ? { ...it, ...g } : it)));
     }
     function onMove(e: PointerEvent) {
       if (!drag.current) return;
@@ -376,6 +512,19 @@ export function BoardCanvas({
         if (lastEvent) applyMove(lastEvent);
       });
     }
+    function settle(d: NonNullable<DragRef>) {
+      for (const el of d.els) {
+        el.style.transform = "";
+        el.style.willChange = "";
+      }
+      if (d.mode === "move" && d.live) setCarrying(false);
+    }
+    function pushBefore() {
+      if (beforeRef.current) {
+        beforeChangeRef.current?.(beforeRef.current);
+        beforeRef.current = null;
+      }
+    }
     function onUp(e: PointerEvent) {
       const d = drag.current;
       if (!d) return;
@@ -383,79 +532,113 @@ export function BoardCanvas({
         cancelAnimationFrame(raf);
         raf = 0;
       }
-      // Apply the release point exactly, so the persisted position can never
+      // Apply the release point exactly, so the saved position can never
       // trail the cursor by a coalesced frame.
       applyMove(e);
       drag.current = null;
-      // Did the pointer actually travel? A plain click (select) must not persist
-      // a no-op or record a junk history step that undo can't visibly reverse.
-      const s = scaleRef.current;
-      const moved =
-        Math.abs((e.clientX - d.startX) / s) > 0.5 ||
-        Math.abs((e.clientY - d.startY) / s) > 0.5;
+      settle(d);
+      // A press that never travelled is a click: it selected the card and
+      // must not save a no-op or record an undo step nothing visibly reverses.
+      if (!d.live) {
+        beforeRef.current = null;
+        return;
+      }
 
       if (d.mode === "resize") {
-        if (!moved) {
+        const g = resizedGeom(d, d.dx, d.dy);
+        if (g.w === d.origW && g.h === d.origH && g.x === d.origX && g.y === d.origY) {
           beforeRef.current = null;
           return;
         }
-        if (beforeRef.current) {
-          onBeforeChange?.(beforeRef.current);
-          beforeRef.current = null;
-        }
-        setItems((prev) => {
-          const cur = prev.find((x) => x.id === d.id);
-          if (cur) {
-            void resizeItem(cur.id, cur.w, cur.h);
-            // A north or west corner moved the card while resizing it, so the
-            // position persists too or a reload snaps it back.
-            if (cur.x !== d.origX || cur.y !== d.origY) {
-              void moveItem(cur.id, cur.x, cur.y);
-            }
-          }
-          return prev;
-        });
+        pushBefore();
+        void resizeItem(d.id, g.w, g.h);
+        // A north or west corner moved the card while resizing it, so the
+        // position is saved too or a reload snaps it back.
+        if (g.x !== d.origX || g.y !== d.origY) void moveItem(d.id, g.x, g.y);
         return;
       }
-      // Move: if dropped over a column, file it into that column instead.
+
+      // Move: dropped over a column, the card is filed into it instead.
       // Never for a GROUP drag: filing several loose cards into a column at
       // once is a different action from moving them, and doing it silently
       // because the drop happened to land over one is not what was asked.
       const colId =
-        moved && d.kind !== "column" && !d.others?.length
+        d.kind !== "column" && !d.others?.length
           ? columnAtPoint(e.clientX, e.clientY, d.id)
           : null;
       if (colId) {
-        if (beforeRef.current) {
-          onBeforeChange?.(beforeRef.current);
-          beforeRef.current = null;
-        }
+        pushBefore();
+        // Shown in the column at once; the reload then confirms its order.
+        setItems((prev) => {
+          const last = prev.reduce(
+            (m, p) => (p.parentId === colId ? Math.max(m, p.sort) : m),
+            -1
+          );
+          return prev.map((p) =>
+            p.id === d.id ? { ...p, parentId: colId, sort: last + 1 } : p
+          );
+        });
         void attachToColumn(d.id, colId).then(() => onReloadRef.current());
         return;
       }
-      if (!moved) {
+      if (d.dx === 0 && d.dy === 0) {
         beforeRef.current = null;
         return;
       }
-      if (beforeRef.current) {
-        onBeforeChange?.(beforeRef.current);
-        beforeRef.current = null;
+      pushBefore();
+      const moves = [
+        { id: d.id, x: d.origX + d.dx, y: d.origY + d.dy },
+        ...(d.others ?? []).map((o) => ({ id: o.id, x: o.x + d.dx, y: o.y + d.dy })),
+      ];
+      const at = new Map(moves.map((m) => [m.id, m]));
+      setItems((prev) =>
+        prev.map((it) => {
+          const m = at.get(it.id);
+          return m ? { ...it, x: m.x, y: m.y } : it;
+        })
+      );
+      if (moves.length === 1) void moveItem(moves[0].id, moves[0].x, moves[0].y);
+      else void moveItems(moves);
+    }
+    // The release can be lost: the pointer is cancelled (a touch turned into a
+    // scroll, the OS took the gesture) or the window loses focus mid-drag.
+    // Without this the card stayed stuck to a cursor with no button held.
+    function onCancel() {
+      const d = drag.current;
+      if (!d) return;
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
       }
-      setItems((prev) => {
-        const ids = [d.id, ...(d.others ?? []).map((o) => o.id)];
-        for (const id of ids) {
-          const cur = prev.find((x) => x.id === id);
-          if (cur) void moveItem(cur.id, cur.x, cur.y);
-        }
-        return prev;
-      });
+      drag.current = null;
+      settle(d);
+      beforeRef.current = null;
+      if (d.mode === "resize" && d.live) {
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === d.id
+              ? { ...it, x: d.origX, y: d.origY, w: d.origW, h: d.origH }
+              : it
+          )
+        );
+      }
+      // Arrows were redrawn by attribute; put them back where state has them.
+      if (d.mode === "move" && d.live) {
+        d.dx = 0;
+        d.dy = 0;
+        redrawArrows(d);
+      }
     }
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("blur", onCancel);
     return () => {
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("blur", onCancel);
     };
   }, [setItems]);
 
@@ -522,17 +705,32 @@ export function BoardCanvas({
     return () => window.removeEventListener("keydown", onKey);
   }, [multi]);
 
-  // Drawing the marquee. Listeners live on the window so the box keeps
-  // following a cursor that has left the canvas, and are only mounted while a
-  // box is actually being drawn.
-  const marqueeOn = marquee !== null;
+  /**
+   * Drawing the marquee. Listeners live on the window so the box keeps
+   * following a cursor that has left the canvas.
+   *
+   * A PRESS IS NOT A BOX UNTIL IT HAS TRAVELLED. Clicking empty canvas is how
+   * you let go of a card, and it used to start a box on the spot: a still
+   * click flashed a two-pixel square, and a hand that drifted a few pixels
+   * onto the card it had just deselected selected it again as a "group" of
+   * one, ring and all. Now nothing is drawn or selected inside DRAG_SLOP.
+   *
+   * AND IT ALWAYS ENDS. A lost release (pointer cancelled, window blurred, the
+   * button let go outside the browser) used to leave the box stuck to the
+   * cursor, so it ends on any of those and on a move with no button held.
+   */
   useEffect(() => {
-    if (!marqueeOn) return;
+    if (readOnly) return;
     let raf = 0;
     let last: PointerEvent | null = null;
     function apply(e: PointerEvent) {
       const o = marqueeRef.current;
       if (!o) return;
+      if (!o.live) {
+        if (Math.hypot(e.clientX - o.sx, e.clientY - o.sy) < DRAG_SLOP) return;
+        o.live = true;
+        measureForMarquee();
+      }
       const p = canvasCoords(e.clientX, e.clientY);
       setMarquee({ x0: o.x0, y0: o.y0, x1: p.x, y1: p.y });
       const box = {
@@ -550,9 +748,47 @@ export function BoardCanvas({
           b.y < box.y + box.h &&
           b.y + b.h > box.y
       );
-      setMulti(new Set(hit.map((b) => b.id)));
+      setMulti((prev) =>
+        prev.size === hit.length && hit.every((b) => prev.has(b.id))
+          ? prev
+          : new Set(hit.map((b) => b.id))
+      );
+    }
+    function end(e?: PointerEvent) {
+      const o = marqueeRef.current;
+      if (!o) return;
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      if (e && o.live) apply(e);
+      marqueeRef.current = null;
+      if (!o.live) return;
+      setMarquee(null);
+      // A box that caught exactly ONE card is just a selection of that card:
+      // it gets the card's own editor in the rail rather than a "1 selected"
+      // group bar whose only offer is Delete.
+      if (e) {
+        const p = canvasCoords(e.clientX, e.clientY);
+        const x = Math.min(o.x0, p.x);
+        const y = Math.min(o.y0, p.y);
+        const w = Math.abs(p.x - o.x0);
+        const h = Math.abs(p.y - o.y0);
+        const hit = marqueeBoxes.current.filter(
+          (b) => b.x < x + w && b.x + b.w > x && b.y < y + h && b.y + b.h > y
+        );
+        if (hit.length === 1) {
+          setMulti(new Set());
+          const only = itemsRef.current.find((i) => i.id === hit[0].id);
+          if (only?.kind === "line") onSelectLine(only.id);
+          else setSelected(hit[0].id);
+        }
+      }
     }
     function onMove(e: PointerEvent) {
+      if (!marqueeRef.current) return;
+      // No button held means the release happened somewhere we never heard.
+      if (e.buttons === 0) return end();
       last = e;
       if (raf) return;
       raf = requestAnimationFrame(() => {
@@ -560,60 +796,34 @@ export function BoardCanvas({
         if (last) apply(last);
       });
     }
-    function onUp(e: PointerEvent) {
-      if (raf) {
-        cancelAnimationFrame(raf);
-        raf = 0;
-      }
-      apply(e);
-      marqueeRef.current = null;
-      setMarquee(null);
-    }
+    const onUp = (e: PointerEvent) => end(e);
+    const onLost = () => end();
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onLost);
+    window.addEventListener("blur", onLost);
     return () => {
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onLost);
+      window.removeEventListener("blur", onLost);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [marqueeOn]);
+  }, [readOnly]);
 
-  // Dragging a line's endpoint or whole body (rAF-coalesced like card drags).
+  // Dragging a line's endpoint or whole body (one render per frame, of one
+  // small SVG; lines are few and cheap).
   useEffect(() => {
     let raf = 0;
     let lastEvent: PointerEvent | null = null;
+    let lastText: string | null = null;
     function applyLine(e: PointerEvent) {
       const d = lineDrag.current;
       if (!d) return;
-      const p = canvasCoords(e.clientX, e.clientY);
-      setItems((prev) =>
-        prev.map((it) => {
-          if (it.id !== d.id) return it;
-          const data = { ...d.orig };
-          if (d.mode === "a") {
-            data.ax = Math.round(p.x);
-            data.ay = Math.round(p.y);
-          } else if (d.mode === "b") {
-            data.bx = Math.round(p.x);
-            data.by = Math.round(p.y);
-          } else if (d.mode === "mid") {
-            // Bend: store the offset of the dragged point from the straight mid.
-            const midx = (d.orig.ax + d.orig.bx) / 2;
-            const midy = (d.orig.ay + d.orig.by) / 2;
-            data.bendX = Math.round(p.x - midx);
-            data.bendY = Math.round(p.y - midy);
-          } else {
-            const dx = p.x - d.startX;
-            const dy = p.y - d.startY;
-            data.ax = Math.round(d.orig.ax + dx);
-            data.ay = Math.round(d.orig.ay + dy);
-            data.bx = Math.round(d.orig.bx + dx);
-            data.by = Math.round(d.orig.by + dy);
-          }
-          return { ...it, text: JSON.stringify(data) };
-        })
-      );
+      const text = JSON.stringify(draggedLine(d, canvasCoords(e.clientX, e.clientY)));
+      lastText = text;
+      setItems((prev) => prev.map((it) => (it.id === d.id ? { ...it, text } : it)));
     }
     function move(e: PointerEvent) {
       if (!lineDrag.current) return;
@@ -624,31 +834,41 @@ export function BoardCanvas({
         if (lastEvent) applyLine(lastEvent);
       });
     }
-    function up(e: PointerEvent) {
+    function up(e: PointerEvent | null) {
       const d = lineDrag.current;
       if (!d) return;
       if (raf) {
         cancelAnimationFrame(raf);
         raf = 0;
       }
-      applyLine(e);
+      if (e) applyLine(e);
       lineDrag.current = null;
+      const text = lastText;
+      lastText = null;
+      // A click on a line selects it. Only a line that actually changed is
+      // saved or recorded as an undo step.
+      if (!text || text === JSON.stringify(d.orig)) {
+        beforeRef.current = null;
+        return;
+      }
       if (beforeRef.current) {
-        onBeforeChange?.(beforeRef.current);
+        beforeChangeRef.current?.(beforeRef.current);
         beforeRef.current = null;
       }
-      setItems((prev) => {
-        const cur = prev.find((x) => x.id === d.id);
-        if (cur?.text) void updateItemText(cur.id, cur.text);
-        return prev;
-      });
+      void updateItemText(d.id, text);
     }
+    const onUp = (e: PointerEvent) => up(e);
+    const onLost = () => up(null);
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onLost);
+    window.addEventListener("blur", onLost);
     return () => {
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onLost);
+      window.removeEventListener("blur", onLost);
     };
   }, [setItems]);
 
@@ -915,6 +1135,10 @@ export function BoardCanvas({
       kind: it.kind,
       mode: "move",
       others,
+      live: false,
+      dx: 0,
+      dy: 0,
+      els: [],
       startX: e.clientX,
       startY: e.clientY,
       origX: it.x,
@@ -950,6 +1174,10 @@ export function BoardCanvas({
       kind: it.kind,
       mode: "resize",
       corner,
+      live: false,
+      dx: 0,
+      dy: 0,
+      els: [],
       startX: e.clientX,
       startY: e.clientY,
       origX: it.x,
@@ -981,22 +1209,29 @@ export function BoardCanvas({
     );
     setSelected(null);
     setMulti(new Set());
-    void Promise.all(ids.map((id) => deleteItem(id))).then(() =>
+    void deleteItems(ids).then(() =>
       // One reload at the end: deleting a card also deletes its arrows, which
       // live in their own table and are not in local state.
       onReloadRef.current()
     );
   }
   /**
-   * Press on empty canvas: measure every card once, then let the effect above
-   * follow the cursor. Nothing is selected yet, so a plain click (press and
-   * release without moving) ends with an empty box and clears the selection,
-   * which is the behaviour the background handler had before.
+   * Press on empty canvas: remember where, and nothing more. The window
+   * listeners above turn it into a box only once it has travelled, so a plain
+   * click ends here having cleared the selection and drawn nothing.
    */
   function startMarquee(e: React.PointerEvent) {
+    const p = canvasCoords(e.clientX, e.clientY);
+    marqueeRef.current = { x0: p.x, y0: p.y, sx: e.clientX, sy: e.clientY, live: false };
+  }
+  /** Measure every selectable card once, as the box starts. */
+  function measureForMarquee() {
     const rect = contentRef.current?.getBoundingClientRect();
     if (!rect) return;
     const sc = scaleRef.current;
+    const filed = new Set(
+      itemsRef.current.filter((i) => i.parentId).map((i) => i.id)
+    );
     marqueeBoxes.current = Array.from(
       contentRef.current?.querySelectorAll<HTMLElement>("[data-item-id]") ?? []
     )
@@ -1013,10 +1248,7 @@ export function BoardCanvas({
       // A card filed inside a column moves with its column, so selecting it
       // separately would let a marquee drag pull it out of the column it is
       // in. Only top-level cards join a group.
-      .filter((b) => !items.find((i) => i.id === b.id)?.parentId);
-    const p = canvasCoords(e.clientX, e.clientY);
-    marqueeRef.current = { x0: p.x, y0: p.y };
-    setMarquee({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+      .filter((b) => !filed.has(b.id));
   }
   // Checklist edits. persist=false for keystrokes (persisted on blur); true for
   // discrete actions (toggle / add / remove).
@@ -1324,13 +1556,8 @@ export function BoardCanvas({
           const a = byId.get(c.fromItemId);
           const b = byId.get(c.toItemId);
           if (!a || !b) return null;
-          const acx = a.x + a.w / 2;
-          const acy = a.y + a.h / 2;
-          const bcx = b.x + b.w / 2;
-          const bcy = b.y + b.h / 2;
-          const p1 = edgePoint(acx, acy, a.w / 2, a.h / 2, bcx, bcy);
-          const p2 = edgePoint(bcx, bcy, b.w / 2, b.h / 2, acx, acy);
-          return { id: c.id, p1, p2, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
+          const { p1, p2, d } = connPath(a, b);
+          return { id: c.id, d, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
         })
         .filter((s): s is NonNullable<typeof s> => Boolean(s)),
     [connections, byId]
@@ -1435,8 +1662,25 @@ export function BoardCanvas({
               // could not see and did not ask for.
               if (!readOnly && e.button === 0) startMarquee(e);
             }}
+            onMouseDown={(e) => {
+              // A press on empty canvas must not start the BROWSER'S own
+              // selection: dragging a box then painted every image and caption
+              // it crossed in the system highlight colour. Cancelling the
+              // default also cancels the focus change, so whatever was being
+              // typed in is blurred by hand, which is what saves it.
+              //
+              // The same goes for a press that has just armed a card drag:
+              // carrying a link card by its title used to select the title.
+              // startMove never arms on a field, a button or a link, so this
+              // cannot take focus away from something being typed in.
+              if (readOnly) return;
+              if (e.target !== e.currentTarget && !drag.current) return;
+              e.preventDefault();
+              (document.activeElement as HTMLElement | null)?.blur?.();
+              window.getSelection()?.removeAllRanges();
+            }}
             onPointerMove={(e) => {
-              if (readOnly || drag.current || connectFrom) return;
+              if (readOnly || drag.current || connectFrom || marqueeRef.current) return;
               // The browser already hit-tested for us: the event target is the
               // topmost element under the cursor. Walking up to the owning card
               // is O(depth); scanning every card's DOM rect per mouse move was
@@ -1466,7 +1710,8 @@ export function BoardCanvas({
                 return (
                   <path
                     key={s.id}
-                    d={`M ${s.p1.x} ${s.p1.y} L ${s.p2.x} ${s.p2.y}`}
+                    data-conn={s.id}
+                    d={s.d}
                     stroke={sel ? "var(--accent)" : "var(--border-strong)"}
                     strokeWidth={sel ? 3 : 2}
                     fill="none"
@@ -2260,7 +2505,7 @@ export function BoardCanvas({
                 next to it on a short card). The invisible per-card hotspot
                 stays as an extra hit area; these are the discoverable ones. */}
             {(() => {
-              if (readOnly || connectFrom) return null;
+              if (readOnly || connectFrom || carrying) return null;
               const id = hovered ?? selected;
               const it = id ? byId.get(id) : null;
               // Lines drag by their endpoints, and a column child is not
@@ -2330,7 +2575,7 @@ export function BoardCanvas({
             {/* Connect handle: appears on the hovered or selected card; drag it
                 onto another card to draw an arrow. */}
             {(() => {
-              const anchorId = connectFrom ? null : hovered ?? selected;
+              const anchorId = connectFrom || carrying ? null : hovered ?? selected;
               const sel = anchorId ? byId.get(anchorId) : null;
               if (!sel) return null;
               return (
@@ -2577,17 +2822,37 @@ function NoteBody({
   editable?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // What is already saved, so a note that was only clicked into does not
+  // write a row and push an undo step that undoes nothing. Compared against
+  // the element's own HTML rather than `initial`: the browser normalises
+  // markup on the way in, so the string we set is not always the one we read.
+  const saved = useRef("");
+  // Seeded on mount, and again when the stored text changes UNDER it (an undo,
+  // a redo, a reload) while nobody is typing in it. Without the second half an
+  // undone edit stayed on screen, and the next blur quietly saved it back.
   useEffect(() => {
-    if (ref.current) ref.current.innerHTML = initial || "";
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemId]);
+    const el = ref.current;
+    if (!el) return;
+    const next = initial || "";
+    if (document.activeElement === el || el.innerHTML === next) {
+      if (!saved.current) saved.current = el.innerHTML;
+      return;
+    }
+    el.innerHTML = next;
+    saved.current = el.innerHTML;
+  }, [itemId, initial]);
   return (
     <div
       ref={ref}
       contentEditable={editable}
       suppressContentEditableWarning
       onFocus={onFocus}
-      onBlur={() => onSave(ref.current?.innerHTML ?? "")}
+      onBlur={() => {
+        const html = ref.current?.innerHTML ?? "";
+        if (html === saved.current) return;
+        saved.current = html;
+        onSave(html);
+      }}
       data-placeholder="Note…"
       className={`rte min-h-0 w-full flex-1 overflow-auto px-2 pb-2 text-sm outline-none ${editable ? "cursor-text" : ""}`}
       style={{ color }}
@@ -2614,10 +2879,17 @@ function HeadingBody({
   editable?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const saved = useRef(initial || "");
+  // Re-seeded when the stored text changes under it (undo, redo, reload),
+  // never while it is being typed in. Same reason as the note body.
   useEffect(() => {
-    if (ref.current) ref.current.textContent = initial || "";
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemId]);
+    const el = ref.current;
+    if (!el) return;
+    const next = initial || "";
+    if (document.activeElement === el || el.textContent === next) return;
+    el.textContent = next;
+    saved.current = next;
+  }, [itemId, initial]);
   return (
     <div
       ref={ref}
@@ -2625,7 +2897,13 @@ function HeadingBody({
       suppressContentEditableWarning
       onFocus={onFocus}
       onPointerDown={(e) => e.stopPropagation()}
-      onBlur={() => onSave(ref.current?.textContent ?? "")}
+      onBlur={() => {
+        // Only a changed heading is saved or recorded for undo.
+        const text = ref.current?.textContent ?? "";
+        if (text === saved.current) return;
+        saved.current = text;
+        onSave(text);
+      }}
       data-placeholder="Heading"
       className={`ce-ph w-full font-extrabold leading-tight tracking-tight outline-none ${editable ? "cursor-text" : ""}`}
       style={css}

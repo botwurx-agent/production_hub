@@ -4615,6 +4615,55 @@ reason the final shape is right.
   heading fill; this is the second time in two sessions, so: DO NOT RUN A
   PRODUCTION BUILD WHILE A DEV SERVER IS UP.
 
+### Moodboard: crash, choppy drag, stray selection box (2026-11-11) — FIXED
+Operator: dragging an image is choppy, "sometimes it crashes", and clicking
+the board to let go of an image "draws a highlight square". All three were
+reproduced in headless Chromium on a throwaway fixture before anything changed.
+- THE CRASH IS REACT #482 AGAIN, AND THE REAL CAUSE IS NOW KNOWN. It is not
+  revalidatePath (the earlier guess, which only made it likelier). A Server
+  Action in flight parks a pending promise in Next's router; if the tree keeps
+  re-rendering while it is pending (about 100 times, under two seconds of a
+  drag), React throws #482 to the GLOBAL boundary. Reproduced exactly: drag
+  cards while a save takes 2.5s. RULE: never re-render per frame while a
+  Server Action can be pending, anywhere in the app. The scene builder, shot
+  blocking and pipeline map are worth checking against it.
+- SO THE BOARD DOES NOT USE SERVER ACTIONS FOR ITEMS ANY MORE. The same
+  functions in app/(app)/boards/actions.ts are called over fetch through
+  app/api/boards/rpc/route.ts (allowlist in lib/board-rpc-names.ts, origin
+  check, same requireStudioContext + RLS inside each function) by
+  lib/board-api.ts, which keeps calls in order on its own chain and toasts a
+  failed save instead of losing it silently. The five BOARD-level actions
+  (create, rename, background, project, delete) stay Server Actions because
+  they need revalidation. A new item-level function must be added to
+  lib/board-rpc-names or the editor cannot call it.
+- DRAGGING A CARD DOES NOT GO THROUGH REACT. Every frame used to setItems,
+  re-rendering the whole workspace and every card and re-measuring layout.
+  Now the card and its group are carried by a CSS transform written on their
+  elements, arrows are redrawn by attribute (path[data-conn]), and state is
+  set ONCE on release (456 state updates became 22 in the same test). Resize
+  handles and the connect anchor hide while a card is carried. Resize and line
+  drags still render per frame (one card). Group move and group delete are one
+  request each (moveItems, deleteItems).
+- SERVER CALLS WERE BEING MADE INSIDE setItems UPDATERS, which run during
+  render (twice in dev). Geometry is now computed by pure functions
+  (resizedGeom, draggedLine) and saved outside the updater.
+- THE SELECTION BOX: a press on empty canvas became a box immediately, so a
+  still click flashed a square, and a few pixels of drift onto the card just
+  deselected re-selected it as a "1 selected" group with a ring. A press is
+  now a box only after DRAG_SLOP (4 screen px); the same slop applies to card
+  drags, so a click no longer nudges a card. A box that catches one card is an
+  ordinary selection. Drags and boxes end on pointercancel, window blur and a
+  move with no button held (a lost release used to leave them stuck to the
+  cursor). A press on empty canvas or on a card being dragged no longer starts
+  the browser's own text selection.
+- ALSO: a note or heading that was only clicked into no longer saves or pushes
+  an undo step, and both re-seed when their stored text changes under them, so
+  an undone text edit actually leaves the screen. Unused updateNote deleted.
+- Verified: slow-save drag no longer crashes; on the real demo studio a drag
+  saved over the new route, survived a reload and was moved back; arrows,
+  corner resize, group drag and one-card box checked; production build clean.
+  NOT verified on the operator's own boards with real photographs.
+
 ### Board headings get a fill (no migration) — BUILT
 Operator: "our moodboard feature doesn't allow us to change the header fill in
 color, we only have the option to change the text." Exactly right. The heading

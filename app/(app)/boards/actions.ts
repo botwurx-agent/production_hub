@@ -23,6 +23,12 @@ import type { Database, Board } from "@/lib/database.types";
 import { logWrite } from "@/lib/log";
 import { finalizeUpload } from "@/lib/upload-ticket";
 
+// HOW THESE ARE CALLED. The five board-level functions (create, rename,
+// background, project, delete) are called as Server Actions. Everything else
+// is called by the editor over fetch, through /api/boards/rpc and
+// lib/board-api, NOT as a Server Action: a Server Action in flight while the
+// canvas re-renders crashed the app (React #482). A new item-level function
+// must be added to lib/board-rpc-names or the editor cannot reach it.
 export type BoardState = { error?: string } | null;
 /** A board card can be scaled up on the canvas, so it gets more pixels. */
 const BOARD_IMAGE_WIDTH = 1200;
@@ -1314,6 +1320,38 @@ export async function moveItem(id: string, x: number, y: number): Promise<void> 
   );
 }
 
+/**
+ * Move several cards in ONE request. A group drag used to send one call per
+ * card, each waiting for the last, so twelve cards meant twelve round trips
+ * and a reload in the middle could catch the group half moved.
+ */
+export async function moveItems(
+  moves: { id: string; x: number; y: number }[]
+): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const clean = (Array.isArray(moves) ? moves : [])
+    .filter(
+      (m) =>
+        m &&
+        typeof m.id === "string" &&
+        Number.isFinite(m.x) &&
+        Number.isFinite(m.y)
+    )
+    .slice(0, 500);
+  await Promise.all(
+    clean.map((m) =>
+      logWrite(
+        "moveItems/board_items",
+        supabase
+          .from("board_items")
+          .update({ x: Math.max(0, m.x), y: Math.max(0, m.y) })
+          .eq("id", m.id)
+      )
+    )
+  );
+}
+
 export async function resizeItem(id: string, w: number, h: number): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
@@ -1333,25 +1371,26 @@ export async function bringToFront(id: string, boardId: string): Promise<void> {
   );
 }
 
-export async function updateNote(
-  id: string,
-  text: string,
-  hue: string
-): Promise<void> {
-  await requireStudioContext();
-  const supabase = createClient();
-  await logWrite(
-    "updateNote/board_items",
-    supabase.from("board_items").update({ text, hue }).eq("id", id)
-  );
-}
-
 export async function deleteItem(id: string): Promise<void> {
   await requireStudioContext();
   const supabase = createClient();
   await logWrite(
     "deleteItem/board_items",
     supabase.from("board_items").delete().eq("id", id)
+  );
+}
+
+/** Delete several cards in one statement (a group selection). */
+export async function deleteItems(ids: string[]): Promise<void> {
+  await requireStudioContext();
+  const supabase = createClient();
+  const clean = (Array.isArray(ids) ? ids : [])
+    .filter((id) => typeof id === "string")
+    .slice(0, 500);
+  if (clean.length === 0) return;
+  await logWrite(
+    "deleteItems/board_items",
+    supabase.from("board_items").delete().in("id", clean)
   );
 }
 

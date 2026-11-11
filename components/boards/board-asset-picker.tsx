@@ -4,11 +4,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  getProjectAssetsForBoard,
-  addAssetItems,
-  type PickableAsset,
-} from "@/app/(app)/boards/actions";
+import type { PickableAsset } from "@/app/(app)/boards/actions";
+import { getProjectAssetsForBoard, addAssetItems } from "@/lib/board-api";
 
 type Proj = { id: string; title: string; assets: PickableAsset[] };
 

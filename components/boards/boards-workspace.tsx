@@ -27,6 +27,11 @@ import {
   deleteBoard,
   setBoardProject,
   setBoardBackground,
+  type BoardItemView,
+  type BoardConnection,
+} from "@/app/(app)/boards/actions";
+// Item-level calls go over fetch, not Server Actions. See lib/board-api.
+import {
   getBoardData,
   registerUploadedBoardItems,
   addNote,
@@ -48,9 +53,7 @@ import {
   createBoardShare,
   revokeBoardShare,
   restoreBoardState,
-  type BoardItemView,
-  type BoardConnection,
-} from "@/app/(app)/boards/actions";
+} from "@/lib/board-api";
 import { useBoardHistory } from "@/lib/use-board-history";
 import { toast } from "@/components/ui/toast";
 import {

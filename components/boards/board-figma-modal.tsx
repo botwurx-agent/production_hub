@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadFigmaFrames, type FigmaFrameCard } from "@/app/(app)/projects/[id]/figma-actions";
-import { addFigmaItems } from "@/app/(app)/boards/actions";
+import { addFigmaItems } from "@/lib/board-api";
 
 export function BoardFigmaModal({
   boardId,
