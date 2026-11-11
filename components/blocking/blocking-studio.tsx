@@ -216,7 +216,7 @@ export function BlockingStudio({
   const exportRef = useOutside(exportOpen, () => setExportOpen(false));
   // The phone as the camera (components/blocking/phone-camera.tsx). While it
   // drives, the studio draws its pose instead of the keys; a take records it.
-  const phone = usePhoneCamera({ record: () => phoneRecord(), stop: () => phoneStop() });
+  const phone = usePhoneCamera({ record: () => phoneRecord(), stop: () => phoneStop(), key: () => phoneKey() });
   const phoneRef = useRef(phone);
   phoneRef.current = phone;
   const liveRef = useRef<LivePose | null>(null);
@@ -399,6 +399,9 @@ export function BlockingStudio({
 
   const insertKey = useCallback(() => {
     const track = selRef.current ?? "camera";
+    // While the phone drives, the camera's key is where the phone points,
+    // not where the old keys would have put it.
+    if (track === "camera" && liveRef.current) { phoneKey(); return; }
     commit((s) => {
       const at = snap(tRef.current, s.fps);
       const cur = posedAt(s, track, at);
@@ -1718,6 +1721,38 @@ export function BlockingStudio({
     if (!phoneRef.current.beginTake(takeStart())) setNote("The phone is not sending yet");
   }
 
+  /**
+   * One camera keyframe at the playhead from where the phone points. Aim
+   * lock and a tripod would override the pose just keyed, so they come off
+   * (and the note says so), the same rule a take follows.
+   */
+  function phoneKey() {
+    const lv = liveRef.current;
+    if (!canEdit) return;
+    if (!lv) { setNote("The phone is not driving the camera"); phoneRef.current.say("Take the camera first, then set a keyframe"); return; }
+    const s0 = sceneRef.current;
+    const at = snap(tRef.current, s0.fps);
+    const wasAimed = !!s0.camera.aim.target;
+    const onTripod = holdsPosition(s0.camera.rig);
+    commit((s) => {
+      const ex = keyAt(s.camera.keys, at, s.fps);
+      const key: CamKey = { t: at, p: [...lv.p] as Vec3, r: [...lv.r] as Vec3, lens: lv.lens, ease: ex?.ease ?? "smooth" };
+      return {
+        ...s,
+        camera: {
+          ...s.camera,
+          keys: setKey(s.camera.keys, key, s.fps),
+          ...(wasAimed ? { aim: { target: null, frame: [0, 0] as [number, number] } } : {}),
+          ...(onTripod ? { rig: "free" as const } : {}),
+        },
+      };
+    });
+    setSelectedKey({ track: "camera", t: at });
+    const off = [wasAimed ? "Keep aimed at was turned off" : "", onTripod ? "the tripod was set to Free" : ""].filter(Boolean).join(", and ");
+    setNote(`Keyframe set at ${timecode(at, s0.fps)} from the phone${off ? `. ${off}, so the key holds where the phone pointed` : ""}`);
+    phoneRef.current.say(`Keyframe set at ${timecode(at, s0.fps)}`);
+  }
+
   function phoneStop() {
     const tk = phoneRef.current.take.current;
     if (tk.mode === "rec") finishTake();
@@ -1944,7 +1979,7 @@ export function BlockingStudio({
                 Phone camera
               </Btn>
               {phoneOpen && (
-                <PhonePanel phone={phone} onTake={phoneRecord}
+                <PhonePanel phone={phone} onTake={phoneRecord} onKey={phoneKey} keyLabel={timecode(snap(t, scene.fps), scene.fps)}
                   startLabel={takeStart() > 0 ? `from ${timecode(takeStart(), scene.fps)}` : "from the top"} />
               )}
             </div>

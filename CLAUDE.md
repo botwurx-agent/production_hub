@@ -8868,6 +8868,18 @@ the side window to the dog, out through the windshield, ending ahead.
   thinning within tolerance). Verified in Chromium with a simulated phone
   (synthetic orientation events): connect, turn, countdown, a 7 s take with a
   push held, 14 keys kept, both layouts. NOT run on a real phone yet.
+  SINGLE KEYFRAMES FROM THE PHONE (2026-11-11, operator asked how driving
+  relates to keyframes). Driving writes NOTHING; only a take or a set key
+  does. "Set keyframe" on the phone (cmd "key"), "Set a keyframe at <time>"
+  in the desk panel, and the timeline's Keyframe button / I with the camera
+  selected all key the PHONE'S pose at the playhead while it drives
+  (phoneKey in blocking-studio; insertKey routes to it when liveRef is set).
+  Before this, I keyed where the old keys put the camera, not where the phone
+  pointed. Like a take, it turns Keep aimed at off and a tripod to Free (an
+  aim or a tripod would override the pose just keyed) and the note says so;
+  the phone shows "Keyframe set at ..." via say(). So keyframing by hand
+  works: move the playhead, aim, set, repeat. Verified in Chromium with a
+  simulated phone.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone

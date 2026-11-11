@@ -53,7 +53,7 @@ export type Take = {
   samples: TakeSample[];
 };
 
-export function usePhoneCamera(handlers: { record: () => void; stop: () => void }) {
+export function usePhoneCamera(handlers: { record: () => void; stop: () => void; key: () => void }) {
   const [room, setRoom] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [url, setUrl] = useState("");
@@ -96,6 +96,7 @@ export function usePhoneCamera(handlers: { record: () => void; stop: () => void 
     else if (c === "drive") setDriving(true);
     else if (c === "record") handlersRef.current.record();
     else if (c === "stop") handlersRef.current.stop();
+    else if (c === "key") handlersRef.current.key();
   };
 
   const link = useLink(room, "desk", (m: Msg) => {
@@ -243,6 +244,9 @@ export function usePhoneCamera(handlers: { record: () => void; stop: () => void 
     return { samples, startT };
   }, []);
 
+  /** A line for the phone to show (what the last press did). */
+  const say = useCallback((text: string) => { line.current = text; }, []);
+
   const status = useMemo(() => {
     if (!room) return "off" as const;
     if (link.status === "error") return "error" as const;
@@ -254,14 +258,14 @@ export function usePhoneCamera(handlers: { record: () => void; stop: () => void 
 
   return {
     room, qr, url, status, link, delay, driving, setDriving, level, setLevel, takeMode,
-    start, end, active, frame, recentre, beginTake, endTake, take,
+    start, end, active, frame, recentre, beginTake, endTake, take, say,
   };
 }
 
 export type PhoneCamera = ReturnType<typeof usePhoneCamera>;
 
 /** The panel under the toolbar's Phone button. */
-export function PhonePanel({ phone, startLabel, onTake }: { phone: PhoneCamera; startLabel: string; onTake: () => void }) {
+export function PhonePanel({ phone, startLabel, keyLabel, onTake, onKey }: { phone: PhoneCamera; startLabel: string; keyLabel: string; onTake: () => void; onKey: () => void }) {
   const p = phone;
   const s = p.status;
   const dot = (hue: string) => <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: `var(--h-${hue})` }} />;
@@ -310,12 +314,16 @@ export function PhonePanel({ phone, startLabel, onTake }: { phone: PhoneCamera; 
               {p.level ? "Horizon level" : "Phone roll on"}
             </button>
           </div>
+          <button type="button" onClick={onKey} disabled={p.takeMode !== "idle" || !p.driving}
+            className="mt-2 w-full rounded-[7px] border border-border px-2 py-1.5 text-[11.5px] font-semibold text-text hover:bg-surface-2 disabled:opacity-50">
+            Set a keyframe at {keyLabel} (I)
+          </button>
           <button type="button" onClick={onTake} disabled={p.takeMode !== "idle"}
             className="mt-2 w-full rounded-[7px] bg-red px-2 py-2 text-[12px] font-bold text-white disabled:opacity-60">
             {p.takeMode === "count" ? "Get ready…" : p.takeMode === "rec" ? "Recording…" : `Record a take ${startLabel}`}
           </button>
           <p className="mt-2 text-[10.5px] leading-relaxed text-text-faint">
-            A take counts down from 3, plays the scene in real time and records the camera into keyframes. It replaces the camera keys it covers; undo puts them back. You can also press Record on the phone.
+            Set a keyframe saves where the phone points at the playhead; move the playhead, aim, and set another. A take counts down from 3, plays the scene in real time and records the whole move into keyframes, replacing the camera keys it covers. Undo puts either back. Both buttons are on the phone too.
           </p>
         </>
       )}

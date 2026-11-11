@@ -180,6 +180,7 @@ export function PhoneRemote({ room }: { room: string }) {
           </button>
           <span className="text-[12px] text-white/60">{recording || counting ? "Stop" : "Record a take"}</span>
           <div className="flex gap-2">
+            <SmallBtn onClick={() => cmd("key")} disabled={!deskLive || mode !== "drive"}>Set keyframe</SmallBtn>
             <SmallBtn onClick={() => cmd("recentre")} disabled={!deskLive}>Recentre</SmallBtn>
             {mode === "view" && <SmallBtn onClick={() => cmd("drive")}>Take the camera</SmallBtn>}
           </div>

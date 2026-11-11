@@ -27,7 +27,8 @@ export type Pose = {
 };
 
 /** What the phone asks the desk to do. */
-export type PhoneCmd = "record" | "stop" | "recentre" | "drive";
+/** "key" sets one camera keyframe at the playhead from where the phone points. */
+export type PhoneCmd = "record" | "stop" | "recentre" | "drive" | "key";
 
 /** What the desk tells the phone, so the phone can show it. */
 export type DeskState = {
