@@ -11,7 +11,7 @@ import { toast } from "@/components/ui/toast";
 import { actionError } from "@/lib/action-result";
 import { TEMPLATES } from "@/lib/blocking/templates";
 import type { BlockScene } from "@/lib/blocking/scene";
-import { createBlockingScene, deleteBlockingScene, describeBlockingScene, saveBlockingScene } from "@/app/(app)/projects/[id]/blocking-actions";
+import { createBlockingScene, deleteBlockingScene, describeBlockingScene, duplicateBlockingScene, saveBlockingScene } from "@/app/(app)/projects/[id]/blocking-actions";
 import { SceneBar, type SceneBarAnswer } from "./scene-bar";
 import { BlockingStudio } from "./blocking-studio";
 import { STUDIO_VARS, useOutside } from "./ui";
@@ -64,6 +64,9 @@ export function BlockingWorkspace({
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState(false);
   const menuRef = useOutside(menu, () => setMenu(false));
+  // Right-click on a scene tab: where the menu opens and which scene it is for.
+  const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const tabMenuRef = useOutside(!!tabMenu, () => setTabMenu(null));
   const [state, setState] = useState<"saved" | "saving" | "error">("saved");
   const [liveName, setLiveName] = useState<string | null>(null);
   const [pipeShots, setPipeShots] = useState(initialShots);
@@ -126,15 +129,38 @@ export function BlockingWorkspace({
   };
   const bar = aiEnabled && canEdit;
 
-  const remove = async () => {
-    if (!active) return;
-    const ok = await confirmAction({ title: `Delete "${liveName ?? active.data.name}"?`, body: "The scene and its keyframes go. This cannot be undone.", confirmLabel: "Delete scene" });
+  const nameFor = (id: string) =>
+    (active?.id === id ? liveName ?? active.data.name : scenes.find((s) => s.id === id)?.name) ?? "this scene";
+
+  const remove = async (id: string) => {
+    setTabMenu(null);
+    const ok = await confirmAction({ title: `Delete "${nameFor(id)}"?`, body: "The scene and its keyframes go. This cannot be undone.", confirmLabel: "Delete scene" });
     if (!ok) return;
-    const res = await deleteBlockingScene(active.id);
+    const res = await deleteBlockingScene(id);
     const err = actionError(res);
     if (err) { toast(err, "error"); return; }
-    pending.current = null;
-    router.push(`/projects/${projectId}/blocking`);
+    if (active?.id === id) {
+      pending.current = null;
+      router.push(`/projects/${projectId}/blocking`);
+    } else router.refresh();
+  };
+
+  /** A copy of a scene with its whole timeline, opened straight away. */
+  const duplicate = async (id: string) => {
+    setTabMenu(null);
+    if (busy) return;
+    setBusy(true);
+    // The copy is made from what is saved, so anything still waiting goes first.
+    if (active?.id === id) {
+      if (timer.current) clearTimeout(timer.current);
+      await flush();
+    }
+    const res = await duplicateBlockingScene(id);
+    setBusy(false);
+    const err = actionError(res);
+    if (err || !res || !("id" in res)) { toast(err ?? "Could not duplicate the scene.", "error"); return; }
+    toast(`Duplicated "${nameFor(id)}".`);
+    router.push(href(res.id));
   };
 
   return (
@@ -154,6 +180,8 @@ export function BlockingWorkspace({
             const on = active?.id === s.id;
             return (
               <Link key={s.id} href={href(s.id)}
+                title={canEdit ? "Right-click for more" : undefined}
+                onContextMenu={canEdit ? (e) => { e.preventDefault(); setTabMenu({ id: s.id, x: e.clientX, y: e.clientY }); } : undefined}
                 className={`shrink-0 rounded-[6px] px-2.5 py-1 text-[12px] ${on ? "bg-surface-2 font-semibold text-text" : "text-text-muted hover:text-text"}`}>
                 {on ? liveName ?? s.name : s.name}
               </Link>
@@ -165,7 +193,11 @@ export function BlockingWorkspace({
             {!canEdit ? "View only" : state === "saving" ? "Saving…" : state === "error" ? "Not saved" : active ? "Saved" : ""}
           </span>
           {canEdit && active && (
-            <button type="button" onClick={remove} className="rounded-[6px] px-2 py-1 text-[12px] text-text-muted hover:text-red">Delete</button>
+            <>
+              <button type="button" disabled={busy} onClick={() => duplicate(active.id)} title="A copy of this scene with its whole timeline"
+                className="rounded-[6px] px-2 py-1 text-[12px] text-text-muted hover:text-text disabled:opacity-50">Duplicate</button>
+              <button type="button" onClick={() => remove(active.id)} className="rounded-[6px] px-2 py-1 text-[12px] text-text-muted hover:text-red">Delete</button>
+            </>
           )}
           {canEdit && (
             <div ref={menuRef} className="relative">
@@ -195,6 +227,17 @@ export function BlockingWorkspace({
           )}
         </div>
       </header>
+      {tabMenu && (
+        <div ref={tabMenuRef} role="menu"
+          style={{ left: Math.min(tabMenu.x, (typeof window === "undefined" ? 9999 : window.innerWidth) - 200), top: tabMenu.y + 4 }}
+          className="fixed z-[70] w-[190px] rounded-[9px] border border-border bg-surface p-1 shadow-2xl">
+          <p className="truncate px-2.5 pb-1 pt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-text-faint">{nameFor(tabMenu.id)}</p>
+          <button type="button" role="menuitem" onClick={() => duplicate(tabMenu.id)}
+            className="block w-full rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] text-text hover:bg-surface-2">Duplicate scene</button>
+          <button type="button" role="menuitem" onClick={() => remove(tabMenu.id)}
+            className="block w-full rounded-[6px] px-2.5 py-1.5 text-left text-[12.5px] text-text hover:bg-surface-2 hover:text-red">Delete scene</button>
+        </div>
+      )}
 
       <div className="flex flex-1 items-center justify-center p-6 text-center lg:hidden">
         <p className="max-w-[320px] text-[13px] leading-relaxed text-text-muted">

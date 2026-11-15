@@ -89,6 +89,48 @@ export async function saveBlockingScene(id: string, raw: unknown): Promise<{ ok:
   return { ok: true };
 }
 
+/**
+ * A copy of a scene on the same project: everything in it (set, people,
+ * camera, keyframes), named "<name> (copy)" and placed last. The link to a
+ * pipeline shot and the list of past requests stay with the original, since
+ * both are a record of what happened to that scene.
+ */
+export async function duplicateBlockingScene(id: string): Promise<{ id: string } | { error: string }> {
+  const ctx = await requireStudioContext();
+  const supabase = createClient();
+  const { data: src } = await supabase
+    .from("blocking_scenes").select("studio_id, project_id, name, data").eq("id", id).maybeSingle();
+  if (!src) return { error: "That scene could not be found." };
+  const base = asBlockScene(src.data);
+  if (!base) return { error: "That scene could not be read." };
+  const name = `${(src.name || base.name || "Untitled blocking").slice(0, 110)} (copy)`;
+  const c = clean({ ...base, name, asked: undefined });
+  if ("error" in c) return c;
+  const { data: last } = await supabase
+    .from("blocking_scenes").select("position").eq("project_id", src.project_id)
+    .order("position", { ascending: false }).limit(1).maybeSingle();
+  const { data, error } = await supabase
+    .from("blocking_scenes")
+    .insert({
+      studio_id: src.studio_id,
+      project_id: src.project_id,
+      shot_id: null,
+      name: nameOf(c.scene),
+      data: c.scene as unknown as Json,
+      position: (last?.position ?? 0) + 1,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    reportError("duplicateBlockingScene", error);
+    return { error: "Could not duplicate the scene. You may only have review access to this project." };
+  }
+  rp(src.project_id);
+  return { id: data.id };
+}
+
 export async function deleteBlockingScene(id: string): Promise<{ ok: true } | { error: string }> {
   await requireStudioContext();
   const supabase = createClient();

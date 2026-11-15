@@ -8929,6 +8929,15 @@ the side window to the dog, out through the windshield, ending ahead.
   the phone shows "Keyframe set at ..." via say(). So keyframing by hand
   works: move the playhead, aim, set, repeat. Verified in Chromium with a
   simulated phone.
+- DUPLICATE A SCENE (2026-11-15, operator). Right-click a scene tab for
+  Duplicate scene / Delete scene (editors only), plus a visible "Duplicate"
+  beside Delete for the open scene. duplicateBlockingScene
+  (blocking-actions.ts) copies the SAVED row server-side, so the workspace
+  flushes any pending save of the open scene first. The copy is named
+  "<name> (copy)", placed last and opened. Not carried: shot_id (the "sent
+  before" link) and `asked` (the scene bar's history), both records of the
+  original. Delete now takes an id, so a tab that is not open can be deleted
+  from its menu. tsc clean; NOT run in a browser.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone
