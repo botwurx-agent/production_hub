@@ -8940,6 +8940,49 @@ the side window to the dog, out through the windshield, ending ahead.
   before" link) and `asked` (the scene bar's history), both records of the
   original. Delete now takes an id, so a tab that is not open can be deleted
   from its menu. tsc clean; NOT run in a browser.
+- A GAME CONTROLLER AS THE CAMERA (2026-11-17, no migration; operator
+  drives a motion control robot from an Xbox pad and wanted the same here).
+  A "Controller" button in the toolbar (editors, beside Phone camera).
+  lib/blocking/gamepad.ts is pure (47 assertions in the scratchpad):
+  the default layout, parseConfig (the trust boundary out of localStorage
+  "blocking.controller"), shape (dead zone then a squared curve), readDrive,
+  jog, pressed, hear, bindAnalog / bindButton. components/blocking/
+  controller.tsx is the hook (useController), the toolbar panel and the
+  mapping window.
+  THE MODEL IS A MOCO DESK'S: the sticks JOG the camera to a framing that is
+  NOT in the keys (the same liveRef the phone uses; liveSrc says which of the
+  two is driving, the phone wins), and a button STORES it as a camera key at
+  the playhead through liveKey (phoneKey's body, shared). So like the phone
+  it turns Keep aimed at off and a tripod to Free and the note says so. After
+  a key the jog is cleared and the keys take the camera back. While a framing
+  is unsaved an amber bar under the toolbar offers Set keyframe / Discard,
+  and Play is refused (the scene builder's framing-then-stamping rule).
+  The playhead can move while a framing is held, which is the workflow: frame,
+  step to a time, store, repeat.
+  DEFAULTS (browser "standard" numbering): left stick truck and push (level
+  with the floor), right stick pan and tilt, LT/RT boom, LB/RB zoom, A set a
+  keyframe, B discard, X play, Y camera/free view, D-pad left/right one frame
+  (repeats when held), D-pad up/down next/previous camera key, View undo,
+  Menu redo, L3 speed (Fine 0.3x / Normal / Fast 3x), R3 level. Roll, delete
+  key and jump to start exist but are unbound. Pan and tilt slow down on a
+  long lens (35/lens, clamped). Rates at Normal: 1.5 m/s, boom 1 m/s, pan
+  60 and tilt 45 deg/s.
+  MAPPING WINDOW: "Customize the controls…" lists every action; Change then
+  push a stick or press a button. An analog action takes a stick axis (the
+  direction pushed is the positive one) or two buttons (positive first). A
+  control given to something new is TAKEN from what had it, and the window
+  says so. While the window is open the controller does nothing in the scene
+  (ctrl.suspended), and whatever is pressed lights its row, so a layout can be
+  checked by feel. Non-standard pads read as "Button N" / "Axis N".
+  The pad is read inside the studio's own frame loop (ctrl.frame), every
+  frame, so buttons work during playback; sticks drive only when not playing,
+  exporting, in a phone take, or while the phone drives.
+  Verified in headless Chromium with a FAKE pad (navigator.getGamepads
+  replaced): jog, play refused, frame step, store a key (7 to 8 keys), undo,
+  discard, rebinding with a steal, reset. NOT tried with a real controller:
+  watch stick drift against the 0.15 dead zone, which way pan and tilt feel,
+  and whether Safari lists the pad. NOT BUILT: recording a live move as a take
+  from the controller (the phone has it), and driving people or vehicles.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone

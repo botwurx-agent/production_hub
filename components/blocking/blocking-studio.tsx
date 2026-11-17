@@ -43,6 +43,8 @@ import { arrivalSize, type PhotoModelId } from "@/lib/blocking/photo-model";
 import { gaitAt } from "@/lib/blocking/gait";
 import { holdsPosition, rigMotion } from "@/lib/blocking/rigs";
 import { PhonePanel, usePhoneCamera, type LivePose } from "./phone-camera";
+import { ControllerMapWindow, ControllerPanel, useController } from "./controller";
+import type { ButtonAction } from "@/lib/blocking/gamepad";
 import { thinTake } from "@/lib/phone-cam";
 
 type View = "camera" | "free";
@@ -220,6 +222,17 @@ export function BlockingStudio({
   const phoneRef = useRef(phone);
   phoneRef.current = phone;
   const liveRef = useRef<LivePose | null>(null);
+  /** Which of the two is driving: the phone wins when both are. */
+  const liveSrc = useRef<"phone" | "pad" | null>(null);
+  // A game controller as the camera (components/blocking/controller.tsx).
+  // Its sticks jog a framing the studio draws in place of the keys, like the
+  // phone; a button stores it as a keyframe at the playhead.
+  const ctrl = useController({ press: (a) => padPress(a), discarded: () => setNote("Framing discarded"), say: (m) => setNote(m) });
+  const ctrlRef = useRef(ctrl);
+  ctrlRef.current = ctrl;
+  const [ctrlOpen, setCtrlOpen] = useState(false);
+  const ctrlMenuRef = useOutside(ctrlOpen, () => setCtrlOpen(false));
+  const [mapOpen, setMapOpen] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const phoneMenuRef = useOutside(phoneOpen, () => setPhoneOpen(false));
   const hostRef = useRef<HTMLDivElement>(null);
@@ -397,11 +410,10 @@ export function BlockingStudio({
     }, coalesce);
   }, [commit]);
 
-  const insertKey = useCallback(() => {
-    const track = selRef.current ?? "camera";
-    // While the phone drives, the camera's key is where the phone points,
-    // not where the old keys would have put it.
-    if (track === "camera" && liveRef.current) { phoneKey(); return; }
+  const insertKeyOn = useCallback((track: Track) => {
+    // While the phone or a controller drives, the camera's key is where it
+    // points, not where the old keys would have put it.
+    if (track === "camera" && liveRef.current) { liveKey(); return; }
     commit((s) => {
       const at = snap(tRef.current, s.fps);
       const cur = posedAt(s, track, at);
@@ -420,7 +432,9 @@ export function BlockingStudio({
     });
     setSelectedKey({ track, t: snap(tRef.current, sceneRef.current.fps) });
     setNote(`Keyframe set at ${timecode(tRef.current, sceneRef.current.fps)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commit]);
+  const insertKey = useCallback(() => insertKeyOn(selRef.current ?? "camera"), [insertKeyOn]);
 
   const deleteKey = useCallback(() => {
     const k = selectedKey;
@@ -1107,9 +1121,13 @@ export function BlockingStudio({
       }
       if (P.on || e.rec?.on || tk.mode !== "idle") setTState(tRef.current);
       // The phone drives whenever the shot is not playing or being exported.
-      const lv = !P.on && !e.rec
-        ? phoneRef.current.frame(dt, () => { const c = camAt(s, tRef.current); return { p: c.p, r: c.r, lens: c.lens }; })
-        : null;
+      const camNow = () => { const c = camAt(s, tRef.current); return { p: c.p, r: c.r, lens: c.lens }; };
+      const phoneLv = !P.on && !e.rec ? phoneRef.current.frame(dt, camNow) : null;
+      // The controller is read every frame, so its buttons work while the
+      // shot plays; its sticks only drive when nothing else has the camera.
+      const padLv = ctrlRef.current.frame(dt, camNow, canEdit && !P.on && !e.rec && !phoneLv && tk.mode === "idle");
+      const lv = phoneLv ?? padLv;
+      liveSrc.current = phoneLv ? "phone" : padLv ? "pad" : null;
       liveRef.current = lv;
       // Fly keys move the camera in camera view.
       if (!lv && e.keys.size && viewRef.current === "camera" && canEdit && !P.on) flyKeys(dt);
@@ -1564,6 +1582,9 @@ export function BlockingStudio({
   const togglePlay = useCallback(() => {
     const P = playRef.current;
     if (P.on) { P.on = false; setPlaying(false); return; }
+    // A framing jogged on the controller is not in the keyframes yet, so
+    // playing would either lose it or show a move that is not the one on screen.
+    if (ctrlRef.current.jogRef.current) { setNote("Set a keyframe from this framing, or discard it, before playing"); return; }
     P.from = tRef.current >= sceneRef.current.duration - 1e-3 ? 0 : tRef.current;
     P.t0 = performance.now();
     P.on = true;
@@ -1727,9 +1748,16 @@ export function BlockingStudio({
    * (and the note says so), the same rule a take follows.
    */
   function phoneKey() {
-    const lv = liveRef.current;
     if (!canEdit) return;
-    if (!lv) { setNote("The phone is not driving the camera"); phoneRef.current.say("Take the camera first, then set a keyframe"); return; }
+    if (!liveRef.current || liveSrc.current !== "phone") { setNote("The phone is not driving the camera"); phoneRef.current.say("Take the camera first, then set a keyframe"); return; }
+    liveKey();
+  }
+
+  /** One camera keyframe at the playhead from whatever is driving: the phone, or a controller's framing. */
+  function liveKey() {
+    const lv = liveRef.current;
+    if (!canEdit || !lv) return;
+    const src = liveSrc.current === "pad" ? "controller" : "phone";
     const s0 = sceneRef.current;
     const at = snap(tRef.current, s0.fps);
     const wasAimed = !!s0.camera.aim.target;
@@ -1749,8 +1777,46 @@ export function BlockingStudio({
     });
     setSelectedKey({ track: "camera", t: at });
     const off = [wasAimed ? "Keep aimed at was turned off" : "", onTripod ? "the tripod was set to Free" : ""].filter(Boolean).join(", and ");
-    setNote(`Keyframe set at ${timecode(at, s0.fps)} from the phone${off ? `. ${off}, so the key holds where the phone pointed` : ""}`);
-    phoneRef.current.say(`Keyframe set at ${timecode(at, s0.fps)}`);
+    setNote(`Keyframe set at ${timecode(at, s0.fps)} from the ${src}${off ? `. ${off}, so the key holds where the ${src} pointed` : ""}`);
+    if (src === "phone") phoneRef.current.say(`Keyframe set at ${timecode(at, s0.fps)}`);
+    else {
+      // The framing is in the keys now, so the keys take the camera back.
+      ctrlRef.current.clearJog();
+      ctrlRef.current.buzz();
+    }
+  }
+
+  /** A controller button the studio carries out (the rest live in the controller itself). */
+  function padPress(a: Exclude<ButtonAction, "speed" | "level" | "discard">) {
+    const s = sceneRef.current;
+    const step = 1 / s.fps;
+    const times = s.camera.keys.map((k) => k.t);
+    switch (a) {
+      case "key":
+        if (!canEdit) return;
+        if (liveRef.current) liveKey();
+        else { insertKeyOn("camera"); ctrlRef.current.buzz(); }
+        return;
+      case "play": return togglePlay();
+      case "view": return setView((v) => (v === "camera" ? "free" : "camera"));
+      case "prevFrame": return setT(snap(Math.max(0, tRef.current - step), s.fps));
+      case "nextFrame": return setT(snap(Math.min(s.duration, tRef.current + step), s.fps));
+      case "prevKey": { const x = [...times].reverse().find((k) => k < tRef.current - step / 2); if (x !== undefined) setT(x); return; }
+      case "nextKey": { const x = times.find((k) => k > tRef.current + step / 2); if (x !== undefined) setT(x); return; }
+      case "start": return setT(0);
+      case "undo": if (canEdit) undo(false); return;
+      case "redo": if (canEdit) undo(true); return;
+      case "deleteKey": {
+        if (!canEdit) return;
+        const at = snap(tRef.current, s.fps);
+        if (!keyAt(s.camera.keys, at, s.fps)) { setNote("No camera keyframe here"); return; }
+        if (s.camera.keys.length <= 1) { setNote("The camera keeps at least one keyframe"); return; }
+        commit((x) => ({ ...x, camera: { ...x.camera, keys: x.camera.keys.filter((k) => Math.abs(k.t - at) >= 0.5 / x.fps) } }));
+        setSelectedKey(null);
+        setNote(`Keyframe at ${timecode(at, s.fps)} deleted`);
+        return;
+      }
+    }
   }
 
   function phoneStop() {
@@ -1971,7 +2037,16 @@ export function BlockingStudio({
             </div>
           )}
           {canEdit && (
-            <div ref={phoneMenuRef} className="relative ml-auto">
+            <div ref={ctrlMenuRef} className="relative ml-auto">
+              <Btn active={ctrlOpen} onClick={() => setCtrlOpen((v) => !v)} title="Drive the camera with a game controller">
+                {ctrl.info && <span className="h-2 w-2 rounded-full" style={{ background: "var(--h-green)" }} />}
+                Controller
+              </Btn>
+              {ctrlOpen && <ControllerPanel ctrl={ctrl} onCustomize={() => { setCtrlOpen(false); setMapOpen(true); }} />}
+            </div>
+          )}
+          {canEdit && (
+            <div ref={phoneMenuRef} className="relative">
               <Btn active={phoneOpen} onClick={() => { phone.start(); setPhoneOpen((v) => !v); }} title="Use your phone as the camera">
                 {phone.status !== "off" && (
                   <span className="h-2 w-2 rounded-full" style={{ background: `var(--h-${phone.status === "live" ? "green" : "amber"})` }} />
@@ -2065,6 +2140,15 @@ export function BlockingStudio({
             Drag to orbit · right-drag to pan · click to select · G move · R turn
           </p>
         )}
+        {ctrl.jogging && canEdit && (
+          <div data-jog-bar className="absolute left-1/2 top-[52px] z-20 flex -translate-x-1/2 items-center gap-2 rounded-[8px] border border-border bg-surface px-2.5 py-1.5 shadow-lg">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--h-amber)" }} />
+            <span className="whitespace-nowrap text-[11.5px] text-text">Controller framing, not saved</span>
+            <Btn tone="primary" onClick={() => insertKeyOn("camera")}>Set keyframe at {timecode(snap(t, scene.fps), scene.fps)}</Btn>
+            <Btn onClick={() => { ctrl.clearJog(); setNote("Framing discarded"); }}>Discard</Btn>
+          </div>
+        )}
+        {mapOpen && <ControllerMapWindow ctrl={ctrl} onClose={() => setMapOpen(false)} />}
         {note && (
           <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-[8px] border border-border bg-surface px-3 py-1.5 text-[12px] text-text shadow-lg">
             {note}
