@@ -9954,6 +9954,16 @@ UNVERIFIED, as of 2026-08-20, and worth knowing before building on top:
   has to say so and a studio-level AI off switch is the honest escape hatch.
 
 The parked items, so they are findable WHEN friction hits (not before):
+- LIGHT METER in the phone viewfinder: DECLINED by the operator 2026-11-17
+  after a feasibility answer, nothing built. A web page cannot do a true
+  incident reading (no light sensor on iPhone, live video is auto-exposed
+  with no ISO or shutter exposed), nor flicker or precise colour temperature.
+  What it could do is a REFLECTED reading from a still, using the photo's own
+  exposure data (spot, key to fill ratio, false colour, grey card mode), good
+  to maybe a third to half a stop given the phone's tone processing.
+  UNPROVEN: whether iPhone Safari keeps exposure EXIF on a photo taken through
+  a file input. If it comes back, test that first on a grey card beside a real
+  meter. A native app would be the real answer.
 - LOCATION SCOUT ("Scout"): DECLINED by the operator 2026-09-07 after a design
   discussion, on their own standing rule. It was an idea rather than friction
   from a live job, and Hint was a studio shoot. Recorded because the technical
