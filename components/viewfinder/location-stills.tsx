@@ -7,8 +7,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ASPECTS, ffEquivalent, fovDeg, imagedArea } from "@/lib/previz/optics";
-import { bodyById } from "@/lib/viewfinder";
+import { ASPECTS, ffEquivalent } from "@/lib/previz/optics";
+import { bodyById, hfovFor, sphericalEquivalent } from "@/lib/viewfinder";
+import { mm } from "@/lib/lens-library";
 import { setupFromStill } from "@/components/previz/setup";
 import { createSceneSetup, readScoutPhoto } from "@/app/(app)/projects/[id]/scene-actions";
 import { deleteLocationStill, getStillUrl, linkStillToScene, updateStillNote } from "@/app/(app)/projects/[id]/still-actions";
@@ -29,6 +30,8 @@ export type StillView = {
   tilt: number | null;
   roll: number | null;
   phoneCamera: string | null;
+  lensName: string | null;
+  squeeze: number;
   note: string | null;
   sceneId: string | null;
   takenAt: string;
@@ -85,7 +88,7 @@ export function LocationStills({
 
       const body = bodyById(s.bodyId);
       const ratio = ASPECTS.find((a) => a.id === s.aspectId)?.ratio ?? 16 / 9;
-      const hfov = fovDeg(imagedArea(body, ratio).w, s.focal);
+      const hfov = hfovFor(body, s.focal, ratio, s.squeeze);
 
       let draft = null;
       if (ai && canReadRoom) {
@@ -106,7 +109,9 @@ export function LocationStills({
       const setup = setupFromStill({
         name: s.note?.slice(0, 60) || `Still, ${when(s.takenAt)}`,
         bodyId: s.bodyId,
-        focal: s.focal,
+        // The scene builder only knows spherical lenses, so an anamorphic
+        // still goes in as the spherical lens that sees the same width.
+        focal: sphericalEquivalent(body, s.focal, ratio, s.squeeze),
         aspectId: s.aspectId,
         tiltDeg: s.tilt,
         board,
@@ -195,7 +200,7 @@ export function LocationStills({
               </button>
               <div className="p-3">
                 <div className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold text-text">
-                  <span>{Math.round(s.focal)}mm</span>
+                  <span>{mm(s.focal)}mm{s.lensName ? ` ${s.lensName}` : ""}</span>
                   <span className="text-text-faint">·</span>
                   <span>{body.name}</span>
                   <span className="text-text-faint">·</span>

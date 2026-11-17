@@ -29,6 +29,10 @@ export type NewStill = {
   rollDeg: number | null;
   phoneCamera: string | null;
   note: string | null;
+  /** The lens set the frame was drawn for, as named in the picker. */
+  lensName?: string | null;
+  /** Anamorphic squeeze of that lens; 1 for spherical. */
+  squeeze?: number | null;
 };
 
 const fin = (v: unknown, lo: number, hi: number): number | null =>
@@ -72,6 +76,8 @@ export async function saveLocationStill(input: NewStill): Promise<{ id: string }
       roll_deg: fin(input.rollDeg, -180, 180),
       phone_camera: input.phoneCamera ? input.phoneCamera.slice(0, 80) : null,
       note: input.note ? input.note.replace(/\s+/g, " ").trim().slice(0, 500) || null : null,
+      lens_name: input.lensName ? input.lensName.replace(/\s+/g, " ").trim().slice(0, 80) || null : null,
+      squeeze: fin(input.squeeze, 1, 2.5) ?? 1,
       taken_by: ctx.userId,
     })
     .select("id")

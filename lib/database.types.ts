@@ -4424,6 +4424,8 @@ export type Database = {
           tilt_deg: number | null;
           roll_deg: number | null;
           phone_camera: string | null;
+          lens_name: string | null;
+          squeeze: number;
           note: string | null;
           scene_setup_id: string | null;
           taken_by: string | null;
@@ -4443,6 +4445,8 @@ export type Database = {
           tilt_deg?: number | null;
           roll_deg?: number | null;
           phone_camera?: string | null;
+          lens_name?: string | null;
+          squeeze?: number;
           note?: string | null;
           scene_setup_id?: string | null;
           taken_by?: string | null;
@@ -4462,6 +4466,8 @@ export type Database = {
           tilt_deg?: number | null;
           roll_deg?: number | null;
           phone_camera?: string | null;
+          lens_name?: string | null;
+          squeeze?: number;
           note?: string | null;
           scene_setup_id?: string | null;
           taken_by?: string | null;

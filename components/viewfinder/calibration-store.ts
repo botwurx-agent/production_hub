@@ -69,7 +69,7 @@ export function clearCalibration(c: { label: string; deviceId: string }) {
   write(s);
 }
 
-export type ViewSettings = { bodyId: string; focal: number; aspectId: string; units: "ft" | "m"; autoCam: boolean };
+export type ViewSettings = { bodyId: string; focal: number; aspectId: string; units: "ft" | "m"; autoCam: boolean; lensId?: string; extId?: string };
 
 export function readSettings(): Partial<ViewSettings> {
   try {

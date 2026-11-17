@@ -1459,7 +1459,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0128. Recent: 0128 =
+files in supabase/migrations. THROUGH 0129. Recent: 0129 =
+location_still_lens (location_stills.lens_name + squeeze: the lens set a
+still was framed for); 0128 =
 blocking_scenes (shot blocking scenes, jsonb per scene, optional shot_id,
 0093 read/edit split); 0127 =
 ai_map_layouts (pipeline map arrangement per project, jsonb overrides,
@@ -9046,6 +9048,38 @@ had the capture work on desktop, and were right: a viewfinder is a phone tool.
   real phone, and the save path cannot reach Supabase from a session: the first
   real scout is the test. Things to watch then: iOS stream size and
   orientation, which cameras Safari lists, and the roll sign.
+
+### Viewfinder lens library (migration 0129) — BUILT, not yet run on a real phone
+Operator, 2026-11-17, from two photos of a director's viewfinder app seen on
+set: a Make / Series / Focal lengths / Extender picker over "a pretty in-depth
+database of lenses", and a lens strip showing each focal length with its angle.
+- lib/lens-library.ts is the database (pure): about 30 makers and 190 series,
+  each either PRIMES (the focal lengths the set comes in) or a ZOOM (a range),
+  with `squeeze` on anamorphic sets. Adding a set is one line. THE FOCAL
+  LENGTHS WERE WRITTEN FROM KNOWLEDGE OF THE PUBLISHED SETS, NOT CHECKED
+  AGAINST EACH MAKER'S SITE from a session; a wrong or missing length is a
+  one-line fix when somebody spots it.
+- components/viewfinder/lens-sheet.tsx: the picker (three columns that scroll
+  by themselves, a search box, extender None / 1.4x / 2x, and "+ Add your own
+  lens set": a name, focal lengths typed as a list, a squeeze; kept on the
+  phone in localStorage "viewfinder.lensSets", parsed back through
+  parseCustomSeries). Opened from a new lens pill in the top bar.
+- The lens strip shows the CHOSEN SET's focal lengths, each with its angle of
+  view across the frame for the chosen body and aspect. Minus and plus step to
+  the next lens in a prime set, or 1mm inside a zoom's range.
+- ANAMORPHIC IS REAL MATHS (lib/viewfinder.ts usedArea, targetTans, hfovFor):
+  the lens records a frame `squeeze` times narrower on the sensor than the
+  delivery aspect, so the horizontal field is squeeze x usedWidth / 2f.
+  An extender multiplies the focal length.
+- A still saves `lens_name` and `squeeze` (0129; focal_mm stays the effective
+  length, lens x extender). The stills page shows the lens name, and Build a
+  scene passes the spherical lens that sees the same width
+  (sphericalEquivalent), since the scene builder has no anamorphic.
+- Verified in headless Chromium with a fake camera on a throwaway fixture
+  (deleted), portrait and landscape: pick a maker and set, anamorphic plus
+  extender, no errors, no overflow. NOT run on a real phone.
+- SEEN IN THEIR APP AND NOT BUILT: compass heading, A/B compare of two
+  lenses, LUTs, video recording, stand-in figures, favourites.
 
 ### Scene Setup: 3D previz (DECIDED DIRECTION, 2026-10-05) — PROTOTYPE, now the Scene builder above
 Operator's idea, discussed at length and confirmed as a fit: a real 3D scene

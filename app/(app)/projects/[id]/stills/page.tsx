@@ -17,7 +17,7 @@ export default async function StillsPage({ params }: { params: { id: string } })
 
   const { data: rows } = await supabase
     .from("location_stills")
-    .select("id, storage_path, width, height, body_id, focal_mm, aspect_id, tilt_deg, roll_deg, phone_camera, note, scene_setup_id, taken_at")
+    .select("id, storage_path, width, height, body_id, focal_mm, aspect_id, tilt_deg, roll_deg, phone_camera, lens_name, squeeze, note, scene_setup_id, taken_at")
     .eq("project_id", project.id)
     .order("taken_at", { ascending: false });
   const list = rows ?? [];
@@ -36,6 +36,8 @@ export default async function StillsPage({ params }: { params: { id: string } })
     tilt: r.tilt_deg,
     roll: r.roll_deg,
     phoneCamera: r.phone_camera,
+    lensName: r.lens_name,
+    squeeze: Number(r.squeeze) || 1,
     note: r.note,
     sceneId: r.scene_setup_id,
     takenAt: r.taken_at,

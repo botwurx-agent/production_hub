@@ -81,9 +81,33 @@ export function outlierDeg(readings: Reading[], i: number): number {
  * frame's width and tanY across its height, so the box on screen is
  * 2*f*tanX by 2*f*tanY stream pixels.
  */
-export function targetTans(body: CameraBody, focalMm: number, aspect: number): { tanX: number; tanY: number } {
-  const a = imagedArea(body, aspect);
-  return { tanX: a.w / (2 * focalMm), tanY: a.h / (2 * focalMm) };
+export function targetTans(body: CameraBody, focalMm: number, aspect: number, squeeze = 1): { tanX: number; tanY: number } {
+  const a = usedArea(body, aspect, squeeze);
+  return { tanX: (squeeze * a.w) / (2 * focalMm), tanY: a.h / (2 * focalMm) };
+}
+
+/**
+ * The part of the sensor a lens uses for a delivery aspect. An anamorphic
+ * lens squeezes the picture sideways, so the frame it records on the sensor
+ * is that much NARROWER than the delivery (a 2.39 frame through a 2x lens is
+ * about 1.2:1 on the sensor) and unsqueezes to the delivery aspect.
+ */
+export function usedArea(body: CameraBody, aspect: number, squeeze = 1): { w: number; h: number } {
+  return imagedArea(body, aspect / Math.max(1, squeeze));
+}
+
+/** Horizontal angle of view in degrees for a lens on a body at an aspect. */
+export function hfovFor(body: CameraBody, focalMm: number, aspect: number, squeeze = 1): number {
+  return (2 * Math.atan(targetTans(body, focalMm, aspect, squeeze).tanX) * 180) / Math.PI;
+}
+
+/**
+ * The spherical focal length that shows the same width on the same body and
+ * aspect, for places that only know spherical lenses (the scene builder).
+ */
+export function sphericalEquivalent(body: CameraBody, focalMm: number, aspect: number, squeeze = 1): number {
+  if (squeeze <= 1) return focalMm;
+  return imagedArea(body, aspect).w / (2 * targetTans(body, focalMm, aspect, squeeze).tanX);
 }
 
 export type Crop = {
@@ -118,11 +142,11 @@ export function cropFor(
  * rounded up to the next whole millimetre, so "wider than this phone" can be
  * stated as a number before anyone picks one.
  */
-export function widestFocal(fNorm: number, stream: { w: number; h: number }, body: CameraBody, aspect: number): number {
+export function widestFocal(fNorm: number, stream: { w: number; h: number }, body: CameraBody, aspect: number, squeeze = 1): number {
   const f = fNorm * Math.max(stream.w, stream.h);
-  const a = imagedArea(body, aspect);
-  // w = f * a.w / focal <= stream.w, so focal >= f * a.w / stream.w.
-  return Math.ceil(Math.max((f * a.w) / stream.w, (f * a.h) / stream.h));
+  const a = usedArea(body, aspect, squeeze);
+  // w = f * squeeze * a.w / focal <= stream.w, so focal >= f * squeeze * a.w / stream.w.
+  return Math.ceil(Math.max((f * squeeze * a.w) / stream.w, (f * a.h) / stream.h));
 }
 
 export type PhoneCamera = { id: string; label: string; fNorm: number };

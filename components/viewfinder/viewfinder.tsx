@@ -11,13 +11,15 @@
 // changes how it reads.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ASPECTS, BODIES, PRIMES, fovDeg, imagedArea } from "@/lib/previz/optics";
+import { ASPECTS, BODIES } from "@/lib/previz/optics";
+import { GENERIC_ID, clampToSeries, extenderFactor, findSeries, lensLabel, mm, seriesFocals, type LensSeries } from "@/lib/lens-library";
 import {
   bestCamera,
   bodyById,
   cameraRoll,
   cameraTilt,
   cropFor,
+  hfovFor,
   longFovDeg,
   targetTans,
   widestFocal,
@@ -27,6 +29,7 @@ import { uploadDirect } from "@/components/upload/direct-upload";
 import { saveLocationStill } from "@/app/(app)/projects/[id]/still-actions";
 import { actionError } from "@/lib/action-result";
 import { Calibrate } from "./calibrate";
+import { LensSheet, readCustomSets, writeCustomSets } from "./lens-sheet";
 import {
   allCalibrations,
   camKey,
@@ -122,7 +125,19 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
   const [aspectId, setAspectId] = useState(saved.aspectId && ASPECTS.some((a) => a.id === saved.aspectId) ? saved.aspectId : "16x9");
   const [units, setUnits] = useState<"ft" | "m">(saved.units === "m" ? "m" : "ft");
   const [autoCam, setAutoCam] = useState(saved.autoCam !== false);
-  useEffect(() => writeSettings({ bodyId, focal, aspectId, units, autoCam }), [bodyId, focal, aspectId, units, autoCam]);
+  // The lens: a set from the library (or one typed in), the focal length
+  // picked from it, and an extender. `focal` is the lens's own marked length;
+  // `eff` is what the frame is drawn for.
+  const [custom, setCustom] = useState<LensSeries[]>([]);
+  const [lensId, setLensId] = useState(saved.lensId ?? GENERIC_ID);
+  const [extId, setExtId] = useState(saved.extId ?? "none");
+  useEffect(() => setCustom(readCustomSets()), []);
+  useEffect(() => writeSettings({ bodyId, focal, aspectId, units, autoCam, lensId, extId }), [bodyId, focal, aspectId, units, autoCam, lensId, extId]);
+  const lens = findSeries(lensId, custom) ?? findSeries(GENERIC_ID)!;
+  const squeeze = lens.series.squeeze ?? 1;
+  const ext = extenderFactor(extId);
+  const eff = focal * ext;
+  const lensName = `${lensLabel(lens.make, lens.series)}${ext > 1 ? ` + ${extId} extender` : ""}`;
 
   const [started, setStarted] = useState(false);
   const [startErr, setStartErr] = useState<string | null>(null);
@@ -134,7 +149,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
   const [stage, setStage] = useState({ w: 0, h: 0 });
   const [cal, setCal] = useState<Record<string, CameraCalibration>>({});
   const [calibrating, setCalibrating] = useState(false);
-  const [sheet, setSheet] = useState<null | "body" | "camera">(null);
+  const [sheet, setSheet] = useState<null | "body" | "camera" | "lens">(null);
   const [flash, setFlash] = useState(false);
   const [pending, setPending] = useState(0);
   const [lastShot, setLastShot] = useState<string | null>(null);
@@ -147,7 +162,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
 
   const body = bodyById(bodyId);
   const aspect = ASPECTS.find((a) => a.id === aspectId) ?? ASPECTS[0];
-  const tans = targetTans(body, focal, aspect.ratio);
+  const tans = targetTans(body, eff, aspect.ratio, squeeze);
 
   // How far the phone is turned against the page. 90 or 270 means it is held
   // sideways while the page stayed upright (rotation lock): the shot's width
@@ -277,7 +292,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoCam, started, calibrating, focal, bodyId, aspectId, media.w, media.h, cal, cams.length, sideways]);
+  }, [autoCam, started, calibrating, eff, squeeze, bodyId, aspectId, media.w, media.h, cal, cams.length, sideways]);
 
   const crop: Crop | null = media.w ? cropFor(fNorm, media, onScreenTans) : null;
 
@@ -296,8 +311,11 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
   const roll = orient ? cameraRoll(orient.beta, orient.gamma, sideways ? orient.held : orient.angle) : null;
   const level = roll !== null && Math.abs(roll) < 0.5;
 
-  const hfov = fovDeg(imagedArea(body, aspect.ratio).w, focal);
-  const widest = media.w ? widestFocal(fNorm, viewStream(media), body, aspect.ratio) : null;
+  const hfov = hfovFor(body, eff, aspect.ratio, squeeze);
+  const angle = (f: number, sq: number) => hfovFor(body, f * ext, aspect.ratio, sq);
+  // The widest this phone camera can show, as a length marked on THIS lens.
+  const widest = media.w ? widestFocal(fNorm, viewStream(media), body, aspect.ratio, squeeze) / ext : null;
+  const stripFocals = seriesFocals(lens.series);
 
   // ----- Capture
   const capture = () => {
@@ -336,7 +354,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
     const sh = Math.min(v.videoHeight, crop.y + crop.h) - sy;
     g.drawImage(v, sx, sy, sw, sh, (sx - crop.x) * scale, (sy - crop.y) * scale, sw * scale, sh * scale);
     const meta = {
-      bodyId, focal, aspectId,
+      bodyId, focal: eff, aspectId, lensName, squeeze,
       tilt: tilt !== null ? Math.round(tilt * 10) / 10 : null,
       roll: roll !== null ? Math.round(roll * 10) / 10 : null,
       phoneCamera: cam?.label ? `${cam.label}${current ? "" : " (not calibrated)"}` : null,
@@ -355,6 +373,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
             projectId, path: up.path, width: W, height: H,
             bodyId: meta.bodyId, focalMm: meta.focal, aspectId: meta.aspectId,
             tiltDeg: meta.tilt, rollDeg: meta.roll, phoneCamera: meta.phoneCamera, note: null,
+            lensName: meta.lensName, squeeze: meta.squeeze,
           });
           const err = actionError(res);
           setToast(err ? `Not saved: ${err}` : "Saved to location stills");
@@ -374,7 +393,21 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
     lensStrip.current?.querySelector<HTMLElement>('[data-on="1"]')?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [focal, started, calibrating]);
 
-  const stepFocal = (d: number) => setFocal((f) => Math.max(8, Math.min(400, Math.round(f) + d)));
+  // A zoom steps a millimetre at a time inside its range; primes step to the
+  // next lens in the set.
+  const stepFocal = (d: number) => setFocal((f) => {
+    if (lens.series.zoom) return clampToSeries(lens.series, Math.round(f) + d);
+    const list = stripFocals;
+    if (!list.length) return f;
+    const at = list.indexOf(clampToSeries(lens.series, f));
+    return list[Math.max(0, Math.min(list.length - 1, at + d))];
+  });
+  const pickLens = (id: string) => {
+    const next = findSeries(id, custom);
+    if (!next) return;
+    setLensId(id);
+    setFocal((f) => clampToSeries(next.series, f));
+  };
 
   // ----- Screens
   if (!started) {
@@ -426,6 +459,9 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
         <button type="button" onClick={() => setSheet(sheet === "body" ? null : "body")} className="min-w-0 truncate rounded-full bg-white/10 px-3 py-1.5">
           {body.name} · {aspect.label}
         </button>
+        <button type="button" data-lens-open onClick={() => setSheet(sheet === "lens" ? null : "lens")} className="min-w-0 truncate rounded-full bg-white/10 px-3 py-1.5">
+          {lensName}
+        </button>
         <button type="button" onClick={() => setSheet(sheet === "camera" ? null : "camera")} className={`ml-auto shrink-0 rounded-full px-3 py-1.5 ${current ? "bg-white/10" : "bg-[#f5b301] text-black"}`}>
           {current ? "Calibrated" : "Calibrate"}
         </button>
@@ -466,10 +502,10 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
           className="pointer-events-none absolute whitespace-nowrap"
           style={sideways
             ? { left: turn === 90 ? fx + fw - 16 : fx + 16, top: fy + fh / 2, transform: `translate(-50%, -50%) rotate(${textTurn}deg)` }
-            : { left: stage.w / 2, top: Math.max(4, fy + 6), transform: "translateX(-50%)" }}
+            : { left: stage.w / 2, top: Math.max(stage.w > stage.h ? 50 : 4, fy + 6), transform: "translateX(-50%)" }}
         >
           <div className="rounded-md bg-black/55 px-2 py-0.5 text-xs tabular-nums">
-            {Math.round(focal)}mm · {hfov.toFixed(1)}° across
+            {mm(focal)}mm{ext > 1 ? ` x${ext} = ${mm(eff)}mm` : ""}{squeeze > 1 ? ` · ${squeeze}x anamorphic` : ""} · {hfov.toFixed(1)}° across
             {tilt !== null && ` · tilt ${Math.abs(tilt).toFixed(0)}° ${tilt < -0.5 ? "down" : tilt > 0.5 ? "up" : ""}`}
             {roll !== null && ` · ${level ? "level" : `${Math.abs(roll).toFixed(1)}° off level`}`}
           </div>
@@ -482,7 +518,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
           )}
           {crop && !crop.fits && (
             <div className="rounded-md bg-black/70 px-2.5 py-1 text-xs">
-              Wider than this phone camera sees{widest ? `: ${widest}mm is the widest it can show` : ""}. The black edges are outside it.
+              Wider than this phone camera sees{widest ? `: ${Math.ceil(widest)}mm is the widest it can show` : ""}. The black edges are outside it.
             </div>
           )}
           {stage.h > stage.w && aspect.ratio > 1 && !sideways && (
@@ -492,7 +528,7 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
         </div>
 
         {sheet && (
-          <div className="absolute inset-x-0 top-0 max-h-[75%] overflow-y-auto border-b border-white/15 bg-[#111]/95 p-3 text-sm">
+          <div className="absolute inset-x-0 top-0 z-20 max-h-[75%] overflow-y-auto border-b border-white/15 bg-[#111] p-3 text-sm landscape:max-h-full">
             {sheet === "body" && (
               <>
                 <div className="text-xs font-semibold uppercase tracking-wide text-white/50">Delivery aspect</div>
@@ -520,6 +556,23 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
                   </div>
                 ))}
               </>
+            )}
+            {sheet === "lens" && (
+              <LensSheet
+                seriesId={lens.series.id}
+                focal={focal}
+                extId={extId}
+                custom={custom}
+                angle={angle}
+                onSeries={pickLens}
+                onFocal={setFocal}
+                onExt={setExtId}
+                onCustom={(sets) => {
+                  setCustom(sets);
+                  writeCustomSets(sets);
+                  if (!sets.some((x) => x.id === lensId) && lensId.startsWith("custom/")) setLensId(GENERIC_ID);
+                }}
+              />
             )}
             {sheet === "camera" && (
               <>
@@ -567,21 +620,31 @@ export function Viewfinder({ projectId, projectTitle, canEdit, stillsHref, backH
           held sideways (where a camera app keeps its shutter). */}
       <div className="flex shrink-0 flex-col pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 landscape:w-[132px] landscape:flex-row-reverse landscape:gap-1 landscape:py-2 landscape:pr-[max(0.5rem,env(safe-area-inset-right))]">
         <div className="flex min-h-0 items-center gap-2 px-3 landscape:flex-col landscape:px-0">
-          <button type="button" onClick={() => stepFocal(-1)} aria-label="1mm wider" className="h-9 w-9 shrink-0 rounded-full bg-white/10 text-lg">−</button>
+          <button type="button" onClick={() => stepFocal(-1)} aria-label={lens.series.zoom ? "1mm wider" : "Next wider lens"} className="h-9 w-9 shrink-0 rounded-full bg-white/10 text-lg">−</button>
           <div ref={lensStrip} className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-1 [scrollbar-width:none] landscape:min-h-0 landscape:flex-col landscape:overflow-y-auto landscape:overflow-x-hidden">
-            {PRIMES.map((f) => (
-              <button
-                key={f}
-                type="button"
-                data-on={Math.round(focal) === f ? "1" : undefined}
-                onClick={() => setFocal(f)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-sm tabular-nums ${Math.round(focal) === f ? "bg-white font-semibold text-black" : "bg-white/10"} ${widest && f < widest ? "opacity-50" : ""}`}
-              >
-                {f}
-              </button>
-            ))}
+            {stripFocals.map((f) => {
+              const on = Math.abs(focal - f) < 0.05;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  data-on={on ? "1" : undefined}
+                  onClick={() => setFocal(f)}
+                  className={`shrink-0 rounded-xl px-3 py-1 text-center tabular-nums leading-tight ${on ? "bg-white text-black" : "bg-white/10"} ${widest && f < widest - 0.5 ? "opacity-50" : ""}`}
+                >
+                  <span className={`block text-sm ${on ? "font-semibold" : ""}`}>{mm(f)}</span>
+                  <span className={`block text-[10px] ${on ? "text-black/55" : "text-white/45"}`}>{angle(f, squeeze).toFixed(1)}°</span>
+                </button>
+              );
+            })}
+            {lens.series.zoom && !stripFocals.some((f) => Math.abs(focal - f) < 0.05) && (
+              <span data-on="1" className="order-first shrink-0 rounded-xl bg-white px-3 py-1 text-center tabular-nums leading-tight text-black">
+                <span className="block text-sm font-semibold">{mm(focal)}</span>
+                <span className="block text-[10px] text-black/55">{hfov.toFixed(1)}°</span>
+              </span>
+            )}
           </div>
-          <button type="button" onClick={() => stepFocal(1)} aria-label="1mm longer" className="h-9 w-9 shrink-0 rounded-full bg-white/10 text-lg">+</button>
+          <button type="button" onClick={() => stepFocal(1)} aria-label={lens.series.zoom ? "1mm longer" : "Next longer lens"} className="h-9 w-9 shrink-0 rounded-full bg-white/10 text-lg">+</button>
         </div>
         <div className="mt-2 flex items-center justify-between px-6 landscape:mt-0 landscape:flex-1 landscape:flex-col landscape:justify-between landscape:px-0 landscape:py-1">
           <Link href={stillsHref} className="relative h-12 w-12 overflow-hidden rounded-lg border border-white/30 bg-white/5" aria-label="Location stills">
