@@ -9053,7 +9053,7 @@ had the capture work on desktop, and were right: a viewfinder is a phone tool.
 Operator, 2026-11-17, from two photos of a director's viewfinder app seen on
 set: a Make / Series / Focal lengths / Extender picker over "a pretty in-depth
 database of lenses", and a lens strip showing each focal length with its angle.
-- lib/lens-library.ts is the database (pure): about 30 makers and 190 series,
+- lib/lens-library.ts is the database (pure): 29 makers and 164 series,
   each either PRIMES (the focal lengths the set comes in) or a ZOOM (a range),
   with `squeeze` on anamorphic sets. Adding a set is one line. THE FOCAL
   LENGTHS WERE WRITTEN FROM KNOWLEDGE OF THE PUBLISHED SETS, NOT CHECKED
