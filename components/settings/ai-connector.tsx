@@ -80,12 +80,23 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
   return (
     <div className="space-y-5" data-ai-connector>
       <p className="max-w-2xl text-sm text-text-muted">
-        Ask Claude or ChatGPT about your jobs in plain words: what is still owed, where a
-        project stands, which client is slow to sign off. It can also build moodboards and
-        storyboards from images it generates or finds. It reads what you can read in Studio
-        Flows, only ever <span className="font-semibold text-text">adds</span>, and never
-        changes or deletes your work. Your own AI subscription does the work.
+        Connect your own Claude and brief it like a production assistant. It answers from
+        your studio (what is still owed, where a job stands, which client is slow to sign
+        off) and does the typing for you: shot lists, storyboards, moodboards, the schedule,
+        draft call sheets, contacts, tasks, costs, props, clients, deals and new projects.
+        It works as you, only ever <span className="font-semibold text-text">adds</span>,
+        and never changes, deletes or sends anything. Your own AI subscription does the
+        work, so there is nothing extra to pay here.
       </p>
+
+      <div className="max-w-2xl rounded-[12px] border border-border p-3">
+        <p className="text-xs font-semibold text-text-muted">Once connected, try</p>
+        <ul className="mt-1.5 space-y-1 text-sm text-text">
+          <li>&ldquo;Here is the script. Break it into a shot list for the job.&rdquo;</li>
+          <li>&ldquo;Build the schedule from that shot list, then Thursday&rsquo;s call sheet.&rdquo;</li>
+          <li>&ldquo;Where does this job stand, and who do we still owe?&rdquo;</li>
+        </ul>
+      </div>
 
       <ol className="grid gap-3 text-sm sm:grid-cols-2">
         <li className="rounded-[12px] border border-border bg-surface-2 p-3">

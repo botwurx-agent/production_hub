@@ -47,7 +47,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
   { id: "money", label: "Money", blurb: "Budgets, costs, paying vendors, estimates and invoices.", hue: "blue" },
   { id: "sales", label: "Clients & pipeline", blurb: "Accounts, deals, follow-ups and request links.", hue: "cyan" },
   { id: "comms", label: "Communication", blurb: "Gmail, Slack and Google Chat inside the project.", hue: "cyan" },
-  { id: "ai", label: "AI tools", blurb: "Runner, the AI pipeline, and connecting Claude or ChatGPT.", hue: "purple" },
+  { id: "ai", label: "AI tools", blurb: "Your own Claude as an assistant, and the AI video pipeline.", hue: "purple" },
   { id: "team", label: "Team & settings", blurb: "Inviting people, roles, branding and connections.", hue: "orange" },
 ];
 
@@ -826,28 +826,39 @@ export const HELP_ARTICLES: HelpArticle[] = [
 
   /* ------------------------------------------------------------ AI tools */
   {
-    slug: "ask-runner",
+    slug: "work-with-your-assistant",
     category: "ai",
-    title: "Ask Runner about your studio",
-    summary: "Ask questions in plain words and confirm the changes it proposes.",
-    minutes: 2,
-    keywords: ["assistant", "ai", "chat", "cmd k", "search"],
-    hero: { shot: "runner-panel", alt: "The Runner panel answering a question" },
+    title: "Brief Claude like a production assistant",
+    summary: "What to ask a connected Claude, with the words that work.",
+    minutes: 3,
+    keywords: ["assistant", "ai", "chat", "claude", "prompts", "shot list", "call sheet"],
     steps: [
       {
-        title: "Open Runner",
-        body: "Choose Runner in the sidebar or press Cmd/Ctrl+K. If you are on a project page, it starts focused on that project.",
+        title: "Connect it first",
+        body: "Make a private link in Settings, AI connector and add it to Claude. See Connect your own Claude or ChatGPT for the two steps.",
       },
       {
-        title: "Ask",
-        body: "Ask anything: who is still owed money, what is overdue, which client asks for the most revisions. Type or use the microphone.",
+        title: "Name the job",
+        body: "Start by naming the project or client: \"On Bright Water...\" Claude looks it up and works on that job from then on in the chat.",
       },
       {
-        title: "Confirm changes",
-        body: "When you ask it to do something (log a cost, add a task, move a deal), it shows a card with every value it would save. Nothing changes until you press Create.",
+        title: "Ask where things stand",
+        body: "Try \"Where does Bright Water stand and who do we still owe?\" or \"What needs my attention this week?\" The answers come from your studio's real records.",
+      },
+      {
+        title: "Hand it the typing",
+        body: "Paste a script and ask for the shot list. Ask for the schedule from that shot list, then Thursday's call sheet. Forward an email and ask it to add the people to the job's contacts, or log the call and set a follow-up.",
+      },
+      {
+        title: "Check what it made",
+        body: "Every answer says what was added and gives a link. Open it in Studio Flows, adjust anything, and send or share it yourself.",
       },
     ],
-    feature: "runner",
+    tips: [
+      "It only adds. It cannot change or delete what is already there, and it never sends anything, so a call sheet it builds stays a draft until you send it.",
+      "Ask for one board or one list per request and put everything in it, since a spare one has to be deleted by hand in Studio Flows.",
+    ],
+    feature: "ai-production-assistant",
   },
   {
     slug: "ai-video-pipeline",
@@ -908,7 +919,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         body: "Back in Settings, Turn off kills a link immediately.",
       },
     ],
-    feature: "runner",
+    feature: "ai-production-assistant",
   },
 
   /* ------------------------------------------------------------ Team & settings */

@@ -1,8 +1,7 @@
 "use client";
 
 // A tiny module-level pub/sub so anything can open the invite panel, the same
-// shape as components/agent/agent-open and components/ui/toast, and for the
-// same reason: the panel is mounted once in the topbar and the things that want
+// shape as components/ui/toast, and for the same reason: the panel is mounted once in the topbar and the things that want
 // to open it (a task's people picker today, anything else tomorrow) live in a
 // different subtree.
 //

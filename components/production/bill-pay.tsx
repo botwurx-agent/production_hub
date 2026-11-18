@@ -6,8 +6,8 @@
 // person, so it states every value that will be sent, in the words a producer
 // uses, before anything happens: who, how much, against which invoice number,
 // out of which bank account. A confirmation nobody can check in two seconds is
-// not a confirmation, which is the rule this app already holds for Runner's
-// cards and the remittance email.
+// not a confirmation, which is the rule this app already holds for the
+// remittance email.
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {

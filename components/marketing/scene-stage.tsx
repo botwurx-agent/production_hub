@@ -87,6 +87,20 @@ import { AS_BLOCK_MS, AS_SCENE_MS, AssistantBlockingScene, AssistantSceneScene }
 import { PV_CAM_MS, PV_FINDER_MS, PV_HERO_MS, PV_LIGHT_MS, PV_MOVE_MS, PV_SET_MS, PrevizCameraScene, PrevizFinderScene, PrevizHeroScene, PrevizLightScene, PrevizMoveScene, PrevizSetScene } from "./scenes-previz";
 import { MOOD_MS, MoodboardScene, PIPELINE_MS, PipelineScene } from "./scenes-more";
 import { DEAL_MS, DealScene } from "./scenes-deal";
+import {
+  CX_ASK_MS,
+  CX_BOARDS_MS,
+  CX_CONNECT_MS,
+  CX_HERO_MS,
+  CX_OFFICE_MS,
+  CX_SHOOT_MS,
+  ConnectorAskScene,
+  ConnectorBoardsScene,
+  ConnectorConnectScene,
+  ConnectorHeroScene,
+  ConnectorOfficeScene,
+  ConnectorShootScene,
+} from "./scenes-connector";
 import { CRM_ACCOUNTS_MS, CRM_REQUEST_MS, CRM_TIMELINE_MS, CrmAccountsScene, CrmRequestScene, CrmTimelineScene } from "./scenes-crm";
 import { BOARD_MS, COMMS_MS, CommsScene, SCHEDULE_MS, ScheduleScene, StoryboardScene } from "./scenes-panels";
 
@@ -184,6 +198,12 @@ const SCENES = {
   "pv-finder": { ms: PV_FINDER_MS, C: PrevizFinderScene, label: "Viewfinder", hue: "orange" },
   "pv-assistant": { ms: AS_SCENE_MS, C: AssistantSceneScene, label: "Assistant", hue: "orange" },
   "ai-blocking": { ms: AS_BLOCK_MS, C: AssistantBlockingScene, label: "Blocking", hue: "purple" },
+  "cx-hero": { ms: CX_HERO_MS, C: ConnectorHeroScene, label: "Assistant", hue: "cyan" },
+  "cx-ask": { ms: CX_ASK_MS, C: ConnectorAskScene, label: "Ask", hue: "cyan" },
+  "cx-boards": { ms: CX_BOARDS_MS, C: ConnectorBoardsScene, label: "Boards", hue: "cyan" },
+  "cx-shoot": { ms: CX_SHOOT_MS, C: ConnectorShootScene, label: "The shoot", hue: "cyan" },
+  "cx-office": { ms: CX_OFFICE_MS, C: ConnectorOfficeScene, label: "Clients and money", hue: "cyan" },
+  "cx-connect": { ms: CX_CONNECT_MS, C: ConnectorConnectScene, label: "Connect", hue: "cyan" },
 } as const;
 
 export type SceneName = keyof typeof SCENES;

@@ -16,7 +16,6 @@ export function Topbar({
   collaborator = false,
   studios = [],
   activeStudioId = "",
-  assistant = false,
   studioName = "",
   logoUrl = null,
   projectNav = null,
@@ -26,9 +25,6 @@ export function Topbar({
   collaborator?: boolean;
   studios?: StudioOption[];
   activeStudioId?: string;
-  /** Runner reads studio-wide tables, so it is staff only, and it needs an AI
-   *  key to do anything at all. Both are decided on the server. */
-  assistant?: boolean;
   /** For the phone drawer's header, which is the sidebar's header. */
   studioName?: string;
   logoUrl?: string | null;
@@ -58,7 +54,6 @@ export function Topbar({
           collaborator={collaborator}
           studios={studios}
           activeStudioId={activeStudioId}
-          assistant={assistant}
         />
 
         {/* Phone brand. The sidebar carries it everywhere else. */}

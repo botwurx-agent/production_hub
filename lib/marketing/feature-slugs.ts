@@ -31,7 +31,7 @@ export const FEATURE_SLUGS = [
   "production-budgeting-software",
   "production-invoicing",
   "ai-video-production",
-  "runner",
+  "ai-production-assistant",
 ] as const;
 
 export type FeatureSlug = (typeof FEATURE_SLUGS)[number];

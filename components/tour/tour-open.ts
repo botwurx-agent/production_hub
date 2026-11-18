@@ -1,7 +1,7 @@
 "use client";
 
 // Module-level pub/sub so anything can start a tour, matching the pattern used
-// by the toast and by Runner. The replay entry in the user menu and the
+// by the toast. The replay entry in the user menu and the
 // auto-start on first visit both drive the same runner.
 
 type Listener = (tourId: string) => void;

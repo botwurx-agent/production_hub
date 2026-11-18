@@ -19,16 +19,10 @@ missing, so a gap is obvious rather than silent (see components/marketing/shot.t
 | `project-budget.png` | The money section, left column |
 | `project-invoices.png` | The money section, right column |
 | `project-pipeline.png` | AI pipeline section |
-| `runner-panel.png` | Runner section |
 
-Two of those are not a plain page load, so a capture script cannot get them on
-its own and they are taken by hand:
+One of those is not a plain page load, so a capture script cannot get it on
+its own and it is taken by hand:
 
-- `runner-panel.png` needs Runner open with a PROPOSAL CARD on screen, since
-  the section's claim is that it asks before it writes. An answer without a
-  card does not make that argument. Stand on a project so the panel's
-  selector names it, and press Cancel afterwards, or the write lands in the
-  demo and the budget shot above stops matching.
 - `project-pipeline.png` needs a project with real generations in it.
 
 `project-communication.png` has its own script:

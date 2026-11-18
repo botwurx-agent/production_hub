@@ -65,7 +65,7 @@ export async function saveContactProfile(
   }
 
   // Re-parsed here as well as in the form, because the payload crossed the
-  // browser. Same rule as the invoice extractor and the Runner cards: whatever
+  // browser. Same rule as the invoice extractor: whatever
   // comes back from a client is input again, not a value you already checked.
   const wardrobe = parseWardrobe(input.wardrobe ?? {});
 

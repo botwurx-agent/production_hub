@@ -8,8 +8,7 @@
 // bill, payment, from a cost that is already on the budget, with nothing
 // retyped.
 //
-// THE CONTRACT, which is the same one the remittance email and Runner's cards
-// hold: NOTHING HAPPENS WITHOUT A DELIBERATE PRESS that named the vendor and
+// THE CONTRACT, which is the same one the remittance email holds: NOTHING HAPPENS WITHOUT A DELIBERATE PRESS that named the vendor and
 // the amount. There is no automatic send, no send on page load, and no retry
 // loop. A payment that goes out twice cannot be recalled, so every guard here
 // errs toward refusing.

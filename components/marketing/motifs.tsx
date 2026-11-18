@@ -552,34 +552,29 @@ function AiMotif() {
   );
 }
 
-function RunnerMotif() {
+function AssistantMotif() {
   return (
-    <Stage hue="cyan" label="A chat request becoming a proposal card with Create and Cancel.">
+    <Stage hue="cyan" label="A request typed into Claude, and the three things it added to Studio Flows.">
       <div className="mx-auto max-w-sm space-y-3">
+        <p className="text-[10.5px] font-bold uppercase tracking-wide text-text-faint">Your Claude, your plan</p>
         <div className="ml-auto w-fit max-w-[85%] rounded-[14px] rounded-br-[4px] px-3.5 py-2 text-[13px] font-medium" style={{ backgroundColor: "var(--m-bg)", color: "var(--text)" }}>
-          Log the $1,200 camera rental against Bright Water
+          Shot list, schedule and Thursday&apos;s call sheet for First Light
         </div>
         <div className="rounded-[12px] border border-border bg-bg p-3.5 shadow-sm">
-          <p className="mb-2.5 text-[10.5px] font-bold uppercase tracking-wide text-text-faint">Proposed cost · nothing saved yet</p>
+          <p className="mb-2.5 text-[10.5px] font-bold uppercase tracking-wide text-text-faint">Added to Studio Flows</p>
           {[
-            ["Project", "Bright Water"],
-            ["Vendor", "Northside Rentals"],
-            ["Amount", "$1,200.00"],
+            ["Shot list", "14 shots"],
+            ["Schedule", "2 days, wraps 5:40 PM"],
+            ["Call sheet", "Draft, not sent"],
           ].map(([k, v]) => (
-            <div key={k} className="flex justify-between border-b border-border py-1.5 text-[12.5px] last:border-0">
-              <span className="font-medium text-text-faint">{k}</span>
-              <span className="font-semibold text-text">{v}</span>
+            <div key={k} className="flex items-center gap-2 border-b border-border py-1.5 text-[12.5px] last:border-0">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "var(--h-green)" }} />
+              <span className="font-semibold text-text">{k}</span>
+              <span className="ml-auto font-medium text-text-faint">{v}</span>
             </div>
           ))}
-          <div className="mt-3 flex gap-2">
-            <span className="rounded-pill px-3.5 py-1.5 text-[12px] font-bold" style={{ backgroundColor: "var(--accent)", color: "var(--accent-fg)" }}>
-              Create
-            </span>
-            <span className="rounded-pill border border-border px-3.5 py-1.5 text-[12px] font-bold text-text-muted">
-              Cancel
-            </span>
-          </div>
         </div>
+        <p className="text-center text-[12px] font-medium text-text-faint">No AI credits to buy from us.</p>
       </div>
     </Stage>
   );
@@ -803,7 +798,7 @@ const MOTIFS: Record<string, () => ReactNode> = {
   "production-budgeting-software": BudgetMotif,
   "production-invoicing": InvoicingMotif,
   "ai-video-production": AiMotif,
-  runner: RunnerMotif,
+  "ai-production-assistant": AssistantMotif,
 };
 
 /**

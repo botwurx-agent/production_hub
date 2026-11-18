@@ -186,7 +186,7 @@ function ThreadRow({ t }: { t: (typeof THREADS)[number] }) {
 export default function CommsFixture() {
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar studioName="Northline Studio" assistant />
+      <Sidebar studioName="Northline Studio" />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* A still of the topbar. The real one mounts a notification poll and a
             communication badge, both of which need a session this page does not

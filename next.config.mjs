@@ -21,7 +21,8 @@ const nextConfig = {
       { source: "/features/production", destination: "/call-sheet-software", permanent: true },
       { source: "/features/budget", destination: "/production-budgeting-software", permanent: true },
       { source: "/features/ai-pipeline", destination: "/ai-video-production", permanent: true },
-      { source: "/features/runner", destination: "/runner", permanent: true },
+      { source: "/features/runner", destination: "/ai-production-assistant", permanent: true },
+      { source: "/runner", destination: "/ai-production-assistant", permanent: true },
     ];
   },
   images: {

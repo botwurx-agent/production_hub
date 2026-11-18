@@ -1103,13 +1103,93 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       },
     ],
   },
+  "ai-production-assistant": {
+    hero: "cx-hero",
+    chapters: [
+      {
+        nav: "Ask",
+        title: "Ask where anything stands.",
+        body: "Ask the way you would ask a coordinator who has read every page. Where a job is, what is waiting on a client, who is still owed and when. It reads your studio's real records and answers in a sentence, with the figures the pages themselves show.",
+        details: [
+          { t: "Any job, by name", d: "Its stage, dates, brief, deliverables, reviews, tasks and people." },
+          { t: "The money", d: "What is owed and to whom, what was billed, and the margin on a job." },
+          { t: "The sales side", d: "Open deals, what they are worth, and which have gone quiet." },
+          { t: "What needs you", d: "Stalled approvals, overdue payments and anything else at risk right now." },
+          { t: "Questions nobody built a report for", d: "Which client asks for the most revision rounds, answered from the records." },
+        ],
+        scene: "cx-ask",
+      },
+      {
+        nav: "Shot lists and boards",
+        title: "From a script to a shot list in one message.",
+        body: "Paste the script or attach the treatment and ask for the shot list. The rows land in Studio Flows with their sizes, types and moves, ready to tighten. Storyboards and moodboards work the same way: pictures the assistant generated or found are copied into your project and laid out in order.",
+        details: [
+          { t: "Shot lists", d: "Rows with code, description, shot size, type, movement and day." },
+          { t: "Storyboards", d: "Frames in order with the picture, the scene, the sound and the motion." },
+          { t: "Moodboards", d: "Images, notes and headings, placed below whatever is already on the board." },
+          { t: "Pictures by link", d: "Images made in the same chat, by Claude or another tool you have connected, are stored in your project." },
+          { t: "A frame without a picture still lands", d: "If an image fails, the frame arrives as text and the assistant says which." },
+        ],
+        scene: "cx-boards",
+      },
+      {
+        nav: "The shoot",
+        title: "The schedule, the call sheet and the list of who is coming.",
+        body: "Once the shot list exists, ask for the schedule and it is built from it, day by day, with setups, lunch and a wrap time. Ask for the call sheet and a draft appears with the day's details and the people pulled from the job's contacts. Nothing goes out: you read it, fix it and send it yourself.",
+        details: [
+          { t: "The schedule from the shot list", d: "The same build as the schedule page's own button, with each day's wrap time reported back." },
+          { t: "Draft call sheets", d: "Date, calls, meals, location and the people, with their call times." },
+          { t: "Contacts from anywhere", d: "People from an email, or copied from an earlier job with their day rate." },
+          { t: "Tasks for the team", d: "Cards on the job's board with due dates, steps and who is on them." },
+          { t: "Props with options", d: "Each prop with pictures or links to choose between." },
+        ],
+        scene: "cx-shoot",
+      },
+      {
+        nav: "Clients and money",
+        title: "The office work, from a sentence.",
+        body: "Coming off a call, say what happened. The deal goes on the pipeline, the call goes on the client's timeline and the follow-up gets a due date. Starting a job is the same: the client, the project, the brief, the deliverables and the key dates, in one message. Invoices and receipts go onto the budget against the right job.",
+        details: [
+          { t: "Clients and projects", d: "A new client with its people, and a new job with its brief, deliverables and dates." },
+          { t: "Deals", d: "Added to a client's pipeline with a value and an expected close date." },
+          { t: "Calls, meetings and emails", d: "Logged on the timeline, with follow-ups assigned to you." },
+          { t: "Costs", d: "Invoices, estimates and receipts on the budget; an amount it cannot read is never added as zero." },
+          { t: "No doubles", d: "A client, project, deal or cost that already exists is found, not added again." },
+        ],
+        scene: "cx-office",
+      },
+      {
+        nav: "3D scenes",
+        title: "Describe the setup. It builds the scene.",
+        body: "Describe a lighting setup the way you would to a gaffer, or a camera move the way you would to a director, and a new scene is laid out in the scene builder or in shot blocking. Lights are placed by their role and kept out of frame, and a moving camera gets a support that can make the move. You open it and adjust.",
+        details: [
+          { t: "Scene builder setups", d: "The room, set pieces, people, lights, diffusion and cameras on real bodies and lenses." },
+          { t: "Shot blocking scenes", d: "A low-poly set, people and vehicles with their moves, and a camera move on a timeline." },
+          { t: "A starting layout", d: "The assistant cannot see the 3D, so it says what it built and you check it." },
+        ],
+        scene: "pv-assistant",
+      },
+      {
+        nav: "Connect and control",
+        title: "Two steps to connect. One press to turn off.",
+        body: "In Settings, make a private link and paste it into Claude as a custom connector. From then on the assistant works in your studio as you: it sees what you can see and nothing more. It can add, and it cannot change, delete or send, so the worst a wrong request can do is leave something extra for you to remove.",
+        details: [
+          { t: "A private link per person", d: "Named, with when it was last used, and up to ten at once." },
+          { t: "It works as you", d: "The same access you have in the app, checked on every request." },
+          { t: "Add only", d: "Nothing existing is edited or removed, and no email or link is ever sent for you." },
+          { t: "Off in one press", d: "Turn a link off in Settings and it stops working at once. Leaving the studio turns yours off too." },
+          { t: "Your own subscription", d: "Claude does the thinking on your plan, so Studio Flows sells no AI credits." },
+        ],
+        scene: "cx-connect",
+      },
+    ],
+  },
 };
 
 export const chaptersFor = (slug: string) => CHAPTERS[slug as FeatureSlug];
 
 /**
  * Pages whose LIVE route uses the chapter form: every page that has chapters
- * (operator approved them all, 2026-09-30). Runner has none yet, so it keeps
- * the older block layout. Previews stay at /dev/feature/<slug>.
+ * (operator approved them all, 2026-09-30). Previews stay at /dev/feature/<slug>.
  */
 export const LIVE_CHAPTER_PAGES = Object.keys(CHAPTERS) as FeatureSlug[];

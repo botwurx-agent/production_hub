@@ -35,7 +35,7 @@ import { SCENE_TOOL, createSceneSetupTool } from "@/lib/connector-scene-tool";
 
 /**
  * The AI connector's server half: who a link belongs to, a session as that
- * person, and the tools. Runner's read tools, plus a small set of ADD-ONLY
+ * person, and the tools. The read tools, plus a small set of ADD-ONLY
  * write tools (lib/connector-write.ts). Over MCP the tool call IS the action:
  * the host's own "allow this tool?" is the only check, which the operator
  * accepted (2026-10-10) on the condition that nothing here can delete or
@@ -152,9 +152,9 @@ const CATALOG_NOTE =
   "Tables you can read, as name(columns). `:num` marks a number, [a|b] lists the allowed values:\n";
 
 /**
- * Runner's read tools, unchanged except that `query` carries the schema in its
- * own description: Runner gets it from a system prompt, and a host that drops
- * the server instructions (some do) would otherwise be querying blind.
+ * The read tools, with `query` carrying the schema in its own description: a
+ * host that drops the server instructions (some do) would otherwise be
+ * querying blind.
  */
 const READ_ONLY_TOOLS: McpTool[] = READ_TOOLS.map((t) => ({
   name: t.name,

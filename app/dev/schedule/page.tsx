@@ -173,7 +173,7 @@ export default function Page({ searchParams }: { searchParams: { job?: string; d
   };
   return (
     <div className="flex min-h-screen bg-bg text-text">
-      <Sidebar studioName="Studio Flows" assistant />
+      <Sidebar studioName="Studio Flows" />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* ?clean=1 drops this bar so scripts/capture-demos.mjs can record the
             real editor without fixture controls in frame. */}

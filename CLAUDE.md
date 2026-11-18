@@ -4218,6 +4218,42 @@ returns no rows, so the value is null with no application check at all.
   compile time, `npx tsc --noEmit` after dropping a column IS the audit. Every
   site that touched it fails to build.
 
+### Runner is REMOVED; the Claude connector is the assistant (2026-11-18)
+Operator: "now that we have Claude fully connected with Studio Flows, I think
+Runner is obsolete... it should be removed from the app, and all language on
+the site should eliminate it. The focus should be on how Claude is integrated
+... almost like a production assistant." This closes the 2026-09-17 decision
+below. THE RUNNER SECTIONS THAT FOLLOW ARE HISTORY, none of it is live code.
+- GONE FROM THE APP: the nav row and Cmd+K, components/agent/* (panel, cards,
+  thread history), /api/agent, app/(app)/agent-actions.ts, the tour step, and
+  lib/agent/{cards,limits,loop,messages,suggestions,values}. The
+  OPENAI_AGENT_* / ANTHROPIC_AGENT_MODEL / RUNNER_DAILY_LIMIT env vars are
+  unread now.
+- KEPT, because the connector runs on it: lib/agent/tools.ts (READ_TOOLS only,
+  with the ToolSchema type), read-tools.ts, schema-map.ts, access.ts
+  (canUseConnector only). Dictation moved to components/ui/dictation.tsx (the
+  scene bar uses it).
+- DORMANT, NOT DROPPED: agent_threads and agent_messages (the parked-table
+  rule, as with leads and ai_looks).
+- THE SITE: the /runner page is replaced by /ai-production-assistant (nav
+  "Claude assistant", chapter form, 301 from /runner and /features/runner).
+  Six new scenes in components/marketing/scenes-connector.tsx (cx-hero, cx-ask,
+  cx-boards, cx-shoot, cx-office, cx-connect): the chat on the left, the
+  Studio Flows page filling in on the right. Every claim is a tool the
+  connector has today, and the copy says add only, never change, delete or
+  send. The home page's FIRST stack panel is now the assistant, the help
+  center's Runner guide became "Brief Claude like a production assistant",
+  and the Settings card lists what it does with three things to try.
+- PRICING, MY PLACEHOLDER, NOT A DECISION: the Runner turn counts are gone and
+  the connector is listed on every PAID plan (Solo and up, where Runner
+  started), with the "no AI credits to buy" FAQ. 3D scenes by assistant stay
+  Studio and up. The operator has not confirmed the tier. Nothing enforces it.
+- THE COPY LEADS WITH CLAUDE (verified live) and says once that the same link
+  works as a ChatGPT connector, which has never been run.
+- NOT DONE: nothing in the app points a new user at the connector except
+  Settings (no nav row, no setup-checklist step). The connector still cannot
+  change or delete, which is the limit the operator will hit next.
+
 ### Runner (the agent layer, migration 0077) — BUILT
 An in-app assistant called RUNNER (left nav, Cmd/Ctrl+K) that reads the studio
 and PROPOSES changes. Named for the production role: a runner fetches things,

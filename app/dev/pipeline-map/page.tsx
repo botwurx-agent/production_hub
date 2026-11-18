@@ -11,7 +11,7 @@ import { MapFixture } from "./map-fixture";
 export default function Page() {
   return (
     <div className="flex min-h-screen bg-bg text-text">
-      <Sidebar studioName="Studio Flows" assistant />
+      <Sidebar studioName="Studio Flows" />
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="w-full flex-1 px-4 py-6 md:px-6">
           <ProjectSubhead

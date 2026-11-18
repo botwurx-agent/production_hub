@@ -57,12 +57,6 @@ export const TOURS: Tour[] = [
         place: "right",
       },
       {
-        anchor: "runner",
-        title: "Runner",
-        body: "Ask it anything about your jobs, your money or what is going cold, and tell it what to log. It reads the studio and proposes changes as cards you confirm, so it never changes anything on its own.",
-        place: "right",
-      },
-      {
         anchor: "notifications",
         title: "When a client responds",
         body: "Approvals, comments and confirmations land here, so a client signing off on a cut does not depend on you refreshing a page to find out.",

@@ -6,8 +6,6 @@ import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { navFor, isActive } from "@/components/app-shell/nav-items";
 import { CommunicationBadge } from "@/components/app-shell/communication-badge";
-import { RunnerIcon } from "@/components/app-shell/nav-icons";
-import { openAgent } from "@/components/agent/agent-open";
 import {
   StudioSwitcher,
   type StudioOption,
@@ -17,14 +15,14 @@ import {
  * The phone's navigation: a hamburger that opens the sidebar as a drawer.
  *
  * It replaces a row of pills that shared the 390px top bar with a brand mark,
- * Runner, Invite, the bell, the theme toggle and the avatar. Six destinations
+ * Invite, the bell, the theme toggle and the avatar. Six destinations
  * were left about 110px of horizontally scrolling runway, so the second one was
  * already cut in half and the rest were found by swiping a strip of chrome
  * nobody reads as scrollable. It also quietly dropped /dashboard, which made
  * the documented home of the app unreachable on a phone.
  *
- * A drawer rather than a bottom tab bar because there are seven destinations
- * plus Runner, and a tab bar holds four or five before it starts hiding things
+ * A drawer rather than a bottom tab bar because there are seven destinations,
+ * and a tab bar holds four or five before it starts hiding things
  * behind a "More" that is the same problem again. The drawer is the sidebar:
  * same order, same icons, same labels, same badge, from the same array.
  */
@@ -34,14 +32,12 @@ export function MobileNav({
   collaborator = false,
   studios = [],
   activeStudioId = "",
-  assistant = false,
 }: {
   studioName: string;
   logoUrl?: string | null;
   collaborator?: boolean;
   studios?: StudioOption[];
   activeStudioId?: string;
-  assistant?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -136,23 +132,6 @@ export function MobileNav({
                 </div>
 
                 <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
-                  {assistant ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpen(false);
-                          openAgent();
-                        }}
-                        className={`${row} w-full text-text-muted hover:bg-surface-2 hover:text-text`}
-                      >
-                        <RunnerIcon />
-                        Runner
-                      </button>
-                      <div className="!my-2 border-t border-border" />
-                    </>
-                  ) : null}
-
                   {items.map(({ href, label, Icon }) => {
                     const active = isActive(pathname, href);
                     return (

@@ -83,6 +83,18 @@ export default function MarketingHome() {
     <StackPanels
       panels={[
         {
+          eyebrow: "Claude, connected",
+          title: "Brief it like a production assistant.",
+          body: "Connect your own Claude and hand it the typing. Paste a script and get the shot list, ask for the schedule and Thursday's call sheet, or ask who you still owe. The work lands in your studio in seconds, with a link to check it.",
+          hue: "indigo",
+          cta: (
+            <Link href="/ai-production-assistant" className="text-[15px] font-semibold text-accent">
+              More about the assistant
+            </Link>
+          ),
+          children: <LiveScene name="cx-hero" className="h-full" box />,
+        },
+        {
           eyebrow: "Storyboards and shot lists",
           title: "From pencils to a shot list.",
           body: "Frames go from sketch to final on the board, and every frame becomes a shot with its size and move, ready for the day.",
@@ -162,7 +174,7 @@ export default function MarketingHome() {
         "See the margin before the job wraps.",
         "Every AI take, one pick.",
         "Clients ask for the next job from their own link.",
-        "Bring your own Claude or ChatGPT.",
+        "Brief Claude like a production assistant.",
       ]}
     />
     </>

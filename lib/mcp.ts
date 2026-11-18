@@ -114,8 +114,7 @@ export async function handleRpc(msg: unknown, deps: McpDeps): Promise<RpcRespons
           ? (params.arguments as Record<string, unknown>)
           : {};
       // A tool failure is a RESULT with isError, not a protocol error: the
-      // model is meant to read it and try again, the same contract Runner's
-      // tools have always had.
+      // model is meant to read it and try again.
       try {
         const out = await deps.callTool(name, args);
         const text = clip(JSON.stringify(out ?? null), deps.maxResultChars);

@@ -107,7 +107,7 @@ export function phaseMeta(
   };
 }
 
-/** Narrow an untrusted value (a form field, a Runner argument) to a phase. */
+/** Narrow an untrusted value (a form field, a connector argument) to a phase. */
 export function taskPhase(v: string | null | undefined): ProjectStatus | null {
   return v && (PROJECT_STATUS_ORDER as string[]).includes(v)
     ? (v as ProjectStatus)

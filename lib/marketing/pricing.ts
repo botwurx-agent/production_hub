@@ -81,7 +81,7 @@ export const PLANS: Plan[] = [
       "1 seat",
       "Unlimited active projects",
       "100GB storage",
-      "150 Runner turns a month",
+      "Your own Claude connected as an assistant",
       "Delivery, binders and document exports",
     ],
   },
@@ -96,7 +96,6 @@ export const PLANS: Plan[] = [
     points: [
       "5 seats, then $18 each",
       "500GB storage",
-      "600 Runner turns a month",
       "Budget, cost ledger and margin",
       "Clients, deals and the CRM timeline",
       "Scene builder, shot blocking and the phone viewfinder",
@@ -113,7 +112,6 @@ export const PLANS: Plan[] = [
     points: [
       "15 seats, then $14 each",
       "2TB storage",
-      "2,500 Runner turns a month",
       "Onboarding and setup session",
       "Priority support",
     ],
@@ -271,15 +269,16 @@ export const COMPARE: CompareBand[] = [
     ],
   },
   {
-    name: "Runner",
-    blurb: "The assistant that reads your studio and proposes, never writes on its own.",
+    name: "Claude assistant",
+    blurb: "Connect your own Claude and brief it like a production assistant. It runs on your plan, so there are no AI credits to buy here.",
     hue: "cyan",
     icon: "M4 6.5h12v8H4z M10 3v3.5 M7 10v1.5 M13 10v1.5 M2 8.5v4 M18 8.5v4",
     rows: [
-      { label: "Ask anything about the studio, answered from live data", cells: PAID },
-      { label: "Proposes a change as a card you confirm", cells: PAID },
-      { label: "Turns a month", cells: [false, "150", "600", "2,500"] },
-      { label: "Conversation history, private to you", cells: PAID },
+      { label: "Ask anything about the studio, answered from your real records", cells: PAID },
+      { label: "Adds shot lists, storyboards, moodboards, schedules and call sheets", cells: PAID },
+      { label: "Adds clients, projects, deals, contacts, tasks, costs and props", cells: PAID },
+      { label: "Adds only: never changes, deletes or sends", cells: PAID },
+      { label: "Private link per person, off in one press", cells: PAID },
     ],
   },
   {
@@ -340,8 +339,8 @@ export const FAQS: { q: string; a: string }[] = [
     a: "Archive it and start the next one. Archiving takes a job out of the count without deleting anything, and an archived project still opens, so a year of finished work stays readable on the free plan. Solo lifts the cap entirely when you need two jobs open at once.",
   },
   {
-    q: "What is a Runner turn?",
-    a: "One question and the answer to it. Runner reading four things across the studio and coming back with a number is a single turn, not four. Runner starts on Solo. Everything else that uses AI here is unmetered on every paid plan: reading a supplier invoice or estimate, pulling deliverables out of a signed SOW, reading a treatment into a shot list, and polishing a message before you send it.",
+    q: "Do I pay Studio Flows for AI?",
+    a: "No. The assistant is your own Claude, connected to your studio with a private link, so the thinking runs on the Claude plan you already have and there are no credits or turns to buy here. It starts on Solo. The helpers built into the pages are unmetered on every paid plan too: reading a supplier invoice or estimate, pulling deliverables out of a signed SOW, reading a treatment into a shot list, and polishing a message before you send it.",
   },
   {
     q: "What counts toward storage?",

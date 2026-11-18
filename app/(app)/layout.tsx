@@ -12,9 +12,7 @@ import { AiAvailabilityProvider } from "@/components/ai/ai-availability";
 import { TeamReviewProvider } from "@/components/review/team-review";
 import { AppVoiceProvider } from "@/components/review/voice-note";
 import { AppTranscriptProvider } from "@/components/review/transcript-panel";
-import { AgentMount } from "@/components/agent/agent-mount";
 import { TourGuide } from "@/components/tour/tour-guide";
-import { canUseRunner } from "@/lib/agent/access";
 import { createClient } from "@/lib/supabase/server";
 import { ProjectNav } from "@/components/projects/project-nav";
 
@@ -65,11 +63,6 @@ export default async function AppLayout({
       ).data
     : null;
 
-  // One seam for "may this studio use Runner", so a paid-tier check lands in
-  // exactly one place later. This only decides whether the nav row is shown;
-  // the real gate is server-side in the route and in confirmCard.
-  const assistant = canUseRunner(ctx);
-
   const outstanding = await getOutstanding();
   const logoUrl = await signedLogoUrl(ctx.studio.logo_path);
 
@@ -95,7 +88,6 @@ export default async function AppLayout({
           collaborator={ctx.isCollaborator}
           studios={studios}
           activeStudioId={ctx.studio.id}
-          assistant={assistant}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar
@@ -104,7 +96,6 @@ export default async function AppLayout({
             collaborator={ctx.isCollaborator}
             studios={studios}
             activeStudioId={ctx.studio.id}
-            assistant={assistant}
             studioName={ctx.studio.name}
             logoUrl={logoUrl}
             projectNav={
@@ -121,7 +112,6 @@ export default async function AppLayout({
             {children}
           </main>
         </div>
-        {assistant ? <AgentMount /> : null}
         {/* One renderer for every tour, so the replay entry in the user menu
             works from any page. Pages opt into a first-run tour with
             TourTrigger. */}

@@ -6,7 +6,7 @@
 // single Undo away; the card says what was done and what could not be read.
 import { useState } from "react";
 import type { Asked } from "@/lib/blocking/scene";
-import { Dictation } from "@/components/agent/dictation";
+import { Dictation } from "@/components/ui/dictation";
 
 export type SceneBarAnswer = { summary: string; skipped: string[] } | { error: string };
 

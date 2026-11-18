@@ -15,9 +15,9 @@ import { ActionLabel, Chip, Cursor, Window, arrive, dragAt, ramp, typed } from "
  * size. The assistant's name is said in text only; no brand marks.
  */
 
-const CHAT_W = 248;
+export const CHAT_W = 248;
 
-function ChatPanel({
+export function ChatPanel({
   t,
   ask,
   askAt,
