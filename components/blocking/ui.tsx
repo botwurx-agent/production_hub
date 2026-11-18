@@ -161,16 +161,19 @@ export function Select({
 }
 
 export function Btn({
-  children, onClick, tone = "plain", disabled, title, active, className = "",
+  children, onClick, tone = "plain", disabled, title, active, solid, className = "",
 }: {
   children: React.ReactNode; onClick?: () => void; tone?: "plain" | "primary" | "danger" | "rec";
   disabled?: boolean; title?: string; active?: boolean; className?: string;
+  /** Sits over the picture, so it needs a ground of its own. */
+  solid?: boolean;
 }) {
+  const ground = solid ? "bg-surface" : "";
   const t =
     tone === "primary" ? "border-accent bg-accent text-accent-fg hover:brightness-110"
       : tone === "danger" ? "border-border text-red hover:border-red"
         : tone === "rec" ? (active ? "border-red bg-red text-white" : "border-border text-text-muted hover:text-text")
-          : active ? "border-accent bg-accent-soft text-text" : "border-border text-text-muted hover:border-border-strong hover:text-text";
+          : active ? "border-accent bg-accent-soft text-text" : `border-border ${ground} text-text-muted hover:border-border-strong hover:text-text`;
   return (
     <button type="button" title={title} disabled={disabled} onClick={onClick}
       className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-[6px] border px-2 text-[11.5px] font-semibold transition disabled:opacity-40 ${t} ${className}`}>

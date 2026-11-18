@@ -9000,6 +9000,13 @@ the side window to the dog, out through the windshield, ending ahead.
   watch stick drift against the 0.15 dead zone, which way pan and tilt feel,
   and whether Safari lists the pad. NOT BUILT: recording a live move as a take
   from the controller (the phone has it), and driving people or vehicles.
+- THE VIEWPORT TOOLBAR, TIDIED (2026-11-18, operator: "these buttons need
+  to be cleaned up"). Plain Btns over the picture had NO background, so the
+  frame's edge and the thirds lines showed through them, and the frame's top
+  edge ran under the toolbar. Btn gained `solid` (a surface ground, for
+  anything sitting over the viewport), every control in the bar is 28px
+  (the segmented pairs were taller), the crosshair's menu half is a drawn
+  chevron, and frameRect starts the frame 46px down so it clears the bar.
 - NEXT (agreed order): describe a scene and have it laid out.
 
 ### Phone viewfinder + location stills (migration 0116) — BUILT, not yet run on a real phone

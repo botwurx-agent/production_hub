@@ -96,12 +96,15 @@ function pickMime(): string | null {
 
 /** The camera frame inside the viewport, letterboxed with a margin. */
 function frameRect(w: number, h: number, ratio: number, margin = 28) {
+  // The toolbar sits along the top (8 + 28 + 8), so the frame starts under it.
+  const top = 46;
+  const bottom = margin + 2;
   const aw = Math.max(10, w - margin * 2);
-  const ah = Math.max(10, h - margin * 2);
+  const ah = Math.max(10, h - top - bottom);
   let fw = aw;
   let fh = aw / ratio;
   if (fh > ah) { fh = ah; fw = ah * ratio; }
-  return { x: (w - fw) / 2, y: (h - fh) / 2, w: fw, h: fh };
+  return { x: (w - fw) / 2, y: top + (ah - fh) / 2, w: fw, h: fh };
 }
 
 type CrossStyle = "cross" | "lines" | "dot";
@@ -1984,33 +1987,35 @@ export function BlockingStudio({
       {/* Viewport */}
       <div className="relative min-h-0 min-w-0">
         <div className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-1.5">
-          <div className="flex rounded-[7px] border border-border bg-surface p-0.5">
+          <div className="flex h-7 items-stretch rounded-[6px] border border-border bg-surface p-0.5">
             {(["camera", "free"] as View[]).map((v) => (
               <button key={v} type="button" onClick={() => setView(v)}
-                className={`rounded-[5px] px-2.5 py-1 text-[11.5px] font-semibold ${view === v ? "bg-accent text-accent-fg" : "text-text-muted hover:text-text"}`}>
+                className={`rounded-[4px] px-2.5 text-[11.5px] font-semibold ${view === v ? "bg-accent text-accent-fg" : "text-text-muted hover:text-text"}`}>
                 {v === "camera" ? "Camera" : "Free view"}
               </button>
             ))}
           </div>
           {view === "free" && canEdit && (
-            <div className="flex rounded-[7px] border border-border bg-surface p-0.5">
+            <div className="flex h-7 items-stretch rounded-[6px] border border-border bg-surface p-0.5">
               {(["translate", "rotate"] as const).map((m) => (
                 <button key={m} type="button" onClick={() => setTcMode(m)} title={m === "translate" ? "Move (G)" : "Turn (R)"}
-                  className={`rounded-[5px] px-2.5 py-1 text-[11.5px] font-semibold ${tcMode === m ? "bg-accent text-accent-fg" : "text-text-muted hover:text-text"}`}>
+                  className={`rounded-[4px] px-2.5 text-[11.5px] font-semibold ${tcMode === m ? "bg-accent text-accent-fg" : "text-text-muted hover:text-text"}`}>
                   {m === "translate" ? "Move" : "Turn"}
                 </button>
               ))}
             </div>
           )}
-          {view === "free" && <Btn onClick={frameSelection} title="Frame the selection">Frame</Btn>}
-          {view === "camera" && <Btn active={thirds} onClick={() => setThirds(!thirds)} title="Rule of thirds">Thirds</Btn>}
+          {view === "free" && <Btn solid onClick={frameSelection} title="Frame the selection">Frame</Btn>}
+          {view === "camera" && <Btn solid active={thirds} onClick={() => setThirds(!thirds)} title="Rule of thirds">Thirds</Btn>}
           {view === "camera" && (
             <div ref={crossRef} className="relative flex">
-              <Btn active={cross.on} onClick={() => saveCross({ ...cross, on: !cross.on })} title="Crosshair at the centre of frame" className="rounded-r-none">
+              <Btn solid active={cross.on} onClick={() => saveCross({ ...cross, on: !cross.on })} title="Crosshair at the centre of frame" className="rounded-r-none">
                 <span className="h-2.5 w-2.5 rounded-full border border-border-strong" style={{ background: cross.color }} />
                 Crosshair
               </Btn>
-              <Btn onClick={() => setCrossOpen((v) => !v)} title="Crosshair colour and style" className="-ml-px rounded-l-none px-1.5">▾</Btn>
+              <Btn solid active={crossOpen} onClick={() => setCrossOpen((v) => !v)} title="Crosshair colour and style" className="-ml-px w-6 rounded-l-none px-0">
+                <svg width="8" height="5" viewBox="0 0 8 5" aria-hidden="true"><path d="M1 1l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </Btn>
               {crossOpen && (
                 <div className="absolute left-0 top-9 z-30 w-[200px] rounded-[10px] border border-border bg-surface p-2.5 shadow-2xl">
                   <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-text-faint">Colour</p>
@@ -2038,7 +2043,7 @@ export function BlockingStudio({
           )}
           {canEdit && (
             <div ref={ctrlMenuRef} className="relative ml-auto">
-              <Btn active={ctrlOpen} onClick={() => setCtrlOpen((v) => !v)} title="Drive the camera with a game controller">
+              <Btn solid active={ctrlOpen} onClick={() => setCtrlOpen((v) => !v)} title="Drive the camera with a game controller">
                 {ctrl.info && <span className="h-2 w-2 rounded-full" style={{ background: "var(--h-green)" }} />}
                 Controller
               </Btn>
@@ -2047,7 +2052,7 @@ export function BlockingStudio({
           )}
           {canEdit && (
             <div ref={phoneMenuRef} className="relative">
-              <Btn active={phoneOpen} onClick={() => { phone.start(); setPhoneOpen((v) => !v); }} title="Use your phone as the camera">
+              <Btn solid active={phoneOpen} onClick={() => { phone.start(); setPhoneOpen((v) => !v); }} title="Use your phone as the camera">
                 {phone.status !== "off" && (
                   <span className="h-2 w-2 rounded-full" style={{ background: `var(--h-${phone.status === "live" ? "green" : "amber"})` }} />
                 )}
