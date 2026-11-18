@@ -22,13 +22,34 @@ const REPEAT_EVERY = 0.08;
 
 type PadInfo = { id: string; standard: boolean };
 
-function readPad(): { pad: Gamepad; state: PadState } | null {
-  if (typeof navigator === "undefined" || !navigator.getGamepads) return null;
-  let pads: (Gamepad | null)[] = [];
-  try { pads = Array.from(navigator.getGamepads()); } catch { return null; }
-  const pad = pads.find((p) => p && p.connected);
-  if (!pad) return null;
-  return { pad, state: { axes: Array.from(pad.axes), buttons: pad.buttons.map((b) => b.value) } };
+/** The pad last seen doing something, so a second device cannot take over mid-session. */
+let lastActive = -1;
+
+const stateOf = (pad: Gamepad): PadState => ({ axes: Array.from(pad.axes), buttons: pad.buttons.map((b) => b.value) });
+const busy = (s: PadState) => s.buttons.some((b) => b > 0.5) || s.axes.some((a) => Math.abs(a) > 0.5);
+
+function listPads(): Gamepad[] {
+  if (typeof navigator === "undefined" || !navigator.getGamepads) return [];
+  try { return Array.from(navigator.getGamepads()).filter((p): p is Gamepad => !!p && p.connected); } catch { return []; }
+}
+
+/**
+ * The controller to listen to. A computer often lists more than one "gamepad"
+ * (a headset, a wheel, a virtual device), and the first in the list is not
+ * always the one in the person's hands: the one being used right now wins,
+ * then the one used last, then a standard-layout pad, then the one with the
+ * most sticks and buttons.
+ */
+function readPad(): { pad: Gamepad; state: PadState; count: number } | null {
+  const pads = listPads();
+  if (!pads.length) return null;
+  const active = pads.find((p) => busy(stateOf(p)));
+  if (active) lastActive = active.index;
+  const pad =
+    active ??
+    pads.find((p) => p.index === lastActive) ??
+    [...pads].sort((a, b) => Number(b.mapping === "standard") - Number(a.mapping === "standard") || b.axes.length + b.buttons.length - (a.axes.length + a.buttons.length))[0];
+  return { pad, state: stateOf(pad), count: pads.length };
 }
 
 /** A pad's name without the vendor and product numbers browsers append. */
@@ -152,8 +173,57 @@ const DEAD: { id: string; name: string; v: number }[] = [
   { id: "large", name: "Large", v: 0.25 },
 ];
 
+/** What the browser is getting from the controller right now, so a dead control can be told from a dead connection. */
+function LiveReadout({ supported }: { supported: boolean }) {
+  const [text, setText] = useState<{ head: string; body: string; ok: boolean }>({ head: "", body: "", ok: false });
+  useEffect(() => {
+    let raf = 0;
+    let last = "";
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const r = readPad();
+      let next: { head: string; body: string; ok: boolean };
+      if (!r) {
+        next = {
+          ok: false,
+          head: supported ? "This browser sees no controller yet" : "This browser cannot use controllers",
+          body: supported
+            ? "Click once anywhere on this page, then press a button on the controller. If nothing changes: check it is on and paired, close other apps that may be holding it (Steam, a game), or try Chrome."
+            : "Try Chrome or Edge.",
+        };
+      } else {
+        const std = r.pad.mapping === "standard";
+        const ax = (i: number) => (r.state.axes[i] ?? 0).toFixed(2);
+        const down = r.state.buttons.map((v, i) => (v > 0.5 ? buttonName(i, std) : "")).filter(Boolean);
+        next = {
+          ok: true,
+          head: `Receiving${r.count > 1 ? ` (1 of ${r.count} devices)` : ""}: ${std ? "standard layout" : "non-standard layout"}`,
+          body:
+            `Left stick ${ax(0)}, ${ax(1)} · Right stick ${ax(2)}, ${ax(3)}${r.state.axes.length > 4 ? ` · ${r.state.axes.length} axes` : ""}\n` +
+            `Pressed: ${down.length ? down.join(", ") : "nothing"}` +
+            (std ? "" : "\nThis controller reports its buttons in its own order. Use Customize the controls to assign each one."),
+        };
+      }
+      const key = next.head + next.body;
+      if (key !== last) { last = key; setText(next); }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [supported]);
+  return (
+    <div data-pad-live className="mt-2 rounded-[7px] border border-border bg-surface-2 px-2.5 py-2">
+      <p className="flex items-center gap-2 text-[11px] font-semibold text-text">
+        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: `var(--h-${text.ok ? "green" : "amber"})` }} />
+        {text.head}
+      </p>
+      <p className="mt-1 whitespace-pre-line text-[10.5px] leading-relaxed text-text-muted">{text.body}</p>
+    </div>
+  );
+}
+
 export function ControllerPanel({ ctrl, onCustomize }: { ctrl: Controller; onCustomize: () => void }) {
   const { cfg, info } = ctrl;
+  const supported = typeof navigator !== "undefined" && !!navigator.getGamepads;
   const std = info?.standard ?? true;
   const set = (patch: Partial<PadConfig["settings"]>) => ctrl.save({ ...cfg, settings: { ...cfg.settings, ...patch } });
   const dead = DEAD.reduce((a, b) => (Math.abs(b.v - cfg.settings.deadZone) < Math.abs(a.v - cfg.settings.deadZone) ? b : a)).id;
@@ -171,6 +241,7 @@ export function ControllerPanel({ ctrl, onCustomize }: { ctrl: Controller; onCus
         <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: `var(--h-${info ? "green" : "amber"})` }} />
         {info ? info.id : "Plug in or pair a controller, then press any button on it"}
       </p>
+      <LiveReadout supported={supported} />
       <p className="mt-2 text-[11px] leading-relaxed text-text-muted">
         The sticks move the camera to a framing. Nothing is saved until you set a keyframe; move the playhead, frame again, set another.
       </p>

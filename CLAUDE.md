@@ -8977,6 +8977,14 @@ the side window to the dog, out through the windshield, ending ahead.
   The pad is read inside the studio's own frame loop (ctrl.frame), every
   frame, so buttons work during playback; sticks drive only when not playing,
   exporting, in a phone take, or while the phone drives.
+  FIRST REAL TRY (2026-11-18): "the app isnt responding" with the pad
+  connected, cause not yet known. Two changes followed: readPad no longer
+  takes the FIRST listed device (a headset or wheel can be listed ahead of
+  the pad): the one in use wins, then the one used last, then a
+  standard-layout pad. And the panel has a LIVE READOUT (LiveReadout) of
+  what the browser is receiving (sticks, pressed buttons, layout, device
+  count), or what to try when it sees nothing, so the next report says
+  whether the browser, the layout or our code is at fault.
   Verified in headless Chromium with a FAKE pad (navigator.getGamepads
   replaced): jog, play refused, frame step, store a key (7 to 8 keys), undo,
   discard, rebinding with a steal, reset. NOT tried with a real controller:
