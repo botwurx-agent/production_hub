@@ -10452,8 +10452,11 @@ view of everything on an AI job, with arrows between related assets.
   foldUnused, default on, only when there are two or more): count, kinds,
   first three pictures; a click deals them out, and an "Unused elements (N)"
   toggle in the toolbar folds them back. Not remembered across reloads.
-  Verified on the fixture only. OPEN: the operator also asked to "include the
-  shot associated with the lineage"; what they meant was asked, not guessed.
+  Verified on the fixture only. A small "N not used yet · Fold" bar sits
+  above the first dealt-out element (graph.unusedHead). The operator's ask to
+  "include the shot associated with the lineage" needed NOTHING built: they
+  meant the finished take, which appears on the map once it is in the
+  pipeline, and they confirmed it did.
 - PHONES CRASHED IT (2026-11-04, Zelvara, 85 generations): scrolling the map
   on an iPhone closed the tab ("Can't open this page" = out of memory). Every
   video take mounted its own <video>, and every card loaded its picture
