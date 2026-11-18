@@ -47,6 +47,12 @@ const INPUT: MapInput = {
     { id: "e2", name: "Lake house jetty", kind: "location" },
     { id: "e3", name: "Golden Hour can", kind: "element" },
     { id: "e4", name: "Linen summer look", kind: "wardrobe" },
+    { id: "u1", name: "GOLDEN-Crew-Deckhand", kind: "character" },
+    { id: "u2", name: "GOLDEN-Crew-Skipper", kind: "character" },
+    { id: "u3", name: "GOLDEN-Dock-Night", kind: "location" },
+    { id: "u4", name: "GOLDEN-Dock-Dawn", kind: "location" },
+    { id: "u5", name: "GOLDEN-Cooler", kind: "element" },
+    { id: "u6", name: "GOLDEN-Towel", kind: "element" },
   ],
   uses: [
     { shot_id: "s1", entity_id: "e2" },
@@ -104,7 +110,7 @@ INPUT.generations.forEach((x, i) => {
   const [a, b] = PALETTE[i % PALETTE.length];
   THUMBS[x.id] = pic(x.kind === "audio" ? "VO" : x.id.toUpperCase(), a, b);
 });
-const EL_THUMBS: Record<string, string> = { e1: pic("", "#d9a07b", "#6b3f2a"), e2: pic("", "#7fb6d8", "#355c45"), e3: pic("", "#f2d06b", "#c7782e"), e4: pic("", "#efe6d2", "#a8957a") };
+const EL_THUMBS: Record<string, string> = { e1: pic("", "#d9a07b", "#6b3f2a"), e2: pic("", "#7fb6d8", "#355c45"), e3: pic("", "#f2d06b", "#c7782e"), e4: pic("", "#efe6d2", "#a8957a"), u1: pic("", "#8a6a4f", "#2c2420"), u2: pic("", "#6d7f8f", "#1f2a33"), u3: pic("", "#27364f", "#0d1320"), u4: pic("", "#f0c9a0", "#7a8fb0"), u5: pic("", "#e45c4a", "#f4f1ea") };
 
 const KEY = "pipeline.map.fixture";
 

@@ -1451,6 +1451,24 @@ export function PipelineWorkspace({
     }
     return out;
   }, [castReferences]);
+  // The same pictures at full size, for the map's hover preview and detail card.
+  const mapFullImages = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const g of generations) {
+      if (g.kind === "video" || g.kind === "audio") continue;
+      const u = media[g.id];
+      if (u) out[g.id] = u;
+    }
+    return out;
+  }, [generations, media]);
+  const elementImages = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const r of castReferences) {
+      const sheet = r.sheets[0];
+      if (sheet?.url) out[r.id] = sheet.url;
+    }
+    return out;
+  }, [castReferences]);
   const cutLatest = masterCut ? [...masterCut.versions].sort((a, b) => b.version_number - a.version_number)[0] : null;
 
   function saveLayout(next: MapPositions) {
@@ -1550,6 +1568,8 @@ export function PipelineWorkspace({
           thumbs={mapThumbs}
           videos={mapVideos}
           elementThumbs={elementThumbs}
+          fullImages={mapFullImages}
+          elementImages={elementImages}
           cutThumb={cutLatest?.thumbUrl ?? cutLatest?.posterUrl ?? null}
           positions={positions}
           onPositionsChange={saveLayout}

@@ -18,6 +18,7 @@ import {
   edgeLabel,
   lineage,
   withPositions,
+  UNUSED_STACK_ID,
   type MapEdge,
   type MapInput,
   type MapNode,
@@ -33,6 +34,12 @@ export type PipelineMapProps = {
   /** Signed sheet image per element id, if any. */
   elementThumbs?: Record<string, string>;
   cutThumb?: string | null;
+  /**
+   * The picture at a size worth looking at, per generation id and per element
+   * id, for the hover preview and the detail card. Falls back to the thumbnail.
+   */
+  fullImages?: Record<string, string>;
+  elementImages?: Record<string, string>;
   positions: MapPositions;
   onPositionsChange: (next: MapPositions) => void;
   /** Jump to a shot's cockpit in the pipeline. */
@@ -76,6 +83,8 @@ export function PipelineMap({
   videos = {},
   elementThumbs = {},
   cutThumb = null,
+  fullImages = {},
+  elementImages = {},
   positions,
   onPositionsChange,
   onOpenShot,
@@ -86,10 +95,25 @@ export function PipelineMap({
   const [showElements, setShowElements] = useState(true);
   const [shotId, setShotId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // Elements no shot uses sit in one stacked card until asked for.
+  const [foldUnused, setFoldUnused] = useState(true);
+  // The card under a mouse, once it has rested there: shows the picture large.
+  const [hover, setHover] = useState<string | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverOn = (id: string) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setHover(id), 220);
+  };
+  const hoverOff = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+    setHover(null);
+  };
+  useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }, []);
 
   const auto = useMemo(
-    () => buildMap(input, { showRejected, showElements, shotId }),
-    [input, showRejected, showElements, shotId]
+    () => buildMap(input, { showRejected, showElements, shotId, foldUnused }),
+    [input, showRejected, showElements, shotId, foldUnused]
   );
 
   // Live drag positions sit over the saved ones so a drag paints every frame
@@ -230,6 +254,7 @@ export function PipelineMap({
   const onNodeDown = (e: React.PointerEvent, n: MapNode) => {
     if (e.button !== 0) return;
     e.stopPropagation();
+    hoverOff();
     // A shot carries its lane, so rearranging the job is moving shots, not
     // forty thumbnails one at a time. Alt moves the shot alone.
     const ids =
@@ -292,6 +317,12 @@ export function PipelineMap({
       return;
     }
     if (!d.moved) {
+      // The stack is not a thing to inspect: a click deals its cards out.
+      if (d.clicked === UNUSED_STACK_ID) {
+        setFoldUnused(false);
+        setLive(null);
+        return;
+      }
       setSelected((cur) => (cur === d.clicked ? null : d.clicked));
       setLive(null);
       return;
@@ -331,6 +362,11 @@ export function PipelineMap({
           ))}
         </select>
         <Toggle on={showElements} onChange={setShowElements}>Elements</Toggle>
+        {showElements && auto.unusedElements > 1 && (
+          <Toggle on={!foldUnused} onChange={(v) => setFoldUnused(!v)}>
+            Unused elements ({auto.unusedElements})
+          </Toggle>
+        )}
         <Toggle on={showRejected} onChange={setShowRejected}>
           Rejected{!showRejected && auto.hiddenRejected ? ` (${auto.hiddenRejected} hidden)` : ""}
         </Toggle>
@@ -399,7 +435,9 @@ export function PipelineMap({
                     video={video}
                     selected={selected === n.id}
                     dim={!!lit && !lit.nodes.has(n.id)}
+                    stack={n.members ? n.members.slice(0, 3).map((id) => (visible ? elementThumbs[id] ?? null : null)) : null}
                     onPointerDown={(e) => onNodeDown(e, n)}
+                    onHover={(on) => (on && !drag.current ? hoverOn(n.id) : hoverOff())}
                   />
                 );
               });
@@ -415,10 +453,18 @@ export function PipelineMap({
 
         <Legend />
 
-        {sel && <Detail node={sel} edges={graph.edges} byId={byId} onOpenShot={onOpenShot} onGenerate={onGenerate} onClose={() => setSelected(null)} />}
+        {(() => {
+          const n = hover && hover !== selected ? byId.get(hover) : null;
+          if (!n || n.members) return null;
+          const src = pictureFor(n, fullImages, elementImages) ?? thumbFor(n, thumbs, elementThumbs, cutThumb);
+          if (!src) return null;
+          return <Preview node={n} src={src} view={view} stage={stageSize} />;
+        })()}
+
+        {sel && <Detail picture={pictureFor(sel, fullImages, elementImages) ?? thumbFor(sel, thumbs, elementThumbs, cutThumb)} clip={sel.id.startsWith("gen:") ? videos[sel.id.slice(4)] ?? null : null} node={sel} edges={graph.edges} byId={byId} onOpenShot={onOpenShot} onGenerate={onGenerate} onClose={() => setSelected(null)} />}
       </div>
       <p className="text-xs text-text-faint">
-        Drag to pan, pinch or scroll to zoom. Drag a shot to move its whole row (hold Alt to move the shot alone). Click anything to trace where it came from and what it fed.
+        Drag to pan, pinch or scroll to zoom. Rest the pointer on a card to see its picture larger. Drag a shot to move its whole row (hold Alt to move the shot alone). Click anything to trace where it came from and what it fed.
       </p>
     </div>
   );
@@ -429,6 +475,56 @@ function thumbFor(n: MapNode, thumbs: Record<string, string>, el: Record<string,
   if (n.id.startsWith("el:")) return el[n.id.slice(3)] ?? null;
   if (n.type === "cut") return cut;
   return null;
+}
+
+function pictureFor(n: MapNode, full: Record<string, string>, el: Record<string, string>): string | null {
+  if (n.id.startsWith("gen:")) return full[n.id.slice(4)] ?? null;
+  if (n.id.startsWith("el:")) return el[n.id.slice(3)] ?? null;
+  return null;
+}
+
+/**
+ * The picture, large, beside the card the pointer is resting on. Drawn in the
+ * stage's own pixels (not inside the zoomed layer), so it is the same size at
+ * any zoom, which is the point: a card at 60% is exactly when it is needed.
+ */
+function Preview({
+  node: n,
+  src,
+  view,
+  stage,
+}: {
+  node: MapNode;
+  src: string;
+  view: { x: number; y: number; z: number };
+  stage: { w: number; h: number };
+}) {
+  const W = Math.min(300, Math.max(180, stage.w - 24));
+  const H = W + 58; // picture box plus the caption
+  const left = view.x + n.x * view.z;
+  const top = view.y + n.y * view.z;
+  const right = left + n.w * view.z;
+  // Beside the card, on whichever side has room; never over the card itself.
+  let x = right + 12;
+  if (x + W > stage.w - 8) x = left - 12 - W;
+  if (x < 8) x = Math.max(8, Math.min(stage.w - W - 8, right + 12));
+  const y = Math.max(8, Math.min(stage.h - H - 8, top + (n.h * view.z) / 2 - H / 2));
+  return (
+    <div
+      className="pointer-events-none absolute z-10 overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
+      style={{ left: x, top: y, width: W }}
+    >
+      <div className="relative bg-surface-2" style={{ height: W }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" className="absolute inset-0 h-full w-full object-contain" />
+      </div>
+      <div className="px-3 py-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-text-faint">{TYPE_WORD[n.type]}</div>
+        <div className="text-[13px] font-semibold leading-snug text-text">{n.title}</div>
+        {n.state && <div className="text-[11px] text-text-muted">{n.state.label}</div>}
+      </div>
+    </div>
+  );
 }
 
 function Toggle({ on, onChange, children }: { on: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
@@ -518,21 +614,29 @@ function NodeCard({
   video = null,
   selected,
   dim,
+  stack = null,
   onPointerDown,
+  onHover,
 }: {
   node: MapNode;
   thumb: string | null;
   video?: string | null;
   selected: boolean;
   dim: boolean;
+  /** The folded stack's first few pictures (null where there is none). */
+  stack?: (string | null)[] | null;
   onPointerDown: (e: React.PointerEvent) => void;
+  onHover?: (on: boolean) => void;
 }) {
   const media = n.type === "image" || n.type === "video" || n.type === "audio" || n.type === "cut";
   const rejected = n.state?.label === "Rejected";
+  if (stack) return <StackCard node={n} pictures={stack} dim={dim} onPointerDown={onPointerDown} />;
   return (
     <div
       data-node-id={n.id}
       onPointerDown={onPointerDown}
+      onPointerEnter={(e) => e.pointerType === "mouse" && onHover?.(true)}
+      onPointerLeave={() => onHover?.(false)}
       className={`absolute cursor-pointer overflow-hidden rounded-lg border bg-surface shadow-sm transition-[opacity,box-shadow] ${
         selected ? "border-accent ring-2 ring-accent" : "border-border hover:border-border-strong hover:shadow-md"
       }`}
@@ -570,18 +674,69 @@ function NodeCard({
           <span className="w-1 shrink-0" style={{ background: n.type === "shot" ? "var(--h-purple)" : "var(--h-cyan)" }} />
           {n.type === "element" && thumb && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumb} alt="" draggable={false} className="my-2 ml-2 h-10 w-10 shrink-0 self-center rounded-md object-cover" />
+            <img src={thumb} alt="" draggable={false} className="ml-2 h-14 w-14 shrink-0 self-center rounded-md object-cover" />
           )}
           <div className="min-w-0 flex-1 px-2.5 py-2">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-text-faint">{TYPE_WORD[n.type]}</div>
-            <div className={`font-semibold text-text ${n.type === "shot" ? "line-clamp-2 text-[13px] leading-snug" : "truncate text-[12.5px] leading-snug"}`} title={n.title}>{n.title}</div>
+            {/* An element's eyebrow is its kind: the column already says "element". */}
+            <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-text-faint">{n.type === "element" ? n.state?.label ?? "Element" : TYPE_WORD[n.type]}</div>
+            <div className={`font-semibold text-text ${n.type === "shot" ? "line-clamp-2 text-[13px] leading-snug" : "line-clamp-2 break-words text-[12px] leading-[1.25]"}`} title={n.title}>{n.title}</div>
             {n.type === "shot" && n.sub && <div className="truncate text-[11px] text-text-muted">{n.sub}</div>}
             {n.state && n.type === "shot" && <StateLine state={n.state} />}
-            {n.type === "element" && <div className="truncate text-[11px] text-text-muted">{n.state?.label}</div>}
             {n.type === "element" && n.sub && <div className="truncate text-[11px] text-text-faint">{n.sub}</div>}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Every element no shot uses, as one pile: two card edges showing behind, the
+ * first few pictures on the face, and the count. A click deals them out.
+ */
+function StackCard({
+  node: n,
+  pictures,
+  dim,
+  onPointerDown,
+}: {
+  node: MapNode;
+  pictures: (string | null)[];
+  dim: boolean;
+  onPointerDown: (e: React.PointerEvent) => void;
+}) {
+  const more = (n.members?.length ?? 0) - pictures.length;
+  return (
+    <div
+      data-node-id={n.id}
+      onPointerDown={onPointerDown}
+      title="Show these elements"
+      className="group absolute cursor-pointer"
+      style={{ left: n.x, top: n.y, width: n.w, height: n.h, opacity: dim ? 0.22 : 1 }}
+    >
+      <span className="absolute inset-x-3 -top-2 h-4 rounded-t-lg border border-border bg-surface" />
+      <span className="absolute inset-x-1.5 -top-1 h-4 rounded-t-lg border border-border bg-surface" />
+      <div className="absolute inset-0 flex overflow-hidden rounded-lg border border-border bg-surface shadow-sm group-hover:border-border-strong group-hover:shadow-md">
+        <span className="w-1 shrink-0" style={{ background: "var(--h-cyan)" }} />
+        <div className="flex min-w-0 flex-1 flex-col justify-between px-2.5 py-2">
+          <div>
+            <div className="text-[12.5px] font-semibold leading-snug text-text">{n.title}</div>
+            {n.sub && <div className="truncate text-[11px] text-text-muted" title={n.sub}>{n.sub}</div>}
+          </div>
+          <div className="flex items-center">
+            {pictures.map((src, i) =>
+              src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={src} alt="" draggable={false} className={`h-8 w-8 shrink-0 rounded-md border-2 border-surface object-cover ${i ? "-ml-2" : ""}`} />
+              ) : (
+                <span key={i} className={`h-8 w-8 shrink-0 rounded-md border-2 border-surface bg-surface-2 ${i ? "-ml-2" : ""}`} />
+              )
+            )}
+            {more > 0 && <span className="ml-1.5 text-[11px] text-text-muted">+{more}</span>}
+            <span className="ml-auto pl-2 text-[11px] font-semibold text-text-muted group-hover:text-text">Show</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -624,6 +779,8 @@ function Legend() {
 
 function Detail({
   node: n,
+  picture,
+  clip,
   edges,
   byId,
   onOpenShot,
@@ -631,6 +788,10 @@ function Detail({
   onClose,
 }: {
   node: MapNode;
+  /** The card's picture, shown whole. */
+  picture: string | null;
+  /** A playable clip, for a video card. */
+  clip: string | null;
   edges: MapEdge[];
   byId: Map<string, MapNode>;
   onOpenShot?: (shotId: string) => void;
@@ -655,7 +816,7 @@ function Detail({
   const outs = edges.filter((e) => e.from === n.id).map((e) => ({ e, node: byId.get(e.to) })).filter((x) => x.node);
   return (
     <div
-      className="absolute right-3 top-3 max-h-[calc(100%-24px)] w-[280px] max-w-[calc(100%-24px)] overflow-y-auto rounded-xl border border-border bg-surface p-4 shadow-lg"
+      className="absolute right-3 top-3 max-h-[calc(100%-24px)] w-[320px] max-w-[calc(100%-24px)] overflow-y-auto rounded-xl border border-border bg-surface p-4 shadow-lg"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="flex items-start justify-between gap-2">
@@ -668,6 +829,16 @@ function Detail({
           ✕
         </button>
       </div>
+      {(clip || picture) && (
+        <div className="relative mt-3 overflow-hidden rounded-lg border border-border bg-surface-2" style={{ aspectRatio: n.type === "element" ? "1 / 1" : "16 / 10" }}>
+          {clip && n.type === "video" ? (
+            <video key={clip} src={clip} poster={picture ?? undefined} controls playsInline preload="metadata" className="absolute inset-0 h-full w-full object-contain" />
+          ) : picture ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={picture} alt="" className="absolute inset-0 h-full w-full object-contain" />
+          ) : null}
+        </div>
+      )}
       {n.sub && n.type !== "shot" && n.type !== "element" && <p className="mt-2 line-clamp-4 text-xs text-text-muted">{n.sub}</p>}
       <Links title="Built from" list={ins} />
       <Links title="Fed into" list={outs} />

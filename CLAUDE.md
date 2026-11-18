@@ -10440,6 +10440,20 @@ view of everything on an AI job, with arrows between related assets.
 - NOT VERIFIED against the live database from a session (Supabase is not
   reachable here): tsc and a production build are clean and the policies were
   read back. The first real open of a project's map is the test.
+- PICTURES LARGER, AND UNUSED ELEMENTS FOLD (2026-11-18, operator on the
+  HISEAS job: 40px element thumbnails were unreadable and 14 unused elements
+  ran a column down the page beside one shot). Resting the mouse on any card
+  with a picture shows it large beside the card (Preview, drawn in stage
+  pixels so it is the same size at any zoom; mouse only, 220ms), and the
+  detail card shows the picture whole (a video card plays). New optional
+  props fullImages / elementImages carry the full-size files. Element cards:
+  56px picture, kind as the eyebrow, name on two lines. Elements NO SHOWN
+  SHOT USES fold into one stacked card (UNUSED_STACK_ID, buildMap option
+  foldUnused, default on, only when there are two or more): count, kinds,
+  first three pictures; a click deals them out, and an "Unused elements (N)"
+  toggle in the toolbar folds them back. Not remembered across reloads.
+  Verified on the fixture only. OPEN: the operator also asked to "include the
+  shot associated with the lineage"; what they meant was asked, not guessed.
 - PHONES CRASHED IT (2026-11-04, Zelvara, 85 generations): scrolling the map
   on an iPhone closed the tab ("Can't open this page" = out of memory). Every
   video take mounted its own <video>, and every card loaded its picture

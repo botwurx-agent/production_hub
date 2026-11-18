@@ -63,6 +63,11 @@ export type MapOptions = {
   showElements?: boolean;
   /** Only this shot's lane (plus the elements it uses and the cut). */
   shotId?: string | null;
+  /**
+   * Elements no shot uses fold into ONE stacked card (the default), so a
+   * library of forty does not run a column down the page beside one shot.
+   */
+  foldUnused?: boolean;
 };
 
 /** What a node is, in words, plus the hue its dot carries. */
@@ -80,7 +85,13 @@ export type MapNode = {
   y: number;
   w: number;
   h: number;
+  /** On the folded stack only: the elements inside it, in order. */
+  members?: string[];
 };
+
+/** The one card that stands in for every element no shot uses. */
+export const UNUSED_STACK_ID = "el-stack";
+export const STACK_H = 96;
 
 export type MapEdge = {
   id: string;
@@ -97,6 +108,8 @@ export type MapGraph = {
   height: number;
   /** How many rejected candidates are folded away, so the toggle can say so. */
   hiddenRejected: number;
+  /** How many elements no shown shot uses (folded or not). */
+  unusedElements: number;
 };
 
 // Geometry, in canvas pixels at 100%.
@@ -211,6 +224,7 @@ export function buildMap(input: MapInput, opts: MapOptions = {}): MapGraph {
 
   const nodes: MapNode[] = [];
   const edges: MapEdge[] = [];
+  let unusedElements = 0;
 
   // Lanes: one per shot, as tall as its tallest column.
   let y = PAD;
@@ -291,8 +305,13 @@ export function buildMap(input: MapInput, opts: MapOptions = {}): MapGraph {
         return { e, target, count: lanes.length };
       })
       .sort((a, b) => a.target - b.target || a.e.name.localeCompare(b.e.name));
+    const unused = placed.filter((p) => p.count === 0);
+    unusedElements = unused.length;
+    // Two or more unused elements fold; one alone is shorter as itself.
+    const fold = (opts.foldUnused ?? true) && unused.length > 1;
     let floor = PAD;
     for (const { e, target, count } of placed) {
+      if (fold && count === 0) continue;
       const want = Number.isFinite(target) ? target - ELEMENT_H / 2 : floor;
       const ey = Math.max(floor, want);
       nodes.push({
@@ -312,6 +331,23 @@ export function buildMap(input: MapInput, opts: MapOptions = {}): MapGraph {
       for (const sid of usedBy.get(e.id) ?? []) {
         edges.push({ id: `u:${e.id}>${sid}`, from: `el:${e.id}`, to: `shot:${sid}`, role: "uses" });
       }
+    }
+    if (fold) {
+      nodes.push({
+        id: UNUSED_STACK_ID,
+        type: "element",
+        title: `${unused.length} elements not used yet`,
+        sub: kindSummary(unused.map((u) => u.e.kind)),
+        state: null,
+        starred: false,
+        shotId: null,
+        x: colX("element", true),
+        y: floor + 8, // room for the cards drawn behind it
+        w: NODE_W,
+        h: STACK_H,
+        members: unused.map((u) => u.e.id),
+      });
+      floor += 8 + STACK_H + 14;
     }
     y = Math.max(y, floor + LANE_GAP);
   }
@@ -342,7 +378,7 @@ export function buildMap(input: MapInput, opts: MapOptions = {}): MapGraph {
 
   const width = Math.max(...nodes.map((n) => n.x + n.w), 600) + PAD;
   const height = Math.max(...nodes.map((n) => n.y + n.h), 400) + PAD;
-  return { nodes, edges, width, height, hiddenRejected };
+  return { nodes, edges, width, height, hiddenRejected, unusedElements };
 }
 
 // Picked things at the top of a column, then shortlisted, then the rest.
@@ -355,6 +391,24 @@ function rank(g: MapGeneration): number {
   if (g.starred) return 4;
   if (g.status === "rejected") return 9;
   return 5;
+}
+
+/** "8 characters, 4 locations, 2 props", biggest group first. */
+function kindSummary(kinds: string[]): string {
+  const n = new Map<string, number>();
+  for (const k of kinds) {
+    const w = elementWord(k);
+    n.set(w, (n.get(w) ?? 0) + 1);
+  }
+  return [...n]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([w, c]) => `${c} ${c === 1 ? w.toLowerCase() : plural(w)}`)
+    .join(", ");
+}
+
+function plural(word: string): string {
+  const w = word.toLowerCase();
+  return w === "wardrobe" ? "wardrobe" : `${w}s`;
 }
 
 function elementWord(kind: string): string {
