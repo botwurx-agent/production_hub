@@ -8990,7 +8990,10 @@ the side window to the dog, out through the windshield, ending ahead.
   tester too (every slot "None detected"), and WORKED IN SAFARI. So when a
   pad "does not respond", check a tester page in the same browser first, and
   try Safari. Why Chrome missed it is not known (it had been in use by the
-  motion control app just before).
+  motion control app just before). A plain Chrome restart did not help; it
+  came back after the usual list was tried (Mac permissions for Chrome,
+  updating Chrome, a guest window, USB, restarting the Mac), which one is not
+  recorded.
   Verified in headless Chromium with a FAKE pad (navigator.getGamepads
   replaced): jog, play refused, frame step, store a key (7 to 8 keys), undo,
   discard, rebinding with a steal, reset. NOT tried with a real controller:
