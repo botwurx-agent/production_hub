@@ -8985,6 +8985,12 @@ the side window to the dog, out through the windshield, ending ahead.
   what the browser is receiving (sticks, pressed buttons, layout, device
   count), or what to try when it sees nothing, so the next report says
   whether the browser, the layout or our code is at fault.
+  WHAT IT WAS (same day): not our code. The operator's Xbox Wireless
+  Controller (Bluetooth, macOS) was invisible to CHROME, on a public gamepad
+  tester too (every slot "None detected"), and WORKED IN SAFARI. So when a
+  pad "does not respond", check a tester page in the same browser first, and
+  try Safari. Why Chrome missed it is not known (it had been in use by the
+  motion control app just before).
   Verified in headless Chromium with a FAKE pad (navigator.getGamepads
   replaced): jog, play refused, frame step, store a key (7 to 8 keys), undo,
   discard, rebinding with a steal, reset. NOT tried with a real controller:
