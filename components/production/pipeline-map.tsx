@@ -417,6 +417,19 @@ export function PipelineMap({
             style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})`, width: graph.width, height: graph.height }}
           >
             <Edges edges={graph.edges} byId={byId} lit={lit?.edges ?? null} />
+            {graph.unusedHead && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setFoldUnused(true)}
+                className="absolute flex h-[22px] items-center justify-between rounded-md border border-border bg-surface px-2 text-[11px] text-text-muted hover:border-border-strong hover:text-text"
+                style={{ left: graph.unusedHead.x, top: graph.unusedHead.y, width: 168 }}
+                title="Put the unused elements back into one stack"
+              >
+                <span>{graph.unusedElements} not used yet</span>
+                <span className="font-semibold">Fold</span>
+              </button>
+            )}
             {(() => {
               let videoSlots = coarse ? 0 : MAX_VIDEOS;
               return graph.nodes.map((n) => {

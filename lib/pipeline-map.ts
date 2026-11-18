@@ -110,6 +110,8 @@ export type MapGraph = {
   hiddenRejected: number;
   /** How many elements no shown shot uses (folded or not). */
   unusedElements: number;
+  /** Where a "fold these" control sits when the unused elements are dealt out: just above the first. */
+  unusedHead: { x: number; y: number } | null;
 };
 
 // Geometry, in canvas pixels at 100%.
@@ -225,6 +227,7 @@ export function buildMap(input: MapInput, opts: MapOptions = {}): MapGraph {
   const nodes: MapNode[] = [];
   const edges: MapEdge[] = [];
   let unusedElements = 0;
+  let unusedHead: { x: number; y: number } | null = null;
 
   // Lanes: one per shot, as tall as its tallest column.
   let y = PAD;
@@ -312,6 +315,11 @@ export function buildMap(input: MapInput, opts: MapOptions = {}): MapGraph {
     let floor = PAD;
     for (const { e, target, count } of placed) {
       if (fold && count === 0) continue;
+      // Dealt out: leave a line above the first unused one for the way back.
+      if (count === 0 && unused.length > 1 && !unusedHead) {
+        unusedHead = { x: colX("element", true), y: floor + 4 };
+        floor += 30;
+      }
       const want = Number.isFinite(target) ? target - ELEMENT_H / 2 : floor;
       const ey = Math.max(floor, want);
       nodes.push({
@@ -378,7 +386,7 @@ export function buildMap(input: MapInput, opts: MapOptions = {}): MapGraph {
 
   const width = Math.max(...nodes.map((n) => n.x + n.w), 600) + PAD;
   const height = Math.max(...nodes.map((n) => n.y + n.h), 400) + PAD;
-  return { nodes, edges, width, height, hiddenRejected, unusedElements };
+  return { nodes, edges, width, height, hiddenRejected, unusedElements, unusedHead };
 }
 
 // Picked things at the top of a column, then shortlisted, then the rest.
