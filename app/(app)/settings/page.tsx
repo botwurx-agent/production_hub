@@ -96,7 +96,7 @@ export default async function SettingsPage({
   const { data: connectorRows } = canUseConnector(ctx)
     ? await supabase
         .from("connector_tokens")
-        .select("id, name, token_last4, created_at, last_used_at")
+        .select("id, name, token_last4, created_at, last_used_at, can_edit")
         .eq("studio_id", ctx.studio.id)
         .eq("user_id", ctx.userId)
         .is("revoked_at", null)
@@ -108,6 +108,7 @@ export default async function SettingsPage({
     last4: r.token_last4,
     createdAt: r.created_at,
     lastUsedAt: r.last_used_at,
+    canEdit: r.can_edit === true,
   }));
 
   const billConnection: BillConnectionView | null = billRow

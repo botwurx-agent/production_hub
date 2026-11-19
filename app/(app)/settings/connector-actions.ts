@@ -24,7 +24,8 @@ const MAX_LIVE_LINKS = 10;
  * user_id = auth.uid(), so nobody can make a link in somebody else's name.
  */
 export async function createConnectorLink(
-  name: string
+  name: string,
+  canEdit = false
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const ctx = await requireStudioContext();
   if (!canUseConnector(ctx)) {
@@ -48,6 +49,7 @@ export async function createConnectorLink(
     name: cleanLinkName(name),
     token_hash: hashConnectorToken(token),
     token_last4: tokenLast4(token),
+    can_edit: canEdit === true,
   });
   if (error) {
     reportError("createConnectorLink", error);
@@ -73,6 +75,36 @@ export async function revokeConnectorLink(
   if (error || !data?.length) {
     if (error) reportError("revokeConnectorLink", error);
     return { ok: false, error: "That link could not be turned off. Refresh and try again." };
+  }
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+/**
+ * Switch a link between "can add" and "can add and edit". Takes effect on the
+ * assistant's next request; the host lists a link's tools when a chat starts,
+ * so a chat already open keeps the old list until a new one is started (a
+ * call to an edit tool on an add-only link is refused server side either way).
+ */
+export async function setConnectorLinkEdit(
+  id: string,
+  canEdit: boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ctx = await requireStudioContext();
+  if (!canUseConnector(ctx)) {
+    return { ok: false, error: "Only studio members can connect an AI assistant." };
+  }
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("connector_tokens")
+    .update({ can_edit: canEdit === true })
+    .eq("id", id)
+    .eq("user_id", ctx.userId)
+    .is("revoked_at", null)
+    .select("id");
+  if (error || !data?.length) {
+    if (error) reportError("setConnectorLinkEdit", error);
+    return { ok: false, error: "That link could not be changed. Refresh and try again." };
   }
   revalidatePath("/settings");
   return { ok: true };

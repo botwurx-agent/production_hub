@@ -1322,10 +1322,12 @@ export const FEATURES: FeatureDef[] = [
         ],
       },
       {
-        title: "It adds. It never changes, deletes or sends",
-        body: "Everything it makes is new, and you check it before anyone else sees it.",
+        title: "You decide how far it goes",
+        body: "Each link either only adds, or can also edit your working documents. It never deletes and never sends.",
         points: [
-          "Nothing you already have can be edited or removed from the chat",
+          "Add only, or add and edit: chosen per link, changed any time",
+          "Edits cover shots, storyboard frames, tasks and draft call sheets",
+          "Every edit comes back with what it said before, so it can be put back",
           "A call sheet arrives as a draft; sending is your press",
           "It works as you, and sees only what you can see",
           "The link turns off in one press",
@@ -1349,6 +1351,7 @@ export const FEATURES: FeatureDef[] = [
       { t: "Scene builder setups", d: "A room, people, lights and cameras laid out from a description." },
       { t: "Shot blocking scenes", d: "A set, moves and a camera move, ready to check and record." },
       { t: "Nothing twice", d: "Ask again and it finds what is already there instead of adding a copy." },
+      { t: "Fix what it made", d: "With editing on, change a shot, a frame, a task or a draft call sheet in the same chat." },
     ],
     diff: {
       eyebrow: "The difference",

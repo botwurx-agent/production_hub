@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleBody } from "@/lib/mcp";
 import {
-  CONNECTOR_TOOLS,
+  connectorToolsFor,
   connectorInstructions,
   resolveConnectorToken,
   runConnectorTool,
@@ -63,7 +63,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
     serverName: "Studio Flows",
     serverVersion: "1.0.0",
     instructions: connectorInstructions(owner),
-    tools: CONNECTOR_TOOLS,
+    tools: connectorToolsFor(owner),
     maxResultChars: MAX_RESULT_CHARS,
     callTool: async (name, args) => {
       try {

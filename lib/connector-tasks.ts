@@ -173,3 +173,15 @@ export function checklistJson(steps: string[], idFor: (i: number) => string) {
   if (!steps.length) return [];
   return [{ id: idFor(-1), name: "Steps", items: steps.map((text, i) => ({ id: idFor(i), text, done: false })) }];
 }
+
+/** A phase word as a producer says it. undefined = not understood; null = Anytime. */
+export function taskPhaseOf(v: string): TaskPhaseKey | null | undefined {
+  const w = word(v);
+  return w in PHASES ? PHASES[w] : undefined;
+}
+
+/** A status word as a producer says it, or undefined when it is not one. */
+export function taskStatusOf(v: string): TaskStatusKey | undefined {
+  const w = word(v);
+  return w in STATUSES ? STATUSES[w] : undefined;
+}

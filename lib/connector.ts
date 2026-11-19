@@ -32,14 +32,18 @@ import {
 import { addDealTool, CRM_LOG_TOOL, DEAL_TOOL, logCrmTool } from "@/lib/connector-crm-tool";
 import { BLOCKING_TOOL, createBlockingSceneTool } from "@/lib/connector-blocking-tool";
 import { SCENE_TOOL, createSceneSetupTool } from "@/lib/connector-scene-tool";
+import { CONNECTOR_EDIT_TOOLS, EDITORS } from "@/lib/connector-edit-tools";
 
 /**
  * The AI connector's server half: who a link belongs to, a session as that
- * person, and the tools. The read tools, plus a small set of ADD-ONLY
- * write tools (lib/connector-write.ts). Over MCP the tool call IS the action:
- * the host's own "allow this tool?" is the only check, which the operator
- * accepted (2026-10-10) on the condition that nothing here can delete or
- * overwrite existing work.
+ * person, and the tools. The read tools, plus ADD tools, plus EDIT tools
+ * (lib/connector-edit-tools.ts) on a link its owner switched to "can edit".
+ *
+ * Over MCP the tool call IS the action: the host's own "allow this tool?" is
+ * the only check. The operator accepted that for adding (2026-10-10) and for
+ * editing the working documents (2026-11-19), on these conditions: editing is
+ * a per-link choice, every edit reports the old value, and nothing here
+ * deletes, sends, or touches something that has already gone out.
  */
 
 export type ConnectorOwner = {
@@ -47,6 +51,8 @@ export type ConnectorOwner = {
   studioId: string;
   studioName: string;
   userId: string;
+  /** The link may change existing work, not only add. */
+  canEdit: boolean;
 };
 
 /**
@@ -59,7 +65,7 @@ export async function resolveConnectorToken(token: string): Promise<ConnectorOwn
   const svc = createServiceClient();
   const { data: row } = await svc
     .from("connector_tokens")
-    .select("id, studio_id, user_id, revoked_at, last_used_at")
+    .select("id, studio_id, user_id, revoked_at, last_used_at, can_edit")
     .eq("token_hash", hashConnectorToken(token))
     .maybeSingle();
   if (!row || row.revoked_at) return null;
@@ -84,7 +90,13 @@ export async function resolveConnectorToken(token: string): Promise<ConnectorOwn
       .update({ last_used_at: new Date().toISOString() })
       .eq("id", row.id);
   }
-  return { tokenId: row.id, studioId: row.studio_id, studioName: studio.name, userId: row.user_id };
+  return {
+    tokenId: row.id,
+    studioId: row.studio_id,
+    studioName: studio.name,
+    userId: row.user_id,
+    canEdit: row.can_edit === true,
+  };
 }
 
 // --- a session as the link's owner -------------------------------------------
@@ -168,6 +180,11 @@ const READ_ONLY_TOOLS: McpTool[] = READ_TOOLS.map((t) => ({
 
 export const CONNECTOR_TOOLS: McpTool[] = [...READ_ONLY_TOOLS, ...CONNECTOR_WRITE_TOOLS, SCHEDULE_TOOL, TASK_TOOL, CONTACT_TOOL, CALL_SHEET_TOOL, CLIENT_TOOL, PROJECT_TOOL, COST_TOOL, PROPS_TOOL, DEAL_TOOL, CRM_LOG_TOOL, BLOCKING_TOOL, SCENE_TOOL];
 
+/** The tools THIS link is offered: the edit tools only when it may edit. */
+export function connectorToolsFor(owner: ConnectorOwner): McpTool[] {
+  return owner.canEdit ? [...CONNECTOR_TOOLS, ...CONNECTOR_EDIT_TOOLS] : CONNECTOR_TOOLS;
+}
+
 type ReadFn = (args: Record<string, unknown>) => Promise<unknown>;
 
 const READERS: Record<string, ReadFn> = {
@@ -201,6 +218,17 @@ export async function runConnectorTool(
   if (name === PROPS_TOOL.name) return addPropsTool(owner, args);
   if (name === BLOCKING_TOOL.name) return createBlockingSceneTool(owner, args);
   if (name === SCENE_TOOL.name) return createSceneSetupTool(owner, args);
+  const edit = EDITORS[name];
+  if (edit) {
+    // The list a host was shown is not a permission: checked again here.
+    if (!owner.canEdit) {
+      return {
+        error:
+          "This link can add but not change existing work. The producer can switch it to 'Can add and edit' in Studio Flows, Settings, AI connector.",
+      };
+    }
+    return edit(owner, args);
+  }
   const write = WRITERS[name];
   if (write) return write(owner, args);
   const fn = READERS[name];
@@ -216,11 +244,17 @@ export async function runConnectorTool(
   return fn(args);
 }
 
+const EDIT_ON =
+  "This link can also CHANGE existing work: shots on a shot list (update_shots), storyboard frames (update_storyboard_frames), tasks (update_tasks: retitle, move status or phase, due date, who it is on) and DRAFT call sheets (update_call_sheet). Read the rows first so you have their ids. Change only what the producer asked for, send only the fields that change, and afterwards tell them each change with what it said before, taken from the tool result, so a wrong one can be put back. If a request is ambiguous about WHICH row, ask before changing anything. You cannot delete or send anything, cannot change a call sheet that has already been sent, and cannot change anything else (clients, deals, costs, contacts, the schedule, moodboard items): say so and tell them where to do it in Studio Flows.";
+const EDIT_OFF =
+  "You cannot change, delete or send anything: this link only adds. If the producer asks you to change something that already exists, tell them they can switch this link to 'Can add and edit' in Studio Flows, Settings, AI connector, or make the change in Studio Flows.";
+
 export function connectorInstructions(owner: ConnectorOwner): string {
   const today = new Date().toISOString().slice(0, 10);
   return [
     `You are connected to Studio Flows, the production hub for ${owner.studioName}, a commercial production studio. Today is ${today}.`,
-    "You can look anything up. You can also ADD clients (add_client) and new projects (create_project, with the brief, deliverables and key dates), and use the project id it returns for everything below. On the sales side you can ADD deals to the pipeline (add_deal, on a client; a new company is added as a prospect) and log notes, calls, meetings and emails on a client's or deal's timeline with follow-ups (log_crm). You can ADD moodboards and storyboards (create_board, then add_to_moodboard or add_storyboard_frames) and shot lists (create_shot_list, then add_shots), with pictures passed as public image links, for example images you or another connected tool just generated. You can build the shooting schedule from the shot lists (build_schedule, which only adds) and add tasks to a project's task board (add_tasks; read its existing tasks first so none is added twice), and add people to a project's contacts (add_contacts: new people, or copies of people from an earlier project with their day rate carried over), and put together call sheets (create_call_sheet: a draft with the day's details and its people, which the producer sends from Studio Flows; it can also add people to an existing sheet), costs on a project's budget (add_costs: invoices, estimates and receipts; read its budget lines first), and props with options to choose between (add_props). You can also lay out a 3D shot blocking scene (create_blocking_scene: a low-poly set, people and vehicles with their moves and gestures, and a camera move, which the producer opens in Studio Flows to check and record as a motion reference for an AI video model); put the whole scene in one call and tell the producer it is a starting layout to check. You can also lay out a scene builder setup (create_scene_setup: the 3D lighting and camera previz for a live-action or tabletop shoot, with the room, set pieces, people, lights, diffusion, grip and cameras on real bodies and lenses), again in one call. Search before adding a client, project or deal, since an existing one is returned rather than made twice. Make one board or list per request and put everything in it; nothing you make can be deleted from here, so a spare one is left for the producer to clean up. You cannot change, delete or send anything, and nothing else can be created yet: if the producer asks for something outside that, say so and tell them where to do it in Studio Flows. Never say something was created unless a tool result says it was, and report what each tool skipped.",
+    "You can look anything up. You can also ADD clients (add_client) and new projects (create_project, with the brief, deliverables and key dates), and use the project id it returns for everything below. On the sales side you can ADD deals to the pipeline (add_deal, on a client; a new company is added as a prospect) and log notes, calls, meetings and emails on a client's or deal's timeline with follow-ups (log_crm). You can ADD moodboards and storyboards (create_board, then add_to_moodboard or add_storyboard_frames) and shot lists (create_shot_list, then add_shots), with pictures passed as public image links, for example images you or another connected tool just generated. You can build the shooting schedule from the shot lists (build_schedule, which only adds) and add tasks to a project's task board (add_tasks; read its existing tasks first so none is added twice), and add people to a project's contacts (add_contacts: new people, or copies of people from an earlier project with their day rate carried over), and put together call sheets (create_call_sheet: a draft with the day's details and its people, which the producer sends from Studio Flows; it can also add people to an existing sheet), costs on a project's budget (add_costs: invoices, estimates and receipts; read its budget lines first), and props with options to choose between (add_props). You can also lay out a 3D shot blocking scene (create_blocking_scene: a low-poly set, people and vehicles with their moves and gestures, and a camera move, which the producer opens in Studio Flows to check and record as a motion reference for an AI video model); put the whole scene in one call and tell the producer it is a starting layout to check. You can also lay out a scene builder setup (create_scene_setup: the 3D lighting and camera previz for a live-action or tabletop shoot, with the room, set pieces, people, lights, diffusion, grip and cameras on real bodies and lenses), again in one call. Search before adding a client, project or deal, since an existing one is returned rather than made twice. Make one board or list per request and put everything in it; nothing you make can be deleted from here, so a spare one is left for the producer to clean up. Never say something was created unless a tool result says it was, and report what each tool skipped.",
+    owner.canEdit ? EDIT_ON : EDIT_OFF,
     "Start with `search` when they name a project, client, deal or person, so you have its id. `get_project` takes only the sections you need. `get_money` is what is owed, billed and the margin. `get_crm` is the sales side. `get_attention` is what is at risk right now. `query` reads any listed table when nothing else fits.",
     "Money amounts are US dollars. Dates are YYYY-MM-DD. Speak in production terms (projects, shoots, deliverables, call sheets, approvals), not table names.",
   ].join("\n\n");

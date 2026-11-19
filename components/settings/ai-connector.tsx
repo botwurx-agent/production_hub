@@ -8,7 +8,11 @@ import { toast } from "@/components/ui/toast";
 import { confirmAction } from "@/components/ui/confirm";
 import { actionError } from "@/lib/action-result";
 import { shortDate, timeAgo } from "@/lib/format";
-import { createConnectorLink, revokeConnectorLink } from "@/app/(app)/settings/connector-actions";
+import {
+  createConnectorLink,
+  revokeConnectorLink,
+  setConnectorLinkEdit,
+} from "@/app/(app)/settings/connector-actions";
 
 export type ConnectorLinkRow = {
   id: string;
@@ -16,6 +20,7 @@ export type ConnectorLinkRow = {
   last4: string;
   createdAt: string;
   lastUsedAt: string | null;
+  canEdit: boolean;
 };
 
 /**
@@ -28,6 +33,7 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
   const router = useRouter();
   const [name, setName] = useState("");
   const [fresh, setFresh] = useState<string | null>(null);
+  const [newCanEdit, setNewCanEdit] = useState(false);
   const [pending, start] = useTransition();
 
   if (!canUse) {
@@ -40,7 +46,7 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
 
   function make() {
     start(async () => {
-      const res = await createConnectorLink(name);
+      const res = await createConnectorLink(name, newCanEdit);
       const e = actionError(res);
       if (e || !res || !res.ok) {
         toast(e ?? "The link could not be made.", "error");
@@ -77,6 +83,34 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
     });
   }
 
+  async function setEdit(l: ConnectorLinkRow, next: boolean) {
+    if (next === l.canEdit) return;
+    // The confirm is asked OUTSIDE the transition: its window is opened by a
+    // state update, and one made inside a pending transition waits for that
+    // transition, which is itself waiting for the answer.
+    if (next) {
+      const ok = await confirmAction({
+        title: `Let "${l.name}" change existing work?`,
+        body: "The assistant on this link will be able to change shots, storyboard frames, tasks and draft call sheets, as well as add. A change is made as soon as it is asked for, and the assistant then tells you what each thing said before. It still cannot delete or send anything, or change a call sheet that has been sent.",
+        confirmLabel: "Allow editing",
+      });
+      if (!ok) return;
+    }
+    start(async () => {
+      const res = await setConnectorLinkEdit(l.id, next);
+      const e = actionError(res);
+      if (e) {
+        toast(e, "error");
+        return;
+      }
+      toast(
+        next ? "This link can now add and edit. Start a new chat for it to take effect." : "This link can only add now.",
+        "success"
+      );
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-5" data-ai-connector>
       <p className="max-w-2xl text-sm text-text-muted">
@@ -84,9 +118,11 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
         your studio (what is still owed, where a job stands, which client is slow to sign
         off) and does the typing for you: shot lists, storyboards, moodboards, the schedule,
         draft call sheets, contacts, tasks, costs, props, clients, deals and new projects.
-        It works as you, only ever <span className="font-semibold text-text">adds</span>,
-        and never changes, deletes or sends anything. Your own AI subscription does the
-        work, so there is nothing extra to pay here.
+        It works as you and never deletes or sends anything. Each link either only{" "}
+        <span className="font-semibold text-text">adds</span>, or can also{" "}
+        <span className="font-semibold text-text">edit</span> shots, storyboard frames, tasks
+        and draft call sheets: you choose per link, below. Your own AI subscription does
+        the work, so there is nothing extra to pay here.
       </p>
 
       <div className="max-w-2xl rounded-[12px] border border-border p-3">
@@ -131,6 +167,18 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
             }}
           />
         </label>
+        <label className="min-w-[160px]">
+          <span className="mb-1 block text-xs font-semibold text-text-muted">It can</span>
+          <select
+            value={newCanEdit ? "edit" : "add"}
+            onChange={(e) => setNewCanEdit(e.target.value === "edit")}
+            className="h-[38px] w-full rounded-[10px] border border-border bg-surface px-3 text-sm text-text"
+            data-connector-new-mode
+          >
+            <option value="add">Add only</option>
+            <option value="edit">Add and edit</option>
+          </select>
+        </label>
         <Button onClick={make} disabled={pending} data-connector-make>
           {pending ? "Making..." : "Make a link"}
         </Button>
@@ -144,7 +192,7 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
               className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
               style={{ background: "var(--h-amber)" }}
             />
-            Copy this now. It is shown once, and anyone holding it can read and add to the studio as you.
+            Copy this now. It is shown once, and anyone holding it can work in the studio as you.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <code className="min-w-0 flex-1 break-all rounded-[8px] border border-border bg-surface px-2 py-1.5 text-xs text-text">
@@ -182,9 +230,22 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
                   {l.lastUsedAt ? `last used ${timeAgo(l.lastUsedAt)}` : "not used yet"}
                 </p>
               </div>
-              <Button size="sm" variant="danger" onClick={() => turnOff(l)} disabled={pending}>
-                Turn off
-              </Button>
+              <div className="flex items-center gap-2">
+                <select
+                  aria-label={`What ${l.name} can do`}
+                  value={l.canEdit ? "edit" : "add"}
+                  onChange={(e) => setEdit(l, e.target.value === "edit")}
+                  disabled={pending}
+                  className="h-8 rounded-[8px] border border-border bg-surface px-2 text-xs font-semibold text-text"
+                  data-connector-mode
+                >
+                  <option value="add">Add only</option>
+                  <option value="edit">Add and edit</option>
+                </select>
+                <Button size="sm" variant="danger" onClick={() => turnOff(l)} disabled={pending}>
+                  Turn off
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

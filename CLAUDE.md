@@ -1459,7 +1459,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0129. Recent: 0129 =
+files in supabase/migrations. THROUGH 0130. Recent: 0130 =
+connector_token_can_edit (connector_tokens.can_edit: a link may change
+existing work as well as add); 0129 =
 location_still_lens (location_stills.lens_name + squeeze: the lens set a
 still was framed for); 0128 =
 blocking_scenes (shot blocking scenes, jsonb per scene, optional shot_id,
@@ -4251,8 +4253,49 @@ below. THE RUNNER SECTIONS THAT FOLLOW ARE HISTORY, none of it is live code.
 - THE COPY LEADS WITH CLAUDE (verified live) and says once that the same link
   works as a ChatGPT connector, which has never been run.
 - NOT DONE: nothing in the app points a new user at the connector except
-  Settings (no nav row, no setup-checklist step). The connector still cannot
-  change or delete, which is the limit the operator will hit next.
+  Settings (no nav row, no setup-checklist step). Editing came the next day,
+  see the section below.
+
+### The connector can EDIT, per link (migration 0130) — BUILT, not run from a real host
+Operator, 2026-11-19: "Why can't Claude edit? Can we change that?" It was a
+choice (the 2026-10-10 add-only condition), and they reversed it for the
+working documents. Agreed shape, in three levels: (1) EDIT working documents,
+yes; (2) DELETE only what is cheap to lose, NOT BUILT YET, they said go without
+it; (3) never send, pay, or touch what has gone out.
+- `connector_tokens.can_edit` (0130, default false): each link is "Add only"
+  or "Add and edit", chosen when it is made and switchable from the link's row
+  in Settings (turning it ON asks first). Every older link stays add only.
+  The host lists a link's tools when a chat starts, so the switch says to
+  start a new chat.
+- FOUR TOOLS (lib/connector-edit-tools.ts), offered only when can_edit
+  (connectorToolsFor) AND refused again in runConnectorTool when it is not:
+  `update_shots`, `update_storyboard_frames` (both can replace the picture by
+  link), `update_tasks` (title, notes, due date, phase, status with done_at
+  stamped, and who it is on) and `update_call_sheet` (details plus the people
+  already on it). Ids come from the query tool.
+- lib/connector-edit.ts is the pure half (20 assertions): ONLY A FIELD THAT
+  WAS SENT IS TOUCHED, an empty string clears, a required field cannot be
+  cleared, an unreadable value is left alone and named, a value equal to
+  what is stored writes nothing, and EVERY CHANGE IS REPORTED WITH ITS OLD
+  VALUE (clipped in the report only). The instructions tell the host to repeat
+  that to the producer. That report is the safeguard, since there is no
+  confirm step.
+- LIMITS THAT ARE DELIBERATE: a call sheet that is not a draft is refused
+  (crew are reading it); a shot's day is not changed once the shot is on the
+  schedule (the schedule owns it); assignees are replaced only when every name
+  given was matched, so one bad name cannot take the right people off.
+  Writes go through the owner's RLS client, so can_edit_project still applies.
+- NOT EDITABLE YET: moodboard items, contacts, schedule rows, props, deals,
+  project stage and dates, costs. No delete of anything.
+- GOTCHA HIT: confirmAction awaited INSIDE startTransition never shows. The
+  confirm window opens by a state update, and one made inside a pending
+  transition waits for that transition, which is waiting for the answer. Ask
+  first, then start the transition.
+- Verified: the pure half in node, and the Settings card in Chromium against
+  the demo studio (make, confirm, switch, turn off). The four tools have NOT
+  been run from Claude: the first real edit is the test.
+- The site, pricing and help copy now say "add only, or add and edit" and
+  "never deletes or sends".
 
 ### Runner (the agent layer, migration 0077) — BUILT
 An in-app assistant called RUNNER (left nav, Cmd/Ctrl+K) that reads the studio

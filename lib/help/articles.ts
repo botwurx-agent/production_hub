@@ -855,7 +855,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
       },
     ],
     tips: [
-      "It only adds. It cannot change or delete what is already there, and it never sends anything, so a call sheet it builds stays a draft until you send it.",
+      "A link only adds unless you switch it to Add and edit in Settings, AI connector. With editing on it can change shots, storyboard frames, tasks and draft call sheets, and it tells you what each one said before.",
+      "It never deletes and never sends, so a call sheet it builds stays a draft until you send it, and a sent one cannot be changed from the chat.",
       "Ask for one board or one list per request and put everything in it, since a spare one has to be deleted by hand in Studio Flows.",
     ],
     feature: "ai-production-assistant",
@@ -904,7 +905,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     steps: [
       {
         title: "Make a link",
-        body: "Open Settings, AI connector and press Make a link. Copy the URL; it is shown once.",
+        body: "Open Settings, AI connector. Choose what the link can do (Add only, or Add and edit) and press Make a link. Copy the URL; it is shown once. You can change what a link can do later, from the same list.",
       },
       {
         title: "Add it to your assistant",
@@ -912,7 +913,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       },
       {
         title: "Ask it to work",
-        body: "Ask about a project, or have it add a shot list, storyboard frames, tasks, contacts, a draft call sheet or costs. It only adds; it never deletes or sends anything.",
+        body: "Ask about a project, or have it add a shot list, storyboard frames, tasks, contacts, a draft call sheet or costs. With Add and edit it can also change shots, storyboard frames, tasks and draft call sheets. It never deletes or sends anything.",
       },
       {
         title: "Turn it off",

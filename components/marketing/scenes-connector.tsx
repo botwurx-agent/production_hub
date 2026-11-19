@@ -13,7 +13,8 @@ import { GenreStill, type Genre } from "./genre-frames";
  * on the left (their words, the tool that ran, the answer and its link) and
  * the real page on the right filling in row by row. Each scene shows only
  * something the connector does today (lib/connector.ts), and what lands is
- * always something ADDED: nothing here is changed, deleted or sent.
+ * always something ADDED (editing is a per-link switch and no scene shows
+ * it); nothing here is deleted or sent.
  */
 
 const WIN = { title: "Your Claude chat", sub: "Studio Flows connected" };
@@ -357,7 +358,7 @@ const N_PASTE = 4600;
 const N_ADD = 6100;
 const N_ON = 6800;
 const LINK = "studio-flows.com/api/mcp/sfc_••••••••";
-const CAN = ["Read your jobs, money and clients", "Add boards, shot lists and schedules", "Add call sheets, tasks, costs and props", "Add clients, projects and deals"];
+const CAN = ["Read your jobs, money and clients", "Add boards, shot lists and schedules", "Add call sheets, tasks, costs and props", "Edit shots, frames and tasks, if you allow it"];
 
 export function ConnectorConnectScene({ t }: { t: number }) {
   return (

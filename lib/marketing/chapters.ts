@@ -1172,11 +1172,13 @@ export const CHAPTERS: Partial<Record<FeatureSlug, ChapterPage>> = {
       {
         nav: "Connect and control",
         title: "Two steps to connect. One press to turn off.",
-        body: "In Settings, make a private link and paste it into Claude as a custom connector. From then on the assistant works in your studio as you: it sees what you can see and nothing more. It can add, and it cannot change, delete or send, so the worst a wrong request can do is leave something extra for you to remove.",
+        body: "In Settings, make a private link and paste it into Claude as a custom connector. From then on the assistant works in your studio as you: it sees what you can see and nothing more. You choose what each link may do: only add, or add and edit your shot lists, storyboards, tasks and draft call sheets. It never deletes and never sends, and every edit is reported back with what it said before.",
         details: [
           { t: "A private link per person", d: "Named, with when it was last used, and up to ten at once." },
           { t: "It works as you", d: "The same access you have in the app, checked on every request." },
-          { t: "Add only", d: "Nothing existing is edited or removed, and no email or link is ever sent for you." },
+          { t: "Add only, or add and edit", d: "A switch on each link. Editing covers shots, storyboard frames, tasks and draft call sheets." },
+          { t: "Before and after", d: "Every edit is reported with the old value, so a wrong one can be put back by asking." },
+          { t: "Never deletes, never sends", d: "Nothing is removed, no email or link goes out for you, and a sent call sheet cannot be changed." },
           { t: "Off in one press", d: "Turn a link off in Settings and it stops working at once. Leaving the studio turns yours off too." },
           { t: "Your own subscription", d: "Claude does the thinking on your plan, so Studio Flows sells no AI credits." },
         ],
