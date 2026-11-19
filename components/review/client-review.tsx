@@ -354,9 +354,10 @@ export function ClientReview({
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-8 sm:py-12">
-      <div className="mb-6 overflow-hidden rounded-[16px] border border-border bg-surface shadow-sm">
+      {/* Not overflow-hidden: the theme menu opens past this card's edge. */}
+      <div className="relative z-20 mb-6 rounded-[16px] border border-border bg-surface shadow-sm">
         <div
-          className="h-1 w-full"
+          className="h-1 w-full rounded-t-[15px]"
           style={{
             background:
               "linear-gradient(90deg, var(--accent), var(--h-purple) 55%, var(--h-cyan))",
