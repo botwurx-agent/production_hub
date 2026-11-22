@@ -259,3 +259,12 @@ export function connectorInstructions(owner: ConnectorOwner): string {
     "Money amounts are US dollars. Dates are YYYY-MM-DD. Speak in production terms (projects, shoots, deliverables, call sheets, approvals), not table names.",
   ].join("\n\n");
 }
+
+/**
+ * Remembers which assistant connected through a link, as it named itself.
+ * Best effort: a label on the dashboard must never fail a connection.
+ */
+export async function noteConnectorHost(tokenId: string, hostName: string): Promise<void> {
+  if (!serviceConfigured()) return;
+  await createServiceClient().from("connector_tokens").update({ host_name: hostName }).eq("id", tokenId);
+}

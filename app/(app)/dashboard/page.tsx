@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/page-header";
 import { DashboardIcon } from "@/components/app-shell/nav-icons";
 import { DashboardBody } from "@/components/dashboard/dashboard-body";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
+import { ConnectorChip } from "@/components/dashboard/connector-chip";
+import { connectorChip } from "@/lib/connector-host";
 import { TourTrigger } from "@/components/tour/tour-trigger";
 import type { Stat } from "@/components/dashboard/stat-tiles";
 import { getOutstanding } from "@/lib/outstanding";
@@ -242,6 +244,14 @@ export default async function DashboardPage() {
     ];
   });
 
+  // This person's own assistant links (RLS: a link is its maker's alone).
+  const { data: connectorLinks } = await supabase
+    .from("connector_tokens")
+    .select("last_used_at, host_name, can_edit")
+    .eq("studio_id", ctx.studio.id)
+    .eq("user_id", ctx.userId)
+    .is("revoked_at", null);
+
   return (
     <div>
       <PageHeader
@@ -249,6 +259,7 @@ export default async function DashboardPage() {
         subtitle="Your studio at a glance."
         icon={<DashboardIcon className="h-6 w-6" />}
         hue="indigo"
+        action={<ConnectorChip chip={connectorChip(connectorLinks ?? [])} />}
       />
       {/* The one automatic tour, on first visit only. The dashboard is where
           a new studio lands, and the shell elements it points at are on every

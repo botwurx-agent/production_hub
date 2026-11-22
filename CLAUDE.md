@@ -1459,7 +1459,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0131. Recent: 0131 =
+files in supabase/migrations. THROUGH 0132. Recent: 0132 =
+connector_token_host_name (connector_tokens.host_name: which assistant last
+connected through a link, as it named itself); 0131 =
 scene_share_links (+ scene_share_takes: a no-login link to one scene builder
 setup, view / edit a copy / edit, and who saved through it); 0130 =
 connector_token_can_edit (connector_tokens.can_edit: a link may change
@@ -8145,6 +8147,24 @@ and see how it goes." The 3D previz below is now a project page.
   so live was probably unaffected, but any remount (a hot reload, a future
   Suspense boundary) would have hit it. Talent and the room rebuild fully on
   every run and never had the problem.
+
+### The assistant's light on the dashboard (migration 0132) — BUILT
+Operator, 2026-11-22: a visual on the dashboard saying Claude (or ChatGPT) is
+connected, with a green light.
+- components/dashboard/connector-chip.tsx, in the dashboard PageHeader's
+  action slot, links to Settings (#ai-connector). Three states from the
+  viewer's OWN live links (lib/connector-host.ts connectorChip, pure, 11
+  assertions): no link = "Connect Claude" (dashed), a link never used =
+  "Assistant link not used yet" (amber dot), used = "<Claude> connected ·
+  used 2h ago · add only / add and edit" with a green dot.
+- IT REPORTS THE LAST USE, NOT A LIVE PRESENCE, and the copy must never claim
+  otherwise: an assistant only contacts us when asked something.
+- `connector_tokens.host_name` (0132): what the assistant called itself in its
+  MCP `initialize` (hostNameFrom), written best effort from the route. Shown
+  through hostLabel (claude/anthropic -> Claude, chatgpt/openai -> ChatGPT,
+  else "Assistant"). A label, never a permission. Links used before this
+  read "Assistant connected" until the assistant next connects.
+- Verified in Chromium on the demo studio with a seeded link (deleted).
 
 ### Share a scene builder setup by link (migration 0131) — BUILT, guest save not run live
 Operator, 2026-11-22: send a setup to a DP or gaffer to try their own lighting

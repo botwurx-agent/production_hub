@@ -2042,6 +2042,7 @@ export type Database = {
           last_used_at: string | null;
           revoked_at: string | null;
           can_edit: boolean;
+          host_name: string | null;
         };
         Insert: {
           id?: string;
@@ -2054,6 +2055,7 @@ export type Database = {
           last_used_at?: string | null;
           revoked_at?: string | null;
           can_edit?: boolean;
+          host_name?: string | null;
         };
         Update: {
           id?: string;
@@ -2066,6 +2068,7 @@ export type Database = {
           last_used_at?: string | null;
           revoked_at?: string | null;
           can_edit?: boolean;
+          host_name?: string | null;
         };
         Relationships: [];
       };
