@@ -24,7 +24,7 @@ export type Plan = {
   tagline: string;
   /** Dollars per month, billed monthly. */
   monthly: number;
-  /** Dollars per month, billed annually. Ten months for twelve, exactly. */
+  /** Dollars per month, billed annually. */
   annual: number;
   /** The "everything in X, plus" line. Null on the first tier. */
   builds: string | null;
@@ -40,10 +40,11 @@ export type Plan = {
 
 /**
  * Annual is shown as a per-month figure and billed for the year, which is the
- * shape every buyer in this category already reads. The discount is stated as
- * TWO MONTHS FREE rather than a percentage: a count of months is concrete and
- * 16.7% is arithmetic. The numbers below are exactly that, so the claim needs
- * no asterisk (23 x 10 / 12 = 19.17, and so on down).
+ * shape every buyer in this category already reads. The saving is stated in
+ * DOLLARS A YEAR, worked out from the two numbers (annualSaving), never typed.
+ * The prices were set by the operator on 2026-11-22 and are no longer "two
+ * months free" (Solo saves $120 a year, Studio and Production $240), so that
+ * line was retired rather than left as a claim the numbers do not keep.
  *
  * PRICED FOR ENTERING THE MARKET, not for the product we think this is worth.
  * Nobody has heard of us, and the category leader opens with a free plan, so
@@ -74,8 +75,8 @@ export const PLANS: Plan[] = [
     id: "solo",
     name: "Solo",
     tagline: "One producer running their own jobs.",
-    monthly: 23,
-    annual: 19,
+    monthly: 27,
+    annual: 17,
     builds: "Free",
     points: [
       "1 seat",
@@ -89,8 +90,8 @@ export const PLANS: Plan[] = [
     id: "studio",
     name: "Studio",
     tagline: "A team running several jobs at once.",
-    monthly: 71,
-    annual: 59,
+    monthly: 77,
+    annual: 57,
     builds: "Solo",
     featured: true,
     points: [
@@ -106,8 +107,8 @@ export const PLANS: Plan[] = [
     id: "production",
     name: "Production",
     tagline: "A full production company, several teams deep.",
-    monthly: 143,
-    annual: 119,
+    monthly: 147,
+    annual: 127,
     builds: "Studio",
     points: [
       "15 seats, then $14 each",
@@ -117,6 +118,11 @@ export const PLANS: Plan[] = [
     ],
   },
 ];
+
+/** What a year on the annual plan saves against twelve monthly payments. */
+export function annualSaving(plan: Plan): number {
+  return (plan.monthly - plan.annual) * 12;
+}
 
 export function planPrice(plan: Plan, annual: boolean): number {
   return annual ? plan.annual : plan.monthly;

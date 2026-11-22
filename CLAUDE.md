@@ -5674,8 +5674,8 @@ THE RESET, on the operator's call after seeing StudioBinder's page side by
 side. Four tiers now, not three:
 
 | | Free | Solo | Studio | Production |
-| annual | 0 | 19 | 59 | 119 |
-| monthly | 0 | 23 | 71 | 143 |
+| annual | 0 | 17 | 57 | 127 |
+| monthly | 0 | 27 | 77 | 147 |
 | seats | 1 | 1 | 5 (+$18) | 15 (+$14) |
 | projects | 1 active | unlimited | unlimited | unlimited |
 | storage | 5GB | 100GB | 500GB | 2TB |
@@ -5688,8 +5688,11 @@ side. Four tiers now, not three:
   is to put a live job through it. Archiving takes a job out of the count, so
   years of finished work stay readable on it.
 - Per seat we were already cheaper than them; the problem was the first number
-  a stranger meets. Monthly figures are odd on purpose ($23/$71/$143) so that
-  "two months free" stays literally true against the annual numbers.
+  a stranger meets. PRICES RESET BY THE OPERATOR 2026-11-22 to the table
+  above (were 19/59/119 annual, 23/71/143 monthly). "Two months free" is no
+  longer true of them and is RETIRED: each card states the saving in dollars a
+  year from annualSaving() (Solo $120, Studio and Production $240), and the
+  toggle reads "Lower price, billed once a year".
 - STORAGE CAME DOWN WITH THE PRICES rather than the prices coming down alone.
   Video is the real cost per customer: 5TB at $179 was roughly $105/month of
   Supabase storage on a $179 plan. Every tier still holds more than the leader
