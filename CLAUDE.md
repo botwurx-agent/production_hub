@@ -1459,7 +1459,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0130. Recent: 0130 =
+files in supabase/migrations. THROUGH 0131. Recent: 0131 =
+scene_share_links (+ scene_share_takes: a no-login link to one scene builder
+setup, view / edit a copy / edit, and who saved through it); 0130 =
 connector_token_can_edit (connector_tokens.can_edit: a link may change
 existing work as well as add); 0129 =
 location_still_lens (location_stills.lens_name + squeeze: the lens set a
@@ -8143,6 +8145,49 @@ and see how it goes." The 3D previz below is now a project page.
   so live was probably unaffected, but any remount (a hot reload, a future
   Suspense boundary) would have hit it. Talent and the room rebuild fully on
   every run and never had the problem.
+
+### Share a scene builder setup by link (migration 0131) — BUILT, guest save not run live
+Operator, 2026-11-22: send a setup to a DP or gaffer to try their own lighting
+on, without a paid plan, "like how Google has viewer options and editing
+options". On the business question (force a free account first?) the agreed
+answer was NO: the link opens with no account, and a name and email are asked
+only when they SAVE, with an account offered afterwards.
+- A "Share" button in the scene builder bar (studio members only, green dot
+  when live) opens components/previz/scene-share-button.tsx: Can view / Can
+  edit a copy (default) / Can edit this setup, Copy link, Open what they see,
+  last opened, Turn off link, and "Who has saved" (name, email, Open their
+  take). Switching to edit-the-original asks first.
+- `scene_share_links` (one per setup, token, mode, revoked_at, last_viewed_at)
+  and `scene_share_takes` (link, guest_key, guest name and email, the setup
+  their saves go to). Both is_studio_member only, so a guest's email is not
+  readable by crew. Off and on again issues a NEW token.
+- /scene/<token> (PUBLIC_PATHS, noindex) renders components/previz/
+  shared-scene.tsx: the real PrevizPrototype with a guest store. SceneStore
+  gained `guest: { note }`, which hides New / Open a file / scout photo and no
+  Make it real, Send to shot list or uploads are passed. A 49px bar carries
+  "Made with Studio Flows", who shared what, and Save my take / Save changes.
+- A GUEST'S CHANGES STAY IN THE BROWSER (localStorage draft per token) until
+  they press Save and give a name and email; from then on changes autosave.
+  The same browser is recognised by the sf_rk cookie (the review portal's key),
+  so a return visit opens THEIR copy.
+- COPY MODE writes a new scene_setups row on the project named
+  "<setup> (<guest>)" (takeName, never doubled), so it shows as a tab; EDIT
+  MODE writes the shared setup (last write wins against anyone else editing).
+  First save rings the bell (type scene_take). 30 copies per link.
+- Guest actions (app/scene/[token]/actions.ts) run on the service client from
+  the token only: saveSharedScene (rate limited, cleanSetup shared with the
+  app's own save via lib/previz/clean-setup.ts) and signSharedSceneFiles, which
+  signs only paths the shared setup or the guest's own copy lists.
+- lib/scene-share-rules.ts is pure (15 assertions). Verified in Chromium: the
+  guest page on a throwaway fixture with stubbed calls (deleted), and the Share
+  window on the demo studio. NOT RUN: a real guest save, since a local server
+  has no service role key. The first real link is the test.
+- GOTCHA: server calls queue, so a read started when the window opened landed
+  AFTER a mode change and put the old mode back; reads are now dropped if
+  anything was changed since (seq ref).
+- NOT BUILT: emailing the link from the window, guest uploads of product
+  photos (theirs stay in their browser), blocking for shot blocking scenes,
+  and prefilling signup with the guest's email.
 
 ### Higgsfield connected to the app over MCP (no migration) — SIGN-IN + PROBE BUILT
 Operator, 2026-10-12: connect Higgsfield to the app like Claude, so a finished

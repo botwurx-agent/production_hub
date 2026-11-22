@@ -493,6 +493,12 @@ export type SceneStore = {
   /** Makes a new setup on the project and switches to it. */
   create: (s: Setup) => Promise<void>;
   canEdit: boolean;
+  /**
+   * Somebody who opened a shared link without an account. They get the scene
+   * and nothing of the project: no new setups, no AI reads, and the line under
+   * the name says where their changes go.
+   */
+  guest?: { note: string };
   /** Uploads a product photo or model to the project; resolves to its storage
    * path, or null when it could not be stored. */
   uploadFile?: (blob: Blob, name: string) => Promise<string | null>;
@@ -3034,7 +3040,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
             {store ? null : <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">Prototype</span>}
           </div>
           <p className="max-w-[330px] truncate px-1 text-xs text-text-muted">
-            {saveNote ?? `${shots.length} shot${shots.length === 1 ? "" : "s"} · ${items.length} thing${items.length === 1 ? "" : "s"} on the set · ${!store ? "saved in this browser" : store.canEdit ? "saved to this project" : "view only, changes are not saved"}`}
+            {saveNote ?? `${shots.length} shot${shots.length === 1 ? "" : "s"} · ${items.length} thing${items.length === 1 ? "" : "s"} on the set · ${!store ? "saved in this browser" : store.guest ? store.guest.note : store.canEdit ? "saved to this project" : "view only, changes are not saved"}`}
           </p>
           {menu ? (
             <div className="absolute left-0 top-full z-30 mt-1 w-[280px] rounded-[12px] border border-border bg-surface p-1.5 shadow-lg" onMouseLeave={() => setMenu(false)}>
@@ -3047,7 +3053,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
                 { l: "Build a room from a scout photo", d: "The AI estimates it, you check it", f: () => setScout(true), edit: true },
                 { l: "Download this setup", d: "A file with its photos and models, for another computer", f: () => void download(), edit: false },
                 { l: "Open a setup file", d: store ? "Adds it to this project as a new setup" : "One you downloaded before", f: () => setupFileRef.current?.click(), edit: true },
-              ].filter((o) => !o.edit || !store || store.canEdit).map((o) => (
+              ].filter((o) => !o.edit || !store || (store.canEdit && !store.guest)).map((o) => (
                 <button
                   key={o.l}
                   type="button"
@@ -3596,7 +3602,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
               onSelectLight={(id) => setSel({ kind: "light", id })}
             />
           ) : (
-            <RoomInspector set={set} units={units} onChange={setSet} onScout={() => setScout(true)} />
+            <RoomInspector set={set} units={units} onChange={setSet} onScout={store?.guest ? undefined : () => setScout(true)} />
           )}
           </ShotExposure.Provider>
         </aside>

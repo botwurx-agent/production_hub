@@ -2069,6 +2069,81 @@ export type Database = {
         };
         Relationships: [];
       };
+      scene_share_links: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          scene_setup_id: string;
+          token: string;
+          mode: string;
+          created_by: string | null;
+          created_at: string;
+          revoked_at: string | null;
+          last_viewed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          scene_setup_id: string;
+          token: string;
+          mode?: string;
+          created_by?: string | null;
+          created_at?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          scene_setup_id?: string;
+          token?: string;
+          mode?: string;
+          created_by?: string | null;
+          created_at?: string;
+          revoked_at?: string | null;
+          last_viewed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      scene_share_takes: {
+        Row: {
+          id: string;
+          studio_id: string;
+          link_id: string;
+          scene_setup_id: string;
+          guest_key: string;
+          guest_name: string;
+          guest_email: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          link_id: string;
+          scene_setup_id: string;
+          guest_key: string;
+          guest_name: string;
+          guest_email: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          link_id?: string;
+          scene_setup_id?: string;
+          guest_key?: string;
+          guest_name?: string;
+          guest_email?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       notification_reads: {
         Row: {
           id: string;

@@ -20,6 +20,7 @@ import {
 } from "@/app/(app)/projects/[id]/scene-actions";
 import { checkRealStill, realStillQuote, startRealStill } from "@/app/(app)/projects/[id]/real-still-actions";
 import { uploadDirect } from "@/components/upload/direct-upload";
+import { SceneShareButton } from "@/components/previz/scene-share-button";
 
 const PRESETS: { l: string; d: string; make: () => Setup }[] = [
   { l: "Empty room", d: "5 x 6 m with one window. Build it to your location.", make: () => blankSetup(5, 6, 2.8) },
@@ -36,6 +37,7 @@ export function SceneBuilderWorkspace({
   active,
   unreadable,
   canEdit,
+  canShare,
   shotLists,
 }: {
   projectId: string;
@@ -44,6 +46,8 @@ export function SceneBuilderWorkspace({
   active: { id: string; data: Setup } | null;
   unreadable: boolean;
   canEdit: boolean;
+  /** Studio members only: a link opens the setup to somebody with no account. */
+  canShare: boolean;
   shotLists: { id: string; title: string; codes: string[] }[];
 }) {
   const router = useRouter();
@@ -155,6 +159,13 @@ export function SceneBuilderWorkspace({
             );
           })}
         </nav>
+        {active && canShare ? (
+          <SceneShareButton
+            setupId={active.id}
+            setupName={liveName ?? setups.find((x) => x.id === active.id)?.name ?? "this setup"}
+            setupHref={href}
+          />
+        ) : null}
         {active && canEdit ? (
           <button
             type="button"
