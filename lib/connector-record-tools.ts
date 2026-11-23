@@ -93,7 +93,7 @@ export const PROJECT_TOOL: McpTool = {
       title: s("The project's name, e.g. 'Hint Treat Yourself'."),
       client_id: s("The client's id (table clients)."),
       client: s("Or the client's exact name, when you do not have the id."),
-      project_type: s("live action, commercial, AI video, CGI/VFX, or general (default)."),
+      project_type: s("live action, commercial, photography, AI video, CGI/VFX, or general (default)."),
       stage: s("pre-production (default), production, post or delivered."),
       shoot_date: s("YYYY-MM-DD, the (first) shoot day."),
       due_date: s("YYYY-MM-DD, when it delivers."),

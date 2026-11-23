@@ -976,6 +976,19 @@ Three fixes shipped with it, all found in operator testing:
   for collaborators), and the hero's DUPLICATE StatusTag + StatusMenu were
   removed so stage is stated and changed in exactly one place.
 
+### Photography project type (2026-11-23, no migration) — BUILT, tailoring not decided
+Operator, after a stills-only shoot: there was no way to start a project as a
+photography shoot. `photography` joined PROJECT_TYPES ("Photography shoot",
+hue orange, camera icon, middle stage reads "Shoot", has a shoot day). The
+connector's create_project reads "photo", "photography", "photoshoot" and
+"stills" as it (they used to map to live action). The hub is otherwise the
+live-action hub: no AI Pipeline card (that stays ai_video only). OPEN, the
+operator's call: whether photography should hide the video-shaped cards
+(storyboards, master cut wording) and whether AI imagery work on a stills job
+needs a home; my advice was not to show the AI pipeline, since it is built
+around shots, takes and a cut, and to wait for a real stills job that needs it.
+An existing project's type cannot be changed in the app yet.
+
 ### Project type + creation wizard + vendor contacts (migration 0049) — BUILT
 - projects.project_type (0049, free text default 'general'): general | live_action
   | commercial | ai_video | cgi_vfx. Light label that tailors which hub cards

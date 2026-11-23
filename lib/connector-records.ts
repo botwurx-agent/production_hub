@@ -172,7 +172,7 @@ export function parseClient(args: Record<string, unknown>): { client: ClientEntr
 
 /* ------------------------------------------------------------ projects */
 
-export type ProjectTypeKey = "general" | "live_action" | "commercial" | "ai_video" | "cgi_vfx";
+export type ProjectTypeKey = "general" | "live_action" | "commercial" | "photography" | "ai_video" | "cgi_vfx";
 export type ProjectStageKey = "pre_pro" | "shoot" | "post" | "delivered";
 export type EventKindKey = "prepro" | "shoot" | "review" | "delivery" | "other";
 
@@ -182,8 +182,10 @@ const PROJECT_TYPE_WORDS: Record<string, ProjectTypeKey> = {
   liveaction: "live_action",
   live: "live_action",
   shoot: "live_action",
-  photo: "live_action",
-  photography: "live_action",
+  photo: "photography",
+  photography: "photography",
+  photoshoot: "photography",
+  stills: "photography",
   commercial: "commercial",
   spot: "commercial",
   tvc: "commercial",
