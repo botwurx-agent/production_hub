@@ -87,6 +87,8 @@ export type CreateEventInput = {
   timeZone: string;
   description?: string;
   addMeet?: boolean;
+  /** Unique id for the Meet request. Pass a fresh one to get a NEW link. */
+  requestId?: string;
 };
 
 // Creates an event on the primary calendar; optionally attaches a Meet link.
@@ -108,7 +110,7 @@ export async function createEvent(
     body.conferenceData = {
       createRequest: {
         // Deterministic-ish request id; Google only needs it unique per event.
-        requestId: `hub-${input.start}-${input.title.slice(0, 20)}`,
+        requestId: input.requestId ?? `hub-${input.start}-${input.title.slice(0, 20)}`,
         conferenceSolutionKey: { type: "hangoutsMeet" },
       },
     };

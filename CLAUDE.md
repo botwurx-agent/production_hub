@@ -1459,7 +1459,9 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0132. Recent: 0132 =
+files in supabase/migrations. THROUGH 0133. Recent: 0133 =
+project_live_views (one Google Meet link per project for a remote client,
+is_studio_member); 0132 =
 connector_token_host_name (connector_tokens.host_name: which assistant last
 connected through a link, as it named itself); 0131 =
 scene_share_links (+ scene_share_takes: a no-login link to one scene builder
@@ -8165,6 +8167,39 @@ connected, with a green light.
   else "Assistant"). A label, never a permission. Links used before this
   read "Assistant connected" until the assistant next connects.
 - Verified in Chromium on the demo studio with a seeded link (deleted).
+
+### Live view: a Google Meet from the project (migration 0133) — BUILT, never run against Google
+Operator, 2026-11-23: clients who cannot be on set watch the camera over Zoom
+or Meet (a Cam Link into the laptop), and a paid Zoom account is the cost they
+wanted gone. Our own video room was discussed and DECLINED: once cameras go
+both ways it is a full meeting tool (LiveKit, about $50 a month to run, a much
+bigger build), and a Zoom plan is cheaper than that for one studio. Do not
+reopen it unprompted. What they chose: "an inexpensive addition to what we
+already have".
+- A "Live view" button on the project hub hero (staff only, green dot when a
+  link exists). Start makes a Google Meet link; the window then has Join the
+  call (new tab), Copy link, Email it to the client, three plain notes (pick
+  the capture adapter as the camera in Meet, which account admits guests, the
+  free-Gmail hour limit), Make a new link and Remove.
+- MEET CANNOT BE EMBEDDED in another site, so the call always opens in its own
+  tab. Studio Flows starts it and remembers the link, nothing more.
+- NO NEW GOOGLE PERMISSION: the link comes from an all-day Calendar event
+  ("Live view: <project>") on the PRESSER'S OWN Google account (email_accounts
+  by user_id, calendar scope), through the existing createEvent, which gained
+  an optional `requestId` so "Make a new link" really gets a new one. Whoever
+  makes it hosts the call, and the window says which account that is.
+- `project_live_views` (0133): one row per project (meet_url, event_id,
+  host_email), is_studio_member only. One link per project, reused across
+  shoot days. Remove deletes the row and, best effort, the calendar event when
+  the remover is the one who made it.
+- app/(app)/projects/[id]/live-view-actions.ts (startLiveView, removeLiveView,
+  emailLiveView), components/projects/live-view-button.tsx.
+- Verified in Chromium on the demo studio: the "connect Google" state and,
+  with a seeded row (deleted), the link state; no overflow at 390. NOT RUN
+  against Google: the demo account has no calendar access, so the first real
+  press is the test. Also unconfirmed, from memory: the 60-minute cap on free
+  Gmail group calls, and that a guest without a Google account can join a
+  Workspace-hosted call by name.
 
 ### Share a scene builder setup by link (migration 0131) — BUILT, guest save not run live
 Operator, 2026-11-22: send a setup to a DP or gaffer to try their own lighting

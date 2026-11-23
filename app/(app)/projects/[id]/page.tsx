@@ -7,6 +7,9 @@ import { LifecycleStepper } from "@/components/projects/lifecycle-stepper";
 import { TourTrigger } from "@/components/tour/tour-trigger";
 import { ArchiveProjectButton } from "@/components/projects/archive-project-button";
 import { ProjectPeople } from "@/components/projects/project-people";
+import { LiveViewButton } from "@/components/projects/live-view-button";
+import { calendarConnected } from "@/lib/googlecalendar";
+import { emailConfigured } from "@/lib/email";
 import { ProjectClientPicker } from "@/components/projects/project-client-picker";
 import { HubCard, BandLabel } from "@/components/projects/hub-card";
 import { ProjectSummary } from "@/components/projects/project-summary";
@@ -250,6 +253,19 @@ export default async function ProjectDetailPage({
     .filter((i) => !i.accepted_at && !i.revoked)
     .map((i) => ({ id: i.id, email: i.email, token: i.token, role: i.role }));
 
+  // Live view (staff only): the project's Meet link, and whether the viewer's
+  // own Google account can make one.
+  let liveView: { url: string; hostEmail: string | null } | null = null;
+  let googleReady = false;
+  if (!ctx.isCollaborator) {
+    const [{ data: lv }, { data: g }] = await Promise.all([
+      supabase.from("project_live_views").select("meet_url, host_email").eq("project_id", params.id).maybeSingle(),
+      supabase.from("email_accounts").select("scope").eq("provider", "google").eq("user_id", ctx.userId).limit(1).maybeSingle(),
+    ]);
+    liveView = lv ? { url: lv.meet_url, hostEmail: lv.host_email } : null;
+    googleReady = calendarConnected(g?.scope);
+  }
+
   // Shot count needs group ids.
   const groupIds = (shotGroups ?? []).map((g) => g.id);
   let shotCount = 0;
@@ -469,6 +485,13 @@ export default async function ProjectDetailPage({
                     projectId={project.id}
                     members={projectMembers}
                     pending={projectPending}
+                  />
+                  <LiveViewButton
+                    projectId={project.id}
+                    projectTitle={project.title}
+                    initial={liveView}
+                    googleReady={googleReady}
+                    emailEnabled={emailConfigured()}
                   />
                   <ArchiveProjectButton
                     projectId={project.id}

@@ -4839,6 +4839,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      project_live_views: {
+        Row: {
+          id: string;
+          studio_id: string;
+          project_id: string;
+          meet_url: string;
+          event_id: string | null;
+          host_email: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          studio_id: string;
+          project_id: string;
+          meet_url: string;
+          event_id?: string | null;
+          host_email?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          studio_id?: string;
+          project_id?: string;
+          meet_url?: string;
+          event_id?: string | null;
+          host_email?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       client_portals: {
         Row: {
           id: string;
