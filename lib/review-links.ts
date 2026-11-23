@@ -525,7 +525,7 @@ export async function loadDocSurface(
     const { data: rows } = await client
       .from("props")
       .select(
-        "id, name, category, qty, notes, picked_option_id, options:prop_options(id, name, source, notes, url, storage_path, position)"
+        "id, name, category, qty, notes, picked_option_id, options:prop_options!prop_options_prop_id_fkey(id, name, source, notes, url, storage_path, position)"
       )
       .eq("project_id", targetId)
       .order("position", { ascending: true });

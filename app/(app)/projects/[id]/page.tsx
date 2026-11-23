@@ -204,7 +204,7 @@ export default async function ProjectDetailPage({
     // answered without knowing whether any exist.
     supabase
       .from("props")
-      .select("id, status, picked_option_id, options:prop_options(id)")
+      .select("id, status, picked_option_id, options:prop_options!prop_options_prop_id_fkey(id)")
       .eq("project_id", params.id),
   ]);
 

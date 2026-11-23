@@ -31,7 +31,7 @@ export default async function ProjectPropsPage({
     supabase
       .from("props")
       .select(
-        "id, name, category, qty, notes, source, contact_id, status, picked_option_id, options:prop_options(id, name, storage_path, mime_type, url, source, notes, position)"
+        "id, name, category, qty, notes, source, contact_id, status, picked_option_id, options:prop_options!prop_options_prop_id_fkey(id, name, storage_path, mime_type, url, source, notes, position)"
       )
       .eq("project_id", project.id)
       .order("position", { ascending: true }),
