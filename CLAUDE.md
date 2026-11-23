@@ -976,6 +976,19 @@ Three fixes shipped with it, all found in operator testing:
   for collaborators), and the hero's DUPLICATE StatusTag + StatusMenu were
   removed so stage is stated and changed in exactly one place.
 
+### Photography project type (2026-11-23, no migration) — BUILT, tailoring not decided
+Operator, after a stills-only shoot: there was no way to start a project as a
+photography shoot. `photography` joined PROJECT_TYPES ("Photography shoot",
+hue orange, camera icon, middle stage reads "Shoot", has a shoot day). The
+connector's create_project reads "photo", "photography", "photoshoot" and
+"stills" as it (they used to map to live action). The hub is otherwise the
+live-action hub: no AI Pipeline card (that stays ai_video only). OPEN, the
+operator's call: whether photography should hide the video-shaped cards
+(storyboards, master cut wording) and whether AI imagery work on a stills job
+needs a home; my advice was not to show the AI pipeline, since it is built
+around shots, takes and a cut, and to wait for a real stills job that needs it.
+An existing project's type cannot be changed in the app yet.
+
 ### Project type + creation wizard + vendor contacts (migration 0049) — BUILT
 - projects.project_type (0049, free text default 'general'): general | live_action
   | commercial | ai_video | cgi_vfx. Light label that tailors which hub cards
@@ -1459,7 +1472,13 @@ optimizing the flow + IA of this whole section.
 
 ### Schema / migrations
 DB changes are applied via the Supabase MCP `apply_migration` and mirrored as
-files in supabase/migrations. THROUGH 0130. Recent: 0130 =
+files in supabase/migrations. THROUGH 0133. Recent: 0133 =
+project_live_views (one Google Meet link per project for a remote client,
+is_studio_member); 0132 =
+connector_token_host_name (connector_tokens.host_name: which assistant last
+connected through a link, as it named itself); 0131 =
+scene_share_links (+ scene_share_takes: a no-login link to one scene builder
+setup, view / edit a copy / edit, and who saved through it); 0130 =
 connector_token_can_edit (connector_tokens.can_edit: a link may change
 existing work as well as add); 0129 =
 location_still_lens (location_stills.lens_name + squeeze: the lens set a
@@ -5674,8 +5693,8 @@ THE RESET, on the operator's call after seeing StudioBinder's page side by
 side. Four tiers now, not three:
 
 | | Free | Solo | Studio | Production |
-| annual | 0 | 19 | 59 | 119 |
-| monthly | 0 | 23 | 71 | 143 |
+| annual | 0 | 17 | 57 | 127 |
+| monthly | 0 | 27 | 77 | 147 |
 | seats | 1 | 1 | 5 (+$18) | 15 (+$14) |
 | projects | 1 active | unlimited | unlimited | unlimited |
 | storage | 5GB | 100GB | 500GB | 2TB |
@@ -5688,8 +5707,11 @@ side. Four tiers now, not three:
   is to put a live job through it. Archiving takes a job out of the count, so
   years of finished work stay readable on it.
 - Per seat we were already cheaper than them; the problem was the first number
-  a stranger meets. Monthly figures are odd on purpose ($23/$71/$143) so that
-  "two months free" stays literally true against the annual numbers.
+  a stranger meets. PRICES RESET BY THE OPERATOR 2026-11-22 to the table
+  above (were 19/59/119 annual, 23/71/143 monthly). "Two months free" is no
+  longer true of them and is RETIRED: each card states the saving in dollars a
+  year from annualSaving() (Solo $120, Studio and Production $240), and the
+  toggle reads "Lower price, billed once a year".
 - STORAGE CAME DOWN WITH THE PRICES rather than the prices coming down alone.
   Video is the real cost per customer: 5TB at $179 was roughly $105/month of
   Supabase storage on a $179 plan. Every tier still holds more than the leader
@@ -8140,6 +8162,100 @@ and see how it goes." The 3D previz below is now a project page.
   so live was probably unaffected, but any remount (a hot reload, a future
   Suspense boundary) would have hit it. Talent and the room rebuild fully on
   every run and never had the problem.
+
+### The assistant's light on the dashboard (migration 0132) — BUILT
+Operator, 2026-11-22: a visual on the dashboard saying Claude (or ChatGPT) is
+connected, with a green light.
+- components/dashboard/connector-chip.tsx, in the dashboard PageHeader's
+  action slot, links to Settings (#ai-connector). Three states from the
+  viewer's OWN live links (lib/connector-host.ts connectorChip, pure, 11
+  assertions): no link = "Connect Claude" (dashed), a link never used =
+  "Assistant link not used yet" (amber dot), used = "<Claude> connected ·
+  used 2h ago · add only / add and edit" with a green dot.
+- IT REPORTS THE LAST USE, NOT A LIVE PRESENCE, and the copy must never claim
+  otherwise: an assistant only contacts us when asked something.
+- `connector_tokens.host_name` (0132): what the assistant called itself in its
+  MCP `initialize` (hostNameFrom), written best effort from the route. Shown
+  through hostLabel (claude/anthropic -> Claude, chatgpt/openai -> ChatGPT,
+  else "Assistant"). A label, never a permission. Links used before this
+  read "Assistant connected" until the assistant next connects.
+- Verified in Chromium on the demo studio with a seeded link (deleted).
+
+### Live view: a Google Meet from the project (migration 0133) — BUILT, never run against Google
+Operator, 2026-11-23: clients who cannot be on set watch the camera over Zoom
+or Meet (a Cam Link into the laptop), and a paid Zoom account is the cost they
+wanted gone. Our own video room was discussed and DECLINED: once cameras go
+both ways it is a full meeting tool (LiveKit, about $50 a month to run, a much
+bigger build), and a Zoom plan is cheaper than that for one studio. Do not
+reopen it unprompted. What they chose: "an inexpensive addition to what we
+already have".
+- A "Live view" button on the project hub hero (staff only, green dot when a
+  link exists). Start makes a Google Meet link; the window then has Join the
+  call (new tab), Copy link, Email it to the client, three plain notes (pick
+  the capture adapter as the camera in Meet, which account admits guests, the
+  free-Gmail hour limit), Make a new link and Remove.
+- MEET CANNOT BE EMBEDDED in another site, so the call always opens in its own
+  tab. Studio Flows starts it and remembers the link, nothing more.
+- NO NEW GOOGLE PERMISSION: the link comes from an all-day Calendar event
+  ("Live view: <project>") on the PRESSER'S OWN Google account (email_accounts
+  by user_id, calendar scope), through the existing createEvent, which gained
+  an optional `requestId` so "Make a new link" really gets a new one. Whoever
+  makes it hosts the call, and the window says which account that is.
+- `project_live_views` (0133): one row per project (meet_url, event_id,
+  host_email), is_studio_member only. One link per project, reused across
+  shoot days. Remove deletes the row and, best effort, the calendar event when
+  the remover is the one who made it.
+- app/(app)/projects/[id]/live-view-actions.ts (startLiveView, removeLiveView,
+  emailLiveView), components/projects/live-view-button.tsx.
+- Verified in Chromium on the demo studio: the "connect Google" state and,
+  with a seeded row (deleted), the link state; no overflow at 390. NOT RUN
+  against Google: the demo account has no calendar access, so the first real
+  press is the test. Also unconfirmed, from memory: the 60-minute cap on free
+  Gmail group calls, and that a guest without a Google account can join a
+  Workspace-hosted call by name.
+
+### Share a scene builder setup by link (migration 0131) — BUILT, guest save not run live
+Operator, 2026-11-22: send a setup to a DP or gaffer to try their own lighting
+on, without a paid plan, "like how Google has viewer options and editing
+options". On the business question (force a free account first?) the agreed
+answer was NO: the link opens with no account, and a name and email are asked
+only when they SAVE, with an account offered afterwards.
+- A "Share" button in the scene builder bar (studio members only, green dot
+  when live) opens components/previz/scene-share-button.tsx: Can view / Can
+  edit a copy (default) / Can edit this setup, Copy link, Open what they see,
+  last opened, Turn off link, and "Who has saved" (name, email, Open their
+  take). Switching to edit-the-original asks first.
+- `scene_share_links` (one per setup, token, mode, revoked_at, last_viewed_at)
+  and `scene_share_takes` (link, guest_key, guest name and email, the setup
+  their saves go to). Both is_studio_member only, so a guest's email is not
+  readable by crew. Off and on again issues a NEW token.
+- /scene/<token> (PUBLIC_PATHS, noindex) renders components/previz/
+  shared-scene.tsx: the real PrevizPrototype with a guest store. SceneStore
+  gained `guest: { note }`, which hides New / Open a file / scout photo and no
+  Make it real, Send to shot list or uploads are passed. A 49px bar carries
+  "Made with Studio Flows", who shared what, and Save my take / Save changes.
+- A GUEST'S CHANGES STAY IN THE BROWSER (localStorage draft per token) until
+  they press Save and give a name and email; from then on changes autosave.
+  The same browser is recognised by the sf_rk cookie (the review portal's key),
+  so a return visit opens THEIR copy.
+- COPY MODE writes a new scene_setups row on the project named
+  "<setup> (<guest>)" (takeName, never doubled), so it shows as a tab; EDIT
+  MODE writes the shared setup (last write wins against anyone else editing).
+  First save rings the bell (type scene_take). 30 copies per link.
+- Guest actions (app/scene/[token]/actions.ts) run on the service client from
+  the token only: saveSharedScene (rate limited, cleanSetup shared with the
+  app's own save via lib/previz/clean-setup.ts) and signSharedSceneFiles, which
+  signs only paths the shared setup or the guest's own copy lists.
+- lib/scene-share-rules.ts is pure (15 assertions). Verified in Chromium: the
+  guest page on a throwaway fixture with stubbed calls (deleted), and the Share
+  window on the demo studio. NOT RUN: a real guest save, since a local server
+  has no service role key. The first real link is the test.
+- GOTCHA: server calls queue, so a read started when the window opened landed
+  AFTER a mode change and put the old mode back; reads are now dropped if
+  anything was changed since (seq ref).
+- NOT BUILT: emailing the link from the window, guest uploads of product
+  photos (theirs stay in their browser), blocking for shot blocking scenes,
+  and prefilling signup with the guest's email.
 
 ### Higgsfield connected to the app over MCP (no migration) — SIGN-IN + PROBE BUILT
 Operator, 2026-10-12: connect Higgsfield to the app like Claude, so a finished

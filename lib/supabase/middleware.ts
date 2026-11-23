@@ -78,6 +78,8 @@ const PUBLIC_PATHS = [
   "/dl",
   // A client's job request link: asks the studio for new work, no login.
   "/request",
+  // A scene builder setup shared by link with a DP or gaffer, no login.
+  "/scene",
   "/c",
   "/p",
   "/h",

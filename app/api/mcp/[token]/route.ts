@@ -3,6 +3,7 @@ import { handleBody } from "@/lib/mcp";
 import {
   connectorToolsFor,
   connectorInstructions,
+  noteConnectorHost,
   resolveConnectorToken,
   runConnectorTool,
   userClient,
@@ -11,6 +12,7 @@ import { runAsUser } from "@/lib/supabase/run-as";
 import { allow } from "@/lib/rate-limit";
 import { hashConnectorToken } from "@/lib/connector-token";
 import { reportError } from "@/lib/log";
+import { hostNameFrom } from "@/lib/connector-host";
 
 // The AI connector: an MCP server that Claude or ChatGPT reaches at
 // /api/mcp/<token>. Public in the middleware because the link IS the
@@ -55,6 +57,11 @@ export async function POST(req: Request, { params }: { params: { token: string }
       { status: 400 }
     );
   }
+
+  // An assistant names itself when it connects; kept so the dashboard can say
+  // which one is on the link.
+  const host = hostNameFrom(body);
+  if (host) void noteConnectorHost(owner.tokenId, host).catch((e) => reportError("mcp/host", e));
 
   // The session is only opened when a tool actually runs: initialize and
   // tools/list happen on every connect and need nothing from the database.

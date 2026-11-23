@@ -361,7 +361,7 @@ export function ItemInspector({
 // ---------------------------------------------------------------- room
 
 export function RoomInspector({ set, units, onChange, onScout }: {
-  set: SetSpec; units: Units; onChange: (s: SetSpec) => void; onScout: () => void;
+  set: SetSpec; units: Units; onChange: (s: SetSpec) => void; onScout?: () => void;
 }) {
   const r = set.room;
   const setR = (p: Partial<typeof r>) => onChange({ ...set, room: { ...r, ...p } });
@@ -396,9 +396,11 @@ export function RoomInspector({ set, units, onChange, onScout }: {
           <div className="flex flex-wrap gap-1">
             <Chip on={false} onClick={() => setR({ ...KITCHEN_ROOM, x: r.x, z: r.z })}>Kitchen sample</Chip>
             <Chip on={false} onClick={() => onChange({ ...set, room: { ...emptyRoom(r.width, r.depth, r.height), x: r.x, z: r.z } })}>Plain room</Chip>
-            <button type="button" onClick={onScout} className="rounded-[8px] bg-accent px-2 py-1 text-xs font-semibold text-accent-fg hover:bg-accent-strong">
-              Build from a scout photo
-            </button>
+            {onScout ? (
+              <button type="button" onClick={onScout} className="rounded-[8px] bg-accent px-2 py-1 text-xs font-semibold text-accent-fg hover:bg-accent-strong">
+                Build from a scout photo
+              </button>
+            ) : null}
           </div>
           <Field label="Measurements">
             <div className="flex gap-2">

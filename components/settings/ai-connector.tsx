@@ -112,7 +112,7 @@ export function AiConnector({ links, canUse }: { links: ConnectorLinkRow[]; canU
   }
 
   return (
-    <div className="space-y-5" data-ai-connector>
+    <div id="ai-connector" className="scroll-mt-24 space-y-5" data-ai-connector>
       <p className="max-w-2xl text-sm text-text-muted">
         Connect your own Claude and brief it like a production assistant. It answers from
         your studio (what is still owed, where a job stands, which client is slow to sign

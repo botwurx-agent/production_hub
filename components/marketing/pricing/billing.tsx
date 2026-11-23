@@ -68,11 +68,11 @@ export function BillingToggle({ className = "" }: { className?: string }) {
           );
         })}
       </div>
-      {/* Two months free, not a percentage. A count of months is a thing you
-          can picture; 16.7% is a sum you have to do. The height is reserved
-          either way so switching the toggle does not shift the cards. */}
+      {/* The saving itself is on each card, in dollars, worked out from that
+          plan's two prices. The height is reserved either way so switching
+          the toggle does not shift the cards. */}
       <p className="h-5 text-sm font-medium text-text-faint">
-        {annual ? "Two months free, billed once a year" : " "}
+        {annual ? "Lower price, billed once a year" : " "}
       </p>
     </div>
   );

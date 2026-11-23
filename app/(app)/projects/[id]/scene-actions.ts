@@ -11,39 +11,19 @@ import { aiConfigured, extractRoomFromPhoto } from "@/lib/ai";
 import { MAX_UPLOAD_BYTES } from "@/lib/attachment-limits";
 import { ROOM_KINDS, parseRoomDraft, type RoomDraft } from "@/lib/previz/room-draft";
 import { asSetup, type Setup } from "@/components/previz/setup";
-import { cleanSceneFiles, sceneFolder } from "@/lib/previz/scene-files";
+import { sceneFolder } from "@/lib/previz/scene-files";
+import { cleanSetup, nameOf } from "@/lib/previz/clean-setup";
 import { finalizeUpload } from "@/lib/upload-ticket";
 import { assetStorage } from "@/lib/asset-storage";
 import { pathWithinScope } from "@/lib/upload-limits";
 import { reportError } from "@/lib/log";
 import type { Json } from "@/lib/database.types";
 import { planSend, updatePatch, type ShotRowOut } from "@/lib/previz/shot-export";
-
-/**
- * A saved setup crosses a Server Action, so the ~4.5MB serverless request body
- * is the real ceiling. Storyboard frames uploaded into a shot are the only
- * thing in a setup that can get near it; the builder drops the large ones
- * before saving and says so (setupForStore in components/previz/setup.ts).
- */
-const MAX_SETUP_CHARS = 3_500_000;
+import { isShareMode, type ShareMode } from "@/lib/scene-share-rules";
+import { generateReviewToken } from "@/lib/review-links";
+import { siteOrigin } from "@/lib/site-url";
 
 const rp = (projectId: string) => revalidatePath(`/projects/${projectId}/scene-builder`);
-
-function cleanSetup(raw: unknown, studioId: string, projectId: string): { setup: Setup; json: string } | { error: string } {
-  const setup = asSetup(raw);
-  if (!setup) return { error: "That is not a scene setup this page can save." };
-  // Embedded photos and models never go to the database as bytes: they are
-  // uploaded to the project's storage on their own, and the setup carries only
-  // where they went, checked to be this project's own folder.
-  const { assets: _a, files, ...rest } = setup;
-  const clean = cleanSceneFiles(files, studioId, projectId);
-  const plain: Setup = Object.keys(clean).length ? { ...rest, files: clean } : rest;
-  const json = JSON.stringify(plain);
-  if (json.length > MAX_SETUP_CHARS) return { error: "This setup is too large to save. Remove some uploaded storyboard frames and try again." };
-  return { setup: plain as Setup, json };
-}
-
-const nameOf = (s: Setup) => (s.name || "").replace(/\s+/g, " ").trim().slice(0, 120) || "Untitled setup";
 
 export async function createSceneSetup(projectId: string, raw: unknown): Promise<{ id: string } | { error: string }> {
   const ctx = await requireStudioContext();
@@ -321,4 +301,84 @@ export async function sendShotsToList(
   }
   revalidatePath(`/projects/${project.id}/shot-list`);
   return { listId: group.id, title: group.title || "Shot list", added: inserts.length, updated };
+}
+
+// ----- Sharing a setup by link (migration 0131) -----------------------------
+// Staff only. The link opens the setup for somebody with no account, at
+// /scene/<token>; what they may do is the link's mode.
+
+export type SceneShareState = {
+  link: { url: string; mode: ShareMode; lastViewedAt: string | null } | null;
+  takes: { id: string; name: string; email: string; setupId: string; savedAt: string; own: boolean }[];
+};
+
+export async function getSceneShare(setupId: string): Promise<SceneShareState | { error: string }> {
+  const ctx = await requireStudioContext();
+  if (ctx.isCollaborator) return { error: "Only studio members can share a setup." };
+  const supabase = createClient();
+  const { data: link } = await supabase
+    .from("scene_share_links")
+    .select("id, token, mode, revoked_at, last_viewed_at")
+    .eq("scene_setup_id", setupId)
+    .maybeSingle();
+  if (!link) return { link: null, takes: [] };
+  const { data: takes } = await supabase
+    .from("scene_share_takes")
+    .select("id, guest_name, guest_email, scene_setup_id, updated_at")
+    .eq("link_id", link.id)
+    .order("updated_at", { ascending: false });
+  return {
+    link: link.revoked_at || !isShareMode(link.mode)
+      ? null
+      : { url: `${siteOrigin()}/scene/${link.token}`, mode: link.mode, lastViewedAt: link.last_viewed_at },
+    takes: (takes ?? []).map((t) => ({
+      id: t.id,
+      name: t.guest_name,
+      email: t.guest_email,
+      setupId: t.scene_setup_id,
+      savedAt: t.updated_at,
+      own: t.scene_setup_id !== setupId,
+    })),
+  };
+}
+
+/** Turns the link on (a NEW address if it had been turned off) or changes what it allows. */
+export async function setSceneShare(setupId: string, mode: string): Promise<{ url: string; mode: ShareMode } | { error: string }> {
+  const ctx = await requireStudioContext();
+  if (ctx.isCollaborator) return { error: "Only studio members can share a setup." };
+  if (!isShareMode(mode)) return { error: "Pick what the link allows." };
+  const supabase = createClient();
+  const { data: setup } = await supabase.from("scene_setups").select("id, studio_id, project_id").eq("id", setupId).maybeSingle();
+  if (!setup) return { error: "This setup could not be found." };
+  const { data: existing } = await supabase
+    .from("scene_share_links")
+    .select("id, token, revoked_at")
+    .eq("scene_setup_id", setupId)
+    .maybeSingle();
+
+  if (existing && !existing.revoked_at) {
+    const { error } = await supabase.from("scene_share_links").update({ mode }).eq("id", existing.id);
+    if (error) { reportError("setSceneShare/mode", error); return { error: "Could not change the link." }; }
+    return { url: `${siteOrigin()}/scene/${existing.token}`, mode };
+  }
+  const token = generateReviewToken();
+  const { error } = existing
+    ? await supabase.from("scene_share_links").update({ token, mode, revoked_at: null, last_viewed_at: null }).eq("id", existing.id)
+    : await supabase.from("scene_share_links").insert({
+        studio_id: setup.studio_id, project_id: setup.project_id, scene_setup_id: setup.id, token, mode, created_by: ctx.userId,
+      });
+  if (error) { reportError("setSceneShare", error); return { error: "Could not make the link." }; }
+  return { url: `${siteOrigin()}/scene/${token}`, mode };
+}
+
+export async function revokeSceneShare(setupId: string): Promise<{ ok: true } | { error: string }> {
+  const ctx = await requireStudioContext();
+  if (ctx.isCollaborator) return { error: "Only studio members can share a setup." };
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("scene_share_links")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("scene_setup_id", setupId);
+  if (error) { reportError("revokeSceneShare", error); return { error: "Could not turn the link off." }; }
+  return { ok: true };
 }

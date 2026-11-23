@@ -1,7 +1,7 @@
 "use client";
 
 import { SIGNUP_URL } from "@/lib/marketing/hosts";
-import { PLANS, SEAT_NOTE, planPrice, type Plan } from "@/lib/marketing/pricing";
+import { PLANS, SEAT_NOTE, annualSaving, planPrice, type Plan } from "@/lib/marketing/pricing";
 import { useBilling } from "./billing";
 
 function Tick() {
@@ -78,7 +78,7 @@ function PlanCard({ plan, annual }: { plan: Plan; annual: boolean }) {
         {isFree
           ? "Free forever, not a trial"
           : annual
-            ? `Billed annually, $${(price * 12).toLocaleString()} a year`
+            ? `Billed annually, $${(price * 12).toLocaleString()} a year. Saves $${annualSaving(plan).toLocaleString()}.`
             : "Billed monthly"}
       </p>
 

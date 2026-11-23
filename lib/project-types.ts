@@ -9,6 +9,7 @@ export type ProjectTypeKey =
   | "general"
   | "live_action"
   | "commercial"
+  | "photography"
   | "ai_video"
   | "cgi_vfx";
 
@@ -42,6 +43,13 @@ export const PROJECT_TYPES: ProjectTypeDef[] = [
     blurb: "Brand spot. Boards, shot list, delivery.",
     hue: "pink",
     icon: "M2 3h20v14H2zM8 21h8M12 17v4",
+  },
+  {
+    key: "photography",
+    label: "Photography shoot",
+    blurb: "Stills. Shot list, call sheets, review, delivery.",
+    hue: "orange",
+    icon: "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
   },
   {
     key: "ai_video",
@@ -81,6 +89,7 @@ const STAGE_LABELS: Partial<
 > = {
   live_action: { shoot: "Shoot" },
   commercial: { shoot: "Shoot" },
+  photography: { shoot: "Shoot" },
   ai_video: { pre_pro: "Concept", shoot: "Generation" },
   cgi_vfx: { pre_pro: "Concept", shoot: "Production" },
 };

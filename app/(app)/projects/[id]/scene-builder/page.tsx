@@ -69,6 +69,7 @@ export default async function SceneBuilderPage({
       active={active && active.data ? { id: active.id, data: active.data } : null}
       unreadable={Boolean(active && !active.data)}
       canEdit={canEditProject(ctx, project.id)}
+      canShare={!ctx.isCollaborator}
       shotLists={shotLists}
     />
   );
