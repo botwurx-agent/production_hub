@@ -362,7 +362,29 @@ async function openaiReadDocument(
   system: string,
   user: string,
   doc: AiDocument,
-  maxTokens: number
+  maxTokens: number,
+  opts: { model?: string; effort?: "low" | "medium" | "high" } = {},
+): Promise<string> {
+  const model = opts.model || OPENAI_MODEL;
+  try {
+    return await openaiReadDocumentWith(model, system, user, doc, maxTokens, opts.effort ?? "low");
+  } catch (e) {
+    // An override this key cannot use (a model the organization has no access
+    // to) must not take the feature down: fall back to the deployment's model.
+    if (model !== OPENAI_MODEL && e instanceof Error && /OpenAI (400|403|404)/.test(e.message)) {
+      return openaiReadDocumentWith(OPENAI_MODEL, system, user, doc, maxTokens, opts.effort ?? "low");
+    }
+    throw e;
+  }
+}
+
+async function openaiReadDocumentWith(
+  model: string,
+  system: string,
+  user: string,
+  doc: AiDocument,
+  maxTokens: number,
+  effort: "low" | "medium" | "high",
 ): Promise<string> {
   const dataUrl = `data:${doc.mediaType};base64,${doc.base64}`;
   // Chat Completions takes a PDF as a "file" part and an image as an
@@ -374,14 +396,14 @@ async function openaiReadDocument(
       : { type: "image_url", image_url: { url: dataUrl } };
 
   const body: Record<string, unknown> = {
-    model: OPENAI_MODEL,
+    model,
     max_completion_tokens: maxTokens,
     messages: [
       { role: "system", content: system },
       { role: "user", content: [filePart, { type: "text", text: user }] },
     ],
   };
-  if (isReasoningModel(OPENAI_MODEL)) body.reasoning_effort = "low";
+  if (isReasoningModel(model)) body.reasoning_effort = effort;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -809,7 +831,7 @@ Return ONLY a JSON object, no prose, no code fences:
   "room": { "width": number, "depth": number, "height": number, "wallColor": "#rrggbb", "floor": "wood" | "concrete" | "tile" | "carpet" },
   "walls": { "back": boolean, "left": boolean, "right": boolean },
   "openings": [ { "wall": "back" | "left" | "right", "kind": "window" | "door", "at": number, "width": number, "sill": number, "top": number } ],
-  "items": [ { "kind": string, "name": string, "x": number, "z": number, "rot": number, "w": number, "d": number, "h": number, "color": "#rrggbb" } ],
+  "items": [ { "kind": string, "name": string, "against": "back" | "left" | "right" | null, "on": string | null, "x": number, "z": number, "rot": number, "w": number, "d": number, "h": number, "color": "#rrggbb" } ],
   "camera": { "x": number, "z": number, "height": number, "yaw": number, "focal": number },
   "confidence": "low" | "medium" | "high",
   "notes": string
@@ -817,7 +839,12 @@ Return ONLY a JSON object, no prose, no code fences:
 
 Rules:
 - "at" is the CENTRE of the opening along its wall: on the back wall measured from the left corner, on a side wall measured from the back corner. sill and top are heights of the bottom and top of the opening (a door's sill is 0).
-- items: only furniture and large objects you can actually see, at most 25. "kind" MUST be one of: KINDS. Use the nearest kind (an armchair for any single upholstered seat, "box" for an object that fits nothing else). x and z are the CENTRE of its footprint; rot is degrees it is turned, 0 when its front faces the camera; w, d, h are its width, depth and height.
+- items: only furniture and large objects you can actually see, at most 25. "kind" MUST be one of: KINDS. Use the nearest kind (an armchair for any single upholstered seat, "box" for an object that fits nothing else). x and z are the CENTRE of its footprint.
+- Orientation is the hard part, so work it out from the photo's perspective lines, not from where things sit in the frame. Most rooms are photographed at an angle, so a counter that runs from the near left corner toward a window is along the LEFT wall even though it fills the left of the frame.
+- "against": the wall the item's BACK is pushed against: "back", "left" or "right", or null for anything free-standing. Fill it for every counter, shelf, rack, cabinet, sofa, bed, desk, dresser or appliance that stands at a wall. The app turns and places it flush to that wall for you, so get the wall right above all else.
+- w is the item's LENGTH along its front (for a counter along a wall, that is how far it runs along the wall), d is front to back, h is height.
+- rot is degrees the item is turned about the vertical, 0 when its front faces the camera, positive turning its front toward the RIGHT of the photo (90 = front faces right, -90 = front faces left, 180 = front faces the back wall). Only free-standing items need it; "against" overrides it.
+- "on": the "name" of the item it sits on (loaves on a counter, a lamp on a nightstand), or null when it stands on the floor.
 - camera: where the photo was taken from. yaw is degrees the camera is turned, 0 straight at the back wall, positive turning left. focal is a 35mm-equivalent focal length estimate (a phone's main camera is about 24 to 26).
 - confidence: how sure you are of the room's size.
 - notes: one or two sentences a producer would want: what you could not see, and which measurement to check first. No em dashes.`;
@@ -840,8 +867,16 @@ export async function extractRoomFromPhoto(
     ? ` Measured, not estimated: this photo's horizontal field of view is ${lens.hfovDeg.toFixed(1)} degrees, the same as a ${Math.round(lens.ffFocal)}mm lens on full frame, so set camera.focal to ${Math.round(lens.ffFocal)} and size the room from that field of view.${lens.tiltDeg !== null ? ` The camera was tilted ${Math.abs(lens.tiltDeg).toFixed(0)} degrees ${lens.tiltDeg < 0 ? "down" : "up"}.` : ""}`
     : "";
   const user = `Estimate this room and return the JSON described in the instructions.${facts}`;
-  if (provider === "openai") return openaiReadDocument(system, user, doc, 6000);
-  if (provider === "anthropic") return anthropicReadDocument(system, user, doc, 6000);
+  // Reading a room's layout from one photo is spatial reasoning, the thing a
+  // small model on low effort is worst at, so this call gets more thinking and
+  // can be pointed at a stronger model without changing the rest of the app.
+  if (provider === "openai") {
+    return openaiReadDocument(system, user, doc, 16000, {
+      model: process.env.OPENAI_SCOUT_MODEL || undefined,
+      effort: "medium",
+    });
+  }
+  if (provider === "anthropic") return anthropicReadDocument(system, user, doc, 8000);
   throw new Error("No AI provider configured.");
 }
 

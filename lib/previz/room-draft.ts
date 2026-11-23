@@ -9,7 +9,15 @@
 import { CATALOG } from "./catalog";
 
 export type RoomDraftOpening = { wall: "back" | "left" | "right"; kind: "window" | "door"; at: number; width: number; sill: number; top: number };
-export type RoomDraftItem = { kind: string; name: string; x: number; z: number; rot: number; w: number | null; d: number | null; h: number | null; color: string | null };
+export type RoomDraftWall = "back" | "left" | "right";
+export type RoomDraftItem = {
+  kind: string; name: string; x: number; z: number; rot: number;
+  w: number | null; d: number | null; h: number | null; color: string | null;
+  /** The wall its back is pushed against, as the reader saw it. */
+  against: RoomDraftWall | null;
+  /** The name of the item it sits on, if any. */
+  on: string | null;
+};
 export type RoomDraft = {
   width: number;
   depth: number;
@@ -100,8 +108,11 @@ export function parseRoomDraft(raw: string): RoomDraft | null {
       d: size(x.d, 8),
       h: size(x.h, 4),
       color: hex(x.color),
+      against: (["back", "left", "right"] as const).find((w) => w === x.against) ?? null,
+      on: str(x.on) || null,
     });
   }
+  settleItems(items, width, depth);
 
   const cam = (o.camera ?? null) as Record<string, unknown> | null;
   const cx = cam ? num(cam.x) : null;
@@ -124,6 +135,71 @@ export function parseRoomDraft(raw: string): RoomDraft | null {
     confidence: conf === "high" || conf === "medium" ? conf : "low",
     notes: str(o.notes, 400),
   };
+}
+
+// ---- Placement ---------------------------------------------------------------
+// A model reading one photo is poor at angles and good at naming which wall a
+// counter stands against. So orientation is DERIVED here from that answer, not
+// taken from the model's own rot: an item against the left wall faces right
+// (rot 90) with its back flush to that wall, and so on. Items that sit ON
+// another item keep their place along it when it moves.
+//
+// Convention (lib/previz/catalog.ts): an item faces local +Z at rot 0, and a
+// positive rot turns that front toward +X, the right of the room.
+
+function catalogSize(kind: string): { w: number; d: number } {
+  const c = CATALOG.find((k) => k.kind === kind);
+  return { w: c?.w ?? 0.6, d: c?.d ?? 0.6 };
+}
+const WALL_ROT: Record<RoomDraftWall, number> = { back: 0, left: 90, right: -90 };
+
+export function settleItems(items: RoomDraftItem[], width: number, depth: number): void {
+  const before = items.map((it) => {
+    const s = catalogSize(it.kind);
+    return { rot: it.rot, w: it.w ?? s.w, d: it.d ?? s.d };
+  });
+  for (const it of items) {
+    if (!it.against) continue;
+    const s = catalogSize(it.kind);
+    let w = it.w ?? s.w;
+    let d = it.d ?? s.d;
+    // A long piece at a wall runs ALONG it. A reply that put the length in d
+    // has swapped the two, since "across" and "along" are easy to mix up.
+    if (d > w * 1.5) [w, d] = [d, w];
+    it.w = w;
+    it.d = d;
+    it.rot = WALL_ROT[it.against];
+    if (it.against === "back") {
+      it.z = d / 2;
+      it.x = clamp(it.x, Math.min(w / 2, width / 2), Math.max(width - w / 2, width / 2));
+    } else {
+      it.x = it.against === "left" ? d / 2 : width - d / 2;
+      it.z = clamp(it.z, Math.min(w / 2, depth / 2), Math.max(depth - w / 2, depth / 2));
+    }
+  }
+  // Things on top of a support stay on it. The reader's room positions are
+  // usually right even when its angles are not, so an item keeps the spot it
+  // was given and is only pulled back inside the support's footprint (now
+  // that the support may have turned) if it would hang off the edge. It also
+  // turns with the support, so loaves on a side counter line up along it.
+  const byName = new Map(items.map((it, i) => [it.name.toLowerCase(), i]));
+  items.forEach((it, i) => {
+    if (!it.on) return;
+    const si = byName.get(it.on.toLowerCase());
+    if (si === undefined || si === i) return;
+    const sup = items[si];
+    const sw = sup.w ?? catalogSize(sup.kind).w;
+    const sd = sup.d ?? catalogSize(sup.kind).d;
+    const sideways = Math.abs(Math.abs(sup.rot) - 90) < 1;
+    const hx = (sideways ? sd : sw) / 2;
+    const hz = (sideways ? sw : sd) / 2;
+    const own = catalogSize(it.kind);
+    const iw = Math.min((it.w ?? own.w) / 2, hx * 0.9);
+    const idp = Math.min((it.d ?? own.d) / 2, hz * 0.9);
+    it.x = clamp(it.x, sup.x - hx + iw, sup.x + hx - iw);
+    it.z = clamp(it.z, sup.z - hz + idp, sup.z + hz - idp);
+    it.rot = sup.rot + (it.rot - before[si].rot);
+  });
 }
 
 /** The kinds the reader may name, for the prompt. */
