@@ -94,9 +94,12 @@ function Preview({
           fallback={fileIcon}
         />
       ) : kind === "video" && link ? (
-        // A muted video element shows the first frame as a thumbnail.
+        // A muted video element shows a frame as a thumbnail. Not frame
+        // zero: a finished spot fades in from black, so its first frame is a
+        // black tile. A stored poster wins when the version has one.
         <video
-          src={link}
+          src={`${link}#t=0.5`}
+          poster={version?.posterUrl ?? undefined}
           muted
           playsInline
           preload="metadata"
