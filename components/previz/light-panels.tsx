@@ -414,13 +414,30 @@ export function WindowInspector({
   const sun = reading?.contributions.find((x) => x.id === "sun");
   return (
     <div className="space-y-5">
-      <Header eyebrow="Daylight" title="Through the windows" on={on} onToggle={() => onChange({ on: !on })} />
-      <Field label="Outside">
+      <Header eyebrow="Window light" title="Through the windows" on={on} onToggle={() => onChange({ on: !on })} />
+      <Field label="Outside, by day">
         <div className="flex flex-wrap gap-1">
-          {(Object.keys(WINDOW_SKIES) as WindowSky[]).map((k) => (
+          {(Object.keys(WINDOW_SKIES) as WindowSky[]).filter((k) => !WINDOW_SKIES[k].night).map((k) => (
             <Chip key={k} on={sky === k} onClick={() => onChange({ sky: k })}>{WINDOW_SKIES[k].name}</Chip>
           ))}
         </div>
+      </Field>
+      <Field label="Outside, at night">
+        <div className="flex flex-wrap gap-1">
+          {(Object.keys(WINDOW_SKIES) as WindowSky[]).filter((k) => WINDOW_SKIES[k].night).map((k) => (
+            <Chip key={k} on={sky === k} onClick={() => onChange({ sky: k })}>{WINDOW_SKIES[k].name}</Chip>
+          ))}
+        </div>
+        {WINDOW_SKIES[sky].night ? (
+          <p className="mt-1 text-xs text-text-muted">
+            {sky === "moon"
+              ? "A cool blue beam high through the first window, over a dim blue sky."
+              : sky === "city"
+                ? "A warm sodium glow filling the windows, no direct beam."
+                : "An orange sodium beam raking in low through the first window."}{" "}
+            Set at the level a production lights a night interior to: real moonlight is about ten stops darker and would read as black.
+          </p>
+        ) : null}
       </Field>
       <Field label="ND gel on the window">
         <div className="flex flex-wrap gap-1">
@@ -429,7 +446,7 @@ export function WindowInspector({
         <p className="mt-1 text-xs text-text-muted">Each 0.3 takes a stop off the window and the view through it, so the outside stops blowing out.</p>
       </Field>
       <AtSubject c={c} reading={reading} targetName={targetName} fmt={fmt} />
-      {sun && sun.lux > 0 ? <Readout k="Direct sun" v={`${Math.round(sun.lux)} lux`} /> : null}
+      {sun && sun.lux > 0 ? <Readout k={WINDOW_SKIES[sky].night ? WINDOW_SKIES[sky].beamName : "Direct sun"} v={`${Math.round(sun.lux)} lux`} /> : null}
 
       <div className="space-y-3 border-t border-border pt-4">
         <div>

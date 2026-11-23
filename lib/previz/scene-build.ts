@@ -7,7 +7,7 @@
 // is +Z. A figure faces its local +Z, and `facing` (degrees) turns it about Y.
 import * as THREE from "three";
 import { buildCameraBody } from "./camera-model";
-import { hipY as poseHipY, poseDef, rightHand, shoulderY as poseShoulderY, eyeY, SHIN, type PoseId } from "./poses";
+import { hipY as poseHipY, poseDef, rightHand, shoulderY as poseShoulderY, eyeY, lieFrame, SHIN, type PoseId } from "./poses";
 import { buildStageFloor } from "./studio-set";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
@@ -137,6 +137,24 @@ export function buildFigure(t: TalentSpec): THREE.Group {
     g.add(hand);
   }
 
+  if (pose.lie) {
+    // Tip the upright body over. The tilt lays it along the floor face up with
+    // its head toward local -Z, centred on the person's position (so `facing`
+    // spins it about its middle, and the head points the opposite way to the
+    // way it faced standing, hence the half turn). The roll then turns it onto
+    // a side, and the lift rests it on the surface under it.
+    const { lift, roll } = lieFrame(pose, H);
+    const tilt = new THREE.Group();
+    tilt.add(...g.children);
+    tilt.rotation.x = -Math.PI / 2;
+    tilt.position.z = 0.5 * H;
+    const lie = new THREE.Group();
+    lie.add(tilt);
+    lie.rotation.z = (roll * Math.PI) / 180;
+    lie.rotation.y = Math.PI;
+    lie.position.y = (t.seatY ?? 0) + lift;
+    g.add(lie);
+  }
   g.position.set(t.x, t.y ?? 0, t.z);
   g.rotation.y = (t.facing * Math.PI) / 180;
   return g;

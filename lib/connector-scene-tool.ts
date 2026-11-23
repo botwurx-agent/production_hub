@@ -108,8 +108,8 @@ export const SCENE_TOOL: McpTool = {
       },
       daylight: {
         type: "object",
-        description: "Through the room's windows: {sky: overcast|bright|sun, nd, on}.",
-        properties: { sky: s("overcast, bright or sun."), nd: n("ND on the window, 0 to 2.4."), on: { type: "boolean" } },
+        description: "Through the room's windows: {sky: overcast|bright|sun|moon|city|street, nd, on}. moon, city and street are night: a blue moon beam, a warm sodium glow, or a low orange streetlight.",
+        properties: { sky: s("overcast, bright, sun (day) or moon, city, street (night)."), nd: n("ND on the window, 0 to 2.4."), on: { type: "boolean" } },
         additionalProperties: false,
       },
     },

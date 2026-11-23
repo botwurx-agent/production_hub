@@ -7,7 +7,8 @@
 
 export type PoseId =
   | "standing" | "walking" | "arms-crossed" | "hand-on-hip"
-  | "holding" | "pointing" | "seated" | "kneeling";
+  | "holding" | "pointing" | "seated" | "kneeling"
+  | "lying-back" | "lying-knees" | "lying-right" | "lying-left";
 
 /** A point as fractions of height: [x, y, z]. */
 type P = [number, number, number];
@@ -25,6 +26,13 @@ export type PoseDef = {
   wrist: [P, P];
   /** Forward lean of the torso, degrees. */
   lean?: number;
+  /**
+   * Lying down. The joints are still given standing (the body as if upright),
+   * and the whole figure is then tipped over: onto its back, face up, or onto
+   * one side. The person's position is the MIDDLE of the body, and `facing`
+   * is the way the HEAD points along the floor.
+   */
+  lie?: "back" | "right" | "left";
 };
 
 // Shoulder sits at hip + 0.29, head at hip + 0.395 (both fractions of height).
@@ -94,6 +102,62 @@ export const POSES: PoseDef[] = [
   },
 ];
 
+const LYING_ARMS_SIDE = {
+  elbow: [[-0.16, -0.17, 0], [0.16, -0.17, 0]] as [P, P],
+  wrist: [[-0.17, -0.33, 0.01], [0.17, -0.33, 0.01]] as [P, P],
+};
+// On a side: knees drawn up a little, the top arm resting forward, the
+// bottom arm out in front under the head, the way people actually sleep.
+const SIDE_LEGS = {
+  knee: [[-0.05, 0.31, 0.14], [0.06, 0.32, 0.18]] as [P, P],
+  ankle: [[-0.05, 0.1, 0.04], [0.06, 0.12, 0.1]] as [P, P],
+};
+
+POSES.push(
+  {
+    id: "lying-back", name: "Lying on back", hip: 0.52, lie: "back",
+    knee: [[-0.06, 0.27, 0], [0.06, 0.27, 0]],
+    ankle: [[-0.07, 0.04, 0], [0.07, 0.04, 0]],
+    ...LYING_ARMS_SIDE,
+  },
+  {
+    id: "lying-knees", name: "Lying on back, knees up", hip: 0.52, lie: "back",
+    knee: [[-0.07, 0.4, 0.2], [0.07, 0.4, 0.2]],
+    ankle: [[-0.07, 0.24, 0.02], [0.07, 0.24, 0.02]],
+    elbow: [[-0.15, -0.12, 0.06], [0.15, -0.12, 0.06]],
+    wrist: [[-0.06, -0.2, 0.1], [0.06, -0.2, 0.1]],
+  },
+  {
+    id: "lying-right", name: "Lying on right side", hip: 0.52, lie: "right",
+    ...SIDE_LEGS,
+    elbow: [[-0.08, -0.08, 0.16], [0.12, -0.13, 0.1]],
+    wrist: [[-0.04, 0.06, 0.22], [0.06, -0.22, 0.2]],
+  },
+  {
+    id: "lying-left", name: "Lying on left side", hip: 0.52, lie: "left",
+    knee: [[-0.06, 0.32, 0.18], [0.05, 0.31, 0.14]],
+    ankle: [[-0.06, 0.12, 0.1], [0.05, 0.1, 0.04]],
+    elbow: [[-0.12, -0.13, 0.1], [0.08, -0.08, 0.16]],
+    wrist: [[-0.06, -0.22, 0.2], [0.04, 0.06, 0.22]],
+  },
+);
+
+/** Is this pose lying down (on the back or a side)? */
+export function isLying(id: string | undefined): boolean {
+  return !!POSES.find((p) => p.id === id)?.lie;
+}
+
+/**
+ * How a lying figure is tipped over, in metres, for a person of this height:
+ * `lift` raises the body so its back (or its side) rests on the surface rather
+ * than in it, and `roll` turns it onto a side (0 on the back).
+ */
+export function lieFrame(pose: PoseDef, heightM: number): { lift: number; roll: number } {
+  if (pose.lie === "back") return { lift: 0.072 * heightM, roll: 0 };
+  // Rolling about the body's long axis: +90 puts the figure's right side down.
+  return { lift: 0.13 * heightM, roll: pose.lie === "right" ? 90 : -90 };
+}
+
 export function poseDef(id: string | undefined): PoseDef {
   return POSES.find((p) => p.id === id) ?? STANDING;
 }
@@ -114,6 +178,9 @@ export function shoulderY(pose: PoseDef, heightM: number, seatY?: number | null)
 }
 /** Eye line, where "focus on" pulls to. */
 export function eyeY(pose: PoseDef, heightM: number, seatY?: number | null): number {
+  // Lying: the eyes are just above the surface, a face's depth up on the
+  // back, about a head's width up on a side.
+  if (pose.lie) return (seatY ?? 0) + (pose.lie === "back" ? 0.105 : 0.135) * heightM;
   return shoulderY(pose, heightM, seatY) + 0.11 * heightM;
 }
 

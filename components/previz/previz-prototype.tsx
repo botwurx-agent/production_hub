@@ -44,7 +44,7 @@ import { FRAME_A, FRAME_B, Timeline } from "./timeline";
 import {
   camAt, constrainEnd, ease, fromLocal, isLockedOff, moveStats, toLocal, trackExtent, trackFrame, type CamKey, type Move,
 } from "@/lib/previz/camera-move";
-import { POSES, poseDef } from "@/lib/previz/poses";
+import { POSES, isLying, poseDef } from "@/lib/previz/poses";
 import { realStillPrompt } from "@/lib/previz/real-prompt";
 import { ControlPads, type PadSpec } from "./move-pad";
 import { CLAMP_DROP, POLECAT_MAX, hangOn, isRig, rigHeight, wallToWall, type RigKind } from "@/lib/previz/rigging";
@@ -103,6 +103,9 @@ function placeScene(rawTalent: TalentSpec[], rawItems: ItemSpec[], k: number): S
     const w = walkerAt(raw, k);
     walk.set(raw.id, { walking: w.walking, walked: w.walked });
     const { walking: _a, walked: _b, ...t } = w;
+    // Lying: the body rests on whatever is under its middle (a bed, a sofa, a
+    // rug, the floor), carried in seatY like a seat.
+    if (isLying(t.pose)) return { ...t, y: 0, seatY: groundUnder(rawItems, heights, t.x, t.z) };
     if (t.pose !== "seated") return { ...t, y: standHeight(rawItems, heights, t.x, t.z), seatY: null };
     // Seated: the hip lands on whatever is under it, and the feet on whatever
     // is under the knees (the floor at a bed's edge, the bed in its middle).
@@ -296,14 +299,13 @@ function settleRig(prev: Shot, next: Shot): Shot {
   return out;
 }
 
-const WINDOW_CCT: Record<WindowSky, number> = { overcast: 6500, bright: 6000, sun: 5600 };
 const BULB_R = 0.045;
 
-/** Toward the sun: low and outside the first window, coming in at a slant. */
-function sunDirection(windows: WindowInfo[]): THREE.Vector3 | null {
+/** Toward the sun (or the moon, or a streetlamp): outside the first window, coming in at a slant, at that source's height. */
+function sunDirection(windows: WindowInfo[], elevationDeg = 24): THREE.Vector3 | null {
   const w = windows[0];
   if (!w) return null;
-  const el = rad(24);
+  const el = rad(elevationDeg);
   const out = w.inward.clone().negate().applyAxisAngle(UP, rad(15)).multiplyScalar(Math.cos(el));
   return out.add(new THREE.Vector3(0, Math.sin(el), 0)).normalize();
 }
@@ -616,7 +618,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const actionK = rawActive.move ? ease(rawActive.move.ease, playhead) : 0;
   const scene = useMemo(() => placeScene(talent, items, actionK), [talent, items, actionK]);
   // What seated people sit on: a figure is rebuilt when its seat changes.
-  const seatKey = scene.talent.map((t) => (t.pose === "seated" ? `${t.id}:${(t.seatY ?? -1).toFixed(3)}:${(t.footY ?? 0).toFixed(3)}` : "")).join("|");
+  const seatKey = scene.talent.map((t) => (t.pose === "seated" || isLying(t.pose) ? `${t.id}:${(t.seatY ?? -1).toFixed(3)}:${(t.footY ?? 0).toFixed(3)}` : "")).join("|");
   // What the camera sees right now: unsaved framing, or the start, the end or
   // a moment between.
   const draft = drafts[rawActive.id];
@@ -896,7 +898,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       const sky = WINDOW_SKIES[L.win.sky];
       const roomOn = L.set.kind === "room";
       const tau = Math.pow(10, -L.win.nd) * (L.win.on && roomOn ? 1 : 0);
-      const dayCol = cameraColor(WINDOW_CCT[L.win.sky], wb);
+      const dayCol = cameraColor(sky.cct, wb);
       for (const { info, light } of windowLights.current) {
         light.color.setRGB(...dayCol);
         light.intensity = sky.skyNits * info.area * tau;
@@ -909,7 +911,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         m.emissive.setRGB(...dayCol);
         m.emissiveIntensity = sky.skyNits * tau;
       }
-      world.sun.color.setRGB(...cameraColor(5600, wb));
+      world.sun.color.setRGB(...cameraColor(sky.beamCct, wb));
       world.sun.intensity = sunDir.current ? sky.sunLux * tau : 0;
       // Practicals: bare bulbs, the glass at the brightness it really has.
       for (const it of sc.items) {
@@ -1184,7 +1186,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       // Seated: built from where they are placed, since the seat (a bed, a
       // sofa) and where the feet land decide the legs.
       const placed = scene.talent.find((x) => x.id === t.id);
-      const base = buildFigure(t.pose === "seated" && placed ? { ...t, seatY: placed.seatY, footY: placed.footY } : t);
+      const base = buildFigure((t.pose === "seated" || isLying(t.pose)) && placed ? { ...t, seatY: placed.seatY, footY: placed.footY } : t);
       base.userData.pick = { kind: "talent", id: t.id };
       e.world.scene.add(base);
       let walk: [THREE.Group, THREE.Group] | null = null;
@@ -1394,7 +1396,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
         W.windowsRoot.add(l, l.target);
         windowLights.current.push({ info, light: l });
       });
-      const dir = sunDirection(roomWindows(set.room));
+      const dir = sunDirection(roomWindows(set.room), WINDOW_SKIES[win.sky].beamEl);
       sunDir.current = dir;
       const r = set.room;
       const mid = new THREE.Vector3(r.x + r.width / 2, 0.7, r.z + r.depth / 2);
@@ -1412,7 +1414,9 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
     }
     dirty();
     requeue(live.current.shots.map((x) => x.id));
-  }, [set]);
+    // The beam's height depends on what is outside (a high moon, a low
+    // streetlamp), so a change of sky re-aims it.
+  }, [set, win.sky]);
 
   // A different shot starts at its own start frame.
   useEffect(() => {
@@ -1442,8 +1446,8 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       const emitters = buildEmitters(lights.filter((l) => inShot(s, l.id)), win, scene, ws);
       const tau = win.on && roomOn ? Math.pow(10, -win.nd) : 0;
       const sunLux = WINDOW_SKIES[win.sky].sunLux * tau;
-      const dir = roomOn ? sunDirection(ws) : null;
-      const sun = sunLux > 0 && dir ? { dir, lux: sunLux, label: "Sun through the window" } : null;
+      const dir = roomOn ? sunDirection(ws, WINDOW_SKIES[win.sky].beamEl) : null;
+      const sun = sunLux > 0 && dir ? { dir, lux: sunLux, label: `${WINDOW_SKIES[win.sky].beamName} through the window` } : null;
       const screens: Screen[] = grips.filter((g) => inShot(s, g.id) && isPattern(g.kind)).map((g) => {
         const a = aimOf(g, scene);
         const eu = new THREE.Euler(rad(a.pitch), rad(a.yaw), 0, "YXZ");
@@ -3156,7 +3160,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
             {windows.length ? (
               <RailItem
                 active={sel.kind === "daylight"} onClick={() => setSel({ kind: "daylight" })} dot={win.on ? "#8fc2f0" : "#5b6068"}
-                label="Daylight" sub={win.on ? `${windows.length} window${windows.length === 1 ? "" : "s"}, ${WINDOW_SKIES[win.sky].name.toLowerCase()}${win.nd ? `, ND ${win.nd.toFixed(1)}` : ""}` : "off"}
+                label="Window light" sub={win.on ? `${windows.length} window${windows.length === 1 ? "" : "s"}, ${WINDOW_SKIES[win.sky].name.toLowerCase()}${win.nd ? `, ND ${win.nd.toFixed(1)}` : ""}` : "off"}
               />
             ) : null}
           </RailGroup>
@@ -3523,7 +3527,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
               units={units}
               props={items.filter((i) => catalogOf(i.kind).holdable)}
               moveSeconds={rawActive.move?.durationS ?? null}
-              seat={(() => { const p = talent.find((x) => x.id === sel.id); return p && p.pose === "seated" ? seatUnder(items, stackHeights(items), p.x, p.z) : null; })()}
+              seat={(() => { const p = talent.find((x) => x.id === sel.id); return p && (p.pose === "seated" || isLying(p.pose)) ? seatUnder(items, stackHeights(items), p.x, p.z) : null; })()}
               onChange={(p) => updatePerson(sel.id, p)}
               onDelete={() => removePerson(sel.id)}
             />
@@ -4064,6 +4068,21 @@ function TalentInspector({ t, units, props, moveSeconds, seat, onChange, onDelet
               ? `Sitting on the ${seat.name.toLowerCase()}, seat ${dist(seat.y, units)} up.`
               : `Nothing under them, so they sit on an implied chair (${dist(0.47, units)}). Drag them onto a bed, sofa or chair to sit on it.`}
           </p>
+        ) : null}
+        {isLying(t.pose) ? (
+          <div className="mt-2 space-y-1.5">
+            <p className="text-xs text-text-muted">
+              {seat
+                ? `Lying on the ${seat.name.toLowerCase()}, ${dist(seat.y, units)} up.`
+                : "Lying on the floor. Drag them onto a bed or sofa to lie on it."}{" "}
+              Their position is the middle of the body, and Facing turns the way the head points.
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {[{ l: "Head left", f: -90 }, { l: "Head right", f: 90 }, { l: "Head away", f: 180 }, { l: "Head to camera", f: 0 }].map((o) => (
+                <Chip key={o.l} on={Math.round(t.facing) === o.f || (o.f === 180 && Math.round(t.facing) === -180)} onClick={() => onChange({ facing: o.f })}>{o.l}</Chip>
+              ))}
+            </div>
+          </div>
         ) : null}
         {t.pose === "holding" && props.length ? (
           <div className="mt-2">

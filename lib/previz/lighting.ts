@@ -456,11 +456,28 @@ export function roomBounceLux(totalFlux: number, reflectance = 0.45, surfaceM2 =
   return (totalFlux * reflectance * keep) / (surfaceM2 * (1 - reflectance));
 }
 
+/**
+ * What comes through the windows. Day skies are real levels. NIGHT ones are
+ * set the way a production lights them, not the way the night really is: real
+ * moonlight is about ten stops under this and would read as black, so a DP
+ * fakes it with a lamp outside, gelled. The panel says so.
+ *
+ * `cct` is the sky's colour; the BEAM (sun, moon or a streetlamp, through the
+ * first window) has its own colour, its own height in the sky (`beamEl`,
+ * degrees above the horizon) and a name for the meter.
+ */
+export type WindowSkyDef = {
+  name: string; night: boolean; skyNits: number; cct: number;
+  sunLux: number; beamCct: number; beamEl: number; beamName: string;
+};
 export const WINDOW_SKIES = {
-  overcast: { name: "Overcast", skyNits: 2500, sunLux: 0 },
-  bright: { name: "Bright overcast", skyNits: 6000, sunLux: 0 },
-  sun: { name: "Direct sun", skyNits: 7000, sunLux: 60000 },
-} as const;
+  overcast: { name: "Overcast", night: false, skyNits: 2500, cct: 6500, sunLux: 0, beamCct: 5600, beamEl: 24, beamName: "Sun" },
+  bright: { name: "Bright overcast", night: false, skyNits: 6000, cct: 6000, sunLux: 0, beamCct: 5600, beamEl: 24, beamName: "Sun" },
+  sun: { name: "Direct sun", night: false, skyNits: 7000, cct: 5600, sunLux: 60000, beamCct: 5600, beamEl: 24, beamName: "Sun" },
+  moon: { name: "Moonlight", night: true, skyNits: 10, cct: 11000, sunLux: 70, beamCct: 10000, beamEl: 38, beamName: "Moonlight" },
+  city: { name: "City glow", night: true, skyNits: 25, cct: 2600, sunLux: 0, beamCct: 2600, beamEl: 10, beamName: "City light" },
+  street: { name: "Streetlight", night: true, skyNits: 5, cct: 3200, sunLux: 140, beamCct: 2000, beamEl: 9, beamName: "Streetlight" },
+} as const satisfies Record<string, WindowSkyDef>;
 export type WindowSky = keyof typeof WINDOW_SKIES;
 
 /**
