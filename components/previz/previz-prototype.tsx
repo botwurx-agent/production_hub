@@ -586,7 +586,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
   const [lights, setLights] = useState<LightSpec[]>(initial.lights);
   const [grips, setGrips] = useState<GripSpec[]>(initial.grips);
   const [win, setWin] = useState<WinState>(initial.win);
-  const [zebra, setZebra] = useState(false);
+  const zebra = false;
   const [meter, setMeter] = useState<Reading | null>(null);
   const [patternReads, setPatternReads] = useState<Map<string, PatternRead>>(new Map());
   // The move timeline: where the playhead sits (0 start, 1 end), and playback.
@@ -1871,7 +1871,6 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       if (k === "f") return frameAll();
       if (k === "b") return setShowBoard((b) => !b);
       if (k === "?") return setHelp((h) => !h);
-      if (k === "z") return setZebra((z) => !z);
       if (e.key === "\\") return setFocusMode((f) => !f);
       if (e.key === "Escape" && focusMode) return setFocusMode(false);
       if (e.key === " ") {
@@ -3026,20 +3025,28 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
       {/* Top bar */}
       <header className="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface px-4 py-2">
         <div className="relative mr-3 min-w-0">
-          <div className="flex items-center gap-2">
-            <input
-              aria-label="Setup name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-[190px] truncate rounded-[6px] border border-transparent bg-transparent px-1 font-display text-[15px] font-bold hover:border-border focus:border-border focus:outline-none"
-            />
+          <div className="flex items-center gap-0.5">
+            {/* The hidden copy of the name sizes the field to its text, so the
+                menu chevron sits right after the name rather than out in the bar. */}
+            <span className="inline-grid max-w-[240px] font-display text-[15px] font-bold">
+              <span aria-hidden className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre border border-transparent px-1">{name || "Untitled"} </span>
+              <input
+                aria-label="Setup name"
+                size={1}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="col-start-1 row-start-1 w-full min-w-0 truncate rounded-[6px] border border-transparent bg-transparent px-1 hover:border-border focus:border-border focus:outline-none"
+              />
+            </span>
             <button
               type="button"
               onClick={() => setMenu(!menu)}
               aria-expanded={menu}
-              className="rounded-[8px] border border-border px-2 py-0.5 text-[11px] font-semibold text-text-muted hover:text-text"
+              aria-label="Setup menu: new, open or download"
+              title="New setup, open a file, download"
+              className={`grid h-7 w-7 place-items-center rounded-[8px] text-text-muted hover:bg-surface-2 hover:text-text ${menu ? "bg-surface-2 text-text" : ""}`}
             >
-              Setup ▾
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
             {store ? null : <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">Prototype</span>}
           </div>
@@ -3077,7 +3084,7 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           onChange={(v) => setView(v as "lens" | "free")}
           options={[{ v: "lens", l: "Through the lens" }, { v: "free", l: "Free view" }]}
         />
-        <Toggle on={focusMode} onClick={() => setFocusMode(!focusMode)} label="Focus" hint="\\" />
+        <Toggle on={focusMode} onClick={() => setFocusMode(!focusMode)} label={focusMode ? "Show panels" : "Hide panels"} hint="\\" />
         <Toggle on={clay} onClick={() => setClay(!clay)} label="Clay" hint="C" />
         {view === "free" ? (
           <>
@@ -3097,7 +3104,6 @@ export function PrevizPrototype({ store, heightClass = "h-screen" }: { store?: S
           />
         ) : null}
         <Toggle on={thirds} onClick={() => setThirds(!thirds)} label="Thirds" />
-        <Toggle on={zebra} onClick={() => setZebra(!zebra)} label="Zebras" hint="Z" />
         <label className="ml-1 flex items-center gap-1.5 text-xs text-text-muted">
           Frame
           <select
@@ -4172,8 +4178,7 @@ function HelpCard({ onClose }: { onClose: () => void }) {
     ["F", "frame all: fit every light, camera and set piece in free view"],
     ["B", "storyboard overlay"],
     ["Map", "drag anything; drag a white dot to aim it or turn it"],
-    ["Z", "zebras: stripes where the picture clips"],
-    ["\\", "focus: hide both side panels and the shot cards for a bigger picture (Esc to leave)"],
+    ["\\", "hide panels: hide both side panels and the shot cards for a bigger picture (Esc to leave)"],
     ["Delete", "delete the selected thing, light, bounce or flag"],
     ["Cmd or Ctrl + D", "duplicate the selected thing"],
   ];

@@ -590,7 +590,7 @@ export const FEATURES: FeatureDef[] = [
       { t: "Overhead rigging", d: "A studio grid, wall spreaders and polecats, with lights hung from them." },
       { t: "RGB fixtures", d: "Colour by hue and saturation, with the output a saturated colour really costs." },
       { t: "Clay view", d: "One key strips the colour so you can read the light alone." },
-      { t: "Zebras", d: "See what clips at the stop and ISO you have set." },
+      { t: "Night through the window", d: "Moonlight, city glow or a streetlight coming in, at levels a production would light to." },
       { t: "Your own models", d: "Import GLB, OBJ or STL, including a LiDAR scan of a real room at true size." },
       { t: "View-only for reviewers", d: "Anyone with review access to the job can look through every camera and change nothing." },
       { t: "Built from a description", d: "A connected Claude or ChatGPT can lay out a new setup for you to check." },
